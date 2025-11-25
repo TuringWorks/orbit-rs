@@ -793,6 +793,86 @@ impl MetalDevice {
         let slice = unsafe { std::slice::from_raw_parts(contents, len) };
         Ok(slice.to_vec())
     }
+
+    /// Execute GPU-accelerated Dijkstra edge relaxation kernel
+    /// This performs one iteration of distance relaxation for Dijkstra's algorithm
+    pub fn execute_dijkstra_relax(
+        &self,
+        edge_array: &[u32],
+        edge_offset: &[u32],
+        edge_weights: &[f32],
+        distances: &mut [f32],
+        parent: &mut [u32],
+        active_mask: &mut [u32],
+        changed: &mut u32,
+        node_count: u32,
+    ) -> Result<(), ComputeError> {
+        // Create buffers
+        let edge_array_buffer = self.create_buffer_with_data_u32(edge_array)?;
+        let edge_offset_buffer = self.create_buffer_with_data_u32(edge_offset)?;
+        let edge_weights_buffer = self.create_buffer_with_data_f32(edge_weights)?;
+        let distances_buffer = self.create_buffer_with_data_f32(distances)?;
+        let parent_buffer = self.create_buffer_with_data_u32(parent)?;
+        let active_mask_buffer = self.create_buffer_with_data_u32(active_mask)?;
+
+        // Create atomic counter buffer for changed flag
+        let changed_buffer = self.create_buffer_with_data_u32(&[*changed])?;
+
+        // Create parameter buffer
+        let params = [node_count];
+        let params_buffer = self.create_buffer_with_data_u32(&params)?;
+
+        // Execute kernel
+        self.execute_kernel(
+            "dijkstra_relax",
+            &[
+                &edge_array_buffer,
+                &edge_offset_buffer,
+                &edge_weights_buffer,
+                &distances_buffer,
+                &parent_buffer,
+                &active_mask_buffer,
+                &changed_buffer,
+                &params_buffer,
+            ],
+            node_count as u64,
+        )?;
+
+        // Read results back
+        let distances_slice = unsafe {
+            std::slice::from_raw_parts(
+                distances_buffer.contents() as *const f32,
+                distances.len(),
+            )
+        };
+        distances.copy_from_slice(distances_slice);
+
+        let parent_slice = unsafe {
+            std::slice::from_raw_parts(
+                parent_buffer.contents() as *const u32,
+                parent.len(),
+            )
+        };
+        parent.copy_from_slice(parent_slice);
+
+        let active_mask_slice = unsafe {
+            std::slice::from_raw_parts(
+                active_mask_buffer.contents() as *const u32,
+                active_mask.len(),
+            )
+        };
+        active_mask.copy_from_slice(active_mask_slice);
+
+        let changed_slice = unsafe {
+            std::slice::from_raw_parts(
+                changed_buffer.contents() as *const u32,
+                1,
+            )
+        };
+        *changed = changed_slice[0];
+
+        Ok(())
+    }
 }
 
 // Implement GpuDevice trait for MetalDevice

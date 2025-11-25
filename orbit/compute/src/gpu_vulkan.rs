@@ -1053,6 +1053,358 @@ impl VulkanDevice {
 
         Ok(output_content.to_vec())
     }
+
+    /// Execute GPU-accelerated Dijkstra edge relaxation kernel
+    /// This performs one iteration of distance relaxation for Dijkstra's algorithm
+    pub fn execute_dijkstra_relax(
+        &mut self,
+        edge_array: &[u32],
+        edge_offset: &[u32],
+        edge_weights: &[f32],
+        distances: &mut [f32],
+        parent: &mut [u32],
+        active_mask: &mut [u32],
+        changed: &mut u32,
+        node_count: u32,
+    ) -> Result<(), ComputeError> {
+        // Load the Dijkstra shader
+        let shader_bytes = include_bytes!("shaders/vulkan/dijkstra_relax.spv");
+        let shader = unsafe {
+            ShaderModule::from_bytes(self.device.clone(), shader_bytes)
+                .map_err(|e| ComputeError::gpu(crate::errors::GPUError::ShaderCompilationFailed {
+                    shader_name: "dijkstra_relax".to_string(),
+                    error: format!("{:?}", e),
+                }))?
+        };
+
+        // Create buffers
+        let edge_array_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            edge_array.iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
+                size: edge_array.len() * std::mem::size_of::<u32>(),
+                error: format!("{:?}", e),
+                compute_unit: Some("Vulkan".to_string()),
+            })
+        })?;
+
+        let edge_offset_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            edge_offset.iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
+                size: edge_offset.len() * std::mem::size_of::<u32>(),
+                error: format!("{:?}", e),
+                compute_unit: Some("Vulkan".to_string()),
+            })
+        })?;
+
+        let edge_weights_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            edge_weights.iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
+                size: edge_weights.len() * std::mem::size_of::<f32>(),
+                error: format!("{:?}", e),
+                compute_unit: Some("Vulkan".to_string()),
+            })
+        })?;
+
+        let distances_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            distances.iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
+                size: distances.len() * std::mem::size_of::<f32>(),
+                error: format!("{:?}", e),
+                compute_unit: Some("Vulkan".to_string()),
+            })
+        })?;
+
+        let parent_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            parent.iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
+                size: parent.len() * std::mem::size_of::<u32>(),
+                error: format!("{:?}", e),
+                compute_unit: Some("Vulkan".to_string()),
+            })
+        })?;
+
+        let active_mask_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            active_mask.iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
+                size: active_mask.len() * std::mem::size_of::<u32>(),
+                error: format!("{:?}", e),
+                compute_unit: Some("Vulkan".to_string()),
+            })
+        })?;
+
+        let changed_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            [*changed].iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
+                size: std::mem::size_of::<u32>(),
+                error: format!("{:?}", e),
+                compute_unit: Some("Vulkan".to_string()),
+            })
+        })?;
+
+        let params_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [node_count].iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
+                size: std::mem::size_of::<u32>(),
+                error: format!("{:?}", e),
+                compute_unit: Some("Vulkan".to_string()),
+            })
+        })?;
+
+        // Create pipeline
+        let entry_point = shader.entry_point("main").unwrap();
+        let stage = PipelineShaderStageCreateInfo::new(entry_point);
+        let layout = PipelineLayout::new(
+            self.device.clone(),
+            PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+                .into_pipeline_layout_create_info(self.device.clone())
+                .map_err(|e| {
+                    ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                        kernel_name: "dijkstra_relax".to_string(),
+                        error: format!("Pipeline layout creation failed: {:?}", e),
+                    })
+                })?,
+        )
+        .map_err(|e| {
+            ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dijkstra_relax".to_string(),
+                error: format!("Pipeline layout creation failed: {:?}", e),
+            })
+        })?;
+
+        let pipeline = ComputePipeline::new(
+            self.device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(stage, layout.clone()),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dijkstra_relax".to_string(),
+                error: format!("Pipeline creation failed: {:?}", e),
+            })
+        })?;
+
+        // Create descriptor set
+        let layout_clone = pipeline.layout().set_layouts().first().unwrap().clone();
+        let descriptor_set = PersistentDescriptorSet::new(
+            &self.descriptor_set_allocator,
+            layout_clone,
+            [
+                WriteDescriptorSet::buffer(0, edge_array_buffer.clone()),
+                WriteDescriptorSet::buffer(1, edge_offset_buffer.clone()),
+                WriteDescriptorSet::buffer(2, edge_weights_buffer.clone()),
+                WriteDescriptorSet::buffer(3, distances_buffer.clone()),
+                WriteDescriptorSet::buffer(4, parent_buffer.clone()),
+                WriteDescriptorSet::buffer(5, active_mask_buffer.clone()),
+                WriteDescriptorSet::buffer(6, changed_buffer.clone()),
+                WriteDescriptorSet::buffer(7, params_buffer.clone()),
+            ],
+            [],
+        )
+        .map_err(|e| {
+            ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dijkstra_relax".to_string(),
+                error: format!("Descriptor set creation failed: {:?}", e),
+            })
+        })?;
+
+        // Execute compute shader
+        let workgroup_count = ((node_count + 255) / 256) as u32;
+        let mut builder = AutoCommandBufferBuilder::primary(
+            &self.command_buffer_allocator,
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .map_err(|e| {
+            ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dijkstra_relax".to_string(),
+                error: format!("Command buffer creation failed: {:?}", e),
+            })
+        })?;
+
+        builder
+            .bind_pipeline_compute(pipeline.clone())
+            .map_err(|e| {
+                ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                    kernel_name: "dijkstra_relax".to_string(),
+                    error: format!("Pipeline bind failed: {:?}", e),
+                })
+            })?
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                pipeline.layout().clone(),
+                0,
+                descriptor_set,
+            )
+            .map_err(|e| {
+                ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                    kernel_name: "dijkstra_relax".to_string(),
+                    error: format!("Descriptor set bind failed: {:?}", e),
+                })
+            })?
+            .dispatch([workgroup_count, 1, 1])
+            .map_err(|e| {
+                ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                    kernel_name: "dijkstra_relax".to_string(),
+                    error: format!("Dispatch failed: {:?}", e),
+                })
+            })?;
+
+        let command_buffer = builder.build().map_err(|e| {
+            ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dijkstra_relax".to_string(),
+                error: format!("Command buffer build failed: {:?}", e),
+            })
+        })?;
+
+        let future = sync::now(self.device.clone())
+            .then_execute(self.queue.clone(), command_buffer)
+            .map_err(|e| {
+                ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                    kernel_name: "dijkstra_relax".to_string(),
+                    error: format!("Command submission failed: {:?}", e),
+                })
+            })?
+            .then_signal_fence_and_flush()
+            .map_err(|e| {
+                ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                    kernel_name: "dijkstra_relax".to_string(),
+                    error: format!("Fence signal failed: {:?}", e),
+                })
+            })?;
+
+        future.wait(None).map_err(|e| {
+            ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dijkstra_relax".to_string(),
+                error: format!("Wait failed: {:?}", e),
+            })
+        })?;
+
+        // Read results back
+        let distances_content = distances_buffer.read().map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dijkstra_relax".to_string(),
+                error: "Failed to read distances buffer".to_string(),
+            })
+        })?;
+        distances.copy_from_slice(&distances_content);
+
+        let parent_content = parent_buffer.read().map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dijkstra_relax".to_string(),
+                error: "Failed to read parent buffer".to_string(),
+            })
+        })?;
+        parent.copy_from_slice(&parent_content);
+
+        let changed_content = changed_buffer.read().map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dijkstra_relax".to_string(),
+                error: "Failed to read changed buffer".to_string(),
+            })
+        })?;
+        *changed = changed_content[0];
+
+        Ok(())
+    }
 }
 
 impl GpuDevice for VulkanDevice {

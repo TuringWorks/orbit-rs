@@ -645,6 +645,464 @@ impl GPUGraphTraversal {
         self.bfs_cpu_parallel(graph, source, target).await
     }
 
+    /// Perform Dijkstra's shortest path from source to target (weighted)
+    pub async fn dijkstra(
+        &self,
+        graph: &GraphData,
+        source: u64,
+        target: Option<u64>,
+    ) -> Result<TraversalResult, ComputeError> {
+        let start_time = std::time::Instant::now();
+
+        // Dijkstra requires edge weights
+        if graph.edge_weights.is_none() {
+            return Err(ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dijkstra".to_string(),
+                error: "Edge weights required for Dijkstra's algorithm".to_string(),
+            }));
+        }
+
+        if self.config.use_gpu && self.should_use_gpu(graph) {
+            info!("Using GPU-accelerated Dijkstra");
+            self.dijkstra_gpu(graph, source, target).await
+        } else {
+            info!("Using CPU Dijkstra");
+            self.dijkstra_cpu(graph, source, target).await
+        }
+        .map(|mut result| {
+            result.execution_time_ms = start_time.elapsed().as_millis() as u64;
+            result
+        })
+    }
+
+    /// GPU-accelerated Dijkstra implementation
+    async fn dijkstra_gpu(
+        &self,
+        graph: &GraphData,
+        source: u64,
+        target: Option<u64>,
+    ) -> Result<TraversalResult, ComputeError> {
+        // Convert graph to GPU-friendly format
+        let _gpu_graph = self.prepare_gpu_graph(graph)?;
+        let _use_u32_indices = graph.node_count <= u32::MAX as usize;
+
+        // Try Metal first (macOS), then Vulkan
+        #[cfg(all(feature = "gpu-acceleration", target_os = "macos"))]
+        {
+            use crate::gpu_metal::MetalDevice;
+
+            if let Ok(metal_device) = MetalDevice::new() {
+                info!("Using Metal GPU for Dijkstra");
+                return self.dijkstra_gpu_metal(
+                    &metal_device,
+                    graph,
+                    &gpu_graph,
+                    source,
+                    target,
+                ).await;
+            }
+        }
+
+        #[cfg(all(feature = "gpu-acceleration", feature = "gpu-vulkan"))]
+        {
+            use crate::gpu_vulkan::VulkanDevice;
+
+            if let Ok(mut vulkan_device) = VulkanDevice::new() {
+                info!("Using Vulkan GPU for Dijkstra");
+                return self.dijkstra_gpu_vulkan(
+                    &mut vulkan_device,
+                    graph,
+                    &gpu_graph,
+                    source,
+                    target,
+                ).await;
+            }
+        }
+
+        // Fall back to CPU
+        warn!("GPU Dijkstra not available, using optimized CPU");
+        self.dijkstra_cpu(graph, source, target).await
+    }
+
+    /// Metal-accelerated Dijkstra implementation
+    #[cfg(all(feature = "gpu-acceleration", target_os = "macos"))]
+    async fn dijkstra_gpu_metal(
+        &self,
+        metal_device: &crate::gpu_metal::MetalDevice,
+        graph: &GraphData,
+        gpu_graph: &GPUGraphData,
+        source: u64,
+        target: Option<u64>,
+    ) -> Result<TraversalResult, ComputeError> {
+        self.dijkstra_gpu_impl(
+            graph,
+            gpu_graph,
+            source,
+            target,
+            |edge_array, edge_offset, edge_weights, distances, parent, active_mask, changed| {
+                metal_device.execute_dijkstra_relax(
+                    edge_array,
+                    edge_offset,
+                    edge_weights,
+                    distances,
+                    parent,
+                    active_mask,
+                    changed,
+                    graph.node_count as u32,
+                )
+            },
+        ).await
+    }
+
+    /// Vulkan-accelerated Dijkstra implementation
+    #[cfg(all(feature = "gpu-acceleration", feature = "gpu-vulkan"))]
+    async fn dijkstra_gpu_vulkan(
+        &self,
+        vulkan_device: &mut crate::gpu_vulkan::VulkanDevice,
+        graph: &GraphData,
+        gpu_graph: &GPUGraphData,
+        source: u64,
+        target: Option<u64>,
+    ) -> Result<TraversalResult, ComputeError> {
+        self.dijkstra_gpu_impl(
+            graph,
+            gpu_graph,
+            source,
+            target,
+            |edge_array, edge_offset, edge_weights, distances, parent, active_mask, changed| {
+                vulkan_device.execute_dijkstra_relax(
+                    edge_array,
+                    edge_offset,
+                    edge_weights,
+                    distances,
+                    parent,
+                    active_mask,
+                    changed,
+                    graph.node_count as u32,
+                )
+            },
+        ).await
+    }
+
+    /// Generic GPU Dijkstra implementation
+    #[allow(dead_code)]
+    async fn dijkstra_gpu_impl<F>(
+        &self,
+        graph: &GraphData,
+        gpu_graph: &GPUGraphData,
+        source: u64,
+        target: Option<u64>,
+        mut execute_kernel: F,
+    ) -> Result<TraversalResult, ComputeError>
+    where
+        F: FnMut(
+            &[u32],          // edge_array
+            &[u32],          // edge_offset
+            &[f32],          // edge_weights
+            &mut [f32],      // distances
+            &mut [u32],      // parent
+            &mut [u32],      // active_mask
+            &mut u32,        // changed flag
+        ) -> Result<(), ComputeError>,
+    {
+        // Get edge weights
+        let edge_weights = graph.edge_weights.as_ref()
+            .ok_or_else(|| ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dijkstra_relax".to_string(),
+                error: "Edge weights required".to_string(),
+            }))?;
+
+        // Convert source node ID to index
+        let source_idx = graph.node_ids.iter().position(|&id| id == source)
+            .ok_or_else(|| ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dijkstra_relax".to_string(),
+                error: "Source node not found in graph".to_string(),
+            }))?;
+
+        // Convert target node ID to index (if provided)
+        let target_idx = target.and_then(|target_id| {
+            graph.node_ids.iter().position(|&id| id == target_id)
+        });
+
+        // Initialize distances to infinity, parent to u32::MAX
+        let mut distances = vec![f32::INFINITY; graph.node_count];
+        let mut parent = vec![u32::MAX; graph.node_count];
+        let mut active_mask = vec![1u32; graph.node_count]; // All nodes active initially
+
+        // Set source distance to 0
+        distances[source_idx] = 0.0;
+        parent[source_idx] = source_idx as u32;
+
+        let mut iteration = 0;
+        let max_iterations = graph.node_count; // Prevent infinite loops
+
+        // Iterate until no changes or max iterations
+        loop {
+            let mut changed = 0u32;
+
+            // Execute GPU kernel for edge relaxation
+            if let Err(e) = execute_kernel(
+                &gpu_graph.edge_array,
+                &gpu_graph.edge_offset,
+                edge_weights,
+                &mut distances,
+                &mut parent,
+                &mut active_mask,
+                &mut changed,
+            ) {
+                warn!("GPU Dijkstra relaxation failed: {}, falling back to CPU", e);
+                return self.dijkstra_cpu(graph, source, target).await;
+            }
+
+            iteration += 1;
+
+            // Check if converged
+            if changed == 0 || iteration >= max_iterations {
+                break;
+            }
+
+            // Early termination if target found
+            if let Some(target_idx_val) = target_idx {
+                if distances[target_idx_val] != f32::INFINITY {
+                    // Check if target's neighbors have been processed
+                    break;
+                }
+            }
+        }
+
+        // Reconstruct path(s)
+        let mut paths = Vec::new();
+
+        if let Some(target_idx_val) = target_idx {
+            // Single target path
+            if distances[target_idx_val] != f32::INFINITY {
+                let mut path_nodes = Vec::new();
+                let mut current_idx = target_idx_val;
+
+                // Build path backwards from target to source
+                loop {
+                    if let Some(&node_id) = graph.node_ids.get(current_idx) {
+                        path_nodes.push(node_id);
+                    } else {
+                        break;
+                    }
+
+                    let parent_idx = parent[current_idx];
+                    if parent_idx == u32::MAX || parent_idx as usize == current_idx {
+                        break; // Reached source
+                    }
+                    current_idx = parent_idx as usize;
+                }
+
+                // Reverse to get source -> target path
+                path_nodes.reverse();
+
+                paths.push(Path {
+                    nodes: path_nodes.clone(),
+                    edges: vec![],
+                    weight: distances[target_idx_val],
+                    score: 1.0,
+                    length: path_nodes.len() - 1,
+                });
+            }
+        }
+
+        // Statistics
+        let nodes_explored = distances.iter().filter(|&&d| d != f32::INFINITY).count();
+        let visited_nodes: HashSet<u64> = distances.iter()
+            .enumerate()
+            .filter_map(|(idx, &d)| {
+                if d != f32::INFINITY {
+                    graph.node_ids.get(idx).copied()
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let paths_count = paths.len();
+        let avg_path_length = if !paths.is_empty() {
+            paths.iter().map(|p| p.length as f32).sum::<f32>() / paths.len() as f32
+        } else {
+            0.0
+        };
+
+        Ok(TraversalResult {
+            paths,
+            visited_nodes,
+            execution_time_ms: 0, // Set by caller
+            used_gpu: true,
+            stats: TraversalStats {
+                nodes_explored,
+                edges_traversed: 0, // TODO: Track edge relaxations
+                paths_found: paths_count,
+                avg_path_length,
+                gpu_utilization: Some(0.0),
+            },
+        })
+    }
+
+    /// CPU-based Dijkstra with priority queue
+    async fn dijkstra_cpu(
+        &self,
+        graph: &GraphData,
+        source: u64,
+        target: Option<u64>,
+    ) -> Result<TraversalResult, ComputeError> {
+        use std::collections::BinaryHeap;
+        use std::cmp::Ordering;
+
+        // Min-heap node wrapper
+        #[derive(Copy, Clone, PartialEq)]
+        struct State {
+            cost: f32,
+            node_idx: usize,
+        }
+
+        // Reverse ordering for min-heap
+        impl Eq for State {}
+        impl Ord for State {
+            fn cmp(&self, other: &Self) -> Ordering {
+                other.cost.partial_cmp(&self.cost)
+                    .unwrap_or(Ordering::Equal)
+                    .then_with(|| self.node_idx.cmp(&other.node_idx))
+            }
+        }
+        impl PartialOrd for State {
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        // Get edge weights
+        let edge_weights = graph.edge_weights.as_ref()
+            .ok_or_else(|| ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dijkstra".to_string(),
+                error: "Edge weights required".to_string(),
+            }))?;
+
+        // Find source index
+        let source_idx = graph.node_ids.iter().position(|&id| id == source)
+            .ok_or_else(|| ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dijkstra".to_string(),
+                error: "Source node not found".to_string(),
+            }))?;
+
+        let target_idx = target.and_then(|t| graph.node_ids.iter().position(|&id| id == t));
+
+        // Initialize
+        let mut distances = vec![f32::INFINITY; graph.node_count];
+        let mut parent = vec![usize::MAX; graph.node_count];
+        let mut heap = BinaryHeap::new();
+
+        distances[source_idx] = 0.0;
+        parent[source_idx] = source_idx;
+        heap.push(State { cost: 0.0, node_idx: source_idx });
+
+        let mut nodes_explored = 0;
+        let mut edges_traversed = 0;
+
+        // Dijkstra's algorithm
+        while let Some(State { cost, node_idx }) = heap.pop() {
+            nodes_explored += 1;
+
+            // Early termination if target found
+            if let Some(target_idx_val) = target_idx {
+                if node_idx == target_idx_val {
+                    break;
+                }
+            }
+
+            // Skip if we've already found a better path
+            if cost > distances[node_idx] {
+                continue;
+            }
+
+            // Process neighbors
+            if let Some(neighbors) = graph.adjacency_list.get(node_idx) {
+                let edge_start = graph.adjacency_list[..node_idx].iter().map(|v| v.len()).sum::<usize>();
+
+                for (i, &neighbor_idx) in neighbors.iter().enumerate() {
+                    edges_traversed += 1;
+
+                    let edge_weight = edge_weights.get(edge_start + i).copied().unwrap_or(1.0);
+                    let next_cost = cost + edge_weight;
+
+                    if next_cost < distances[neighbor_idx as usize] {
+                        distances[neighbor_idx as usize] = next_cost;
+                        parent[neighbor_idx as usize] = node_idx;
+                        heap.push(State { cost: next_cost, node_idx: neighbor_idx as usize });
+                    }
+                }
+            }
+        }
+
+        // Reconstruct path
+        let mut paths = Vec::new();
+
+        if let Some(target_idx_val) = target_idx {
+            if distances[target_idx_val] != f32::INFINITY {
+                let mut path_nodes = Vec::new();
+                let mut current_idx = target_idx_val;
+
+                loop {
+                    if let Some(&node_id) = graph.node_ids.get(current_idx) {
+                        path_nodes.push(node_id);
+                    } else {
+                        break;
+                    }
+
+                    if parent[current_idx] == usize::MAX || parent[current_idx] == current_idx {
+                        break;
+                    }
+                    current_idx = parent[current_idx];
+                }
+
+                path_nodes.reverse();
+
+                paths.push(Path {
+                    nodes: path_nodes.clone(),
+                    edges: vec![],
+                    weight: distances[target_idx_val],
+                    score: 1.0,
+                    length: path_nodes.len() - 1,
+                });
+            }
+        }
+
+        let visited_nodes: HashSet<u64> = distances.iter()
+            .enumerate()
+            .filter_map(|(idx, &d)| {
+                if d != f32::INFINITY {
+                    graph.node_ids.get(idx).copied()
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let paths_count = paths.len();
+        let avg_path_length = if !paths.is_empty() {
+            paths.iter().map(|p| p.length as f32).sum::<f32>() / paths.len() as f32
+        } else {
+            0.0
+        };
+
+        Ok(TraversalResult {
+            paths,
+            visited_nodes,
+            execution_time_ms: 0,
+            used_gpu: false,
+            stats: TraversalStats {
+                nodes_explored,
+                edges_traversed,
+                paths_found: paths_count,
+                avg_path_length,
+                gpu_utilization: None,
+            },
+        })
+    }
+
     /// Detect communities using connected components (GPU-accelerated)
     pub async fn detect_communities(
         &self,
@@ -847,7 +1305,7 @@ mod tests {
     async fn test_community_detection() {
         let config = TraversalConfig::default();
         let traversal = GPUGraphTraversal::new(config).await.unwrap();
-        
+
         // Create graph with two disconnected components
         let graph = GraphData {
             node_ids: vec![0, 1, 2, 3, 4, 5],
@@ -864,11 +1322,45 @@ mod tests {
             node_count: 6,
             edge_count: 6,
         };
-        
+
         let communities = traversal.detect_communities(&graph, 2).await.unwrap();
-        
+
         assert_eq!(communities.len(), 2);
         assert!(communities.iter().any(|c| c.len() == 3));
+    }
+
+    #[tokio::test]
+    async fn test_dijkstra_weighted_graph() {
+        let config = TraversalConfig {
+            max_depth: 5,
+            max_paths: 10,
+            use_gpu: false, // Use CPU for test
+            ..Default::default()
+        };
+
+        let traversal = GPUGraphTraversal::new(config).await.unwrap();
+
+        // Create weighted graph: 0 --(1.0)-> 1 --(2.0)-> 2 --(3.0)-> 3
+        //                         0 --(10.0)-> 3 (expensive direct path)
+        let graph = GraphData {
+            node_ids: vec![0, 1, 2, 3],
+            adjacency_list: vec![
+                vec![1, 3],    // 0 -> 1, 0 -> 3
+                vec![2],       // 1 -> 2
+                vec![3],       // 2 -> 3
+                vec![],        // 3 -> (none)
+            ],
+            edge_weights: Some(vec![1.0, 10.0, 2.0, 3.0]),
+            node_properties: HashMap::new(),
+            node_count: 4,
+            edge_count: 4,
+        };
+
+        let result = traversal.dijkstra(&graph, 0, Some(3)).await.unwrap();
+
+        assert!(!result.paths.is_empty());
+        assert_eq!(result.paths[0].nodes, vec![0, 1, 2, 3]);
+        assert_eq!(result.paths[0].weight, 6.0); // 1.0 + 2.0 + 3.0
     }
 }
 

@@ -492,6 +492,73 @@ kernel void bfs_level_expansion(
     }
 }
 
+/// GPU-Accelerated Dijkstra's Shortest Path - Edge Relaxation Kernel
+/// Each thread processes one node to relax its outgoing edges
+/// Uses atomic min operations for distance updates and parent tracking
+/// Input: edge_array, edge_offset, edge_weights, distances, parent, active_mask
+/// Output: updated distances, parent, changed flag (indicates convergence)
+kernel void dijkstra_relax(
+    device const uint* edge_array [[buffer(0)]],
+    device const uint* edge_offset [[buffer(1)]],
+    device const float* edge_weights [[buffer(2)]],
+    device atomic<float>* distances [[buffer(3)]],
+    device uint* parent [[buffer(4)]],
+    device const uint* active_mask [[buffer(5)]],
+    device atomic_uint* changed [[buffer(6)]],
+    device const uint& node_count [[buffer(7)]],
+    uint id [[thread_position_in_grid]]
+) {
+    if (id >= node_count) {
+        return;
+    }
+
+    // Skip inactive nodes (already processed optimally)
+    if (active_mask[id] == 0) {
+        return;
+    }
+
+    // Get current distance for this node
+    float current_dist = atomic_load_explicit(&distances[id], memory_order_relaxed);
+
+    // Skip if node is unreachable
+    if (isinf(current_dist)) {
+        return;
+    }
+
+    uint start_idx = edge_offset[id];
+    uint end_idx = edge_offset[id + 1];
+
+    // Process all outgoing edges (relax neighbors)
+    for (uint i = start_idx; i < end_idx; i++) {
+        uint neighbor = edge_array[i];
+        float edge_weight = edge_weights[i];
+        float new_dist = current_dist + edge_weight;
+
+        // Atomic min operation on neighbor's distance
+        float old_dist = atomic_load_explicit(&distances[neighbor], memory_order_relaxed);
+
+        // Try to update if we found a shorter path
+        while (new_dist < old_dist) {
+            // Attempt atomic compare-and-exchange
+            if (atomic_compare_exchange_weak_explicit(
+                &distances[neighbor],
+                &old_dist,
+                new_dist,
+                memory_order_relaxed,
+                memory_order_relaxed
+            )) {
+                // Successfully updated distance - also update parent
+                parent[neighbor] = id;
+
+                // Mark that a change occurred (for convergence detection)
+                atomic_fetch_add_explicit(changed, 1, memory_order_relaxed);
+                break;
+            }
+            // If CAS failed, old_dist now has the new value - retry
+        }
+    }
+}
+
 /// Parallel community detection using connected components
 /// Each thread processes one node to find its connected component
 kernel void connected_components(
