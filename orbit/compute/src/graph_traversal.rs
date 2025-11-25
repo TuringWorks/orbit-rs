@@ -208,12 +208,20 @@ impl GPUGraphTraversal {
         source: u64,
         target: Option<u64>,
     ) -> Result<TraversalResult, ComputeError> {
-        // Convert graph to GPU-friendly format
+        // Convert graph to GPU-friendly format (only when GPU features are enabled)
+        #[cfg(any(
+            all(feature = "gpu-acceleration", target_os = "macos"),
+            all(feature = "gpu-acceleration", feature = "gpu-vulkan")
+        ))]
         let gpu_graph = self.prepare_gpu_graph(graph)?;
 
         // Use u32 indices if graph is small enough (< 4B nodes)
+        #[cfg(any(
+            all(feature = "gpu-acceleration", target_os = "macos"),
+            all(feature = "gpu-acceleration", feature = "gpu-vulkan")
+        ))]
         let use_u32_indices = graph.node_count <= u32::MAX as usize;
-        
+
         // Try Metal first (macOS), then Vulkan
         #[cfg(all(feature = "gpu-acceleration", target_os = "macos"))]
         {
@@ -701,9 +709,12 @@ impl GPUGraphTraversal {
         source: u64,
         target: Option<u64>,
     ) -> Result<TraversalResult, ComputeError> {
-        // Convert graph to GPU-friendly format
+        // Convert graph to GPU-friendly format (only when GPU features are enabled)
+        #[cfg(any(
+            all(feature = "gpu-acceleration", target_os = "macos"),
+            all(feature = "gpu-acceleration", feature = "gpu-vulkan")
+        ))]
         let gpu_graph = self.prepare_gpu_graph(graph)?;
-        let use_u32_indices = graph.node_count <= u32::MAX as usize;
 
         // Try Metal first (macOS), then Vulkan
         #[cfg(all(feature = "gpu-acceleration", target_os = "macos"))]
