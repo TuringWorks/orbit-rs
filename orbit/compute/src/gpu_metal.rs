@@ -599,6 +599,56 @@ impl MetalDevice {
         self.read_buffer_f32(&distances_buffer, point_count)
     }
 
+    /// Execute GPU-accelerated Haversine distance calculation (great circle distance on a sphere)
+    pub fn execute_spatial_distance_sphere(
+        &self,
+        query_lon: f32,
+        query_lat: f32,
+        candidates_lon: &[f32],
+        candidates_lat: &[f32],
+        point_count: usize,
+    ) -> Result<Vec<f32>, ComputeError> {
+        use crate::errors::ExecutionError;
+
+        // Validate inputs
+        if candidates_lon.len() != point_count || candidates_lat.len() != point_count {
+            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
+                parameter: "candidates_length".to_string(),
+                value: format!(
+                    "expected {}, got lon={}, lat={}",
+                    point_count,
+                    candidates_lon.len(),
+                    candidates_lat.len()
+                ),
+            }));
+        }
+
+        // Create buffers
+        let query_lon_buffer = self.create_buffer_with_data_f32(&[query_lon])?;
+        let query_lat_buffer = self.create_buffer_with_data_f32(&[query_lat])?;
+        let candidates_lon_buffer = self.create_buffer_with_data_f32(candidates_lon)?;
+        let candidates_lat_buffer = self.create_buffer_with_data_f32(candidates_lat)?;
+        let distances_buffer = self.create_buffer_f32(point_count)?;
+        let point_count_buffer = self.create_buffer_with_data_u32(&[point_count as u32])?;
+
+        // Execute kernel
+        self.execute_kernel(
+            "spatial_distance_sphere",
+            &[
+                &query_lon_buffer,
+                &query_lat_buffer,
+                &candidates_lon_buffer,
+                &candidates_lat_buffer,
+                &distances_buffer,
+                &point_count_buffer,
+            ],
+            point_count as u64,
+        )?;
+
+        // Read results back
+        self.read_buffer_f32(&distances_buffer, point_count)
+    }
+
     /// Execute GPU-accelerated BFS level expansion (u32 indices - optimized for graphs < 4B nodes)
     /// This is a helper method for graph traversal operations
     pub fn execute_bfs_level_expansion_u32(

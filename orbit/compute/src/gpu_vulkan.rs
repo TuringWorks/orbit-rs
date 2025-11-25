@@ -1761,6 +1761,502 @@ impl VulkanDevice {
         let result_content = matrix_c_buffer.read().unwrap();
         Ok(result_content.iter().copied().collect())
     }
+
+    /// Execute Euclidean distance calculation on GPU
+    ///
+    /// # Arguments
+    /// * `query_x` - X coordinate of query point
+    /// * `query_y` - Y coordinate of query point
+    /// * `candidates_x` - X coordinates of candidate points
+    /// * `candidates_y` - Y coordinates of candidate points
+    /// * `point_count` - Number of candidate points
+    pub fn execute_spatial_distance(
+        &mut self,
+        query_x: f32,
+        query_y: f32,
+        candidates_x: &[f32],
+        candidates_y: &[f32],
+        point_count: usize,
+    ) -> Result<Vec<f32>, ComputeError> {
+        // Validate inputs
+        if candidates_x.len() != point_count || candidates_y.len() != point_count {
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "candidates".to_string(),
+                    value: format!(
+                        "expected {} points, got x={} y={}",
+                        point_count,
+                        candidates_x.len(),
+                        candidates_y.len()
+                    ),
+                },
+                compute_unit: None,
+            });
+        }
+
+        // Create buffers
+        let query_x_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [query_x].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let query_y_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [query_y].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let candidates_x_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            candidates_x.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: candidates_x.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let candidates_y_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            candidates_y.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: candidates_y.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let distances_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            (0..point_count).map(|_| 0.0f32),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: point_count * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let point_count_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [point_count as u32].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        // Load shader
+        let shader_bytes = include_bytes!("shaders/vulkan/spatial_distance.spv");
+        let shader = unsafe {
+            ShaderModule::from_bytes(self.device.clone(), shader_bytes)
+                .map_err(|e| ComputeError::GPU {
+                    source: crate::errors::GPUError::InitializationFailed {
+                        message: format!("Failed to load spatial_distance shader: {}", e),
+                    },
+                })?
+        };
+
+        // Create pipeline
+        let cs = shader.entry_point("main").unwrap();
+        let stage = PipelineShaderStageCreateInfo::new(cs);
+        let layout = PipelineLayout::new(
+            self.device.clone(),
+            PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+                .into_pipeline_layout_create_info(self.device.clone())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let pipeline = ComputePipeline::new(
+            self.device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(stage, layout),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::InitializationFailed {
+                message: format!("Failed to create spatial_distance pipeline: {}", e),
+            },
+        })?;
+
+        // Create descriptor set
+        let layout = &pipeline.layout().set_layouts()[0];
+        let descriptor_set = PersistentDescriptorSet::new(
+            &self.descriptor_set_allocator,
+            layout.clone(),
+            [
+                WriteDescriptorSet::buffer(0, query_x_buffer.clone()),
+                WriteDescriptorSet::buffer(1, query_y_buffer.clone()),
+                WriteDescriptorSet::buffer(2, candidates_x_buffer.clone()),
+                WriteDescriptorSet::buffer(3, candidates_y_buffer.clone()),
+                WriteDescriptorSet::buffer(4, distances_buffer.clone()),
+                WriteDescriptorSet::buffer(5, point_count_buffer.clone()),
+            ],
+            [],
+        )
+        .unwrap();
+
+        // Create command buffer
+        let mut builder = AutoCommandBufferBuilder::primary(
+            &self.command_buffer_allocator,
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        builder
+            .bind_pipeline_compute(pipeline.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                pipeline.layout().clone(),
+                0,
+                descriptor_set,
+            )
+            .unwrap();
+
+        // Dispatch with 256 threads per workgroup
+        let workgroup_count = (point_count as u32 + 255) / 256;
+        builder.dispatch([workgroup_count, 1, 1]).unwrap();
+
+        let command_buffer = builder.build().unwrap();
+
+        // Submit and wait
+        let future = sync::now(self.device.clone())
+            .then_execute(self.queue.clone(), command_buffer)
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap();
+
+        future.wait(None).unwrap();
+
+        // Read result
+        let result_content = distances_buffer.read().unwrap();
+        Ok(result_content.iter().copied().collect())
+    }
+
+    /// Execute Haversine distance calculation on GPU (great circle distance on a sphere)
+    ///
+    /// # Arguments
+    /// * `query_lon` - Longitude of query point
+    /// * `query_lat` - Latitude of query point
+    /// * `candidates_lon` - Longitudes of candidate points
+    /// * `candidates_lat` - Latitudes of candidate points
+    /// * `point_count` - Number of candidate points
+    pub fn execute_spatial_distance_sphere(
+        &mut self,
+        query_lon: f32,
+        query_lat: f32,
+        candidates_lon: &[f32],
+        candidates_lat: &[f32],
+        point_count: usize,
+    ) -> Result<Vec<f32>, ComputeError> {
+        // Validate inputs
+        if candidates_lon.len() != point_count || candidates_lat.len() != point_count {
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "candidates".to_string(),
+                    value: format!(
+                        "expected {} points, got lon={} lat={}",
+                        point_count,
+                        candidates_lon.len(),
+                        candidates_lat.len()
+                    ),
+                },
+                compute_unit: None,
+            });
+        }
+
+        // Create buffers (using uniform for query point)
+        let query_lon_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [query_lon].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let query_lat_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [query_lat].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let candidates_lon_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            candidates_lon.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: candidates_lon.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let candidates_lat_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            candidates_lat.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: candidates_lat.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let distances_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            (0..point_count).map(|_| 0.0f32),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: point_count * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let point_count_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [point_count as u32].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        // Load shader
+        let shader_bytes = include_bytes!("shaders/vulkan/spatial_distance_sphere.spv");
+        let shader = unsafe {
+            ShaderModule::from_bytes(self.device.clone(), shader_bytes)
+                .map_err(|e| ComputeError::GPU {
+                    source: crate::errors::GPUError::InitializationFailed {
+                        message: format!("Failed to load spatial_distance_sphere shader: {}", e),
+                    },
+                })?
+        };
+
+        // Create pipeline
+        let cs = shader.entry_point("main").unwrap();
+        let stage = PipelineShaderStageCreateInfo::new(cs);
+        let layout = PipelineLayout::new(
+            self.device.clone(),
+            PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+                .into_pipeline_layout_create_info(self.device.clone())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let pipeline = ComputePipeline::new(
+            self.device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(stage, layout),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::InitializationFailed {
+                message: format!("Failed to create spatial_distance_sphere pipeline: {}", e),
+            },
+        })?;
+
+        // Create descriptor set
+        let layout = &pipeline.layout().set_layouts()[0];
+        let descriptor_set = PersistentDescriptorSet::new(
+            &self.descriptor_set_allocator,
+            layout.clone(),
+            [
+                WriteDescriptorSet::buffer(0, query_lon_buffer.clone()),
+                WriteDescriptorSet::buffer(1, query_lat_buffer.clone()),
+                WriteDescriptorSet::buffer(2, candidates_lon_buffer.clone()),
+                WriteDescriptorSet::buffer(3, candidates_lat_buffer.clone()),
+                WriteDescriptorSet::buffer(4, distances_buffer.clone()),
+                WriteDescriptorSet::buffer(5, point_count_buffer.clone()),
+            ],
+            [],
+        )
+        .unwrap();
+
+        // Create command buffer
+        let mut builder = AutoCommandBufferBuilder::primary(
+            &self.command_buffer_allocator,
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        builder
+            .bind_pipeline_compute(pipeline.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                pipeline.layout().clone(),
+                0,
+                descriptor_set,
+            )
+            .unwrap();
+
+        // Dispatch with 256 threads per workgroup
+        let workgroup_count = (point_count as u32 + 255) / 256;
+        builder.dispatch([workgroup_count, 1, 1]).unwrap();
+
+        let command_buffer = builder.build().unwrap();
+
+        // Submit and wait
+        let future = sync::now(self.device.clone())
+            .then_execute(self.queue.clone(), command_buffer)
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap();
+
+        future.wait(None).unwrap();
+
+        // Read result
+        let result_content = distances_buffer.read().unwrap();
+        Ok(result_content.iter().copied().collect())
+    }
 }
 
 #[cfg(test)]
