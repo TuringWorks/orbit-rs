@@ -49,6 +49,7 @@ crc32fast = "1.4"
 # Encryption at rest (AES-256-GCM)
 aes-gcm = "0.10"
 rand = "0.8"
+base64 = "0.22"
 
 # Code quality patterns
 paste.workspace = true

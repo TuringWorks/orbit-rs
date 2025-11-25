@@ -13,6 +13,7 @@ pub mod audit;
 pub mod authentication;
 pub mod authorization;
 pub mod encryption;
+pub mod field_encryption;
 pub mod policy;
 pub mod row_level_security;
 pub mod sql_validation;
@@ -30,6 +31,10 @@ pub use authorization::{
 };
 pub use encryption::{
     EncryptionManager, KeyManagementSystem, KeyRotationPolicy, TlsConfig, TlsVersion,
+};
+pub use field_encryption::{
+    EncryptedFieldValue, EncryptionType, FieldEncryptionConfig, FieldEncryptionEngine,
+    FieldEncryptionPolicy, SensitivityLevel,
 };
 pub use policy::{PolicyEngine, PolicyEvaluator, SecurityPolicy};
 pub use row_level_security::{
