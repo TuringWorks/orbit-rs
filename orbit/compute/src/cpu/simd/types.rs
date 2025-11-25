@@ -17,7 +17,7 @@ pub struct NullBitmap {
 impl NullBitmap {
     /// Create a new null bitmap with all values non-null
     pub fn new(len: usize) -> Self {
-        let bytes = (len + 7) / 8;
+        let bytes = len.div_ceil(8);
         Self {
             bits: vec![0; bytes],
             len,
@@ -33,14 +33,14 @@ impl NullBitmap {
 
     /// Create a null bitmap with all values null
     pub fn all_null(len: usize) -> Self {
-        let bytes = (len + 7) / 8;
+        let bytes = len.div_ceil(8);
         let mut bitmap = Self {
             bits: vec![0xFF; bytes],
             len,
         };
 
         // Clear any extra bits in the last byte beyond len
-        if len % 8 != 0 {
+        if !len.is_multiple_of(8) {
             let last_byte_idx = bytes - 1;
             let valid_bits = len % 8;
             let mask = (1u8 << valid_bits) - 1;

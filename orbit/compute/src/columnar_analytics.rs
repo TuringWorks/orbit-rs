@@ -372,10 +372,35 @@ impl GPUColumnarAnalytics {
                     count,
                 })
             }
-            AggregateFunction::Min | AggregateFunction::Max => {
-                // MIN/MAX not yet GPU-accelerated, fall back to CPU
-                tracing::warn!("MIN/MAX not yet GPU-accelerated, falling back to CPU");
-                Ok(self.aggregate_i32_cpu_parallel(values, null_bitmap, function))
+            AggregateFunction::Min => {
+                let result = device
+                    .execute_aggregate_i32(values, null_bitmap, "aggregate_i32_min")
+                    .map_err(|e| {
+                        ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                            kernel_name: "aggregate_i32_min".to_string(),
+                            error: format!("Metal execution failed: {}", e),
+                        })
+                    })?;
+                Ok(AggregationResult {
+                    function,
+                    value: result,
+                    count: values.len(),
+                })
+            }
+            AggregateFunction::Max => {
+                let result = device
+                    .execute_aggregate_i32(values, null_bitmap, "aggregate_i32_max")
+                    .map_err(|e| {
+                        ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                            kernel_name: "aggregate_i32_max".to_string(),
+                            error: format!("Metal execution failed: {}", e),
+                        })
+                    })?;
+                Ok(AggregationResult {
+                    function,
+                    value: result,
+                    count: values.len(),
+                })
             }
         }
     }

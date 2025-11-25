@@ -1,0 +1,40 @@
+#version 450
+
+// Finalize time-series aggregation results (convert sums to averages)
+
+layout(local_size_x = 256) in;
+
+layout(set = 0, binding = 0) readonly buffer WindowResults {
+    uint window_results[];  // Sums as uint (reinterpreted as float)
+};
+
+layout(set = 0, binding = 1) readonly buffer WindowCounts {
+    uint window_counts[];
+};
+
+layout(set = 0, binding = 2) writeonly buffer FinalResults {
+    float final_results[];
+};
+
+layout(set = 0, binding = 3) uniform WindowCount {
+    uint window_count;
+};
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+
+    // Bounds check
+    if (id >= window_count) {
+        return;
+    }
+
+    uint count = window_counts[id];
+    if (count == 0) {
+        final_results[id] = 0.0;
+        return;
+    }
+
+    uint sum_as_uint = window_results[id];
+    float sum = uintBitsToFloat(sum_as_uint);
+    final_results[id] = sum / float(count);
+}

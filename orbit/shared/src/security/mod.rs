@@ -3,6 +3,7 @@
 //! This module provides comprehensive security features including:
 //! - Advanced authentication mechanisms (LDAP, OAuth2, SAML)
 //! - Role-based access control (RBAC) with fine-grained permissions
+//! - Row-level security (RLS) for fine-grained data access control
 //! - Data encryption at rest and in transit
 //! - Comprehensive audit logging
 //! - SQL injection prevention
@@ -11,8 +12,12 @@
 pub mod audit;
 pub mod authentication;
 pub mod authorization;
+pub mod data_masking;
 pub mod encryption;
+pub mod field_encryption;
+pub mod multi_tenant;
 pub mod policy;
+pub mod row_level_security;
 pub mod sql_validation;
 pub mod threat_detection;
 
@@ -26,10 +31,25 @@ pub use authorization::{
     AccessPolicy, Permission, RbacEngine, Role, RoleBasedAccessControl, SecurityAction,
     SecurityResource, SecuritySubject,
 };
+pub use data_masking::{
+    AccessLevel, DataMaskingEngine, DatePrecision, FieldMaskingConfig, MaskingContext,
+    MaskingPolicy, MaskingStrategy, TokenStore,
+};
 pub use encryption::{
     EncryptionManager, KeyManagementSystem, KeyRotationPolicy, TlsConfig, TlsVersion,
 };
+pub use field_encryption::{
+    EncryptedFieldValue, EncryptionType, FieldEncryptionConfig, FieldEncryptionEngine,
+    FieldEncryptionPolicy, SensitivityLevel,
+};
+pub use multi_tenant::{
+    CrossTenantAction, CrossTenantPolicy, IsolationLevel, ResourceQuota, ResourceUsage,
+    TenantAccessResult, TenantConfig, TenantContext, TenantId, TenantManager, TenantStatus,
+};
 pub use policy::{PolicyEngine, PolicyEvaluator, SecurityPolicy};
+pub use row_level_security::{
+    RlsAction, RlsEngine, RlsExpression, RlsPolicy, RlsPolicyType, RlsValue, RowLevelSecurity,
+};
 pub use sql_validation::{QueryValidator, SqlInjectionDetector};
 pub use threat_detection::{AnomalyDetector, ThreatDetectionEngine};
 

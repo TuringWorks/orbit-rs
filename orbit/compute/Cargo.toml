@@ -65,7 +65,7 @@ anyhow = "1.0"
 thiserror = "1.0"
 
 # Mathematics and algorithms
-nalgebra = "0.32"
+nalgebra = "0.33"
 ndarray = "0.15"
 num-traits = "0.2"
 num-complex = "0.4"

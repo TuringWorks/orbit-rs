@@ -298,102 +298,92 @@ impl GPUSpatialOperations {
         query_point: &GPUPoint,
         candidate_points: &[GPUPoint],
     ) -> Result<Vec<SpatialDistanceResult>, ComputeError> {
-        use crate::gpu_metal::MetalDevice;
+        // Use GPU manager (avoids 50-60ms device initialization overhead)
+        if let Some(ref manager) = self.gpu_manager {
+            // Flatten points into arrays
+            let point_count = candidate_points.len();
+            let mut points_x = Vec::with_capacity(point_count);
+            let mut points_y = Vec::with_capacity(point_count);
 
-        // Try Metal first (macOS), then Vulkan
-        #[cfg(target_os = "macos")]
-        {
-            if let Ok(metal_device) = MetalDevice::new() {
-                return self
-                    .batch_distance_metal(&metal_device, query_point, candidate_points)
-                    .await;
+            for point in candidate_points {
+                points_x.push(point.x as f32);
+                points_y.push(point.y as f32);
             }
-        }
 
-        #[cfg(feature = "gpu-vulkan")]
-        {
-            use crate::gpu_vulkan::VulkanDevice;
-            if let Ok(mut vulkan_device) = VulkanDevice::new() {
-                return self
-                    .batch_distance_vulkan(&mut vulkan_device, query_point, candidate_points)
-                    .await;
-            }
-        }
-
-        // Fallback to CPU if GPU unavailable
-        tracing::warn!("GPU unavailable, falling back to CPU");
-        Ok(self.batch_distance_cpu_parallel(query_point, candidate_points))
-    }
-
-    /// Metal-accelerated batch distance calculation
-    #[cfg(all(feature = "gpu-acceleration", target_os = "macos"))]
-    async fn batch_distance_metal(
-        &self,
-        device: &crate::gpu_metal::MetalDevice,
-        query_point: &GPUPoint,
-        candidate_points: &[GPUPoint],
-    ) -> Result<Vec<SpatialDistanceResult>, ComputeError> {
-        // Flatten points into arrays
-        let point_count = candidate_points.len();
-        let mut points_x = Vec::with_capacity(point_count);
-        let mut points_y = Vec::with_capacity(point_count);
-
-        for point in candidate_points {
-            points_x.push(point.x as f32);
-            points_y.push(point.y as f32);
-        }
-
-        // Execute GPU kernel
-        let distances = device
-            .execute_spatial_distance(
+            // Execute via manager (uses pooled device)
+            match manager.execute_spatial_distance(
                 query_point.x as f32,
                 query_point.y as f32,
                 &points_x,
                 &points_y,
                 point_count,
-            )
-            .map_err(|e| {
-                ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
-                    kernel_name: "spatial_distance".to_string(),
-                    error: format!("Metal execution failed: {}", e),
-                })
-            })?;
-
-        // Convert distances to results
-        let mut results = Vec::with_capacity(point_count);
-        for (idx, &distance) in distances.iter().enumerate() {
-            results.push(SpatialDistanceResult {
-                index: idx,
-                distance: distance as f64,
-            });
+            ).await {
+                Ok(distances) => {
+                    // Convert distances to results
+                    let mut results = Vec::with_capacity(point_count);
+                    for (idx, &distance) in distances.iter().enumerate() {
+                        results.push(SpatialDistanceResult {
+                            index: idx,
+                            distance: distance as f64,
+                        });
+                    }
+                    return Ok(results);
+                }
+                Err(e) => {
+                    tracing::warn!("GPU execution failed: {}, falling back to CPU", e);
+                }
+            }
         }
 
-        Ok(results)
-    }
-
-    /// Vulkan-accelerated batch distance calculation
-    #[cfg(all(feature = "gpu-acceleration", feature = "gpu-vulkan"))]
-    async fn batch_distance_vulkan(
-        &self,
-        _device: &crate::gpu_vulkan::VulkanDevice,
-        query_point: &GPUPoint,
-        candidate_points: &[GPUPoint],
-    ) -> Result<Vec<SpatialDistanceResult>, ComputeError> {
-        // TODO: Implement Vulkan spatial distance
-        // For now, fall back to CPU
-        tracing::warn!("Vulkan spatial distance not yet implemented, falling back to CPU");
+        // Fallback to CPU if GPU unavailable
         Ok(self.batch_distance_cpu_parallel(query_point, candidate_points))
     }
 
-    /// GPU-accelerated batch sphere distance calculation
+    /// GPU-accelerated batch sphere distance calculation (Haversine)
     #[cfg(feature = "gpu-acceleration")]
     async fn batch_distance_sphere_gpu(
         &self,
         query_point: &GPUPoint,
         candidate_points: &[GPUPoint],
     ) -> Result<Vec<SpatialDistanceResult>, ComputeError> {
-        // For now, fall back to CPU (Haversine is more complex)
-        tracing::warn!("GPU sphere distance not yet implemented, falling back to CPU");
+        // Use GPU manager (avoids 50-60ms device initialization overhead)
+        if let Some(ref manager) = self.gpu_manager {
+            // Flatten points into arrays (x=longitude, y=latitude)
+            let point_count = candidate_points.len();
+            let mut points_lon = Vec::with_capacity(point_count);
+            let mut points_lat = Vec::with_capacity(point_count);
+
+            for point in candidate_points {
+                points_lon.push(point.x as f32);  // longitude
+                points_lat.push(point.y as f32);  // latitude
+            }
+
+            // Execute via manager (uses pooled device)
+            match manager.execute_spatial_distance_sphere(
+                query_point.x as f32,  // query longitude
+                query_point.y as f32,  // query latitude
+                &points_lon,
+                &points_lat,
+                point_count,
+            ).await {
+                Ok(distances) => {
+                    // Convert distances to results
+                    let mut results = Vec::with_capacity(point_count);
+                    for (idx, &distance) in distances.iter().enumerate() {
+                        results.push(SpatialDistanceResult {
+                            index: idx,
+                            distance: distance as f64,
+                        });
+                    }
+                    return Ok(results);
+                }
+                Err(e) => {
+                    tracing::warn!("GPU execution failed: {}, falling back to CPU", e);
+                }
+            }
+        }
+
+        // Fallback to CPU if GPU unavailable
         Ok(self.batch_distance_sphere_cpu_parallel(query_point, candidate_points))
     }
 

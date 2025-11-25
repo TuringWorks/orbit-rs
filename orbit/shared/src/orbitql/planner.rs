@@ -47,6 +47,15 @@ impl From<OptimizationError> for PlanningError {
     }
 }
 
+/// Data model types for cross-model operations
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum DataModel {
+    Document,
+    Graph,
+    TimeSeries,
+    Vector,
+}
+
 /// Execution plan node types
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PlanNode {
@@ -64,6 +73,16 @@ pub enum PlanNode {
         left: Box<PlanNode>,
         right: Box<PlanNode>,
         condition: Expression,
+    },
+    /// Cross-model join for joining data from different data models
+    CrossModelJoin {
+        left: Box<PlanNode>,
+        right: Box<PlanNode>,
+        left_model: DataModel,
+        right_model: DataModel,
+        left_key: Expression,
+        right_key: Expression,
+        join_type: JoinType,
     },
     Aggregation {
         input: Box<PlanNode>,
@@ -504,6 +523,29 @@ impl QueryPlanner {
                 // Time series query cost depends on time range
                 // For now, use a simple heuristic
                 Ok((500.0, 1000))
+            }
+            PlanNode::CrossModelJoin {
+                left,
+                right,
+                left_model,
+                right_model,
+                ..
+            } => {
+                let (left_cost, left_rows) = self.estimate_plan_cost(left)?;
+                let (right_cost, right_rows) = self.estimate_plan_cost(right)?;
+
+                // Cross-model joins have higher overhead due to schema unification
+                let model_conversion_cost = match (left_model, right_model) {
+                    (DataModel::Document, DataModel::Document) => 1.0,
+                    (DataModel::Graph, DataModel::Document) | (DataModel::Document, DataModel::Graph) => 1.5,
+                    (DataModel::TimeSeries, DataModel::Document) | (DataModel::Document, DataModel::TimeSeries) => 1.3,
+                    (DataModel::Graph, DataModel::TimeSeries) | (DataModel::TimeSeries, DataModel::Graph) => 2.0,
+                    _ => 1.5,
+                };
+
+                let output_rows = (left_rows * right_rows / 10).max(1); // Join selectivity estimate
+                let cost = (left_cost + right_cost + (left_rows * right_rows) as f64 * 0.01) * model_conversion_cost;
+                Ok((cost, output_rows))
             }
         }
     }

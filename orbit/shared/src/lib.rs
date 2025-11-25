@@ -1,4 +1,5 @@
 pub mod actor_communication;
+pub mod actor_memory;
 pub mod addressable;
 pub mod benchmarks;
 pub mod builder_pattern;
@@ -134,12 +135,16 @@ pub use spatial::{
 // Re-export security functionality
 pub use security::authentication::AuthToken;
 pub use security::{
-    AnomalyDetector, AuditEvent, AuditLogger, AuditPolicy, AuthenticationManager,
-    AuthenticationProvider, ComplianceMonitor, EncryptionManager, KeyManagementSystem,
-    KeyRotationPolicy, LdapAuthProvider, OAuth2AuthProvider, PolicyEngine, QueryValidator,
-    RbacEngine, RoleBasedAccessControl, SamlAuthProvider, SecurityAction, SecurityContext,
-    SecurityFramework, SecurityResource, SecuritySubject, SqlInjectionDetector,
-    ThreatDetectionEngine, TlsConfig, TlsVersion,
+    AccessLevel, AnomalyDetector, AuditEvent, AuditLogger, AuditPolicy, AuthenticationManager,
+    AuthenticationProvider, ComplianceMonitor, CrossTenantAction, CrossTenantPolicy,
+    DataMaskingEngine, DatePrecision, EncryptedFieldValue, EncryptionManager, EncryptionType,
+    FieldEncryptionConfig, FieldEncryptionEngine, FieldEncryptionPolicy, FieldMaskingConfig,
+    IsolationLevel, KeyManagementSystem, KeyRotationPolicy, LdapAuthProvider, MaskingContext,
+    MaskingPolicy, MaskingStrategy, OAuth2AuthProvider, PolicyEngine, QueryValidator, RbacEngine,
+    ResourceQuota, ResourceUsage, RoleBasedAccessControl, SamlAuthProvider, SecurityAction,
+    SecurityContext, SecurityFramework, SecurityResource, SecuritySubject, SensitivityLevel,
+    SqlInjectionDetector, TenantAccessResult, TenantConfig, TenantContext, TenantId,
+    TenantManager, TenantStatus, ThreatDetectionEngine, TlsConfig, TlsVersion, TokenStore,
 };
 
 // Re-export trigger functionality

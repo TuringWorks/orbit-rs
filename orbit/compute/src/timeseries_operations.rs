@@ -241,19 +241,75 @@ impl GPUTimeSeriesOperations {
         window_size_ms: u64,
         aggregation: TimeSeriesAggregation,
     ) -> Result<Vec<TimeSeriesAggregationResult>, ComputeError> {
-        // For now, fall back to CPU-parallel
-        // GPU implementation would require:
-        // 1. Grouping points by window on GPU
-        // 2. Parallel aggregation within each window
-        // This is complex and deferred to a future implementation
+        // Map aggregation type to GPU kernel code
+        let agg_type = match aggregation {
+            TimeSeriesAggregation::Sum => 0,
+            TimeSeriesAggregation::Min => 1,
+            TimeSeriesAggregation::Max => 2,
+            TimeSeriesAggregation::Avg => 3,
+            TimeSeriesAggregation::Count => 4,
+            // These are not yet supported on GPU, fall back to CPU
+            TimeSeriesAggregation::First | TimeSeriesAggregation::Last |
+            TimeSeriesAggregation::Range | TimeSeriesAggregation::Std => {
+                let mut windows: std::collections::BTreeMap<u64, Vec<TimeSeriesPoint>> =
+                    std::collections::BTreeMap::new();
+                for point in points {
+                    let window_start = (point.timestamp / window_size_ms) * window_size_ms;
+                    windows.entry(window_start).or_default().push(point.clone());
+                }
+                return self.aggregate_by_windows_cpu_parallel(&windows, window_size_ms, aggregation);
+            }
+        };
+
+        // Extract timestamps and values
+        let timestamps: Vec<u64> = points.iter().map(|p| p.timestamp).collect();
+        let values: Vec<f32> = points.iter().map(|p| p.value as f32).collect();
+
+        // Use GPU manager (avoids 50-60ms device initialization overhead)
+        if let Some(ref manager) = self.gpu_manager {
+            match tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    manager.execute_timeseries_window_aggregate(
+                        &timestamps,
+                        &values,
+                        window_size_ms,
+                        agg_type,
+                    ).await
+                })
+            }) {
+                Ok((window_results, window_counts, max_window_id)) => {
+                    // Convert GPU results to TimeSeriesAggregationResult
+                    let mut results = Vec::new();
+                    for window_id in 0..max_window_id {
+                        let count = window_counts[window_id as usize];
+                        if count > 0 {
+                            let window_start = (window_id as u64) * window_size_ms;
+                            let window_end = window_start + window_size_ms;
+                            let value = window_results[window_id as usize] as f64;
+
+                            results.push(TimeSeriesAggregationResult {
+                                window_start,
+                                window_end,
+                                value,
+                                point_count: count as usize,
+                            });
+                        }
+                    }
+                    return Ok(results);
+                }
+                Err(e) => {
+                    tracing::warn!("GPU execution failed: {}, falling back to CPU", e);
+                }
+            }
+        }
+
+        // Fallback to CPU
         let mut windows: std::collections::BTreeMap<u64, Vec<TimeSeriesPoint>> =
             std::collections::BTreeMap::new();
-
         for point in points {
             let window_start = (point.timestamp / window_size_ms) * window_size_ms;
             windows.entry(window_start).or_default().push(point.clone());
         }
-
         self.aggregate_by_windows_cpu_parallel(&windows, window_size_ms, aggregation)
     }
 
@@ -549,8 +605,8 @@ mod tests {
         assert!(results[0].value >= 0.0);
     }
 
-    #[test]
-    fn test_aggregate_values() {
+    #[tokio::test]
+    async fn test_aggregate_values() {
         let config = TimeSeriesOperationsConfig::default();
         let ops = GPUTimeSeriesOperations::new(config).await.unwrap();
 

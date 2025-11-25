@@ -803,3 +803,362 @@ kernel void spatial_distance_sphere(
     
     distances[id] = EARTH_RADIUS_KM * c * 1000.0; // Return distance in meters
 }
+
+// ============================================================================
+// Matrix Operations (GEMM - General Matrix Multiply)
+// ============================================================================
+
+/// GPU-Accelerated Matrix Multiplication (GEMM): C = A * B
+/// Each thread computes one element of the result matrix C[i][j]
+/// A is M×K, B is K×N, C is M×N
+/// Matrices are stored in row-major order as flattened arrays
+kernel void matrix_multiply_f32(
+    device const float* matrix_a [[buffer(0)]],  // M×K matrix (flattened)
+    device const float* matrix_b [[buffer(1)]],  // K×N matrix (flattened)
+    device float* matrix_c [[buffer(2)]],        // M×N result matrix (flattened)
+    device const uint* params [[buffer(3)]],     // [M, N, K]
+    uint2 id [[thread_position_in_grid]]
+) {
+    uint M = params[0];  // Rows in A and C
+    uint N = params[1];  // Cols in B and C
+    uint K = params[2];  // Cols in A, Rows in B
+
+    uint row = id.y;  // Row index in result matrix
+    uint col = id.x;  // Col index in result matrix
+
+    if (row >= M || col >= N) {
+        return;
+    }
+
+    // Compute C[row][col] = sum(A[row][k] * B[k][col])
+    float sum = 0.0;
+    for (uint k = 0; k < K; k++) {
+        float a_val = matrix_a[row * K + k];       // A[row][k]
+        float b_val = matrix_b[k * N + col];       // B[k][col]
+        sum += a_val * b_val;
+    }
+
+    matrix_c[row * N + col] = sum;
+}
+
+/// GPU-Accelerated Matrix Multiplication with Tiling (Optimized)
+/// Uses shared memory (threadgroup) for better cache locality
+/// Tile size: 16×16 (optimal for most GPUs)
+kernel void matrix_multiply_tiled_f32(
+    device const float* matrix_a [[buffer(0)]],
+    device const float* matrix_b [[buffer(1)]],
+    device float* matrix_c [[buffer(2)]],
+    device const uint* params [[buffer(3)]],  // [M, N, K]
+    uint2 global_id [[thread_position_in_grid]],
+    uint2 local_id [[thread_position_in_threadgroup]],
+    uint2 group_id [[threadgroup_position_in_grid]]
+) {
+    uint M = params[0];
+    uint N = params[1];
+    uint K = params[2];
+
+    // Tile size
+    const uint TILE_SIZE = 16;
+
+    // Shared memory for tiles
+    threadgroup float tile_a[TILE_SIZE][TILE_SIZE];
+    threadgroup float tile_b[TILE_SIZE][TILE_SIZE];
+
+    uint row = global_id.y;
+    uint col = global_id.x;
+
+    float sum = 0.0;
+
+    // Process tiles
+    uint num_tiles = (K + TILE_SIZE - 1) / TILE_SIZE;
+
+    for (uint tile = 0; tile < num_tiles; tile++) {
+        // Load tile from A
+        uint a_col = tile * TILE_SIZE + local_id.x;
+        if (row < M && a_col < K) {
+            tile_a[local_id.y][local_id.x] = matrix_a[row * K + a_col];
+        } else {
+            tile_a[local_id.y][local_id.x] = 0.0;
+        }
+
+        // Load tile from B
+        uint b_row = tile * TILE_SIZE + local_id.y;
+        if (b_row < K && col < N) {
+            tile_b[local_id.y][local_id.x] = matrix_b[b_row * N + col];
+        } else {
+            tile_b[local_id.y][local_id.x] = 0.0;
+        }
+
+        // Synchronize threads
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        // Compute partial dot product for this tile
+        for (uint k = 0; k < TILE_SIZE; k++) {
+            sum += tile_a[local_id.y][k] * tile_b[k][local_id.x];
+        }
+
+        // Synchronize before loading next tile
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+
+    // Write result
+    if (row < M && col < N) {
+        matrix_c[row * N + col] = sum;
+    }
+}
+
+/// GPU-Accelerated Matrix-Vector Multiplication
+/// Each thread computes one element of the result vector: y = A * x
+kernel void matrix_vector_multiply_f32(
+    device const float* matrix [[buffer(0)]],  // M×N matrix (flattened)
+    device const float* vector [[buffer(1)]],  // N-element vector
+    device float* result [[buffer(2)]],        // M-element result vector
+    device const uint* params [[buffer(3)]],   // [M, N]
+    uint id [[thread_position_in_grid]]
+) {
+    uint M = params[0];  // Rows in matrix
+    uint N = params[1];  // Cols in matrix (length of vector)
+
+    if (id >= M) {
+        return;
+    }
+
+    // Compute result[id] = sum(matrix[id][j] * vector[j])
+    float sum = 0.0;
+    for (uint j = 0; j < N; j++) {
+        sum += matrix[id * N + j] * vector[j];
+    }
+
+    result[id] = sum;
+}
+
+// ============================================================================
+// Time-Series Window Aggregation Kernels
+// ============================================================================
+
+/// Time-series window aggregation with atomic operations
+/// Computes aggregations (Sum, Min, Max, Count) for time-windowed data
+///
+/// Each thread processes one data point and atomically updates its window's aggregate
+kernel void timeseries_window_aggregate(
+    device const float* values [[buffer(0)]],          // Input values
+    device const ulong* timestamps [[buffer(1)]],      // Timestamps (ms)
+    device const uint* point_count [[buffer(2)]],      // Number of points
+    device const ulong* window_size_ms [[buffer(3)]],  // Window size in milliseconds
+    device const uint* aggregation_type [[buffer(4)]], // 0=Sum, 1=Min, 2=Max, 3=Avg, 4=Count
+    device atomic_uint* window_counts [[buffer(5)]],   // Count per window (for Avg)
+    device atomic_uint* window_results [[buffer(6)]],  // Results as uint (reinterpreted as float)
+    device uint* window_ids [[buffer(7)]],             // Output: window ID for each point
+    uint id [[thread_position_in_grid]]
+) {
+    if (id >= *point_count) {
+        return;
+    }
+
+    // Calculate window ID for this point
+    ulong timestamp = timestamps[id];
+    ulong window_id = timestamp / (*window_size_ms);
+    window_ids[id] = (uint)window_id;
+
+    float value = values[id];
+    uint agg_type = *aggregation_type;
+
+    // Atomic aggregation based on type
+    if (agg_type == 0) {
+        // Sum: atomic add (reinterpret float as uint for atomic ops)
+        uint value_as_uint = as_type<uint>(value);
+        uint old_val, new_val;
+        do {
+            old_val = atomic_load_explicit(&window_results[window_id], memory_order_relaxed);
+            float old_float = as_type<float>(old_val);
+            float new_float = old_float + value;
+            new_val = as_type<uint>(new_float);
+        } while (!atomic_compare_exchange_weak_explicit(
+            &window_results[window_id], &old_val, new_val,
+            memory_order_relaxed, memory_order_relaxed));
+
+        atomic_fetch_add_explicit(&window_counts[window_id], 1, memory_order_relaxed);
+
+    } else if (agg_type == 1) {
+        // Min: atomic compare and swap
+        uint value_as_uint = as_type<uint>(value);
+        uint old_val, new_val;
+        do {
+            old_val = atomic_load_explicit(&window_results[window_id], memory_order_relaxed);
+            float old_float = as_type<float>(old_val);
+            float new_float = min(old_float, value);
+            new_val = as_type<uint>(new_float);
+        } while (!atomic_compare_exchange_weak_explicit(
+            &window_results[window_id], &old_val, new_val,
+            memory_order_relaxed, memory_order_relaxed));
+
+        atomic_fetch_add_explicit(&window_counts[window_id], 1, memory_order_relaxed);
+
+    } else if (agg_type == 2) {
+        // Max: atomic compare and swap
+        uint value_as_uint = as_type<uint>(value);
+        uint old_val, new_val;
+        do {
+            old_val = atomic_load_explicit(&window_results[window_id], memory_order_relaxed);
+            float old_float = as_type<float>(old_val);
+            float new_float = max(old_float, value);
+            new_val = as_type<uint>(new_float);
+        } while (!atomic_compare_exchange_weak_explicit(
+            &window_results[window_id], &old_val, new_val,
+            memory_order_relaxed, memory_order_relaxed));
+
+        atomic_fetch_add_explicit(&window_counts[window_id], 1, memory_order_relaxed);
+
+    } else if (agg_type == 3) {
+        // Avg: accumulate sum, count separately
+        uint value_as_uint = as_type<uint>(value);
+        uint old_val, new_val;
+        do {
+            old_val = atomic_load_explicit(&window_results[window_id], memory_order_relaxed);
+            float old_float = as_type<float>(old_val);
+            float new_float = old_float + value;
+            new_val = as_type<uint>(new_float);
+        } while (!atomic_compare_exchange_weak_explicit(
+            &window_results[window_id], &old_val, new_val,
+            memory_order_relaxed, memory_order_relaxed));
+
+        atomic_fetch_add_explicit(&window_counts[window_id], 1, memory_order_relaxed);
+
+    } else if (agg_type == 4) {
+        // Count: just increment
+        atomic_fetch_add_explicit(&window_counts[window_id], 1, memory_order_relaxed);
+    }
+}
+
+/// Finalize time-series aggregation results (convert sums to averages)
+kernel void timeseries_finalize_avg(
+    device atomic_uint* window_results [[buffer(0)]],
+    device atomic_uint* window_counts [[buffer(1)]],
+    device float* final_results [[buffer(2)]],
+    device const uint* window_count [[buffer(3)]],
+    uint id [[thread_position_in_grid]]
+) {
+    if (id >= *window_count) {
+        return;
+    }
+
+    uint count = atomic_load_explicit(&window_counts[id], memory_order_relaxed);
+    if (count == 0) {
+        final_results[id] = 0.0;
+        return;
+    }
+
+    uint sum_as_uint = atomic_load_explicit(&window_results[id], memory_order_relaxed);
+    float sum = as_type<float>(sum_as_uint);
+    final_results[id] = sum / float(count);
+}
+
+// ============================================================================
+// Hash Join Kernels (Inner Join)
+// ============================================================================
+
+/// Build phase: construct hash table from build relation (smaller table)
+/// Uses open addressing with linear probing for collision resolution
+///
+/// Hash table layout: [key0, value0, key1, value1, ..., keyN, valueN]
+/// Empty slots marked with UINT_MAX
+kernel void hash_join_build(
+    device const uint* build_keys [[buffer(0)]],      // Keys from build relation
+    device const uint* build_values [[buffer(1)]],    // Values (row IDs) from build relation
+    device const uint* build_count [[buffer(2)]],     // Number of rows in build relation
+    device const uint* table_size [[buffer(3)]],      // Hash table size (2x build_count for low collision)
+    device atomic_uint* hash_table [[buffer(4)]],     // Output: hash table (key-value pairs)
+    uint id [[thread_position_in_grid]]
+) {
+    if (id >= *build_count) {
+        return;
+    }
+
+    uint key = build_keys[id];
+    uint value = build_values[id];
+    uint size = *table_size;
+
+    // Simple hash function
+    uint hash = key % size;
+
+    // Linear probing to find empty slot
+    uint probe = hash;
+    for (uint i = 0; i < size; i++) {
+        uint slot_idx = probe * 2;  // Each entry is 2 elements (key, value)
+
+        // Try to insert key
+        uint expected = UINT_MAX;
+        if (atomic_compare_exchange_weak_explicit(
+            &hash_table[slot_idx],
+            &expected,
+            key,
+            memory_order_relaxed,
+            memory_order_relaxed
+        )) {
+            // Successfully inserted key, now insert value
+            atomic_store_explicit(&hash_table[slot_idx + 1], value, memory_order_relaxed);
+            return;
+        }
+
+        // Slot occupied, try next slot (linear probing)
+        probe = (probe + 1) % size;
+    }
+
+    // Table full (should not happen if sized correctly)
+}
+
+/// Probe phase: probe hash table with probe relation (larger table)
+/// Outputs matching pairs to result buffers
+kernel void hash_join_probe(
+    device const uint* probe_keys [[buffer(0)]],           // Keys from probe relation
+    device const uint* probe_values [[buffer(1)]],         // Values (row IDs) from probe relation
+    device const uint* probe_count [[buffer(2)]],          // Number of rows in probe relation
+    device const uint* table_size [[buffer(3)]],           // Hash table size
+    device const atomic_uint* hash_table [[buffer(4)]],    // Input: hash table from build phase
+    device atomic_uint* output_count [[buffer(5)]],        // Output: count of matches
+    device uint* output_build_ids [[buffer(6)]],           // Output: matching build row IDs
+    device uint* output_probe_ids [[buffer(7)]],           // Output: matching probe row IDs
+    device const uint* max_output [[buffer(8)]],           // Maximum output size
+    uint id [[thread_position_in_grid]]
+) {
+    if (id >= *probe_count) {
+        return;
+    }
+
+    uint key = probe_keys[id];
+    uint probe_value = probe_values[id];
+    uint size = *table_size;
+
+    // Hash and probe
+    uint hash = key % size;
+    uint probe_slot = hash;
+
+    // Linear probing to find matching key
+    for (uint i = 0; i < size; i++) {
+        uint slot_idx = probe_slot * 2;
+        uint stored_key = atomic_load_explicit(&hash_table[slot_idx], memory_order_relaxed);
+
+        if (stored_key == UINT_MAX) {
+            // Empty slot, key not found
+            return;
+        }
+
+        if (stored_key == key) {
+            // Found matching key
+            uint build_value = atomic_load_explicit(&hash_table[slot_idx + 1], memory_order_relaxed);
+
+            // Atomically get output index and increment
+            uint output_idx = atomic_fetch_add_explicit(output_count, 1, memory_order_relaxed);
+
+            if (output_idx < *max_output) {
+                output_build_ids[output_idx] = build_value;
+                output_probe_ids[output_idx] = probe_value;
+            }
+
+            return;
+        }
+
+        // Key mismatch, continue probing
+        probe_slot = (probe_slot + 1) % size;
+    }
+}

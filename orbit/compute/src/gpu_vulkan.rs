@@ -3,7 +3,7 @@
 //! This module provides GPU-accelerated database operations using Vulkan compute shaders.
 //! Vulkan works on all major platforms (Linux, Windows, macOS) and supports NVIDIA, AMD, and Intel GPUs.
 
-use crate::errors::{ComputeError, GPUError};
+use crate::errors::{ComputeError, ExecutionError, GPUError};
 use crate::gpu_backend::{FilterOp, GpuBackendType, GpuDevice};
 use std::sync::Arc;
 use vulkano::{
@@ -13,7 +13,8 @@ use vulkano::{
         CopyBufferInfo,
     },
     descriptor_set::{
-        allocator::StandardDescriptorSetAllocator, layout::DescriptorSetLayout, PersistentDescriptorSet, WriteDescriptorSet,
+        allocator::StandardDescriptorSetAllocator, layout::DescriptorSetLayout,
+        PersistentDescriptorSet, WriteDescriptorSet,
     },
     device::{
         physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, Queue,
@@ -149,7 +150,6 @@ impl VulkanDevice {
         // For now, we'll create pipelines lazily when needed
         let bfs_pipeline = None; // Will be created on first use
         let vector_similarity_pipeline = None; // Will be created on first use
-        let spatial_distance_pipeline = None; // Will be created on first use
 
         Ok(Self {
             device,
@@ -160,7 +160,6 @@ impl VulkanDevice {
             device_name,
             bfs_pipeline,
             vector_similarity_pipeline,
-            spatial_distance_pipeline,
         })
     }
 
@@ -1072,7 +1071,7 @@ impl VulkanDevice {
         let shader = unsafe {
             ShaderModule::from_bytes(self.device.clone(), shader_bytes)
                 .map_err(|e| ComputeError::gpu(crate::errors::GPUError::ShaderCompilationFailed {
-                    shader_name: "dijkstra_relax".to_string(),
+                    shader_type: "dijkstra_relax".to_string(),
                     error: format!("{:?}", e),
                 }))?
         };
@@ -1092,10 +1091,9 @@ impl VulkanDevice {
             edge_array.iter().copied(),
         )
         .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: edge_array.len() * std::mem::size_of::<u32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: edge_array.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1113,10 +1111,9 @@ impl VulkanDevice {
             edge_offset.iter().copied(),
         )
         .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: edge_offset.len() * std::mem::size_of::<u32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: edge_offset.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1133,11 +1130,10 @@ impl VulkanDevice {
             },
             edge_weights.iter().copied(),
         )
-        .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: edge_weights.len() * std::mem::size_of::<f32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: edge_weights.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1155,11 +1151,10 @@ impl VulkanDevice {
             },
             distances.iter().copied(),
         )
-        .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: distances.len() * std::mem::size_of::<f32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: distances.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1177,11 +1172,10 @@ impl VulkanDevice {
             },
             parent.iter().copied(),
         )
-        .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: parent.len() * std::mem::size_of::<u32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: parent.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1198,11 +1192,10 @@ impl VulkanDevice {
             },
             active_mask.iter().copied(),
         )
-        .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: active_mask.len() * std::mem::size_of::<u32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: active_mask.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1220,11 +1213,10 @@ impl VulkanDevice {
             },
             [*changed].iter().copied(),
         )
-        .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: std::mem::size_of::<u32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1241,11 +1233,10 @@ impl VulkanDevice {
             },
             [node_count].iter().copied(),
         )
-        .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: std::mem::size_of::<u32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1553,6 +1544,1594 @@ impl GpuDevice for VulkanDevice {
 
     fn aggregate_count(&self, mask: &[i32]) -> Result<usize, ComputeError> {
         Ok(mask.iter().filter(|&&x| x != 0).count())
+    }
+}
+
+impl VulkanDevice {
+    /// Execute matrix multiplication on GPU (C = A × B)
+    ///
+    /// # Arguments
+    /// * `matrix_a` - M×K matrix (row-major, flattened)
+    /// * `matrix_b` - K×N matrix (row-major, flattened)
+    /// * `m` - Number of rows in A and C
+    /// * `n` - Number of columns in B and C
+    /// * `k` - Number of columns in A, rows in B
+    pub fn execute_matrix_multiply(
+        &mut self,
+        matrix_a: &[f32],
+        matrix_b: &[f32],
+        m: usize,
+        n: usize,
+        k: usize,
+    ) -> Result<Vec<f32>, ComputeError> {
+        // Validate inputs
+        if matrix_a.len() != m * k {
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "matrix_a".to_string(),
+                    value: format!("expected {}×{} = {} elements, got {}", m, k, m * k, matrix_a.len()),
+                },
+                compute_unit: None,
+            });
+        }
+        if matrix_b.len() != k * n {
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "matrix_b".to_string(),
+                    value: format!("expected {}×{} = {} elements, got {}", k, n, k * n, matrix_b.len()),
+                },
+                compute_unit: None,
+            });
+        }
+
+        // Create buffers for matrices
+        let matrix_a_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            matrix_a.iter().copied(),
+        )
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: matrix_a.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        let matrix_b_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            matrix_b.iter().copied(),
+        )
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: matrix_b.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        let matrix_c_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            (0..m * n).map(|_| 0.0f32),
+        )
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: m * n * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        // Create uniform buffer for parameters
+        let params = [m as u32, n as u32, k as u32];
+        let params_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            params.iter().copied(),
+        )
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<[u32; 3]>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        // Load shader
+        let shader_bytes = include_bytes!("shaders/vulkan/matrix_multiply.spv");
+        let shader = unsafe {
+            ShaderModule::from_bytes(self.device.clone(), shader_bytes)
+                .map_err(|e| ComputeError::gpu(crate::errors::GPUError::ShaderCompilationFailed {
+                    shader_type: "matrix_multiply".to_string(),
+                    error: format!("{:?}", e),
+                }))?
+        };
+
+        // Create pipeline
+        let entry_point = shader.entry_point("main").unwrap();
+        let stage = PipelineShaderStageCreateInfo::new(entry_point);
+        let layout = PipelineLayout::new(
+            self.device.clone(),
+            PipelineDescriptorSetLayoutCreateInfo::from_stages(&[stage.clone()])
+                .into_pipeline_layout_create_info(self.device.clone())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let pipeline = ComputePipeline::new(
+            self.device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(stage, layout),
+        )
+        .map_err(|e| {
+            ComputeError::execution(ExecutionError::RuntimeError {
+                stage: "pipeline_creation:matrix_multiply".to_string(),
+                error: format!("{:?}", e),
+            })
+        })?;
+
+        // Create descriptor set
+        let layout = &pipeline.layout().set_layouts()[0];
+        let descriptor_set = PersistentDescriptorSet::new(
+            &self.descriptor_set_allocator,
+            layout.clone(),
+            [
+                WriteDescriptorSet::buffer(0, matrix_a_buffer.clone()),
+                WriteDescriptorSet::buffer(1, matrix_b_buffer.clone()),
+                WriteDescriptorSet::buffer(2, matrix_c_buffer.clone()),
+                WriteDescriptorSet::buffer(3, params_buffer.clone()),
+            ],
+            [],
+        )
+        .map_err(|e| {
+            ComputeError::execution(ExecutionError::RuntimeError {
+                stage: "descriptor_set_creation".to_string(),
+                error: format!("{:?}", e),
+            })
+        })?;
+
+        // Create command buffer and dispatch
+        let mut builder = AutoCommandBufferBuilder::primary(
+            &self.command_buffer_allocator,
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        builder
+            .bind_pipeline_compute(pipeline.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                pipeline.layout().clone(),
+                0,
+                descriptor_set,
+            )
+            .unwrap();
+
+        // Dispatch with 16×16 workgroups
+        let workgroup_count_x = (n as u32 + 15) / 16;
+        let workgroup_count_y = (m as u32 + 15) / 16;
+        builder
+            .dispatch([workgroup_count_x, workgroup_count_y, 1])
+            .unwrap();
+
+        let command_buffer = builder.build().unwrap();
+
+        // Submit and wait
+        let future = sync::now(self.device.clone())
+            .then_execute(self.queue.clone(), command_buffer)
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap();
+
+        future.wait(None).unwrap();
+
+        // Read result
+        let result_content = matrix_c_buffer.read().unwrap();
+        Ok(result_content.iter().copied().collect())
+    }
+
+    /// Execute Euclidean distance calculation on GPU
+    ///
+    /// # Arguments
+    /// * `query_x` - X coordinate of query point
+    /// * `query_y` - Y coordinate of query point
+    /// * `candidates_x` - X coordinates of candidate points
+    /// * `candidates_y` - Y coordinates of candidate points
+    /// * `point_count` - Number of candidate points
+    pub fn execute_spatial_distance(
+        &mut self,
+        query_x: f32,
+        query_y: f32,
+        candidates_x: &[f32],
+        candidates_y: &[f32],
+        point_count: usize,
+    ) -> Result<Vec<f32>, ComputeError> {
+        // Validate inputs
+        if candidates_x.len() != point_count || candidates_y.len() != point_count {
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "candidates".to_string(),
+                    value: format!(
+                        "expected {} points, got x={} y={}",
+                        point_count,
+                        candidates_x.len(),
+                        candidates_y.len()
+                    ),
+                },
+                compute_unit: None,
+            });
+        }
+
+        // Create buffers
+        let query_x_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [query_x].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let query_y_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [query_y].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let candidates_x_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            candidates_x.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: candidates_x.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let candidates_y_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            candidates_y.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: candidates_y.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let distances_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            (0..point_count).map(|_| 0.0f32),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: point_count * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let point_count_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [point_count as u32].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        // Load shader
+        let shader_bytes = include_bytes!("shaders/vulkan/spatial_distance.spv");
+        let shader = unsafe {
+            ShaderModule::from_bytes(self.device.clone(), shader_bytes)
+                .map_err(|e| ComputeError::GPU {
+                    source: crate::errors::GPUError::InitializationFailed {
+                        message: format!("Failed to load spatial_distance shader: {}", e),
+                    },
+                })?
+        };
+
+        // Create pipeline
+        let cs = shader.entry_point("main").unwrap();
+        let stage = PipelineShaderStageCreateInfo::new(cs);
+        let layout = PipelineLayout::new(
+            self.device.clone(),
+            PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+                .into_pipeline_layout_create_info(self.device.clone())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let pipeline = ComputePipeline::new(
+            self.device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(stage, layout),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::InitializationFailed {
+                message: format!("Failed to create spatial_distance pipeline: {}", e),
+            },
+        })?;
+
+        // Create descriptor set
+        let layout = &pipeline.layout().set_layouts()[0];
+        let descriptor_set = PersistentDescriptorSet::new(
+            &self.descriptor_set_allocator,
+            layout.clone(),
+            [
+                WriteDescriptorSet::buffer(0, query_x_buffer.clone()),
+                WriteDescriptorSet::buffer(1, query_y_buffer.clone()),
+                WriteDescriptorSet::buffer(2, candidates_x_buffer.clone()),
+                WriteDescriptorSet::buffer(3, candidates_y_buffer.clone()),
+                WriteDescriptorSet::buffer(4, distances_buffer.clone()),
+                WriteDescriptorSet::buffer(5, point_count_buffer.clone()),
+            ],
+            [],
+        )
+        .unwrap();
+
+        // Create command buffer
+        let mut builder = AutoCommandBufferBuilder::primary(
+            &self.command_buffer_allocator,
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        builder
+            .bind_pipeline_compute(pipeline.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                pipeline.layout().clone(),
+                0,
+                descriptor_set,
+            )
+            .unwrap();
+
+        // Dispatch with 256 threads per workgroup
+        let workgroup_count = (point_count as u32 + 255) / 256;
+        builder.dispatch([workgroup_count, 1, 1]).unwrap();
+
+        let command_buffer = builder.build().unwrap();
+
+        // Submit and wait
+        let future = sync::now(self.device.clone())
+            .then_execute(self.queue.clone(), command_buffer)
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap();
+
+        future.wait(None).unwrap();
+
+        // Read result
+        let result_content = distances_buffer.read().unwrap();
+        Ok(result_content.iter().copied().collect())
+    }
+
+    /// Execute Haversine distance calculation on GPU (great circle distance on a sphere)
+    ///
+    /// # Arguments
+    /// * `query_lon` - Longitude of query point
+    /// * `query_lat` - Latitude of query point
+    /// * `candidates_lon` - Longitudes of candidate points
+    /// * `candidates_lat` - Latitudes of candidate points
+    /// * `point_count` - Number of candidate points
+    pub fn execute_spatial_distance_sphere(
+        &mut self,
+        query_lon: f32,
+        query_lat: f32,
+        candidates_lon: &[f32],
+        candidates_lat: &[f32],
+        point_count: usize,
+    ) -> Result<Vec<f32>, ComputeError> {
+        // Validate inputs
+        if candidates_lon.len() != point_count || candidates_lat.len() != point_count {
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "candidates".to_string(),
+                    value: format!(
+                        "expected {} points, got lon={} lat={}",
+                        point_count,
+                        candidates_lon.len(),
+                        candidates_lat.len()
+                    ),
+                },
+                compute_unit: None,
+            });
+        }
+
+        // Create buffers (using uniform for query point)
+        let query_lon_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [query_lon].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let query_lat_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [query_lat].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let candidates_lon_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            candidates_lon.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: candidates_lon.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let candidates_lat_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            candidates_lat.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: candidates_lat.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let distances_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            (0..point_count).map(|_| 0.0f32),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: point_count * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let point_count_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [point_count as u32].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        // Load shader
+        let shader_bytes = include_bytes!("shaders/vulkan/spatial_distance_sphere.spv");
+        let shader = unsafe {
+            ShaderModule::from_bytes(self.device.clone(), shader_bytes)
+                .map_err(|e| ComputeError::GPU {
+                    source: crate::errors::GPUError::InitializationFailed {
+                        message: format!("Failed to load spatial_distance_sphere shader: {}", e),
+                    },
+                })?
+        };
+
+        // Create pipeline
+        let cs = shader.entry_point("main").unwrap();
+        let stage = PipelineShaderStageCreateInfo::new(cs);
+        let layout = PipelineLayout::new(
+            self.device.clone(),
+            PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+                .into_pipeline_layout_create_info(self.device.clone())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let pipeline = ComputePipeline::new(
+            self.device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(stage, layout),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::InitializationFailed {
+                message: format!("Failed to create spatial_distance_sphere pipeline: {}", e),
+            },
+        })?;
+
+        // Create descriptor set
+        let layout = &pipeline.layout().set_layouts()[0];
+        let descriptor_set = PersistentDescriptorSet::new(
+            &self.descriptor_set_allocator,
+            layout.clone(),
+            [
+                WriteDescriptorSet::buffer(0, query_lon_buffer.clone()),
+                WriteDescriptorSet::buffer(1, query_lat_buffer.clone()),
+                WriteDescriptorSet::buffer(2, candidates_lon_buffer.clone()),
+                WriteDescriptorSet::buffer(3, candidates_lat_buffer.clone()),
+                WriteDescriptorSet::buffer(4, distances_buffer.clone()),
+                WriteDescriptorSet::buffer(5, point_count_buffer.clone()),
+            ],
+            [],
+        )
+        .unwrap();
+
+        // Create command buffer
+        let mut builder = AutoCommandBufferBuilder::primary(
+            &self.command_buffer_allocator,
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        builder
+            .bind_pipeline_compute(pipeline.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                pipeline.layout().clone(),
+                0,
+                descriptor_set,
+            )
+            .unwrap();
+
+        // Dispatch with 256 threads per workgroup
+        let workgroup_count = (point_count as u32 + 255) / 256;
+        builder.dispatch([workgroup_count, 1, 1]).unwrap();
+
+        let command_buffer = builder.build().unwrap();
+
+        // Submit and wait
+        let future = sync::now(self.device.clone())
+            .then_execute(self.queue.clone(), command_buffer)
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap();
+
+        future.wait(None).unwrap();
+
+        // Read result
+        let result_content = distances_buffer.read().unwrap();
+        Ok(result_content.iter().copied().collect())
+    }
+
+    /// Execute GPU-accelerated time-series window aggregation
+    ///
+    /// # Arguments
+    /// * `timestamps` - Timestamps in milliseconds
+    /// * `values` - Values at each timestamp
+    /// * `window_size_ms` - Window size in milliseconds
+    /// * `aggregation_type` - 0=Sum, 1=Min, 2=Max, 3=Avg, 4=Count
+    ///
+    /// # Returns
+    /// Tuple of (window_results, window_counts, max_window_id)
+    pub fn execute_timeseries_window_aggregate(
+        &mut self,
+        timestamps: &[u64],
+        values: &[f32],
+        window_size_ms: u64,
+        aggregation_type: u32,
+    ) -> Result<(Vec<f32>, Vec<u32>, u32), ComputeError> {
+        let point_count = timestamps.len();
+        if point_count == 0 || point_count != values.len() {
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "timestamps/values".to_string(),
+                    value: format!("empty or mismatched: {} vs {}", timestamps.len(), values.len()),
+                },
+                compute_unit: None,
+            });
+        }
+
+        // Pre-compute window IDs on CPU
+        let max_timestamp = *timestamps.iter().max().unwrap();
+        let max_window_id = (max_timestamp / window_size_ms) as u32 + 1;
+        let window_ids: Vec<u32> = timestamps
+            .iter()
+            .map(|&ts| (ts / window_size_ms) as u32)
+            .collect();
+
+        // Create buffers
+        let values_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            values.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: values.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let window_ids_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            window_ids.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: window_ids.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let point_count_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [point_count as u32].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let agg_type_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [aggregation_type].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        // Initialize result buffers
+        let init_value = match aggregation_type {
+            1 => f32::INFINITY,      // Min
+            2 => f32::NEG_INFINITY,  // Max
+            _ => 0.0,                // Sum, Avg, Count
+        };
+
+        let window_results_init: Vec<u32> = vec![init_value.to_bits(); max_window_id as usize];
+        let window_counts_init: Vec<u32> = vec![0; max_window_id as usize];
+
+        let window_counts_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            window_counts_init.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: window_counts_init.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let window_results_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            window_results_init.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: window_results_init.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        // Load shader
+        let shader_bytes = include_bytes!("shaders/vulkan/timeseries_window_aggregate.spv");
+        let shader = unsafe {
+            ShaderModule::from_bytes(self.device.clone(), shader_bytes)
+                .map_err(|e| ComputeError::GPU {
+                    source: crate::errors::GPUError::InitializationFailed {
+                        message: format!("Failed to load timeseries_window_aggregate shader: {}", e),
+                    },
+                })?
+        };
+
+        // Create pipeline
+        let cs = shader.entry_point("main").unwrap();
+        let stage = PipelineShaderStageCreateInfo::new(cs);
+        let layout = PipelineLayout::new(
+            self.device.clone(),
+            PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+                .into_pipeline_layout_create_info(self.device.clone())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let pipeline = ComputePipeline::new(
+            self.device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(stage, layout),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::InitializationFailed {
+                message: format!("Failed to create timeseries_window_aggregate pipeline: {}", e),
+            },
+        })?;
+
+        // Create descriptor set
+        let layout_ref = &pipeline.layout().set_layouts()[0];
+        let descriptor_set = PersistentDescriptorSet::new(
+            &self.descriptor_set_allocator,
+            layout_ref.clone(),
+            [
+                WriteDescriptorSet::buffer(0, values_buffer.clone()),
+                WriteDescriptorSet::buffer(1, window_ids_buffer.clone()),
+                WriteDescriptorSet::buffer(2, point_count_buffer.clone()),
+                WriteDescriptorSet::buffer(3, agg_type_buffer.clone()),
+                WriteDescriptorSet::buffer(4, window_counts_buffer.clone()),
+                WriteDescriptorSet::buffer(5, window_results_buffer.clone()),
+            ],
+            [],
+        )
+        .unwrap();
+
+        // Create command buffer
+        let mut builder = AutoCommandBufferBuilder::primary(
+            &self.command_buffer_allocator,
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        builder
+            .bind_pipeline_compute(pipeline.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                pipeline.layout().clone(),
+                0,
+                descriptor_set,
+            )
+            .unwrap();
+
+        // Dispatch with 256 threads per workgroup
+        let workgroup_count = (point_count as u32 + 255) / 256;
+        builder.dispatch([workgroup_count, 1, 1]).unwrap();
+
+        let command_buffer = builder.build().unwrap();
+
+        // Submit and wait
+        let future = sync::now(self.device.clone())
+            .then_execute(self.queue.clone(), command_buffer)
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap();
+
+        future.wait(None).unwrap();
+
+        // Read results - reinterpret u32 as f32
+        let window_results_u32 = window_results_buffer.read().unwrap();
+        let window_results: Vec<f32> = window_results_u32
+            .iter()
+            .map(|&bits| f32::from_bits(bits))
+            .collect();
+        let window_counts = window_counts_buffer.read().unwrap();
+
+        // If aggregation is Avg, finalize (divide sum by count)
+        if aggregation_type == 3 {
+            let final_results_buffer = Buffer::from_iter(
+                self.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::STORAGE_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                        | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                    ..Default::default()
+                },
+                (0..max_window_id).map(|_| 0.0f32),
+            )
+            .map_err(|e| ComputeError::GPU {
+                source: crate::errors::GPUError::MemoryAllocationFailed {
+                    requested_bytes: max_window_id as usize * std::mem::size_of::<f32>(),
+                    available_bytes: 0,
+                    message: e.to_string(),
+                },
+            })?;
+
+            let max_window_id_buffer = Buffer::from_iter(
+                self.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::UNIFORM_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                [max_window_id].iter().copied(),
+            )
+            .map_err(|e| ComputeError::GPU {
+                source: crate::errors::GPUError::MemoryAllocationFailed {
+                    requested_bytes: std::mem::size_of::<u32>(),
+                    available_bytes: 0,
+                    message: e.to_string(),
+                },
+            })?;
+
+            // Load finalization shader
+            let finalize_shader_bytes = include_bytes!("shaders/vulkan/timeseries_finalize_avg.spv");
+            let finalize_shader = unsafe {
+                ShaderModule::from_bytes(self.device.clone(), finalize_shader_bytes)
+                    .map_err(|e| ComputeError::GPU {
+                        source: crate::errors::GPUError::InitializationFailed {
+                            message: format!("Failed to load timeseries_finalize_avg shader: {}", e),
+                        },
+                    })?
+            };
+
+            let cs = finalize_shader.entry_point("main").unwrap();
+            let stage = PipelineShaderStageCreateInfo::new(cs);
+            let layout = PipelineLayout::new(
+                self.device.clone(),
+                PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+                    .into_pipeline_layout_create_info(self.device.clone())
+                    .unwrap(),
+            )
+            .unwrap();
+
+            let finalize_pipeline = ComputePipeline::new(
+                self.device.clone(),
+                None,
+                ComputePipelineCreateInfo::stage_layout(stage, layout),
+            )
+            .map_err(|e| ComputeError::GPU {
+                source: crate::errors::GPUError::InitializationFailed {
+                    message: format!("Failed to create timeseries_finalize_avg pipeline: {}", e),
+                },
+            })?;
+
+            let layout_ref = &finalize_pipeline.layout().set_layouts()[0];
+            let finalize_descriptor_set = PersistentDescriptorSet::new(
+                &self.descriptor_set_allocator,
+                layout_ref.clone(),
+                [
+                    WriteDescriptorSet::buffer(0, window_results_buffer.clone()),
+                    WriteDescriptorSet::buffer(1, window_counts_buffer.clone()),
+                    WriteDescriptorSet::buffer(2, final_results_buffer.clone()),
+                    WriteDescriptorSet::buffer(3, max_window_id_buffer.clone()),
+                ],
+                [],
+            )
+            .unwrap();
+
+            let mut builder = AutoCommandBufferBuilder::primary(
+                &self.command_buffer_allocator,
+                self.queue.queue_family_index(),
+                CommandBufferUsage::OneTimeSubmit,
+            )
+            .unwrap();
+
+            builder
+                .bind_pipeline_compute(finalize_pipeline.clone())
+                .unwrap()
+                .bind_descriptor_sets(
+                    PipelineBindPoint::Compute,
+                    finalize_pipeline.layout().clone(),
+                    0,
+                    finalize_descriptor_set,
+                )
+                .unwrap();
+
+            let workgroup_count = (max_window_id + 255) / 256;
+            builder.dispatch([workgroup_count, 1, 1]).unwrap();
+
+            let command_buffer = builder.build().unwrap();
+
+            let future = sync::now(self.device.clone())
+                .then_execute(self.queue.clone(), command_buffer)
+                .unwrap()
+                .then_signal_fence_and_flush()
+                .unwrap();
+
+            future.wait(None).unwrap();
+
+            let final_results = final_results_buffer.read().unwrap();
+            Ok((
+                final_results.iter().copied().collect(),
+                window_counts.iter().copied().collect(),
+                max_window_id,
+            ))
+        } else {
+            Ok((window_results, window_counts.iter().copied().collect(), max_window_id))
+        }
+    }
+
+    /// Execute GPU-accelerated hash join (inner join)
+    ///
+    /// # Arguments
+    /// * `build_keys` - Keys from build relation (smaller table)
+    /// * `build_values` - Row IDs from build relation
+    /// * `probe_keys` - Keys from probe relation (larger table)
+    /// * `probe_values` - Row IDs from probe relation
+    ///
+    /// # Returns
+    /// Tuple of (output_build_ids, output_probe_ids, match_count)
+    pub fn execute_hash_join(
+        &mut self,
+        build_keys: &[u32],
+        build_values: &[u32],
+        probe_keys: &[u32],
+        probe_values: &[u32],
+    ) -> Result<(Vec<u32>, Vec<u32>, u32), ComputeError> {
+        let build_count = build_keys.len();
+        let probe_count = probe_keys.len();
+
+        if build_count == 0 || probe_count == 0 {
+            return Ok((Vec::new(), Vec::new(), 0));
+        }
+
+        if build_count != build_values.len() || probe_count != probe_values.len() {
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "keys/values".to_string(),
+                    value: format!(
+                        "mismatched lengths: build {}!={}, probe {}!={}",
+                        build_count,
+                        build_values.len(),
+                        probe_count,
+                        probe_values.len()
+                    ),
+                },
+                compute_unit: None,
+            });
+        }
+
+        // Hash table size: 2x build count for low collision rate
+        let table_size = (build_count * 2).max(256);
+
+        // ========== Build Phase: Create all buffers first ==========
+
+        let build_keys_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            build_keys.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: build_keys.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let build_values_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            build_values.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: build_values.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let build_count_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [build_count as u32].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let table_size_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [table_size as u32].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        // Initialize hash table with UINT_MAX (empty marker)
+        let hash_table_init: Vec<u32> = vec![u32::MAX; table_size * 2];
+        let hash_table_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            hash_table_init.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: hash_table_init.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        // Load build shader and create pipeline
+        let build_shader_bytes = include_bytes!("shaders/vulkan/hash_join_build.spv");
+        let build_shader = unsafe {
+            ShaderModule::from_bytes(self.device.clone(), build_shader_bytes)
+                .map_err(|e| ComputeError::GPU {
+                    source: crate::errors::GPUError::InitializationFailed {
+                        message: format!("Failed to load hash_join_build shader: {}", e),
+                    },
+                })?
+        };
+
+        let cs = build_shader.entry_point("main").unwrap();
+        let stage = PipelineShaderStageCreateInfo::new(cs);
+        let layout = PipelineLayout::new(
+            self.device.clone(),
+            PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+                .into_pipeline_layout_create_info(self.device.clone())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let build_pipeline = ComputePipeline::new(
+            self.device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(stage, layout),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::InitializationFailed {
+                message: format!("Failed to create hash_join_build pipeline: {}", e),
+            },
+        })?;
+
+        let build_layout = &build_pipeline.layout().set_layouts()[0];
+        let build_descriptor_set = PersistentDescriptorSet::new(
+            &self.descriptor_set_allocator,
+            build_layout.clone(),
+            [
+                WriteDescriptorSet::buffer(0, build_keys_buffer.clone()),
+                WriteDescriptorSet::buffer(1, build_values_buffer.clone()),
+                WriteDescriptorSet::buffer(2, build_count_buffer.clone()),
+                WriteDescriptorSet::buffer(3, table_size_buffer.clone()),
+                WriteDescriptorSet::buffer(4, hash_table_buffer.clone()),
+            ],
+            [],
+        )
+        .unwrap();
+
+        // Execute build phase
+        let mut builder = AutoCommandBufferBuilder::primary(
+            &self.command_buffer_allocator,
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        builder
+            .bind_pipeline_compute(build_pipeline.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                build_pipeline.layout().clone(),
+                0,
+                build_descriptor_set,
+            )
+            .unwrap();
+
+        let workgroup_count = (build_count as u32 + 255) / 256;
+        builder.dispatch([workgroup_count, 1, 1]).unwrap();
+
+        let command_buffer = builder.build().unwrap();
+
+        let future = sync::now(self.device.clone())
+            .then_execute(self.queue.clone(), command_buffer)
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap();
+
+        future.wait(None).unwrap();
+
+        // ========== Probe Phase ==========
+
+        let probe_keys_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            probe_keys.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: probe_keys.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let probe_values_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            probe_values.iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: probe_values.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let probe_count_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [probe_count as u32].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let max_output = build_count.min(probe_count);
+
+        let output_count_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            [0u32].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let output_build_ids_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            (0..max_output).map(|_| 0u32),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: max_output * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let output_probe_ids_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            (0..max_output).map(|_| 0u32),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: max_output * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        let max_output_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            [max_output as u32].iter().copied(),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
+                message: e.to_string(),
+            },
+        })?;
+
+        // Load probe shader
+        let probe_shader_bytes = include_bytes!("shaders/vulkan/hash_join_probe.spv");
+        let probe_shader = unsafe {
+            ShaderModule::from_bytes(self.device.clone(), probe_shader_bytes)
+                .map_err(|e| ComputeError::GPU {
+                    source: crate::errors::GPUError::InitializationFailed {
+                        message: format!("Failed to load hash_join_probe shader: {}", e),
+                    },
+                })?
+        };
+
+        let cs = probe_shader.entry_point("main").unwrap();
+        let stage = PipelineShaderStageCreateInfo::new(cs);
+        let layout = PipelineLayout::new(
+            self.device.clone(),
+            PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
+                .into_pipeline_layout_create_info(self.device.clone())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let probe_pipeline = ComputePipeline::new(
+            self.device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(stage, layout),
+        )
+        .map_err(|e| ComputeError::GPU {
+            source: crate::errors::GPUError::InitializationFailed {
+                message: format!("Failed to create hash_join_probe pipeline: {}", e),
+            },
+        })?;
+
+        let probe_layout = &probe_pipeline.layout().set_layouts()[0];
+        let probe_descriptor_set = PersistentDescriptorSet::new(
+            &self.descriptor_set_allocator,
+            probe_layout.clone(),
+            [
+                WriteDescriptorSet::buffer(0, probe_keys_buffer.clone()),
+                WriteDescriptorSet::buffer(1, probe_values_buffer.clone()),
+                WriteDescriptorSet::buffer(2, probe_count_buffer.clone()),
+                WriteDescriptorSet::buffer(3, table_size_buffer.clone()),
+                WriteDescriptorSet::buffer(4, hash_table_buffer.clone()),
+                WriteDescriptorSet::buffer(5, output_count_buffer.clone()),
+                WriteDescriptorSet::buffer(6, output_build_ids_buffer.clone()),
+                WriteDescriptorSet::buffer(7, output_probe_ids_buffer.clone()),
+                WriteDescriptorSet::buffer(8, max_output_buffer.clone()),
+            ],
+            [],
+        )
+        .unwrap();
+
+        // Execute probe phase
+        let mut builder = AutoCommandBufferBuilder::primary(
+            &self.command_buffer_allocator,
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        builder
+            .bind_pipeline_compute(probe_pipeline.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                probe_pipeline.layout().clone(),
+                0,
+                probe_descriptor_set,
+            )
+            .unwrap();
+
+        let workgroup_count = (probe_count as u32 + 255) / 256;
+        builder.dispatch([workgroup_count, 1, 1]).unwrap();
+
+        let command_buffer = builder.build().unwrap();
+
+        let future = sync::now(self.device.clone())
+            .then_execute(self.queue.clone(), command_buffer)
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap();
+
+        future.wait(None).unwrap();
+
+        // Read results
+        let output_count_data = output_count_buffer.read().unwrap();
+        let match_count = output_count_data[0].min(max_output as u32);
+
+        let output_build_ids = output_build_ids_buffer.read().unwrap();
+        let output_probe_ids = output_probe_ids_buffer.read().unwrap();
+
+        Ok((
+            output_build_ids.iter().take(match_count as usize).copied().collect(),
+            output_probe_ids.iter().take(match_count as usize).copied().collect(),
+            match_count,
+        ))
     }
 }
 

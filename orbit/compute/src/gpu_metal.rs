@@ -399,7 +399,7 @@ impl MetalDevice {
 
         // Calculate optimal thread group count
         let thread_groups = MTLSize {
-            width: (grid_size + thread_group_size.width - 1) / thread_group_size.width,
+            width: grid_size.div_ceil(thread_group_size.width),
             height: 1,
             depth: 1,
         };
@@ -447,7 +447,7 @@ impl MetalDevice {
     }
 
     fn create_buffer_with_data_i32(&self, data: &[i32]) -> Result<metal::Buffer, ComputeError> {
-        let size = (data.len() * mem::size_of::<i32>()) as u64;
+        let size = std::mem::size_of_val(data) as u64;
         Ok(self.device.new_buffer_with_data(
             data.as_ptr() as *const _,
             size,
@@ -456,7 +456,7 @@ impl MetalDevice {
     }
 
     fn create_buffer_with_data_i64(&self, data: &[i64]) -> Result<metal::Buffer, ComputeError> {
-        let size = (data.len() * mem::size_of::<i64>()) as u64;
+        let size = std::mem::size_of_val(data) as u64;
         Ok(self.device.new_buffer_with_data(
             data.as_ptr() as *const _,
             size,
@@ -465,7 +465,7 @@ impl MetalDevice {
     }
 
     fn create_buffer_with_data_f64(&self, data: &[f64]) -> Result<metal::Buffer, ComputeError> {
-        let size = (data.len() * mem::size_of::<f64>()) as u64;
+        let size = std::mem::size_of_val(data) as u64;
         Ok(self.device.new_buffer_with_data(
             data.as_ptr() as *const _,
             size,
@@ -481,7 +481,7 @@ impl MetalDevice {
     }
 
     fn create_buffer_with_data_f32(&self, data: &[f32]) -> Result<metal::Buffer, ComputeError> {
-        let size = (data.len() * mem::size_of::<f32>()) as u64;
+        let size = std::mem::size_of_val(data) as u64;
         Ok(self.device.new_buffer_with_data(
             data.as_ptr() as *const _,
             size,
@@ -589,6 +589,56 @@ impl MetalDevice {
                 &query_y_buffer,
                 &candidates_x_buffer,
                 &candidates_y_buffer,
+                &distances_buffer,
+                &point_count_buffer,
+            ],
+            point_count as u64,
+        )?;
+
+        // Read results back
+        self.read_buffer_f32(&distances_buffer, point_count)
+    }
+
+    /// Execute GPU-accelerated Haversine distance calculation (great circle distance on a sphere)
+    pub fn execute_spatial_distance_sphere(
+        &self,
+        query_lon: f32,
+        query_lat: f32,
+        candidates_lon: &[f32],
+        candidates_lat: &[f32],
+        point_count: usize,
+    ) -> Result<Vec<f32>, ComputeError> {
+        use crate::errors::ExecutionError;
+
+        // Validate inputs
+        if candidates_lon.len() != point_count || candidates_lat.len() != point_count {
+            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
+                parameter: "candidates_length".to_string(),
+                value: format!(
+                    "expected {}, got lon={}, lat={}",
+                    point_count,
+                    candidates_lon.len(),
+                    candidates_lat.len()
+                ),
+            }));
+        }
+
+        // Create buffers
+        let query_lon_buffer = self.create_buffer_with_data_f32(&[query_lon])?;
+        let query_lat_buffer = self.create_buffer_with_data_f32(&[query_lat])?;
+        let candidates_lon_buffer = self.create_buffer_with_data_f32(candidates_lon)?;
+        let candidates_lat_buffer = self.create_buffer_with_data_f32(candidates_lat)?;
+        let distances_buffer = self.create_buffer_f32(point_count)?;
+        let point_count_buffer = self.create_buffer_with_data_u32(&[point_count as u32])?;
+
+        // Execute kernel
+        self.execute_kernel(
+            "spatial_distance_sphere",
+            &[
+                &query_lon_buffer,
+                &query_lat_buffer,
+                &candidates_lon_buffer,
+                &candidates_lat_buffer,
                 &distances_buffer,
                 &point_count_buffer,
             ],
@@ -744,7 +794,7 @@ impl MetalDevice {
     }
 
     fn create_buffer_with_data_u32(&self, data: &[u32]) -> Result<metal::Buffer, ComputeError> {
-        let size = (data.len() * mem::size_of::<u32>()) as u64;
+        let size = std::mem::size_of_val(data) as u64;
         Ok(self.device.new_buffer_with_data(
             data.as_ptr() as *const _,
             size,
@@ -754,7 +804,7 @@ impl MetalDevice {
 
     #[allow(dead_code)]
     fn create_buffer_with_data_u64(&self, data: &[u64]) -> Result<metal::Buffer, ComputeError> {
-        let size = (data.len() * mem::size_of::<u64>()) as u64;
+        let size = std::mem::size_of_val(data) as u64;
         Ok(self.device.new_buffer_with_data(
             data.as_ptr() as *const _,
             size,
@@ -768,6 +818,16 @@ impl MetalDevice {
         len: usize,
     ) -> Result<Vec<i32>, ComputeError> {
         let contents = buffer.contents() as *const i32;
+        let slice = unsafe { std::slice::from_raw_parts(contents, len) };
+        Ok(slice.to_vec())
+    }
+
+    fn read_buffer_u32(
+        &self,
+        buffer: &metal::Buffer,
+        len: usize,
+    ) -> Result<Vec<u32>, ComputeError> {
+        let contents = buffer.contents() as *const u32;
         let slice = unsafe { std::slice::from_raw_parts(contents, len) };
         Ok(slice.to_vec())
     }
@@ -872,6 +932,305 @@ impl MetalDevice {
         *changed = changed_slice[0];
 
         Ok(())
+    }
+
+    /// Execute GPU-accelerated matrix multiplication (GEMM): C = A * B
+    /// Uses tiled algorithm for better cache locality
+    pub fn execute_matrix_multiply(
+        &self,
+        matrix_a: &[f32],  // M×K matrix (row-major, flattened)
+        matrix_b: &[f32],  // K×N matrix (row-major, flattened)
+        m: usize,          // Rows in A and C
+        n: usize,          // Cols in B and C
+        k: usize,          // Cols in A, Rows in B
+    ) -> Result<Vec<f32>, ComputeError> {
+        use crate::errors::ExecutionError;
+
+        // Validate inputs
+        if matrix_a.len() != m * k {
+            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
+                parameter: "matrix_a_size".to_string(),
+                value: format!("expected {}, got {}", m * k, matrix_a.len()),
+            }));
+        }
+
+        if matrix_b.len() != k * n {
+            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
+                parameter: "matrix_b_size".to_string(),
+                value: format!("expected {}, got {}", k * n, matrix_b.len()),
+            }));
+        }
+
+        // Create buffers
+        let a_buffer = self.create_buffer_with_data_f32(matrix_a)?;
+        let b_buffer = self.create_buffer_with_data_f32(matrix_b)?;
+        let c_buffer = self.create_buffer_f32(m * n)?;
+
+        // Create parameter buffer: [M, N, K]
+        let params = [m as u32, n as u32, k as u32];
+        let params_buffer = self.create_buffer_with_data_u32(&params)?;
+
+        // Use tiled kernel for better performance
+        let kernel_name = "matrix_multiply_tiled_f32";
+
+        // Execute kernel with 2D grid
+        let kernel = self
+            .library
+            .get_function(kernel_name, None)
+            .map_err(|_| {
+                ComputeError::execution(ExecutionError::InvalidKernelParameters {
+                    parameter: "kernel_name".to_string(),
+                    value: kernel_name.to_string(),
+                })
+            })?;
+
+        let pipeline_state = self
+            .device
+            .new_compute_pipeline_state_with_function(&kernel)
+            .map_err(|e| {
+                ComputeError::execution(ExecutionError::RuntimeError {
+                    stage: format!("pipeline_creation:{}", kernel_name),
+                    error: format!("{:?}", e),
+                })
+            })?;
+
+        let command_buffer = self.queue.new_command_buffer();
+        let encoder = command_buffer.new_compute_command_encoder();
+
+        encoder.set_compute_pipeline_state(&pipeline_state);
+        encoder.set_buffer(0, Some(&a_buffer), 0);
+        encoder.set_buffer(1, Some(&b_buffer), 0);
+        encoder.set_buffer(2, Some(&c_buffer), 0);
+        encoder.set_buffer(3, Some(&params_buffer), 0);
+
+        // Dispatch 2D grid with 16×16 threadgroups (tile size)
+        let tile_size = 16u64;
+        let grid_width = (n as u64).div_ceil(tile_size) * tile_size;
+        let grid_height = (m as u64).div_ceil(tile_size) * tile_size;
+
+        let threadgroup_size = metal::MTLSize {
+            width: tile_size,
+            height: tile_size,
+            depth: 1,
+        };
+
+        let grid_size = metal::MTLSize {
+            width: grid_width,
+            height: grid_height,
+            depth: 1,
+        };
+
+        encoder.dispatch_threads(grid_size, threadgroup_size);
+        encoder.end_encoding();
+        command_buffer.commit();
+        command_buffer.wait_until_completed();
+
+        // Read results
+        self.read_buffer_f32(&c_buffer, m * n)
+    }
+
+    /// Execute GPU-accelerated time-series window aggregation
+    ///
+    /// # Arguments
+    /// * `timestamps` - Timestamps in milliseconds
+    /// * `values` - Values at each timestamp
+    /// * `window_size_ms` - Window size in milliseconds
+    /// * `aggregation_type` - 0=Sum, 1=Min, 2=Max, 3=Avg, 4=Count
+    ///
+    /// # Returns
+    /// Tuple of (window_results, window_counts, max_window_id)
+    pub fn execute_timeseries_window_aggregate(
+        &self,
+        timestamps: &[u64],
+        values: &[f32],
+        window_size_ms: u64,
+        aggregation_type: u32,
+    ) -> Result<(Vec<f32>, Vec<u32>, u32), ComputeError> {
+        let point_count = timestamps.len();
+        if point_count == 0 || point_count != values.len() {
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "timestamps/values".to_string(),
+                    value: format!("empty or mismatched: {} vs {}", timestamps.len(), values.len()),
+                },
+                compute_unit: None,
+            });
+        }
+
+        // Calculate max window ID to allocate result buffers
+        let max_timestamp = *timestamps.iter().max().unwrap();
+        let max_window_id = (max_timestamp / window_size_ms) as u32 + 1;
+
+        // Create buffers
+        let values_buffer = self.create_buffer_with_data_f32(values)?;
+        let timestamps_buffer = self.create_buffer_with_data_u64(timestamps)?;
+        let point_count_buffer = self.create_buffer_with_data_u32(&[point_count as u32])?;
+        let window_size_buffer = self.create_buffer_with_data_u64(&[window_size_ms])?;
+        let agg_type_buffer = self.create_buffer_with_data_u32(&[aggregation_type])?;
+
+        // Initialize result buffers
+        // For Min, initialize with f32::INFINITY; for Max, initialize with f32::NEG_INFINITY
+        let init_value = match aggregation_type {
+            1 => f32::INFINITY,  // Min
+            2 => f32::NEG_INFINITY,  // Max
+            _ => 0.0,  // Sum, Avg, Count
+        };
+        let window_results_init: Vec<f32> = vec![init_value; max_window_id as usize];
+        let window_counts_init: Vec<u32> = vec![0; max_window_id as usize];
+
+        let window_counts_buffer = self.create_buffer_with_data_u32(&window_counts_init)?;
+
+        // Reinterpret f32 buffer as u32 for atomic operations
+        let window_results_buffer = self.create_buffer_with_data_f32(&window_results_init)?;
+
+        let window_ids_buffer = self.create_buffer_u32(point_count)?;
+
+        // Execute aggregation kernel
+        self.execute_kernel(
+            "timeseries_window_aggregate",
+            &[
+                &values_buffer,
+                &timestamps_buffer,
+                &point_count_buffer,
+                &window_size_buffer,
+                &agg_type_buffer,
+                &window_counts_buffer,
+                &window_results_buffer,
+                &window_ids_buffer,
+            ],
+            point_count as u64,
+        )?;
+
+        // Read results
+        let window_results = self.read_buffer_f32(&window_results_buffer, max_window_id as usize)?;
+        let window_counts = self.read_buffer_u32(&window_counts_buffer, max_window_id as usize)?;
+
+        // If aggregation is Avg, we need to finalize (divide sum by count)
+        if aggregation_type == 3 {
+            let final_results_buffer = self.create_buffer_f32(max_window_id as usize)?;
+            let max_window_id_buffer = self.create_buffer_with_data_u32(&[max_window_id])?;
+
+            self.execute_kernel(
+                "timeseries_finalize_avg",
+                &[
+                    &window_results_buffer,
+                    &window_counts_buffer,
+                    &final_results_buffer,
+                    &max_window_id_buffer,
+                ],
+                max_window_id as u64,
+            )?;
+
+            let final_results = self.read_buffer_f32(&final_results_buffer, max_window_id as usize)?;
+            Ok((final_results, window_counts, max_window_id))
+        } else {
+            Ok((window_results, window_counts, max_window_id))
+        }
+    }
+
+    /// Execute GPU-accelerated hash join (inner join)
+    ///
+    /// # Arguments
+    /// * `build_keys` - Keys from build relation (smaller table)
+    /// * `build_values` - Row IDs from build relation
+    /// * `probe_keys` - Keys from probe relation (larger table)
+    /// * `probe_values` - Row IDs from probe relation
+    ///
+    /// # Returns
+    /// Tuple of (output_build_ids, output_probe_ids, match_count)
+    pub fn execute_hash_join(
+        &self,
+        build_keys: &[u32],
+        build_values: &[u32],
+        probe_keys: &[u32],
+        probe_values: &[u32],
+    ) -> Result<(Vec<u32>, Vec<u32>, u32), ComputeError> {
+        let build_count = build_keys.len();
+        let probe_count = probe_keys.len();
+
+        if build_count == 0 || probe_count == 0 {
+            return Ok((Vec::new(), Vec::new(), 0));
+        }
+
+        if build_count != build_values.len() || probe_count != probe_values.len() {
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "keys/values".to_string(),
+                    value: format!(
+                        "mismatched lengths: build {}!={}, probe {}!={}",
+                        build_count,
+                        build_values.len(),
+                        probe_count,
+                        probe_values.len()
+                    ),
+                },
+                compute_unit: None,
+            });
+        }
+
+        // Hash table size: 2x build count for low collision rate
+        let table_size = (build_count * 2).max(256);
+
+        // Create buffers
+        let build_keys_buffer = self.create_buffer_with_data_u32(build_keys)?;
+        let build_values_buffer = self.create_buffer_with_data_u32(build_values)?;
+        let build_count_buffer = self.create_buffer_with_data_u32(&[build_count as u32])?;
+        let table_size_buffer = self.create_buffer_with_data_u32(&[table_size as u32])?;
+
+        // Initialize hash table with UINT_MAX (empty marker)
+        let hash_table_init: Vec<u32> = vec![u32::MAX; table_size * 2];
+        let hash_table_buffer = self.create_buffer_with_data_u32(&hash_table_init)?;
+
+        // Build phase: construct hash table
+        self.execute_kernel(
+            "hash_join_build",
+            &[
+                &build_keys_buffer,
+                &build_values_buffer,
+                &build_count_buffer,
+                &table_size_buffer,
+                &hash_table_buffer,
+            ],
+            build_count as u64,
+        )?;
+
+        // Probe phase setup
+        let probe_keys_buffer = self.create_buffer_with_data_u32(probe_keys)?;
+        let probe_values_buffer = self.create_buffer_with_data_u32(probe_values)?;
+        let probe_count_buffer = self.create_buffer_with_data_u32(&[probe_count as u32])?;
+
+        // Output buffers (worst case: all rows match)
+        let max_output = build_count.min(probe_count);
+        let output_count_buffer = self.create_buffer_with_data_u32(&[0])?;
+        let output_build_ids_buffer = self.create_buffer_u32(max_output)?;
+        let output_probe_ids_buffer = self.create_buffer_u32(max_output)?;
+        let max_output_buffer = self.create_buffer_with_data_u32(&[max_output as u32])?;
+
+        // Probe phase: find matches
+        self.execute_kernel(
+            "hash_join_probe",
+            &[
+                &probe_keys_buffer,
+                &probe_values_buffer,
+                &probe_count_buffer,
+                &table_size_buffer,
+                &hash_table_buffer,
+                &output_count_buffer,
+                &output_build_ids_buffer,
+                &output_probe_ids_buffer,
+                &max_output_buffer,
+            ],
+            probe_count as u64,
+        )?;
+
+        // Read results
+        let output_count_vec = self.read_buffer_u32(&output_count_buffer, 1)?;
+        let match_count = output_count_vec[0].min(max_output as u32);
+
+        let output_build_ids = self.read_buffer_u32(&output_build_ids_buffer, match_count as usize)?;
+        let output_probe_ids = self.read_buffer_u32(&output_probe_ids_buffer, match_count as usize)?;
+
+        Ok((output_build_ids, output_probe_ids, match_count))
     }
 }
 

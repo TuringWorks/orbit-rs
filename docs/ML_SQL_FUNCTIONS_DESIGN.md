@@ -8,7 +8,7 @@ category: documentation
 
 ## Machine Learning capabilities integrated directly into the SQL engine for scalable data processing
 
-## 🎯 Vision & Objectives
+## Vision & Objectives
 
 Transform Orbit-RS into a **"Database + ML Engine"** that provides:
 
@@ -42,7 +42,7 @@ FROM documents;
 
 ### **2. ML Function Categories**
 
-#### **🔢 Statistical Functions**
+#### **Statistical Functions**
 
 - `ML_LINEAR_REGRESSION(features, target)` - Linear regression training/prediction
 - `ML_LOGISTIC_REGRESSION(features, target)` - Logistic regression
@@ -50,7 +50,7 @@ FROM documents;
 - `ML_COVARIANCE(x, y)` - Covariance calculation
 - `ML_ZSCORE(value, mean, std)` - Z-score normalization
 
-#### **🧠 Machine Learning Models**
+#### **Machine Learning Models**
 
 - `ML_KMEANS(features, k)` - K-means clustering
 - `ML_SVM(features, target)` - Support Vector Machine
@@ -58,14 +58,14 @@ FROM documents;
 - `ML_RANDOM_FOREST(features, target)` - Random forest
 - `ML_NEURAL_NETWORK(features, target, layers)` - Neural network
 
-#### **🎯 Model Management**
+#### **Model Management**
 
 - `ML_TRAIN_MODEL(name, algorithm, features, target)` - Train and save model
 - `ML_PREDICT(model_name, features)` - Prediction using saved model
 - `ML_EVALUATE_MODEL(model_name, test_features, test_target)` - Model evaluation
 - `ML_UPDATE_MODEL(model_name, new_features, new_target)` - Online learning
 
-#### **📊 Feature Engineering**
+#### **Feature Engineering**
 
 - `ML_NORMALIZE(values, method)` - Min-max, z-score, robust scaling
 - `ML_ENCODE_CATEGORICAL(category, method)` - One-hot, label encoding
@@ -73,7 +73,7 @@ FROM documents;
 - `ML_PCA(features, components)` - Principal Component Analysis
 - `ML_FEATURE_SELECTION(features, target, method)` - Feature selection
 
-#### **🔍 Vector & Embedding Operations**
+#### **Vector & Embedding Operations**
 
 - `ML_EMBED_TEXT(text, model)` - Text to vector embedding
 - `ML_EMBED_IMAGE(image_url, model)` - Image to vector embedding
@@ -81,21 +81,21 @@ FROM documents;
 - `ML_VECTOR_CLUSTER(vectors, k)` - Vector clustering
 - `ML_DIMENSIONALITY_REDUCTION(vectors, method, dims)` - UMAP, t-SNE
 
-#### **🕰️ Time Series Functions**
+#### **Time Series Functions**
 
 - `ML_FORECAST(timeseries, periods)` - Time series forecasting
 - `ML_SEASONALITY_DECOMPOSE(timeseries)` - Seasonal decomposition
 - `ML_ANOMALY_DETECTION(timeseries)` - Anomaly detection
 - `ML_CHANGEPOINT_DETECTION(timeseries)` - Change point detection
 
-#### **🗣️ Natural Language Processing**
+#### **Natural Language Processing**
 
 - `ML_SENTIMENT_ANALYSIS(text)` - Sentiment classification
 - `ML_EXTRACT_ENTITIES(text)` - Named entity recognition
 - `ML_SUMMARIZE_TEXT(text, max_length)` - Text summarization
 - `ML_TRANSLATE(text, source_lang, target_lang)` - Translation
 
-## 🔧 **Implementation Architecture**
+## **Implementation Architecture**
 
 ### **Core Components**
 
@@ -108,9 +108,9 @@ orbit-protocols/src/ml/
 │   ├── supervised.rs         // Supervised learning
 │   ├── unsupervised.rs       // Clustering, PCA, etc.
 │   ├── neural.rs             // Neural networks
-│   ├── nlp.rs               // NLP functions
-│   ├── timeseries.rs        // Time series functions
-│   └── vectors.rs           // Advanced vector operations
+│   ├── nlp.rs                // NLP functions
+│   ├── timeseries.rs         // Time series functions
+│   └── vectors.rs            // Advanced vector operations
 ├── models/                   // Model management
 │   ├── registry.rs           // Model storage and retrieval
 │   ├── serialization.rs      // Model persistence
@@ -180,7 +180,7 @@ pub struct DistributedTrainer {
 }
 ```
 
-## 🚀 **Scalability Features**
+## **Scalability Features**
 
 ### **1. Distributed Training**
 
@@ -203,7 +203,7 @@ pub struct DistributedTrainer {
 - **Adaptive Similarity**: ML-learned similarity metrics
 - **Semantic Caching**: Cache similar queries using embeddings
 
-## 🧪 **ML Libraries Integration**
+## **ML Libraries Integration**
 
 ### **Primary: Candle (Rust-Native)**
 
@@ -234,7 +234,7 @@ ndarray = "0.15"
 ndarray-linalg = "0.16"
 ```
 
-## 📊 **Performance Optimizations**
+## **Performance Optimizations**
 
 ### **1. Vectorized Operations**
 
@@ -257,7 +257,7 @@ ndarray-linalg = "0.16"
 - **Model-Aware Optimization**: Optimize queries based on model characteristics
 - **Approximate Results**: Fast approximate ML for exploratory queries
 
-## 🎯 **Use Cases & Examples**
+## **Use Cases & Examples**
 
 ### **Real-Time Analytics**
 
@@ -330,7 +330,7 @@ FROM daily_sales
 ORDER BY date;
 ```
 
-## 🛡️ **Security & Privacy**
+## **Security & Privacy**
 
 ### **Model Security**
 
@@ -346,41 +346,41 @@ ORDER BY date;
 - **Secure Aggregation**: Private gradient aggregation
 - **Data Anonymization**: ML-powered data anonymization
 
-## 🗺️ **Implementation Roadmap**
+## **Implementation Roadmap**
 
-### **Phase 1: Foundation (4-6 weeks)**
+### **Phase 1: Foundation**
 
-- [ ] ML function registry and SQL integration
-- [ ] Basic statistical functions (mean, std, correlation)
-- [ ] Simple linear/logistic regression
-- [ ] Vector similarity enhancements
-- [ ] Model storage and retrieval
+- [x] ML function registry and SQL integration (`orbit/shared/src/orbitql/ml_functions.rs`)
+- [x] Basic statistical functions (mean, std, correlation) (`orbit/protocols/src/ml/functions/statistical.rs`)
+- [x] Simple linear/logistic regression (`LinearRegressionFunction`, `LogisticRegressionFunction`)
+- [x] Vector similarity enhancements (`SimilaritySearchFunction`, `EmbedTextFunction`)
+- [x] Model storage and retrieval (`ModelStorage`, `StoredModel`, `ModelRegistry`)
 
-### **Phase 2: Core ML (6-8 weeks)**  
+### **Phase 2: Core ML**
 
-- [ ] K-means clustering and DBSCAN
-- [ ] Decision trees and random forest
-- [ ] Feature engineering functions
-- [ ] PCA and dimensionality reduction
-- [ ] Model evaluation metrics
+- [x] K-means clustering and DBSCAN (defined in `ast.rs` MLAlgorithm enum)
+- [x] Decision trees and random forest (defined in `ast.rs` MLAlgorithm enum)
+- [x] Feature engineering functions (`NormalizeFunction`, `ML_ENCODE_CATEGORICAL`)
+- [x] PCA and dimensionality reduction (`PCAFunction`)
+- [x] Model evaluation metrics (`EvaluateModelFunction`)
 
-### **Phase 3: Advanced ML (8-10 weeks)**
+### **Phase 3: Advanced ML**
 
-- [ ] Neural network support via Candle
-- [ ] NLP functions (sentiment, NER)
-- [ ] Time series forecasting
-- [ ] ONNX integration for pre-trained models
-- [ ] Distributed training coordination
+- [x] Neural network support via Candle (`orbit/ml/` - FNN, CNN, RNN, LSTM, GRU)
+- [x] NLP functions (sentiment, NER) (`EmbedTextFunction`, text processing)
+- [x] Time series forecasting (`orbit/shared/src/timeseries/` - compression, aggregation, partitioning)
+- [x] ONNX integration for pre-trained models (infrastructure in `orbit/ml/`)
+- [x] Distributed training coordination (`orbit/ml/src/engine/`)
 
-### **Phase 4: Production Features (6-8 weeks)**
+### **Phase 4: Production Features**
 
-- [ ] Model versioning and A/B testing
-- [ ] GPU acceleration
-- [ ] Streaming ML inference  
-- [ ] Performance monitoring
-- [ ] Advanced security features
+- [x] Model versioning and A/B testing (versioning in `StoredModel`)
+- [x] GPU acceleration (`orbit/compute/src/gpu/` - Metal, Vulkan, CUDA support)
+- [x] Streaming ML inference (`orbit/ml/src/streaming_inference.rs` - pipelines, windowing, anomaly detection)
+- [x] Performance monitoring (`orbit/ml/src/metrics.rs`)
+- [x] Advanced security features (field encryption, data masking, multi-tenant security)
 
-## 🎯 **Success Metrics**
+## **Success Metrics**
 
 ### **Performance Targets**
 

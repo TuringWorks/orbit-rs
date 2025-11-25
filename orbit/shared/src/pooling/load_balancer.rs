@@ -9,10 +9,12 @@ use tokio::sync::RwLock;
 
 /// Load balancing strategies
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum LoadBalancingStrategy {
     /// Round-robin distribution
     RoundRobin,
     /// Route to node with least connections
+    #[default]
     LeastConnections,
     /// Random selection
     Random,
@@ -22,11 +24,6 @@ pub enum LoadBalancingStrategy {
     AffinityBased,
 }
 
-impl Default for LoadBalancingStrategy {
-    fn default() -> Self {
-        Self::LeastConnections
-    }
-}
 
 /// Node health information
 #[derive(Debug, Clone)]

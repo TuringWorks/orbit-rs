@@ -208,12 +208,20 @@ impl GPUGraphTraversal {
         source: u64,
         target: Option<u64>,
     ) -> Result<TraversalResult, ComputeError> {
-        // Convert graph to GPU-friendly format
-        let _gpu_graph = self.prepare_gpu_graph(graph)?;
+        // Convert graph to GPU-friendly format (only when GPU features are enabled)
+        #[cfg(any(
+            all(feature = "gpu-acceleration", target_os = "macos"),
+            all(feature = "gpu-acceleration", feature = "gpu-vulkan")
+        ))]
+        let gpu_graph = self.prepare_gpu_graph(graph)?;
 
         // Use u32 indices if graph is small enough (< 4B nodes)
-        let _use_u32_indices = graph.node_count <= u32::MAX as usize;
-        
+        #[cfg(any(
+            all(feature = "gpu-acceleration", target_os = "macos"),
+            all(feature = "gpu-acceleration", feature = "gpu-vulkan")
+        ))]
+        let use_u32_indices = graph.node_count <= u32::MAX as usize;
+
         // Try Metal first (macOS), then Vulkan
         #[cfg(all(feature = "gpu-acceleration", target_os = "macos"))]
         {
@@ -518,7 +526,7 @@ impl GPUGraphTraversal {
             }
             
             // Prepare next level (already in index format)
-            current_level_indices = next_level_slice.iter().copied().collect();
+            current_level_indices = next_level_slice.to_vec();
         }
         
         let paths_count = paths.len();
@@ -701,9 +709,12 @@ impl GPUGraphTraversal {
         source: u64,
         target: Option<u64>,
     ) -> Result<TraversalResult, ComputeError> {
-        // Convert graph to GPU-friendly format
-        let _gpu_graph = self.prepare_gpu_graph(graph)?;
-        let _use_u32_indices = graph.node_count <= u32::MAX as usize;
+        // Convert graph to GPU-friendly format (only when GPU features are enabled)
+        #[cfg(any(
+            all(feature = "gpu-acceleration", target_os = "macos"),
+            all(feature = "gpu-acceleration", feature = "gpu-vulkan")
+        ))]
+        let gpu_graph = self.prepare_gpu_graph(graph)?;
 
         // Try Metal first (macOS), then Vulkan
         #[cfg(all(feature = "gpu-acceleration", target_os = "macos"))]
