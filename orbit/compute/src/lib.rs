@@ -118,6 +118,30 @@ pub mod neural;
 /// Memory management optimizations for accelerated computing
 pub mod memory;
 
+/// GPU-accelerated graph traversal algorithms
+pub mod graph_traversal;
+
+/// GPU-accelerated vector similarity search
+pub mod vector_similarity;
+
+/// GPU-accelerated spatial operations
+pub mod spatial_operations;
+
+/// GPU-accelerated columnar analytics
+pub mod columnar_analytics;
+
+/// GPU-accelerated time-series operations
+#[cfg(feature = "gpu-acceleration")]
+pub mod timeseries_operations;
+
+/// GPU-accelerated columnar joins
+#[cfg(feature = "gpu-acceleration")]
+pub mod columnar_joins;
+
+/// GPU-accelerated machine learning operations
+#[cfg(feature = "gpu-acceleration")]
+pub mod ml_operations;
+
 /// Benchmarking utilities for performance validation
 #[cfg(any(feature = "criterion", feature = "benchmarks"))]
 pub mod benchmarks;

@@ -4,8 +4,8 @@
 //! It supports all ArangoDB GEO_* functions and spatial indexing capabilities.
 
 use orbit_shared::spatial::{
-    crs::utils::haversine_distance, MultiPoint, Point, SpatialError, SpatialGeometry,
-    SpatialOperations, WGS84_SRID,
+    crs::utils::haversine_distance, LineString, LinearRing, MultiPoint, Point, Polygon,
+    SpatialError, SpatialGeometry, SpatialOperations, WGS84_SRID,
 };
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -206,8 +206,7 @@ impl AQLSpatialExecutor {
             ));
         }
 
-        // For now, create a simple polygon from coordinate array
-        // In a full implementation, this would handle complex polygon structures
+        // Extract coordinates array - AQL format: [[lng1, lat1], [lng2, lat2], ...]
         let coords_array = self.extract_array(&args[0])?;
         let mut points = Vec::new();
 
@@ -221,14 +220,22 @@ impl AQLSpatialExecutor {
             }
         }
 
-        // Create a simple polygon (in a real implementation, this would use proper Polygon type)
-        let multipoint = MultiPoint {
-            points,
-            srid: Some(WGS84_SRID),
-        };
-        Ok(AQLSpatialResult::Geometry(SpatialGeometry::MultiPoint(
-            multipoint,
-        )))
+        // Ensure polygon is closed (first point == last point)
+        if points.len() >= 3 {
+            if points[0].x != points[points.len() - 1].x
+                || points[0].y != points[points.len() - 1].y
+            {
+                points.push(points[0].clone());
+            }
+
+            let exterior_ring = LinearRing::new(points)?;
+            let polygon = Polygon::new(exterior_ring, vec![], Some(WGS84_SRID))?;
+            Ok(AQLSpatialResult::Geometry(SpatialGeometry::Polygon(polygon)))
+        } else {
+            Err(SpatialError::OperationError(
+                "Polygon requires at least 3 points".to_string(),
+            ))
+        }
     }
 
     /// GEO_MULTIPOLYGON(polygons_array)  
@@ -276,13 +283,14 @@ impl AQLSpatialExecutor {
             }
         }
 
-        let multipoint = MultiPoint {
-            points,
-            srid: Some(WGS84_SRID),
-        };
-        Ok(AQLSpatialResult::Geometry(SpatialGeometry::MultiPoint(
-            multipoint,
-        )))
+        if points.len() < 2 {
+            return Err(SpatialError::OperationError(
+                "LineString requires at least 2 points".to_string(),
+            ));
+        }
+
+        let linestring = LineString::new(points, Some(WGS84_SRID))?;
+        Ok(AQLSpatialResult::Geometry(SpatialGeometry::LineString(linestring)))
     }
 
     /// GEO_MULTILINESTRING(linestrings_array)
@@ -317,8 +325,9 @@ impl AQLSpatialExecutor {
             ));
         }
 
-        // Placeholder - would calculate actual area
-        Ok(AQLSpatialResult::Number(0.0))
+        let geometry = self.extract_geometry(&args[0])?;
+        let area = SpatialOperations::area(&geometry)?;
+        Ok(AQLSpatialResult::Number(area))
     }
 
     /// GEO_LENGTH(geometry)
@@ -332,8 +341,9 @@ impl AQLSpatialExecutor {
             ));
         }
 
-        // Placeholder - would calculate actual length
-        Ok(AQLSpatialResult::Number(0.0))
+        let geometry = self.extract_geometry(&args[0])?;
+        let length = SpatialOperations::length(&geometry)?;
+        Ok(AQLSpatialResult::Number(length))
     }
 
     /// GEO_CONTAINS(geometry1, geometry2)
@@ -350,13 +360,8 @@ impl AQLSpatialExecutor {
         let geom1 = self.extract_geometry(&args[0])?;
         let geom2 = self.extract_geometry(&args[1])?;
 
-        // Use point_in_polygon for simple contains logic
-        let contains = match (&geom1, &geom2) {
-            (SpatialGeometry::Polygon(poly), SpatialGeometry::Point(point)) => {
-                SpatialOperations::point_in_polygon(point, poly)?
-            }
-            _ => false, // Simplified - would need more geometry combinations
-        };
+        // Use enhanced spatial operations
+        let contains = SpatialOperations::contains(&geom1, &geom2)?;
         Ok(AQLSpatialResult::Boolean(contains))
     }
 
@@ -392,14 +397,8 @@ impl AQLSpatialExecutor {
         let geom1 = self.extract_geometry(&args[0])?;
         let geom2 = self.extract_geometry(&args[1])?;
 
-        // Simple equality check - in practice would be more sophisticated
-        let equals = match (&geom1, &geom2) {
-            (SpatialGeometry::Point(p1), SpatialGeometry::Point(p2)) => {
-                (p1.x - p2.x).abs() < f64::EPSILON && (p1.y - p2.y).abs() < f64::EPSILON
-            }
-            _ => false,
-        };
-
+        // Use enhanced spatial operations
+        let equals = SpatialOperations::equals(&geom1, &geom2)?;
         Ok(AQLSpatialResult::Boolean(equals))
     }
 

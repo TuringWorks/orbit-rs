@@ -1,0 +1,44 @@
+#version 450
+
+// Spatial distance operations for GPU acceleration
+// Calculates 2D Euclidean distance between a query point and multiple candidate points
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+// Input buffers
+layout(set = 0, binding = 0) readonly buffer QueryXBuffer {
+    float query_x;
+};
+
+layout(set = 0, binding = 1) readonly buffer QueryYBuffer {
+    float query_y;
+};
+
+layout(set = 0, binding = 2) readonly buffer CandidatesXBuffer {
+    float candidates_x[];
+};
+
+layout(set = 0, binding = 3) readonly buffer CandidatesYBuffer {
+    float candidates_y[];
+};
+
+layout(set = 0, binding = 4) writeonly buffer DistancesBuffer {
+    float distances[];
+};
+
+layout(set = 0, binding = 5) readonly buffer PointCountBuffer {
+    uint point_count;
+};
+
+void main() {
+    uint point_id = gl_GlobalInvocationID.x;
+    
+    if (point_id >= point_count) {
+        return;
+    }
+    
+    float dx = candidates_x[point_id] - query_x;
+    float dy = candidates_y[point_id] - query_y;
+    distances[point_id] = sqrt(dx * dx + dy * dy);
+}
+

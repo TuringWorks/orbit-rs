@@ -263,14 +263,16 @@ pub type JsonbResult<T> = Result<T, JsonbError>;
 /// Encode a serde_json::Value into CBOR bytes for compact storage.
 pub fn encode_jsonb(value: &serde_json::Value) -> crate::protocols::error::ProtocolResult<Vec<u8>> {
     use crate::protocols::error::ProtocolError;
-    serde_cbor::to_vec(value)
-        .map_err(|e| ProtocolError::SerializationError(format!("CBOR encode failed: {e}")))
+    let mut buffer = Vec::new();
+    ciborium::ser::into_writer(value, &mut buffer)
+        .map_err(|e| ProtocolError::SerializationError(format!("CBOR encode failed: {e}")))?;
+    Ok(buffer)
 }
 
 /// Decode CBOR bytes back into serde_json::Value.
 pub fn decode_jsonb(bytes: &[u8]) -> crate::protocols::error::ProtocolResult<serde_json::Value> {
     use crate::protocols::error::ProtocolError;
-    serde_cbor::from_slice(bytes)
+    ciborium::de::from_reader(bytes)
         .map_err(|e| ProtocolError::SerializationError(format!("CBOR decode failed: {e}")))
 }
 

@@ -49,13 +49,14 @@ impl CudaDevice {
     /// - Linux: Checks for /usr/local/cuda, CUDA_PATH env var, or nvcc in PATH
     /// - Windows: Checks for CUDA_PATH env var, nvcc.exe in PATH, or common installation paths
     pub(crate) fn is_cuda_available() -> bool {
+        // CUDA not yet implemented
         #[cfg(all(unix, not(target_os = "macos")))]
         {
             // Linux/Unix CUDA detection
-            std::path::Path::new("/usr/local/cuda").exists()
+            return std::path::Path::new("/usr/local/cuda").exists()
                 || std::env::var("CUDA_PATH").is_ok()
                 || which::which("nvcc").is_ok()
-                || std::path::Path::new("/usr/bin/nvcc").exists()
+                || std::path::Path::new("/usr/bin/nvcc").exists();
         }
         
         #[cfg(target_os = "windows")]
@@ -90,8 +91,11 @@ impl CudaDevice {
         
         #[cfg(not(any(unix, target_os = "windows")))]
         {
-            false
+            return false;
         }
+        
+        // Default: CUDA not available (fallback for platforms without specific cfg)
+        false
     }
 
     /// Get the default CUDA device ID

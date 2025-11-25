@@ -237,13 +237,8 @@ impl CypherSpatialExecutor {
         let geom1 = self.extract_geometry(&args[0])?;
         let geom2 = self.extract_geometry(&args[1])?;
 
-        // Use point_in_polygon for simple contains logic
-        let contains = match (&geom1, &geom2) {
-            (SpatialGeometry::Polygon(poly), SpatialGeometry::Point(point)) => {
-                SpatialOperations::point_in_polygon(point, poly)?
-            }
-            _ => false, // Simplified - would need more geometry combinations
-        };
+        // Use enhanced spatial operations
+        let contains = SpatialOperations::contains(&geom1, &geom2)?;
         Ok(CypherSpatialResult::Boolean(contains))
     }
 
@@ -261,13 +256,8 @@ impl CypherSpatialExecutor {
         let geom1 = self.extract_geometry(&args[0])?;
         let geom2 = self.extract_geometry(&args[1])?;
 
-        // within is the inverse of contains
-        let within = match (&geom2, &geom1) {
-            (SpatialGeometry::Polygon(poly), SpatialGeometry::Point(point)) => {
-                SpatialOperations::point_in_polygon(point, poly)?
-            }
-            _ => false, // Simplified - would need more geometry combinations
-        };
+        // Use enhanced spatial operations
+        let within = SpatialOperations::within(&geom1, &geom2)?;
         Ok(CypherSpatialResult::Boolean(within))
     }
 
@@ -282,8 +272,11 @@ impl CypherSpatialExecutor {
             ));
         }
 
-        // Placeholder implementation
-        Ok(CypherSpatialResult::Boolean(false))
+        let geom1 = self.extract_geometry(&args[0])?;
+        let geom2 = self.extract_geometry(&args[1])?;
+
+        let overlaps = SpatialOperations::overlaps(&geom1, &geom2)?;
+        Ok(CypherSpatialResult::Boolean(overlaps))
     }
 
     /// touches(geometry1, geometry2)
@@ -297,8 +290,11 @@ impl CypherSpatialExecutor {
             ));
         }
 
-        // Placeholder implementation
-        Ok(CypherSpatialResult::Boolean(false))
+        let geom1 = self.extract_geometry(&args[0])?;
+        let geom2 = self.extract_geometry(&args[1])?;
+
+        let touches = SpatialOperations::touches(&geom1, &geom2)?;
+        Ok(CypherSpatialResult::Boolean(touches))
     }
 
     /// crosses(geometry1, geometry2)
@@ -312,8 +308,11 @@ impl CypherSpatialExecutor {
             ));
         }
 
-        // Placeholder implementation
-        Ok(CypherSpatialResult::Boolean(false))
+        let geom1 = self.extract_geometry(&args[0])?;
+        let geom2 = self.extract_geometry(&args[1])?;
+
+        let crosses = SpatialOperations::crosses(&geom1, &geom2)?;
+        Ok(CypherSpatialResult::Boolean(crosses))
     }
 
     /// disjoint(geometry1, geometry2)
@@ -346,23 +345,25 @@ impl CypherSpatialExecutor {
             ));
         }
 
-        // Placeholder - would calculate actual bounding box
+        let geometry = self.extract_geometry(&args[0])?;
+        let bbox = SpatialOperations::bounding_box(&geometry)?;
+
         let mut bbox_map = Map::new();
         bbox_map.insert(
             "minX".to_string(),
-            Value::Number(serde_json::Number::from_f64(-180.0).unwrap()),
+            Value::Number(serde_json::Number::from_f64(bbox.min_x).unwrap()),
         );
         bbox_map.insert(
             "minY".to_string(),
-            Value::Number(serde_json::Number::from_f64(-90.0).unwrap()),
+            Value::Number(serde_json::Number::from_f64(bbox.min_y).unwrap()),
         );
         bbox_map.insert(
             "maxX".to_string(),
-            Value::Number(serde_json::Number::from_f64(180.0).unwrap()),
+            Value::Number(serde_json::Number::from_f64(bbox.max_x).unwrap()),
         );
         bbox_map.insert(
             "maxY".to_string(),
-            Value::Number(serde_json::Number::from_f64(90.0).unwrap()),
+            Value::Number(serde_json::Number::from_f64(bbox.max_y).unwrap()),
         );
 
         Ok(CypherSpatialResult::Map(bbox_map))

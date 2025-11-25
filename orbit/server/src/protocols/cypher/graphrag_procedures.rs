@@ -9,12 +9,14 @@ use crate::protocols::graphrag::{
     entity_extraction::DocumentProcessingResult,
     graph_rag_actor::{GraphRAGDocumentRequest, GraphRAGQuery, GraphRAGQueryResult, GraphRAGStats},
     multi_hop_reasoning::ReasoningQuery,
+    storage::GraphRAGStorage,
     GraphRAGActor,
 };
 use orbit_client::OrbitClient;
 use orbit_shared::{graphrag::ReasoningPath, Key};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// GraphRAG procedure handler for Bolt/Cypher protocol
@@ -157,6 +159,7 @@ impl BoltGraphRAGProcedures {
             nodes: Vec::new(),
             relationships: Vec::new(),
             columns,
+            rows: Vec::new(),
         })
     }
 
@@ -234,6 +237,7 @@ impl BoltGraphRAGProcedures {
             nodes: Vec::new(),
             relationships: Vec::new(),
             columns,
+            rows: Vec::new(),
         })
     }
 
@@ -320,6 +324,7 @@ impl BoltGraphRAGProcedures {
             nodes: Vec::new(),
             relationships: Vec::new(),
             columns,
+            rows: Vec::new(),
         })
     }
 
@@ -427,10 +432,11 @@ impl BoltGraphRAGProcedures {
             nodes: Vec::new(),
             relationships: Vec::new(),
             columns,
+            rows: Vec::new(),
         })
     }
 
-    /// Execute orbit.graphrag.findSimilar procedure (placeholder)
+    /// Execute orbit.graphrag.findSimilar procedure
     /// CALL orbit.graphrag.findSimilar(kg_name, entity, config)
     async fn execute_find_similar(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
         if args.len() < 3 {
@@ -440,31 +446,134 @@ impl BoltGraphRAGProcedures {
             ));
         }
 
-        let _kg_name = self.extract_string_arg(&args[0], "kg_name")?;
-        let entity = self.extract_string_arg(&args[1], "entity")?;
-        let _config = self.parse_config_arg(&args[2])?;
+        let kg_name = self.extract_string_arg(&args[0], "kg_name")?;
+        let entity_text = self.extract_string_arg(&args[1], "entity")?;
+        let config = self.parse_config_arg(&args[2])?;
 
-        // For now, return a placeholder result
+        let limit = config
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(10);
+
+        let similarity_threshold = config
+            .get("similarity_threshold")
+            .and_then(|v| v.as_f64())
+            .map(|f| f as f32)
+            .unwrap_or(0.7);
+
+        // Get storage and find similar entities
+        let storage = self.get_storage(&kg_name).await?;
+        let nodes = storage.list_nodes().await?;
+
+        // Find the target entity
+        let target_node = nodes
+            .iter()
+            .find(|n| n.text == entity_text || n.id == entity_text);
+
+        if target_node.is_none() {
+            return Err(ProtocolError::CypherError(format!(
+                "Entity '{}' not found in knowledge graph",
+                entity_text
+            )));
+        }
+
+        let target = target_node.unwrap();
+        let target_embedding = target
+            .embeddings
+            .values()
+            .next()
+            .cloned()
+            .unwrap_or_default();
+
         let columns = vec![
-            "entity_name".to_string(),
-            "similarity_score".to_string(),
-            "shared_properties".to_string(),
+            "entity_id".to_string(),
+            "entity_text".to_string(),
+            "entity_type".to_string(),
+            "similarity".to_string(),
+            "confidence".to_string(),
         ];
 
-        let _rows = [vec![
-            Some(format!("Similar to {entity}")),
-            Some("0.0".to_string()),
-            Some("{}".to_string()),
-        ]];
+        let mut rows = Vec::new();
+
+        if target_embedding.is_empty() {
+            // Text similarity fallback
+            let target_lower = target.text.to_lowercase();
+            let target_words: std::collections::HashSet<&str> =
+                target_lower.split_whitespace().collect();
+            for node in nodes.iter().filter(|n| n.id != target.id).take(limit) {
+                let node_lower = node.text.to_lowercase();
+                let node_words: std::collections::HashSet<&str> =
+                    node_lower.split_whitespace().collect();
+                let intersection = target_words.intersection(&node_words).count();
+                let union = target_words.union(&node_words).count();
+                if union > 0 {
+                    let similarity = intersection as f32 / union as f32;
+                    if similarity >= similarity_threshold {
+                        rows.push(vec![
+                            Some(node.id.clone()),
+                            Some(node.text.clone()),
+                            Some(format!("{:?}", node.entity_type)),
+                            Some(format!("{:.4}", similarity)),
+                            Some(format!("{:.4}", node.confidence)),
+                        ]);
+                    }
+                }
+            }
+        } else {
+            // Embedding similarity
+            let mut similarities: Vec<(f32, &crate::protocols::graphrag::storage::GraphRAGNode)> = nodes
+                .iter()
+                .filter(|n| n.id != target.id)
+                .filter_map(|n| {
+                    let node_embedding = n.embeddings.values().next()?;
+                    if node_embedding.len() != target_embedding.len() {
+                        return None;
+                    }
+
+                    let dot_product: f32 = target_embedding
+                        .iter()
+                        .zip(node_embedding.iter())
+                        .map(|(a, b)| a * b)
+                        .sum();
+                    let target_norm: f32 = target_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+                    let node_norm: f32 = node_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+
+                    if target_norm == 0.0 || node_norm == 0.0 {
+                        return None;
+                    }
+
+                    let similarity = dot_product / (target_norm * node_norm);
+                    if similarity >= similarity_threshold {
+                        Some((similarity, n))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            similarities.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+            for (similarity, node) in similarities.into_iter().take(limit) {
+                rows.push(vec![
+                    Some(node.id.clone()),
+                    Some(node.text.clone()),
+                    Some(format!("{:?}", node.entity_type)),
+                    Some(format!("{:.4}", similarity)),
+                    Some(format!("{:.4}", node.confidence)),
+                ]);
+            }
+        }
 
         Ok(QueryResult {
             nodes: Vec::new(),
             relationships: Vec::new(),
             columns,
+            rows,
         })
     }
 
-    /// Execute orbit.graphrag.semanticSearch procedure (placeholder)
+    /// Execute orbit.graphrag.semanticSearch procedure
     /// CALL orbit.graphrag.semanticSearch(kg_name, query_text, config)
     async fn execute_semantic_search(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
         if args.len() < 3 {
@@ -474,29 +583,95 @@ impl BoltGraphRAGProcedures {
             ));
         }
 
-        let _kg_name = self.extract_string_arg(&args[0], "kg_name")?;
-        let _query_text = self.extract_string_arg(&args[1], "query_text")?;
-        let _config = self.parse_config_arg(&args[2])?;
+        let orbit_client = self.orbit_client.as_ref().unwrap();
+        let kg_name = self.extract_string_arg(&args[0], "kg_name")?;
+        let query_text = self.extract_string_arg(&args[1], "query_text")?;
+        let config = self.parse_config_arg(&args[2])?;
 
-        // For now, return a placeholder result
+        let max_results = config
+            .get("max_results")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(20);
+
+        // Use RAG query to find relevant entities and context
+        let rag_query = GraphRAGQuery {
+            query_text: query_text.clone(),
+            max_hops: config
+                .get("max_hops")
+                .and_then(|v| v.as_u64().map(|n| n as u32))
+                .or_else(|| config.get("max_hops").and_then(|v| v.as_i64().map(|n| n as u32))),
+            context_size: config
+                .get("context_size")
+                .and_then(|v| v.as_u64().map(|n| n as usize))
+                .or_else(|| config.get("context_size").and_then(|v| v.as_i64().map(|n| n as usize))),
+            llm_provider: config
+                .get("llm_provider")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            search_strategy: None,
+            include_explanation: false,
+            max_results: Some(max_results),
+        };
+
+        // Get GraphRAG actor reference
+        let actor_ref = orbit_client
+            .actor_reference::<GraphRAGActor>(Key::StringKey {
+                key: kg_name.clone(),
+            })
+            .await
+            .map_err(|e| ProtocolError::CypherError(format!("Actor error: {e}")))?;
+
+        // Execute RAG query
+        let rag_result: GraphRAGQueryResult = actor_ref
+            .invoke("query_rag", vec![serde_json::to_value(rag_query).unwrap()])
+            .await
+            .map_err(|e| ProtocolError::CypherError(format!("Semantic search failed: {e}")))?;
+
         let columns = vec![
-            "entity_name".to_string(),
-            "entity_type".to_string(),
-            "relevance_score".to_string(),
-            "context_snippet".to_string(),
+            "type".to_string(),
+            "content".to_string(),
+            "entity_id".to_string(),
+            "score".to_string(),
         ];
 
-        let _rows = [vec![
-            Some("Sample Entity".to_string()),
-            Some("Concept".to_string()),
-            Some("0.0".to_string()),
-            Some("Semantic search not yet implemented".to_string()),
-        ]];
+        let mut rows = Vec::new();
+
+        // Add entities
+        for entity_id in rag_result.entities_involved.iter().take(max_results) {
+            rows.push(vec![
+                Some("entity".to_string()),
+                Some(entity_id.clone()),
+                Some(entity_id.clone()),
+                Some("1.0".to_string()),
+            ]);
+        }
+
+        // Add reasoning paths
+        if let Some(ref paths) = rag_result.reasoning_paths {
+            for path in paths.iter().take(max_results.saturating_sub(rows.len())) {
+                rows.push(vec![
+                    Some("path".to_string()),
+                    Some(path.nodes.join(" -> ")),
+                    None,
+                    Some(format!("{:.4}", path.score)),
+                ]);
+            }
+        }
+
+        // Add response
+        rows.push(vec![
+            Some("response".to_string()),
+            Some(rag_result.response.response.clone()),
+            None,
+            Some(format!("{:.4}", rag_result.response.confidence)),
+        ]);
 
         Ok(QueryResult {
             nodes: Vec::new(),
             relationships: Vec::new(),
             columns,
+            rows,
         })
     }
 
@@ -553,10 +728,11 @@ impl BoltGraphRAGProcedures {
             nodes: Vec::new(),
             relationships: Vec::new(),
             columns,
+            rows: Vec::new(),
         })
     }
 
-    /// Execute orbit.graphrag.listEntities procedure (placeholder)
+    /// Execute orbit.graphrag.listEntities procedure
     /// CALL orbit.graphrag.listEntities(kg_name, config)
     async fn execute_list_entities(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
         if args.len() < 2 {
@@ -565,34 +741,65 @@ impl BoltGraphRAGProcedures {
             ));
         }
 
-        let _kg_name = self.extract_string_arg(&args[0], "kg_name")?;
-        let _config = self.parse_config_arg(&args[1])?;
+        let kg_name = self.extract_string_arg(&args[0], "kg_name")?;
+        let config = self.parse_config_arg(&args[1])?;
 
-        // For now, return a placeholder result
+        let limit = config
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize);
+
+        let entity_type_filter = config
+            .get("entity_type")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        // Get storage and list entities
+        let storage = self.get_storage(&kg_name).await?;
+        let mut nodes = storage.list_nodes().await?;
+
+        // Apply filters
+        if let Some(ref filter_type) = entity_type_filter {
+            nodes.retain(|n| format!("{:?}", n.entity_type) == *filter_type);
+        }
+
+        // Apply limit
+        if let Some(limit_val) = limit {
+            nodes.truncate(limit_val);
+        }
+
         let columns = vec![
+            "entity_id".to_string(),
             "entity_text".to_string(),
             "entity_type".to_string(),
             "confidence".to_string(),
-            "properties".to_string(),
-            "aliases".to_string(),
+            "labels".to_string(),
+            "source_documents".to_string(),
         ];
 
-        let _rows = [vec![
-            Some("Sample Entity".to_string()),
-            Some("Concept".to_string()),
-            Some("0.8".to_string()),
-            Some("{}".to_string()),
-            Some("[]".to_string()),
-        ]];
+        let rows: Vec<Vec<Option<String>>> = nodes
+            .into_iter()
+            .map(|n| {
+                vec![
+                    Some(n.id),
+                    Some(n.text),
+                    Some(format!("{:?}", n.entity_type)),
+                    Some(format!("{:.4}", n.confidence)),
+                    Some(serde_json::to_string(&n.labels).unwrap_or_default()),
+                    Some(serde_json::to_string(&n.source_documents).unwrap_or_default()),
+                ]
+            })
+            .collect();
 
         Ok(QueryResult {
             nodes: Vec::new(),
             relationships: Vec::new(),
             columns,
+            rows,
         })
     }
 
-    /// Execute orbit.graphrag.analyzeTrends procedure (placeholder)
+    /// Execute orbit.graphrag.analyzeTrends procedure
     /// CALL orbit.graphrag.analyzeTrends(kg_name, concept, config)
     async fn execute_analyze_trends(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
         if args.len() < 3 {
@@ -602,33 +809,70 @@ impl BoltGraphRAGProcedures {
             ));
         }
 
-        let _kg_name = self.extract_string_arg(&args[0], "kg_name")?;
-        let _concept = self.extract_string_arg(&args[1], "concept")?;
-        let _config = self.parse_config_arg(&args[2])?;
+        let kg_name = self.extract_string_arg(&args[0], "kg_name")?;
+        let concept = self.extract_string_arg(&args[1], "concept")?;
+        let config = self.parse_config_arg(&args[2])?;
 
-        // For now, return a placeholder result
+        let time_window_days = config
+            .get("time_window_days")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as i64)
+            .unwrap_or(30);
+
+        // Get storage and analyze trends
+        let storage = self.get_storage(&kg_name).await?;
+        let nodes = storage.list_nodes().await?;
+        let relationships = storage.list_relationships().await?;
+
+        let now = chrono::Utc::now().timestamp_millis();
+        let window_start = now - (time_window_days * 24 * 60 * 60 * 1000);
+
+        // Find entities related to the concept
+        let concept_entities: Vec<_> = nodes
+            .iter()
+            .filter(|n| {
+                n.text.to_lowercase().contains(&concept.to_lowercase())
+                    || n.labels.iter().any(|l| l.to_lowercase().contains(&concept.to_lowercase()))
+            })
+            .collect();
+
+        // Analyze relationship trends over time
+        let mut time_buckets: std::collections::BTreeMap<i64, usize> = std::collections::BTreeMap::new();
+        let bucket_size_ms = 24 * 60 * 60 * 1000; // 1 day buckets
+
+        for rel in &relationships {
+            if rel.created_at >= window_start {
+                let bucket = (rel.created_at / bucket_size_ms) * bucket_size_ms;
+                *time_buckets.entry(bucket).or_insert(0) += 1;
+            }
+        }
+
         let columns = vec![
-            "period".to_string(),
-            "mention_frequency".to_string(),
-            "sentiment".to_string(),
-            "innovation_score".to_string(),
+            "timestamp".to_string(),
+            "relationship_count".to_string(),
+            "concept_entities_found".to_string(),
         ];
 
-        let _rows = [vec![
-            Some("2024".to_string()),
-            Some("100".to_string()),
-            Some("0.7".to_string()),
-            Some("0.8".to_string()),
-        ]];
+        let rows: Vec<Vec<Option<String>>> = time_buckets
+            .into_iter()
+            .map(|(timestamp, count)| {
+                vec![
+                    Some(timestamp.to_string()),
+                    Some(count.to_string()),
+                    Some(concept_entities.len().to_string()),
+                ]
+            })
+            .collect();
 
         Ok(QueryResult {
             nodes: Vec::new(),
             relationships: Vec::new(),
             columns,
+            rows,
         })
     }
 
-    /// Execute orbit.graphrag.detectCommunities procedure (placeholder)
+    /// Execute orbit.graphrag.detectCommunities procedure
     /// CALL orbit.graphrag.detectCommunities(kg_name, config)
     async fn execute_detect_communities(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
         if args.len() < 2 {
@@ -638,28 +882,88 @@ impl BoltGraphRAGProcedures {
             ));
         }
 
-        let _kg_name = self.extract_string_arg(&args[0], "kg_name")?;
-        let _config = self.parse_config_arg(&args[1])?;
+        let kg_name = self.extract_string_arg(&args[0], "kg_name")?;
+        let config = self.parse_config_arg(&args[1])?;
 
-        // For now, return a placeholder result
+        let min_community_size = config
+            .get("min_community_size")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(3);
+
+        // Get storage
+        let storage = self.get_storage(&kg_name).await?;
+        let nodes = storage.list_nodes().await?;
+        let relationships = storage.list_relationships().await?;
+
+        // Build adjacency list
+        let mut adjacency: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        for rel in &relationships {
+            adjacency
+                .entry(rel.from_entity_id.clone())
+                .or_insert_with(Vec::new)
+                .push(rel.to_entity_id.clone());
+            adjacency
+                .entry(rel.to_entity_id.clone())
+                .or_insert_with(Vec::new)
+                .push(rel.from_entity_id.clone());
+        }
+
+        // Community detection using connected components
+        let mut visited = std::collections::HashSet::new();
+        let mut communities = Vec::new();
+
+        for node in &nodes {
+            if visited.contains(&node.id) {
+                continue;
+            }
+
+            let mut community = Vec::new();
+            let mut queue = std::collections::VecDeque::new();
+            queue.push_back(node.id.clone());
+            visited.insert(node.id.clone());
+
+            while let Some(current_id) = queue.pop_front() {
+                community.push(current_id.clone());
+
+                if let Some(neighbors) = adjacency.get(&current_id) {
+                    for neighbor in neighbors {
+                        if !visited.contains(neighbor) {
+                            visited.insert(neighbor.clone());
+                            queue.push_back(neighbor.clone());
+                        }
+                    }
+                }
+            }
+
+            if community.len() >= min_community_size {
+                communities.push(community);
+            }
+        }
+
         let columns = vec![
             "community_id".to_string(),
-            "entities".to_string(),
-            "dominant_concepts".to_string(),
-            "internal_density".to_string(),
+            "size".to_string(),
+            "entity_ids".to_string(),
         ];
 
-        let _rows = [vec![
-            Some("community_1".to_string()),
-            Some("[]".to_string()),
-            Some("[]".to_string()),
-            Some("0.0".to_string()),
-        ]];
+        let rows: Vec<Vec<Option<String>>> = communities
+            .into_iter()
+            .enumerate()
+            .map(|(idx, community)| {
+                vec![
+                    Some(idx.to_string()),
+                    Some(community.len().to_string()),
+                    Some(serde_json::to_string(&community).unwrap_or_default()),
+                ]
+            })
+            .collect();
 
         Ok(QueryResult {
             nodes: Vec::new(),
             relationships: Vec::new(),
             columns,
+            rows,
         })
     }
 
@@ -694,6 +998,7 @@ impl BoltGraphRAGProcedures {
             nodes: Vec::new(),
             relationships: Vec::new(),
             columns,
+            rows: Vec::new(),
         })
     }
 
@@ -731,6 +1036,7 @@ impl BoltGraphRAGProcedures {
             nodes: Vec::new(),
             relationships: Vec::new(),
             columns,
+            rows: Vec::new(),
         })
     }
 
@@ -767,7 +1073,17 @@ impl BoltGraphRAGProcedures {
             nodes: Vec::new(),
             relationships: Vec::new(),
             columns,
+            rows: Vec::new(),
         })
+    }
+
+    /// Helper to get GraphRAG storage instance
+    async fn get_storage(&self, kg_name: &str) -> ProtocolResult<GraphRAGStorage> {
+        // Create storage instance using standard data directory
+        let data_dir = PathBuf::from("data/graphrag");
+        let storage = GraphRAGStorage::new(data_dir, kg_name.to_string());
+        storage.initialize().await?;
+        Ok(storage)
     }
 
     /// Helper function to extract string argument

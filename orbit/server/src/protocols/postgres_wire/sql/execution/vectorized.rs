@@ -365,10 +365,61 @@ impl VectorizedExecutor {
                 let count = self.simd_aggregate_f64.count(null_bitmap);
                 Ok(SqlValue::BigInt(count as i64))
             }
+            (Column::Int32(values), AggregateFunction::Avg) => {
+                let sum = self.simd_aggregate_i32.sum(values, null_bitmap);
+                let count = self.simd_aggregate_i32.count(null_bitmap);
+                match (sum, count) {
+                    (Some(s), c) if c > 0 => {
+                        Ok(SqlValue::DoublePrecision(s as f64 / c as f64))
+                    }
+                    _ => Ok(SqlValue::Null),
+                }
+            }
+            (Column::Int64(values), AggregateFunction::Avg) => {
+                let sum = self.simd_aggregate_i64.sum(values, null_bitmap);
+                let count = self.simd_aggregate_i64.count(null_bitmap);
+                match (sum, count) {
+                    (Some(s), c) if c > 0 => {
+                        Ok(SqlValue::DoublePrecision(s as f64 / c as f64))
+                    }
+                    _ => Ok(SqlValue::Null),
+                }
+            }
+            (Column::Float32(values), AggregateFunction::Avg) => {
+                // For Float32, we need to compute sum and count
+                let mut sum: f64 = 0.0;
+                let mut count = 0;
+                for (index, &value) in values.iter().enumerate() {
+                    if null_bitmap.is_valid(index) {
+                        sum += value as f64;
+                        count += 1;
+                    }
+                }
+                if count > 0 {
+                    Ok(SqlValue::DoublePrecision(sum / count as f64))
+                } else {
+                    Ok(SqlValue::Null)
+                }
+            }
+            (Column::Float64(values), AggregateFunction::Avg) => {
+                let sum = self.simd_aggregate_f64.sum(values, null_bitmap);
+                let count = self.simd_aggregate_f64.count(null_bitmap);
+                match (sum, count) {
+                    (Some(s), c) if c > 0 => {
+                        Ok(SqlValue::DoublePrecision(s / c as f64))
+                    }
+                    _ => Ok(SqlValue::Null),
+                }
+            }
             (_, AggregateFunction::Avg) => {
-                // Average requires both sum and count
+                // For other types, compute average using sum/count
+                let count = null_bitmap.len() - null_bitmap.null_count();
+                if count == 0 {
+                    return Ok(SqlValue::Null);
+                }
+                // For non-numeric types, average doesn't make sense
                 Err(ProtocolError::PostgresError(
-                    "AVG aggregation not yet implemented".to_string(),
+                    format!("AVG not supported for column type: {:?}", column),
                 ))
             }
             _ => Err(ProtocolError::PostgresError(

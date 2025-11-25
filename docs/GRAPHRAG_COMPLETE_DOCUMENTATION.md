@@ -40,7 +40,16 @@ GraphRAG (Graph-enhanced Retrieval-Augmented Generation) provides comprehensive 
 ✅ **Multiple Interfaces**
 - RESP protocol commands (GRAPHRAG.*)
 - PostgreSQL SQL functions
+- AQL function calls (GRAPHRAG_*)
+- Cypher/Bolt stored procedures (orbit.graphrag.*)
 - REST API support
+
+✅ **Advanced Analytics Functions** (NEW - November 2025)
+- Entity similarity search (embedding and text-based)
+- Semantic search with RAG integration
+- Entity listing with filtering
+- Trend analysis over time windows
+- Community detection using connected components
 
 ---
 

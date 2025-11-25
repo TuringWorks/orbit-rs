@@ -126,3 +126,7 @@ rand = "0.9"
 # Security patches
 # Note: tikv-client has been removed from dependencies due to unresolved protobuf vulnerabilities
 # See orbit/protocols/src/persistence/mod.rs for details
+
+# Note: yaml-rust is unmaintained but required by syntect 5.3.0
+# Tracking: https://github.com/trishume/syntect/issues for yaml-rust2 migration
+# yaml-rust2 is available as a maintained alternative but requires upstream adoption

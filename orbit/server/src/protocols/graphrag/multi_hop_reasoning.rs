@@ -2,14 +2,20 @@
 //!
 //! This module provides algorithms for traversing graph relationships across
 //! multiple hops to find complex connections and insights between entities.
+//! Includes GPU acceleration support for Metal (macOS) and Vulkan (cross-platform).
 
 use orbit_client::OrbitClient;
 use orbit_shared::graphrag::{ConnectionExplanation, ReasoningPath};
 use orbit_shared::{Addressable, Key, OrbitError, OrbitResult};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
+
+#[cfg(feature = "gpu-acceleration")]
+use orbit_compute::graph_traversal::{
+    GraphData, GPUGraphTraversal, NodeProperties, TraversalConfig, TraversalResult,
+};
 
 /// Multi-hop reasoning engine for graph traversal
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +68,18 @@ pub struct ReasoningConfig {
 
     /// Enable path caching
     pub enable_caching: bool,
+
+    /// Enable GPU acceleration for large graphs
+    #[cfg(feature = "gpu-acceleration")]
+    pub enable_gpu_acceleration: bool,
+
+    /// Minimum graph size to use GPU (node count)
+    #[cfg(feature = "gpu-acceleration")]
+    pub gpu_min_nodes: usize,
+
+    /// Minimum graph size to use GPU (edge count)
+    #[cfg(feature = "gpu-acceleration")]
+    pub gpu_min_edges: usize,
 }
 
 impl Default for ReasoningConfig {
@@ -75,6 +93,12 @@ impl Default for ReasoningConfig {
             bidirectional_search: true,
             query_timeout_ms: 30_000,
             enable_caching: true,
+            #[cfg(feature = "gpu-acceleration")]
+            enable_gpu_acceleration: true,
+            #[cfg(feature = "gpu-acceleration")]
+            gpu_min_nodes: 1000,
+            #[cfg(feature = "gpu-acceleration")]
+            gpu_min_edges: 5000,
         }
     }
 }
@@ -308,8 +332,26 @@ impl MultiHopReasoningEngine {
         }
     }
 
-    /// Find paths between two entities
+    /// Find paths between two entities (with automatic GPU/CPU routing)
     pub async fn find_paths(
+        &mut self,
+        orbit_client: Arc<OrbitClient>,
+        kg_name: &str,
+        query: ReasoningQuery,
+    ) -> OrbitResult<Vec<ReasoningPath>> {
+        #[cfg(feature = "gpu-acceleration")]
+        {
+            if self.should_use_gpu(&query) {
+                return self.find_paths_gpu(orbit_client, kg_name, query).await;
+            }
+        }
+
+        // Fall back to CPU BFS
+        self.find_paths_cpu(orbit_client, kg_name, query).await
+    }
+
+    /// CPU-based path finding (original implementation)
+    async fn find_paths_cpu(
         &mut self,
         orbit_client: Arc<OrbitClient>,
         kg_name: &str,
@@ -336,6 +378,436 @@ impl MultiHopReasoningEngine {
         self.finalize_search_results(&query, &found_paths, explored_count, query_time);
 
         Ok(found_paths)
+    }
+
+    /// GPU-accelerated path finding
+    #[cfg(feature = "gpu-acceleration")]
+    async fn find_paths_gpu(
+        &mut self,
+        orbit_client: Arc<OrbitClient>,
+        kg_name: &str,
+        query: ReasoningQuery,
+    ) -> OrbitResult<Vec<ReasoningPath>> {
+        let start_time = std::time::Instant::now();
+
+        info!(
+            from_entity = %query.from_entity,
+            to_entity = %query.to_entity,
+            "Using GPU-accelerated path finding"
+        );
+
+        // Convert graph to GPU format
+        let (graph_data, entity_to_id) = self
+            .convert_graph_to_gpu_format_with_mapping(
+                orbit_client.clone(),
+                kg_name,
+                &query.from_entity,
+                &query.to_entity,
+                query.max_hops.unwrap_or(self.max_hops),
+            )
+            .await?;
+
+        // Create GPU traversal engine
+        let config = TraversalConfig {
+            max_depth: query.max_hops.unwrap_or(self.max_hops),
+            max_paths: query.max_results.unwrap_or(self.config.max_results),
+            use_gpu: true,
+            min_score: self.config.min_path_score,
+            allowed_types: query.relationship_types.clone().unwrap_or_default(),
+            bidirectional: self.config.bidirectional_search,
+        };
+
+        let traversal = GPUGraphTraversal::new(config)
+            .await
+            .map_err(|e| OrbitError::internal(format!("Failed to create GPU traversal: {e}")))?;
+
+        // Convert entity IDs to numeric IDs
+        let from_id = entity_to_id
+            .get(&query.from_entity)
+            .copied()
+            .ok_or_else(|| OrbitError::internal(format!("Entity not found: {}", query.from_entity)))?;
+        let to_id = entity_to_id
+            .get(&query.to_entity)
+            .copied()
+            .ok_or_else(|| OrbitError::internal(format!("Entity not found: {}", query.to_entity)))?;
+
+        // Execute GPU traversal
+        let result = traversal
+            .bfs(&graph_data, from_id, Some(to_id))
+            .await
+            .map_err(|e| OrbitError::internal(format!("GPU traversal failed: {e}")))?;
+
+        // Convert results back to ReasoningPath
+        let reasoning_paths = self.convert_gpu_results_to_reasoning_paths(
+            result,
+            &graph_data,
+            &entity_to_id,
+            &query,
+        )?;
+
+        let query_time = start_time.elapsed();
+        self.finalize_search_results(&query, &reasoning_paths, 0, query_time);
+
+        Ok(reasoning_paths)
+    }
+
+    /// Check if GPU should be used for this query
+    #[cfg(feature = "gpu-acceleration")]
+    pub fn should_use_gpu(&self, _query: &ReasoningQuery) -> bool {
+        if !self.config.enable_gpu_acceleration {
+            return false;
+        }
+
+        // For now, always try GPU if enabled
+        // In the future, we could estimate graph size before deciding
+        true
+    }
+
+    /// Convert graph to GPU-friendly format with entity ID mapping
+    #[cfg(feature = "gpu-acceleration")]
+    async fn convert_graph_to_gpu_format_with_mapping(
+        &self,
+        orbit_client: Arc<OrbitClient>,
+        kg_name: &str,
+        from_entity: &str,
+        to_entity: &str,
+        max_hops: u32,
+    ) -> OrbitResult<(GraphData, HashMap<String, u64>)> {
+        info!(
+            from_entity = %from_entity,
+            to_entity = %to_entity,
+            max_hops = max_hops,
+            "Converting graph to GPU format"
+        );
+
+        // Use BFS to discover nodes
+        let mut node_set = HashSet::new();
+        let mut adjacency_map: HashMap<String, Vec<(String, f32)>> = HashMap::new();
+        let mut entity_to_id: HashMap<String, u64> = HashMap::new();
+        let mut next_id: u64 = 0;
+
+        // Helper to get or assign numeric ID for an entity
+        let mut get_or_assign_id = |entity: &str| -> u64 {
+            if let Some(&id) = entity_to_id.get(entity) {
+                id
+            } else {
+                let id = next_id;
+                next_id += 1;
+                entity_to_id.insert(entity.to_string(), id);
+                id
+            }
+        };
+
+        // BFS to discover graph
+        let mut queue = VecDeque::new();
+        let mut visited = HashSet::new();
+
+        queue.push_back((from_entity.to_string(), 0u32));
+        visited.insert(from_entity.to_string());
+        node_set.insert(from_entity.to_string());
+        get_or_assign_id(from_entity);
+
+        if !node_set.contains(to_entity) {
+            node_set.insert(to_entity.to_string());
+            get_or_assign_id(to_entity);
+        }
+
+        while let Some((current_node, hop_count)) = queue.pop_front() {
+            if hop_count >= max_hops {
+                continue;
+            }
+
+            match self
+                .get_neighbors(orbit_client.clone(), kg_name, &current_node, &None)
+                .await
+            {
+                Ok(neighbors) => {
+                    let neighbor_list = adjacency_map
+                        .entry(current_node.clone())
+                        .or_insert_with(Vec::new);
+
+                    for (neighbor_id, _rel_id, _rel_type, confidence) in neighbors {
+                        neighbor_list.push((neighbor_id.clone(), confidence));
+
+                        if !node_set.contains(&neighbor_id) {
+                            node_set.insert(neighbor_id.clone());
+                            get_or_assign_id(&neighbor_id);
+                        }
+
+                        if hop_count + 1 < max_hops && !visited.contains(&neighbor_id) {
+                            visited.insert(neighbor_id.clone());
+                            queue.push_back((neighbor_id, hop_count + 1));
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        node = %current_node,
+                        error = %e,
+                        "Failed to get neighbors, continuing"
+                    );
+                }
+            }
+        }
+
+        // Build adjacency list with numeric IDs
+        let node_count = node_set.len();
+        let node_ids: Vec<u64> = (0..next_id).collect();
+        let mut adjacency_list: Vec<Vec<u32>> = vec![Vec::new(); node_count];
+        let mut edge_weights: Vec<f32> = Vec::new();
+        let mut edge_count = 0;
+
+        for (entity, neighbors) in adjacency_map.iter() {
+            if let Some(&node_idx) = entity_to_id.get(entity) {
+                let idx = node_idx as usize;
+                if idx < adjacency_list.len() {
+                    for (neighbor_entity, confidence) in neighbors {
+                        if let Some(&neighbor_idx) = entity_to_id.get(neighbor_entity) {
+                            adjacency_list[idx].push(neighbor_idx as u32);
+                            edge_weights.push(*confidence);
+                            edge_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut node_properties: HashMap<u64, NodeProperties> = HashMap::new();
+        for (_entity, &id) in entity_to_id.iter() {
+            node_properties.insert(
+                id,
+                NodeProperties {
+                    importance: 1.0,
+                    node_type: None,
+                    metadata: HashMap::new(),
+                },
+            );
+        }
+
+        info!(
+            nodes = node_count,
+            edges = edge_count,
+            "Graph conversion complete"
+        );
+
+        Ok((
+            GraphData {
+                node_ids,
+                adjacency_list,
+                edge_weights: Some(edge_weights),
+                node_properties,
+                node_count,
+                edge_count,
+            },
+            entity_to_id,
+        ))
+    }
+
+    /// Convert graph incrementally for very large graphs
+    /// This method loads the graph in chunks to avoid memory issues
+    #[cfg(feature = "gpu-acceleration")]
+    async fn _convert_graph_to_gpu_format_incremental(
+        &self,
+        orbit_client: Arc<OrbitClient>,
+        kg_name: &str,
+        from_entity: &str,
+        to_entity: &str,
+        max_hops: u32,
+        chunk_size: usize,
+    ) -> OrbitResult<(GraphData, HashMap<String, u64>)> {
+        info!(
+            from_entity = %from_entity,
+            to_entity = %to_entity,
+            max_hops = max_hops,
+            chunk_size = chunk_size,
+            "Converting large graph incrementally"
+        );
+
+        // Use BFS to discover nodes in chunks
+        let mut node_set = HashSet::new();
+        let mut adjacency_map: HashMap<String, Vec<(String, f32)>> = HashMap::new();
+        let mut entity_to_id: HashMap<String, u64> = HashMap::new();
+        let mut next_id: u64 = 0;
+
+        // Helper to get or assign numeric ID for an entity
+        let mut get_or_assign_id = |entity: &str| -> u64 {
+            if let Some(&id) = entity_to_id.get(entity) {
+                id
+            } else {
+                let id = next_id;
+                next_id += 1;
+                entity_to_id.insert(entity.to_string(), id);
+                id
+            }
+        };
+
+        // BFS with chunked processing
+        let mut queue = VecDeque::new();
+        let mut visited = HashSet::new();
+        let mut processed_in_chunk = 0;
+
+        queue.push_back((from_entity.to_string(), 0u32));
+        visited.insert(from_entity.to_string());
+        node_set.insert(from_entity.to_string());
+        get_or_assign_id(from_entity);
+
+        if !node_set.contains(to_entity) {
+            node_set.insert(to_entity.to_string());
+            get_or_assign_id(to_entity);
+        }
+
+        // Process in chunks to avoid memory issues
+        while let Some((current_node, hop_count)) = queue.pop_front() {
+            if hop_count >= max_hops {
+                continue;
+            }
+
+            // Process chunk, then yield if needed
+            if processed_in_chunk >= chunk_size {
+                // Yield control to allow other tasks
+                tokio::task::yield_now().await;
+                processed_in_chunk = 0;
+            }
+
+            match self
+                .get_neighbors(orbit_client.clone(), kg_name, &current_node, &None)
+                .await
+            {
+                Ok(neighbors) => {
+                    let neighbor_list = adjacency_map
+                        .entry(current_node.clone())
+                        .or_insert_with(Vec::new);
+
+                    for (neighbor_id, _rel_id, _rel_type, confidence) in neighbors {
+                        neighbor_list.push((neighbor_id.clone(), confidence));
+
+                        if !node_set.contains(&neighbor_id) {
+                            node_set.insert(neighbor_id.clone());
+                            get_or_assign_id(&neighbor_id);
+                        }
+
+                        if hop_count + 1 < max_hops && !visited.contains(&neighbor_id) {
+                            visited.insert(neighbor_id.clone());
+                            queue.push_back((neighbor_id, hop_count + 1));
+                        }
+                    }
+                    processed_in_chunk += 1;
+                }
+                Err(e) => {
+                    warn!(
+                        node = %current_node,
+                        error = %e,
+                        "Failed to get neighbors, continuing"
+                    );
+                }
+            }
+        }
+
+        // Build adjacency list with numeric IDs (same as before)
+        let node_count = node_set.len();
+        let node_ids: Vec<u64> = (0..next_id).collect();
+        let mut adjacency_list: Vec<Vec<u32>> = vec![Vec::new(); node_count];
+        let mut edge_weights: Vec<f32> = Vec::new();
+        let mut edge_count = 0;
+
+        for (entity, neighbors) in adjacency_map.iter() {
+            if let Some(&node_idx) = entity_to_id.get(entity) {
+                let idx = node_idx as usize;
+                if idx < adjacency_list.len() {
+                    for (neighbor_entity, confidence) in neighbors {
+                        if let Some(&neighbor_idx) = entity_to_id.get(neighbor_entity) {
+                            adjacency_list[idx].push(neighbor_idx as u32);
+                            edge_weights.push(*confidence);
+                            edge_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut node_properties: HashMap<u64, NodeProperties> = HashMap::new();
+        for (_entity, &id) in entity_to_id.iter() {
+            node_properties.insert(
+                id,
+                NodeProperties {
+                    importance: 1.0,
+                    node_type: None,
+                    metadata: HashMap::new(),
+                },
+            );
+        }
+
+        info!(
+            nodes = node_count,
+            edges = edge_count,
+            "Incremental graph conversion complete"
+        );
+
+        Ok((
+            GraphData {
+                node_ids,
+                adjacency_list,
+                edge_weights: Some(edge_weights),
+                node_properties,
+                node_count,
+                edge_count,
+            },
+            entity_to_id,
+        ))
+    }
+
+    /// Convert GPU traversal results to ReasoningPath format
+    #[cfg(feature = "gpu-acceleration")]
+    fn convert_gpu_results_to_reasoning_paths(
+        &self,
+        result: TraversalResult,
+        _graph_data: &GraphData,
+        entity_to_id: &HashMap<String, u64>,
+        query: &ReasoningQuery,
+    ) -> OrbitResult<Vec<ReasoningPath>> {
+        let mut reasoning_paths = Vec::new();
+
+        // Create reverse mapping (u64 -> String)
+        let mut id_to_entity: HashMap<u64, String> = HashMap::new();
+        for (entity, &id) in entity_to_id.iter() {
+            id_to_entity.insert(id, entity.clone());
+        }
+
+        for path in result.paths {
+            // Convert numeric node IDs back to entity strings
+            let nodes: Vec<String> = path
+                .nodes
+                .iter()
+                .filter_map(|&id| id_to_entity.get(&id).cloned())
+                .collect();
+
+            if nodes.len() < 2 {
+                continue; // Skip invalid paths
+            }
+
+            // Reconstruct relationships (simplified - would need to query actual relationships)
+            let relationships: Vec<String> = (0..nodes.len().saturating_sub(1))
+                .map(|i| format!("rel_{}_{}", nodes[i], nodes[i + 1]))
+                .collect();
+
+            // Create ReasoningPath
+            reasoning_paths.push(ReasoningPath {
+                nodes,
+                relationships,
+                score: path.score,
+                length: path.length,
+                explanation: if query.include_explanation {
+                    format!(
+                        "GPU-accelerated path with {} hops (score: {:.3})",
+                        path.length, path.score
+                    )
+                } else {
+                    String::new()
+                },
+            });
+        }
+
+        Ok(reasoning_paths)
     }
 
     /// Extract search parameters from query

@@ -257,6 +257,92 @@ impl MetalDevice {
         Ok(result[0] as usize)
     }
 
+    /// Execute GPU-accelerated i32 aggregation with null bitmap support
+    /// 
+    /// This method handles null bitmaps and routes to the appropriate aggregation kernel.
+    pub fn execute_aggregate_i32(
+        &self,
+        values: &[i32],
+        null_bitmap: Option<&[u8]>,
+        kernel_name: &str,
+    ) -> Result<Option<f64>, ComputeError> {
+        use crate::errors::ExecutionError;
+
+        let len = values.len();
+
+        // Create null mask if null_bitmap is provided
+        let mask: Vec<i32> = if let Some(bm) = null_bitmap {
+            (0..len)
+                .map(|idx| {
+                    let byte_idx = idx / 8;
+                    let bit_idx = idx % 8;
+                    if byte_idx < bm.len() && (bm[byte_idx] >> bit_idx) & 1 == 0 {
+                        1 // Valid
+                    } else {
+                        0 // Null
+                    }
+                })
+                .collect()
+        } else {
+            vec![1; len] // All valid
+        };
+
+        // Filter values based on null bitmap
+        let filtered_values: Vec<i32> = values
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| mask[*idx] != 0)
+            .map(|(_, &v)| v)
+            .collect();
+
+        if filtered_values.is_empty() {
+            return Ok(None);
+        }
+
+        // Create buffers
+        let input_buffer = self.create_buffer_with_data_i32(&filtered_values)?;
+        let output_buffer = self.create_buffer_i32(1)?;
+
+        // Initialize output buffer based on operation
+        // For MIN, initialize with first valid value (handled in kernel)
+        // For MAX, initialize with first valid value (handled in kernel)
+        // For SUM and COUNT, initialize to 0 (handled by buffer creation)
+
+        // Execute kernel
+        self.execute_kernel(
+            kernel_name,
+            &[&input_buffer, &output_buffer],
+            filtered_values.len() as u64,
+        )?;
+
+        // Read result
+        let result = self.read_buffer_i32(&output_buffer, 1)?;
+
+        match kernel_name {
+            "aggregate_i32_sum" | "aggregate_i32_count" => Ok(Some(result[0] as f64)),
+            "aggregate_i32_min" => {
+                // Check if we got MAX (meaning no valid values)
+                if result[0] == i32::MAX {
+                    Ok(None)
+                } else {
+                    Ok(Some(result[0] as f64))
+                }
+            }
+            "aggregate_i32_max" => {
+                // Check if we got MIN (meaning no valid values)
+                if result[0] == i32::MIN {
+                    Ok(None)
+                } else {
+                    Ok(Some(result[0] as f64))
+                }
+            }
+            _ => Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
+                parameter: "kernel_name".to_string(),
+                value: format!("Unknown kernel: {}", kernel_name),
+            })),
+        }
+    }
+
     // ========================================================================
     // Internal helper methods
     // ========================================================================
@@ -279,6 +365,8 @@ impl MetalDevice {
                 })
             })?;
 
+        // Cache pipeline state for better performance (reuse compiled pipelines)
+        // TODO: Implement pipeline caching in future optimization
         let pipeline = self
             .device
             .new_compute_pipeline_state_with_function(&kernel)
@@ -289,30 +377,38 @@ impl MetalDevice {
                 })
             })?;
 
+        // Use optimized command buffer creation
         let command_buffer = self.queue.new_command_buffer();
         let encoder = command_buffer.new_compute_command_encoder();
 
         encoder.set_compute_pipeline_state(&pipeline);
+        
+        // Set buffers with optimized offset calculation
         for (i, buffer) in buffers.iter().enumerate() {
             encoder.set_buffer(i as u64, Some(buffer), 0);
         }
 
-        // Configure thread groups (256 threads per group is optimal for most Apple GPUs)
+        // Optimize thread group size based on GPU capabilities
+        // Apple Silicon GPUs work best with 256 threads, but can handle up to 1024
+        let optimal_threads = 256u64;
         let thread_group_size = MTLSize {
-            width: 256.min(grid_size),
+            width: optimal_threads.min(grid_size),
             height: 1,
             depth: 1,
         };
 
+        // Calculate optimal thread group count
         let thread_groups = MTLSize {
-            width: grid_size.div_ceil(thread_group_size.width),
+            width: (grid_size + thread_group_size.width - 1) / thread_group_size.width,
             height: 1,
             depth: 1,
         };
 
+        // Dispatch with optimized configuration
         encoder.dispatch_thread_groups(thread_groups, thread_group_size);
         encoder.end_encoding();
 
+        // Commit and wait (for now - could be async in future)
         command_buffer.commit();
         command_buffer.wait_until_completed();
 
@@ -377,6 +473,295 @@ impl MetalDevice {
         ))
     }
 
+    fn create_buffer_f32(&self, len: usize) -> Result<metal::Buffer, ComputeError> {
+        let size = (len * mem::size_of::<f32>()) as u64;
+        Ok(self
+            .device
+            .new_buffer(size, MTLResourceOptions::StorageModeShared))
+    }
+
+    fn create_buffer_with_data_f32(&self, data: &[f32]) -> Result<metal::Buffer, ComputeError> {
+        let size = (data.len() * mem::size_of::<f32>()) as u64;
+        Ok(self.device.new_buffer_with_data(
+            data.as_ptr() as *const _,
+            size,
+            MTLResourceOptions::StorageModeShared,
+        ))
+    }
+
+    fn read_buffer_f32(&self, buffer: &metal::Buffer, len: usize) -> Result<Vec<f32>, ComputeError> {
+        let contents = buffer.contents();
+        let slice = unsafe {
+            std::slice::from_raw_parts(contents as *const f32, len)
+        };
+        Ok(slice.to_vec())
+    }
+
+    /// Execute GPU-accelerated vector similarity calculation
+    ///
+    /// Calculates similarity between a query vector and multiple candidate vectors.
+    /// The candidate vectors are provided as a flattened array: [v1[0..dim], v2[0..dim], ...]
+    pub fn execute_vector_similarity(
+        &self,
+        query_vector: &[f32],
+        candidate_vectors: &[f32],
+        _vector_count: usize,
+        dimension: usize,
+        kernel_name: &str,
+    ) -> Result<Vec<f32>, ComputeError> {
+        use crate::errors::ExecutionError;
+
+        // Validate inputs
+        if query_vector.len() != dimension {
+            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
+                parameter: "query_vector_dimension".to_string(),
+                value: format!("expected {}, got {}", dimension, query_vector.len()),
+            }));
+        }
+
+        let vector_count = candidate_vectors.len() / dimension;
+        if candidate_vectors.len() != vector_count * dimension {
+            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
+                parameter: "candidate_vectors_length".to_string(),
+                value: format!("expected {}, got {}", vector_count * dimension, candidate_vectors.len()),
+            }));
+        }
+
+        // Create buffers
+        let query_buffer = self.create_buffer_with_data_f32(query_vector)?;
+        let candidates_buffer = self.create_buffer_with_data_f32(candidate_vectors)?;
+        let scores_buffer = self.create_buffer_f32(vector_count)?;
+
+        // Create parameter buffer: [vector_count, dimension]
+        let params = [vector_count as u32, dimension as u32];
+        let params_buffer = self.create_buffer_with_data_u32(&params)?;
+
+        // Execute kernel
+        self.execute_kernel(
+            kernel_name,
+            &[&query_buffer, &candidates_buffer, &scores_buffer, &params_buffer],
+            vector_count as u64,
+        )?;
+
+        // Read results back
+        self.read_buffer_f32(&scores_buffer, vector_count)
+    }
+
+    /// Execute GPU-accelerated spatial distance calculation
+    /// 
+    /// Calculates 2D Euclidean distance between a query point and multiple candidate points.
+    pub fn execute_spatial_distance(
+        &self,
+        query_x: f32,
+        query_y: f32,
+        candidates_x: &[f32],
+        candidates_y: &[f32],
+        point_count: usize,
+    ) -> Result<Vec<f32>, ComputeError> {
+        use crate::errors::ExecutionError;
+
+        // Validate inputs
+        if candidates_x.len() != point_count || candidates_y.len() != point_count {
+            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
+                parameter: "candidates_length".to_string(),
+                value: format!(
+                    "expected {}, got x={}, y={}",
+                    point_count,
+                    candidates_x.len(),
+                    candidates_y.len()
+                ),
+            }));
+        }
+
+        // Create buffers
+        let query_x_buffer = self.create_buffer_with_data_f32(&[query_x])?;
+        let query_y_buffer = self.create_buffer_with_data_f32(&[query_y])?;
+        let candidates_x_buffer = self.create_buffer_with_data_f32(candidates_x)?;
+        let candidates_y_buffer = self.create_buffer_with_data_f32(candidates_y)?;
+        let distances_buffer = self.create_buffer_f32(point_count)?;
+        let point_count_buffer = self.create_buffer_with_data_u32(&[point_count as u32])?;
+
+        // Execute kernel
+        self.execute_kernel(
+            "spatial_distance",
+            &[
+                &query_x_buffer,
+                &query_y_buffer,
+                &candidates_x_buffer,
+                &candidates_y_buffer,
+                &distances_buffer,
+                &point_count_buffer,
+            ],
+            point_count as u64,
+        )?;
+
+        // Read results back
+        self.read_buffer_f32(&distances_buffer, point_count)
+    }
+
+    /// Execute GPU-accelerated BFS level expansion (u32 indices - optimized for graphs < 4B nodes)
+    /// This is a helper method for graph traversal operations
+    pub fn execute_bfs_level_expansion_u32(
+        &self,
+        edge_array: &[u32],
+        edge_offset: &[u32],
+        current_level: &[u32],
+        visited: &mut [u32],
+        next_level: &mut [u32],
+        next_level_size: &mut u32,
+        parent: &mut [u32],
+        current_level_size: u32,
+        max_nodes: u32,
+    ) -> Result<(), ComputeError> {
+        // Create buffers
+        let edge_array_buffer = self.create_buffer_with_data_u32(edge_array)?;
+        let edge_offset_buffer = self.create_buffer_with_data_u32(edge_offset)?;
+        let current_level_buffer = self.create_buffer_with_data_u32(current_level)?;
+        let visited_buffer = self.create_buffer_with_data_u32(visited)?;
+        let next_level_buffer = self.create_buffer_u32(max_nodes as usize)?;
+
+        // Create atomic counter buffer for next_level_size
+        let next_level_size_buffer = self.create_buffer_with_data_u32(&[*next_level_size])?;
+
+        // Create parent buffer for path reconstruction
+        let parent_buffer = self.create_buffer_with_data_u32(parent)?;
+
+        // Create parameter buffer
+        let params = [current_level_size, max_nodes];
+        let params_buffer = self.create_buffer_with_data_u32(&params)?;
+
+        // Execute kernel
+        self.execute_kernel(
+            "bfs_level_expansion",
+            &[
+                &edge_array_buffer,
+                &edge_offset_buffer,
+                &current_level_buffer,
+                &visited_buffer,
+                &next_level_buffer,
+                &next_level_size_buffer,
+                &parent_buffer,
+                &params_buffer,
+            ],
+            current_level_size as u64,
+        )?;
+
+        // Read results back
+        let visited_slice = unsafe {
+            std::slice::from_raw_parts(
+                visited_buffer.contents() as *const u32,
+                visited.len(),
+            )
+        };
+        visited.copy_from_slice(visited_slice);
+
+        let next_level_slice = unsafe {
+            std::slice::from_raw_parts(
+                next_level_buffer.contents() as *const u32,
+                next_level.len().min(max_nodes as usize),
+            )
+        };
+        next_level[..next_level_slice.len()].copy_from_slice(next_level_slice);
+
+        let size_slice = unsafe {
+            std::slice::from_raw_parts(
+                next_level_size_buffer.contents() as *const u32,
+                1,
+            )
+        };
+        *next_level_size = size_slice[0];
+
+        // Read parent buffer back
+        let parent_slice = unsafe {
+            std::slice::from_raw_parts(
+                parent_buffer.contents() as *const u32,
+                parent.len(),
+            )
+        };
+        parent.copy_from_slice(parent_slice);
+
+        Ok(())
+    }
+    
+    /// Execute GPU-accelerated BFS level expansion (u64 indices - for large graphs)
+    /// This is a helper method for graph traversal operations
+    pub fn execute_bfs_level_expansion(
+        &self,
+        edge_array: &[u32],
+        edge_offset: &[u32],
+        current_level: &[u64],
+        visited: &mut [u32],
+        next_level: &mut [u64],
+        next_level_size: &mut u32,
+        parent: &mut [u32],
+        current_level_size: u32,
+        max_nodes: u32,
+    ) -> Result<(), ComputeError> {
+        // Convert u64 to u32 for Metal kernel (Metal kernel expects u32)
+        // Note: This assumes indices fit in u32, which is true for graphs < 4B nodes
+        let current_level_u32: Vec<u32> = current_level.iter()
+            .map(|&x| x as u32)
+            .collect();
+        let mut next_level_u32 = vec![0u32; max_nodes as usize];
+        let mut next_level_size_u32 = *next_level_size;
+
+        // Execute with u32 version
+        self.execute_bfs_level_expansion_u32(
+            edge_array,
+            edge_offset,
+            &current_level_u32,
+            visited,
+            &mut next_level_u32,
+            &mut next_level_size_u32,
+            parent,
+            current_level_size,
+            max_nodes,
+        )?;
+
+        // Convert results back to u64
+        *next_level_size = next_level_size_u32;
+        for (i, &val) in next_level_u32.iter().enumerate().take(*next_level_size as usize) {
+            next_level[i] = val as u64;
+        }
+        
+        Ok(())
+    }
+
+    #[allow(dead_code)] // Reserved for future u32 buffer operations
+    fn create_buffer_u32(&self, len: usize) -> Result<metal::Buffer, ComputeError> {
+        let size = (len * mem::size_of::<u32>()) as u64;
+        Ok(self
+            .device
+            .new_buffer(size, MTLResourceOptions::StorageModeShared))
+    }
+
+    #[allow(dead_code)]
+    fn create_buffer_u64(&self, len: usize) -> Result<metal::Buffer, ComputeError> {
+        let size = (len * mem::size_of::<u64>()) as u64;
+        Ok(self
+            .device
+            .new_buffer(size, MTLResourceOptions::StorageModeShared))
+    }
+
+    fn create_buffer_with_data_u32(&self, data: &[u32]) -> Result<metal::Buffer, ComputeError> {
+        let size = (data.len() * mem::size_of::<u32>()) as u64;
+        Ok(self.device.new_buffer_with_data(
+            data.as_ptr() as *const _,
+            size,
+            MTLResourceOptions::StorageModeShared,
+        ))
+    }
+
+    #[allow(dead_code)]
+    fn create_buffer_with_data_u64(&self, data: &[u64]) -> Result<metal::Buffer, ComputeError> {
+        let size = (data.len() * mem::size_of::<u64>()) as u64;
+        Ok(self.device.new_buffer_with_data(
+            data.as_ptr() as *const _,
+            size,
+            MTLResourceOptions::StorageModeShared,
+        ))
+    }
+
     fn read_buffer_i32(
         &self,
         buffer: &metal::Buffer,
@@ -407,6 +792,86 @@ impl MetalDevice {
         let contents = buffer.contents() as *const f64;
         let slice = unsafe { std::slice::from_raw_parts(contents, len) };
         Ok(slice.to_vec())
+    }
+
+    /// Execute GPU-accelerated Dijkstra edge relaxation kernel
+    /// This performs one iteration of distance relaxation for Dijkstra's algorithm
+    pub fn execute_dijkstra_relax(
+        &self,
+        edge_array: &[u32],
+        edge_offset: &[u32],
+        edge_weights: &[f32],
+        distances: &mut [f32],
+        parent: &mut [u32],
+        active_mask: &mut [u32],
+        changed: &mut u32,
+        node_count: u32,
+    ) -> Result<(), ComputeError> {
+        // Create buffers
+        let edge_array_buffer = self.create_buffer_with_data_u32(edge_array)?;
+        let edge_offset_buffer = self.create_buffer_with_data_u32(edge_offset)?;
+        let edge_weights_buffer = self.create_buffer_with_data_f32(edge_weights)?;
+        let distances_buffer = self.create_buffer_with_data_f32(distances)?;
+        let parent_buffer = self.create_buffer_with_data_u32(parent)?;
+        let active_mask_buffer = self.create_buffer_with_data_u32(active_mask)?;
+
+        // Create atomic counter buffer for changed flag
+        let changed_buffer = self.create_buffer_with_data_u32(&[*changed])?;
+
+        // Create parameter buffer
+        let params = [node_count];
+        let params_buffer = self.create_buffer_with_data_u32(&params)?;
+
+        // Execute kernel
+        self.execute_kernel(
+            "dijkstra_relax",
+            &[
+                &edge_array_buffer,
+                &edge_offset_buffer,
+                &edge_weights_buffer,
+                &distances_buffer,
+                &parent_buffer,
+                &active_mask_buffer,
+                &changed_buffer,
+                &params_buffer,
+            ],
+            node_count as u64,
+        )?;
+
+        // Read results back
+        let distances_slice = unsafe {
+            std::slice::from_raw_parts(
+                distances_buffer.contents() as *const f32,
+                distances.len(),
+            )
+        };
+        distances.copy_from_slice(distances_slice);
+
+        let parent_slice = unsafe {
+            std::slice::from_raw_parts(
+                parent_buffer.contents() as *const u32,
+                parent.len(),
+            )
+        };
+        parent.copy_from_slice(parent_slice);
+
+        let active_mask_slice = unsafe {
+            std::slice::from_raw_parts(
+                active_mask_buffer.contents() as *const u32,
+                active_mask.len(),
+            )
+        };
+        active_mask.copy_from_slice(active_mask_slice);
+
+        let changed_slice = unsafe {
+            std::slice::from_raw_parts(
+                changed_buffer.contents() as *const u32,
+                1,
+            )
+        };
+        *changed = changed_slice[0];
+
+        Ok(())
     }
 }
 

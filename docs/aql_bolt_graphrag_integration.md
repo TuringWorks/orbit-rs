@@ -142,7 +142,176 @@ FOR company IN companies
         }
 ```
 
-#### 4. Analytics and Statistics
+#### 4. Entity Similarity Search
+
+##### GRAPHRAG_FIND_SIMILAR(knowledge_graph, entity, options)
+
+Finds entities similar to a given entity using embedding similarity or text similarity.
+
+```aql
+// Find similar entities using embeddings
+FOR similar IN GRAPHRAG_FIND_SIMILAR("research_kg", "Machine Learning", {
+    "limit": 10,
+    "similarity_threshold": 0.7
+})
+RETURN {
+    "entity": similar.entity_text,
+    "entity_type": similar.entity_type,
+    "similarity_score": similar.similarity,
+    "confidence": similar.confidence
+}
+
+// Find similar concepts for research recommendations
+FOR paper IN papers
+    FOR concept IN GRAPHRAG_EXTRACT_ENTITIES(paper.abstract, {})
+    FOR similar IN GRAPHRAG_FIND_SIMILAR("research_kg", concept.text, {
+        "limit": 5,
+        "similarity_threshold": 0.8
+    })
+    COLLECT concept_text = concept.text INTO similar_concepts = similar
+    RETURN {
+        "concept": concept_text,
+        "similar_concepts": similar_concepts[*].entity_text,
+        "avg_similarity": AVG(similar_concepts[*].similarity)
+    }
+```
+
+#### 5. Semantic Search
+
+##### GRAPHRAG_SEMANTIC_SEARCH(knowledge_graph, query_text, options)
+
+Performs semantic search across the knowledge graph using RAG queries.
+
+```aql
+// Semantic search for relevant entities and context
+FOR result IN GRAPHRAG_SEMANTIC_SEARCH("research_kg", 
+    "What are the latest developments in quantum computing?", {
+    "max_results": 20,
+    "max_hops": 2,
+    "context_size": 1024
+})
+FILTER result.type == "entity" OR result.type == "path"
+RETURN {
+    "type": result.type,
+    "content": result.content,
+    "relevance_score": result.relevance_score
+}
+
+// Combine semantic search with document filtering
+FOR doc IN research_papers
+    FILTER doc.year >= 2023
+    FOR search_result IN GRAPHRAG_SEMANTIC_SEARCH("research_kg",
+        CONCAT("Find information about ", doc.topic), {
+        "max_results": 10
+    })
+    WHERE search_result.type == "entity"
+    RETURN {
+        "paper": doc.title,
+        "topic": doc.topic,
+        "relevant_entities": search_result.content
+    }
+```
+
+#### 6. Entity Listing
+
+##### GRAPHRAG_LIST_ENTITIES(knowledge_graph, options)
+
+Lists all entities in a knowledge graph with optional filtering.
+
+```aql
+// List all entities
+FOR entity IN GRAPHRAG_LIST_ENTITIES("research_kg", {
+    "limit": 100
+})
+RETURN {
+    "id": entity.id,
+    "text": entity.text,
+    "type": entity.entity_type,
+    "confidence": entity.confidence,
+    "labels": entity.labels,
+    "source_documents": entity.source_documents
+}
+
+// Filter by entity type
+FOR entity IN GRAPHRAG_LIST_ENTITIES("business_kg", {
+    "entity_type": "Organization",
+    "limit": 50
+})
+SORT entity.confidence DESC
+RETURN {
+    "organization": entity.text,
+    "confidence": entity.confidence,
+    "mentioned_in": entity.source_documents
+}
+```
+
+#### 7. Trend Analysis
+
+##### GRAPHRAG_ANALYZE_TRENDS(knowledge_graph, concept, options)
+
+Analyzes trends for a concept over time based on relationship creation patterns.
+
+```aql
+// Analyze trends for a concept
+FOR trend IN GRAPHRAG_ANALYZE_TRENDS("research_kg", "Artificial Intelligence", {
+    "time_window_days": 30
+})
+RETURN {
+    "timestamp": trend.timestamp,
+    "relationship_count": trend.relationship_count,
+    "concept_entities_found": trend.concept_entities_found
+}
+
+// Compare trends across multiple concepts
+FOR concept IN ["AI", "ML", "Deep Learning"]
+    FOR trend IN GRAPHRAG_ANALYZE_TRENDS("research_kg", concept, {
+        "time_window_days": 90
+    })
+    COLLECT period = trend.timestamp INTO trends = trend
+    RETURN {
+        "concept": concept,
+        "trends": trends,
+        "total_activity": SUM(trends[*].relationship_count)
+    }
+```
+
+#### 8. Community Detection
+
+##### GRAPHRAG_DETECT_COMMUNITIES(knowledge_graph, options)
+
+Detects communities (connected components) in the knowledge graph.
+
+```aql
+// Detect communities in knowledge graph
+FOR community IN GRAPHRAG_DETECT_COMMUNITIES("research_kg", {
+    "min_community_size": 3
+})
+RETURN {
+    "community_id": community.community_id,
+    "size": community.size,
+    "entity_ids": community.entity_ids
+}
+
+// Analyze community structure
+FOR community IN GRAPHRAG_DETECT_COMMUNITIES("business_kg", {
+    "min_community_size": 5
+})
+LET entities = community.entity_ids
+FOR entity_id IN entities
+    FOR entity IN GRAPHRAG_LIST_ENTITIES("business_kg", {
+        "limit": 1000
+    })
+    WHERE entity.id == entity_id
+    COLLECT community_id = community.community_id INTO community_entities = entity
+    RETURN {
+        "community": community_id,
+        "size": LENGTH(community_entities),
+        "entity_types": UNIQUE(community_entities[*].entity_type),
+        "top_entities": community_entities[0..5].text
+    }
+```
+
+#### 9. Analytics and Statistics
 
 ##### GRAPHRAG_GET_STATS(knowledge_graph)
 
@@ -380,7 +549,137 @@ RETURN path_nodes, relationships, score
 ORDER BY score DESC;
 ```
 
-#### 5. Graph Analytics and Statistics
+#### 5. Entity Similarity Search
+
+##### orbit.graphrag.findSimilar(kg_name, entity, config)
+
+Finds entities similar to a given entity using embedding or text similarity.
+
+```cypher
+// Find similar entities using embeddings
+MATCH (target:Entity {name: "Machine Learning"})
+CALL orbit.graphrag.findSimilar(
+    "research_kg",
+    target.name,
+    {limit: 10, similarity_threshold: 0.7}
+) YIELD entity_id, entity_text, entity_type, similarity, confidence
+
+// Create similarity relationships
+MERGE (similar:Entity {id: entity_id, name: entity_text})
+CREATE (target)-[:SIMILAR_TO {
+    similarity: similarity,
+    confidence: confidence,
+    discovered_at: datetime()
+}]->(similar)
+
+RETURN entity_text, entity_type, similarity, confidence
+ORDER BY similarity DESC;
+```
+
+#### 6. Semantic Search
+
+##### orbit.graphrag.semanticSearch(kg_name, query_text, config)
+
+Performs semantic search across the knowledge graph using RAG queries.
+
+```cypher
+// Semantic search for relevant entities and context
+CALL orbit.graphrag.semanticSearch(
+    "research_kg",
+    "What are the latest developments in quantum computing?",
+    {max_results: 20, max_hops: 2, context_size: 1024}
+) YIELD type, content, entity_id, score
+
+// Filter and process results
+WITH * WHERE type IN ["entity", "path"]
+MATCH (e:Entity) WHERE e.id = entity_id OR e.name = content
+RETURN type, content, score, e
+ORDER BY score DESC;
+```
+
+#### 7. Entity Listing
+
+##### orbit.graphrag.listEntities(kg_name, config)
+
+Lists all entities in a knowledge graph with optional filtering.
+
+```cypher
+// List all entities
+CALL orbit.graphrag.listEntities(
+    "research_kg",
+    {limit: 100}
+) YIELD entity_id, entity_text, entity_type, confidence, labels, source_documents
+
+// Create entity nodes in graph
+MERGE (e:GraphRAGEntity {
+    id: entity_id,
+    name: entity_text,
+    type: entity_type
+})
+SET e.confidence = confidence,
+    e.labels = labels,
+    e.source_documents = source_documents
+
+RETURN e
+ORDER BY confidence DESC
+LIMIT 100;
+```
+
+#### 8. Trend Analysis
+
+##### orbit.graphrag.analyzeTrends(kg_name, concept, config)
+
+Analyzes trends for a concept over time based on relationship creation patterns.
+
+```cypher
+// Analyze trends for a concept
+CALL orbit.graphrag.analyzeTrends(
+    "research_kg",
+    "Artificial Intelligence",
+    {time_window_days: 30}
+) YIELD timestamp, relationship_count, concept_entities_found
+
+// Create trend visualization nodes
+CREATE (trend:Trend {
+    concept: "Artificial Intelligence",
+    timestamp: timestamp,
+    activity_level: relationship_count,
+    entities_involved: concept_entities_found
+})
+
+RETURN trend
+ORDER BY timestamp;
+```
+
+#### 9. Community Detection
+
+##### orbit.graphrag.detectCommunities(kg_name, config)
+
+Detects communities (connected components) in the knowledge graph.
+
+```cypher
+// Detect communities
+CALL orbit.graphrag.detectCommunities(
+    "research_kg",
+    {min_community_size: 3}
+) YIELD community_id, size, entity_ids
+
+// Create community nodes and relationships
+CREATE (comm:Community {
+    id: community_id,
+    size: size
+})
+
+// Link entities to communities
+UNWIND entity_ids as entity_id
+MATCH (e:Entity {id: entity_id})
+CREATE (e)-[:BELONGS_TO]->(comm)
+
+RETURN comm, size
+ORDER BY size DESC;
+```
+
+#### 10. Graph Analytics and Statistics
 
 ##### orbit.graphrag.getStats(kg_name)
 
