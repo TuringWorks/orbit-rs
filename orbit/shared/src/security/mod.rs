@@ -15,6 +15,7 @@ pub mod authorization;
 pub mod data_masking;
 pub mod encryption;
 pub mod field_encryption;
+pub mod multi_tenant;
 pub mod policy;
 pub mod row_level_security;
 pub mod sql_validation;
@@ -40,6 +41,10 @@ pub use encryption::{
 pub use field_encryption::{
     EncryptedFieldValue, EncryptionType, FieldEncryptionConfig, FieldEncryptionEngine,
     FieldEncryptionPolicy, SensitivityLevel,
+};
+pub use multi_tenant::{
+    CrossTenantAction, CrossTenantPolicy, IsolationLevel, ResourceQuota, ResourceUsage,
+    TenantAccessResult, TenantConfig, TenantContext, TenantId, TenantManager, TenantStatus,
 };
 pub use policy::{PolicyEngine, PolicyEvaluator, SecurityPolicy};
 pub use row_level_security::{
