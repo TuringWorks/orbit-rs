@@ -88,18 +88,37 @@ impl Default for TraversalConfig {
 pub struct TraversalResult {
     /// Found paths from source to target
     pub paths: Vec<Path>,
-    
+
     /// Nodes visited during traversal
     pub visited_nodes: HashSet<u64>,
-    
+
     /// Execution time in milliseconds
     pub execution_time_ms: u64,
-    
+
     /// Whether GPU acceleration was used
     pub used_gpu: bool,
-    
+
     /// Statistics about the traversal
     pub stats: TraversalStats,
+}
+
+/// PageRank result containing node scores
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PageRankResult {
+    /// Map from node_id to PageRank score
+    pub scores: HashMap<u64, f32>,
+
+    /// Number of iterations performed
+    pub iterations: usize,
+
+    /// Execution time in milliseconds
+    pub execution_time_ms: u64,
+
+    /// Whether GPU acceleration was used
+    pub used_gpu: bool,
+
+    /// Convergence delta (difference from previous iteration)
+    pub convergence_delta: f32,
 }
 
 /// A path through the graph
@@ -1103,6 +1122,240 @@ impl GPUGraphTraversal {
         })
     }
 
+    /// Perform depth-first search from source to target
+    pub async fn dfs(
+        &self,
+        graph: &GraphData,
+        source: u64,
+        target: Option<u64>,
+    ) -> Result<TraversalResult, ComputeError> {
+        let start_time = std::time::Instant::now();
+
+        // DFS is inherently sequential, so CPU is usually more efficient
+        // GPU version would require stack management which is complex
+        info!("Using CPU DFS (inherently sequential algorithm)");
+        self.dfs_cpu(graph, source, target).await
+            .map(|mut result| {
+                result.execution_time_ms = start_time.elapsed().as_millis() as u64;
+                result
+            })
+    }
+
+    /// CPU-based DFS with stack
+    async fn dfs_cpu(
+        &self,
+        graph: &GraphData,
+        source: u64,
+        target: Option<u64>,
+    ) -> Result<TraversalResult, ComputeError> {
+        let mut visited = HashSet::new();
+        let mut stack = Vec::new();
+        let mut paths = Vec::new();
+        let mut parent_map: HashMap<u64, u64> = HashMap::new();
+
+        // Verify source exists
+        let _source_idx = graph.node_ids.iter().position(|&id| id == source)
+            .ok_or_else(|| ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                kernel_name: "dfs".to_string(),
+                error: "Source node not found in graph".to_string(),
+            }))?;
+
+        // DFS using explicit stack: (node_id, depth)
+        stack.push((source, 0));
+        visited.insert(source);
+
+        let mut nodes_explored = 0;
+        let mut edges_traversed = 0;
+
+        while let Some((current, depth)) = stack.pop() {
+            nodes_explored += 1;
+
+            // Check if we reached the target
+            if let Some(target_id) = target {
+                if current == target_id {
+                    // Reconstruct path from source to target
+                    let mut path = vec![target_id];
+                    let mut current_node = target_id;
+
+                    while current_node != source {
+                        if let Some(&parent) = parent_map.get(&current_node) {
+                            path.push(parent);
+                            current_node = parent;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    path.reverse();
+
+                    paths.push(Path {
+                        nodes: path.clone(),
+                        edges: vec![],
+                        weight: 0.0,
+                        score: 1.0,
+                        length: path.len() - 1,
+                    });
+
+                    if paths.len() >= self.config.max_paths {
+                        break;
+                    }
+                }
+            }
+
+            if depth >= self.config.max_depth as usize {
+                continue;
+            }
+
+            // Get current node index
+            let current_idx = graph.node_ids.iter().position(|&id| id == current)
+                .unwrap_or(0);
+
+            // Process neighbors (in reverse order for DFS to maintain left-to-right traversal)
+            if let Some(neighbors) = graph.adjacency_list.get(current_idx) {
+                edges_traversed += neighbors.len();
+
+                for &neighbor_idx in neighbors.iter().rev() {
+                    if let Some(&neighbor_id) = graph.node_ids.get(neighbor_idx as usize) {
+                        if !visited.contains(&neighbor_id) {
+                            visited.insert(neighbor_id);
+                            parent_map.insert(neighbor_id, current);
+                            stack.push((neighbor_id, depth + 1));
+                        }
+                    }
+                }
+            }
+        }
+
+        let paths_found = paths.len();
+        let avg_path_length = if !paths.is_empty() {
+            paths.iter().map(|p| p.length as f32).sum::<f32>() / paths_found as f32
+        } else {
+            0.0
+        };
+
+        Ok(TraversalResult {
+            paths,
+            visited_nodes: visited,
+            execution_time_ms: 0, // Set by caller
+            used_gpu: false,
+            stats: TraversalStats {
+                nodes_explored,
+                edges_traversed,
+                paths_found,
+                avg_path_length,
+                gpu_utilization: None,
+            },
+        })
+    }
+
+    /// Compute PageRank scores for all nodes in the graph
+    /// PageRank is a link analysis algorithm that assigns importance scores to nodes
+    pub async fn pagerank(
+        &self,
+        graph: &GraphData,
+        damping_factor: f32,
+        max_iterations: usize,
+        convergence_threshold: f32,
+    ) -> Result<PageRankResult, ComputeError> {
+        let start_time = std::time::Instant::now();
+
+        // PageRank benefits from GPU parallelization
+        if self.config.use_gpu && self.should_use_gpu(graph) {
+            info!("Using CPU PageRank (GPU version not yet implemented)");
+            self.pagerank_cpu(graph, damping_factor, max_iterations, convergence_threshold).await
+        } else {
+            info!("Using CPU PageRank");
+            self.pagerank_cpu(graph, damping_factor, max_iterations, convergence_threshold).await
+        }
+        .map(|mut result| {
+            result.execution_time_ms = start_time.elapsed().as_millis() as u64;
+            result
+        })
+    }
+
+    /// CPU-based PageRank using power iteration method
+    async fn pagerank_cpu(
+        &self,
+        graph: &GraphData,
+        damping_factor: f32,
+        max_iterations: usize,
+        convergence_threshold: f32,
+    ) -> Result<PageRankResult, ComputeError> {
+        use rayon::prelude::*;
+
+        let n = graph.node_count;
+        let initial_rank = 1.0 / n as f32;
+
+        // Initialize ranks
+        let mut ranks = vec![initial_rank; n];
+        let mut new_ranks = vec![0.0f32; n];
+
+        // Calculate out-degrees for each node
+        let out_degrees: Vec<usize> = graph.adjacency_list.iter()
+            .map(|neighbors| neighbors.len().max(1)) // Avoid division by zero
+            .collect();
+
+        let mut iterations = 0;
+        let mut delta = f32::MAX;
+
+        // Power iteration
+        while iterations < max_iterations && delta > convergence_threshold {
+            // Reset new ranks to teleportation probability
+            let teleport_prob = (1.0 - damping_factor) / n as f32;
+            new_ranks.fill(teleport_prob);
+
+            // Parallel computation of rank contributions
+            if n > 1000 {
+                // Use parallel iteration for large graphs
+                new_ranks.par_iter_mut()
+                    .enumerate()
+                    .for_each(|(target_idx, new_rank)| {
+                        // Sum contributions from all nodes pointing to this target
+                        for (source_idx, neighbors) in graph.adjacency_list.iter().enumerate() {
+                            if neighbors.contains(&(target_idx as u32)) {
+                                let contribution = ranks[source_idx] * damping_factor / out_degrees[source_idx] as f32;
+                                *new_rank += contribution;
+                            }
+                        }
+                    });
+            } else {
+                // Sequential for small graphs
+                for target_idx in 0..n {
+                    for (source_idx, neighbors) in graph.adjacency_list.iter().enumerate() {
+                        if neighbors.contains(&(target_idx as u32)) {
+                            let contribution = ranks[source_idx] * damping_factor / out_degrees[source_idx] as f32;
+                            new_ranks[target_idx] += contribution;
+                        }
+                    }
+                }
+            }
+
+            // Calculate convergence delta (L1 norm)
+            delta = ranks.iter()
+                .zip(new_ranks.iter())
+                .map(|(old, new)| (old - new).abs())
+                .sum();
+
+            // Swap ranks
+            std::mem::swap(&mut ranks, &mut new_ranks);
+            iterations += 1;
+        }
+
+        // Build result map
+        let scores: HashMap<u64, f32> = graph.node_ids.iter()
+            .enumerate()
+            .map(|(idx, &node_id)| (node_id, ranks[idx]))
+            .collect();
+
+        Ok(PageRankResult {
+            scores,
+            iterations,
+            execution_time_ms: 0, // Set by caller
+            used_gpu: false,
+            convergence_delta: delta,
+        })
+    }
+
     /// Detect communities using connected components (GPU-accelerated)
     pub async fn detect_communities(
         &self,
@@ -1361,6 +1614,78 @@ mod tests {
         assert!(!result.paths.is_empty());
         assert_eq!(result.paths[0].nodes, vec![0, 1, 2, 3]);
         assert_eq!(result.paths[0].weight, 6.0); // 1.0 + 2.0 + 3.0
+    }
+
+    #[tokio::test]
+    async fn test_dfs_graph() {
+        let config = TraversalConfig {
+            max_depth: 5,
+            max_paths: 10,
+            use_gpu: false,
+            ..Default::default()
+        };
+
+        let traversal = GPUGraphTraversal::new(config).await.unwrap();
+
+        // Create a simple graph: 0 -> 1 -> 2 -> 3
+        let graph = GraphData {
+            node_ids: vec![0, 1, 2, 3],
+            adjacency_list: vec![
+                vec![1],    // 0 -> 1
+                vec![2],    // 1 -> 2
+                vec![3],    // 2 -> 3
+                vec![],     // 3 -> (none)
+            ],
+            edge_weights: None,
+            node_properties: HashMap::new(),
+            node_count: 4,
+            edge_count: 3,
+        };
+
+        let result = traversal.dfs(&graph, 0, Some(3)).await.unwrap();
+
+        assert!(!result.paths.is_empty());
+        assert_eq!(result.paths[0].nodes, vec![0, 1, 2, 3]);
+        assert!(!result.used_gpu); // DFS uses CPU
+    }
+
+    #[tokio::test]
+    async fn test_pagerank() {
+        let config = TraversalConfig::default();
+        let traversal = GPUGraphTraversal::new(config).await.unwrap();
+
+        // Create a simple graph where node 1 has highest importance
+        // 0 -> 1, 2 -> 1, 3 -> 1 (node 1 has 3 incoming edges)
+        let graph = GraphData {
+            node_ids: vec![0, 1, 2, 3],
+            adjacency_list: vec![
+                vec![1],    // 0 -> 1
+                vec![],     // 1 -> (none, but receives from 0, 2, 3)
+                vec![1],    // 2 -> 1
+                vec![1],    // 3 -> 1
+            ],
+            edge_weights: None,
+            node_properties: HashMap::new(),
+            node_count: 4,
+            edge_count: 3,
+        };
+
+        let result = traversal.pagerank(&graph, 0.85, 100, 0.0001).await.unwrap();
+
+        // Node 1 should have highest PageRank (it has most incoming edges)
+        let rank_1 = result.scores.get(&1).unwrap();
+        let rank_0 = result.scores.get(&0).unwrap();
+        let rank_2 = result.scores.get(&2).unwrap();
+        let rank_3 = result.scores.get(&3).unwrap();
+
+        // Node 1 should have highest rank
+        assert!(rank_1 > rank_0);
+        assert!(rank_1 > rank_2);
+        assert!(rank_1 > rank_3);
+
+        // Verify convergence happened
+        assert!(result.iterations > 0);
+        assert!(result.convergence_delta < 0.01);
     }
 }
 
