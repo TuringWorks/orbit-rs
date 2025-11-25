@@ -95,7 +95,7 @@ impl SimdCapability {
         #[cfg(target_arch = "aarch64")]
         {
             // NEON is mandatory on aarch64
-            return SimdCapability::NEON;
+            SimdCapability::NEON
         }
 
         #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]

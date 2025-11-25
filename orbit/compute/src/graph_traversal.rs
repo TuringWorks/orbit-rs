@@ -526,7 +526,7 @@ impl GPUGraphTraversal {
             }
             
             // Prepare next level (already in index format)
-            current_level_indices = next_level_slice.iter().copied().collect();
+            current_level_indices = next_level_slice.to_vec();
         }
         
         let paths_count = paths.len();

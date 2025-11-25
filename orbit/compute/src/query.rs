@@ -274,6 +274,7 @@ pub enum OperationType {
 
 /// Acceleration strategy recommendation
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Default)]
 pub enum AccelerationStrategy {
     /// CPU SIMD acceleration
     CpuSimd,
@@ -284,14 +285,10 @@ pub enum AccelerationStrategy {
     /// Hybrid approach (CPU + SIMD + parallel)
     Hybrid,
     /// No acceleration needed
+    #[default]
     None,
 }
 
-impl Default for AccelerationStrategy {
-    fn default() -> Self {
-        Self::None
-    }
-}
 
 #[cfg(test)]
 mod tests {

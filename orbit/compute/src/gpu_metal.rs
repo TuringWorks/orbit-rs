@@ -399,7 +399,7 @@ impl MetalDevice {
 
         // Calculate optimal thread group count
         let thread_groups = MTLSize {
-            width: (grid_size + thread_group_size.width - 1) / thread_group_size.width,
+            width: grid_size.div_ceil(thread_group_size.width),
             height: 1,
             depth: 1,
         };
@@ -447,7 +447,7 @@ impl MetalDevice {
     }
 
     fn create_buffer_with_data_i32(&self, data: &[i32]) -> Result<metal::Buffer, ComputeError> {
-        let size = (data.len() * mem::size_of::<i32>()) as u64;
+        let size = std::mem::size_of_val(data) as u64;
         Ok(self.device.new_buffer_with_data(
             data.as_ptr() as *const _,
             size,
@@ -456,7 +456,7 @@ impl MetalDevice {
     }
 
     fn create_buffer_with_data_i64(&self, data: &[i64]) -> Result<metal::Buffer, ComputeError> {
-        let size = (data.len() * mem::size_of::<i64>()) as u64;
+        let size = std::mem::size_of_val(data) as u64;
         Ok(self.device.new_buffer_with_data(
             data.as_ptr() as *const _,
             size,
@@ -465,7 +465,7 @@ impl MetalDevice {
     }
 
     fn create_buffer_with_data_f64(&self, data: &[f64]) -> Result<metal::Buffer, ComputeError> {
-        let size = (data.len() * mem::size_of::<f64>()) as u64;
+        let size = std::mem::size_of_val(data) as u64;
         Ok(self.device.new_buffer_with_data(
             data.as_ptr() as *const _,
             size,
@@ -481,7 +481,7 @@ impl MetalDevice {
     }
 
     fn create_buffer_with_data_f32(&self, data: &[f32]) -> Result<metal::Buffer, ComputeError> {
-        let size = (data.len() * mem::size_of::<f32>()) as u64;
+        let size = std::mem::size_of_val(data) as u64;
         Ok(self.device.new_buffer_with_data(
             data.as_ptr() as *const _,
             size,
@@ -794,7 +794,7 @@ impl MetalDevice {
     }
 
     fn create_buffer_with_data_u32(&self, data: &[u32]) -> Result<metal::Buffer, ComputeError> {
-        let size = (data.len() * mem::size_of::<u32>()) as u64;
+        let size = std::mem::size_of_val(data) as u64;
         Ok(self.device.new_buffer_with_data(
             data.as_ptr() as *const _,
             size,
@@ -804,7 +804,7 @@ impl MetalDevice {
 
     #[allow(dead_code)]
     fn create_buffer_with_data_u64(&self, data: &[u64]) -> Result<metal::Buffer, ComputeError> {
-        let size = (data.len() * mem::size_of::<u64>()) as u64;
+        let size = std::mem::size_of_val(data) as u64;
         Ok(self.device.new_buffer_with_data(
             data.as_ptr() as *const _,
             size,
@@ -1005,8 +1005,8 @@ impl MetalDevice {
 
         // Dispatch 2D grid with 16×16 threadgroups (tile size)
         let tile_size = 16u64;
-        let grid_width = ((n as u64 + tile_size - 1) / tile_size) * tile_size;
-        let grid_height = ((m as u64 + tile_size - 1) / tile_size) * tile_size;
+        let grid_width = (n as u64).div_ceil(tile_size) * tile_size;
+        let grid_height = (m as u64).div_ceil(tile_size) * tile_size;
 
         let threadgroup_size = metal::MTLSize {
             width: tile_size,
