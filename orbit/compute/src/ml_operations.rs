@@ -252,7 +252,7 @@ impl GPUMLOperations {
     #[cfg(feature = "gpu-acceleration")]
     fn matrix_operation_gpu(
         &self,
-        _manager: &Arc<GPUAccelerationManager>,
+        manager: &Arc<GPUAccelerationManager>,
         matrix_a: &[Vec<f64>],
         matrix_b: Option<&[Vec<f64>]>,
         operation: MatrixOp,
@@ -299,70 +299,12 @@ impl GPUMLOperations {
                     .flat_map(|row| row.iter().map(|&v| v as f32))
                     .collect();
 
-                // Try Metal first (macOS), then Vulkan
-                let result_flat = {
-                    #[cfg(target_os = "macos")]
-                    {
-                        use crate::gpu_metal::MetalDevice;
-                        if let Ok(metal_device) = MetalDevice::new() {
-                            metal_device.execute_matrix_multiply(&matrix_a_flat, &matrix_b_flat, m, n, k)?
-                        } else {
-                            #[cfg(feature = "gpu-vulkan")]
-                            {
-                                use crate::gpu_vulkan::VulkanDevice;
-                                if let Ok(mut vulkan_device) = VulkanDevice::new() {
-                                    vulkan_device.execute_matrix_multiply(&matrix_a_flat, &matrix_b_flat, m, n, k)?
-                                } else {
-                                    return Err(ComputeError::Execution {
-                                        source: crate::errors::ExecutionError::InvalidKernelParameters {
-                                            parameter: "gpu_device".to_string(),
-                                            value: "Neither Metal nor Vulkan available".to_string(),
-                                        },
-                                        compute_unit: None,
-                                    });
-                                }
-                            }
-                            #[cfg(not(feature = "gpu-vulkan"))]
-                            {
-                                return Err(ComputeError::Execution {
-                                    source: crate::errors::ExecutionError::InvalidKernelParameters {
-                                        parameter: "gpu_device".to_string(),
-                                        value: "Metal device not available".to_string(),
-                                    },
-                                    compute_unit: None,
-                                });
-                            }
-                        }
-                    }
-                    #[cfg(not(target_os = "macos"))]
-                    {
-                        #[cfg(feature = "gpu-vulkan")]
-                        {
-                            use crate::gpu_vulkan::VulkanDevice;
-                            if let Ok(mut vulkan_device) = VulkanDevice::new() {
-                                vulkan_device.execute_matrix_multiply(&matrix_a_flat, &matrix_b_flat, m, n, k)?
-                            } else {
-                                return Err(ComputeError::Execution {
-                                    source: crate::errors::ExecutionError::InvalidKernelParameters {
-                                        parameter: "gpu_device".to_string(),
-                                        value: "Vulkan device not available".to_string(),
-                                    },
-                                    compute_unit: None,
-                                });
-                            }
-                        }
-                        #[cfg(not(feature = "gpu-vulkan"))]
-                        {
-                            return Err(ComputeError::Execution {
-                                source: crate::errors::ExecutionError::InvalidKernelParameters {
-                                    parameter: "gpu_backend".to_string(),
-                                    value: "No GPU backend available (compile with gpu-vulkan feature)".to_string(),
-                                },
-                                compute_unit: None,
-                            });
-                        }
-                    }
-                };
+                // Use GPU manager (avoids 50-60ms device initialization overhead)
+                let result_flat = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(async {
+                        manager.execute_matrix_multiply(&matrix_a_flat, &matrix_b_flat, m, n, k).await
+                    })
+                })?;
 
                 // Convert result back to f64
                 let result_f64: Vec<f64> = result_flat.iter().map(|&v| v as f64).collect();

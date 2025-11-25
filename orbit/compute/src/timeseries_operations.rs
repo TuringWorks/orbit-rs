@@ -265,32 +265,41 @@ impl GPUTimeSeriesOperations {
         let timestamps: Vec<u64> = points.iter().map(|p| p.timestamp).collect();
         let values: Vec<f32> = points.iter().map(|p| p.value as f32).collect();
 
-        // Try Metal first (macOS), then Vulkan
-        #[cfg(target_os = "macos")]
-        {
-            use crate::gpu_metal::MetalDevice;
-            if let Ok(metal_device) = MetalDevice::new() {
-                return self.aggregate_by_windows_metal(
-                    &metal_device,
-                    &timestamps,
-                    &values,
-                    window_size_ms,
-                    agg_type,
-                );
-            }
-        }
+        // Use GPU manager (avoids 50-60ms device initialization overhead)
+        if let Some(ref manager) = self.gpu_manager {
+            match tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    manager.execute_timeseries_window_aggregate(
+                        &timestamps,
+                        &values,
+                        window_size_ms,
+                        agg_type,
+                    ).await
+                })
+            }) {
+                Ok((window_results, window_counts, max_window_id)) => {
+                    // Convert GPU results to TimeSeriesAggregationResult
+                    let mut results = Vec::new();
+                    for window_id in 0..max_window_id {
+                        let count = window_counts[window_id as usize];
+                        if count > 0 {
+                            let window_start = (window_id as u64) * window_size_ms;
+                            let window_end = window_start + window_size_ms;
+                            let value = window_results[window_id as usize] as f64;
 
-        #[cfg(feature = "gpu-vulkan")]
-        {
-            use crate::gpu_vulkan::VulkanDevice;
-            if let Ok(mut vulkan_device) = VulkanDevice::new() {
-                return self.aggregate_by_windows_vulkan(
-                    &mut vulkan_device,
-                    &timestamps,
-                    &values,
-                    window_size_ms,
-                    agg_type,
-                );
+                            results.push(TimeSeriesAggregationResult {
+                                window_start,
+                                window_end,
+                                value,
+                                point_count: count as usize,
+                            });
+                        }
+                    }
+                    return Ok(results);
+                }
+                Err(e) => {
+                    tracing::warn!("GPU execution failed: {}, falling back to CPU", e);
+                }
             }
         }
 
@@ -302,72 +311,6 @@ impl GPUTimeSeriesOperations {
             windows.entry(window_start).or_default().push(point.clone());
         }
         self.aggregate_by_windows_cpu_parallel(&windows, window_size_ms, aggregation)
-    }
-
-    #[cfg(all(feature = "gpu-acceleration", target_os = "macos"))]
-    fn aggregate_by_windows_metal(
-        &self,
-        device: &crate::gpu_metal::MetalDevice,
-        timestamps: &[u64],
-        values: &[f32],
-        window_size_ms: u64,
-        agg_type: u32,
-    ) -> Result<Vec<TimeSeriesAggregationResult>, ComputeError> {
-        let (window_results, window_counts, max_window_id) =
-            device.execute_timeseries_window_aggregate(timestamps, values, window_size_ms, agg_type)?;
-
-        // Convert GPU results to TimeSeriesAggregationResult
-        let mut results = Vec::new();
-        for window_id in 0..max_window_id {
-            let count = window_counts[window_id as usize];
-            if count > 0 {
-                let window_start = (window_id as u64) * window_size_ms;
-                let window_end = window_start + window_size_ms;
-                let value = window_results[window_id as usize] as f64;
-
-                results.push(TimeSeriesAggregationResult {
-                    window_start,
-                    window_end,
-                    value,
-                    point_count: count as usize,
-                });
-            }
-        }
-
-        Ok(results)
-    }
-
-    #[cfg(all(feature = "gpu-acceleration", feature = "gpu-vulkan"))]
-    fn aggregate_by_windows_vulkan(
-        &self,
-        device: &mut crate::gpu_vulkan::VulkanDevice,
-        timestamps: &[u64],
-        values: &[f32],
-        window_size_ms: u64,
-        agg_type: u32,
-    ) -> Result<Vec<TimeSeriesAggregationResult>, ComputeError> {
-        let (window_results, window_counts, max_window_id) =
-            device.execute_timeseries_window_aggregate(timestamps, values, window_size_ms, agg_type)?;
-
-        // Convert GPU results to TimeSeriesAggregationResult
-        let mut results = Vec::new();
-        for window_id in 0..max_window_id {
-            let count = window_counts[window_id as usize];
-            if count > 0 {
-                let window_start = (window_id as u64) * window_size_ms;
-                let window_end = window_start + window_size_ms;
-                let value = window_results[window_id as usize] as f64;
-
-                results.push(TimeSeriesAggregationResult {
-                    window_start,
-                    window_end,
-                    value,
-                    point_count: count as usize,
-                });
-            }
-        }
-
-        Ok(results)
     }
 
     fn aggregate_by_windows_cpu_parallel(
