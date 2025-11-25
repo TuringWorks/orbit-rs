@@ -135,13 +135,15 @@ pub use spatial::{
 // Re-export security functionality
 pub use security::authentication::AuthToken;
 pub use security::{
-    AnomalyDetector, AuditEvent, AuditLogger, AuditPolicy, AuthenticationManager,
-    AuthenticationProvider, ComplianceMonitor, EncryptedFieldValue, EncryptionManager,
-    EncryptionType, FieldEncryptionConfig, FieldEncryptionEngine, FieldEncryptionPolicy,
-    KeyManagementSystem, KeyRotationPolicy, LdapAuthProvider, OAuth2AuthProvider, PolicyEngine,
-    QueryValidator, RbacEngine, RoleBasedAccessControl, SamlAuthProvider, SecurityAction,
-    SecurityContext, SecurityFramework, SecurityResource, SecuritySubject, SensitivityLevel,
-    SqlInjectionDetector, ThreatDetectionEngine, TlsConfig, TlsVersion,
+    AccessLevel, AnomalyDetector, AuditEvent, AuditLogger, AuditPolicy, AuthenticationManager,
+    AuthenticationProvider, ComplianceMonitor, DataMaskingEngine, DatePrecision,
+    EncryptedFieldValue, EncryptionManager, EncryptionType, FieldEncryptionConfig,
+    FieldEncryptionEngine, FieldEncryptionPolicy, FieldMaskingConfig, KeyManagementSystem,
+    KeyRotationPolicy, LdapAuthProvider, MaskingContext, MaskingPolicy, MaskingStrategy,
+    OAuth2AuthProvider, PolicyEngine, QueryValidator, RbacEngine, RoleBasedAccessControl,
+    SamlAuthProvider, SecurityAction, SecurityContext, SecurityFramework, SecurityResource,
+    SecuritySubject, SensitivityLevel, SqlInjectionDetector, ThreatDetectionEngine, TlsConfig,
+    TlsVersion, TokenStore,
 };
 
 // Re-export trigger functionality

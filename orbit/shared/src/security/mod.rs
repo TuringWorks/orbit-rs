@@ -12,6 +12,7 @@
 pub mod audit;
 pub mod authentication;
 pub mod authorization;
+pub mod data_masking;
 pub mod encryption;
 pub mod field_encryption;
 pub mod policy;
@@ -28,6 +29,10 @@ pub use authentication::{
 pub use authorization::{
     AccessPolicy, Permission, RbacEngine, Role, RoleBasedAccessControl, SecurityAction,
     SecurityResource, SecuritySubject,
+};
+pub use data_masking::{
+    AccessLevel, DataMaskingEngine, DatePrecision, FieldMaskingConfig, MaskingContext,
+    MaskingPolicy, MaskingStrategy, TokenStore,
 };
 pub use encryption::{
     EncryptionManager, KeyManagementSystem, KeyRotationPolicy, TlsConfig, TlsVersion,

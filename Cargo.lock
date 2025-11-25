@@ -5637,6 +5637,7 @@ dependencies = [
  "dashmap 6.1.0",
  "fastrand",
  "futures",
+ "hex",
  "hyper 0.14.32",
  "md5",
  "metrics 0.23.1",
