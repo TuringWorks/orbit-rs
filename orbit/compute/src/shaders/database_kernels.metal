@@ -1052,3 +1052,113 @@ kernel void timeseries_finalize_avg(
     float sum = as_type<float>(sum_as_uint);
     final_results[id] = sum / float(count);
 }
+
+// ============================================================================
+// Hash Join Kernels (Inner Join)
+// ============================================================================
+
+/// Build phase: construct hash table from build relation (smaller table)
+/// Uses open addressing with linear probing for collision resolution
+///
+/// Hash table layout: [key0, value0, key1, value1, ..., keyN, valueN]
+/// Empty slots marked with UINT_MAX
+kernel void hash_join_build(
+    device const uint* build_keys [[buffer(0)]],      // Keys from build relation
+    device const uint* build_values [[buffer(1)]],    // Values (row IDs) from build relation
+    device const uint* build_count [[buffer(2)]],     // Number of rows in build relation
+    device const uint* table_size [[buffer(3)]],      // Hash table size (2x build_count for low collision)
+    device atomic_uint* hash_table [[buffer(4)]],     // Output: hash table (key-value pairs)
+    uint id [[thread_position_in_grid]]
+) {
+    if (id >= *build_count) {
+        return;
+    }
+
+    uint key = build_keys[id];
+    uint value = build_values[id];
+    uint size = *table_size;
+
+    // Simple hash function
+    uint hash = key % size;
+
+    // Linear probing to find empty slot
+    uint probe = hash;
+    for (uint i = 0; i < size; i++) {
+        uint slot_idx = probe * 2;  // Each entry is 2 elements (key, value)
+
+        // Try to insert key
+        uint expected = UINT_MAX;
+        if (atomic_compare_exchange_weak_explicit(
+            &hash_table[slot_idx],
+            &expected,
+            key,
+            memory_order_relaxed,
+            memory_order_relaxed
+        )) {
+            // Successfully inserted key, now insert value
+            atomic_store_explicit(&hash_table[slot_idx + 1], value, memory_order_relaxed);
+            return;
+        }
+
+        // Slot occupied, try next slot (linear probing)
+        probe = (probe + 1) % size;
+    }
+
+    // Table full (should not happen if sized correctly)
+}
+
+/// Probe phase: probe hash table with probe relation (larger table)
+/// Outputs matching pairs to result buffers
+kernel void hash_join_probe(
+    device const uint* probe_keys [[buffer(0)]],           // Keys from probe relation
+    device const uint* probe_values [[buffer(1)]],         // Values (row IDs) from probe relation
+    device const uint* probe_count [[buffer(2)]],          // Number of rows in probe relation
+    device const uint* table_size [[buffer(3)]],           // Hash table size
+    device const atomic_uint* hash_table [[buffer(4)]],    // Input: hash table from build phase
+    device atomic_uint* output_count [[buffer(5)]],        // Output: count of matches
+    device uint* output_build_ids [[buffer(6)]],           // Output: matching build row IDs
+    device uint* output_probe_ids [[buffer(7)]],           // Output: matching probe row IDs
+    device const uint* max_output [[buffer(8)]],           // Maximum output size
+    uint id [[thread_position_in_grid]]
+) {
+    if (id >= *probe_count) {
+        return;
+    }
+
+    uint key = probe_keys[id];
+    uint probe_value = probe_values[id];
+    uint size = *table_size;
+
+    // Hash and probe
+    uint hash = key % size;
+    uint probe_slot = hash;
+
+    // Linear probing to find matching key
+    for (uint i = 0; i < size; i++) {
+        uint slot_idx = probe_slot * 2;
+        uint stored_key = atomic_load_explicit(&hash_table[slot_idx], memory_order_relaxed);
+
+        if (stored_key == UINT_MAX) {
+            // Empty slot, key not found
+            return;
+        }
+
+        if (stored_key == key) {
+            // Found matching key
+            uint build_value = atomic_load_explicit(&hash_table[slot_idx + 1], memory_order_relaxed);
+
+            // Atomically get output index and increment
+            uint output_idx = atomic_fetch_add_explicit(output_count, 1, memory_order_relaxed);
+
+            if (output_idx < *max_output) {
+                output_build_ids[output_idx] = build_value;
+                output_probe_ids[output_idx] = probe_value;
+            }
+
+            return;
+        }
+
+        // Key mismatch, continue probing
+        probe_slot = (probe_slot + 1) % size;
+    }
+}

@@ -1127,6 +1127,111 @@ impl MetalDevice {
             Ok((window_results, window_counts, max_window_id))
         }
     }
+
+    /// Execute GPU-accelerated hash join (inner join)
+    ///
+    /// # Arguments
+    /// * `build_keys` - Keys from build relation (smaller table)
+    /// * `build_values` - Row IDs from build relation
+    /// * `probe_keys` - Keys from probe relation (larger table)
+    /// * `probe_values` - Row IDs from probe relation
+    ///
+    /// # Returns
+    /// Tuple of (output_build_ids, output_probe_ids, match_count)
+    pub fn execute_hash_join(
+        &self,
+        build_keys: &[u32],
+        build_values: &[u32],
+        probe_keys: &[u32],
+        probe_values: &[u32],
+    ) -> Result<(Vec<u32>, Vec<u32>, u32), ComputeError> {
+        let build_count = build_keys.len();
+        let probe_count = probe_keys.len();
+
+        if build_count == 0 || probe_count == 0 {
+            return Ok((Vec::new(), Vec::new(), 0));
+        }
+
+        if build_count != build_values.len() || probe_count != probe_values.len() {
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "keys/values".to_string(),
+                    value: format!(
+                        "mismatched lengths: build {}!={}, probe {}!={}",
+                        build_count,
+                        build_values.len(),
+                        probe_count,
+                        probe_values.len()
+                    ),
+                },
+                compute_unit: None,
+            });
+        }
+
+        // Hash table size: 2x build count for low collision rate
+        let table_size = (build_count * 2).max(256);
+
+        // Create buffers
+        let build_keys_buffer = self.create_buffer_with_data_u32(build_keys)?;
+        let build_values_buffer = self.create_buffer_with_data_u32(build_values)?;
+        let build_count_buffer = self.create_buffer_with_data_u32(&[build_count as u32])?;
+        let table_size_buffer = self.create_buffer_with_data_u32(&[table_size as u32])?;
+
+        // Initialize hash table with UINT_MAX (empty marker)
+        let hash_table_init: Vec<u32> = vec![u32::MAX; table_size * 2];
+        let hash_table_buffer = self.create_buffer_with_data_u32(&hash_table_init)?;
+
+        // Build phase: construct hash table
+        self.execute_kernel(
+            "hash_join_build",
+            &[
+                &build_keys_buffer,
+                &build_values_buffer,
+                &build_count_buffer,
+                &table_size_buffer,
+                &hash_table_buffer,
+            ],
+            build_count as u64,
+        )?;
+
+        // Probe phase setup
+        let probe_keys_buffer = self.create_buffer_with_data_u32(probe_keys)?;
+        let probe_values_buffer = self.create_buffer_with_data_u32(probe_values)?;
+        let probe_count_buffer = self.create_buffer_with_data_u32(&[probe_count as u32])?;
+
+        // Output buffers (worst case: all rows match)
+        let max_output = build_count.min(probe_count);
+        let output_count_buffer = self.create_buffer_with_data_u32(&[0])?;
+        let output_build_ids_buffer = self.create_buffer_u32(max_output)?;
+        let output_probe_ids_buffer = self.create_buffer_u32(max_output)?;
+        let max_output_buffer = self.create_buffer_with_data_u32(&[max_output as u32])?;
+
+        // Probe phase: find matches
+        self.execute_kernel(
+            "hash_join_probe",
+            &[
+                &probe_keys_buffer,
+                &probe_values_buffer,
+                &probe_count_buffer,
+                &table_size_buffer,
+                &hash_table_buffer,
+                &output_count_buffer,
+                &output_build_ids_buffer,
+                &output_probe_ids_buffer,
+                &max_output_buffer,
+            ],
+            probe_count as u64,
+        )?;
+
+        // Read results
+        let output_count_vec = self.read_buffer_u32(&output_count_buffer, 1)?;
+        let match_count = output_count_vec[0].min(max_output as u32);
+
+        let output_build_ids = self.read_buffer_u32(&output_build_ids_buffer, match_count as usize)?;
+        let output_probe_ids = self.read_buffer_u32(&output_probe_ids_buffer, match_count as usize)?;
+
+        Ok((output_build_ids, output_probe_ids, match_count))
+    }
 }
 
 // Implement GpuDevice trait for MetalDevice
