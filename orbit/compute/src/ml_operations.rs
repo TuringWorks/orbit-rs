@@ -307,25 +307,60 @@ impl GPUMLOperations {
                         if let Ok(metal_device) = MetalDevice::new() {
                             metal_device.execute_matrix_multiply(&matrix_a_flat, &matrix_b_flat, m, n, k)?
                         } else {
-                            return Err(ComputeError::Execution {
-                                source: crate::errors::ExecutionError::InvalidKernelParameters {
-                                    parameter: "gpu_device".to_string(),
-                                    value: "Metal device not available".to_string(),
-                                },
-                                compute_unit: None,
-                            });
+                            #[cfg(feature = "gpu-vulkan")]
+                            {
+                                use crate::gpu_vulkan::VulkanDevice;
+                                if let Ok(mut vulkan_device) = VulkanDevice::new() {
+                                    vulkan_device.execute_matrix_multiply(&matrix_a_flat, &matrix_b_flat, m, n, k)?
+                                } else {
+                                    return Err(ComputeError::Execution {
+                                        source: crate::errors::ExecutionError::InvalidKernelParameters {
+                                            parameter: "gpu_device".to_string(),
+                                            value: "Neither Metal nor Vulkan available".to_string(),
+                                        },
+                                        compute_unit: None,
+                                    });
+                                }
+                            }
+                            #[cfg(not(feature = "gpu-vulkan"))]
+                            {
+                                return Err(ComputeError::Execution {
+                                    source: crate::errors::ExecutionError::InvalidKernelParameters {
+                                        parameter: "gpu_device".to_string(),
+                                        value: "Metal device not available".to_string(),
+                                    },
+                                    compute_unit: None,
+                                });
+                            }
                         }
                     }
                     #[cfg(not(target_os = "macos"))]
                     {
-                        // Vulkan implementation would go here
-                        return Err(ComputeError::Execution {
-                            source: crate::errors::ExecutionError::InvalidKernelParameters {
-                                parameter: "gpu_backend".to_string(),
-                                value: "Vulkan GEMM not yet implemented".to_string(),
-                            },
-                            compute_unit: None,
-                        });
+                        #[cfg(feature = "gpu-vulkan")]
+                        {
+                            use crate::gpu_vulkan::VulkanDevice;
+                            if let Ok(mut vulkan_device) = VulkanDevice::new() {
+                                vulkan_device.execute_matrix_multiply(&matrix_a_flat, &matrix_b_flat, m, n, k)?
+                            } else {
+                                return Err(ComputeError::Execution {
+                                    source: crate::errors::ExecutionError::InvalidKernelParameters {
+                                        parameter: "gpu_device".to_string(),
+                                        value: "Vulkan device not available".to_string(),
+                                    },
+                                    compute_unit: None,
+                                });
+                            }
+                        }
+                        #[cfg(not(feature = "gpu-vulkan"))]
+                        {
+                            return Err(ComputeError::Execution {
+                                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                                    parameter: "gpu_backend".to_string(),
+                                    value: "No GPU backend available (compile with gpu-vulkan feature)".to_string(),
+                                },
+                                compute_unit: None,
+                            });
+                        }
                     }
                 };
 

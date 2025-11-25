@@ -3,7 +3,7 @@
 //! This module provides GPU-accelerated database operations using Vulkan compute shaders.
 //! Vulkan works on all major platforms (Linux, Windows, macOS) and supports NVIDIA, AMD, and Intel GPUs.
 
-use crate::errors::{ComputeError, GPUError};
+use crate::errors::{ComputeError, ExecutionError, GPUError};
 use crate::gpu_backend::{FilterOp, GpuBackendType, GpuDevice};
 use std::sync::Arc;
 use vulkano::{
@@ -13,7 +13,8 @@ use vulkano::{
         CopyBufferInfo,
     },
     descriptor_set::{
-        allocator::StandardDescriptorSetAllocator, layout::DescriptorSetLayout, PersistentDescriptorSet, WriteDescriptorSet,
+        allocator::StandardDescriptorSetAllocator, layout::DescriptorSetLayout,
+        PersistentDescriptorSet, WriteDescriptorSet,
     },
     device::{
         physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, Queue,
@@ -1543,6 +1544,222 @@ impl GpuDevice for VulkanDevice {
 
     fn aggregate_count(&self, mask: &[i32]) -> Result<usize, ComputeError> {
         Ok(mask.iter().filter(|&&x| x != 0).count())
+    }
+}
+
+impl VulkanDevice {
+    /// Execute matrix multiplication on GPU (C = A × B)
+    ///
+    /// # Arguments
+    /// * `matrix_a` - M×K matrix (row-major, flattened)
+    /// * `matrix_b` - K×N matrix (row-major, flattened)
+    /// * `m` - Number of rows in A and C
+    /// * `n` - Number of columns in B and C
+    /// * `k` - Number of columns in A, rows in B
+    pub fn execute_matrix_multiply(
+        &mut self,
+        matrix_a: &[f32],
+        matrix_b: &[f32],
+        m: usize,
+        n: usize,
+        k: usize,
+    ) -> Result<Vec<f32>, ComputeError> {
+        // Validate inputs
+        if matrix_a.len() != m * k {
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "matrix_a".to_string(),
+                    value: format!("expected {}×{} = {} elements, got {}", m, k, m * k, matrix_a.len()),
+                },
+                compute_unit: None,
+            });
+        }
+        if matrix_b.len() != k * n {
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "matrix_b".to_string(),
+                    value: format!("expected {}×{} = {} elements, got {}", k, n, k * n, matrix_b.len()),
+                },
+                compute_unit: None,
+            });
+        }
+
+        // Create buffers for matrices
+        let matrix_a_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            matrix_a.iter().copied(),
+        )
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: matrix_a.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        let matrix_b_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            matrix_b.iter().copied(),
+        )
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: matrix_b.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        let matrix_c_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            (0..m * n).map(|_| 0.0f32),
+        )
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: m * n * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        // Create uniform buffer for parameters
+        let params = [m as u32, n as u32, k as u32];
+        let params_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            params.iter().copied(),
+        )
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<[u32; 3]>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        // Load shader
+        let shader_bytes = include_bytes!("shaders/vulkan/matrix_multiply.spv");
+        let shader = unsafe {
+            ShaderModule::from_bytes(self.device.clone(), shader_bytes)
+                .map_err(|e| ComputeError::gpu(crate::errors::GPUError::ShaderCompilationFailed {
+                    shader_type: "matrix_multiply".to_string(),
+                    error: format!("{:?}", e),
+                }))?
+        };
+
+        // Create pipeline
+        let entry_point = shader.entry_point("main").unwrap();
+        let stage = PipelineShaderStageCreateInfo::new(entry_point);
+        let layout = PipelineLayout::new(
+            self.device.clone(),
+            PipelineDescriptorSetLayoutCreateInfo::from_stages(&[stage.clone()])
+                .into_pipeline_layout_create_info(self.device.clone())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let pipeline = ComputePipeline::new(
+            self.device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(stage, layout),
+        )
+        .map_err(|e| {
+            ComputeError::execution(ExecutionError::RuntimeError {
+                stage: "pipeline_creation:matrix_multiply".to_string(),
+                error: format!("{:?}", e),
+            })
+        })?;
+
+        // Create descriptor set
+        let layout = &pipeline.layout().set_layouts()[0];
+        let descriptor_set = PersistentDescriptorSet::new(
+            &self.descriptor_set_allocator,
+            layout.clone(),
+            [
+                WriteDescriptorSet::buffer(0, matrix_a_buffer.clone()),
+                WriteDescriptorSet::buffer(1, matrix_b_buffer.clone()),
+                WriteDescriptorSet::buffer(2, matrix_c_buffer.clone()),
+                WriteDescriptorSet::buffer(3, params_buffer.clone()),
+            ],
+            [],
+        )
+        .map_err(|e| {
+            ComputeError::execution(ExecutionError::RuntimeError {
+                stage: "descriptor_set_creation".to_string(),
+                error: format!("{:?}", e),
+            })
+        })?;
+
+        // Create command buffer and dispatch
+        let mut builder = AutoCommandBufferBuilder::primary(
+            &self.command_buffer_allocator,
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        builder
+            .bind_pipeline_compute(pipeline.clone())
+            .unwrap()
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                pipeline.layout().clone(),
+                0,
+                descriptor_set,
+            )
+            .unwrap();
+
+        // Dispatch with 16×16 workgroups
+        let workgroup_count_x = (n as u32 + 15) / 16;
+        let workgroup_count_y = (m as u32 + 15) / 16;
+        builder
+            .dispatch([workgroup_count_x, workgroup_count_y, 1])
+            .unwrap();
+
+        let command_buffer = builder.build().unwrap();
+
+        // Submit and wait
+        let future = sync::now(self.device.clone())
+            .then_execute(self.queue.clone(), command_buffer)
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap();
+
+        future.wait(None).unwrap();
+
+        // Read result
+        let result_content = matrix_c_buffer.read().unwrap();
+        Ok(result_content.iter().copied().collect())
     }
 }
 
