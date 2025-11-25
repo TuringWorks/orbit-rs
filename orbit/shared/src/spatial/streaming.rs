@@ -247,7 +247,7 @@ impl SpatialStreamProcessor {
         }
 
         let entity_count = entity_ids.len() as u64;
-        let avg_speed = if updates.len() > 0 {
+        let avg_speed = if !updates.is_empty() {
             total_speed / updates.len() as f64
         } else {
             0.0

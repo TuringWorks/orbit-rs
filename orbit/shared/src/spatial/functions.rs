@@ -104,7 +104,7 @@ impl SpatialFunctions {
 
         let mut points = Vec::new();
         for coord_pair in coords_str.split(',') {
-            let coords: Vec<&str> = coord_pair.trim().split_whitespace().collect();
+            let coords: Vec<&str> = coord_pair.split_whitespace().collect();
             if coords.len() >= 2 {
                 let x: f64 = coords[0].parse().map_err(|_| {
                     SpatialError::OperationError("Invalid coordinate in LINESTRING WKT".to_string())
@@ -148,7 +148,7 @@ impl SpatialFunctions {
         // Parse exterior ring
         let mut exterior_points = Vec::new();
         for coord_pair in ring_strs[0].split(',') {
-            let coords: Vec<&str> = coord_pair.trim().split_whitespace().collect();
+            let coords: Vec<&str> = coord_pair.split_whitespace().collect();
             if coords.len() >= 2 {
                 let x: f64 = coords[0].parse().map_err(|_| {
                     SpatialError::OperationError("Invalid coordinate in POLYGON WKT".to_string())
@@ -167,7 +167,7 @@ impl SpatialFunctions {
         for ring_str in ring_strs.iter().skip(1) {
             let mut interior_points = Vec::new();
             for coord_pair in ring_str.split(',') {
-                let coords: Vec<&str> = coord_pair.trim().split_whitespace().collect();
+                let coords: Vec<&str> = coord_pair.split_whitespace().collect();
                 if coords.len() >= 2 {
                     let x: f64 = coords[0].parse().map_err(|_| {
                         SpatialError::OperationError("Invalid coordinate in POLYGON WKT".to_string())

@@ -163,18 +163,15 @@ pub struct TransactionContext {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum IsolationLevel {
     ReadUncommitted,
+    #[default]
     ReadCommitted,
     RepeatableRead,
     Serializable,
 }
 
-impl Default for IsolationLevel {
-    fn default() -> Self {
-        Self::ReadCommitted
-    }
-}
 
 /// Trait for transaction management with default implementations
 #[async_trait]

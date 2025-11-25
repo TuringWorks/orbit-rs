@@ -35,6 +35,7 @@ use std::time::Duration;
 
 /// Memory profile classification for actors based on latency requirements
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum ActorMemoryProfile {
     /// Hot profile: <1ms tail latency requirement
     /// Used for: real-time analytics, high-frequency trading, gaming
@@ -44,6 +45,7 @@ pub enum ActorMemoryProfile {
     /// Warm profile: <10ms tail latency requirement
     /// Used for: interactive queries, dashboards, API responses
     /// Strategy: Keep frequently accessed data pinned, allow some page faults
+    #[default]
     Warm,
 
     /// Cold profile: >100ms acceptable
@@ -114,11 +116,6 @@ impl ActorMemoryProfile {
     }
 }
 
-impl Default for ActorMemoryProfile {
-    fn default() -> Self {
-        ActorMemoryProfile::Warm
-    }
-}
 
 /// Estimated memory footprint for an actor
 #[derive(Debug, Clone, Serialize, Deserialize)]

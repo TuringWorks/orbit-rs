@@ -78,6 +78,7 @@ use uuid::Uuid;
 /// - **Standard**: fsync on commit boundaries (MySQL-like)
 /// - **Performance**: OS-buffered writes with periodic fsync (MongoDB-like)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum DurabilityLevel {
     /// Maximum durability: fsync after every WAL write
     /// Guarantees no data loss but highest latency
@@ -85,6 +86,7 @@ pub enum DurabilityLevel {
 
     /// Balanced durability: fsync on transaction commit
     /// Good balance between safety and performance
+    #[default]
     Standard,
 
     /// Maximum performance: OS-buffered writes with periodic fsync
@@ -92,11 +94,6 @@ pub enum DurabilityLevel {
     Performance,
 }
 
-impl Default for DurabilityLevel {
-    fn default() -> Self {
-        DurabilityLevel::Standard
-    }
-}
 
 /// WAL entry type representing different operations
 #[derive(Debug, Clone, Serialize, Deserialize)]

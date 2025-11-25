@@ -141,7 +141,7 @@ where
         V: Default,
         K: Clone,
     {
-        self.entry(key).or_insert_with(V::default)
+        self.entry(key).or_default()
     }
 
     fn get_or_insert_with<F>(&mut self, key: K, f: F) -> &mut V
