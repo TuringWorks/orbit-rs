@@ -21,7 +21,7 @@ pub struct GraphEngine<S: GraphStorage> {
     storage: Arc<S>,
 }
 
-impl<S: GraphStorage> GraphEngine<S> {
+impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
     /// Create a new graph engine with the given storage backend
     pub fn new(storage: Arc<S>) -> Self {
         Self { storage }
@@ -108,6 +108,24 @@ impl<S: GraphStorage> GraphEngine<S> {
                 }
                 CypherClause::Remove { items } => {
                     self.execute_remove_clause(items, &mut context, &mut result_nodes).await?;
+                }
+                CypherClause::Call {
+                    procedure,
+                    arguments,
+                    yield_items,
+                } => {
+                    // Execute procedure call and return result directly
+                    let result = self
+                        .execute_call_clause(procedure.clone(), arguments.clone(), yield_items.clone())
+                        .await?;
+                    // For CALL statements, return the result immediately
+                    // unless there are more clauses that process the data
+                    if query.clauses.len() == 1 {
+                        return Ok(result);
+                    }
+                    // Otherwise, the results are available for further processing
+                    result_nodes.extend(result.nodes);
+                    result_relationships.extend(result.relationships);
                 }
                 // ORDER BY, LIMIT, SKIP already collected in first pass
                 CypherClause::OrderBy { .. } | CypherClause::Limit { .. } | CypherClause::Skip { .. } => {}
@@ -819,6 +837,62 @@ impl<S: GraphStorage> GraphEngine<S> {
         );
 
         Ok(())
+    }
+
+    /// Execute a CALL clause for procedure invocation
+    async fn execute_call_clause(
+        &self,
+        procedure: String,
+        arguments: Vec<serde_json::Value>,
+        yield_items: Option<Vec<String>>,
+    ) -> ProtocolResult<QueryResult> {
+        use super::graph_algorithms_procedures::GraphAlgorithmProcedures;
+
+        info!(
+            procedure = %procedure,
+            args_count = arguments.len(),
+            "Executing CALL procedure"
+        );
+
+        // Create procedure executor
+        let procedures = GraphAlgorithmProcedures::new(self.storage.clone());
+
+        // Execute the procedure
+        let mut result = procedures.execute_procedure(&procedure, &arguments).await?;
+
+        // Apply YIELD filtering if specified
+        if let Some(items) = yield_items {
+            if !items.is_empty() {
+                // Filter columns to only those in YIELD
+                let col_indices: Vec<usize> = items
+                    .iter()
+                    .filter_map(|item| result.columns.iter().position(|c| c == item))
+                    .collect();
+
+                // Filter rows to only include yielded columns
+                result.rows = result
+                    .rows
+                    .into_iter()
+                    .map(|row| {
+                        col_indices
+                            .iter()
+                            .map(|&idx| row.get(idx).cloned().unwrap_or(None))
+                            .collect()
+                    })
+                    .collect();
+
+                // Update column names
+                result.columns = items;
+            }
+        }
+
+        info!(
+            procedure = %procedure,
+            rows = result.rows.len(),
+            "Procedure execution completed"
+        );
+
+        Ok(result)
     }
 
     /// Apply ORDER BY to nodes

@@ -445,6 +445,9 @@ impl TokenParser {
                 Some(Token::Skip) => {
                     clauses.push(self.parse_skip_clause()?);
                 }
+                Some(Token::Call) => {
+                    clauses.push(self.parse_call_clause()?);
+                }
                 Some(token) => {
                     return Err(ProtocolError::CypherError(format!(
                         "Unexpected token: {token:?}"
@@ -803,6 +806,196 @@ impl TokenParser {
         Ok(CypherClause::Skip { count })
     }
 
+    /// Parse a CALL clause for procedure invocation
+    /// Syntax: CALL procedure.name(arg1, arg2) YIELD col1, col2
+    fn parse_call_clause(&mut self) -> ProtocolResult<CypherClause> {
+        self.expect_token(Token::Call)?;
+
+        // Parse procedure name (may have dots, e.g., orbit.graph.pagerank)
+        let mut procedure = String::new();
+        loop {
+            match self.current_token() {
+                Some(Token::Identifier(name)) => {
+                    procedure.push_str(name);
+                    self.advance();
+                }
+                _ => break,
+            }
+            // Check for dot continuation
+            if matches!(self.current_token(), Some(Token::Dot)) {
+                procedure.push('.');
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        if procedure.is_empty() {
+            return Err(ProtocolError::CypherError(
+                "Expected procedure name after CALL".to_string(),
+            ));
+        }
+
+        // Parse arguments (optional, in parentheses)
+        let mut arguments = Vec::new();
+        if matches!(self.current_token(), Some(Token::LeftParen)) {
+            self.advance(); // consume (
+
+            // Parse arguments until we hit )
+            loop {
+                if matches!(self.current_token(), Some(Token::RightParen)) {
+                    self.advance();
+                    break;
+                }
+
+                // Parse argument value
+                let arg = self.parse_call_argument()?;
+                arguments.push(arg);
+
+                // Check for comma or closing paren
+                if matches!(self.current_token(), Some(Token::Comma)) {
+                    self.advance();
+                } else if matches!(self.current_token(), Some(Token::RightParen)) {
+                    self.advance();
+                    break;
+                } else if self.current_token().is_none() {
+                    break;
+                }
+            }
+        }
+
+        // Parse optional YIELD clause
+        let yield_items = if matches!(self.current_token(), Some(Token::Yield)) {
+            self.advance();
+            let mut items = Vec::new();
+            loop {
+                match self.current_token() {
+                    Some(Token::Identifier(name)) => {
+                        items.push(name.clone());
+                        self.advance();
+                    }
+                    _ => break,
+                }
+                if matches!(self.current_token(), Some(Token::Comma)) {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            Some(items)
+        } else {
+            None
+        };
+
+        Ok(CypherClause::Call {
+            procedure,
+            arguments,
+            yield_items,
+        })
+    }
+
+    /// Parse a single argument value in a CALL clause
+    fn parse_call_argument(&mut self) -> ProtocolResult<serde_json::Value> {
+        match self.current_token() {
+            Some(Token::Number(n)) => {
+                let n = n.clone();
+                self.advance();
+                // Try parsing as integer first, then float
+                if let Ok(i) = n.parse::<i64>() {
+                    Ok(serde_json::Value::Number(i.into()))
+                } else if let Ok(f) = n.parse::<f64>() {
+                    Ok(serde_json::json!(f))
+                } else {
+                    Err(ProtocolError::CypherError(format!(
+                        "Invalid number: {}",
+                        n
+                    )))
+                }
+            }
+            Some(Token::String(s)) => {
+                let s = s.clone();
+                self.advance();
+                Ok(serde_json::Value::String(s))
+            }
+            Some(Token::LeftBrace) => {
+                // Parse object/map argument: {key: value, ...}
+                self.parse_object_argument()
+            }
+            Some(Token::Identifier(name)) => {
+                // Could be a boolean, null, or identifier
+                let name = name.clone();
+                self.advance();
+                match name.to_lowercase().as_str() {
+                    "true" => Ok(serde_json::Value::Bool(true)),
+                    "false" => Ok(serde_json::Value::Bool(false)),
+                    "null" => Ok(serde_json::Value::Null),
+                    _ => Ok(serde_json::Value::String(name)),
+                }
+            }
+            Some(token) => Err(ProtocolError::CypherError(format!(
+                "Unexpected token in CALL arguments: {:?}",
+                token
+            ))),
+            None => Err(ProtocolError::CypherError(
+                "Unexpected end of query in CALL arguments".to_string(),
+            )),
+        }
+    }
+
+    /// Parse an object argument like {damping: 0.85, iterations: 20}
+    fn parse_object_argument(&mut self) -> ProtocolResult<serde_json::Value> {
+        self.advance(); // consume {
+        let mut map = serde_json::Map::new();
+
+        loop {
+            if matches!(self.current_token(), Some(Token::RightBrace)) {
+                self.advance();
+                break;
+            }
+
+            // Parse key
+            let key = match self.current_token() {
+                Some(Token::Identifier(k)) => {
+                    let k = k.clone();
+                    self.advance();
+                    k
+                }
+                Some(Token::String(k)) => {
+                    let k = k.clone();
+                    self.advance();
+                    k
+                }
+                _ => {
+                    return Err(ProtocolError::CypherError(
+                        "Expected key in object argument".to_string(),
+                    ))
+                }
+            };
+
+            // Expect colon
+            if !matches!(self.current_token(), Some(Token::Colon)) {
+                return Err(ProtocolError::CypherError(
+                    "Expected ':' after key in object".to_string(),
+                ));
+            }
+            self.advance();
+
+            // Parse value (recursive call for nested objects)
+            let value = self.parse_call_argument()?;
+            map.insert(key, value);
+
+            // Check for comma or closing brace
+            if matches!(self.current_token(), Some(Token::Comma)) {
+                self.advance();
+            } else if matches!(self.current_token(), Some(Token::RightBrace)) {
+                self.advance();
+                break;
+            }
+        }
+
+        Ok(serde_json::Value::Object(map))
+    }
+
     fn parse_pattern(&mut self) -> ProtocolResult<Pattern> {
         let mut elements = Vec::new();
 
@@ -1144,6 +1337,15 @@ pub enum CypherClause {
     Skip {
         /// Number of results to skip
         count: usize,
+    },
+    /// CALL clause for procedure invocation
+    Call {
+        /// Procedure name (e.g., "orbit.graph.pagerank")
+        procedure: String,
+        /// Arguments to the procedure
+        arguments: Vec<serde_json::Value>,
+        /// Optional YIELD clause to select specific output columns
+        yield_items: Option<Vec<String>>,
     },
 }
 
@@ -1540,5 +1742,115 @@ mod tests {
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed.clauses.len(), 6); // MATCH, WHERE, SET, RETURN, ORDER BY, LIMIT
+    }
+
+    #[test]
+    fn test_call_procedure_simple() {
+        let parser = CypherParser::new();
+        let query = "CALL orbit.graph.pagerank()";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 1);
+
+        match &parsed.clauses[0] {
+            CypherClause::Call {
+                procedure,
+                arguments,
+                yield_items,
+            } => {
+                assert_eq!(procedure, "orbit.graph.pagerank");
+                assert!(arguments.is_empty());
+                assert!(yield_items.is_none());
+            }
+            _ => panic!("Expected CALL clause"),
+        }
+    }
+
+    #[test]
+    fn test_call_procedure_with_args() {
+        let parser = CypherParser::new();
+        // Note: Current tokenizer doesn't support floating point literals like 0.85
+        // Use integer values for config parameters
+        let query = "CALL orbit.graph.pagerank({iterations: 20, minNodes: 5})";
+        let result = parser.parse(query);
+
+        if result.is_err() {
+            eprintln!("Parse error: {:?}", result.as_ref().unwrap_err());
+        }
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 1);
+
+        match &parsed.clauses[0] {
+            CypherClause::Call {
+                procedure,
+                arguments,
+                yield_items,
+            } => {
+                assert_eq!(procedure, "orbit.graph.pagerank");
+                assert_eq!(arguments.len(), 1);
+                // The argument should be an object with iterations and minNodes
+                let arg = &arguments[0];
+                assert!(arg.is_object());
+                let obj = arg.as_object().unwrap();
+                assert_eq!(obj.get("iterations").unwrap().as_i64().unwrap(), 20);
+                assert_eq!(obj.get("minNodes").unwrap().as_i64().unwrap(), 5);
+                assert!(yield_items.is_none());
+            }
+            _ => panic!("Expected CALL clause"),
+        }
+    }
+
+    #[test]
+    fn test_call_procedure_with_yield() {
+        let parser = CypherParser::new();
+        let query = "CALL orbit.graph.shortestPath('node1', 'node2') YIELD path, distance";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 1);
+
+        match &parsed.clauses[0] {
+            CypherClause::Call {
+                procedure,
+                arguments,
+                yield_items,
+            } => {
+                assert_eq!(procedure, "orbit.graph.shortestPath");
+                assert_eq!(arguments.len(), 2);
+                assert!(yield_items.is_some());
+                let items = yield_items.as_ref().unwrap();
+                assert_eq!(items.len(), 2);
+                assert_eq!(items[0], "path");
+                assert_eq!(items[1], "distance");
+            }
+            _ => panic!("Expected CALL clause"),
+        }
+    }
+
+    #[test]
+    fn test_call_procedure_bfs() {
+        let parser = CypherParser::new();
+        let query = "CALL orbit.graph.bfs('startNode', 5)";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 1);
+
+        match &parsed.clauses[0] {
+            CypherClause::Call {
+                procedure,
+                arguments,
+                ..
+            } => {
+                assert_eq!(procedure, "orbit.graph.bfs");
+                assert_eq!(arguments.len(), 2);
+            }
+            _ => panic!("Expected CALL clause"),
+        }
     }
 }

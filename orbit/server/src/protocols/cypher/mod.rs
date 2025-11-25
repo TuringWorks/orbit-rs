@@ -21,6 +21,7 @@
 pub mod bolt;
 pub mod bolt_protocol;
 pub mod cypher_parser;
+pub mod graph_algorithms_procedures;
 pub mod graph_engine;
 pub mod graphrag_procedures;
 pub mod server;
@@ -32,6 +33,7 @@ pub mod storage;
 pub use bolt::BoltProtocol;
 pub use bolt_protocol::BoltProtocolHandler;
 pub use cypher_parser::CypherParser;
+pub use graph_algorithms_procedures::GraphAlgorithmProcedures;
 pub use graph_engine::GraphEngine;
 pub use graphrag_procedures::BoltGraphRAGProcedures;
 pub use server::CypherServer;

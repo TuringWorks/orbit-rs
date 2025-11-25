@@ -447,6 +447,30 @@ impl GraphActor {
                     estimated_cost += step.estimated_cost;
                     steps.push(step);
                 }
+                crate::protocols::cypher::cypher_parser::CypherClause::Call {
+                    procedure,
+                    arguments,
+                    yield_items,
+                } => {
+                    let yield_desc = yield_items
+                        .as_ref()
+                        .map(|items| format!(" YIELD {}", items.join(", ")))
+                        .unwrap_or_default();
+                    let step = PlanStep {
+                        operation: "ProcedureCall".to_string(),
+                        description: format!(
+                            "CALL {}({}){}",
+                            procedure,
+                            arguments.len(),
+                            yield_desc
+                        ),
+                        estimated_rows: 100,
+                        estimated_cost: 20.0, // Procedures can be expensive
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
             }
         }
 
