@@ -149,7 +149,6 @@ impl VulkanDevice {
         // For now, we'll create pipelines lazily when needed
         let bfs_pipeline = None; // Will be created on first use
         let vector_similarity_pipeline = None; // Will be created on first use
-        let spatial_distance_pipeline = None; // Will be created on first use
 
         Ok(Self {
             device,
@@ -160,7 +159,6 @@ impl VulkanDevice {
             device_name,
             bfs_pipeline,
             vector_similarity_pipeline,
-            spatial_distance_pipeline,
         })
     }
 
@@ -1072,7 +1070,7 @@ impl VulkanDevice {
         let shader = unsafe {
             ShaderModule::from_bytes(self.device.clone(), shader_bytes)
                 .map_err(|e| ComputeError::gpu(crate::errors::GPUError::ShaderCompilationFailed {
-                    shader_name: "dijkstra_relax".to_string(),
+                    shader_type: "dijkstra_relax".to_string(),
                     error: format!("{:?}", e),
                 }))?
         };
@@ -1092,10 +1090,9 @@ impl VulkanDevice {
             edge_array.iter().copied(),
         )
         .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: edge_array.len() * std::mem::size_of::<u32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: edge_array.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1113,10 +1110,9 @@ impl VulkanDevice {
             edge_offset.iter().copied(),
         )
         .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: edge_offset.len() * std::mem::size_of::<u32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: edge_offset.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1133,11 +1129,10 @@ impl VulkanDevice {
             },
             edge_weights.iter().copied(),
         )
-        .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: edge_weights.len() * std::mem::size_of::<f32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: edge_weights.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1155,11 +1150,10 @@ impl VulkanDevice {
             },
             distances.iter().copied(),
         )
-        .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: distances.len() * std::mem::size_of::<f32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: distances.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1177,11 +1171,10 @@ impl VulkanDevice {
             },
             parent.iter().copied(),
         )
-        .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: parent.len() * std::mem::size_of::<u32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: parent.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1198,11 +1191,10 @@ impl VulkanDevice {
             },
             active_mask.iter().copied(),
         )
-        .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: active_mask.len() * std::mem::size_of::<u32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: active_mask.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1220,11 +1212,10 @@ impl VulkanDevice {
             },
             [*changed].iter().copied(),
         )
-        .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: std::mem::size_of::<u32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
             })
         })?;
 
@@ -1241,11 +1232,10 @@ impl VulkanDevice {
             },
             [node_count].iter().copied(),
         )
-        .map_err(|e| {
-            ComputeError::gpu(crate::errors::GPUError::BufferAllocationFailed {
-                size: std::mem::size_of::<u32>(),
-                error: format!("{:?}", e),
-                compute_unit: Some("Vulkan".to_string()),
+        .map_err(|_e| {
+            ComputeError::gpu(crate::errors::GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
             })
         })?;
 

@@ -873,6 +873,101 @@ impl MetalDevice {
 
         Ok(())
     }
+
+    /// Execute GPU-accelerated matrix multiplication (GEMM): C = A * B
+    /// Uses tiled algorithm for better cache locality
+    pub fn execute_matrix_multiply(
+        &self,
+        matrix_a: &[f32],  // M×K matrix (row-major, flattened)
+        matrix_b: &[f32],  // K×N matrix (row-major, flattened)
+        m: usize,          // Rows in A and C
+        n: usize,          // Cols in B and C
+        k: usize,          // Cols in A, Rows in B
+    ) -> Result<Vec<f32>, ComputeError> {
+        use crate::errors::ExecutionError;
+
+        // Validate inputs
+        if matrix_a.len() != m * k {
+            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
+                parameter: "matrix_a_size".to_string(),
+                value: format!("expected {}, got {}", m * k, matrix_a.len()),
+            }));
+        }
+
+        if matrix_b.len() != k * n {
+            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
+                parameter: "matrix_b_size".to_string(),
+                value: format!("expected {}, got {}", k * n, matrix_b.len()),
+            }));
+        }
+
+        // Create buffers
+        let a_buffer = self.create_buffer_with_data_f32(matrix_a)?;
+        let b_buffer = self.create_buffer_with_data_f32(matrix_b)?;
+        let c_buffer = self.create_buffer_f32(m * n)?;
+
+        // Create parameter buffer: [M, N, K]
+        let params = [m as u32, n as u32, k as u32];
+        let params_buffer = self.create_buffer_with_data_u32(&params)?;
+
+        // Use tiled kernel for better performance
+        let kernel_name = "matrix_multiply_tiled_f32";
+
+        // Execute kernel with 2D grid
+        let kernel = self
+            .library
+            .get_function(kernel_name, None)
+            .map_err(|_| {
+                ComputeError::execution(ExecutionError::InvalidKernelParameters {
+                    parameter: "kernel_name".to_string(),
+                    value: kernel_name.to_string(),
+                })
+            })?;
+
+        let pipeline_state = self
+            .device
+            .new_compute_pipeline_state_with_function(&kernel)
+            .map_err(|e| {
+                ComputeError::execution(ExecutionError::RuntimeError {
+                    stage: format!("pipeline_creation:{}", kernel_name),
+                    error: format!("{:?}", e),
+                })
+            })?;
+
+        let command_buffer = self.queue.new_command_buffer();
+        let encoder = command_buffer.new_compute_command_encoder();
+
+        encoder.set_compute_pipeline_state(&pipeline_state);
+        encoder.set_buffer(0, Some(&a_buffer), 0);
+        encoder.set_buffer(1, Some(&b_buffer), 0);
+        encoder.set_buffer(2, Some(&c_buffer), 0);
+        encoder.set_buffer(3, Some(&params_buffer), 0);
+
+        // Dispatch 2D grid with 16×16 threadgroups (tile size)
+        let tile_size = 16u64;
+        let grid_width = ((n as u64 + tile_size - 1) / tile_size) * tile_size;
+        let grid_height = ((m as u64 + tile_size - 1) / tile_size) * tile_size;
+
+        let threadgroup_size = metal::MTLSize {
+            width: tile_size,
+            height: tile_size,
+            depth: 1,
+        };
+
+        let grid_size = metal::MTLSize {
+            width: grid_width,
+            height: grid_height,
+            depth: 1,
+        };
+
+        encoder.dispatch_threads(grid_size, threadgroup_size);
+        encoder.end_encoding();
+        command_buffer.commit();
+        command_buffer.wait_until_completed();
+
+        // Read results
+        self.read_buffer_f32(&c_buffer, m * n)
+    }
 }
 
 // Implement GpuDevice trait for MetalDevice

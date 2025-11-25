@@ -549,8 +549,8 @@ mod tests {
         assert!(results[0].value >= 0.0);
     }
 
-    #[test]
-    fn test_aggregate_values() {
+    #[tokio::test]
+    async fn test_aggregate_values() {
         let config = TimeSeriesOperationsConfig::default();
         let ops = GPUTimeSeriesOperations::new(config).await.unwrap();
 

@@ -803,3 +803,131 @@ kernel void spatial_distance_sphere(
     
     distances[id] = EARTH_RADIUS_KM * c * 1000.0; // Return distance in meters
 }
+
+// ============================================================================
+// Matrix Operations (GEMM - General Matrix Multiply)
+// ============================================================================
+
+/// GPU-Accelerated Matrix Multiplication (GEMM): C = A * B
+/// Each thread computes one element of the result matrix C[i][j]
+/// A is M×K, B is K×N, C is M×N
+/// Matrices are stored in row-major order as flattened arrays
+kernel void matrix_multiply_f32(
+    device const float* matrix_a [[buffer(0)]],  // M×K matrix (flattened)
+    device const float* matrix_b [[buffer(1)]],  // K×N matrix (flattened)
+    device float* matrix_c [[buffer(2)]],        // M×N result matrix (flattened)
+    device const uint* params [[buffer(3)]],     // [M, N, K]
+    uint2 id [[thread_position_in_grid]]
+) {
+    uint M = params[0];  // Rows in A and C
+    uint N = params[1];  // Cols in B and C
+    uint K = params[2];  // Cols in A, Rows in B
+
+    uint row = id.y;  // Row index in result matrix
+    uint col = id.x;  // Col index in result matrix
+
+    if (row >= M || col >= N) {
+        return;
+    }
+
+    // Compute C[row][col] = sum(A[row][k] * B[k][col])
+    float sum = 0.0;
+    for (uint k = 0; k < K; k++) {
+        float a_val = matrix_a[row * K + k];       // A[row][k]
+        float b_val = matrix_b[k * N + col];       // B[k][col]
+        sum += a_val * b_val;
+    }
+
+    matrix_c[row * N + col] = sum;
+}
+
+/// GPU-Accelerated Matrix Multiplication with Tiling (Optimized)
+/// Uses shared memory (threadgroup) for better cache locality
+/// Tile size: 16×16 (optimal for most GPUs)
+kernel void matrix_multiply_tiled_f32(
+    device const float* matrix_a [[buffer(0)]],
+    device const float* matrix_b [[buffer(1)]],
+    device float* matrix_c [[buffer(2)]],
+    device const uint* params [[buffer(3)]],  // [M, N, K]
+    uint2 global_id [[thread_position_in_grid]],
+    uint2 local_id [[thread_position_in_threadgroup]],
+    uint2 group_id [[threadgroup_position_in_grid]]
+) {
+    uint M = params[0];
+    uint N = params[1];
+    uint K = params[2];
+
+    // Tile size
+    const uint TILE_SIZE = 16;
+
+    // Shared memory for tiles
+    threadgroup float tile_a[TILE_SIZE][TILE_SIZE];
+    threadgroup float tile_b[TILE_SIZE][TILE_SIZE];
+
+    uint row = global_id.y;
+    uint col = global_id.x;
+
+    float sum = 0.0;
+
+    // Process tiles
+    uint num_tiles = (K + TILE_SIZE - 1) / TILE_SIZE;
+
+    for (uint tile = 0; tile < num_tiles; tile++) {
+        // Load tile from A
+        uint a_col = tile * TILE_SIZE + local_id.x;
+        if (row < M && a_col < K) {
+            tile_a[local_id.y][local_id.x] = matrix_a[row * K + a_col];
+        } else {
+            tile_a[local_id.y][local_id.x] = 0.0;
+        }
+
+        // Load tile from B
+        uint b_row = tile * TILE_SIZE + local_id.y;
+        if (b_row < K && col < N) {
+            tile_b[local_id.y][local_id.x] = matrix_b[b_row * N + col];
+        } else {
+            tile_b[local_id.y][local_id.x] = 0.0;
+        }
+
+        // Synchronize threads
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        // Compute partial dot product for this tile
+        for (uint k = 0; k < TILE_SIZE; k++) {
+            sum += tile_a[local_id.y][k] * tile_b[k][local_id.x];
+        }
+
+        // Synchronize before loading next tile
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+
+    // Write result
+    if (row < M && col < N) {
+        matrix_c[row * N + col] = sum;
+    }
+}
+
+/// GPU-Accelerated Matrix-Vector Multiplication
+/// Each thread computes one element of the result vector: y = A * x
+kernel void matrix_vector_multiply_f32(
+    device const float* matrix [[buffer(0)]],  // M×N matrix (flattened)
+    device const float* vector [[buffer(1)]],  // N-element vector
+    device float* result [[buffer(2)]],        // M-element result vector
+    device const uint* params [[buffer(3)]],   // [M, N]
+    uint id [[thread_position_in_grid]]
+) {
+    uint M = params[0];  // Rows in matrix
+    uint N = params[1];  // Cols in matrix (length of vector)
+
+    if (id >= M) {
+        return;
+    }
+
+    // Compute result[id] = sum(matrix[id][j] * vector[j])
+    float sum = 0.0;
+    for (uint j = 0; j < N; j++) {
+        sum += matrix[id * N + j] * vector[j];
+    }
+
+    result[id] = sum;
+}
