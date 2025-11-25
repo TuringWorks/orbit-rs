@@ -43,7 +43,7 @@ ordered-float = { version = "4.2", features = ["serde"] }
 comfy-table = "7.1"
 owo-colors = "4.1"
 tonic.workspace = true
-tonic-reflection = "0.12"
+tonic-reflection = "0.14"
 futures.workspace = true
 dashmap.workspace = true
 serde.workspace = true
