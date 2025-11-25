@@ -3,6 +3,7 @@
 //! This module provides comprehensive security features including:
 //! - Advanced authentication mechanisms (LDAP, OAuth2, SAML)
 //! - Role-based access control (RBAC) with fine-grained permissions
+//! - Row-level security (RLS) for fine-grained data access control
 //! - Data encryption at rest and in transit
 //! - Comprehensive audit logging
 //! - SQL injection prevention
@@ -13,6 +14,7 @@ pub mod authentication;
 pub mod authorization;
 pub mod encryption;
 pub mod policy;
+pub mod row_level_security;
 pub mod sql_validation;
 pub mod threat_detection;
 
@@ -30,6 +32,9 @@ pub use encryption::{
     EncryptionManager, KeyManagementSystem, KeyRotationPolicy, TlsConfig, TlsVersion,
 };
 pub use policy::{PolicyEngine, PolicyEvaluator, SecurityPolicy};
+pub use row_level_security::{
+    RlsAction, RlsEngine, RlsExpression, RlsPolicy, RlsPolicyType, RlsValue, RowLevelSecurity,
+};
 pub use sql_validation::{QueryValidator, SqlInjectionDetector};
 pub use threat_detection::{AnomalyDetector, ThreatDetectionEngine};
 
