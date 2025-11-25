@@ -931,3 +931,124 @@ kernel void matrix_vector_multiply_f32(
 
     result[id] = sum;
 }
+
+// ============================================================================
+// Time-Series Window Aggregation Kernels
+// ============================================================================
+
+/// Time-series window aggregation with atomic operations
+/// Computes aggregations (Sum, Min, Max, Count) for time-windowed data
+///
+/// Each thread processes one data point and atomically updates its window's aggregate
+kernel void timeseries_window_aggregate(
+    device const float* values [[buffer(0)]],          // Input values
+    device const ulong* timestamps [[buffer(1)]],      // Timestamps (ms)
+    device const uint* point_count [[buffer(2)]],      // Number of points
+    device const ulong* window_size_ms [[buffer(3)]],  // Window size in milliseconds
+    device const uint* aggregation_type [[buffer(4)]], // 0=Sum, 1=Min, 2=Max, 3=Avg, 4=Count
+    device atomic_uint* window_counts [[buffer(5)]],   // Count per window (for Avg)
+    device atomic_uint* window_results [[buffer(6)]],  // Results as uint (reinterpreted as float)
+    device uint* window_ids [[buffer(7)]],             // Output: window ID for each point
+    uint id [[thread_position_in_grid]]
+) {
+    if (id >= *point_count) {
+        return;
+    }
+
+    // Calculate window ID for this point
+    ulong timestamp = timestamps[id];
+    ulong window_id = timestamp / (*window_size_ms);
+    window_ids[id] = (uint)window_id;
+
+    float value = values[id];
+    uint agg_type = *aggregation_type;
+
+    // Atomic aggregation based on type
+    if (agg_type == 0) {
+        // Sum: atomic add (reinterpret float as uint for atomic ops)
+        uint value_as_uint = as_type<uint>(value);
+        uint old_val, new_val;
+        do {
+            old_val = atomic_load_explicit(&window_results[window_id], memory_order_relaxed);
+            float old_float = as_type<float>(old_val);
+            float new_float = old_float + value;
+            new_val = as_type<uint>(new_float);
+        } while (!atomic_compare_exchange_weak_explicit(
+            &window_results[window_id], &old_val, new_val,
+            memory_order_relaxed, memory_order_relaxed));
+
+        atomic_fetch_add_explicit(&window_counts[window_id], 1, memory_order_relaxed);
+
+    } else if (agg_type == 1) {
+        // Min: atomic compare and swap
+        uint value_as_uint = as_type<uint>(value);
+        uint old_val, new_val;
+        do {
+            old_val = atomic_load_explicit(&window_results[window_id], memory_order_relaxed);
+            float old_float = as_type<float>(old_val);
+            float new_float = min(old_float, value);
+            new_val = as_type<uint>(new_float);
+        } while (!atomic_compare_exchange_weak_explicit(
+            &window_results[window_id], &old_val, new_val,
+            memory_order_relaxed, memory_order_relaxed));
+
+        atomic_fetch_add_explicit(&window_counts[window_id], 1, memory_order_relaxed);
+
+    } else if (agg_type == 2) {
+        // Max: atomic compare and swap
+        uint value_as_uint = as_type<uint>(value);
+        uint old_val, new_val;
+        do {
+            old_val = atomic_load_explicit(&window_results[window_id], memory_order_relaxed);
+            float old_float = as_type<float>(old_val);
+            float new_float = max(old_float, value);
+            new_val = as_type<uint>(new_float);
+        } while (!atomic_compare_exchange_weak_explicit(
+            &window_results[window_id], &old_val, new_val,
+            memory_order_relaxed, memory_order_relaxed));
+
+        atomic_fetch_add_explicit(&window_counts[window_id], 1, memory_order_relaxed);
+
+    } else if (agg_type == 3) {
+        // Avg: accumulate sum, count separately
+        uint value_as_uint = as_type<uint>(value);
+        uint old_val, new_val;
+        do {
+            old_val = atomic_load_explicit(&window_results[window_id], memory_order_relaxed);
+            float old_float = as_type<float>(old_val);
+            float new_float = old_float + value;
+            new_val = as_type<uint>(new_float);
+        } while (!atomic_compare_exchange_weak_explicit(
+            &window_results[window_id], &old_val, new_val,
+            memory_order_relaxed, memory_order_relaxed));
+
+        atomic_fetch_add_explicit(&window_counts[window_id], 1, memory_order_relaxed);
+
+    } else if (agg_type == 4) {
+        // Count: just increment
+        atomic_fetch_add_explicit(&window_counts[window_id], 1, memory_order_relaxed);
+    }
+}
+
+/// Finalize time-series aggregation results (convert sums to averages)
+kernel void timeseries_finalize_avg(
+    device atomic_uint* window_results [[buffer(0)]],
+    device atomic_uint* window_counts [[buffer(1)]],
+    device float* final_results [[buffer(2)]],
+    device const uint* window_count [[buffer(3)]],
+    uint id [[thread_position_in_grid]]
+) {
+    if (id >= *window_count) {
+        return;
+    }
+
+    uint count = atomic_load_explicit(&window_counts[id], memory_order_relaxed);
+    if (count == 0) {
+        final_results[id] = 0.0;
+        return;
+    }
+
+    uint sum_as_uint = atomic_load_explicit(&window_results[id], memory_order_relaxed);
+    float sum = as_type<float>(sum_as_uint);
+    final_results[id] = sum / float(count);
+}

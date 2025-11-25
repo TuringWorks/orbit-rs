@@ -822,6 +822,16 @@ impl MetalDevice {
         Ok(slice.to_vec())
     }
 
+    fn read_buffer_u32(
+        &self,
+        buffer: &metal::Buffer,
+        len: usize,
+    ) -> Result<Vec<u32>, ComputeError> {
+        let contents = buffer.contents() as *const u32;
+        let slice = unsafe { std::slice::from_raw_parts(contents, len) };
+        Ok(slice.to_vec())
+    }
+
     #[allow(dead_code)] // Reserved for future i64 buffer operations
     fn read_buffer_i64(
         &self,
@@ -1017,6 +1027,105 @@ impl MetalDevice {
 
         // Read results
         self.read_buffer_f32(&c_buffer, m * n)
+    }
+
+    /// Execute GPU-accelerated time-series window aggregation
+    ///
+    /// # Arguments
+    /// * `timestamps` - Timestamps in milliseconds
+    /// * `values` - Values at each timestamp
+    /// * `window_size_ms` - Window size in milliseconds
+    /// * `aggregation_type` - 0=Sum, 1=Min, 2=Max, 3=Avg, 4=Count
+    ///
+    /// # Returns
+    /// Tuple of (window_results, window_counts, max_window_id)
+    pub fn execute_timeseries_window_aggregate(
+        &self,
+        timestamps: &[u64],
+        values: &[f32],
+        window_size_ms: u64,
+        aggregation_type: u32,
+    ) -> Result<(Vec<f32>, Vec<u32>, u32), ComputeError> {
+        let point_count = timestamps.len();
+        if point_count == 0 || point_count != values.len() {
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "timestamps/values".to_string(),
+                    value: format!("empty or mismatched: {} vs {}", timestamps.len(), values.len()),
+                },
+                compute_unit: None,
+            });
+        }
+
+        // Calculate max window ID to allocate result buffers
+        let max_timestamp = *timestamps.iter().max().unwrap();
+        let max_window_id = (max_timestamp / window_size_ms) as u32 + 1;
+
+        // Create buffers
+        let values_buffer = self.create_buffer_with_data_f32(values)?;
+        let timestamps_buffer = self.create_buffer_with_data_u64(timestamps)?;
+        let point_count_buffer = self.create_buffer_with_data_u32(&[point_count as u32])?;
+        let window_size_buffer = self.create_buffer_with_data_u64(&[window_size_ms])?;
+        let agg_type_buffer = self.create_buffer_with_data_u32(&[aggregation_type])?;
+
+        // Initialize result buffers
+        // For Min, initialize with f32::INFINITY; for Max, initialize with f32::NEG_INFINITY
+        let init_value = match aggregation_type {
+            1 => f32::INFINITY,  // Min
+            2 => f32::NEG_INFINITY,  // Max
+            _ => 0.0,  // Sum, Avg, Count
+        };
+        let window_results_init: Vec<f32> = vec![init_value; max_window_id as usize];
+        let window_counts_init: Vec<u32> = vec![0; max_window_id as usize];
+
+        let window_counts_buffer = self.create_buffer_with_data_u32(&window_counts_init)?;
+
+        // Reinterpret f32 buffer as u32 for atomic operations
+        let window_results_buffer = self.create_buffer_with_data_f32(&window_results_init)?;
+
+        let window_ids_buffer = self.create_buffer_u32(point_count)?;
+
+        // Execute aggregation kernel
+        self.execute_kernel(
+            "timeseries_window_aggregate",
+            &[
+                &values_buffer,
+                &timestamps_buffer,
+                &point_count_buffer,
+                &window_size_buffer,
+                &agg_type_buffer,
+                &window_counts_buffer,
+                &window_results_buffer,
+                &window_ids_buffer,
+            ],
+            point_count as u64,
+        )?;
+
+        // Read results
+        let window_results = self.read_buffer_f32(&window_results_buffer, max_window_id as usize)?;
+        let window_counts = self.read_buffer_u32(&window_counts_buffer, max_window_id as usize)?;
+
+        // If aggregation is Avg, we need to finalize (divide sum by count)
+        if aggregation_type == 3 {
+            let final_results_buffer = self.create_buffer_f32(max_window_id as usize)?;
+            let max_window_id_buffer = self.create_buffer_with_data_u32(&[max_window_id])?;
+
+            self.execute_kernel(
+                "timeseries_finalize_avg",
+                &[
+                    &window_results_buffer,
+                    &window_counts_buffer,
+                    &final_results_buffer,
+                    &max_window_id_buffer,
+                ],
+                max_window_id as u64,
+            )?;
+
+            let final_results = self.read_buffer_f32(&final_results_buffer, max_window_id as usize)?;
+            Ok((final_results, window_counts, max_window_id))
+        } else {
+            Ok((window_results, window_counts, max_window_id))
+        }
     }
 }
 
