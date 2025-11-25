@@ -1,4 +1,5 @@
 pub mod actor_communication;
+pub mod actor_memory;
 pub mod addressable;
 pub mod benchmarks;
 pub mod builder_pattern;
