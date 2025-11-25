@@ -75,6 +75,15 @@ impl CypherParser {
             "BY" => Token::By,
             "AS" => Token::As,
             "OPTIONAL" => Token::Optional,
+            "DETACH" => Token::Detach,
+            "REMOVE" => Token::Remove,
+            "SKIP" => Token::Skip,
+            "DESC" => Token::Desc,
+            "DESCENDING" => Token::Desc,
+            "ASC" => Token::Asc,
+            "ASCENDING" => Token::Asc,
+            "CALL" => Token::Call,
+            "YIELD" => Token::Yield,
             _ => {
                 // Check if it's a number
                 if token.chars().all(|c| c.is_ascii_digit()) {
@@ -113,6 +122,13 @@ enum Token {
     By,
     As,
     Optional,
+    Detach,
+    Remove,
+    Skip,
+    Desc,
+    Asc,
+    Call,
+    Yield,
 
     // Literals
     Identifier(String),
@@ -124,8 +140,11 @@ enum Token {
     RightParen,
     LeftBrace,
     RightBrace,
+    LeftBracket,
+    RightBracket,
     Comma,
     Colon,
+    Dot,
     Equals,
     NotEquals,      // !=
     GreaterThan,     // >
@@ -202,7 +221,7 @@ impl CypherTokenizer {
         match ch {
             '"' | '\'' => self.start_string_literal(ch),
             ' ' | '\t' | '\n' | '\r' => self.handle_whitespace(),
-            '(' | ')' | '{' | '}' | ',' | ':' => self.handle_single_char_token(ch),
+            '(' | ')' | '{' | '}' | '[' | ']' | ',' | ':' | '.' => self.handle_single_char_token(ch),
             '=' | '!' | '>' | '<' => self.handle_comparison_operator(ch),
             _ => self.current_token.push(ch),
         }
@@ -279,8 +298,11 @@ impl CypherTokenizer {
             ')' => Token::RightParen,
             '{' => Token::LeftBrace,
             '}' => Token::RightBrace,
+            '[' => Token::LeftBracket,
+            ']' => Token::RightBracket,
             ',' => Token::Comma,
             ':' => Token::Colon,
+            '.' => Token::Dot,
             '=' => {
                 if self.peek_char() == Some('=') {
                     self.advance_char();
@@ -392,6 +414,37 @@ impl TokenParser {
                 Some(Token::Where) => {
                     clauses.push(self.parse_where_clause()?);
                 }
+                Some(Token::Delete) => {
+                    clauses.push(self.parse_delete_clause(false)?);
+                }
+                Some(Token::Detach) => {
+                    self.advance();
+                    if matches!(self.current_token(), Some(Token::Delete)) {
+                        clauses.push(self.parse_delete_clause(true)?);
+                    } else {
+                        return Err(ProtocolError::CypherError(
+                            "Expected DELETE after DETACH".to_string(),
+                        ));
+                    }
+                }
+                Some(Token::Set) => {
+                    clauses.push(self.parse_set_clause()?);
+                }
+                Some(Token::Merge) => {
+                    clauses.push(self.parse_merge_clause()?);
+                }
+                Some(Token::Remove) => {
+                    clauses.push(self.parse_remove_clause()?);
+                }
+                Some(Token::Order) => {
+                    clauses.push(self.parse_order_by_clause()?);
+                }
+                Some(Token::Limit) => {
+                    clauses.push(self.parse_limit_clause()?);
+                }
+                Some(Token::Skip) => {
+                    clauses.push(self.parse_skip_clause()?);
+                }
                 Some(token) => {
                     return Err(ProtocolError::CypherError(format!(
                         "Unexpected token: {token:?}"
@@ -453,6 +506,301 @@ impl TokenParser {
         self.expect_token(Token::Where)?;
         let condition = self.parse_condition()?;
         Ok(CypherClause::Where { condition })
+    }
+
+    fn parse_delete_clause(&mut self, detach: bool) -> ProtocolResult<CypherClause> {
+        self.expect_token(Token::Delete)?;
+        let mut variables = Vec::new();
+
+        // Parse comma-separated list of variables to delete
+        loop {
+            if let Some(Token::Identifier(var)) = self.current_token() {
+                variables.push(var.clone());
+                self.advance();
+
+                // Check for comma
+                if matches!(self.current_token(), Some(Token::Comma)) {
+                    self.advance();
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        if variables.is_empty() {
+            return Err(ProtocolError::CypherError(
+                "DELETE clause must specify at least one variable".to_string(),
+            ));
+        }
+
+        Ok(CypherClause::Delete { variables, detach })
+    }
+
+    fn parse_set_clause(&mut self) -> ProtocolResult<CypherClause> {
+        self.expect_token(Token::Set)?;
+        let mut assignments = Vec::new();
+
+        // Parse comma-separated list of property assignments
+        loop {
+            if let Some(Token::Identifier(var)) = self.current_token() {
+                let var = var.clone();
+                self.advance();
+
+                // Expect dot for property access
+                if !matches!(self.current_token(), Some(Token::Dot)) {
+                    return Err(ProtocolError::CypherError(
+                        "Expected '.' after variable in SET clause".to_string(),
+                    ));
+                }
+                self.advance();
+
+                // Get property name
+                let prop = if let Some(Token::Identifier(p)) = self.current_token() {
+                    let p = p.clone();
+                    self.advance();
+                    p
+                } else {
+                    return Err(ProtocolError::CypherError(
+                        "Expected property name after '.'".to_string(),
+                    ));
+                };
+
+                // Expect equals
+                if !matches!(self.current_token(), Some(Token::Equals)) {
+                    return Err(ProtocolError::CypherError(
+                        "Expected '=' in SET clause".to_string(),
+                    ));
+                }
+                self.advance();
+
+                // Get value
+                let value = match self.current_token() {
+                    Some(Token::String(s)) => {
+                        let s = s.clone();
+                        self.advance();
+                        serde_json::Value::String(s)
+                    }
+                    Some(Token::Number(n)) => {
+                        let n = n.clone();
+                        self.advance();
+                        if let Ok(int_val) = n.parse::<i64>() {
+                            serde_json::Value::Number(serde_json::Number::from(int_val))
+                        } else if let Ok(float_val) = n.parse::<f64>() {
+                            serde_json::Value::Number(
+                                serde_json::Number::from_f64(float_val)
+                                    .unwrap_or(serde_json::Number::from(0)),
+                            )
+                        } else {
+                            serde_json::Value::String(n)
+                        }
+                    }
+                    _ => {
+                        return Err(ProtocolError::CypherError(
+                            "Expected value in SET clause".to_string(),
+                        ))
+                    }
+                };
+
+                assignments.push(PropertyAssignment {
+                    target: format!("{}.{}", var, prop),
+                    value,
+                });
+
+                // Check for comma
+                if matches!(self.current_token(), Some(Token::Comma)) {
+                    self.advance();
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        if assignments.is_empty() {
+            return Err(ProtocolError::CypherError(
+                "SET clause must have at least one assignment".to_string(),
+            ));
+        }
+
+        Ok(CypherClause::Set { assignments })
+    }
+
+    fn parse_merge_clause(&mut self) -> ProtocolResult<CypherClause> {
+        self.expect_token(Token::Merge)?;
+        let pattern = self.parse_pattern()?;
+        Ok(CypherClause::Merge { pattern })
+    }
+
+    fn parse_remove_clause(&mut self) -> ProtocolResult<CypherClause> {
+        self.expect_token(Token::Remove)?;
+        let mut items = Vec::new();
+
+        // Parse comma-separated list of items to remove
+        loop {
+            if let Some(Token::Identifier(var)) = self.current_token() {
+                let var = var.clone();
+                self.advance();
+
+                match self.current_token() {
+                    Some(Token::Dot) => {
+                        // Remove property: var.property
+                        self.advance();
+                        if let Some(Token::Identifier(prop)) = self.current_token() {
+                            items.push(RemoveItem::Property {
+                                variable: var,
+                                property: prop.clone(),
+                            });
+                            self.advance();
+                        } else {
+                            return Err(ProtocolError::CypherError(
+                                "Expected property name after '.'".to_string(),
+                            ));
+                        }
+                    }
+                    Some(Token::Colon) => {
+                        // Remove label: var:Label
+                        self.advance();
+                        if let Some(Token::Identifier(label)) = self.current_token() {
+                            items.push(RemoveItem::Label {
+                                variable: var,
+                                label: label.clone(),
+                            });
+                            self.advance();
+                        } else {
+                            return Err(ProtocolError::CypherError(
+                                "Expected label name after ':'".to_string(),
+                            ));
+                        }
+                    }
+                    _ => {
+                        return Err(ProtocolError::CypherError(
+                            "Expected '.' or ':' after variable in REMOVE clause".to_string(),
+                        ));
+                    }
+                }
+
+                // Check for comma
+                if matches!(self.current_token(), Some(Token::Comma)) {
+                    self.advance();
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        if items.is_empty() {
+            return Err(ProtocolError::CypherError(
+                "REMOVE clause must specify at least one item".to_string(),
+            ));
+        }
+
+        Ok(CypherClause::Remove { items })
+    }
+
+    fn parse_order_by_clause(&mut self) -> ProtocolResult<CypherClause> {
+        self.expect_token(Token::Order)?;
+        self.expect_token(Token::By)?;
+
+        let mut items = Vec::new();
+
+        // Parse comma-separated list of order by items
+        loop {
+            if let Some(Token::Identifier(expr)) = self.current_token() {
+                let mut expression = expr.clone();
+                self.advance();
+
+                // Check for property access (var.property)
+                if matches!(self.current_token(), Some(Token::Dot)) {
+                    self.advance();
+                    if let Some(Token::Identifier(prop)) = self.current_token() {
+                        expression = format!("{}.{}", expression, prop);
+                        self.advance();
+                    }
+                }
+
+                // Check for direction
+                let descending = match self.current_token() {
+                    Some(Token::Desc) => {
+                        self.advance();
+                        true
+                    }
+                    Some(Token::Asc) => {
+                        self.advance();
+                        false
+                    }
+                    _ => false,
+                };
+
+                items.push(OrderByItem {
+                    expression,
+                    descending,
+                });
+
+                // Check for comma
+                if matches!(self.current_token(), Some(Token::Comma)) {
+                    self.advance();
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        if items.is_empty() {
+            return Err(ProtocolError::CypherError(
+                "ORDER BY clause must specify at least one expression".to_string(),
+            ));
+        }
+
+        Ok(CypherClause::OrderBy { items })
+    }
+
+    fn parse_limit_clause(&mut self) -> ProtocolResult<CypherClause> {
+        self.expect_token(Token::Limit)?;
+
+        let count = match self.current_token() {
+            Some(Token::Number(n)) => {
+                let n = n.clone();
+                self.advance();
+                n.parse::<usize>().map_err(|_| {
+                    ProtocolError::CypherError(format!("Invalid LIMIT value: {}", n))
+                })?
+            }
+            _ => {
+                return Err(ProtocolError::CypherError(
+                    "Expected number after LIMIT".to_string(),
+                ))
+            }
+        };
+
+        Ok(CypherClause::Limit { count })
+    }
+
+    fn parse_skip_clause(&mut self) -> ProtocolResult<CypherClause> {
+        self.expect_token(Token::Skip)?;
+
+        let count = match self.current_token() {
+            Some(Token::Number(n)) => {
+                let n = n.clone();
+                self.advance();
+                n.parse::<usize>().map_err(|_| {
+                    ProtocolError::CypherError(format!("Invalid SKIP value: {}", n))
+                })?
+            }
+            _ => {
+                return Err(ProtocolError::CypherError(
+                    "Expected number after SKIP".to_string(),
+                ))
+            }
+        };
+
+        Ok(CypherClause::Skip { count })
     }
 
     fn parse_pattern(&mut self) -> ProtocolResult<Pattern> {
@@ -651,7 +999,7 @@ impl TokenParser {
             self.advance();
 
             // Check for property access (var.property)
-            if let Some(Token::Colon) = self.current_token() {
+            if let Some(Token::Dot) = self.current_token() {
                 self.advance();
                 if let Some(Token::Identifier(prop)) = self.current_token() {
                     let prop = prop.clone();
@@ -763,6 +1111,67 @@ pub enum CypherClause {
     Return { items: Vec<ReturnItem> },
     /// WHERE clause for filtering
     Where { condition: Condition },
+    /// DELETE clause for removing nodes/relationships
+    Delete {
+        /// Variables to delete
+        variables: Vec<String>,
+        /// Whether to use DETACH DELETE (removes relationships automatically)
+        detach: bool,
+    },
+    /// SET clause for updating properties
+    Set {
+        /// Property assignments
+        assignments: Vec<PropertyAssignment>,
+    },
+    /// MERGE clause for create-or-match
+    Merge { pattern: Pattern },
+    /// REMOVE clause for removing properties/labels
+    Remove {
+        /// Items to remove
+        items: Vec<RemoveItem>,
+    },
+    /// ORDER BY clause for sorting
+    OrderBy {
+        /// Sort expressions
+        items: Vec<OrderByItem>,
+    },
+    /// LIMIT clause for result limiting
+    Limit {
+        /// Maximum number of results
+        count: usize,
+    },
+    /// SKIP clause for result offset
+    Skip {
+        /// Number of results to skip
+        count: usize,
+    },
+}
+
+/// Property assignment for SET clause
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PropertyAssignment {
+    /// Target (variable.property or just variable for setting all properties)
+    pub target: String,
+    /// Value to set
+    pub value: serde_json::Value,
+}
+
+/// Item to remove in REMOVE clause
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RemoveItem {
+    /// Remove a property (variable.property)
+    Property { variable: String, property: String },
+    /// Remove a label (variable:Label)
+    Label { variable: String, label: String },
+}
+
+/// ORDER BY item
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrderByItem {
+    /// Expression to sort by
+    pub expression: String,
+    /// Sort direction
+    pub descending: bool,
 }
 
 /// Graph pattern in Cypher queries
@@ -938,5 +1347,198 @@ mod tests {
         let result = parser.parse("");
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_delete_query() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) DELETE n";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 2); // MATCH and DELETE
+
+        match &parsed.clauses[1] {
+            CypherClause::Delete { variables, detach } => {
+                assert_eq!(variables.len(), 1);
+                assert_eq!(variables[0], "n");
+                assert!(!detach);
+            }
+            _ => panic!("Expected DELETE clause"),
+        }
+    }
+
+    #[test]
+    fn test_detach_delete_query() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) DETACH DELETE n";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 2); // MATCH and DELETE
+
+        match &parsed.clauses[1] {
+            CypherClause::Delete { variables, detach } => {
+                assert_eq!(variables.len(), 1);
+                assert!(*detach);
+            }
+            _ => panic!("Expected DELETE clause"),
+        }
+    }
+
+    #[test]
+    fn test_set_query() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) SET n.name = 'Bob' RETURN n";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 3); // MATCH, SET, RETURN
+
+        match &parsed.clauses[1] {
+            CypherClause::Set { assignments } => {
+                assert_eq!(assignments.len(), 1);
+                assert_eq!(assignments[0].target, "n.name");
+                assert_eq!(assignments[0].value, serde_json::Value::String("Bob".to_string()));
+            }
+            _ => panic!("Expected SET clause"),
+        }
+    }
+
+    #[test]
+    fn test_merge_query() {
+        let parser = CypherParser::new();
+        let query = "MERGE (n:Person {name: 'Alice'}) RETURN n";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 2); // MERGE and RETURN
+
+        match &parsed.clauses[0] {
+            CypherClause::Merge { pattern } => {
+                assert!(!pattern.elements.is_empty());
+            }
+            _ => panic!("Expected MERGE clause"),
+        }
+    }
+
+    #[test]
+    fn test_order_by_query() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) RETURN n ORDER BY n.name DESC";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 3); // MATCH, RETURN, ORDER BY
+
+        match &parsed.clauses[2] {
+            CypherClause::OrderBy { items } => {
+                assert_eq!(items.len(), 1);
+                assert_eq!(items[0].expression, "n.name");
+                assert!(items[0].descending);
+            }
+            _ => panic!("Expected ORDER BY clause"),
+        }
+    }
+
+    #[test]
+    fn test_limit_query() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) RETURN n LIMIT 10";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 3); // MATCH, RETURN, LIMIT
+
+        match &parsed.clauses[2] {
+            CypherClause::Limit { count } => {
+                assert_eq!(*count, 10);
+            }
+            _ => panic!("Expected LIMIT clause"),
+        }
+    }
+
+    #[test]
+    fn test_skip_query() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) RETURN n SKIP 5";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 3); // MATCH, RETURN, SKIP
+
+        match &parsed.clauses[2] {
+            CypherClause::Skip { count } => {
+                assert_eq!(*count, 5);
+            }
+            _ => panic!("Expected SKIP clause"),
+        }
+    }
+
+    #[test]
+    fn test_remove_property_query() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) REMOVE n.age RETURN n";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 3); // MATCH, REMOVE, RETURN
+
+        match &parsed.clauses[1] {
+            CypherClause::Remove { items } => {
+                assert_eq!(items.len(), 1);
+                match &items[0] {
+                    RemoveItem::Property { variable, property } => {
+                        assert_eq!(variable, "n");
+                        assert_eq!(property, "age");
+                    }
+                    _ => panic!("Expected property removal"),
+                }
+            }
+            _ => panic!("Expected REMOVE clause"),
+        }
+    }
+
+    #[test]
+    fn test_remove_label_query() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) REMOVE n:Inactive RETURN n";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[1] {
+            CypherClause::Remove { items } => {
+                assert_eq!(items.len(), 1);
+                match &items[0] {
+                    RemoveItem::Label { variable, label } => {
+                        assert_eq!(variable, "n");
+                        assert_eq!(label, "Inactive");
+                    }
+                    _ => panic!("Expected label removal"),
+                }
+            }
+            _ => panic!("Expected REMOVE clause"),
+        }
+    }
+
+    #[test]
+    fn test_complex_query_with_multiple_clauses() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) WHERE n.age > 18 SET n.adult = 'true' RETURN n ORDER BY n.name LIMIT 10";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 6); // MATCH, WHERE, SET, RETURN, ORDER BY, LIMIT
     }
 }

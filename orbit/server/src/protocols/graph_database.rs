@@ -370,6 +370,83 @@ impl GraphActor {
                     estimated_cost += step.estimated_cost;
                     steps.push(step);
                 }
+                crate::protocols::cypher::cypher_parser::CypherClause::Delete { variables, detach } => {
+                    let step = PlanStep {
+                        operation: if *detach { "DetachDelete".to_string() } else { "Delete".to_string() },
+                        description: format!("Delete {} variables", variables.len()),
+                        estimated_rows: variables.len() as u64,
+                        estimated_cost: 8.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::Set { assignments } => {
+                    let step = PlanStep {
+                        operation: "SetProperty".to_string(),
+                        description: format!("Set {} properties", assignments.len()),
+                        estimated_rows: assignments.len() as u64,
+                        estimated_cost: 4.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::Merge { pattern } => {
+                    let step = PlanStep {
+                        operation: "Merge".to_string(),
+                        description: format!("Merge pattern: {pattern:?}"),
+                        estimated_rows: 1,
+                        estimated_cost: 12.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::Remove { items } => {
+                    let step = PlanStep {
+                        operation: "Remove".to_string(),
+                        description: format!("Remove {} items", items.len()),
+                        estimated_rows: items.len() as u64,
+                        estimated_cost: 4.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::OrderBy { items } => {
+                    let step = PlanStep {
+                        operation: "Sort".to_string(),
+                        description: format!("Order by {} expressions", items.len()),
+                        estimated_rows: 100,
+                        estimated_cost: 6.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::Limit { count } => {
+                    let step = PlanStep {
+                        operation: "Limit".to_string(),
+                        description: format!("Limit to {count} results"),
+                        estimated_rows: *count as u64,
+                        estimated_cost: 1.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::Skip { count } => {
+                    let step = PlanStep {
+                        operation: "Skip".to_string(),
+                        description: format!("Skip {count} results"),
+                        estimated_rows: 100,
+                        estimated_cost: 1.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
             }
         }
 

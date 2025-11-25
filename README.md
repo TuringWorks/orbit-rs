@@ -405,10 +405,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | **OrbitQL Engine** | Active | 40% | No | 256 tests | Query planning works, optimizer incomplete |
 | **Persistence Layer** | Complete | 85% | Yes | 47+ tests | RocksDB, COW B+Tree, LSM-Tree, Memory, TiKV, Cloud storage |
 | **Kubernetes Integration** | Active | 70% | No | 16 tests | Operator basics, needs production hardening |
-| **Heterogeneous Compute** | Active | 65% | No | 26 tests | CPU/GPU detection works, optimization partial |
+| **Heterogeneous Compute** | Active | 75% | Yes | 81 tests | GPU backends (Metal, Vulkan, CUDA, ROCm), CPU SIMD, vector/spatial/timeseries ops |
 | **Vector Operations (pgvector)** | Complete | 90% | Yes | 25+ tests | Full pgvector compatibility with HNSW/IVFFlat indexes |
-| **Time Series** | Planned | 10% | No | 15 tests | Core structures only, no RedisTimeSeries compat |
-| **Graph Database** | Planned | 5% | No | 22 tests | Basic graph structures, no query execution |
+| **Machine Learning (orbit-ml)** | Active | 50% | No | 52 tests | Neural networks, transformers, streaming inference, SQL functions |
+| **Time Series** | Active | 60% | Yes | 44 tests | Compression (Delta, Gorilla), aggregation (EWMA, rate), partitioning, PostgreSQL/Redis compat |
+| **Graph Database** | Planned | 10% | No | 15 tests | Basic graph storage, no query execution |
 
 **Legend:** Complete | Active Development | Experimental | Planned
 
