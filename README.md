@@ -409,7 +409,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | **Vector Operations (pgvector)** | Complete | 90% | Yes | 25+ tests | Full pgvector compatibility with HNSW/IVFFlat indexes |
 | **Machine Learning (orbit-ml)** | Active | 50% | No | 52 tests | Neural networks, transformers, streaming inference, SQL functions |
 | **Time Series** | Active | 60% | Yes | 44 tests | Compression (Delta, Gorilla), aggregation (EWMA, rate), partitioning, PostgreSQL/Redis compat |
-| **Graph Database** | Planned | 10% | No | 15 tests | Basic graph storage, no query execution |
+| **Graph Database** | Active | 40% | No | 38 tests | Cypher queries, CALL procedures, graph algorithms (PageRank, BFS, DFS, centrality) |
 
 **Legend:** Complete | Active Development | Experimental | Planned
 

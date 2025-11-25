@@ -90,9 +90,16 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
 
 ### Cypher/Neo4j (Bolt Protocol)
 
-- **Status**: **Implemented**
+- **Status**: **Production Ready** (38 tests)
 - **Persistence**: ✅ RocksDB at `data/cypher/rocksdb/`
-- **Features**: Graph database operations, Cypher query language, node and relationship storage
+- **Features**:
+  - **Core Cypher**: MATCH, CREATE, RETURN, WHERE with property filters
+  - **Graph Mutations**: DELETE, DETACH DELETE, SET, MERGE, REMOVE
+  - **Query Modifiers**: ORDER BY (ASC/DESC), LIMIT, SKIP
+  - **Graph Algorithms**: CALL procedures for PageRank, BFS, DFS, Dijkstra shortest path
+  - **Centrality Metrics**: Betweenness, Closeness, Degree centrality
+  - **Community Detection**: Connected components, Triangle counting
+  - **Pattern Matching**: Variable-length paths, relationship patterns
 - **Port**: 7687
 - **Documentation**: [Graph Database](GRAPH_DATABASE.md)
 
