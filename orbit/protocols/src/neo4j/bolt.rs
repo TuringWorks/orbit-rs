@@ -72,6 +72,7 @@ pub struct BoltProtocol {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 enum BoltState {
     Handshake,
     Connected,
@@ -237,7 +238,7 @@ impl BoltProtocol {
     pub async fn send_success<S>(
         &mut self,
         stream: &mut S,
-        metadata: &[(&str, &str)],
+        _metadata: &[(&str, &str)],
     ) -> ProtocolResult<()>
     where
         S: AsyncWriteExt + Unpin,
@@ -263,8 +264,8 @@ impl BoltProtocol {
     pub async fn send_failure<S>(
         &mut self,
         stream: &mut S,
-        code: &str,
-        message: &str,
+        _code: &str,
+        _message: &str,
     ) -> ProtocolResult<()>
     where
         S: AsyncWriteExt + Unpin,
@@ -472,7 +473,7 @@ impl PackStreamDecoder {
             return Err(ProtocolError::DecodingError("Empty data".to_string()));
         }
 
-        let marker = data[0];
+        let _marker = data[0];
         Self::decode_value(data, 0)
     }
 
@@ -753,7 +754,7 @@ impl BoltProtocol {
             ));
         }
 
-        let marker = data[0];
+        let _marker = data[0];
         let signature = data[1];
 
         if signature != 0x10 {

@@ -1,7 +1,6 @@
 //! Trigger Manager
 
 use crate::error::{EngineError, EngineResult};
-use crate::procedures::ProcedureDef;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::RwLock;

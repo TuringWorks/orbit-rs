@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use tokio::time::{timeout, Duration, Instant};
 use tracing::{error, info, warn};
 use uuid::Uuid;
@@ -936,6 +936,7 @@ pub struct TransactionStats {
 mod tests {
     use super::*;
     use crate::addressable::{AddressableReference, Key};
+    use tokio::sync::Mutex;
 
     // Mock message sender for testing
     #[derive(Debug)]

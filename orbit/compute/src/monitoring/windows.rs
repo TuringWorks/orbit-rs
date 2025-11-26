@@ -11,11 +11,12 @@ use std::time::Duration;
 use tokio::time::interval;
 use tracing::{debug, error, info, warn};
 
-use crate::errors::{ComputeError, PlatformError, SystemError, WindowsError};
-use crate::scheduler::{PowerState, SystemConditions, ThermalState};
+use crate::errors::{ComputeError, SystemError};
+use crate::scheduler::{PowerState, SystemConditions};
 
 /// Windows system monitor implementation
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct WindowsSystemMonitor {
     /// System information cache
     system_info: WindowsSystemInfo,

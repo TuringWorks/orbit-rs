@@ -10,7 +10,7 @@ use crate::neural_networks::{NetworkArchitecture, NeuralNetwork, Optimizer};
 ///
 /// A specialized recurrent neural network capable of learning long-term
 /// dependencies through gating mechanisms (forget, input, output gates).
-use ndarray::{s, Array1, Axis};
+use ndarray::{Array1, Axis};
 use rand::distributions::Uniform;
 use rand::Rng;
 use serde::{Deserialize, Serialize};

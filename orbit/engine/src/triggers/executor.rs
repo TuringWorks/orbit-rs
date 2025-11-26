@@ -1,7 +1,7 @@
 //! Trigger Execution Service
 
-use super::manager::{TriggerDef, TriggerEvent, TriggerExecutor, TriggerTiming};
-use crate::error::{EngineError, EngineResult};
+use super::manager::{TriggerDef, TriggerEvent, TriggerExecutor};
+use crate::error::EngineResult;
 use crate::procedures::{ProcedureCatalog, ProcedureInterpreter, Value};
 use crate::storage::Row;
 use std::collections::HashMap;
@@ -100,9 +100,11 @@ impl TriggerExecutor for TriggerExecutionService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::procedures::{ArgDef, BinaryOperator, Block, Expression, Statement};
-
-    use crate::query::{ExecutionPlan, Query, QueryExecutor, QueryMetrics, QueryResult};
+    use crate::triggers::TriggerTiming;
+    use crate::procedures::{BinaryOperator, Block, Expression, Statement};
+    use crate::metrics::QueryMetrics;
+    use crate::query::{ExecutionPlan, Query, QueryExecutor};
+    use crate::storage::QueryResult;
     use async_trait::async_trait;
 
     struct MockQueryExecutor;
@@ -110,9 +112,7 @@ mod tests {
     #[async_trait]
     impl QueryExecutor for MockQueryExecutor {
         async fn execute(&self, _query: Query) -> EngineResult<QueryResult> {
-            Ok(QueryResult::Scalar {
-                value: crate::storage::SqlValue::Int32(42),
-            })
+            Ok(QueryResult::Aggregate(crate::storage::SqlValue::Int32(42)))
         }
         async fn explain(&self, _query: Query) -> EngineResult<ExecutionPlan> {
             unimplemented!()

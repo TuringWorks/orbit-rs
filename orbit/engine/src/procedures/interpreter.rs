@@ -67,7 +67,7 @@ impl SymbolTable {
         // If variable exists in current scope, update it
         if self.variables.contains_key(&name) {
             self.variables.insert(name, value);
-        } else if let Some(parent) = &mut self.parent {
+        } else if let Some(_parent) = &mut self.parent {
             // Try to update in parent scope
             // Note: This is a simplified implementation.
             // In a real implementation with Box<SymbolTable>, we'd need RefCell or similar for mutable parent access.
@@ -1602,7 +1602,8 @@ impl ProcedureInterpreter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::query::{ExecutionPlan, QueryMetrics};
+    use crate::metrics::QueryMetrics;
+    use crate::query::ExecutionPlan;
     use async_trait::async_trait;
 
     struct MockQueryExecutor;
@@ -1610,9 +1611,7 @@ mod tests {
     #[async_trait]
     impl QueryExecutor for MockQueryExecutor {
         async fn execute(&self, _query: Query) -> EngineResult<QueryResult> {
-            Ok(QueryResult::Scalar {
-                value: SqlValue::Int32(42),
-            })
+            Ok(QueryResult::Aggregate(SqlValue::Int32(42)))
         }
         async fn explain(&self, _query: Query) -> EngineResult<ExecutionPlan> {
             unimplemented!()

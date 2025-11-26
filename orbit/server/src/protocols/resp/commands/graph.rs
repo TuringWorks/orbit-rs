@@ -8,6 +8,8 @@
 //! - GRAPH.LIST - List all graphs
 //! - GRAPH.CONFIG GET/SET - Configure graph settings
 
+#![allow(dead_code)]
+
 use super::traits::{BaseCommandHandler, CommandHandler};
 use crate::protocols::error::ProtocolResult;
 use crate::protocols::resp::RespValue;
@@ -316,7 +318,7 @@ impl GraphCommands {
     fn execute_create(&self, graph: &mut Graph, query: &str) -> ProtocolResult<RespValue> {
         // Simple parser for: CREATE (n:Label {key: value, ...})
         let mut nodes_created = 0;
-        let mut rels_created = 0;
+        let rels_created = 0;
         let mut properties_set = 0;
 
         // Extract node patterns
@@ -375,56 +377,50 @@ impl GraphCommands {
         // Remove parentheses
         let inner = pattern.trim_start_matches('(').trim_end_matches(')');
 
-        // Split by : to get labels
-        let parts: Vec<&str> = inner.split(':').collect();
+        // Find where properties start (if any)
+        let (label_part, props_part) = if let Some(brace_pos) = inner.find('{') {
+            (&inner[..brace_pos], Some(&inner[brace_pos..]))
+        } else {
+            (inner, None)
+        };
 
+        // Parse labels - split by : but only in the label part
+        let parts: Vec<&str> = label_part.split(':').collect();
         for (i, part) in parts.iter().enumerate() {
             if i == 0 {
                 continue; // Skip variable name
             }
+            let label = part.trim();
+            if !label.is_empty() {
+                labels.push(label.to_string());
+            }
+        }
 
-            // Check if this part has properties
-            if let Some(brace_pos) = part.find('{') {
-                // Label is before the brace
-                let label = part[..brace_pos].trim();
-                if !label.is_empty() {
-                    labels.push(label.to_string());
-                }
+        // Parse properties if present
+        if let Some(props_str) = props_part {
+            let props_inner = props_str.trim_start_matches('{').trim_end_matches('}');
+            for prop in props_inner.split(',') {
+                if let Some(colon_pos) = prop.find(':') {
+                    let key = prop[..colon_pos].trim().to_string();
+                    let value_str = prop[colon_pos + 1..].trim();
 
-                // Parse properties
-                if let Some(end_brace) = part.rfind('}') {
-                    let props_str = &part[brace_pos + 1..end_brace];
-                    for prop in props_str.split(',') {
-                        if let Some(colon_pos) = prop.find(':') {
-                            let key = prop[..colon_pos].trim().to_string();
-                            let value_str = prop[colon_pos + 1..].trim();
+                    // Parse value
+                    let value = if value_str.starts_with('\'') || value_str.starts_with('"') {
+                        let s = value_str.trim_matches('\'').trim_matches('"').to_string();
+                        serde_json::Value::String(s)
+                    } else if let Ok(n) = value_str.parse::<i64>() {
+                        serde_json::Value::Number(n.into())
+                    } else if let Ok(f) = value_str.parse::<f64>() {
+                        serde_json::json!(f)
+                    } else if value_str == "true" {
+                        serde_json::Value::Bool(true)
+                    } else if value_str == "false" {
+                        serde_json::Value::Bool(false)
+                    } else {
+                        serde_json::Value::String(value_str.to_string())
+                    };
 
-                            // Parse value
-                            let value = if value_str.starts_with('\'') || value_str.starts_with('"')
-                            {
-                                let s = value_str.trim_matches('\'').trim_matches('"').to_string();
-                                serde_json::Value::String(s)
-                            } else if let Ok(n) = value_str.parse::<i64>() {
-                                serde_json::Value::Number(n.into())
-                            } else if let Ok(f) = value_str.parse::<f64>() {
-                                serde_json::json!(f)
-                            } else if value_str == "true" {
-                                serde_json::Value::Bool(true)
-                            } else if value_str == "false" {
-                                serde_json::Value::Bool(false)
-                            } else {
-                                serde_json::Value::String(value_str.to_string())
-                            };
-
-                            properties.insert(key, value);
-                        }
-                    }
-                }
-            } else {
-                // Just a label
-                let label = part.trim().trim_end_matches(')');
-                if !label.is_empty() {
-                    labels.push(label.to_string());
+                    properties.insert(key, value);
                 }
             }
         }
@@ -435,11 +431,11 @@ impl GraphCommands {
     /// Execute MATCH statement
     fn execute_match(&self, graph: &Graph, query: &str) -> ProtocolResult<RespValue> {
         // Simple parser for: MATCH (n:Label) RETURN n
-        let query_upper = query.to_uppercase();
+        let _query_upper = query.to_uppercase();
 
         // Find label in pattern
         let mut results = Vec::new();
-        let mut header = vec![RespValue::bulk_string_from_str("n")];
+        let header = vec![RespValue::bulk_string_from_str("n")];
 
         // Extract label from pattern like (n:Label)
         if let Some(colon_pos) = query.find(':') {
@@ -485,7 +481,7 @@ impl GraphCommands {
     }
 
     /// Execute DELETE statement
-    fn execute_delete(&self, graph: &mut Graph, _query: &str) -> ProtocolResult<RespValue> {
+    fn execute_delete(&self, _graph: &mut Graph, _query: &str) -> ProtocolResult<RespValue> {
         // For now, this is a placeholder
         // A full implementation would parse the DELETE pattern
 

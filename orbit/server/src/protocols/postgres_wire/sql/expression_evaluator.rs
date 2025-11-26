@@ -1555,8 +1555,8 @@ impl ExpressionEvaluator {
 
     /// Simple LIKE matching fallback without regex
     fn simple_like_match(&self, text: &str, pattern: &str) -> bool {
-        let mut text_chars = text.chars().peekable();
-        let mut pattern_chars = pattern.chars().peekable();
+        let text_chars = text.chars().peekable();
+        let pattern_chars = pattern.chars().peekable();
 
         self.like_match_recursive(
             &mut text_chars.collect::<Vec<_>>(),
@@ -1874,7 +1874,7 @@ impl ExpressionEvaluator {
         }
 
         // Get current row's order values
-        let current_row = &window_context.all_rows[current_idx];
+        let _current_row = &window_context.all_rows[current_idx];
 
         // Count rows with smaller order values
         let mut rank = 1i64;
@@ -2233,7 +2233,7 @@ impl ExpressionEvaluator {
     ) -> ProtocolResult<SqlValue> {
         let partition_rows = &window_context.partition_rows;
         let partition_size = partition_rows.len();
-        let current_idx = window_context.current_row_index;
+        let _current_idx = window_context.current_row_index;
 
         if partition_size == 0 {
             return Ok(SqlValue::DoublePrecision(1.0));
@@ -2413,6 +2413,7 @@ impl ExpressionEvaluator {
         partition_size: usize,
         current_pos: usize,
     ) -> ProtocolResult<(usize, usize)> {
+        #[allow(unused_imports)]
         use crate::protocols::postgres_wire::sql::ast::FrameBound;
 
         let pos = current_pos.min(partition_size.saturating_sub(1));

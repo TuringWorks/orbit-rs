@@ -222,11 +222,6 @@ impl SqlFunctionHandler {
         } else {
             1
         };
-        let epochs: usize = if args.len() > 3 {
-            args[3].parse().unwrap_or(1)
-        } else {
-            1
-        };
 
         // Parse optimizer config or learning rate
         let optimizer_config = if args.len() > 4 {
@@ -352,24 +347,7 @@ impl SqlFunctionHandler {
         // Chunk 3 (ModelRegistry):
         // models: RwLock<HashMap<String, Arc<RwLock<dyn NeuralNetwork>>>>
         // register: models.insert(name, Arc::new(RwLock::new(model)));
-        // get: returns Option<Arc<RwLock<dyn NeuralNetwork>>>
-        // predict: model.read().unwrap().forward(...)
-
-        // Chunk 4 (handle_train_model):
-        // let model_arc = self.registry.get(&name)...
-        // let mut model = model_arc.write().unwrap();
-        // model.forward... model.backward...
-
-        // This looks correct.
-
-        // Let's rewrite the chunks.
-
-        let mut registry_lock = self.registry.models.write().unwrap();
-        let model = registry_lock
-            .get_mut(&name)
-            .ok_or_else(|| MLError::not_found(&name))?;
-
-        let mut optimizer = create_optimizer(&optimizer_config);
+        let optimizer = create_optimizer(&optimizer_config);
         let mut final_loss = 0.0;
 
         // Get the model from registry

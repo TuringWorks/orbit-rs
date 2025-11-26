@@ -346,7 +346,7 @@ impl NeuralNetwork for GRUNetwork {
         Ok(())
     }
 
-    async fn update_weights(&mut self, optimizer: &dyn Optimizer) -> Result<()> {
+    async fn update_weights(&mut self, _optimizer: &dyn Optimizer) -> Result<()> {
         if self.gradients.is_empty() {
             return Ok(());
         }

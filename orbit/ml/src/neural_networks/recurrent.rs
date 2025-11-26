@@ -10,7 +10,7 @@ use crate::neural_networks::{NetworkArchitecture, NeuralNetwork, Optimizer};
 ///
 /// A neural network with feedback connections that can process
 /// sequences of data by maintaining internal state across time steps.
-use ndarray::{s, Array1, Axis};
+use ndarray::{Array1, Axis};
 use rand::distributions::Uniform;
 use rand::Rng;
 use serde::{Deserialize, Serialize};

@@ -725,6 +725,7 @@ impl Default for StreamingInferencePipelineBuilder {
 }
 
 /// Windowed inference aggregator for time-series data
+#[allow(dead_code)]
 pub struct WindowedInferenceAggregator {
     /// Window duration
     window_duration: Duration,
