@@ -27,9 +27,10 @@ impl SqlMlBridge {
     pub async fn execute_ml_function(&self, function_call: &FunctionCall) -> OrbitResult<MLValue> {
         let function_name = match &function_call.name {
             crate::protocols::postgres_wire::sql::ast::FunctionName::Simple(name) => name.clone(),
-            crate::protocols::postgres_wire::sql::ast::FunctionName::Qualified { schema: _, name } => {
-                name.clone()
-            }
+            crate::protocols::postgres_wire::sql::ast::FunctionName::Qualified {
+                schema: _,
+                name,
+            } => name.clone(),
         };
 
         // Convert SQL expressions to ML values

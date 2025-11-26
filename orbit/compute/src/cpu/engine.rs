@@ -3,9 +3,9 @@
 //! Provides high-level API for CPU-based compute operations with
 //! automatic SIMD optimization and runtime feature detection.
 
-use super::simd::{NullBitmap, SimdAggregate, SimdCapability, SimdFilter, simd_capability};
-use super::simd::aggregates::{SimdAggregateI32, SimdAggregateI64, SimdAggregateF64};
-use super::simd::filters::{SimdFilterI32, SimdFilterI64, SimdFilterF64};
+use super::simd::aggregates::{SimdAggregateF64, SimdAggregateI32, SimdAggregateI64};
+use super::simd::filters::{SimdFilterF64, SimdFilterI32, SimdFilterI64};
+use super::simd::{simd_capability, NullBitmap, SimdAggregate, SimdCapability, SimdFilter};
 
 /// SIMD level supported by the CPU
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -127,7 +127,8 @@ impl CPUEngine {
         filter.filter_le(data, max, &mut le_result);
 
         // Intersect the two result sets
-        ge_result.into_iter()
+        ge_result
+            .into_iter()
             .filter(|idx| le_result.contains(idx))
             .collect()
     }
@@ -245,7 +246,12 @@ mod tests {
         // Should always be able to create an engine
         assert!(matches!(
             engine.simd_level(),
-            SimdLevel::None | SimdLevel::SSE2 | SimdLevel::AVX2 | SimdLevel::AVX512 | SimdLevel::NEON | SimdLevel::SVE
+            SimdLevel::None
+                | SimdLevel::SSE2
+                | SimdLevel::AVX2
+                | SimdLevel::AVX512
+                | SimdLevel::NEON
+                | SimdLevel::SVE
         ));
     }
 

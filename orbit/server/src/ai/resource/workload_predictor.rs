@@ -74,10 +74,10 @@ impl WorkloadPredictor {
     /// Record a workload measurement
     pub async fn record_measurement(&self, measurement: WorkloadMeasurement) -> OrbitResult<()> {
         let mut history = self.workload_history.write().await;
-        
+
         // Add new measurement
         history.push_back(measurement);
-        
+
         // Trim if exceeds max size
         while history.len() > self.max_history_size {
             history.pop_front();
@@ -97,7 +97,7 @@ impl WorkloadPredictor {
         horizon: tokio::time::Duration,
     ) -> OrbitResult<WorkloadForecast> {
         let history = self.workload_history.read().await;
-        
+
         if history.is_empty() {
             // No history - return default forecast
             return Ok(WorkloadForecast {
@@ -112,21 +112,15 @@ impl WorkloadPredictor {
 
         // Calculate base forecast using moving average
         let recent_avg = self.calculate_recent_average(&history);
-        
+
         // Apply seasonal adjustments
         let seasonal_patterns = self.seasonal_patterns.read().await;
-        let adjusted_forecast = self.apply_seasonal_adjustments(
-            &recent_avg,
-            &seasonal_patterns,
-            horizon,
-        );
+        let adjusted_forecast =
+            self.apply_seasonal_adjustments(&recent_avg, &seasonal_patterns, horizon);
 
         // Generate forecast points
-        let forecast_points = self.generate_forecast_points(
-            &recent_avg,
-            &seasonal_patterns,
-            horizon,
-        );
+        let forecast_points =
+            self.generate_forecast_points(&recent_avg, &seasonal_patterns, horizon);
 
         Ok(WorkloadForecast {
             predicted_cpu: adjusted_forecast.cpu,
@@ -282,7 +276,10 @@ impl WorkloadPredictor {
             }
         }
 
-        debug!("Updated seasonal patterns from {} measurements", history.len());
+        debug!(
+            "Updated seasonal patterns from {} measurements",
+            history.len()
+        );
         Ok(())
     }
 
@@ -324,4 +321,3 @@ impl Default for WorkloadPredictor {
         Self::new(10000) // Default: 10k measurements
     }
 }
-

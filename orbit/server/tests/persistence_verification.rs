@@ -7,8 +7,8 @@
 
 #[cfg(test)]
 mod tests {
+    use rocksdb::{Options, DB};
     use std::fs;
-    use rocksdb::{DB, Options};
     use tempfile::TempDir;
 
     /// Test that RocksDB opens existing databases instead of deleting them
@@ -23,9 +23,10 @@ mod tests {
             opts.create_if_missing(true);
             opts.create_missing_column_families(true);
 
-            let cf_descriptors = vec![
-                rocksdb::ColumnFamilyDescriptor::new("test_cf", Options::default()),
-            ];
+            let cf_descriptors = vec![rocksdb::ColumnFamilyDescriptor::new(
+                "test_cf",
+                Options::default(),
+            )];
 
             let db = DB::open_cf_descriptors(&opts, &db_path, cf_descriptors).unwrap();
             let cf = db.cf_handle("test_cf").unwrap();
@@ -43,9 +44,10 @@ mod tests {
             opts.create_if_missing(true);
             opts.create_missing_column_families(true);
 
-            let cf_descriptors = vec![
-                rocksdb::ColumnFamilyDescriptor::new("test_cf", Options::default()),
-            ];
+            let cf_descriptors = vec![rocksdb::ColumnFamilyDescriptor::new(
+                "test_cf",
+                Options::default(),
+            )];
 
             let db = DB::open_cf_descriptors(&opts, &db_path, cf_descriptors).unwrap();
             let cf = db.cf_handle("test_cf").unwrap();
@@ -61,7 +63,7 @@ mod tests {
         // Verify files still exist (not deleted)
         assert!(db_path.exists(), "Database directory should still exist");
         let files_after: Vec<_> = fs::read_dir(&db_path).unwrap().collect();
-        
+
         // Files should still be there (may have more due to WAL, but shouldn't be fewer)
         assert!(
             files_after.len() >= files_before.len(),
@@ -100,8 +102,10 @@ mod tests {
     /// Test AQL storage persistence
     #[tokio::test]
     async fn test_aql_storage_persistence() {
+        use orbit_server::protocols::aql::data_model::{
+            AqlCollection, AqlDocument, AqlValue, CollectionStatus, CollectionType,
+        };
         use orbit_server::protocols::aql::storage::AqlStorage;
-        use orbit_server::protocols::aql::data_model::{AqlDocument, AqlValue, AqlCollection, CollectionType, CollectionStatus};
         use std::collections::HashMap;
 
         let temp_dir = TempDir::new().unwrap();
@@ -138,7 +142,10 @@ mod tests {
 
         // Verify data persists
         let retrieved = storage2.get_document("users", "alice").await.unwrap();
-        assert!(retrieved.is_some(), "Document should persist across restarts");
+        assert!(
+            retrieved.is_some(),
+            "Document should persist across restarts"
+        );
         assert_eq!(retrieved.unwrap().key, "alice");
     }
 
@@ -195,7 +202,15 @@ mod tests {
         let aql_dir = data_dir.join("aql").join("rocksdb");
         let graphrag_dir = data_dir.join("graphrag").join("rocksdb");
 
-        for dir in &[&postgres_dir, &redis_dir, &mysql_dir, &cql_dir, &cypher_dir, &aql_dir, &graphrag_dir] {
+        for dir in &[
+            &postgres_dir,
+            &redis_dir,
+            &mysql_dir,
+            &cql_dir,
+            &cypher_dir,
+            &aql_dir,
+            &graphrag_dir,
+        ] {
             fs::create_dir_all(dir).unwrap();
             let test_file = dir.join("test.txt");
             fs::write(&test_file, "existing data").unwrap();
@@ -203,12 +218,28 @@ mod tests {
 
         // Simulate server initialization (create_dir_all for each directory)
         // This is what the server does - it calls create_dir_all which doesn't delete
-        for dir in &[&postgres_dir, &redis_dir, &mysql_dir, &cql_dir, &cypher_dir, &aql_dir, &graphrag_dir] {
+        for dir in &[
+            &postgres_dir,
+            &redis_dir,
+            &mysql_dir,
+            &cql_dir,
+            &cypher_dir,
+            &aql_dir,
+            &graphrag_dir,
+        ] {
             fs::create_dir_all(dir).unwrap();
         }
 
         // Verify all test files still exist
-        for dir in &[&postgres_dir, &redis_dir, &mysql_dir, &cql_dir, &cypher_dir, &aql_dir, &graphrag_dir] {
+        for dir in &[
+            &postgres_dir,
+            &redis_dir,
+            &mysql_dir,
+            &cql_dir,
+            &cypher_dir,
+            &aql_dir,
+            &graphrag_dir,
+        ] {
             let test_file = dir.join("test.txt");
             assert!(
                 test_file.exists(),
@@ -236,9 +267,10 @@ mod tests {
             opts.create_if_missing(true);
             opts.create_missing_column_families(true);
 
-            let cf_descriptors = vec![
-                rocksdb::ColumnFamilyDescriptor::new("cf1", Options::default()),
-            ];
+            let cf_descriptors = vec![rocksdb::ColumnFamilyDescriptor::new(
+                "cf1",
+                Options::default(),
+            )];
 
             let db = DB::open_cf_descriptors(&opts, &db_path, cf_descriptors).unwrap();
             let cf = db.cf_handle("cf1").unwrap();
@@ -254,9 +286,10 @@ mod tests {
             opts.create_if_missing(true); // This is safe - only creates if missing
             opts.create_missing_column_families(true);
 
-            let cf_descriptors = vec![
-                rocksdb::ColumnFamilyDescriptor::new("cf1", Options::default()),
-            ];
+            let cf_descriptors = vec![rocksdb::ColumnFamilyDescriptor::new(
+                "cf1",
+                Options::default(),
+            )];
 
             let db = DB::open_cf_descriptors(&opts, &db_path, cf_descriptors).unwrap();
             let cf = db.cf_handle("cf1").unwrap();
@@ -267,4 +300,3 @@ mod tests {
         }
     }
 }
-

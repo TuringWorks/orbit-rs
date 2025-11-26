@@ -646,7 +646,10 @@ impl EntityExtractionActor {
                 temperature: Some(0.3),
             }
         } else {
-            warn!("Unknown LLM provider: {}, skipping LLM extraction", provider_name);
+            warn!(
+                "Unknown LLM provider: {}, skipping LLM extraction",
+                provider_name
+            );
             return Ok((Vec::new(), Vec::new()));
         };
 
@@ -656,7 +659,7 @@ impl EntityExtractionActor {
             .map(|et| format!("{:?}", et))
             .collect::<Vec<_>>()
             .join(", ");
-        
+
         let prompt = prompt_template
             .replace("{text}", &request.text)
             .replace("{entity_types}", &entity_types_str);
@@ -676,7 +679,9 @@ impl EntityExtractionActor {
             ),
         };
 
-        let response = llm_client.generate(generation_request).await
+        let response = llm_client
+            .generate(generation_request)
+            .await
             .map_err(|e| OrbitError::internal(format!("LLM extraction failed: {}", e)))?;
 
         // Parse JSON response
@@ -695,7 +700,7 @@ impl EntityExtractionActor {
                 ) {
                     let entity_type = EntityType::from_str(type_str)
                         .unwrap_or(EntityType::Custom(type_str.to_string()));
-                    
+
                     let confidence = entity_json
                         .get("confidence")
                         .and_then(|v| v.as_f64())
@@ -819,7 +824,11 @@ impl EntityExtractionActor {
 
         for i in 1..=s1_len {
             for j in 1..=s2_len {
-                let cost = if s1_chars[i - 1] == s2_chars[j - 1] { 0 } else { 1 };
+                let cost = if s1_chars[i - 1] == s2_chars[j - 1] {
+                    0
+                } else {
+                    1
+                };
                 matrix[i][j] = (matrix[i - 1][j] + 1)
                     .min(matrix[i][j - 1] + 1)
                     .min(matrix[i - 1][j - 1] + cost);

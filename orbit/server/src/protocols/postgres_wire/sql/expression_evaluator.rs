@@ -1138,9 +1138,10 @@ impl ExpressionEvaluator {
                 if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
                     Ok(SqlValue::Integer(date.year() as i32))
                 } else {
-                    Err(ProtocolError::PostgresError(
-                        format!("YEAR requires date argument, got: {}", s),
-                    ))
+                    Err(ProtocolError::PostgresError(format!(
+                        "YEAR requires date argument, got: {}",
+                        s
+                    )))
                 }
             }
             SqlValue::Null => Ok(SqlValue::Null),
@@ -1168,9 +1169,10 @@ impl ExpressionEvaluator {
                 if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
                     Ok(SqlValue::Integer(date.month() as i32))
                 } else {
-                    Err(ProtocolError::PostgresError(
-                        format!("MONTH requires date argument, got: {}", s),
-                    ))
+                    Err(ProtocolError::PostgresError(format!(
+                        "MONTH requires date argument, got: {}",
+                        s
+                    )))
                 }
             }
             SqlValue::Null => Ok(SqlValue::Null),
@@ -1198,9 +1200,10 @@ impl ExpressionEvaluator {
                 if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
                     Ok(SqlValue::Integer(date.day() as i32))
                 } else {
-                    Err(ProtocolError::PostgresError(
-                        format!("DAY requires date argument, got: {}", s),
-                    ))
+                    Err(ProtocolError::PostgresError(format!(
+                        "DAY requires date argument, got: {}",
+                        s
+                    )))
                 }
             }
             SqlValue::Null => Ok(SqlValue::Null),
@@ -1299,44 +1302,307 @@ impl ExpressionEvaluator {
 
     fn evaluate_in_expression(
         &mut self,
-        _expr: &Expression,
-        _list: &InList,
-        _negated: bool,
-        _context: &EvaluationContext,
+        expr: &Expression,
+        list: &InList,
+        negated: bool,
+        context: &EvaluationContext,
     ) -> ProtocolResult<SqlValue> {
-        // TODO: Implement IN expression evaluation
-        Err(ProtocolError::PostgresError(
-            "IN expression evaluation not implemented".to_string(),
-        ))
+        let value = self.evaluate(expr, context)?;
+
+        // NULL IN (...) always returns NULL
+        if value.is_null() {
+            return Ok(SqlValue::Null);
+        }
+
+        let result = match list {
+            InList::Expressions(expressions) => {
+                let mut found = false;
+                let mut has_null = false;
+
+                for list_expr in expressions {
+                    let list_value = self.evaluate(list_expr, context)?;
+
+                    if list_value.is_null() {
+                        has_null = true;
+                        continue;
+                    }
+
+                    if self.compare_values(&value, &list_value)? == Ordering::Equal {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if found {
+                    SqlValue::Boolean(true)
+                } else if has_null {
+                    // If not found but there were NULLs, result is NULL (unknown)
+                    SqlValue::Null
+                } else {
+                    SqlValue::Boolean(false)
+                }
+            }
+            InList::Subquery(select_stmt) => {
+                // For subquery IN, we need to execute the subquery
+                // This is a simplified implementation that uses the subquery evaluation
+                let subquery_result = self.evaluate_subquery(select_stmt, context)?;
+
+                match subquery_result {
+                    SqlValue::Array(values) => {
+                        let mut found = false;
+                        let mut has_null = false;
+
+                        for list_value in &values {
+                            if list_value.is_null() {
+                                has_null = true;
+                                continue;
+                            }
+
+                            if self.compare_values(&value, list_value)? == Ordering::Equal {
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if found {
+                            SqlValue::Boolean(true)
+                        } else if has_null {
+                            SqlValue::Null
+                        } else {
+                            SqlValue::Boolean(false)
+                        }
+                    }
+                    _ => {
+                        // Single value result
+                        if subquery_result.is_null() {
+                            SqlValue::Null
+                        } else if self.compare_values(&value, &subquery_result)? == Ordering::Equal
+                        {
+                            SqlValue::Boolean(true)
+                        } else {
+                            SqlValue::Boolean(false)
+                        }
+                    }
+                }
+            }
+        };
+
+        // Apply negation if needed
+        match result {
+            SqlValue::Boolean(b) => Ok(SqlValue::Boolean(if negated { !b } else { b })),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Ok(result),
+        }
     }
 
     fn evaluate_between_expression(
         &mut self,
-        _expr: &Expression,
-        _low: &Expression,
-        _high: &Expression,
-        _negated: bool,
-        _context: &EvaluationContext,
+        expr: &Expression,
+        low: &Expression,
+        high: &Expression,
+        negated: bool,
+        context: &EvaluationContext,
     ) -> ProtocolResult<SqlValue> {
-        // TODO: Implement BETWEEN evaluation
-        Err(ProtocolError::PostgresError(
-            "BETWEEN evaluation not implemented".to_string(),
-        ))
+        let value = self.evaluate(expr, context)?;
+        let low_value = self.evaluate(low, context)?;
+        let high_value = self.evaluate(high, context)?;
+
+        // NULL handling: if any value is NULL, result is NULL
+        if value.is_null() || low_value.is_null() || high_value.is_null() {
+            return Ok(SqlValue::Null);
+        }
+
+        // BETWEEN is inclusive: value >= low AND value <= high
+        let cmp_low = self.compare_values(&value, &low_value)?;
+        let cmp_high = self.compare_values(&value, &high_value)?;
+
+        let in_range = matches!(cmp_low, Ordering::Greater | Ordering::Equal)
+            && matches!(cmp_high, Ordering::Less | Ordering::Equal);
+
+        Ok(SqlValue::Boolean(if negated {
+            !in_range
+        } else {
+            in_range
+        }))
     }
 
     fn evaluate_like_expression(
         &mut self,
-        _expr: &Expression,
-        _pattern: &Expression,
-        _escape: Option<&Expression>,
-        _case_insensitive: bool,
-        _negated: bool,
-        _context: &EvaluationContext,
+        expr: &Expression,
+        pattern: &Expression,
+        escape: Option<&Expression>,
+        case_insensitive: bool,
+        negated: bool,
+        context: &EvaluationContext,
     ) -> ProtocolResult<SqlValue> {
-        // TODO: Implement LIKE evaluation
-        Err(ProtocolError::PostgresError(
-            "LIKE evaluation not implemented".to_string(),
-        ))
+        let value = self.evaluate(expr, context)?;
+        let pattern_value = self.evaluate(pattern, context)?;
+
+        // NULL handling
+        if value.is_null() || pattern_value.is_null() {
+            return Ok(SqlValue::Null);
+        }
+
+        let text = match &value {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.clone(),
+            _ => value.to_postgres_string(),
+        };
+
+        let pattern_str = match &pattern_value {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.clone(),
+            _ => pattern_value.to_postgres_string(),
+        };
+
+        // Get escape character (default is backslash, but can be customized)
+        let escape_char = if let Some(escape_expr) = escape {
+            let escape_value = self.evaluate(escape_expr, context)?;
+            match &escape_value {
+                SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => {
+                    s.chars().next().unwrap_or('\\')
+                }
+                SqlValue::Null => return Ok(SqlValue::Null),
+                _ => '\\',
+            }
+        } else {
+            '\\'
+        };
+
+        // Convert SQL LIKE pattern to regex pattern
+        let regex_pattern = self.like_pattern_to_regex(&pattern_str, escape_char, case_insensitive);
+
+        // Perform the match
+        let matches = self.match_like_pattern(&text, &regex_pattern, case_insensitive);
+
+        Ok(SqlValue::Boolean(if negated { !matches } else { matches }))
+    }
+
+    /// Convert SQL LIKE pattern to a matching pattern
+    /// % matches any sequence of characters (including empty)
+    /// _ matches any single character
+    fn like_pattern_to_regex(
+        &self,
+        pattern: &str,
+        escape_char: char,
+        _case_insensitive: bool,
+    ) -> String {
+        let mut result = String::new();
+        let mut chars = pattern.chars().peekable();
+        let mut escaped = false;
+
+        while let Some(c) = chars.next() {
+            if escaped {
+                // Previous character was escape, so this character is literal
+                result.push(c);
+                escaped = false;
+            } else if c == escape_char {
+                // Escape character - next character is literal
+                escaped = true;
+            } else if c == '%' {
+                // Match any sequence of characters
+                result.push_str(".*");
+            } else if c == '_' {
+                // Match any single character
+                result.push('.');
+            } else if "\\^$.|?*+()[]{}".contains(c) {
+                // Escape regex special characters
+                result.push('\\');
+                result.push(c);
+            } else {
+                result.push(c);
+            }
+        }
+
+        // If the last character was an escape but nothing followed, add it literally
+        if escaped {
+            result.push(escape_char);
+        }
+
+        result
+    }
+
+    /// Perform LIKE pattern matching
+    fn match_like_pattern(&self, text: &str, pattern: &str, case_insensitive: bool) -> bool {
+        let text_to_match = if case_insensitive {
+            text.to_lowercase()
+        } else {
+            text.to_string()
+        };
+
+        let pattern_to_match = if case_insensitive {
+            pattern.to_lowercase()
+        } else {
+            pattern.to_string()
+        };
+
+        // Build full regex pattern with anchors
+        let full_pattern = format!("^{}$", pattern_to_match);
+
+        // Use simple pattern matching for common cases to avoid regex overhead
+        if !pattern_to_match.contains(".*") && !pattern_to_match.contains('.') {
+            // No wildcards, exact match
+            return text_to_match == pattern_to_match;
+        }
+
+        // Try regex matching
+        match regex::Regex::new(&full_pattern) {
+            Ok(re) => re.is_match(&text_to_match),
+            Err(_) => {
+                // Fallback to simple matching if regex fails
+                self.simple_like_match(&text_to_match, &pattern_to_match)
+            }
+        }
+    }
+
+    /// Simple LIKE matching fallback without regex
+    fn simple_like_match(&self, text: &str, pattern: &str) -> bool {
+        let mut text_chars = text.chars().peekable();
+        let mut pattern_chars = pattern.chars().peekable();
+
+        self.like_match_recursive(
+            &mut text_chars.collect::<Vec<_>>(),
+            &mut pattern_chars.collect::<Vec<_>>(),
+            0,
+            0,
+        )
+    }
+
+    fn like_match_recursive(&self, text: &[char], pattern: &[char], ti: usize, pi: usize) -> bool {
+        // Base cases
+        if pi >= pattern.len() {
+            return ti >= text.len();
+        }
+
+        // Check for .* (% wildcard converted to regex)
+        if pi + 1 < pattern.len() && pattern[pi] == '.' && pattern[pi + 1] == '*' {
+            // Try matching zero or more characters
+            for i in ti..=text.len() {
+                if self.like_match_recursive(text, pattern, i, pi + 2) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Check for . (single character wildcard)
+        if pattern[pi] == '.' {
+            if ti < text.len() {
+                return self.like_match_recursive(text, pattern, ti + 1, pi + 1);
+            }
+            return false;
+        }
+
+        // Regular character match
+        if ti < text.len()
+            && (pattern[pi] == text[ti]
+                || pattern[pi] == '\\' && pi + 1 < pattern.len() && pattern[pi + 1] == text[ti])
+        {
+            if pattern[pi] == '\\' {
+                return self.like_match_recursive(text, pattern, ti + 1, pi + 2);
+            }
+            return self.like_match_recursive(text, pattern, ti + 1, pi + 1);
+        }
+
+        false
     }
 
     fn evaluate_is_null(
@@ -1388,27 +1654,124 @@ impl ExpressionEvaluator {
 
     fn evaluate_array_index(
         &mut self,
-        _array: &Expression,
-        _index: &Expression,
-        _context: &EvaluationContext,
+        array: &Expression,
+        index: &Expression,
+        context: &EvaluationContext,
     ) -> ProtocolResult<SqlValue> {
-        // TODO: Implement array indexing
-        Err(ProtocolError::PostgresError(
-            "Array indexing not implemented".to_string(),
-        ))
+        let array_value = self.evaluate(array, context)?;
+        let index_value = self.evaluate(index, context)?;
+
+        // NULL handling
+        if array_value.is_null() || index_value.is_null() {
+            return Ok(SqlValue::Null);
+        }
+
+        let elements = match &array_value {
+            SqlValue::Array(arr) => arr,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "Cannot index non-array value".to_string(),
+                ))
+            }
+        };
+
+        // PostgreSQL arrays are 1-indexed
+        let index = match &index_value {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::SmallInt(i) => *i as i64,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "Array index must be an integer".to_string(),
+                ))
+            }
+        };
+
+        // Convert 1-based index to 0-based
+        if index < 1 {
+            return Ok(SqlValue::Null); // PostgreSQL returns NULL for out-of-bounds
+        }
+
+        let zero_based_index = (index - 1) as usize;
+        if zero_based_index >= elements.len() {
+            return Ok(SqlValue::Null); // PostgreSQL returns NULL for out-of-bounds
+        }
+
+        Ok(elements[zero_based_index].clone())
     }
 
     fn evaluate_array_slice(
         &mut self,
-        _array: &Expression,
-        _start: Option<&Expression>,
-        _end: Option<&Expression>,
-        _context: &EvaluationContext,
+        array: &Expression,
+        start: Option<&Expression>,
+        end: Option<&Expression>,
+        context: &EvaluationContext,
     ) -> ProtocolResult<SqlValue> {
-        // TODO: Implement array slicing
-        Err(ProtocolError::PostgresError(
-            "Array slicing not implemented".to_string(),
-        ))
+        let array_value = self.evaluate(array, context)?;
+
+        // NULL array handling
+        if array_value.is_null() {
+            return Ok(SqlValue::Null);
+        }
+
+        let elements = match &array_value {
+            SqlValue::Array(arr) => arr,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "Cannot slice non-array value".to_string(),
+                ))
+            }
+        };
+
+        // Evaluate start and end indices (PostgreSQL arrays are 1-indexed)
+        let start_idx = if let Some(start_expr) = start {
+            let start_value = self.evaluate(start_expr, context)?;
+            if start_value.is_null() {
+                return Ok(SqlValue::Null);
+            }
+            match &start_value {
+                SqlValue::Integer(i) => std::cmp::max(1, *i) as usize,
+                SqlValue::BigInt(i) => std::cmp::max(1, *i) as usize,
+                SqlValue::SmallInt(i) => std::cmp::max(1, *i as i32) as usize,
+                _ => {
+                    return Err(ProtocolError::PostgresError(
+                        "Array slice index must be an integer".to_string(),
+                    ))
+                }
+            }
+        } else {
+            1 // Default to first element
+        };
+
+        let end_idx = if let Some(end_expr) = end {
+            let end_value = self.evaluate(end_expr, context)?;
+            if end_value.is_null() {
+                return Ok(SqlValue::Null);
+            }
+            match &end_value {
+                SqlValue::Integer(i) => *i as usize,
+                SqlValue::BigInt(i) => *i as usize,
+                SqlValue::SmallInt(i) => *i as usize,
+                _ => {
+                    return Err(ProtocolError::PostgresError(
+                        "Array slice index must be an integer".to_string(),
+                    ))
+                }
+            }
+        } else {
+            elements.len() // Default to last element
+        };
+
+        // Convert from 1-based to 0-based and perform slice
+        let zero_start = start_idx.saturating_sub(1);
+        let zero_end = std::cmp::min(end_idx, elements.len());
+
+        if zero_start >= elements.len() || zero_start >= zero_end {
+            return Ok(SqlValue::Array(Vec::new())); // Empty array
+        }
+
+        let sliced: Vec<SqlValue> = elements[zero_start..zero_end].to_vec();
+        Ok(SqlValue::Array(sliced))
     }
 
     fn evaluate_vector_similarity(
@@ -1481,91 +1844,666 @@ impl ExpressionEvaluator {
     }
 
     // Window function helper methods
+
+    /// Evaluate RANK() or DENSE_RANK() window function
+    /// RANK() returns rank with gaps (1, 1, 3 for ties)
+    /// DENSE_RANK() returns rank without gaps (1, 1, 2 for ties)
     fn evaluate_rank(
         &mut self,
-        _order_by: &[OrderByItem],
-        _window_context: &WindowFrameContext,
-        _context: &EvaluationContext,
-        _dense: bool,
+        order_by: &[OrderByItem],
+        window_context: &WindowFrameContext,
+        context: &EvaluationContext,
+        dense: bool,
     ) -> ProtocolResult<SqlValue> {
-        // TODO: Implement RANK() and DENSE_RANK()
-        Ok(SqlValue::BigInt(1))
+        let partition_rows = &window_context.partition_rows;
+        let current_idx = window_context.current_row_index;
+
+        if partition_rows.is_empty() {
+            return Ok(SqlValue::BigInt(1));
+        }
+
+        // Find position of current row in partition
+        let pos_in_partition = partition_rows
+            .iter()
+            .position(|&idx| idx == current_idx)
+            .unwrap_or(0);
+
+        if order_by.is_empty() {
+            // No ORDER BY means all rows have rank 1
+            return Ok(SqlValue::BigInt(1));
+        }
+
+        // Get current row's order values
+        let current_row = &window_context.all_rows[current_idx];
+
+        // Count rows with smaller order values
+        let mut rank = 1i64;
+        let mut distinct_ranks = 1i64;
+        let mut last_order_values: Option<Vec<SqlValue>> = None;
+
+        for (i, &row_idx) in partition_rows.iter().enumerate() {
+            if i >= pos_in_partition {
+                break;
+            }
+
+            let row = &window_context.all_rows[row_idx];
+
+            // Evaluate order expressions for this row
+            let mut row_context = context.clone();
+            row_context.current_row = row.clone();
+
+            let mut order_values = Vec::new();
+            for item in order_by {
+                let val = self.evaluate(&item.expression, &row_context)?;
+                order_values.push(val);
+            }
+
+            // Check if values changed from last
+            let values_changed = match &last_order_values {
+                None => true,
+                Some(last) => order_values.iter().zip(last.iter()).any(|(a, b)| {
+                    self.compare_values(a, b).unwrap_or(Ordering::Equal) != Ordering::Equal
+                }),
+            };
+
+            if values_changed {
+                distinct_ranks += 1;
+            }
+            rank = i as i64 + 2; // Position + 1 (1-indexed)
+            last_order_values = Some(order_values);
+        }
+
+        // For dense rank, use distinct_ranks; for regular rank, use position
+        if pos_in_partition == 0 {
+            Ok(SqlValue::BigInt(1))
+        } else if dense {
+            // Check if current row ties with previous
+            let prev_row = &window_context.all_rows[partition_rows[pos_in_partition - 1]];
+            let mut prev_context = context.clone();
+            prev_context.current_row = prev_row.clone();
+
+            let mut current_order_values = Vec::new();
+            let mut prev_order_values = Vec::new();
+
+            for item in order_by {
+                current_order_values.push(self.evaluate(&item.expression, context)?);
+                prev_order_values.push(self.evaluate(&item.expression, &prev_context)?);
+            }
+
+            let ties = current_order_values
+                .iter()
+                .zip(prev_order_values.iter())
+                .all(|(a, b)| {
+                    self.compare_values(a, b).unwrap_or(Ordering::Equal) == Ordering::Equal
+                });
+
+            if ties {
+                Ok(SqlValue::BigInt(distinct_ranks))
+            } else {
+                Ok(SqlValue::BigInt(distinct_ranks + 1))
+            }
+        } else {
+            // Check if current row ties with previous
+            let prev_row = &window_context.all_rows[partition_rows[pos_in_partition - 1]];
+            let mut prev_context = context.clone();
+            prev_context.current_row = prev_row.clone();
+
+            let mut current_order_values = Vec::new();
+            let mut prev_order_values = Vec::new();
+
+            for item in order_by {
+                current_order_values.push(self.evaluate(&item.expression, context)?);
+                prev_order_values.push(self.evaluate(&item.expression, &prev_context)?);
+            }
+
+            let ties = current_order_values
+                .iter()
+                .zip(prev_order_values.iter())
+                .all(|(a, b)| {
+                    self.compare_values(a, b).unwrap_or(Ordering::Equal) == Ordering::Equal
+                });
+
+            if ties {
+                // Find the rank of the tied group
+                let mut tie_rank = pos_in_partition as i64 + 1;
+                for i in (0..pos_in_partition).rev() {
+                    let check_row = &window_context.all_rows[partition_rows[i]];
+                    let mut check_context = context.clone();
+                    check_context.current_row = check_row.clone();
+
+                    let mut check_order_values = Vec::new();
+                    for item in order_by {
+                        check_order_values.push(self.evaluate(&item.expression, &check_context)?);
+                    }
+
+                    let still_ties = check_order_values
+                        .iter()
+                        .zip(current_order_values.iter())
+                        .all(|(a, b)| {
+                            self.compare_values(a, b).unwrap_or(Ordering::Equal) == Ordering::Equal
+                        });
+
+                    if still_ties {
+                        tie_rank = i as i64 + 1;
+                    } else {
+                        break;
+                    }
+                }
+                Ok(SqlValue::BigInt(tie_rank))
+            } else {
+                Ok(SqlValue::BigInt(rank))
+            }
+        }
     }
 
+    /// Evaluate LAG() or LEAD() window function
+    /// LAG(expr, offset, default) returns value from row at offset rows before current
+    /// LEAD(expr, offset, default) returns value from row at offset rows after current
     fn evaluate_lag_lead(
         &mut self,
-        _expr: &Expression,
-        _offset: Option<&Expression>,
-        _default: Option<&Expression>,
-        _window_context: &WindowFrameContext,
-        _context: &EvaluationContext,
-        _is_lag: bool,
+        expr: &Expression,
+        offset: Option<&Expression>,
+        default: Option<&Expression>,
+        window_context: &WindowFrameContext,
+        context: &EvaluationContext,
+        is_lag: bool,
     ) -> ProtocolResult<SqlValue> {
-        // TODO: Implement LAG() and LEAD()
-        Ok(SqlValue::Null)
+        // Evaluate offset (default is 1)
+        let offset_value = if let Some(offset_expr) = offset {
+            let val = self.evaluate(offset_expr, context)?;
+            match val {
+                SqlValue::Integer(i) => i as i64,
+                SqlValue::BigInt(i) => i,
+                SqlValue::SmallInt(i) => i as i64,
+                SqlValue::Null => return Ok(SqlValue::Null),
+                _ => 1,
+            }
+        } else {
+            1
+        };
+
+        // Evaluate default value
+        let default_value = if let Some(default_expr) = default {
+            self.evaluate(default_expr, context)?
+        } else {
+            SqlValue::Null
+        };
+
+        let partition_rows = &window_context.partition_rows;
+        let current_idx = window_context.current_row_index;
+
+        // Find position in partition
+        let pos_in_partition = partition_rows
+            .iter()
+            .position(|&idx| idx == current_idx)
+            .unwrap_or(0);
+
+        // Calculate target position
+        let target_pos = if is_lag {
+            pos_in_partition as i64 - offset_value
+        } else {
+            pos_in_partition as i64 + offset_value
+        };
+
+        // Check bounds
+        if target_pos < 0 || target_pos >= partition_rows.len() as i64 {
+            return Ok(default_value);
+        }
+
+        // Get the target row
+        let target_row_idx = partition_rows[target_pos as usize];
+        let target_row = &window_context.all_rows[target_row_idx];
+
+        // Evaluate expression in context of target row
+        let mut target_context = context.clone();
+        target_context.current_row = target_row.clone();
+
+        self.evaluate(expr, &target_context)
     }
 
+    /// Evaluate FIRST_VALUE() or LAST_VALUE() window function
     fn evaluate_first_last_value(
         &mut self,
-        _expr: &Expression,
-        _window_context: &WindowFrameContext,
-        _context: &EvaluationContext,
-        _is_first: bool,
+        expr: &Expression,
+        window_context: &WindowFrameContext,
+        context: &EvaluationContext,
+        is_first: bool,
     ) -> ProtocolResult<SqlValue> {
-        // TODO: Implement FIRST_VALUE() and LAST_VALUE()
-        Ok(SqlValue::Null)
+        let partition_rows = &window_context.partition_rows;
+
+        if partition_rows.is_empty() {
+            return Ok(SqlValue::Null);
+        }
+
+        // Get first or last row in partition
+        let target_row_idx = if is_first {
+            partition_rows[0]
+        } else {
+            partition_rows[partition_rows.len() - 1]
+        };
+
+        let target_row = &window_context.all_rows[target_row_idx];
+
+        // Evaluate expression in context of target row
+        let mut target_context = context.clone();
+        target_context.current_row = target_row.clone();
+
+        self.evaluate(expr, &target_context)
     }
 
+    /// Evaluate NTH_VALUE() window function
+    /// Returns the value of expr from the nth row in the window frame
     fn evaluate_nth_value(
         &mut self,
-        _expr: &Expression,
-        _n: &Expression,
-        _window_context: &WindowFrameContext,
-        _context: &EvaluationContext,
+        expr: &Expression,
+        n: &Expression,
+        window_context: &WindowFrameContext,
+        context: &EvaluationContext,
     ) -> ProtocolResult<SqlValue> {
-        // TODO: Implement NTH_VALUE()
-        Ok(SqlValue::Null)
+        // Evaluate n (must be positive integer)
+        let n_value = self.evaluate(n, context)?;
+        let n_int = match n_value {
+            SqlValue::Integer(i) => i as i64,
+            SqlValue::BigInt(i) => i,
+            SqlValue::SmallInt(i) => i as i64,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "NTH_VALUE requires integer argument".to_string(),
+                ))
+            }
+        };
+
+        if n_int < 1 {
+            return Err(ProtocolError::PostgresError(
+                "NTH_VALUE requires positive integer".to_string(),
+            ));
+        }
+
+        let partition_rows = &window_context.partition_rows;
+
+        // n is 1-indexed
+        let index = (n_int - 1) as usize;
+        if index >= partition_rows.len() {
+            return Ok(SqlValue::Null);
+        }
+
+        let target_row_idx = partition_rows[index];
+        let target_row = &window_context.all_rows[target_row_idx];
+
+        // Evaluate expression in context of target row
+        let mut target_context = context.clone();
+        target_context.current_row = target_row.clone();
+
+        self.evaluate(expr, &target_context)
     }
 
+    /// Evaluate NTILE() window function
+    /// Divides the partition into n groups and returns the group number
     fn evaluate_ntile(
         &mut self,
-        _n_expr: &Expression,
-        _window_context: &WindowFrameContext,
-        _context: &EvaluationContext,
+        n_expr: &Expression,
+        window_context: &WindowFrameContext,
+        context: &EvaluationContext,
     ) -> ProtocolResult<SqlValue> {
-        // TODO: Implement NTILE()
-        Ok(SqlValue::BigInt(1))
+        // Evaluate n (number of buckets)
+        let n_value = self.evaluate(n_expr, context)?;
+        let n_buckets = match n_value {
+            SqlValue::Integer(i) => i as i64,
+            SqlValue::BigInt(i) => i,
+            SqlValue::SmallInt(i) => i as i64,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "NTILE requires integer argument".to_string(),
+                ))
+            }
+        };
+
+        if n_buckets < 1 {
+            return Err(ProtocolError::PostgresError(
+                "NTILE requires positive integer".to_string(),
+            ));
+        }
+
+        let partition_rows = &window_context.partition_rows;
+        let current_idx = window_context.current_row_index;
+        let partition_size = partition_rows.len() as i64;
+
+        if partition_size == 0 {
+            return Ok(SqlValue::BigInt(1));
+        }
+
+        // Find position in partition
+        let pos_in_partition = partition_rows
+            .iter()
+            .position(|&idx| idx == current_idx)
+            .unwrap_or(0) as i64;
+
+        // Calculate bucket assignment
+        // PostgreSQL distributes extra rows to earlier buckets
+        let base_bucket_size = partition_size / n_buckets;
+        let extra_rows = partition_size % n_buckets;
+
+        // Rows 0..(extra_rows * (base_bucket_size + 1)) get bucket sizes of (base_bucket_size + 1)
+        // Remaining rows get bucket size of base_bucket_size
+        let bucket = if pos_in_partition < extra_rows * (base_bucket_size + 1) {
+            pos_in_partition / (base_bucket_size + 1) + 1
+        } else {
+            let adjusted_pos = pos_in_partition - extra_rows * (base_bucket_size + 1);
+            extra_rows + adjusted_pos / base_bucket_size + 1
+        };
+
+        Ok(SqlValue::BigInt(bucket))
     }
 
+    /// Evaluate PERCENT_RANK() window function
+    /// Returns (rank - 1) / (partition_size - 1)
     fn evaluate_percent_rank(
         &mut self,
-        _order_by: &[OrderByItem],
-        _window_context: &WindowFrameContext,
-        _context: &EvaluationContext,
+        order_by: &[OrderByItem],
+        window_context: &WindowFrameContext,
+        context: &EvaluationContext,
     ) -> ProtocolResult<SqlValue> {
-        // TODO: Implement PERCENT_RANK()
-        Ok(SqlValue::DoublePrecision(0.0))
+        let partition_size = window_context.partition_rows.len();
+
+        if partition_size <= 1 {
+            return Ok(SqlValue::DoublePrecision(0.0));
+        }
+
+        // Get the rank first
+        let rank = self.evaluate_rank(order_by, window_context, context, false)?;
+        let rank_value = match rank {
+            SqlValue::BigInt(r) => r as f64,
+            SqlValue::Integer(r) => r as f64,
+            _ => 1.0,
+        };
+
+        let percent_rank = (rank_value - 1.0) / (partition_size as f64 - 1.0);
+        Ok(SqlValue::DoublePrecision(percent_rank))
     }
 
+    /// Evaluate CUME_DIST() window function
+    /// Returns the cumulative distribution: number of rows <= current / total rows
     fn evaluate_cume_dist(
         &mut self,
-        _order_by: &[OrderByItem],
-        _window_context: &WindowFrameContext,
-        _context: &EvaluationContext,
+        order_by: &[OrderByItem],
+        window_context: &WindowFrameContext,
+        context: &EvaluationContext,
     ) -> ProtocolResult<SqlValue> {
-        // TODO: Implement CUME_DIST()
-        Ok(SqlValue::DoublePrecision(1.0))
+        let partition_rows = &window_context.partition_rows;
+        let partition_size = partition_rows.len();
+        let current_idx = window_context.current_row_index;
+
+        if partition_size == 0 {
+            return Ok(SqlValue::DoublePrecision(1.0));
+        }
+
+        if order_by.is_empty() {
+            // No ORDER BY means CUME_DIST is always 1.0
+            return Ok(SqlValue::DoublePrecision(1.0));
+        }
+
+        // Get current row's order values
+        let mut current_order_values = Vec::new();
+        for item in order_by {
+            current_order_values.push(self.evaluate(&item.expression, context)?);
+        }
+
+        // Count rows with values <= current row's values
+        let mut count_le = 0i64;
+        for &row_idx in partition_rows {
+            let row = &window_context.all_rows[row_idx];
+            let mut row_context = context.clone();
+            row_context.current_row = row.clone();
+
+            let mut row_order_values = Vec::new();
+            for item in order_by {
+                row_order_values.push(self.evaluate(&item.expression, &row_context)?);
+            }
+
+            // Check if row values <= current values
+            let mut is_le = true;
+            for (rv, cv) in row_order_values.iter().zip(current_order_values.iter()) {
+                match self.compare_values(rv, cv)? {
+                    Ordering::Greater => {
+                        is_le = false;
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+
+            if is_le {
+                count_le += 1;
+            }
+        }
+
+        let cume_dist = count_le as f64 / partition_size as f64;
+        Ok(SqlValue::DoublePrecision(cume_dist))
     }
 
+    /// Evaluate aggregate functions used as window functions
     fn evaluate_window_aggregate(
         &mut self,
-        _func: &FunctionCall,
-        _frame: &Option<WindowFrame>,
-        _window_context: &WindowFrameContext,
-        _context: &EvaluationContext,
+        func: &FunctionCall,
+        frame: &Option<WindowFrame>,
+        window_context: &WindowFrameContext,
+        context: &EvaluationContext,
     ) -> ProtocolResult<SqlValue> {
-        // TODO: Implement aggregate functions used as window functions
-        Ok(SqlValue::Null)
+        let func_name = match &func.name {
+            FunctionName::Simple(name) => name.to_uppercase(),
+            FunctionName::Qualified { schema: _, name } => name.to_uppercase(),
+        };
+
+        let partition_rows = &window_context.partition_rows;
+        let current_idx = window_context.current_row_index;
+
+        // Determine frame bounds
+        let (start_offset, end_offset) = if let Some(window_frame) = frame {
+            self.get_frame_bounds(window_frame, partition_rows.len(), current_idx)?
+        } else {
+            // Default frame: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            // For simplicity, we'll use the entire partition up to current row
+            let pos = partition_rows
+                .iter()
+                .position(|&idx| idx == current_idx)
+                .unwrap_or(0);
+            (0, pos)
+        };
+
+        // Collect values from frame rows
+        let mut frame_values = Vec::new();
+        for i in start_offset..=end_offset {
+            if i < partition_rows.len() {
+                let row_idx = partition_rows[i];
+                let row = &window_context.all_rows[row_idx];
+
+                let mut row_context = context.clone();
+                row_context.current_row = row.clone();
+
+                // Evaluate function arguments for this row
+                for arg_expr in &func.args {
+                    let val = self.evaluate(arg_expr, &row_context)?;
+                    frame_values.push(val);
+                }
+            }
+        }
+
+        // Apply aggregate function
+        match func_name.as_str() {
+            "COUNT" => {
+                let count = if func.args.is_empty() {
+                    // COUNT(*)
+                    (end_offset - start_offset + 1) as i64
+                } else {
+                    // COUNT(expr) - count non-null values
+                    frame_values.iter().filter(|v| !v.is_null()).count() as i64
+                };
+                Ok(SqlValue::BigInt(count))
+            }
+            "SUM" => {
+                let sum = self.sum_values(&frame_values)?;
+                Ok(sum)
+            }
+            "AVG" => {
+                let non_null: Vec<&SqlValue> =
+                    frame_values.iter().filter(|v| !v.is_null()).collect();
+                if non_null.is_empty() {
+                    return Ok(SqlValue::Null);
+                }
+                let sum = self.sum_values(&frame_values)?;
+                let count = non_null.len() as f64;
+                match sum {
+                    SqlValue::Integer(i) => Ok(SqlValue::DoublePrecision(i as f64 / count)),
+                    SqlValue::BigInt(i) => Ok(SqlValue::DoublePrecision(i as f64 / count)),
+                    SqlValue::DoublePrecision(f) => Ok(SqlValue::DoublePrecision(f / count)),
+                    SqlValue::Real(f) => Ok(SqlValue::DoublePrecision(f as f64 / count)),
+                    SqlValue::Null => Ok(SqlValue::Null),
+                    _ => Ok(SqlValue::Null),
+                }
+            }
+            "MIN" => {
+                let min = frame_values.iter().filter(|v| !v.is_null()).try_fold(
+                    None,
+                    |acc: Option<&SqlValue>, v| -> ProtocolResult<Option<&SqlValue>> {
+                        match acc {
+                            None => Ok(Some(v)),
+                            Some(current) => {
+                                if self.compare_values(v, current)? == Ordering::Less {
+                                    Ok(Some(v))
+                                } else {
+                                    Ok(Some(current))
+                                }
+                            }
+                        }
+                    },
+                )?;
+                Ok(min.cloned().unwrap_or(SqlValue::Null))
+            }
+            "MAX" => {
+                let max = frame_values.iter().filter(|v| !v.is_null()).try_fold(
+                    None,
+                    |acc: Option<&SqlValue>, v| -> ProtocolResult<Option<&SqlValue>> {
+                        match acc {
+                            None => Ok(Some(v)),
+                            Some(current) => {
+                                if self.compare_values(v, current)? == Ordering::Greater {
+                                    Ok(Some(v))
+                                } else {
+                                    Ok(Some(current))
+                                }
+                            }
+                        }
+                    },
+                )?;
+                Ok(max.cloned().unwrap_or(SqlValue::Null))
+            }
+            _ => Err(ProtocolError::not_implemented(
+                "Window aggregate function",
+                &func_name,
+            )),
+        }
+    }
+
+    /// Get frame bounds from WindowFrame specification
+    fn get_frame_bounds(
+        &mut self,
+        frame: &WindowFrame,
+        partition_size: usize,
+        current_pos: usize,
+    ) -> ProtocolResult<(usize, usize)> {
+        use crate::protocols::postgres_wire::sql::ast::FrameBound;
+
+        let pos = current_pos.min(partition_size.saturating_sub(1));
+        let empty_context = EvaluationContext::empty();
+
+        let start = self.frame_bound_to_pos(&frame.start_bound, pos, partition_size, &empty_context, true);
+        let end = frame
+            .end_bound
+            .as_ref()
+            .map(|b| self.frame_bound_to_pos(b, pos, partition_size, &empty_context, false))
+            .unwrap_or(pos); // Default to CURRENT ROW
+
+        Ok((start, end))
+    }
+
+    /// Convert a frame bound to a position
+    fn frame_bound_to_pos(
+        &mut self,
+        bound: &crate::protocols::postgres_wire::sql::ast::FrameBound,
+        pos: usize,
+        partition_size: usize,
+        context: &EvaluationContext,
+        is_start: bool,
+    ) -> usize {
+        use crate::protocols::postgres_wire::sql::ast::FrameBound;
+        match bound {
+            FrameBound::UnboundedPreceding => 0,
+            FrameBound::Preceding(expr) => {
+                if let Ok(SqlValue::Integer(n)) = self.evaluate(expr, context) {
+                    pos.saturating_sub(n as usize)
+                } else {
+                    if is_start { 0 } else { pos }
+                }
+            }
+            FrameBound::CurrentRow => pos,
+            FrameBound::Following(expr) => {
+                if let Ok(SqlValue::Integer(n)) = self.evaluate(expr, context) {
+                    std::cmp::min(pos + n as usize, partition_size.saturating_sub(1))
+                } else {
+                    pos
+                }
+            }
+            FrameBound::UnboundedFollowing => partition_size.saturating_sub(1),
+        }
+    }
+
+    /// Sum a slice of SqlValues
+    fn sum_values(&self, values: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        let mut sum_int: i64 = 0;
+        let mut sum_float: f64 = 0.0;
+        let mut has_float = false;
+        let mut has_any = false;
+
+        for v in values {
+            match v {
+                SqlValue::Integer(i) => {
+                    has_any = true;
+                    sum_int += *i as i64;
+                }
+                SqlValue::BigInt(i) => {
+                    has_any = true;
+                    sum_int += i;
+                }
+                SqlValue::SmallInt(i) => {
+                    has_any = true;
+                    sum_int += *i as i64;
+                }
+                SqlValue::DoublePrecision(f) => {
+                    has_any = true;
+                    has_float = true;
+                    sum_float += f;
+                }
+                SqlValue::Real(f) => {
+                    has_any = true;
+                    has_float = true;
+                    sum_float += *f as f64;
+                }
+                SqlValue::Null => {}
+                _ => {}
+            }
+        }
+
+        if !has_any {
+            return Ok(SqlValue::Null);
+        }
+
+        if has_float {
+            Ok(SqlValue::DoublePrecision(sum_float + sum_int as f64))
+        } else {
+            Ok(SqlValue::BigInt(sum_int))
+        }
     }
 
     fn pattern_match(
@@ -1595,20 +2533,12 @@ impl ExpressionEvaluator {
             }
         };
 
-        // TODO: Implement proper SQL LIKE pattern matching with % and _
-        let text_to_match = if case_insensitive {
-            text_str.to_lowercase()
-        } else {
-            text_str.clone()
-        };
-        let pattern_to_match = if case_insensitive {
-            pattern_str.to_lowercase()
-        } else {
-            pattern_str.clone()
-        };
+        // Convert SQL LIKE pattern to regex pattern
+        let regex_pattern = self.like_pattern_to_regex(pattern_str, '\\', case_insensitive);
 
-        // Simple implementation - replace with proper LIKE matching
-        let matches = text_to_match.contains(&pattern_to_match);
+        // Perform the match using the LIKE matching implementation
+        let matches = self.match_like_pattern(text_str, &regex_pattern, case_insensitive);
+
         Ok(SqlValue::Boolean(if negated { !matches } else { matches }))
     }
 }

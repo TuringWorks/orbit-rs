@@ -5,14 +5,14 @@
 pub mod deadlock_preventer;
 
 pub use deadlock_preventer::{
-    DeadlockPreventer, DeadlockPrediction, TransactionDependencyGraph,
-    TransactionId, TransactionNode, TransactionStatus, LockResource, LockType,
-    DeadlockOccurrence, ResolutionAction, DependencyEdge,
+    DeadlockOccurrence, DeadlockPrediction, DeadlockPreventer, DependencyEdge, LockResource,
+    LockType, ResolutionAction, TransactionDependencyGraph, TransactionId, TransactionNode,
+    TransactionStatus,
 };
 
-use crate::ai::{AIDecision, AISubsystem, AISubsystemMetrics};
 use crate::ai::controller::AIConfig;
 use crate::ai::knowledge::AIKnowledgeBase;
+use crate::ai::{AIDecision, AISubsystem, AISubsystemMetrics};
 use anyhow::Result as OrbitResult;
 use std::sync::Arc;
 use tracing::info;
@@ -71,10 +71,7 @@ impl AISubsystem for AdaptiveTransactionManager {
 
 impl AdaptiveTransactionManager {
     /// Create a new adaptive transaction manager
-    pub async fn new(
-        config: &AIConfig,
-        knowledge_base: Arc<AIKnowledgeBase>,
-    ) -> OrbitResult<Self> {
+    pub async fn new(config: &AIConfig, knowledge_base: Arc<AIKnowledgeBase>) -> OrbitResult<Self> {
         info!("Initializing Adaptive Transaction Manager");
 
         Ok(Self {
@@ -94,4 +91,3 @@ impl AdaptiveTransactionManager {
             .await
     }
 }
-

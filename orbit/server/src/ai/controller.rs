@@ -2,11 +2,11 @@
 //!
 //! Central AI system that orchestrates all intelligent features in Orbit-RS.
 
-use crate::ai::{
-    AIDecision, AISubsystem, AISubsystemMetrics, DecisionEngine, LearningEngine,
-    LearningMode, OptimizationLevel,
-};
 use crate::ai::knowledge::AIKnowledgeBase;
+use crate::ai::{
+    AIDecision, AISubsystem, AISubsystemMetrics, DecisionEngine, LearningEngine, LearningMode,
+    OptimizationLevel,
+};
 use anyhow::Result as OrbitResult;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -150,16 +150,12 @@ impl AIMasterController {
         let knowledge_base = Arc::new(AIKnowledgeBase::new(&config).await?);
 
         // Set up decision engine with initial policies
-        let decision_engine = Arc::new(DecisionEngine::new(
-            config.clone(),
-            knowledge_base.clone(),
-        )?);
+        let decision_engine =
+            Arc::new(DecisionEngine::new(config.clone(), knowledge_base.clone())?);
 
         // Initialize learning engine for continuous improvement
-        let learning_engine = Arc::new(LearningEngine::new(
-            config.clone(),
-            knowledge_base.clone(),
-        )?);
+        let learning_engine =
+            Arc::new(LearningEngine::new(config.clone(), knowledge_base.clone())?);
 
         // Initialize intelligent subsystems
         let subsystems = Arc::new(RwLock::new(HashMap::new()));
@@ -224,11 +220,7 @@ impl AIMasterController {
             match self.collect_system_state().await {
                 Ok(system_state) => {
                     // Update knowledge base with new observations
-                    if let Err(e) = self
-                        .knowledge_base
-                        .update_observations(&system_state)
-                        .await
-                    {
+                    if let Err(e) = self.knowledge_base.update_observations(&system_state).await {
                         error!(error = %e, "Failed to update knowledge base");
                     }
 
@@ -349,4 +341,3 @@ impl AIMasterController {
         metrics
     }
 }
-

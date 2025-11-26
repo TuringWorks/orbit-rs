@@ -7,8 +7,9 @@
 use crate::orbitql::ast::BinaryOperator;
 use crate::orbitql::ast::{
     AggregateFunction, DeleteStatement, EdgeDirection, Expression, FromClause, GraphPath,
-    GraphPattern, GraphStep, InsertStatement, JoinType, SelectField, SelectStatement, SortDirection,
-    Statement, TimeRange, TimeSeriesAggregation, TimeWindow, TraverseStatement, UpdateStatement,
+    GraphPattern, GraphStep, InsertStatement, JoinType, SelectField, SelectStatement,
+    SortDirection, Statement, TimeRange, TimeSeriesAggregation, TimeWindow, TraverseStatement,
+    UpdateStatement,
 };
 use crate::orbitql::optimizer::OptimizationError;
 use serde::{Deserialize, Serialize};
@@ -537,14 +538,18 @@ impl QueryPlanner {
                 // Cross-model joins have higher overhead due to schema unification
                 let model_conversion_cost = match (left_model, right_model) {
                     (DataModel::Document, DataModel::Document) => 1.0,
-                    (DataModel::Graph, DataModel::Document) | (DataModel::Document, DataModel::Graph) => 1.5,
-                    (DataModel::TimeSeries, DataModel::Document) | (DataModel::Document, DataModel::TimeSeries) => 1.3,
-                    (DataModel::Graph, DataModel::TimeSeries) | (DataModel::TimeSeries, DataModel::Graph) => 2.0,
+                    (DataModel::Graph, DataModel::Document)
+                    | (DataModel::Document, DataModel::Graph) => 1.5,
+                    (DataModel::TimeSeries, DataModel::Document)
+                    | (DataModel::Document, DataModel::TimeSeries) => 1.3,
+                    (DataModel::Graph, DataModel::TimeSeries)
+                    | (DataModel::TimeSeries, DataModel::Graph) => 2.0,
                     _ => 1.5,
                 };
 
                 let output_rows = (left_rows * right_rows / 10).max(1); // Join selectivity estimate
-                let cost = (left_cost + right_cost + (left_rows * right_rows) as f64 * 0.01) * model_conversion_cost;
+                let cost = (left_cost + right_cost + (left_rows * right_rows) as f64 * 0.01)
+                    * model_conversion_cost;
                 Ok((cost, output_rows))
             }
         }

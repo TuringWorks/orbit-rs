@@ -75,9 +75,7 @@ impl StatisticValue {
     pub fn compare(&self, other: &StatisticValue) -> Option<std::cmp::Ordering> {
         match (self, other) {
             (StatisticValue::Integer(a), StatisticValue::Integer(b)) => Some(a.cmp(b)),
-            (StatisticValue::Float(a), StatisticValue::Float(b)) => {
-                a.partial_cmp(b)
-            }
+            (StatisticValue::Float(a), StatisticValue::Float(b)) => a.partial_cmp(b),
             (StatisticValue::Text(a), StatisticValue::Text(b)) => Some(a.cmp(b)),
             (StatisticValue::Boolean(a), StatisticValue::Boolean(b)) => Some(a.cmp(b)),
             _ => None,
@@ -188,7 +186,11 @@ impl ColumnStatisticsBuilder {
     }
 
     /// Add a column batch to statistics
-    pub fn add_column(&mut self, column: &Column, null_bitmap: &crate::protocols::postgres_wire::sql::execution::NullBitmap) {
+    pub fn add_column(
+        &mut self,
+        column: &Column,
+        null_bitmap: &crate::protocols::postgres_wire::sql::execution::NullBitmap,
+    ) {
         let len = column.len();
         self.total_count += len;
 
@@ -281,7 +283,11 @@ impl ColumnStatisticsBuilder {
 
 impl ColumnStatistics {
     /// Estimate selectivity for a range predicate
-    pub fn estimate_range_selectivity(&self, min: Option<&StatisticValue>, max: Option<&StatisticValue>) -> f64 {
+    pub fn estimate_range_selectivity(
+        &self,
+        min: Option<&StatisticValue>,
+        max: Option<&StatisticValue>,
+    ) -> f64 {
         if self.total_count == 0 {
             return 0.0;
         }
@@ -290,11 +296,13 @@ impl ColumnStatistics {
         let column_min = &self.min_value;
         let column_max = &self.max_value;
 
-        if let (Some(col_min), Some(col_max), Some(pred_min), Some(pred_max)) = 
-            (column_min, column_max, min, max) {
+        if let (Some(col_min), Some(col_max), Some(pred_min), Some(pred_max)) =
+            (column_min, column_max, min, max)
+        {
             // Check if ranges overlap
-            if let (Some(min_cmp), Some(max_cmp)) = 
-                (pred_max.compare(col_min), pred_min.compare(col_max)) {
+            if let (Some(min_cmp), Some(max_cmp)) =
+                (pred_max.compare(col_min), pred_min.compare(col_max))
+            {
                 if min_cmp == std::cmp::Ordering::Less || max_cmp == std::cmp::Ordering::Greater {
                     return 0.0; // No overlap
                 }
@@ -302,9 +310,13 @@ impl ColumnStatistics {
 
             // Estimate based on value range (simplified)
             // In production, would use histogram for better accuracy
-            if let (StatisticValue::Integer(col_min_val), StatisticValue::Integer(col_max_val),
-                    StatisticValue::Integer(pred_min_val), StatisticValue::Integer(pred_max_val)) =
-                (col_min, col_max, pred_min, pred_max) {
+            if let (
+                StatisticValue::Integer(col_min_val),
+                StatisticValue::Integer(col_max_val),
+                StatisticValue::Integer(pred_min_val),
+                StatisticValue::Integer(pred_max_val),
+            ) = (col_min, col_max, pred_min, pred_max)
+            {
                 let col_range = (col_max_val - col_min_val) as f64;
                 let pred_range = (pred_max_val - pred_min_val) as f64;
                 if col_range > 0.0 {
@@ -407,4 +419,3 @@ mod tests {
         assert_eq!(selectivity, 0.01); // 1/100
     }
 }
-

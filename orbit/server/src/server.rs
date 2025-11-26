@@ -3,13 +3,15 @@
 use crate::mesh::{AddressableDirectory, ClusterManager, ClusterStats, DirectoryStats};
 use crate::persistence::config::PersistenceProviderConfig;
 use crate::persistence::PersistenceProviderRegistry;
+use crate::protocols::postgres_wire::QueryEngine;
+#[cfg(feature = "storage-rocksdb")]
+use crate::protocols::postgres_wire::RocksDbTableStorage;
+use crate::protocols::{PostgresServer, RespServer};
 use crate::LoadBalancer;
 use orbit_proto::{
     connection_service_server, health_check_response, health_service_server,
     OrbitConnectionService, OrbitHealthService,
 };
-use crate::protocols::{PostgresServer, RespServer};
-use crate::protocols::postgres_wire::{QueryEngine, RocksDbTableStorage};
 use orbit_shared::{NodeCapabilities, NodeId, NodeInfo, NodeStatus, OrbitError, OrbitResult};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -253,35 +255,43 @@ impl OrbitServer {
 
             // Try to create QueryEngine with persistent storage if RocksDB is available
             let query_engine = {
-                // Check if we have a RocksDB provider configured
-                // The addressable provider is registered as "rocksdb_addressable"
-                match persistence_registry
-                    .get_addressable_provider("rocksdb_addressable")
-                    .await
+                #[cfg(feature = "storage-rocksdb")]
                 {
-                    Ok(_provider) => {
-                        // Create a separate RocksDB instance for PostgreSQL table storage
-                        // Use the same data directory structure as the server but with postgresql subdirectory
-                        let pg_data_path = "./orbit_integrated_data/postgresql";
+                    // Check if we have a RocksDB provider configured
+                    // The addressable provider is registered as "rocksdb_addressable"
+                    match persistence_registry
+                        .get_addressable_provider("rocksdb_addressable")
+                        .await
+                    {
+                        Ok(_provider) => {
+                            // Create a separate RocksDB instance for PostgreSQL table storage
+                            // Use the same data directory structure as the server but with postgresql subdirectory
+                            let pg_data_path = "./orbit_integrated_data/postgresql";
 
-                        match RocksDbTableStorage::new(&pg_data_path) {
-                            Ok(storage) => {
-                                tracing::info!(
-                                    "PostgreSQL using persistent RocksDB storage at: {}",
-                                    pg_data_path
-                                );
-                                QueryEngine::new_with_persistent_storage(Arc::new(storage))
-                            }
-                            Err(e) => {
-                                tracing::warn!("Failed to create PostgreSQL persistent storage, falling back to memory: {}", e);
-                                QueryEngine::new()
+                            match RocksDbTableStorage::new(&pg_data_path) {
+                                Ok(storage) => {
+                                    tracing::info!(
+                                        "PostgreSQL using persistent RocksDB storage at: {}",
+                                        pg_data_path
+                                    );
+                                    QueryEngine::new_with_persistent_storage(Arc::new(storage))
+                                }
+                                Err(e) => {
+                                    tracing::warn!("Failed to create PostgreSQL persistent storage, falling back to memory: {}", e);
+                                    QueryEngine::new()
+                                }
                             }
                         }
+                        Err(_) => {
+                            tracing::info!("PostgreSQL using in-memory storage (no RocksDB persistence configured)");
+                            QueryEngine::new()
+                        }
                     }
-                    Err(_) => {
-                        tracing::info!("PostgreSQL using in-memory storage (no RocksDB persistence configured)");
-                        QueryEngine::new()
-                    }
+                }
+                #[cfg(not(feature = "storage-rocksdb"))]
+                {
+                    tracing::info!("PostgreSQL using in-memory storage (RocksDB support disabled)");
+                    QueryEngine::new()
                 }
             };
 
@@ -372,10 +382,12 @@ impl OrbitServer {
 
             // Create RESP server without OrbitClient
             {
-                    // Create RocksDB storage for Redis persistence
-                    // Use consistent path structure: data/redis/rocksdb/ (matching other protocols)
-                    let redis_data_path = "./data/redis/rocksdb";
-                    let redis_provider: Option<Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>> = 
+                // Create RocksDB storage for Redis persistence
+                // Use consistent path structure: data/redis/rocksdb/ (matching other protocols)
+                let redis_data_path = "./data/redis/rocksdb";
+
+                #[cfg(feature = "storage-rocksdb")]
+                    let redis_provider: Option<Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>> =
                         match crate::protocols::persistence::rocksdb_redis_provider::RocksDbRedisDataProvider::new(
                             redis_data_path,
                             crate::protocols::persistence::redis_data::RedisDataConfig::default(),
@@ -396,6 +408,14 @@ impl OrbitServer {
                                 None
                             }
                         };
+
+                #[cfg(not(feature = "storage-rocksdb"))]
+                let redis_provider: Option<
+                    Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>,
+                > = {
+                    tracing::info!("Redis using in-memory storage (RocksDB support disabled)");
+                    None
+                };
 
                 let resp_server = RespServer::new_with_persistence(redis_addr, redis_provider);
                 server_tasks.push(tokio::spawn(async move {

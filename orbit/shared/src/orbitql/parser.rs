@@ -5,10 +5,10 @@
 
 use crate::orbitql::ast::{
     AggregateFunction, BinaryOperator, CreateDefinition, CreateObjectType, CreateStatement,
-    DeleteStatement, DropStatement, EdgeDirection, Expression, FetchClause, FromClause,
-    GraphPath, GraphStep, InsertStatement, InsertValues, JoinClause, JoinType, LiveStatement,
-    OrderByClause, RelateStatement, SelectField, SelectStatement, SortDirection, Statement,
-    TransactionStatement, TraverseStatement, UnaryOperator, UpdateStatement, WhenClause, WithClause,
+    DeleteStatement, DropStatement, EdgeDirection, Expression, FetchClause, FromClause, GraphPath,
+    GraphStep, InsertStatement, InsertValues, JoinClause, JoinType, LiveStatement, OrderByClause,
+    RelateStatement, SelectField, SelectStatement, SortDirection, Statement, TransactionStatement,
+    TraverseStatement, UnaryOperator, UpdateStatement, WhenClause, WithClause,
 };
 use crate::orbitql::lexer::{LexError, Token, TokenType};
 use crate::orbitql::QueryValue;
@@ -541,21 +541,21 @@ impl Parser {
                 TokenType::ILike => BinaryOperator::ILike,
                 TokenType::In => {
                     self.advance(); // consume IN
-                    // IN expects a list of values in parentheses: IN (value1, value2, ...)
+                                    // IN expects a list of values in parentheses: IN (value1, value2, ...)
                     self.expect(TokenType::LeftParen)?;
                     let values = self.parse_expression_list()?;
                     self.expect(TokenType::RightParen)?;
-                    
+
                     // Create an Array expression for the IN values
                     let right = Expression::Array(values);
-                    
+
                     expr = Expression::Binary {
                         left: Box::new(expr),
                         operator: BinaryOperator::In,
                         right: Box::new(right),
                     };
                     continue;
-                },
+                }
                 TokenType::Is => {
                     self.advance(); // consume IS
 
@@ -680,12 +680,48 @@ impl Parser {
             // (table aliases, column names, etc.)
             // Keywords with special parsing rules (like NOW, INTERVAL) must be restricted
             let restricted = [
-                "SELECT", "FROM", "WHERE", "JOIN", "INNER", "LEFT", "RIGHT",
-                "FULL", "CROSS", "ON", "GROUP", "BY", "HAVING", "ORDER",
-                "LIMIT", "OFFSET", "INSERT", "INTO", "VALUES", "UPDATE",
-                "SET", "DELETE", "CREATE", "DROP", "TABLE", "AS", "AND",
-                "OR", "NOT", "IN", "BETWEEN", "IS", "LIKE", "CASE", "WHEN",
-                "THEN", "ELSE", "END", "WITH", "RECURSIVE", "NOW", "INTERVAL"
+                "SELECT",
+                "FROM",
+                "WHERE",
+                "JOIN",
+                "INNER",
+                "LEFT",
+                "RIGHT",
+                "FULL",
+                "CROSS",
+                "ON",
+                "GROUP",
+                "BY",
+                "HAVING",
+                "ORDER",
+                "LIMIT",
+                "OFFSET",
+                "INSERT",
+                "INTO",
+                "VALUES",
+                "UPDATE",
+                "SET",
+                "DELETE",
+                "CREATE",
+                "DROP",
+                "TABLE",
+                "AS",
+                "AND",
+                "OR",
+                "NOT",
+                "IN",
+                "BETWEEN",
+                "IS",
+                "LIKE",
+                "CASE",
+                "WHEN",
+                "THEN",
+                "ELSE",
+                "END",
+                "WITH",
+                "RECURSIVE",
+                "NOW",
+                "INTERVAL",
             ];
             !restricted.contains(&token.value.to_uppercase().as_str())
         };
@@ -1294,14 +1330,48 @@ impl Parser {
                 // Allow most keywords to be used as identifiers
                 // Only restrict truly structural keywords that would break parsing
                 let restricted_keywords = [
-                    "SELECT", "FROM", "WHERE", "JOIN", "INNER", "LEFT", "RIGHT", 
-                    "FULL", "CROSS", "ON", "GROUP", "BY", "HAVING", "ORDER", 
-                    "LIMIT", "OFFSET", "INSERT", "INTO", "VALUES", "UPDATE", 
-                    "SET", "DELETE", "CREATE", "DROP", "TABLE", "AS", "AND", 
-                    "OR", "NOT", "IN", "BETWEEN", "IS", "LIKE", "CASE", "WHEN", 
-                    "THEN", "ELSE", "END", "WITH", "RECURSIVE"
+                    "SELECT",
+                    "FROM",
+                    "WHERE",
+                    "JOIN",
+                    "INNER",
+                    "LEFT",
+                    "RIGHT",
+                    "FULL",
+                    "CROSS",
+                    "ON",
+                    "GROUP",
+                    "BY",
+                    "HAVING",
+                    "ORDER",
+                    "LIMIT",
+                    "OFFSET",
+                    "INSERT",
+                    "INTO",
+                    "VALUES",
+                    "UPDATE",
+                    "SET",
+                    "DELETE",
+                    "CREATE",
+                    "DROP",
+                    "TABLE",
+                    "AS",
+                    "AND",
+                    "OR",
+                    "NOT",
+                    "IN",
+                    "BETWEEN",
+                    "IS",
+                    "LIKE",
+                    "CASE",
+                    "WHEN",
+                    "THEN",
+                    "ELSE",
+                    "END",
+                    "WITH",
+                    "RECURSIVE",
                 ];
-                
+
                 if restricted_keywords.contains(&token.value.to_uppercase().as_str()) {
                     Err(ParseError::UnexpectedToken {
                         expected: vec![TokenType::Identifier],
@@ -1310,7 +1380,7 @@ impl Parser {
                 } else {
                     Ok(self.advance())
                 }
-            },
+            }
             _ => Err(ParseError::UnexpectedToken {
                 expected: vec![TokenType::Identifier],
                 found: token.clone(),
@@ -1754,7 +1824,12 @@ mod tests {
             assert_eq!(select.join_clauses.len(), 1);
             // JOIN condition should be: u.id = f.from
             let join = &select.join_clauses[0];
-            if let Expression::Binary { left, operator, right } = &join.condition {
+            if let Expression::Binary {
+                left,
+                operator,
+                right,
+            } = &join.condition
+            {
                 assert!(matches!(operator, BinaryOperator::Equal));
                 // Left side: u.id
                 if let Expression::FieldAccess { object, field } = left.as_ref() {
@@ -1787,7 +1862,11 @@ mod tests {
             .unwrap();
         let mut parser = Parser::new();
         let result = parser.parse(tokens);
-        assert!(result.is_ok(), "Failed to parse NOW() - INTERVAL: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to parse NOW() - INTERVAL: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -1803,7 +1882,11 @@ mod tests {
         let tokens = lexer.tokenize(query).unwrap();
         let mut parser = Parser::new();
         let result = parser.parse(tokens);
-        assert!(result.is_ok(), "Failed to parse simple CTE: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to parse simple CTE: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -1819,7 +1902,11 @@ mod tests {
         let tokens = lexer.tokenize(query).unwrap();
         let mut parser = Parser::new();
         let result = parser.parse(tokens);
-        assert!(result.is_ok(), "Failed to parse CTE with COUNT(*): {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to parse CTE with COUNT(*): {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -1838,7 +1925,11 @@ mod tests {
         let tokens = lexer.tokenize(query).unwrap();
         let mut parser = Parser::new();
         let result = parser.parse(tokens);
-        assert!(result.is_ok(), "Failed to parse CTE with interval: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to parse CTE with interval: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -1848,6 +1939,10 @@ mod tests {
         let tokens = lexer.tokenize("SELECT COUNT(*) FROM users").unwrap();
         let mut parser = Parser::new();
         let result = parser.parse(tokens);
-        assert!(result.is_ok(), "Failed to parse COUNT(*): {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to parse COUNT(*): {:?}",
+            result.err()
+        );
     }
 }

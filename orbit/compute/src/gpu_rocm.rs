@@ -32,7 +32,11 @@ impl RocmDevice {
         let device_id = Self::get_default_device()?;
         let device_name = Self::get_device_name(device_id)?;
 
-        tracing::info!("ROCm device initialized: {} (device {})", device_name, device_id);
+        tracing::info!(
+            "ROCm device initialized: {} (device {})",
+            device_name,
+            device_id
+        );
 
         Ok(Self {
             device_id,
@@ -68,17 +72,51 @@ impl RocmDevice {
     ) -> Result<Vec<i32>, ComputeError> {
         // TODO: Implement actual ROCm kernel execution
         tracing::warn!("ROCm filter_i32 not yet implemented, using CPU fallback");
-        
+
         let result: Vec<i32> = data
             .iter()
-            .map(|&x| {
-                match operation {
-                    FilterOp::Equal => if x == value { 1 } else { 0 },
-                    FilterOp::GreaterThan => if x > value { 1 } else { 0 },
-                    FilterOp::GreaterOrEqual => if x >= value { 1 } else { 0 },
-                    FilterOp::LessThan => if x < value { 1 } else { 0 },
-                    FilterOp::LessOrEqual => if x <= value { 1 } else { 0 },
-                    FilterOp::NotEqual => if x != value { 1 } else { 0 },
+            .map(|&x| match operation {
+                FilterOp::Equal => {
+                    if x == value {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::GreaterThan => {
+                    if x > value {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::GreaterOrEqual => {
+                    if x >= value {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::LessThan => {
+                    if x < value {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::LessOrEqual => {
+                    if x <= value {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::NotEqual => {
+                    if x != value {
+                        1
+                    } else {
+                        0
+                    }
                 }
             })
             .collect();
@@ -95,17 +133,51 @@ impl RocmDevice {
     ) -> Result<Vec<i32>, ComputeError> {
         // TODO: Implement actual ROCm kernel execution
         tracing::warn!("ROCm filter_i64 not yet implemented, using CPU fallback");
-        
+
         let result: Vec<i32> = data
             .iter()
-            .map(|&x| {
-                match operation {
-                    FilterOp::Equal => if x == value { 1 } else { 0 },
-                    FilterOp::GreaterThan => if x > value { 1 } else { 0 },
-                    FilterOp::GreaterOrEqual => if x >= value { 1 } else { 0 },
-                    FilterOp::LessThan => if x < value { 1 } else { 0 },
-                    FilterOp::LessOrEqual => if x <= value { 1 } else { 0 },
-                    FilterOp::NotEqual => if x != value { 1 } else { 0 },
+            .map(|&x| match operation {
+                FilterOp::Equal => {
+                    if x == value {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::GreaterThan => {
+                    if x > value {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::GreaterOrEqual => {
+                    if x >= value {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::LessThan => {
+                    if x < value {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::LessOrEqual => {
+                    if x <= value {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::NotEqual => {
+                    if x != value {
+                        1
+                    } else {
+                        0
+                    }
                 }
             })
             .collect();
@@ -122,17 +194,51 @@ impl RocmDevice {
     ) -> Result<Vec<i32>, ComputeError> {
         // TODO: Implement actual ROCm kernel execution
         tracing::warn!("ROCm filter_f64 not yet implemented, using CPU fallback");
-        
+
         let result: Vec<i32> = data
             .iter()
-            .map(|&x| {
-                match operation {
-                    FilterOp::Equal => if (x - value).abs() < 1e-10 { 1 } else { 0 },
-                    FilterOp::GreaterThan => if x > value { 1 } else { 0 },
-                    FilterOp::GreaterOrEqual => if x >= value { 1 } else { 0 },
-                    FilterOp::LessThan => if x < value { 1 } else { 0 },
-                    FilterOp::LessOrEqual => if x <= value { 1 } else { 0 },
-                    FilterOp::NotEqual => if (x - value).abs() >= 1e-10 { 1 } else { 0 },
+            .map(|&x| match operation {
+                FilterOp::Equal => {
+                    if (x - value).abs() < 1e-10 {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::GreaterThan => {
+                    if x > value {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::GreaterOrEqual => {
+                    if x >= value {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::LessThan => {
+                    if x < value {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::LessOrEqual => {
+                    if x <= value {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                FilterOp::NotEqual => {
+                    if (x - value).abs() >= 1e-10 {
+                        1
+                    } else {
+                        0
+                    }
                 }
             })
             .collect();
@@ -145,15 +251,17 @@ impl RocmDevice {
         use crate::errors::ExecutionError;
 
         if mask_a.len() != mask_b.len() {
-            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
-                parameter: "mask_length".to_string(),
-                value: format!("mask_a={}, mask_b={}", mask_a.len(), mask_b.len()),
-            }));
+            return Err(ComputeError::execution(
+                ExecutionError::InvalidKernelParameters {
+                    parameter: "mask_length".to_string(),
+                    value: format!("mask_a={}, mask_b={}", mask_a.len(), mask_b.len()),
+                },
+            ));
         }
 
         // TODO: Implement actual ROCm kernel execution
         tracing::warn!("ROCm bitmap_and not yet implemented, using CPU fallback");
-        
+
         let result: Vec<i32> = mask_a
             .iter()
             .zip(mask_b.iter())
@@ -168,15 +276,17 @@ impl RocmDevice {
         use crate::errors::ExecutionError;
 
         if mask_a.len() != mask_b.len() {
-            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
-                parameter: "mask_length".to_string(),
-                value: format!("mask_a={}, mask_b={}", mask_a.len(), mask_b.len()),
-            }));
+            return Err(ComputeError::execution(
+                ExecutionError::InvalidKernelParameters {
+                    parameter: "mask_length".to_string(),
+                    value: format!("mask_a={}, mask_b={}", mask_a.len(), mask_b.len()),
+                },
+            ));
         }
 
         // TODO: Implement actual ROCm kernel execution
         tracing::warn!("ROCm bitmap_or not yet implemented, using CPU fallback");
-        
+
         let result: Vec<i32> = mask_a
             .iter()
             .zip(mask_b.iter())
@@ -190,7 +300,7 @@ impl RocmDevice {
     pub fn bitmap_not(&self, mask: &[i32]) -> Result<Vec<i32>, ComputeError> {
         // TODO: Implement actual ROCm kernel execution
         tracing::warn!("ROCm bitmap_not not yet implemented, using CPU fallback");
-        
+
         let result: Vec<i32> = mask.iter().map(|&x| if x == 0 { 1 } else { 0 }).collect();
         Ok(result)
     }
@@ -199,7 +309,7 @@ impl RocmDevice {
     pub fn aggregate_sum_i32(&self, data: &[i32]) -> Result<i64, ComputeError> {
         // TODO: Implement actual ROCm reduction kernel
         tracing::warn!("ROCm aggregate_sum_i32 not yet implemented, using CPU fallback");
-        
+
         let sum: i64 = data.iter().map(|&x| x as i64).sum();
         Ok(sum)
     }
@@ -208,7 +318,7 @@ impl RocmDevice {
     pub fn aggregate_count(&self, mask: &[i32]) -> Result<usize, ComputeError> {
         // TODO: Implement actual ROCm reduction kernel
         tracing::warn!("ROCm aggregate_count not yet implemented, using CPU fallback");
-        
+
         let count = mask.iter().filter(|&&x| x != 0).count();
         Ok(count)
     }
@@ -294,4 +404,3 @@ mod tests {
         }
     }
 }
-

@@ -74,8 +74,7 @@ pub trait CommandHandler: Send + Sync {
                 // Try integer first
                 v.as_integer().or_else(|| {
                     // Try parsing as string
-                    v.as_string()
-                        .and_then(|s| s.parse::<i64>().ok())
+                    v.as_string().and_then(|s| s.parse::<i64>().ok())
                 })
             })
             .ok_or_else(|| {
@@ -116,9 +115,7 @@ pub struct BaseCommandHandler {
 impl BaseCommandHandler {
     /// Create new base handler
     pub fn new(local_registry: Arc<SimpleLocalRegistry>) -> Self {
-        Self {
-            local_registry,
-        }
+        Self { local_registry }
     }
 
     /// Get a key for Orbit actor addressing

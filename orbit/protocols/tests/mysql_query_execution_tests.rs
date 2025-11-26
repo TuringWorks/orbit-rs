@@ -14,9 +14,7 @@ impl MySqlTestContext {
     pub async fn new() -> Self {
         let config = MySqlConfig::default();
         let adapter = MySqlAdapter::new(config).await.unwrap();
-        Self {
-            adapter,
-        }
+        Self { adapter }
     }
 
     /// Setup: Create a test table using SQL
@@ -34,7 +32,10 @@ impl MySqlTestContext {
     }
 
     /// Execute a query and get result
-    pub async fn execute_query(&self, sql: &str) -> orbit_protocols::postgres_wire::sql::UnifiedExecutionResult {
+    pub async fn execute_query(
+        &self,
+        sql: &str,
+    ) -> orbit_protocols::postgres_wire::sql::UnifiedExecutionResult {
         let mut engine = self.adapter.sql_engine().write().await;
         engine.execute(sql).await.unwrap()
     }
@@ -47,16 +48,26 @@ impl MySqlTestContext {
 #[tokio::test]
 async fn test_mysql_select_execution() {
     let ctx = MySqlTestContext::new().await;
-    ctx.setup_table("test_users", "(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)").await;
-    ctx.insert_data_sql("INSERT INTO test_users (id, name, age) VALUES (1, 'Alice', 30)").await;
-    ctx.insert_data_sql("INSERT INTO test_users (id, name, age) VALUES (2, 'Bob', 25)").await;
+    ctx.setup_table(
+        "test_users",
+        "(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
+    )
+    .await;
+    ctx.insert_data_sql("INSERT INTO test_users (id, name, age) VALUES (1, 'Alice', 30)")
+        .await;
+    ctx.insert_data_sql("INSERT INTO test_users (id, name, age) VALUES (2, 'Bob', 25)")
+        .await;
 
     // Test SELECT query
     let query = "SELECT * FROM test_users";
     let result = ctx.execute_query(query).await;
-    
+
     match result {
-        orbit_protocols::postgres_wire::sql::UnifiedExecutionResult::Select { columns, rows, .. } => {
+        orbit_protocols::postgres_wire::sql::UnifiedExecutionResult::Select {
+            columns,
+            rows,
+            ..
+        } => {
             assert_eq!(columns.len(), 3);
             assert_eq!(rows.len(), 2);
         }
@@ -67,12 +78,16 @@ async fn test_mysql_select_execution() {
 #[tokio::test]
 async fn test_mysql_insert_execution() {
     let ctx = MySqlTestContext::new().await;
-    ctx.setup_table("test_users", "(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)").await;
+    ctx.setup_table(
+        "test_users",
+        "(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
+    )
+    .await;
 
     // Test INSERT query
     let query = "INSERT INTO test_users (id, name, age) VALUES (1, 'Alice', 30)";
     let result = ctx.execute_query(query).await;
-    
+
     match result {
         orbit_protocols::postgres_wire::sql::UnifiedExecutionResult::Insert { count, .. } => {
             assert_eq!(count, 1);
@@ -84,13 +99,18 @@ async fn test_mysql_insert_execution() {
 #[tokio::test]
 async fn test_mysql_update_execution() {
     let ctx = MySqlTestContext::new().await;
-    ctx.setup_table("test_users", "(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)").await;
-    ctx.insert_data_sql("INSERT INTO test_users (id, name, age) VALUES (1, 'Alice', 30)").await;
+    ctx.setup_table(
+        "test_users",
+        "(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
+    )
+    .await;
+    ctx.insert_data_sql("INSERT INTO test_users (id, name, age) VALUES (1, 'Alice', 30)")
+        .await;
 
     // Test UPDATE query
     let query = "UPDATE test_users SET age = 31 WHERE id = 1";
     let result = ctx.execute_query(query).await;
-    
+
     match result {
         orbit_protocols::postgres_wire::sql::UnifiedExecutionResult::Update { count, .. } => {
             assert_eq!(count, 1);
@@ -102,14 +122,20 @@ async fn test_mysql_update_execution() {
 #[tokio::test]
 async fn test_mysql_delete_execution() {
     let ctx = MySqlTestContext::new().await;
-    ctx.setup_table("test_users", "(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)").await;
-    ctx.insert_data_sql("INSERT INTO test_users (id, name, age) VALUES (1, 'Alice', 30)").await;
-    ctx.insert_data_sql("INSERT INTO test_users (id, name, age) VALUES (2, 'Bob', 25)").await;
+    ctx.setup_table(
+        "test_users",
+        "(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
+    )
+    .await;
+    ctx.insert_data_sql("INSERT INTO test_users (id, name, age) VALUES (1, 'Alice', 30)")
+        .await;
+    ctx.insert_data_sql("INSERT INTO test_users (id, name, age) VALUES (2, 'Bob', 25)")
+        .await;
 
     // Test DELETE query
     let query = "DELETE FROM test_users WHERE id = 1";
     let result = ctx.execute_query(query).await;
-    
+
     match result {
         orbit_protocols::postgres_wire::sql::UnifiedExecutionResult::Delete { count, .. } => {
             assert_eq!(count, 1);
@@ -121,14 +147,20 @@ async fn test_mysql_delete_execution() {
 #[tokio::test]
 async fn test_mysql_select_with_where() {
     let ctx = MySqlTestContext::new().await;
-    ctx.setup_table("test_users", "(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)").await;
-    ctx.insert_data_sql("INSERT INTO test_users (id, name, age) VALUES (1, 'Alice', 30)").await;
-    ctx.insert_data_sql("INSERT INTO test_users (id, name, age) VALUES (2, 'Bob', 25)").await;
+    ctx.setup_table(
+        "test_users",
+        "(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
+    )
+    .await;
+    ctx.insert_data_sql("INSERT INTO test_users (id, name, age) VALUES (1, 'Alice', 30)")
+        .await;
+    ctx.insert_data_sql("INSERT INTO test_users (id, name, age) VALUES (2, 'Bob', 25)")
+        .await;
 
     // Test SELECT with WHERE clause
     let query = "SELECT * FROM test_users WHERE age > 25";
     let result = ctx.execute_query(query).await;
-    
+
     match result {
         orbit_protocols::postgres_wire::sql::UnifiedExecutionResult::Select { rows, .. } => {
             // Note: WHERE clause filtering may not be fully implemented in SQL engine
@@ -138,4 +170,3 @@ async fn test_mysql_select_with_where() {
         _ => panic!("Expected Select result"),
     }
 }
-

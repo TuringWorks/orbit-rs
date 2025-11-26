@@ -515,13 +515,13 @@ impl RTree {
             // Check if we need to split
             if node.entries.len() > self.max_entries {
                 let entries_clone = node.entries.clone();
-                let (group1_entries, group1_bounds, _group2_entries, _group2_bounds) = 
+                let (group1_entries, group1_bounds, _group2_entries, _group2_bounds) =
                     self.split_entries(&entries_clone, node.is_leaf)?;
-                
+
                 // Update current node with group1
                 node.entries = group1_entries;
                 node.bounds = group1_bounds;
-                
+
                 // Note: In a full implementation, we would handle root splits here
                 // For now, we keep group1 in the current node
                 // Group2 entries are discarded (this is a limitation that should be fixed)
@@ -530,7 +530,7 @@ impl RTree {
         } else {
             // Find the best child to insert into
             let best_child_idx = self.choose_leaf(node, &entry.bounds);
-            
+
             // Recursively insert into the chosen child
             if let Some(ref mut child_entry) = node.entries.get_mut(best_child_idx) {
                 if let Some(ref mut child_node) = child_entry.child {
@@ -557,16 +557,22 @@ impl RTree {
         _is_leaf: bool,
     ) -> Result<(Vec<RTreeEntry>, BoundingBox, Vec<RTreeEntry>, BoundingBox), SpatialError> {
         if entries.len() <= self.max_entries {
-            return Err(SpatialError::IndexError("Entries don't need splitting".to_string()));
+            return Err(SpatialError::IndexError(
+                "Entries don't need splitting".to_string(),
+            ));
         }
 
         // Use quadratic split algorithm
         let (seed1_idx, seed2_idx) = self.pick_seeds(entries);
-        
+
         let mut entries_vec = entries.to_vec();
         let mut group1_entries = vec![entries_vec.remove(seed1_idx)];
-        let mut group2_entries = vec![entries_vec.remove(if seed2_idx > seed1_idx { seed2_idx - 1 } else { seed2_idx })];
-        
+        let mut group2_entries = vec![entries_vec.remove(if seed2_idx > seed1_idx {
+            seed2_idx - 1
+        } else {
+            seed2_idx
+        })];
+
         let mut group1_bounds = group1_entries[0].bounds.clone();
         let mut group2_bounds = group2_entries[0].bounds.clone();
 
@@ -599,7 +605,9 @@ impl RTree {
             let enlargement2 = self.calculate_enlargement(&group2_bounds, &entry.bounds);
 
             // Assign to group with smaller enlargement (or smaller group if tie)
-            if enlargement1 < enlargement2 || (enlargement1 == enlargement2 && group1_entries.len() < group2_entries.len()) {
+            if enlargement1 < enlargement2
+                || (enlargement1 == enlargement2 && group1_entries.len() < group2_entries.len())
+            {
                 self.expand_bounds(&mut group1_bounds, &entry.bounds);
                 group1_entries.push(entry);
             } else {
@@ -620,9 +628,11 @@ impl RTree {
         // Find the pair of entries that would waste the most space if grouped together
         for i in 0..entries.len() {
             for j in (i + 1)..entries.len() {
-                let combined_bounds = self.calculate_combined_bounds(&entries[i].bounds, &entries[j].bounds);
-                let waste = combined_bounds.area() - entries[i].bounds.area() - entries[j].bounds.area();
-                
+                let combined_bounds =
+                    self.calculate_combined_bounds(&entries[i].bounds, &entries[j].bounds);
+                let waste =
+                    combined_bounds.area() - entries[i].bounds.area() - entries[j].bounds.area();
+
                 if waste > max_waste {
                     max_waste = waste;
                     seed1_idx = i;
@@ -706,9 +716,12 @@ impl RTree {
     }
 
     /// Query geometries that intersect with the given bounding box.
-    pub fn query_bbox(&self, bbox: &BoundingBox) -> Result<Vec<(u64, SpatialGeometry)>, SpatialError> {
+    pub fn query_bbox(
+        &self,
+        bbox: &BoundingBox,
+    ) -> Result<Vec<(u64, SpatialGeometry)>, SpatialError> {
         let mut results = Vec::new();
-        
+
         if let Some(ref root) = self.root {
             self.query_bbox_recursive(root, bbox, &mut results)?;
         }
@@ -758,7 +771,7 @@ impl RTree {
         count: usize,
     ) -> Result<Vec<(u64, SpatialGeometry, f64)>, SpatialError> {
         let mut candidates: Vec<(u64, SpatialGeometry, f64)> = Vec::new();
-        
+
         if let Some(ref root) = self.root {
             self.nearest_neighbors_recursive(root, point, &mut candidates)?;
         }
@@ -1115,29 +1128,35 @@ mod tests {
     #[test]
     fn test_rtree_insert() {
         let mut rtree = RTree::new(16, 4, RTreeSplitStrategy::Quadratic);
-        
+
         let point1 = SpatialGeometry::Point(Point::new(1.0, 1.0, None));
         let point2 = SpatialGeometry::Point(Point::new(2.0, 2.0, None));
-        
+
         assert!(rtree.insert_geometry(1, point1).is_ok());
         assert!(rtree.insert_geometry(2, point2).is_ok());
-        
+
         assert_eq!(rtree.geometry_count, 2);
     }
 
     #[test]
     fn test_rtree_query_bbox() {
         let mut rtree = RTree::new(16, 4, RTreeSplitStrategy::Quadratic);
-        
+
         // Insert some points
-        rtree.insert_geometry(1, SpatialGeometry::Point(Point::new(1.0, 1.0, None))).unwrap();
-        rtree.insert_geometry(2, SpatialGeometry::Point(Point::new(5.0, 5.0, None))).unwrap();
-        rtree.insert_geometry(3, SpatialGeometry::Point(Point::new(2.0, 2.0, None))).unwrap();
-        
+        rtree
+            .insert_geometry(1, SpatialGeometry::Point(Point::new(1.0, 1.0, None)))
+            .unwrap();
+        rtree
+            .insert_geometry(2, SpatialGeometry::Point(Point::new(5.0, 5.0, None)))
+            .unwrap();
+        rtree
+            .insert_geometry(3, SpatialGeometry::Point(Point::new(2.0, 2.0, None)))
+            .unwrap();
+
         // Query a bounding box
         let query_bbox = BoundingBox::new(0.0, 0.0, 3.0, 3.0, None);
         let results = rtree.query_bbox(&query_bbox).unwrap();
-        
+
         // Should find points 1 and 3
         assert!(results.len() >= 2);
         let ids: Vec<u64> = results.iter().map(|(id, _)| *id).collect();
@@ -1148,16 +1167,22 @@ mod tests {
     #[test]
     fn test_rtree_nearest_neighbors() {
         let mut rtree = RTree::new(16, 4, RTreeSplitStrategy::Quadratic);
-        
+
         // Insert points
-        rtree.insert_geometry(1, SpatialGeometry::Point(Point::new(1.0, 1.0, None))).unwrap();
-        rtree.insert_geometry(2, SpatialGeometry::Point(Point::new(5.0, 5.0, None))).unwrap();
-        rtree.insert_geometry(3, SpatialGeometry::Point(Point::new(2.0, 2.0, None))).unwrap();
-        
+        rtree
+            .insert_geometry(1, SpatialGeometry::Point(Point::new(1.0, 1.0, None)))
+            .unwrap();
+        rtree
+            .insert_geometry(2, SpatialGeometry::Point(Point::new(5.0, 5.0, None)))
+            .unwrap();
+        rtree
+            .insert_geometry(3, SpatialGeometry::Point(Point::new(2.0, 2.0, None)))
+            .unwrap();
+
         // Find nearest neighbors to point (0, 0)
         let query_point = Point::new(0.0, 0.0, None);
         let neighbors = rtree.nearest_neighbors(&query_point, 2).unwrap();
-        
+
         assert_eq!(neighbors.len(), 2);
         // Point 1 should be closest
         assert_eq!(neighbors[0].0, 1);

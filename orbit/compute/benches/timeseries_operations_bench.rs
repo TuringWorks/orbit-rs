@@ -11,7 +11,7 @@ use orbit_compute::timeseries_operations::{
 fn create_test_points(count: usize) -> Vec<TimeSeriesPoint> {
     (0..count)
         .map(|i| TimeSeriesPoint {
-            timestamp: 1000 * i as u64, // 1 second intervals
+            timestamp: 1000 * i as u64,      // 1 second intervals
             value: (i as f64).sin() * 100.0, // Sinusoidal pattern
         })
         .collect()
@@ -116,7 +116,7 @@ fn benchmark_ewma(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = Criterion::default().sample_size(10);
-    targets = 
+    targets =
         benchmark_aggregate_by_windows,
         benchmark_moving_average,
         benchmark_ewma

@@ -3,7 +3,7 @@
 //! Measures performance of vector similarity operations (cosine, euclidean, dot product, manhattan)
 //! comparing CPU sequential, CPU parallel, and GPU-accelerated implementations.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use orbit_compute::vector_similarity::{
     GPUVectorSimilarity, VectorSimilarityConfig, VectorSimilarityMetric,
 };
@@ -13,11 +13,7 @@ fn generate_random_vectors(count: usize, dimension: usize) -> Vec<Vec<f32>> {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     (0..count)
-        .map(|_| {
-            (0..dimension)
-                .map(|_| rng.gen_range(-1.0..1.0))
-                .collect()
-        })
+        .map(|_| (0..dimension).map(|_| rng.gen_range(-1.0..1.0)).collect())
         .collect()
 }
 
@@ -49,7 +45,10 @@ fn bench_cpu_sequential(
     let engine = rt.block_on(GPUVectorSimilarity::new(config)).unwrap();
 
     c.bench_function(
-        &format!("cpu_sequential_{}_{}v_{}d", metric_name, vector_count, dimension),
+        &format!(
+            "cpu_sequential_{}_{}v_{}d",
+            metric_name, vector_count, dimension
+        ),
         |b| {
             b.to_async(&rt).iter(|| {
                 engine.batch_similarity(
@@ -83,7 +82,10 @@ fn bench_cpu_parallel(
     let engine = rt.block_on(GPUVectorSimilarity::new(config)).unwrap();
 
     c.bench_function(
-        &format!("cpu_parallel_{}_{}v_{}d", metric_name, vector_count, dimension),
+        &format!(
+            "cpu_parallel_{}_{}v_{}d",
+            metric_name, vector_count, dimension
+        ),
         |b| {
             b.to_async(&rt).iter(|| {
                 engine.batch_similarity(
@@ -168,12 +170,7 @@ fn bench_cosine_similarity(c: &mut Criterion) {
 
 /// Benchmark suite for euclidean distance
 fn bench_euclidean_distance(c: &mut Criterion) {
-    let sizes = vec![
-        (100, 128),
-        (1000, 128),
-        (10000, 128),
-        (1000, 384),
-    ];
+    let sizes = vec![(100, 128), (1000, 128), (10000, 128), (1000, 384)];
 
     for (vector_count, dimension) in sizes {
         bench_cpu_sequential(
@@ -202,11 +199,7 @@ fn bench_euclidean_distance(c: &mut Criterion) {
 
 /// Benchmark suite for dot product
 fn bench_dot_product(c: &mut Criterion) {
-    let sizes = vec![
-        (100, 128),
-        (1000, 128),
-        (10000, 128),
-    ];
+    let sizes = vec![(100, 128), (1000, 128), (10000, 128)];
 
     for (vector_count, dimension) in sizes {
         bench_cpu_sequential(
@@ -240,4 +233,3 @@ criterion_group!(
     bench_dot_product
 );
 criterion_main!(benches);
-

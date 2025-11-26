@@ -13,8 +13,8 @@ use async_trait::async_trait;
 use orbit_shared::orbitql::{
     ast::{
         BinaryOperator, CreateDefinition, CreateObjectType, CreateStatement, DeleteStatement,
-        Expression, FromClause, InsertStatement, InsertValues, SelectStatement,
-        Statement, UnaryOperator, UpdateStatement,
+        Expression, FromClause, InsertStatement, InsertValues, SelectStatement, Statement,
+        UnaryOperator, UpdateStatement,
     },
     Lexer, Parser, QueryValue,
 };
@@ -177,9 +177,9 @@ impl OrbitQLAdapter {
             }
             InsertValues::Values(values) => {
                 // Multiple rows from values
-                let field_names = insert.fields.ok_or_else(|| {
-                    EngineError::query("INSERT VALUES requires field names")
-                })?;
+                let field_names = insert
+                    .fields
+                    .ok_or_else(|| EngineError::query("INSERT VALUES requires field names"))?;
 
                 values
                     .into_iter()
@@ -323,54 +323,52 @@ impl OrbitQLAdapter {
                 left,
                 operator,
                 right,
-            } => {
-                match operator {
-                    BinaryOperator::Equal => {
-                        let field = self.extract_field_name(left)?;
-                        let value = self.expression_to_sql_value(right)?;
-                        Ok(FilterPredicate::Eq(field, value))
-                    }
-                    BinaryOperator::NotEqual => {
-                        let field = self.extract_field_name(left)?;
-                        let value = self.expression_to_sql_value(right)?;
-                        Ok(FilterPredicate::Ne(field, value))
-                    }
-                    BinaryOperator::LessThan => {
-                        let field = self.extract_field_name(left)?;
-                        let value = self.expression_to_sql_value(right)?;
-                        Ok(FilterPredicate::Lt(field, value))
-                    }
-                    BinaryOperator::LessThanOrEqual => {
-                        let field = self.extract_field_name(left)?;
-                        let value = self.expression_to_sql_value(right)?;
-                        Ok(FilterPredicate::Le(field, value))
-                    }
-                    BinaryOperator::GreaterThan => {
-                        let field = self.extract_field_name(left)?;
-                        let value = self.expression_to_sql_value(right)?;
-                        Ok(FilterPredicate::Gt(field, value))
-                    }
-                    BinaryOperator::GreaterThanOrEqual => {
-                        let field = self.extract_field_name(left)?;
-                        let value = self.expression_to_sql_value(right)?;
-                        Ok(FilterPredicate::Ge(field, value))
-                    }
-                    BinaryOperator::And => {
-                        let left_filter = self.expression_to_filter(left)?;
-                        let right_filter = self.expression_to_filter(right)?;
-                        Ok(FilterPredicate::And(vec![left_filter, right_filter]))
-                    }
-                    BinaryOperator::Or => {
-                        let left_filter = self.expression_to_filter(left)?;
-                        let right_filter = self.expression_to_filter(right)?;
-                        Ok(FilterPredicate::Or(vec![left_filter, right_filter]))
-                    }
-                    _ => Err(EngineError::not_supported(format!(
-                        "Operator {:?} not supported in WHERE clause",
-                        operator
-                    ))),
+            } => match operator {
+                BinaryOperator::Equal => {
+                    let field = self.extract_field_name(left)?;
+                    let value = self.expression_to_sql_value(right)?;
+                    Ok(FilterPredicate::Eq(field, value))
                 }
-            }
+                BinaryOperator::NotEqual => {
+                    let field = self.extract_field_name(left)?;
+                    let value = self.expression_to_sql_value(right)?;
+                    Ok(FilterPredicate::Ne(field, value))
+                }
+                BinaryOperator::LessThan => {
+                    let field = self.extract_field_name(left)?;
+                    let value = self.expression_to_sql_value(right)?;
+                    Ok(FilterPredicate::Lt(field, value))
+                }
+                BinaryOperator::LessThanOrEqual => {
+                    let field = self.extract_field_name(left)?;
+                    let value = self.expression_to_sql_value(right)?;
+                    Ok(FilterPredicate::Le(field, value))
+                }
+                BinaryOperator::GreaterThan => {
+                    let field = self.extract_field_name(left)?;
+                    let value = self.expression_to_sql_value(right)?;
+                    Ok(FilterPredicate::Gt(field, value))
+                }
+                BinaryOperator::GreaterThanOrEqual => {
+                    let field = self.extract_field_name(left)?;
+                    let value = self.expression_to_sql_value(right)?;
+                    Ok(FilterPredicate::Ge(field, value))
+                }
+                BinaryOperator::And => {
+                    let left_filter = self.expression_to_filter(left)?;
+                    let right_filter = self.expression_to_filter(right)?;
+                    Ok(FilterPredicate::And(vec![left_filter, right_filter]))
+                }
+                BinaryOperator::Or => {
+                    let left_filter = self.expression_to_filter(left)?;
+                    let right_filter = self.expression_to_filter(right)?;
+                    Ok(FilterPredicate::Or(vec![left_filter, right_filter]))
+                }
+                _ => Err(EngineError::not_supported(format!(
+                    "Operator {:?} not supported in WHERE clause",
+                    operator
+                ))),
+            },
             Expression::Unary { operator, operand } => match operator {
                 UnaryOperator::Not => {
                     let inner = self.expression_to_filter(operand)?;

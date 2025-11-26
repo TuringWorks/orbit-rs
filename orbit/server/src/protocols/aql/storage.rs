@@ -2,6 +2,8 @@
 //!
 //! This module provides persistent storage for AQL/ArangoDB document and graph data using RocksDB.
 
+#![cfg(feature = "storage-rocksdb")]
+
 use crate::protocols::aql::data_model::{AqlCollection, AqlDocument};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
@@ -99,9 +101,9 @@ impl AqlStorage {
         }
 
         // Load documents
-        let docs_cf = db.cf_handle("documents").ok_or_else(|| {
-            ProtocolError::Other("Documents column family not found".to_string())
-        })?;
+        let docs_cf = db
+            .cf_handle("documents")
+            .ok_or_else(|| ProtocolError::Other("Documents column family not found".to_string()))?;
 
         let doc_iter = db.iterator_cf(docs_cf, rocksdb::IteratorMode::Start);
         let mut documents = self.documents.write().await;
@@ -112,7 +114,8 @@ impl AqlStorage {
                 Ok((_key, value)) => {
                     if let Ok(doc) = serde_json::from_slice::<AqlDocument>(&value) {
                         // Extract collection name from _id (format: "collection/key")
-                        let collection_name = doc.id.split('/').next().unwrap_or("default").to_string();
+                        let collection_name =
+                            doc.id.split('/').next().unwrap_or("default").to_string();
                         documents
                             .entry(collection_name)
                             .or_insert_with(HashMap::new)
@@ -136,7 +139,10 @@ impl AqlStorage {
     /// Store a collection
     pub async fn store_collection(&self, collection: AqlCollection) -> ProtocolResult<()> {
         // Store in memory
-        self.collections.write().await.insert(collection.name.clone(), collection.clone());
+        self.collections
+            .write()
+            .await
+            .insert(collection.name.clone(), collection.clone());
 
         // Persist to RocksDB
         let db_guard = self.db.read().await;
@@ -150,9 +156,10 @@ impl AqlStorage {
                 ProtocolError::Other(format!("Failed to serialize collection: {}", e))
             })?;
 
-            db.put_cf(collections_cf, key.as_bytes(), &value).map_err(|e| {
-                ProtocolError::Other(format!("Failed to persist collection to RocksDB: {}", e))
-            })?;
+            db.put_cf(collections_cf, key.as_bytes(), &value)
+                .map_err(|e| {
+                    ProtocolError::Other(format!("Failed to persist collection to RocksDB: {}", e))
+                })?;
         }
 
         Ok(())
@@ -168,7 +175,7 @@ impl AqlStorage {
     pub async fn store_document(&self, doc: AqlDocument) -> ProtocolResult<()> {
         // Extract collection name from _id (format: "collection/key")
         let collection_name = doc.id.split('/').next().unwrap_or("default").to_string();
-        
+
         // Store in memory
         {
             let mut documents = self.documents.write().await;
@@ -199,7 +206,11 @@ impl AqlStorage {
     }
 
     /// Get a document by collection and key
-    pub async fn get_document(&self, collection: &str, key: &str) -> ProtocolResult<Option<AqlDocument>> {
+    pub async fn get_document(
+        &self,
+        collection: &str,
+        key: &str,
+    ) -> ProtocolResult<Option<AqlDocument>> {
         let documents = self.documents.read().await;
         if let Some(coll_docs) = documents.get(collection) {
             return Ok(coll_docs.get(key).cloned());
@@ -208,7 +219,10 @@ impl AqlStorage {
     }
 
     /// Get all documents in a collection
-    pub async fn get_collection_documents(&self, collection: &str) -> ProtocolResult<Vec<AqlDocument>> {
+    pub async fn get_collection_documents(
+        &self,
+        collection: &str,
+    ) -> ProtocolResult<Vec<AqlDocument>> {
         let documents = self.documents.read().await;
         if let Some(coll_docs) = documents.get(collection) {
             return Ok(coll_docs.values().cloned().collect());
@@ -229,4 +243,3 @@ impl AqlStorage {
         Ok(())
     }
 }
-

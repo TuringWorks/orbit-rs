@@ -3,11 +3,13 @@
 //! This module provides integration between the MCP server and Orbit-RS's
 //! PostgreSQL wire protocol and query engine.
 
+#![cfg(feature = "storage-rocksdb")]
+
 use crate::protocols::mcp::result_processor::{QueryResult as McpQueryResult, Row};
 use crate::protocols::mcp::sql_generator::GeneratedQuery;
 use crate::protocols::mcp::types::McpError;
-use crate::protocols::postgres_wire::query_engine::{QueryEngine, QueryResult as PgQueryResult};
 use crate::protocols::postgres_wire::persistent_storage::PersistentTableStorage;
+use crate::protocols::postgres_wire::query_engine::{QueryEngine, QueryResult as PgQueryResult};
 use std::sync::Arc;
 
 /// MCP-Orbit Integration Layer
@@ -99,34 +101,30 @@ impl OrbitMcpIntegration {
                     row_count: 1,
                 })
             }
-            PgQueryResult::Update { count } => {
-                Ok(McpQueryResult {
-                    columns: vec!["rows_affected".to_string()],
-                    rows: vec![{
-                        let mut row = Row::new();
-                        row.insert(
-                            "rows_affected".to_string(),
-                            serde_json::Value::Number(count.into()),
-                        );
-                        row
-                    }],
-                    row_count: 1,
-                })
-            }
-            PgQueryResult::Delete { count } => {
-                Ok(McpQueryResult {
-                    columns: vec!["rows_affected".to_string()],
-                    rows: vec![{
-                        let mut row = Row::new();
-                        row.insert(
-                            "rows_affected".to_string(),
-                            serde_json::Value::Number(count.into()),
-                        );
-                        row
-                    }],
-                    row_count: 1,
-                })
-            }
+            PgQueryResult::Update { count } => Ok(McpQueryResult {
+                columns: vec!["rows_affected".to_string()],
+                rows: vec![{
+                    let mut row = Row::new();
+                    row.insert(
+                        "rows_affected".to_string(),
+                        serde_json::Value::Number(count.into()),
+                    );
+                    row
+                }],
+                row_count: 1,
+            }),
+            PgQueryResult::Delete { count } => Ok(McpQueryResult {
+                columns: vec!["rows_affected".to_string()],
+                rows: vec![{
+                    let mut row = Row::new();
+                    row.insert(
+                        "rows_affected".to_string(),
+                        serde_json::Value::Number(count.into()),
+                    );
+                    row
+                }],
+                row_count: 1,
+            }),
         }
     }
 
@@ -243,4 +241,3 @@ impl OrbitMcpIntegration {
         }
     }
 }
-

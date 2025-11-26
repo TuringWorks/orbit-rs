@@ -9,10 +9,10 @@
 //! - **Hardware Acceleration**: Analyze and recommend optimal acceleration strategy
 //! - **SIMD Enablement**: Identify operations that benefit from vectorization
 
-use crate::query::{ExecutionPlan, PlanNode, PlanNodeType, Query};
 use crate::error::EngineResult;
+use crate::query::{ExecutionPlan, PlanNode, PlanNodeType, Query};
 use crate::storage::FilterPredicate;
-use orbit_compute::{QueryAnalyzer, OperationType, UniversalComputeCapabilities};
+use orbit_compute::{OperationType, QueryAnalyzer, UniversalComputeCapabilities};
 
 /// Query optimizer with hardware acceleration awareness
 pub struct QueryOptimizer {
@@ -39,12 +39,15 @@ impl QueryOptimizer {
     ///
     /// Detects available compute capabilities and creates a QueryAnalyzer
     /// for intelligent acceleration recommendations.
-    pub async fn new_with_acceleration(
-        optimization_level: u8,
-    ) -> EngineResult<Self> {
+    pub async fn new_with_acceleration(optimization_level: u8) -> EngineResult<Self> {
         let capabilities = orbit_compute::init_heterogeneous_compute()
             .await
-            .map_err(|e| crate::error::EngineError::Internal(format!("Failed to detect compute capabilities: {}", e)))?;
+            .map_err(|e| {
+                crate::error::EngineError::Internal(format!(
+                    "Failed to detect compute capabilities: {}",
+                    e
+                ))
+            })?;
 
         Ok(Self {
             optimization_level: optimization_level.min(3),
@@ -106,10 +109,8 @@ impl QueryOptimizer {
                         plan.query_analysis = Some(analysis);
 
                         // Recalculate cost with acceleration strategy
-                        plan.estimated_cost = self.estimate_cost_with_strategy(
-                            &plan.nodes,
-                            plan.acceleration_strategy,
-                        );
+                        plan.estimated_cost = self
+                            .estimate_cost_with_strategy(&plan.nodes, plan.acceleration_strategy);
 
                         tracing::debug!(
                             "Cost estimate updated: {:.2} -> {:.2} ({}x speedup)",
@@ -181,8 +182,14 @@ impl QueryOptimizer {
     /// the amount of data processed by subsequent operations.
     fn apply_filter_pushdown(&self, mut plan: ExecutionPlan, _query: &Query) -> ExecutionPlan {
         // Reorder nodes to push filters down
-        let has_filter = plan.nodes.iter().any(|n| n.node_type == PlanNodeType::Filter);
-        let has_scan = plan.nodes.iter().any(|n| n.node_type == PlanNodeType::TableScan);
+        let has_filter = plan
+            .nodes
+            .iter()
+            .any(|n| n.node_type == PlanNodeType::Filter);
+        let has_scan = plan
+            .nodes
+            .iter()
+            .any(|n| n.node_type == PlanNodeType::TableScan);
 
         if has_filter && has_scan {
             // Ensure filter comes immediately after scan
@@ -235,7 +242,11 @@ impl QueryOptimizer {
     /// Apply cost-based optimization
     ///
     /// Choose between table scan and index scan based on estimated cost.
-    fn apply_cost_based_optimization(&self, mut plan: ExecutionPlan, query: &Query) -> ExecutionPlan {
+    fn apply_cost_based_optimization(
+        &self,
+        mut plan: ExecutionPlan,
+        query: &Query,
+    ) -> ExecutionPlan {
         // If we have a highly selective filter, consider using index scan
         if let Some(ref filter) = query.filter {
             let selectivity = self.estimate_selectivity(filter);
@@ -274,12 +285,12 @@ impl QueryOptimizer {
     /// Check if filter uses numeric comparison
     fn filter_uses_numeric_comparison(&self, filter: &FilterPredicate) -> bool {
         match filter {
-            FilterPredicate::Eq(_, val) |
-            FilterPredicate::Ne(_, val) |
-            FilterPredicate::Lt(_, val) |
-            FilterPredicate::Le(_, val) |
-            FilterPredicate::Gt(_, val) |
-            FilterPredicate::Ge(_, val) => {
+            FilterPredicate::Eq(_, val)
+            | FilterPredicate::Ne(_, val)
+            | FilterPredicate::Lt(_, val)
+            | FilterPredicate::Le(_, val)
+            | FilterPredicate::Gt(_, val)
+            | FilterPredicate::Ge(_, val) => {
                 // Check if value is numeric
                 matches!(
                     val,
@@ -290,9 +301,9 @@ impl QueryOptimizer {
                         | crate::storage::SqlValue::Float64(_)
                 )
             }
-            FilterPredicate::And(filters) | FilterPredicate::Or(filters) => {
-                filters.iter().any(|f| self.filter_uses_numeric_comparison(f))
-            }
+            FilterPredicate::And(filters) | FilterPredicate::Or(filters) => filters
+                .iter()
+                .any(|f| self.filter_uses_numeric_comparison(f)),
             FilterPredicate::Not(filter) => self.filter_uses_numeric_comparison(filter),
         }
     }
@@ -312,27 +323,25 @@ impl QueryOptimizer {
             // Inequality is less selective
             FilterPredicate::Ne(_, _) => 0.95,
             // Range predicates have medium selectivity
-            FilterPredicate::Lt(_, _) |
-            FilterPredicate::Le(_, _) |
-            FilterPredicate::Gt(_, _) |
-            FilterPredicate::Ge(_, _) => 0.33,
+            FilterPredicate::Lt(_, _)
+            | FilterPredicate::Le(_, _)
+            | FilterPredicate::Gt(_, _)
+            | FilterPredicate::Ge(_, _) => 0.33,
             // AND reduces selectivity (multiplicative)
-            FilterPredicate::And(filters) => {
-                filters.iter()
-                    .map(|f| self.estimate_selectivity(f))
-                    .product()
-            }
+            FilterPredicate::And(filters) => filters
+                .iter()
+                .map(|f| self.estimate_selectivity(f))
+                .product(),
             // OR increases selectivity (probabilistic union)
             FilterPredicate::Or(filters) => {
-                let combined = filters.iter()
+                let combined = filters
+                    .iter()
                     .map(|f| 1.0 - self.estimate_selectivity(f))
                     .product::<f64>();
                 1.0 - combined
             }
             // NOT inverts selectivity
-            FilterPredicate::Not(filter) => {
-                1.0 - self.estimate_selectivity(filter)
-            }
+            FilterPredicate::Not(filter) => 1.0 - self.estimate_selectivity(filter),
         }
     }
 

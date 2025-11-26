@@ -77,7 +77,7 @@ impl Default for TimeSeriesOperationsConfig {
         Self {
             enable_gpu: true,
             gpu_min_points: 10000, // Use GPU for 10K+ points
-            gpu_min_windows: 100,   // Use GPU for 100+ windows
+            gpu_min_windows: 100,  // Use GPU for 100+ windows
             use_cpu_parallel: true,
         }
     }
@@ -249,15 +249,21 @@ impl GPUTimeSeriesOperations {
             TimeSeriesAggregation::Avg => 3,
             TimeSeriesAggregation::Count => 4,
             // These are not yet supported on GPU, fall back to CPU
-            TimeSeriesAggregation::First | TimeSeriesAggregation::Last |
-            TimeSeriesAggregation::Range | TimeSeriesAggregation::Std => {
+            TimeSeriesAggregation::First
+            | TimeSeriesAggregation::Last
+            | TimeSeriesAggregation::Range
+            | TimeSeriesAggregation::Std => {
                 let mut windows: std::collections::BTreeMap<u64, Vec<TimeSeriesPoint>> =
                     std::collections::BTreeMap::new();
                 for point in points {
                     let window_start = (point.timestamp / window_size_ms) * window_size_ms;
                     windows.entry(window_start).or_default().push(point.clone());
                 }
-                return self.aggregate_by_windows_cpu_parallel(&windows, window_size_ms, aggregation);
+                return self.aggregate_by_windows_cpu_parallel(
+                    &windows,
+                    window_size_ms,
+                    aggregation,
+                );
             }
         };
 
@@ -269,12 +275,14 @@ impl GPUTimeSeriesOperations {
         if let Some(ref manager) = self.gpu_manager {
             match tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(async {
-                    manager.execute_timeseries_window_aggregate(
-                        &timestamps,
-                        &values,
-                        window_size_ms,
-                        agg_type,
-                    ).await
+                    manager
+                        .execute_timeseries_window_aggregate(
+                            &timestamps,
+                            &values,
+                            window_size_ms,
+                            agg_type,
+                        )
+                        .await
                 })
             }) {
                 Ok((window_results, window_counts, max_window_id)) => {
@@ -360,7 +368,11 @@ impl GPUTimeSeriesOperations {
         Ok(results)
     }
 
-    fn aggregate_values(&self, points: &[TimeSeriesPoint], aggregation: TimeSeriesAggregation) -> f64 {
+    fn aggregate_values(
+        &self,
+        points: &[TimeSeriesPoint],
+        aggregation: TimeSeriesAggregation,
+    ) -> f64 {
         if points.is_empty() {
             return 0.0;
         }
@@ -371,10 +383,9 @@ impl GPUTimeSeriesOperations {
                 sum / points.len() as f64
             }
             TimeSeriesAggregation::Sum => points.iter().map(|p| p.value).sum(),
-            TimeSeriesAggregation::Min => points
-                .iter()
-                .map(|p| p.value)
-                .fold(f64::INFINITY, f64::min),
+            TimeSeriesAggregation::Min => {
+                points.iter().map(|p| p.value).fold(f64::INFINITY, f64::min)
+            }
             TimeSeriesAggregation::Max => points
                 .iter()
                 .map(|p| p.value)
@@ -383,10 +394,7 @@ impl GPUTimeSeriesOperations {
             TimeSeriesAggregation::First => points.first().map(|p| p.value).unwrap_or(0.0),
             TimeSeriesAggregation::Last => points.last().map(|p| p.value).unwrap_or(0.0),
             TimeSeriesAggregation::Range => {
-                let min = points
-                    .iter()
-                    .map(|p| p.value)
-                    .fold(f64::INFINITY, f64::min);
+                let min = points.iter().map(|p| p.value).fold(f64::INFINITY, f64::min);
                 let max = points
                     .iter()
                     .map(|p| p.value)
@@ -398,10 +406,7 @@ impl GPUTimeSeriesOperations {
                     return 0.0;
                 }
                 let mean = points.iter().map(|p| p.value).sum::<f64>() / points.len() as f64;
-                let variance = points
-                    .iter()
-                    .map(|p| (p.value - mean).powi(2))
-                    .sum::<f64>()
+                let variance = points.iter().map(|p| (p.value - mean).powi(2)).sum::<f64>()
                     / points.len() as f64;
                 variance.sqrt()
             }
@@ -647,4 +652,3 @@ mod tests {
         );
     }
 }
-

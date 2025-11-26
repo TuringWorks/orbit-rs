@@ -4,10 +4,10 @@
 //! large result sets and real-time query subscriptions that automatically
 //! update when underlying data changes.
 
+use crate::error::{OrbitError, OrbitResult};
 use crate::orbitql::executor::{QueryExecutor, QueryResult};
 use crate::orbitql::planner::{ExecutionPlan, PlanNode};
 use crate::orbitql::{QueryContext, QueryParams};
-use crate::error::{OrbitError, OrbitResult};
 use futures::Stream;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

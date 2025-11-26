@@ -3,7 +3,7 @@
 //! Provides high-performance filtering for common predicates.
 //! Uses SIMD instructions when available with automatic fallback to scalar code.
 
-use super::{SimdFilter, simd_capability, SimdCapability};
+use super::{simd_capability, SimdCapability, SimdFilter};
 
 /// SIMD filter for i32 values
 pub struct SimdFilterI32 {

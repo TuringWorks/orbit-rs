@@ -27,18 +27,10 @@ mod handler {
     use tracing::{debug, warn};
 
     use super::{
-        connection::ConnectionCommands,
-        graphrag::GraphRAGCommands,
-        hash::HashCommands,
-        list::ListCommands,
-        // pubsub::PubSubCommands, // TODO: fix
-        server::ServerCommands,
-        set::SetCommands,
-        sorted_set::SortedSetCommands,
-        // time_series::TimeSeriesCommands, // TODO: fix
-        // vector::VectorCommands, // TODO: fix
-        // graph::GraphCommands, // TODO: fix
-        string::StringCommands,
+        connection::ConnectionCommands, graph::GraphCommands, graphrag::GraphRAGCommands,
+        hash::HashCommands, list::ListCommands, pubsub::PubSubCommands, server::ServerCommands,
+        set::SetCommands, sorted_set::SortedSetCommands, string::StringCommands,
+        time_series::TimeSeriesCommands, vector::VectorCommands,
     };
     use crate::protocols::error::ProtocolResult;
     use crate::protocols::resp::simple_local::SimpleLocalRegistry;
@@ -71,12 +63,12 @@ mod handler {
         string: StringCommands,
         hash: HashCommands,
         list: ListCommands,
-        // pubsub: PubSubCommands, // TODO: fix
+        pubsub: PubSubCommands,
         set: SetCommands,
         sorted_set: SortedSetCommands,
-        // vector: VectorCommands, // TODO: fix
-        // time_series: TimeSeriesCommands, // TODO: fix
-        // graph: GraphCommands, // TODO: fix
+        vector: VectorCommands,
+        time_series: TimeSeriesCommands,
+        graph: GraphCommands,
         graphrag: GraphRAGCommands,
         server: ServerCommands,
     }
@@ -89,7 +81,9 @@ mod handler {
 
         /// Create a new command handler with optional persistent storage
         pub fn new_with_persistence(
-            persistent_storage: Option<Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>>,
+            persistent_storage: Option<
+                Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>,
+            >,
         ) -> Self {
             let local_registry = if let Some(provider) = persistent_storage {
                 Arc::new(SimpleLocalRegistry::with_persistence(provider))
@@ -102,12 +96,12 @@ mod handler {
                 string: StringCommands::new(local_registry.clone()),
                 hash: HashCommands::new(local_registry.clone()),
                 list: ListCommands::new(local_registry.clone()),
-                // pubsub: PubSubCommands::new(local_registry.clone()), // TODO: fix
+                pubsub: PubSubCommands::new(local_registry.clone()),
                 set: SetCommands::new(local_registry.clone()),
                 sorted_set: SortedSetCommands::new(local_registry.clone()),
-                // vector: VectorCommands::new(local_registry.clone()), // TODO: fix
-                // time_series: TimeSeriesCommands::new(local_registry.clone()), // TODO: fix
-                // graph: GraphCommands::new(local_registry.clone()), // TODO: fix
+                vector: VectorCommands::new(local_registry.clone()),
+                time_series: TimeSeriesCommands::new(local_registry.clone()),
+                graph: GraphCommands::new(local_registry.clone()),
                 graphrag: GraphRAGCommands::new(local_registry.clone()),
                 server: ServerCommands::new(local_registry.clone()),
                 local_registry,
@@ -116,9 +110,12 @@ mod handler {
 
         /// Load data from persistent storage on startup
         pub async fn load_from_persistence(&self) {
-            self.local_registry.load_from_persistence().await.unwrap_or_else(|e| {
-                tracing::error!("Failed to load data from persistent storage: {}", e);
-            });
+            self.local_registry
+                .load_from_persistence()
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::error!("Failed to load data from persistent storage: {}", e);
+                });
         }
 
         /// Handle a RESP command by delegating to the appropriate module
@@ -146,24 +143,24 @@ mod handler {
                 CommandCategory::List => {
                     CommandHandlerTrait::handle(&self.list, &command_name, &args).await
                 }
-                CommandCategory::PubSub => Err(ProtocolError::RespError(
-                    "ERR PubSub commands not available".to_string(),
-                )),
+                CommandCategory::PubSub => {
+                    CommandHandlerTrait::handle(&self.pubsub, &command_name, &args).await
+                }
                 CommandCategory::Set => {
                     CommandHandlerTrait::handle(&self.set, &command_name, &args).await
                 }
                 CommandCategory::SortedSet => {
                     CommandHandlerTrait::handle(&self.sorted_set, &command_name, &args).await
                 }
-                CommandCategory::Vector => Err(ProtocolError::RespError(
-                    "ERR Vector commands not available".to_string(),
-                )),
-                CommandCategory::TimeSeries => Err(ProtocolError::RespError(
-                    "ERR TimeSeries commands not available".to_string(),
-                )),
-                CommandCategory::Graph => Err(ProtocolError::RespError(
-                    "ERR Graph commands not available".to_string(),
-                )),
+                CommandCategory::Vector => {
+                    CommandHandlerTrait::handle(&self.vector, &command_name, &args).await
+                }
+                CommandCategory::TimeSeries => {
+                    CommandHandlerTrait::handle(&self.time_series, &command_name, &args).await
+                }
+                CommandCategory::Graph => {
+                    CommandHandlerTrait::handle(&self.graph, &command_name, &args).await
+                }
                 CommandCategory::GraphRAG => {
                     CommandHandlerTrait::handle(&self.graphrag, &command_name, &args).await
                 }

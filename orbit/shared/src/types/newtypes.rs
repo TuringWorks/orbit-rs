@@ -228,7 +228,10 @@ pub struct Percentage(pub f64);
 impl Percentage {
     pub fn new(value: f64) -> Result<Self, String> {
         if !(0.0..=100.0).contains(&value) {
-            Err(format!("Percentage must be between 0.0 and 100.0, got {}", value))
+            Err(format!(
+                "Percentage must be between 0.0 and 100.0, got {}",
+                value
+            ))
         } else {
             Ok(Self(value))
         }
@@ -268,7 +271,10 @@ pub struct NormalizedPercentage(pub f64);
 impl NormalizedPercentage {
     pub fn new(value: f64) -> Result<Self, String> {
         if !(0.0..=1.0).contains(&value) {
-            Err(format!("Normalized percentage must be between 0.0 and 1.0, got {}", value))
+            Err(format!(
+                "Normalized percentage must be between 0.0 and 1.0, got {}",
+                value
+            ))
         } else {
             Ok(Self(value))
         }

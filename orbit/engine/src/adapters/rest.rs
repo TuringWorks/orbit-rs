@@ -137,8 +137,14 @@ impl RestAdapter {
         let filter = request.filter.to_filter_predicate();
         let updates = json_to_row(request.updates)?;
 
-        let count = self.context.storage.update(table_name, filter, updates).await?;
-        Ok(RestResponse::data(serde_json::json!({ "rows_affected": count })))
+        let count = self
+            .context
+            .storage
+            .update(table_name, filter, updates)
+            .await?;
+        Ok(RestResponse::data(
+            serde_json::json!({ "rows_affected": count }),
+        ))
     }
 
     /// Handle DELETE ROWS request
@@ -149,7 +155,9 @@ impl RestAdapter {
     ) -> EngineResult<RestResponse> {
         let filter = request.filter.to_filter_predicate();
         let count = self.context.storage.delete(table_name, filter).await?;
-        Ok(RestResponse::data(serde_json::json!({ "rows_affected": count })))
+        Ok(RestResponse::data(
+            serde_json::json!({ "rows_affected": count }),
+        ))
     }
 
     /// Begin transaction
@@ -161,7 +169,9 @@ impl RestAdapter {
         self.transaction_adapter
             .begin(tx_id.clone(), request.isolation_level.to_engine_isolation())
             .await?;
-        Ok(RestResponse::data(serde_json::json!({ "transaction_id": tx_id })))
+        Ok(RestResponse::data(
+            serde_json::json!({ "transaction_id": tx_id }),
+        ))
     }
 
     /// Commit transaction
@@ -252,11 +262,7 @@ impl CreateTableRequest {
     pub fn to_table_schema(&self) -> TableSchema {
         TableSchema {
             name: self.name.clone(),
-            columns: self
-                .columns
-                .iter()
-                .map(|col| col.to_column_def())
-                .collect(),
+            columns: self.columns.iter().map(|col| col.to_column_def()).collect(),
             primary_key: self.primary_key.clone(),
         }
     }
@@ -329,7 +335,7 @@ pub enum RestFilter {
         /// Field name
         field: String,
         /// Value to compare
-        value: serde_json::Value
+        value: serde_json::Value,
     },
     /// Not equals
     #[serde(rename = "ne")]
@@ -337,7 +343,7 @@ pub enum RestFilter {
         /// Field name
         field: String,
         /// Value to compare
-        value: serde_json::Value
+        value: serde_json::Value,
     },
     /// Less than
     #[serde(rename = "lt")]
@@ -345,7 +351,7 @@ pub enum RestFilter {
         /// Field name
         field: String,
         /// Value to compare
-        value: serde_json::Value
+        value: serde_json::Value,
     },
     /// Less than or equal
     #[serde(rename = "lte")]
@@ -353,7 +359,7 @@ pub enum RestFilter {
         /// Field name
         field: String,
         /// Value to compare
-        value: serde_json::Value
+        value: serde_json::Value,
     },
     /// Greater than
     #[serde(rename = "gt")]
@@ -361,7 +367,7 @@ pub enum RestFilter {
         /// Field name
         field: String,
         /// Value to compare
-        value: serde_json::Value
+        value: serde_json::Value,
     },
     /// Greater than or equal
     #[serde(rename = "gte")]
@@ -369,19 +375,19 @@ pub enum RestFilter {
         /// Field name
         field: String,
         /// Value to compare
-        value: serde_json::Value
+        value: serde_json::Value,
     },
     /// AND
     #[serde(rename = "and")]
     And {
         /// Filters to combine with AND
-        filters: Vec<RestFilter>
+        filters: Vec<RestFilter>,
     },
     /// OR
     #[serde(rename = "or")]
     Or {
         /// Filters to combine with OR
-        filters: Vec<RestFilter>
+        filters: Vec<RestFilter>,
     },
 }
 
@@ -522,13 +528,15 @@ fn sql_value_to_json(value: &SqlValue) -> EngineResult<serde_json::Value> {
             Ok(serde_json::Value::String(s.clone()))
         }
         SqlValue::Binary(b) => {
-            use base64::{Engine as _, engine::general_purpose};
-            Ok(serde_json::Value::String(general_purpose::STANDARD.encode(b)))
+            use base64::{engine::general_purpose, Engine as _};
+            Ok(serde_json::Value::String(
+                general_purpose::STANDARD.encode(b),
+            ))
         }
         SqlValue::Timestamp(ts) => {
-            let duration = ts.duration_since(std::time::UNIX_EPOCH).map_err(|e| {
-                EngineError::internal(format!("Invalid timestamp: {}", e))
-            })?;
+            let duration = ts
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| EngineError::internal(format!("Invalid timestamp: {}", e)))?;
             Ok(serde_json::json!(duration.as_secs()))
         }
     }

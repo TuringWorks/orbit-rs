@@ -201,20 +201,81 @@ impl CostEstimationModel {
         actual: &ExecutionMetrics,
     ) -> f64 {
         let error = (predicted.total_cost - actual.execution_time.as_millis() as f64).abs();
-        let max_error = predicted.total_cost.max(actual.execution_time.as_millis() as f64);
-        
+        let max_error = predicted
+            .total_cost
+            .max(actual.execution_time.as_millis() as f64);
+
         if max_error > 0.0 {
             1.0 / (1.0 + error / max_error)
         } else {
             1.0
         }
     }
-
     /// Schedule model retraining
     async fn schedule_retraining(&self) -> OrbitResult<()> {
         debug!("Scheduling cost model retraining");
-        // TODO: Implement actual retraining with neural network
-        // For now, this is a placeholder
+
+        // Get training data from buffer
+        let training_data = {
+            let buffer = self.training_buffer.lock().await;
+            buffer.clone()
+        };
+
+        if training_data.is_empty() {
+            debug!("No training data available, skipping retraining");
+            return Ok(());
+        }
+
+        debug!(
+            "Retraining cost model with {} examples",
+            training_data.len()
+        );
+
+        let learning_rate = 0.001; // Small learning rate
+        let num_epochs = 5; // Number of passes over the training data
+
+        // Get current weights and work on a copy
+        let mut current_model_weights_guard = self.weights.lock().await;
+        let mut new_weights = current_model_weights_guard.clone();
+
+        for epoch in 0..num_epochs {
+            let mut total_loss = 0.0;
+            for example in training_data.iter() {
+                // Predict using current weights
+                let mut prediction = new_weights.bias;
+                for (i, &feature) in example.inputs.iter().enumerate() {
+                    if i < new_weights.weights.len() {
+                        prediction += feature * new_weights.weights[i];
+                    }
+                }
+
+                // The primary target is execution time (first element of targets)
+                let target = example.targets.get(0).copied().unwrap_or(0.0);
+                let error = prediction - target;
+
+                // Apply example weight to the error
+                let weighted_error = error * example.weight;
+
+                // Update weights and bias using gradient descent
+                new_weights.bias -= learning_rate * weighted_error;
+                for (i, &feature) in example.inputs.iter().enumerate() {
+                    if i < new_weights.weights.len() {
+                        new_weights.weights[i] -= learning_rate * weighted_error * feature;
+                    }
+                }
+                total_loss += weighted_error.powi(2); // Sum of squared errors
+            }
+            debug!(
+                "Epoch {}: Average Loss = {:.4}",
+                epoch,
+                total_loss / training_data.len() as f64
+            );
+        }
+
+        // Update the model's weights with the newly trained weights
+        *current_model_weights_guard = new_weights;
+        debug!("Cost model retraining complete. Weights updated.");
+
         Ok(())
     }
 }
@@ -237,4 +298,3 @@ pub struct ExecutionMetrics {
     pub io_operations: u64,
     pub network_bytes: u64,
 }
-

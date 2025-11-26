@@ -2,8 +2,8 @@
 //!
 //! Stores patterns, models, and decision history for the AI system.
 
-use crate::ai::{SystemState, LearningMode};
 use crate::ai::controller::AIConfig;
+use crate::ai::{LearningMode, SystemState};
 use anyhow::Result as OrbitResult;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -164,7 +164,10 @@ impl AIKnowledgeBase {
     }
 
     /// Calculate similarity between two feature sets
-    fn calculate_similarity(features1: &HashMap<String, f64>, features2: &HashMap<String, f64>) -> f64 {
+    fn calculate_similarity(
+        features1: &HashMap<String, f64>,
+        features2: &HashMap<String, f64>,
+    ) -> f64 {
         let mut common_features = 0;
         let mut total_diff = 0.0;
 
@@ -184,10 +187,7 @@ impl AIKnowledgeBase {
     }
 
     /// Get recent observations for learning
-    pub async fn get_recent_observations(
-        &self,
-        count: usize,
-    ) -> Vec<SystemObservation> {
+    pub async fn get_recent_observations(&self, count: usize) -> Vec<SystemObservation> {
         let observations = self.observations.read().await;
         let start = observations.len().saturating_sub(count);
         observations[start..].to_vec()
@@ -216,17 +216,12 @@ impl AIKnowledgeBase {
 
         KnowledgeBaseStatistics {
             total_patterns: patterns.len(),
-            pattern_types: patterns
-                .values()
-                .fold(HashMap::new(), |mut acc, p| {
-                    *acc.entry(format!("{:?}", p.pattern_type)).or_insert(0) += 1;
-                    acc
-                }),
+            pattern_types: patterns.values().fold(HashMap::new(), |mut acc, p| {
+                *acc.entry(format!("{:?}", p.pattern_type)).or_insert(0) += 1;
+                acc
+            }),
             total_observations: observations.len(),
-            average_confidence: patterns
-                .values()
-                .map(|p| p.confidence)
-                .sum::<f64>()
+            average_confidence: patterns.values().map(|p| p.confidence).sum::<f64>()
                 / patterns.len().max(1) as f64,
         }
     }
@@ -239,4 +234,3 @@ pub struct KnowledgeBaseStatistics {
     pub total_observations: usize,
     pub average_confidence: f64,
 }
-

@@ -4,9 +4,7 @@
 //! Natural Language → NLP Processing → SQL Generation → Query Execution → Result Processing
 
 use orbit_protocols::mcp::{
-    integration::OrbitMcpIntegration,
-    server::McpServer,
-    McpCapabilities, McpConfig,
+    integration::OrbitMcpIntegration, server::McpServer, McpCapabilities, McpConfig,
 };
 use orbit_protocols::postgres_wire::query_engine::QueryEngine;
 use std::sync::Arc;
@@ -49,7 +47,10 @@ async fn test_natural_language_to_sql_generation() {
 
         let generated_query = result.unwrap();
         assert!(
-            generated_query.sql.to_uppercase().contains(expected_sql_keyword),
+            generated_query
+                .sql
+                .to_uppercase()
+                .contains(expected_sql_keyword),
             "Query '{}' did not generate expected SQL keyword. Got: {}",
             query,
             generated_query.sql
@@ -210,7 +211,10 @@ async fn test_result_processing() {
             "name".to_string(),
             serde_json::Value::String(format!("User {}", i)),
         );
-        row.insert("age".to_string(), serde_json::Value::Number((20 + i * 5).into()));
+        row.insert(
+            "age".to_string(),
+            serde_json::Value::Number((20 + i * 5).into()),
+        );
         mock_result.rows.push(row);
     }
     mock_result.row_count = mock_result.rows.len();
@@ -267,9 +271,7 @@ async fn test_complex_query_generation() {
 
     // Test complex query with multiple conditions
     let query = server
-        .process_natural_language_query(
-            "Show me the top 10 users from California ordered by age",
-        )
+        .process_natural_language_query("Show me the top 10 users from California ordered by age")
         .await
         .unwrap();
 
@@ -360,4 +362,3 @@ async fn test_optimization_hints() {
         "Query with conditions should have optimization hints"
     );
 }
-

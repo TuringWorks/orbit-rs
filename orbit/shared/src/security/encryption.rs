@@ -319,9 +319,9 @@ impl EncryptionManager {
         let ciphertext = &encrypted_data[NONCE_SIZE..];
 
         // Decrypt and verify authentication tag
-        let plaintext = cipher
-            .decrypt(nonce, ciphertext)
-            .map_err(|_| OrbitError::internal("Decryption failed: authentication tag mismatch or corrupted data"))?;
+        let plaintext = cipher.decrypt(nonce, ciphertext).map_err(|_| {
+            OrbitError::internal("Decryption failed: authentication tag mismatch or corrupted data")
+        })?;
 
         Ok(plaintext)
     }

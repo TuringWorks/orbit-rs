@@ -93,7 +93,7 @@ fn benchmark_left_outer_join(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = Criterion::default().sample_size(10);
-    targets = 
+    targets =
         benchmark_inner_join,
         benchmark_left_outer_join
 }
@@ -105,4 +105,3 @@ criterion_main!(benches);
 fn main() {
     println!("GPU acceleration feature not enabled");
 }
-

@@ -18,9 +18,10 @@ use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
 
 use crate::error::{EngineError, EngineResult};
-use crate::storage::{SqlValue, Column, ColumnBatch, NullBitmap};
+use crate::query::{AggregateFunction, ComparisonOp, VectorizedExecutor, VectorizedExecutorConfig};
 use crate::storage::FilterPredicate as StorageFilterPredicate;
-use crate::query::{VectorizedExecutor, VectorizedExecutorConfig, AggregateFunction, ComparisonOp};
+use crate::storage::{Column, ColumnBatch, NullBitmap, SqlValue};
+use crate::triggers::{TriggerEvent, TriggerExecutor, TriggerManager, TriggerTiming};
 
 /// Primary key value that can be hashed and compared
 ///
@@ -59,21 +60,16 @@ impl PrimaryKey {
             SqlValue::Binary(b) => Ok(PrimaryKey::Bytea(b.clone())),
 
             // Reject types that can't be primary keys
-            SqlValue::Float32(_) | SqlValue::Float64(_) => {
-                Err(EngineError::storage(
-                    "Floating point types cannot be used as primary keys".to_string()
-                ))
-            }
-            SqlValue::Decimal(_) => {
-                Err(EngineError::storage(
-                    "Decimal type not yet supported as primary key".to_string()
-                ))
-            }
-            _ => {
-                Err(EngineError::storage(
-                    format!("Type {:?} cannot be used as primary key", value)
-                ))
-            }
+            SqlValue::Float32(_) | SqlValue::Float64(_) => Err(EngineError::storage(
+                "Floating point types cannot be used as primary keys".to_string(),
+            )),
+            SqlValue::Decimal(_) => Err(EngineError::storage(
+                "Decimal type not yet supported as primary key".to_string(),
+            )),
+            _ => Err(EngineError::storage(format!(
+                "Type {:?} cannot be used as primary key",
+                value
+            ))),
         }
     }
 
@@ -121,8 +117,10 @@ impl StorageTier {
     pub fn is_suitable_for_age(&self, age: Duration) -> bool {
         match self {
             StorageTier::Hot => age < Duration::from_secs(48 * 60 * 60),
-            StorageTier::Warm => age >= Duration::from_secs(48 * 60 * 60)
-                              && age < Duration::from_secs(30 * 24 * 60 * 60),
+            StorageTier::Warm => {
+                age >= Duration::from_secs(48 * 60 * 60)
+                    && age < Duration::from_secs(30 * 24 * 60 * 60)
+            }
             StorageTier::Cold => age >= Duration::from_secs(30 * 24 * 60 * 60),
         }
     }
@@ -227,7 +225,9 @@ impl TimeRange {
 
     /// Get the duration of this time range
     pub fn duration(&self) -> Duration {
-        self.end.duration_since(self.start).unwrap_or(Duration::ZERO)
+        self.end
+            .duration_since(self.start)
+            .unwrap_or(Duration::ZERO)
     }
 }
 
@@ -299,9 +299,11 @@ impl RowBasedStore {
     /// Insert a row
     pub fn insert(&mut self, values: Vec<SqlValue>) -> EngineResult<()> {
         if values.len() != self.schema.len() {
-            return Err(EngineError::storage(
-                format!("Expected {} values, got {}", self.schema.len(), values.len()),
-            ));
+            return Err(EngineError::storage(format!(
+                "Expected {} values, got {}",
+                self.schema.len(),
+                values.len()
+            )));
         }
 
         let row = Row {
@@ -324,11 +326,17 @@ impl RowBasedStore {
     /// Get row by primary key
     pub fn get(&self, key: &SqlValue) -> Option<&Row> {
         let pk = PrimaryKey::from_sql_value(key).ok()?;
-        self.primary_index.get(&pk).and_then(|&idx| self.rows.get(idx))
+        self.primary_index
+            .get(&pk)
+            .and_then(|&idx| self.rows.get(idx))
     }
 
     /// Update rows matching filter
-    pub fn update(&mut self, filter: &FilterPredicate, updates: HashMap<String, SqlValue>) -> EngineResult<usize> {
+    pub fn update(
+        &mut self,
+        filter: &FilterPredicate,
+        updates: HashMap<String, SqlValue>,
+    ) -> EngineResult<usize> {
         let mut updated_count = 0;
 
         // First, find matching row indices
@@ -419,7 +427,7 @@ impl RowBasedStore {
                     }
                     SqlValue::Int32(v) => column_values.push(*v),
                     SqlValue::Int64(v) => column_values.push(*v as i32), // Simplified
-                    _ => column_values.push(0), // Handle other types
+                    _ => column_values.push(0),                          // Handle other types
                 }
             }
 
@@ -450,11 +458,11 @@ impl RowBasedStore {
     // Private helper methods
 
     fn matches_filter(&self, row: &Row, filter: &FilterPredicate) -> EngineResult<bool> {
-        let col_idx = self.schema.iter()
+        let col_idx = self
+            .schema
+            .iter()
             .position(|s| s.name == filter.column)
-            .ok_or_else(|| EngineError::storage(
-                format!("Column {} not found", filter.column)
-            ))?;
+            .ok_or_else(|| EngineError::storage(format!("Column {} not found", filter.column)))?;
 
         let value = &row.values[col_idx];
 
@@ -474,7 +482,9 @@ impl RowBasedStore {
             (SqlValue::Int64(x), SqlValue::Int64(y)) => Ok(x.cmp(y) as i32),
             (SqlValue::Int16(x), SqlValue::Int16(y)) => Ok(x.cmp(y) as i32),
             (SqlValue::String(x), SqlValue::String(y)) => Ok(x.cmp(y) as i32),
-            _ => Err(EngineError::storage("Cannot compare values of different types".to_string())),
+            _ => Err(EngineError::storage(
+                "Cannot compare values of different types".to_string(),
+            )),
         }
     }
 
@@ -517,6 +527,11 @@ pub struct HybridStorageManager {
 
     /// Storage tier configuration
     config: HybridStorageConfig,
+
+    /// Trigger manager
+    trigger_manager: Option<Arc<TriggerManager>>,
+    /// Trigger executor
+    trigger_executor: Option<Arc<dyn TriggerExecutor>>,
 }
 
 /// Configuration for hybrid storage manager
@@ -557,14 +572,32 @@ impl HybridStorageManager {
             cold_store: None,
             #[cfg(not(feature = "iceberg-cold"))]
             cold_store: Arc::new(RwLock::new(None)),
-            vectorized_executor: VectorizedExecutor::with_config(VectorizedExecutorConfig::default()),
+            vectorized_executor: VectorizedExecutor::with_config(
+                VectorizedExecutorConfig::default(),
+            ),
             config,
+            trigger_manager: None,
+            trigger_executor: None,
         }
+    }
+
+    /// Set trigger manager and executor
+    pub fn with_triggers(
+        mut self,
+        manager: Arc<TriggerManager>,
+        executor: Arc<dyn TriggerExecutor>,
+    ) -> Self {
+        self.trigger_manager = Some(manager);
+        self.trigger_executor = Some(executor);
+        self
     }
 
     /// Set the Iceberg cold store (optional - for archival tier)
     #[cfg(feature = "iceberg-cold")]
-    pub fn with_cold_store(mut self, cold_store: Arc<crate::storage::iceberg::IcebergColdStore>) -> Self {
+    pub fn with_cold_store(
+        mut self,
+        cold_store: Arc<crate::storage::iceberg::IcebergColdStore>,
+    ) -> Self {
         self.cold_store = Some(cold_store);
         self
     }
@@ -572,37 +605,74 @@ impl HybridStorageManager {
     /// Execute a query using the appropriate storage tier(s)
     pub async fn execute(&self, access_pattern: AccessPattern) -> EngineResult<QueryResult> {
         match access_pattern {
-            AccessPattern::PointLookup { key } => {
-                self.execute_point_lookup(key).await
-            }
+            AccessPattern::PointLookup { key } => self.execute_point_lookup(key).await,
 
             AccessPattern::Scan { time_range, filter } => {
                 self.execute_scan(time_range, filter).await
             }
 
-            AccessPattern::Aggregation { function, column, filter } => {
-                self.execute_aggregation(function, column, filter).await
-            }
+            AccessPattern::Aggregation {
+                function,
+                column,
+                filter,
+            } => self.execute_aggregation(function, column, filter).await,
 
             AccessPattern::Insert { row_count: _ } => {
                 // Inserts always go to hot tier
                 Ok(QueryResult::Modified { rows_affected: 0 })
             }
 
-            AccessPattern::Update { filter, estimated_rows: _ } => {
-                self.execute_update(filter).await
-            }
+            AccessPattern::Update {
+                filter,
+                estimated_rows: _,
+            } => self.execute_update(filter).await,
 
-            AccessPattern::Delete { filter, estimated_rows: _ } => {
-                self.execute_delete(filter).await
-            }
+            AccessPattern::Delete {
+                filter,
+                estimated_rows: _,
+            } => self.execute_delete(filter).await,
         }
     }
 
     /// Insert into hot tier
     pub async fn insert(&self, values: Vec<SqlValue>) -> EngineResult<()> {
+        // Prepare row for triggers
+        let row_map = {
+            let hot = self.hot_store.read().await;
+            let mut map = HashMap::new();
+            for (idx, col) in hot.schema.iter().enumerate() {
+                if let Some(val) = values.get(idx) {
+                    map.insert(col.name.clone(), val.clone());
+                }
+            }
+            map
+        };
+
+        // Execute BEFORE INSERT triggers
+        self.execute_triggers(
+            &self.table_name,
+            TriggerEvent::Insert,
+            TriggerTiming::Before,
+            None,
+            Some(&row_map),
+        )
+        .await?;
+
         let mut hot = self.hot_store.write().await;
-        hot.insert(values)
+        hot.insert(values)?;
+        drop(hot);
+
+        // Execute AFTER INSERT triggers
+        self.execute_triggers(
+            &self.table_name,
+            TriggerEvent::Insert,
+            TriggerTiming::After,
+            None,
+            Some(&row_map),
+        )
+        .await?;
+
+        Ok(())
     }
 
     /// Migrate hot data to warm/cold tiers
@@ -648,6 +718,24 @@ impl HybridStorageManager {
         Ok(stats)
     }
 
+    /// Execute triggers helper
+    async fn execute_triggers(
+        &self,
+        table: &str,
+        event: TriggerEvent,
+        timing: TriggerTiming,
+        old_row: Option<&crate::storage::Row>,
+        new_row: Option<&crate::storage::Row>,
+    ) -> EngineResult<()> {
+        if let (Some(manager), Some(executor)) = (&self.trigger_manager, &self.trigger_executor) {
+            let triggers = manager.get_triggers(table, event, timing)?;
+            for trigger in triggers {
+                executor.execute_trigger(&trigger, old_row, new_row).await?;
+            }
+        }
+        Ok(())
+    }
+
     // Private execution methods
 
     async fn execute_point_lookup(&self, key: SqlValue) -> EngineResult<QueryResult> {
@@ -677,7 +765,11 @@ impl HybridStorageManager {
         let mut column_names = Vec::new();
 
         // Scan hot tier if needed
-        if time_range.as_ref().map(|r| r.overlaps_hot()).unwrap_or(true) {
+        if time_range
+            .as_ref()
+            .map(|r| r.overlaps_hot())
+            .unwrap_or(true)
+        {
             let hot = self.hot_store.read().await;
             // Note: Hot tier uses simple FilterPredicate, so we scan all and filter in warm/cold
             // TODO: Convert StorageFilterPredicate to simple FilterPredicate for hot tier
@@ -706,7 +798,11 @@ impl HybridStorageManager {
         }
 
         // Scan warm tier if needed
-        if time_range.as_ref().map(|r| r.overlaps_warm()).unwrap_or(true) {
+        if time_range
+            .as_ref()
+            .map(|r| r.overlaps_warm())
+            .unwrap_or(true)
+        {
             let warm = self.warm_store.read().await;
             if let Some(ref batch) = *warm {
                 // Extract column names if not yet set
@@ -753,7 +849,11 @@ impl HybridStorageManager {
 
         // Scan cold tier using Iceberg (if available)
         #[cfg(feature = "iceberg-cold")]
-        if time_range.as_ref().map(|r| r.overlaps_cold()).unwrap_or(true) {
+        if time_range
+            .as_ref()
+            .map(|r| r.overlaps_cold())
+            .unwrap_or(true)
+        {
             if let Some(ref cold_store) = self.cold_store {
                 // Query Iceberg cold tier
                 // TODO: Convert StorageFilterPredicate to hybrid::FilterPredicate for Iceberg
@@ -761,7 +861,8 @@ impl HybridStorageManager {
 
                 // Convert Arrow batches to rows
                 for arrow_batch in arrow_batches {
-                    let column_batch = crate::storage::iceberg::arrow_to_column_batch(&arrow_batch)?;
+                    let column_batch =
+                        crate::storage::iceberg::arrow_to_column_batch(&arrow_batch)?;
 
                     // Extract column names if not yet set
                     if column_names.is_empty() {
@@ -826,14 +927,16 @@ impl HybridStorageManager {
 
             if let Some(ref batch) = *cold {
                 // Find column index
-                let col_idx = batch.column_names.as_ref()
+                let col_idx = batch
+                    .column_names
+                    .as_ref()
                     .and_then(|names| names.iter().position(|n| n == &column))
-                    .ok_or_else(|| EngineError::storage(
-                        format!("Column {} not found", column)
-                    ))?;
+                    .ok_or_else(|| EngineError::storage(format!("Column {} not found", column)))?;
 
                 // Execute aggregation using vectorized executor
-                let result = self.vectorized_executor.execute_aggregation(batch, col_idx, function)?;
+                let result = self
+                    .vectorized_executor
+                    .execute_aggregation(batch, col_idx, function)?;
 
                 return Ok(QueryResult::Scalar { value: result });
             }
@@ -841,7 +944,9 @@ impl HybridStorageManager {
 
         // Fallback to hot tier
         // (Would need to implement row-based aggregation)
-        Err(EngineError::storage("Aggregation not implemented for hot tier".to_string()))
+        Err(EngineError::storage(
+            "Aggregation not implemented for hot tier".to_string(),
+        ))
     }
 
     async fn execute_update(&self, _filter: StorageFilterPredicate) -> EngineResult<QueryResult> {
@@ -972,11 +1077,13 @@ impl HybridStorageManager {
         row_idx: usize,
         column_name: &str,
     ) -> EngineResult<SqlValue> {
-        let col_idx = batch.column_names.as_ref()
+        let col_idx = batch
+            .column_names
+            .as_ref()
             .and_then(|names| names.iter().position(|n| n == column_name))
-            .ok_or_else(|| EngineError::storage(
-                format!("Column {} not found in batch", column_name)
-            ))?;
+            .ok_or_else(|| {
+                EngineError::storage(format!("Column {} not found in batch", column_name))
+            })?;
 
         let null_bitmap = &batch.null_bitmaps[col_idx];
         if null_bitmap.is_null(row_idx) {
@@ -1010,24 +1117,19 @@ impl HybridStorageManager {
             (Int16(a), Int16(b)) => Ok(a.cmp(b)),
             (Int32(a), Int32(b)) => Ok(a.cmp(b)),
             (Int64(a), Int64(b)) => Ok(a.cmp(b)),
-            (Float32(a), Float32(b)) => {
-                a.partial_cmp(b).ok_or_else(|| EngineError::storage(
-                    "Cannot compare NaN float values".to_string()
-                ))
-            }
-            (Float64(a), Float64(b)) => {
-                a.partial_cmp(b).ok_or_else(|| EngineError::storage(
-                    "Cannot compare NaN float values".to_string()
-                ))
-            }
-            (String(a), String(b)) | (Varchar(a), Varchar(b)) | (Char(a), Char(b)) => {
-                Ok(a.cmp(b))
-            }
+            (Float32(a), Float32(b)) => a
+                .partial_cmp(b)
+                .ok_or_else(|| EngineError::storage("Cannot compare NaN float values".to_string())),
+            (Float64(a), Float64(b)) => a
+                .partial_cmp(b)
+                .ok_or_else(|| EngineError::storage("Cannot compare NaN float values".to_string())),
+            (String(a), String(b)) | (Varchar(a), Varchar(b)) | (Char(a), Char(b)) => Ok(a.cmp(b)),
             (Binary(a), Binary(b)) => Ok(a.cmp(b)),
 
-            _ => Err(EngineError::storage(
-                format!("Cannot compare values of different types: {:?} and {:?}", a, b)
-            ))
+            _ => Err(EngineError::storage(format!(
+                "Cannot compare values of different types: {:?} and {:?}",
+                a, b
+            ))),
         }
     }
 }
@@ -1137,9 +1239,15 @@ mod tests {
         let mut store = RowBasedStore::new("users".to_string(), schema);
 
         // Insert multiple rows
-        store.insert(vec![SqlValue::Int32(1), SqlValue::Int32(25)]).unwrap();
-        store.insert(vec![SqlValue::Int32(2), SqlValue::Int32(30)]).unwrap();
-        store.insert(vec![SqlValue::Int32(3), SqlValue::Int32(35)]).unwrap();
+        store
+            .insert(vec![SqlValue::Int32(1), SqlValue::Int32(25)])
+            .unwrap();
+        store
+            .insert(vec![SqlValue::Int32(2), SqlValue::Int32(30)])
+            .unwrap();
+        store
+            .insert(vec![SqlValue::Int32(3), SqlValue::Int32(35)])
+            .unwrap();
 
         // Scan with filter
         let filter = FilterPredicate {
@@ -1154,27 +1262,25 @@ mod tests {
 
     #[tokio::test]
     async fn test_hybrid_storage_manager() {
-        let schema = vec![
-            ColumnSchema {
-                name: "id".to_string(),
-                data_type: "INTEGER".to_string(),
-                nullable: false,
-            },
-        ];
+        let schema = vec![ColumnSchema {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+        }];
 
-        let manager = HybridStorageManager::new(
-            "test".to_string(),
-            schema,
-            HybridStorageConfig::default(),
-        );
+        let manager =
+            HybridStorageManager::new("test".to_string(), schema, HybridStorageConfig::default());
 
         // Insert into hot tier
         manager.insert(vec![SqlValue::Int32(1)]).await.unwrap();
 
         // Point lookup
-        let result = manager.execute(AccessPattern::PointLookup {
-            key: SqlValue::Int32(1),
-        }).await.unwrap();
+        let result = manager
+            .execute(AccessPattern::PointLookup {
+                key: SqlValue::Int32(1),
+            })
+            .await
+            .unwrap();
 
         match result {
             QueryResult::Rows { rows, .. } => assert_eq!(rows.len(), 1),

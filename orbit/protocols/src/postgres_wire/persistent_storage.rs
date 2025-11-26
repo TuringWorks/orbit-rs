@@ -3,6 +3,8 @@
 //! This module provides a persistent storage backend for PostgreSQL tables using RocksDB.
 //! It stores table schemas, data, and supports basic CRUD operations.
 
+#![cfg(feature = "storage-rocksdb")]
+
 use crate::error::{ProtocolError, ProtocolResult};
 use async_trait::async_trait;
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};

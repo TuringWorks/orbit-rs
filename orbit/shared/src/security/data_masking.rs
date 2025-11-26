@@ -291,8 +291,7 @@ impl MaskingPolicy {
 
     /// Add a field with full configuration
     pub fn mask_field_with_config(mut self, config: FieldMaskingConfig) -> Self {
-        self.field_configs
-            .insert(config.field_name.clone(), config);
+        self.field_configs.insert(config.field_name.clone(), config);
         self
     }
 
@@ -333,7 +332,11 @@ impl TokenStore {
         }
 
         // Generate new token
-        let token = format!("{}_{}", prefix, uuid::Uuid::new_v4().to_string().replace("-", "")[..12].to_uppercase());
+        let token = format!(
+            "{}_{}",
+            prefix,
+            uuid::Uuid::new_v4().to_string().replace("-", "")[..12].to_uppercase()
+        );
 
         let mut tokens = self.tokens.write().await;
         tokens.insert(token.clone(), value.to_string());
@@ -448,9 +451,9 @@ impl DataMaskingEngine {
             MaskingStrategy::Email => Ok(self.mask_email(value)),
             MaskingStrategy::Phone => Ok(self.mask_phone(value)),
             MaskingStrategy::Hash { salt } => Ok(self.hash_value(value, salt.as_deref())),
-            MaskingStrategy::Redact { replacement } => {
-                Ok(replacement.clone().unwrap_or_else(|| "[REDACTED]".to_string()))
-            }
+            MaskingStrategy::Redact { replacement } => Ok(replacement
+                .clone()
+                .unwrap_or_else(|| "[REDACTED]".to_string())),
             MaskingStrategy::Tokenize { token_prefix } => {
                 Ok(self.token_store.tokenize(value, token_prefix).await)
             }
@@ -480,9 +483,9 @@ impl DataMaskingEngine {
                 let upper = lower + bucket_size;
                 Ok(format!("{}-{}", lower as i64, upper as i64))
             }
-            MaskingStrategy::Redact { replacement } => {
-                Ok(replacement.clone().unwrap_or_else(|| "[REDACTED]".to_string()))
-            }
+            MaskingStrategy::Redact { replacement } => Ok(replacement
+                .clone()
+                .unwrap_or_else(|| "[REDACTED]".to_string())),
             MaskingStrategy::Hash { salt } => {
                 Ok(self.hash_value(&value.to_string(), salt.as_deref()))
             }
@@ -513,7 +516,13 @@ impl DataMaskingEngine {
     }
 
     /// Show first and last N characters
-    fn show_first_and_last(&self, value: &str, first: usize, last: usize, mask_char: char) -> String {
+    fn show_first_and_last(
+        &self,
+        value: &str,
+        first: usize,
+        last: usize,
+        mask_char: char,
+    ) -> String {
         let chars: Vec<char> = value.chars().collect();
         if chars.len() <= first + last {
             return value.to_string();
@@ -771,7 +780,9 @@ mod tests {
     #[tokio::test]
     async fn test_numeric_range_masking() {
         let engine = DataMaskingEngine::new();
-        let strategy = MaskingStrategy::NumericRange { bucket_size: 10000.0 };
+        let strategy = MaskingStrategy::NumericRange {
+            bucket_size: 10000.0,
+        };
 
         let value = serde_json::json!(45678);
         let masked = engine.mask_value(&value, &strategy).await.unwrap();
@@ -785,7 +796,12 @@ mod tests {
 
         let policy = MaskingPolicy::new("employees")
             .mask_field("ssn", MaskingStrategy::Ssn)
-            .mask_field("salary", MaskingStrategy::NumericRange { bucket_size: 10000.0 })
+            .mask_field(
+                "salary",
+                MaskingStrategy::NumericRange {
+                    bucket_size: 10000.0,
+                },
+            )
             .mask_field("email", MaskingStrategy::Email);
 
         engine.register_policy(policy).await.unwrap();
@@ -842,16 +858,22 @@ mod tests {
         // Full access - should not be masked
         let full_ctx = create_test_context(AccessLevel::Full);
         let unmasked = engine.mask_row("users", &row, &full_ctx).await.unwrap();
-        assert_eq!(unmasked.get("ssn").unwrap().as_str().unwrap(), "123-45-6789");
+        assert_eq!(
+            unmasked.get("ssn").unwrap().as_str().unwrap(),
+            "123-45-6789"
+        );
     }
 
     #[tokio::test]
     async fn test_data_owner_bypass() {
         let engine = DataMaskingEngine::new();
 
-        let policy = MaskingPolicy::new("data").mask_field("secret", MaskingStrategy::Redact {
-            replacement: Some("[HIDDEN]".to_string()),
-        });
+        let policy = MaskingPolicy::new("data").mask_field(
+            "secret",
+            MaskingStrategy::Redact {
+                replacement: Some("[HIDDEN]".to_string()),
+            },
+        );
         engine.register_policy(policy).await.unwrap();
 
         let row: HashMap<String, serde_json::Value> =
@@ -922,8 +944,9 @@ mod tests {
     async fn test_role_override() {
         let engine = DataMaskingEngine::new();
 
-        let config = FieldMaskingConfig::new("salary", MaskingStrategy::Redact { replacement: None })
-            .with_role_override("hr_admin", None); // HR admins can see salary
+        let config =
+            FieldMaskingConfig::new("salary", MaskingStrategy::Redact { replacement: None })
+                .with_role_override("hr_admin", None); // HR admins can see salary
 
         let policy = MaskingPolicy::new("employees").mask_field_with_config(config);
         engine.register_policy(policy).await.unwrap();
@@ -947,10 +970,7 @@ mod tests {
         // HR admin - should not be masked
         let hr_ctx =
             create_test_context(AccessLevel::Standard).with_roles(vec!["hr_admin".to_string()]);
-        let unmasked = engine
-            .mask_row("employees", &row, &hr_ctx)
-            .await
-            .unwrap();
+        let unmasked = engine.mask_row("employees", &row, &hr_ctx).await.unwrap();
         assert_eq!(unmasked.get("salary").unwrap().as_i64().unwrap(), 100000);
     }
 }

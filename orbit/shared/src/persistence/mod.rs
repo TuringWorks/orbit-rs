@@ -11,9 +11,7 @@ pub mod wal;
 pub use snapshot::*;
 
 // Re-export WAL types
-pub use wal::{
-    DurabilityLevel, WalConfig, WalEntry, WalEntryType, WalMetrics, WriteAheadLog,
-};
+pub use wal::{DurabilityLevel, WalConfig, WalEntry, WalEntryType, WalMetrics, WriteAheadLog};
 
 // Re-export specific traits to avoid ambiguity
 pub use traits::{

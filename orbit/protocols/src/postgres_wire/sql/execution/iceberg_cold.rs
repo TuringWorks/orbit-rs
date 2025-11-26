@@ -27,19 +27,20 @@ use std::time::SystemTime;
 use arrow::array::{Array, ArrayRef, Int32Array, Int64Array};
 use arrow::datatypes::{DataType, Field, Schema as ArrowSchema};
 use arrow::record_batch::RecordBatch;
-use iceberg::{Catalog, CatalogBuilder, NamespaceIdent, TableIdent};
-use iceberg::table::Table;
 use iceberg::spec::Schema as IcebergSchema;
-use iceberg_catalog_rest::{RestCatalog, RestCatalogBuilder, REST_CATALOG_PROP_URI, REST_CATALOG_PROP_WAREHOUSE};
+use iceberg::table::Table;
+use iceberg::{Catalog, CatalogBuilder, NamespaceIdent, TableIdent};
+use iceberg_catalog_rest::{
+    RestCatalog, RestCatalogBuilder, REST_CATALOG_PROP_URI, REST_CATALOG_PROP_WAREHOUSE,
+};
 
+use super::storage_config::StorageBackend;
+use super::{
+    AggregateFunction, Column, ColumnBatch, NullBitmap, VectorizedExecutor,
+    VectorizedExecutorConfig,
+};
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::sql::types::SqlValue;
-use super::{
-    Column, ColumnBatch, NullBitmap,
-    VectorizedExecutor, VectorizedExecutorConfig,
-    AggregateFunction,
-};
-use super::storage_config::StorageBackend;
 
 /// Iceberg cold tier storage
 ///
@@ -69,17 +70,16 @@ impl IcebergColdStore {
         let namespace_ident = NamespaceIdent::new(namespace.to_string());
         let table_ident = TableIdent::new(namespace_ident, table_name.to_string());
 
-        let table = catalog
-            .load_table(&table_ident)
-            .await
-            .map_err(|e| ProtocolError::PostgresError(
-                format!("Failed to load Iceberg table: {}", e)
-            ))?;
+        let table = catalog.load_table(&table_ident).await.map_err(|e| {
+            ProtocolError::PostgresError(format!("Failed to load Iceberg table: {}", e))
+        })?;
 
         Ok(Self {
             table: Arc::new(table),
             table_name: table_name.to_string(),
-            vectorized_executor: VectorizedExecutor::with_config(VectorizedExecutorConfig::default()),
+            vectorized_executor: VectorizedExecutor::with_config(
+                VectorizedExecutorConfig::default(),
+            ),
             created_at: SystemTime::now(),
         })
     }
@@ -92,25 +92,21 @@ impl IcebergColdStore {
         _filter: Option<&FilterPredicate>,
     ) -> ProtocolResult<Vec<RecordBatch>> {
         // Build Iceberg table scan
-        let scan = self.table.scan()
-            .build()
-            .map_err(|e| ProtocolError::PostgresError(
-                format!("Failed to build Iceberg scan: {}", e)
-            ))?;
+        let scan = self.table.scan().build().map_err(|e| {
+            ProtocolError::PostgresError(format!("Failed to build Iceberg scan: {}", e))
+        })?;
 
         // Execute scan and collect Arrow batches
         let mut batches = Vec::new();
-        let mut stream = scan.to_arrow().await
-            .map_err(|e| ProtocolError::PostgresError(
-                format!("Failed to create Arrow stream: {}", e)
-            ))?;
+        let mut stream = scan.to_arrow().await.map_err(|e| {
+            ProtocolError::PostgresError(format!("Failed to create Arrow stream: {}", e))
+        })?;
 
         use futures::StreamExt;
         while let Some(batch_result) = stream.next().await {
-            let batch = batch_result
-                .map_err(|e| ProtocolError::PostgresError(
-                    format!("Failed to read Arrow batch: {}", e)
-                ))?;
+            let batch = batch_result.map_err(|e| {
+                ProtocolError::PostgresError(format!("Failed to read Arrow batch: {}", e))
+            })?;
             batches.push(batch);
         }
 
@@ -143,11 +139,9 @@ impl IcebergColdStore {
 
         // 3. Use vectorized executor for SIMD aggregation (14.8x speedup)
         let column_index = 0; // We converted specific column above
-        let result = self.vectorized_executor.execute_aggregation(
-            &column_batch,
-            column_index,
-            function,
-        )?;
+        let result =
+            self.vectorized_executor
+                .execute_aggregation(&column_batch, column_index, function)?;
 
         Ok(result)
     }
@@ -248,7 +242,7 @@ impl IcebergColdStore {
         // See HYBRID_ICEBERG_INTEGRATION.md for detailed implementation plan.
 
         Err(ProtocolError::PostgresError(
-            "Write path not yet implemented - see Phase 3 roadmap".to_string()
+            "Write path not yet implemented - see Phase 3 roadmap".to_string(),
         ))
     }
 
@@ -274,9 +268,9 @@ impl IcebergColdStore {
             .fields()
             .iter()
             .position(|f| f.name() == column_name)
-            .ok_or_else(|| ProtocolError::PostgresError(
-                format!("Column {} not found", column_name)
-            ))?;
+            .ok_or_else(|| {
+                ProtocolError::PostgresError(format!("Column {} not found", column_name))
+            })?;
 
         // Extract column from all batches
         let mut values = Vec::with_capacity(total_rows);
@@ -288,7 +282,9 @@ impl IcebergColdStore {
 
             match array.data_type() {
                 DataType::Int32 => {
-                    let int_array = array.as_any().downcast_ref::<Int32Array>()
+                    let int_array = array
+                        .as_any()
+                        .downcast_ref::<Int32Array>()
                         .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
 
                     for i in 0..int_array.len() {
@@ -301,7 +297,9 @@ impl IcebergColdStore {
                     }
                 }
                 DataType::Int64 => {
-                    let int_array = array.as_any().downcast_ref::<Int64Array>()
+                    let int_array = array
+                        .as_any()
+                        .downcast_ref::<Int64Array>()
                         .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
 
                     for i in 0..int_array.len() {
@@ -314,9 +312,10 @@ impl IcebergColdStore {
                     }
                 }
                 _ => {
-                    return Err(ProtocolError::PostgresError(
-                        format!("Unsupported data type: {:?}", array.data_type())
-                    ));
+                    return Err(ProtocolError::PostgresError(format!(
+                        "Unsupported data type: {:?}",
+                        array.data_type()
+                    )));
                 }
             }
 
@@ -343,14 +342,17 @@ pub fn column_batch_to_arrow(batch: &ColumnBatch) -> ProtocolResult<RecordBatch>
         return Err(ProtocolError::PostgresError("No columns to convert".into()));
     }
 
-    let column_names = batch.column_names.as_ref()
+    let column_names = batch
+        .column_names
+        .as_ref()
         .ok_or_else(|| ProtocolError::PostgresError("No column names".into()))?;
 
     let mut fields = Vec::new();
     let mut arrays: Vec<ArrayRef> = Vec::new();
 
     for (col_idx, column) in batch.columns.iter().enumerate() {
-        let column_name = column_names.get(col_idx)
+        let column_name = column_names
+            .get(col_idx)
             .ok_or_else(|| ProtocolError::PostgresError("Missing column name".into()))?;
 
         let null_bitmap = &batch.null_bitmaps[col_idx];
@@ -550,10 +552,7 @@ mod tests {
                 Column::Int32(int_values),
                 Column::String(str_values.clone()),
             ],
-            null_bitmaps: vec![
-                NullBitmap::new_all_valid(3),
-                NullBitmap::new_all_valid(3),
-            ],
+            null_bitmaps: vec![NullBitmap::new_all_valid(3), NullBitmap::new_all_valid(3)],
             row_count: 3,
             column_names: Some(vec!["id".to_string(), "name".to_string()]),
         };
@@ -564,13 +563,19 @@ mod tests {
         assert_eq!(arrow_batch.num_columns(), 2);
 
         // Check int column
-        let int_array = arrow_batch.column(0).as_any()
-            .downcast_ref::<Int32Array>().unwrap();
+        let int_array = arrow_batch
+            .column(0)
+            .as_any()
+            .downcast_ref::<Int32Array>()
+            .unwrap();
         assert_eq!(int_array.value(0), 1);
 
         // Check string column
-        let str_array = arrow_batch.column(1).as_any()
-            .downcast_ref::<StringArray>().unwrap();
+        let str_array = arrow_batch
+            .column(1)
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap();
         assert_eq!(str_array.value(0), "a");
     }
 
@@ -587,10 +592,7 @@ mod tests {
 
         let id_array = Arc::new(Int32Array::from(vec![1, 2, 3]));
         let name_array = Arc::new(StringArray::from(vec![Some("a"), None, Some("c")]));
-        let arrow_batch = RecordBatch::try_new(
-            schema,
-            vec![id_array, name_array],
-        ).unwrap();
+        let arrow_batch = RecordBatch::try_new(schema, vec![id_array, name_array]).unwrap();
 
         // Convert to ColumnBatch
         let column_batch = arrow_to_column_batch(&arrow_batch).unwrap();
@@ -625,7 +627,10 @@ mod tests {
 ///
 /// Enables reading from Iceberg back to our columnar format.
 pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch> {
-    use arrow::array::{Array, BooleanArray, Int16Array, Int32Array, Int64Array, Float32Array, Float64Array, StringArray, BinaryArray};
+    use arrow::array::{
+        Array, BinaryArray, BooleanArray, Float32Array, Float64Array, Int16Array, Int32Array,
+        Int64Array, StringArray,
+    };
 
     let num_rows = batch.num_rows();
     let mut columns = Vec::new();
@@ -638,7 +643,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
 
         match array.data_type() {
             DataType::Boolean => {
-                let bool_array = array.as_any()
+                let bool_array = array
+                    .as_any()
                     .downcast_ref::<BooleanArray>()
                     .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
 
@@ -654,7 +660,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
                 columns.push(Column::Bool(values));
             }
             DataType::Int16 => {
-                let int_array = array.as_any()
+                let int_array = array
+                    .as_any()
                     .downcast_ref::<Int16Array>()
                     .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
 
@@ -670,7 +677,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
                 columns.push(Column::Int16(values));
             }
             DataType::Int32 => {
-                let int_array = array.as_any()
+                let int_array = array
+                    .as_any()
                     .downcast_ref::<Int32Array>()
                     .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
 
@@ -686,7 +694,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
                 columns.push(Column::Int32(values));
             }
             DataType::Int64 => {
-                let int_array = array.as_any()
+                let int_array = array
+                    .as_any()
                     .downcast_ref::<Int64Array>()
                     .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
 
@@ -702,7 +711,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
                 columns.push(Column::Int64(values));
             }
             DataType::Float32 => {
-                let float_array = array.as_any()
+                let float_array = array
+                    .as_any()
                     .downcast_ref::<Float32Array>()
                     .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
 
@@ -718,7 +728,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
                 columns.push(Column::Float32(values));
             }
             DataType::Float64 => {
-                let float_array = array.as_any()
+                let float_array = array
+                    .as_any()
                     .downcast_ref::<Float64Array>()
                     .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
 
@@ -734,7 +745,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
                 columns.push(Column::Float64(values));
             }
             DataType::Utf8 => {
-                let str_array = array.as_any()
+                let str_array = array
+                    .as_any()
                     .downcast_ref::<StringArray>()
                     .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
 
@@ -750,7 +762,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
                 columns.push(Column::String(values));
             }
             DataType::Binary => {
-                let bin_array = array.as_any()
+                let bin_array = array
+                    .as_any()
                     .downcast_ref::<BinaryArray>()
                     .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
 
@@ -766,9 +779,10 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
                 columns.push(Column::Binary(values));
             }
             _ => {
-                return Err(ProtocolError::PostgresError(
-                    format!("Unsupported Arrow data type: {:?}", array.data_type())
-                ));
+                return Err(ProtocolError::PostgresError(format!(
+                    "Unsupported Arrow data type: {:?}",
+                    array.data_type()
+                )));
             }
         }
 
@@ -862,9 +876,9 @@ pub async fn create_rest_catalog_with_storage(
     let catalog = RestCatalogBuilder::default()
         .load("rest", config)
         .await
-        .map_err(|e| ProtocolError::PostgresError(
-            format!("Failed to create REST catalog: {}", e)
-        ))?;
+        .map_err(|e| {
+            ProtocolError::PostgresError(format!("Failed to create REST catalog: {}", e))
+        })?;
 
     // Create FileIO and configure it (if the catalog supports it)
     // Note: The FileIO might need to be set separately depending on the catalog implementation

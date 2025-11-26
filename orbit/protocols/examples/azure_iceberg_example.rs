@@ -29,8 +29,8 @@ use std::sync::Arc;
 
 #[cfg(feature = "iceberg-cold")]
 use orbit_protocols::postgres_wire::sql::execution::{
-    AzureConfig, StorageBackend, IcebergColdStore,
-    create_file_io_for_storage, create_rest_catalog_with_storage,
+    create_file_io_for_storage, create_rest_catalog_with_storage, AzureConfig, IcebergColdStore,
+    StorageBackend,
 };
 
 #[cfg(feature = "iceberg-cold")]
@@ -73,7 +73,10 @@ async fn example_azurite_config() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Container: {}", azure_config.container);
     println!(
         "  Endpoint: {}",
-        azure_config.endpoint.as_ref().unwrap_or(&"default".to_string())
+        azure_config
+            .endpoint
+            .as_ref()
+            .unwrap_or(&"default".to_string())
     );
 
     // Create storage backend
@@ -91,16 +94,13 @@ async fn example_azurite_config() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "iceberg-cold")]
 fn example_azure_storage_config() -> Result<(), Box<dyn std::error::Error>> {
     // In production, you would get these from environment variables or config
-    let account_name = std::env::var("AZURE_STORAGE_ACCOUNT")
-        .unwrap_or_else(|_| "mystorageaccount".to_string());
-    let account_key = std::env::var("AZURE_STORAGE_KEY")
-        .unwrap_or_else(|_| "your-account-key-here".to_string());
+    let account_name =
+        std::env::var("AZURE_STORAGE_ACCOUNT").unwrap_or_else(|_| "mystorageaccount".to_string());
+    let account_key =
+        std::env::var("AZURE_STORAGE_KEY").unwrap_or_else(|_| "your-account-key-here".to_string());
 
-    let azure_config = AzureConfig::azure_storage(
-        account_name.clone(),
-        account_key,
-        "orbitstore".to_string(),
-    );
+    let azure_config =
+        AzureConfig::azure_storage(account_name.clone(), account_key, "orbitstore".to_string());
 
     println!("  Account Name: {}", account_name);
     println!("  Container: {}", azure_config.container);
@@ -124,16 +124,17 @@ fn example_connection_string_config() -> Result<(), Box<dyn std::error::Error>> 
         QueueEndpoint=http://127.0.0.1:10001/devstoreaccount1;\
         TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;";
 
-    let azure_config = AzureConfig::from_connection_string(
-        connection_string,
-        "orbitstore".to_string(),
-    )?;
+    let azure_config =
+        AzureConfig::from_connection_string(connection_string, "orbitstore".to_string())?;
 
     println!("  Account Name: {}", azure_config.account_name);
     println!("  Container: {}", azure_config.container);
     println!(
         "  Endpoint: {}",
-        azure_config.endpoint.as_ref().unwrap_or(&"default".to_string())
+        azure_config
+            .endpoint
+            .as_ref()
+            .unwrap_or(&"default".to_string())
     );
 
     // Create storage backend and FileIO
@@ -154,18 +155,20 @@ async fn example_create_cold_store() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create REST catalog with Azure storage backend
     let catalog = create_rest_catalog_with_storage(
-        "http://localhost:8181",  // REST catalog URI
+        "http://localhost:8181", // REST catalog URI
         storage_backend,
-    ).await?;
+    )
+    .await?;
 
     println!("  ✓ Created REST catalog with Azure backend");
 
     // Create cold store instance
     let cold_store = IcebergColdStore::new(
         catalog,
-        "default",      // namespace
-        "user_events",  // table name
-    ).await?;
+        "default",     // namespace
+        "user_events", // table name
+    )
+    .await?;
 
     println!("  ✓ Cold store created successfully");
     println!("  Table: {}", cold_store.table_name());
@@ -195,10 +198,8 @@ async fn example_complete_workflow() -> Result<(), Box<dyn std::error::Error>> {
     let storage_backend = StorageBackend::Azure(azure_config);
 
     // 3. Create REST catalog with Azure backend
-    let catalog = create_rest_catalog_with_storage(
-        "http://localhost:8181",
-        storage_backend,
-    ).await?;
+    let catalog =
+        create_rest_catalog_with_storage("http://localhost:8181", storage_backend).await?;
 
     println!("  ✓ Catalog configured with Azure Blob Storage");
 

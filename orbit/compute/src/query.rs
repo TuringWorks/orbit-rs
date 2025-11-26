@@ -74,10 +74,18 @@ impl QueryAnalyzer {
     /// Classify workload based on operations and data size
     fn classify_workload(&self, operations: &[OperationType], data_size: usize) -> WorkloadType {
         // Check for specific patterns
-        let has_filter = operations.iter().any(|op| matches!(op, OperationType::Filter));
-        let has_aggregate = operations.iter().any(|op| matches!(op, OperationType::Aggregate | OperationType::GroupBy));
-        let has_join = operations.iter().any(|op| matches!(op, OperationType::Join));
-        let has_sort = operations.iter().any(|op| matches!(op, OperationType::Sort));
+        let has_filter = operations
+            .iter()
+            .any(|op| matches!(op, OperationType::Filter));
+        let has_aggregate = operations
+            .iter()
+            .any(|op| matches!(op, OperationType::Aggregate | OperationType::GroupBy));
+        let has_join = operations
+            .iter()
+            .any(|op| matches!(op, OperationType::Join));
+        let has_sort = operations
+            .iter()
+            .any(|op| matches!(op, OperationType::Sort));
 
         // Decision logic based on patterns and data size
         match (data_size, has_filter, has_aggregate, has_join, has_sort) {
@@ -228,7 +236,10 @@ impl QueryAnalyzer {
 
     /// Check if neural engine is available
     fn has_neural_engine(&self) -> bool {
-        !matches!(self.capabilities.neural, crate::capabilities::NeuralEngineCapabilities::None)
+        !matches!(
+            self.capabilities.neural,
+            crate::capabilities::NeuralEngineCapabilities::None
+        )
     }
 }
 
@@ -273,8 +284,7 @@ pub enum OperationType {
 }
 
 /// Acceleration strategy recommendation
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 pub enum AccelerationStrategy {
     /// CPU SIMD acceleration
     CpuSimd,
@@ -289,11 +299,10 @@ pub enum AccelerationStrategy {
     None,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capabilities::{detect_all_capabilities};
+    use crate::capabilities::detect_all_capabilities;
 
     async fn create_test_capabilities() -> UniversalComputeCapabilities {
         // Use actual capability detection for tests

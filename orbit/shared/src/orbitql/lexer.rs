@@ -88,8 +88,8 @@ pub enum TokenType {
     Edge,
     Path,
     Connected,
-    Traverse,  // TRAVERSE for graph traversal
-    MaxDepth,  // MAX_DEPTH for traversal depth limit
+    Traverse, // TRAVERSE for graph traversal
+    MaxDepth, // MAX_DEPTH for traversal depth limit
 
     // Time-series keywords
     Metrics,
@@ -1214,7 +1214,10 @@ impl Lexer {
         }
 
         let (token_type, token_value) = if !duration_suffix.is_empty() {
-            (TokenType::DurationLiteral, format!("{}{}", number, duration_suffix))
+            (
+                TokenType::DurationLiteral,
+                format!("{}{}", number, duration_suffix),
+            )
         } else if is_float {
             (TokenType::Float, number)
         } else {

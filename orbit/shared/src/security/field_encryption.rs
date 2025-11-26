@@ -200,8 +200,9 @@ impl EncryptedFieldValue {
 
     /// Serialize to a marked string
     pub fn to_marked_string(&self) -> OrbitResult<String> {
-        let json = serde_json::to_string(self)
-            .map_err(|e| OrbitError::internal(format!("Failed to serialize encrypted value: {}", e)))?;
+        let json = serde_json::to_string(self).map_err(|e| {
+            OrbitError::internal(format!("Failed to serialize encrypted value: {}", e))
+        })?;
         Ok(format!("{}{}", Self::marker(), json))
     }
 
@@ -290,10 +291,12 @@ impl FieldEncryptionEngine {
             .map_err(|e| OrbitError::internal(format!("Failed to serialize value: {}", e)))?;
 
         // Get key
-        let key_id = config
-            .key_id
-            .clone()
-            .unwrap_or_else(|| self.default_key_id.try_read().map(|k| k.clone()).unwrap_or_default());
+        let key_id = config.key_id.clone().unwrap_or_else(|| {
+            self.default_key_id
+                .try_read()
+                .map(|k| k.clone())
+                .unwrap_or_default()
+        });
 
         let keys = self.keys.read().await;
         let key = keys
@@ -682,8 +685,8 @@ mod tests {
 
         // Encrypt with different keys
         let config1 = FieldEncryptionConfig::new("field1", EncryptionType::Randomized);
-        let config2 = FieldEncryptionConfig::new("field2", EncryptionType::Randomized)
-            .with_key("key2");
+        let config2 =
+            FieldEncryptionConfig::new("field2", EncryptionType::Randomized).with_key("key2");
 
         let value = serde_json::json!("secret data");
 
@@ -750,7 +753,10 @@ mod tests {
             .map(|i| {
                 [
                     ("id".to_string(), serde_json::json!(i)),
-                    ("credit_card".to_string(), serde_json::json!(format!("4111111111111{:03}", i))),
+                    (
+                        "credit_card".to_string(),
+                        serde_json::json!(format!("4111111111111{:03}", i)),
+                    ),
                 ]
                 .into_iter()
                 .collect()

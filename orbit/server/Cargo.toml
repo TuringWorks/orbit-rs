@@ -63,7 +63,7 @@ urlencoding = "2.1"
 flate2 = "1.0" # For compression
 toml = "0.9" # For configuration file support
 # New persistence backends
-rocksdb = "0.22"
+rocksdb = { version = "0.22", default-features = false, optional = true }
 rand = "0.8"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 env_logger = "0.11"
@@ -74,12 +74,12 @@ hyper = { version = "1.0", features = ["full"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 # Apache Iceberg integration for warm/cold tiers (optional feature)
-iceberg = { version = "0.7", optional = true, features = ["storage-s3", "storage-memory"] }
-iceberg-catalog-rest = { version = "0.7", optional = true }
-arrow = { version = "55.2", optional = true }
-arrow-schema = { version = "55.2", optional = true }
-parquet = { version = "55.2", optional = true }
-opendal = { version = "0.51", optional = true, features = ["services-s3", "services-azblob", "services-memory"] }
+# iceberg = { version = "0.7", optional = true, default-features = false, features = ["storage-memory"] }
+# iceberg-catalog-rest = { version = "0.7", optional = true }
+# arrow = { version = "55.2", optional = true, default-features = false }
+# arrow-schema = { version = "55.2", optional = true, default-features = false }
+# parquet = { version = "55.2", optional = true, default-features = false }
+# opendal = { version = "0.51", optional = true, features = ["services-azblob", "services-memory"] }
 
 [features]
 # Default features - all production-ready features enabled
@@ -148,10 +148,11 @@ protocol-mcp = ["networking"]
 
 # Storage Engines
 storage-memory = []
-storage-rocksdb = []
+storage-rocksdb = ["rocksdb"]
 storage-lsm = []
 storage-btree = []
-storage-iceberg = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet", "opendal"]
+storage-iceberg = []
+# storage-iceberg = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet", "opendal"]
 storage-cloud = []
 
 # AI-Native Database Features

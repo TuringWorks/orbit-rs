@@ -168,7 +168,8 @@ impl GPUSpatialOperations {
             );
             #[cfg(feature = "gpu-acceleration")]
             {
-                self.batch_distance_gpu(query_point, candidate_points).await?
+                self.batch_distance_gpu(query_point, candidate_points)
+                    .await?
             }
             #[cfg(not(feature = "gpu-acceleration"))]
             {
@@ -311,13 +312,16 @@ impl GPUSpatialOperations {
             }
 
             // Execute via manager (uses pooled device)
-            match manager.execute_spatial_distance(
-                query_point.x as f32,
-                query_point.y as f32,
-                &points_x,
-                &points_y,
-                point_count,
-            ).await {
+            match manager
+                .execute_spatial_distance(
+                    query_point.x as f32,
+                    query_point.y as f32,
+                    &points_x,
+                    &points_y,
+                    point_count,
+                )
+                .await
+            {
                 Ok(distances) => {
                     // Convert distances to results
                     let mut results = Vec::with_capacity(point_count);
@@ -354,18 +358,21 @@ impl GPUSpatialOperations {
             let mut points_lat = Vec::with_capacity(point_count);
 
             for point in candidate_points {
-                points_lon.push(point.x as f32);  // longitude
-                points_lat.push(point.y as f32);  // latitude
+                points_lon.push(point.x as f32); // longitude
+                points_lat.push(point.y as f32); // latitude
             }
 
             // Execute via manager (uses pooled device)
-            match manager.execute_spatial_distance_sphere(
-                query_point.x as f32,  // query longitude
-                query_point.y as f32,  // query latitude
-                &points_lon,
-                &points_lat,
-                point_count,
-            ).await {
+            match manager
+                .execute_spatial_distance_sphere(
+                    query_point.x as f32, // query longitude
+                    query_point.y as f32, // query latitude
+                    &points_lon,
+                    &points_lat,
+                    point_count,
+                )
+                .await
+            {
                 Ok(distances) => {
                     // Convert distances to results
                     let mut results = Vec::with_capacity(point_count);
@@ -498,10 +505,7 @@ impl GPUSpatialOperations {
             .enumerate()
             .map(|(idx, point)| {
                 let result = Self::point_in_polygon_cpu(point, polygon);
-                SpatialPredicateResult {
-                    index: idx,
-                    result,
-                }
+                SpatialPredicateResult { index: idx, result }
             })
             .collect()
     }
@@ -517,10 +521,7 @@ impl GPUSpatialOperations {
             .enumerate()
             .map(|(idx, point)| {
                 let result = Self::point_in_polygon_cpu(point, polygon);
-                SpatialPredicateResult {
-                    index: idx,
-                    result,
-                }
+                SpatialPredicateResult { index: idx, result }
             })
             .collect()
     }
@@ -572,8 +573,7 @@ impl GPUSpatialOperations {
         for i in 0..ring.len() {
             if ((ring[i].y > point.y) != (ring[j].y > point.y))
                 && (point.x
-                    < (ring[j].x - ring[i].x) * (point.y - ring[i].y)
-                        / (ring[j].y - ring[i].y)
+                    < (ring[j].x - ring[i].x) * (point.y - ring[i].y) / (ring[j].y - ring[i].y)
                         + ring[i].x)
             {
                 inside = !inside;
@@ -640,9 +640,9 @@ mod tests {
         };
 
         let points = vec![
-            GPUPoint { x: 5.0, y: 5.0 },   // Inside
-            GPUPoint { x: 15.0, y: 5.0 },  // Outside
-            GPUPoint { x: 0.0, y: 0.0 },   // On corner (may be inside or outside depending on implementation)
+            GPUPoint { x: 5.0, y: 5.0 },  // Inside
+            GPUPoint { x: 15.0, y: 5.0 }, // Outside
+            GPUPoint { x: 0.0, y: 0.0 }, // On corner (may be inside or outside depending on implementation)
         ];
 
         let results = engine
@@ -655,4 +655,3 @@ mod tests {
         assert!(!results[1].result); // Outside
     }
 }
-

@@ -28,7 +28,11 @@ fn create_test_data_with_values() -> ColumnBatch {
             NullBitmap::new_all_valid(row_count),
         ],
         row_count,
-        column_names: Some(vec!["id".to_string(), "value".to_string(), "score".to_string()]),
+        column_names: Some(vec![
+            "id".to_string(),
+            "value".to_string(),
+            "score".to_string(),
+        ]),
     }
 }
 
@@ -194,7 +198,10 @@ async fn test_complex_query_with_all_operations() {
     let query = Query {
         table: "test".to_string(),
         projection: Some(vec!["id".to_string(), "score".to_string()]),
-        filter: Some(FilterPredicate::Gt("value".to_string(), SqlValue::Int32(100))),
+        filter: Some(FilterPredicate::Gt(
+            "value".to_string(),
+            SqlValue::Int32(100),
+        )),
         limit: Some(10),
         offset: Some(5),
     };
@@ -236,7 +243,10 @@ async fn test_acceleration_strategy_is_applied() {
     let query = Query {
         table: "test".to_string(),
         projection: None,
-        filter: Some(FilterPredicate::Gt("value".to_string(), SqlValue::Int32(50))),
+        filter: Some(FilterPredicate::Gt(
+            "value".to_string(),
+            SqlValue::Int32(50),
+        )),
         limit: None,
         offset: None,
     };

@@ -3,19 +3,19 @@
 //! This module provides the main CQL adapter that handles client connections
 //! and translates CQL operations to Orbit engine calls.
 
-use super::parser::{CqlParser, CqlStatement, ComparisonOperator};
+use super::parser::{ComparisonOperator, CqlParser, CqlStatement};
 use super::protocol::{
     build_error_from_protocol_error, build_error_response, build_ready_response,
-    build_supported_response, build_void_result, read_string, read_string_map, CqlFrame,
-    CqlOpcode, QueryParameters,
+    build_supported_response, build_void_result, read_string, read_string_map, CqlFrame, CqlOpcode,
+    QueryParameters,
 };
 use super::types::CqlValue;
 use super::CqlConfig;
-use crate::protocols::error::{ProtocolError, ProtocolResult};
-use crate::protocols::postgres_wire::QueryEngine;
-use crate::protocols::postgres_wire::sql::types::SqlValue;
 use crate::protocols::common::storage::memory::MemoryTableStorage;
-use bytes::{Buf, BufMut, BytesMut};
+use crate::protocols::error::{ProtocolError, ProtocolResult};
+use crate::protocols::postgres_wire::sql::types::SqlValue;
+use crate::protocols::postgres_wire::QueryEngine;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -89,10 +89,13 @@ impl CqlAdapter {
     }
 
     /// Create a new CQL adapter with a specific query engine
-    /// 
+    ///
     /// This is primarily for testing to allow sharing a query engine between
     /// adapter and test setup code.
-    pub async fn with_query_engine(config: CqlConfig, query_engine: Arc<QueryEngine>) -> ProtocolResult<Self> {
+    pub async fn with_query_engine(
+        config: CqlConfig,
+        query_engine: Arc<QueryEngine>,
+    ) -> ProtocolResult<Self> {
         let storage = Arc::new(MemoryTableStorage::new());
 
         Ok(Self {
@@ -114,40 +117,45 @@ impl CqlAdapter {
 
     /// Execute SQL directly using the internal SQL engine (for testing/setup)
     /// This uses QueryEngine's comprehensive SQL engine which can handle CREATE TABLE
-    pub async fn execute_sql(&self, sql: &str) -> ProtocolResult<crate::protocols::postgres_wire::sql::UnifiedExecutionResult> {
+    pub async fn execute_sql(
+        &self,
+        sql: &str,
+    ) -> ProtocolResult<crate::protocols::postgres_wire::sql::UnifiedExecutionResult> {
         // Use QueryEngine's execute_sql_direct which bypasses persistent storage checks
         // and uses ConfigurableSqlEngine directly
         let result = self.query_engine.execute_sql_direct(sql).await?;
-        
+
         // Convert QueryResult to UnifiedExecutionResult
         match result {
             crate::protocols::postgres_wire::QueryResult::Select { columns, rows } => {
                 let row_count = rows.len();
-                Ok(crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select {
-                    columns,
-                    rows,
-                    row_count,
-                    transaction_id: None,
-                })
+                Ok(
+                    crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select {
+                        columns,
+                        rows,
+                        row_count,
+                        transaction_id: None,
+                    },
+                )
             }
-            crate::protocols::postgres_wire::QueryResult::Insert { count } => {
-                Ok(crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Insert {
+            crate::protocols::postgres_wire::QueryResult::Insert { count } => Ok(
+                crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Insert {
                     count,
                     transaction_id: None,
-                })
-            }
-            crate::protocols::postgres_wire::QueryResult::Update { count } => {
-                Ok(crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Update {
+                },
+            ),
+            crate::protocols::postgres_wire::QueryResult::Update { count } => Ok(
+                crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Update {
                     count,
                     transaction_id: None,
-                })
-            }
-            crate::protocols::postgres_wire::QueryResult::Delete { count } => {
-                Ok(crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Delete {
+                },
+            ),
+            crate::protocols::postgres_wire::QueryResult::Delete { count } => Ok(
+                crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Delete {
                     count,
                     transaction_id: None,
-                })
-            }
+                },
+            ),
         }
     }
 
@@ -157,10 +165,7 @@ impl CqlAdapter {
             .await
             .map_err(|e| ProtocolError::IoError(e.to_string()))?;
 
-        println!(
-            "[CQL] Server listening on {}",
-            self.config.listen_addr
-        );
+        println!("[CQL] Server listening on {}", self.config.listen_addr);
 
         loop {
             match listener.accept().await {
@@ -258,7 +263,7 @@ impl CqlAdapter {
                 "Unsupported opcode",
             )),
         };
-        
+
         // Convert ProtocolError to CQL error frame
         match result {
             Ok(frame) => Ok(frame),
@@ -303,7 +308,7 @@ impl CqlAdapter {
         }
 
         let mut body = frame.body.clone();
-        
+
         // Read token (password)
         let token_len = body.get_u32();
         let token_bytes = body.copy_to_bytes(token_len as usize);
@@ -326,7 +331,7 @@ impl CqlAdapter {
                 "Invalid credentials",
             ));
         }
-        
+
         // Send AUTH_SUCCESS
         let mut response_body = BytesMut::new();
         response_body.put_u32(0); // Empty token (success)
@@ -344,7 +349,7 @@ impl CqlAdapter {
             let mut metrics = self.metrics.write().await;
             metrics.total_queries += 1;
         }
-        
+
         let mut body = frame.body.clone();
 
         // Read query string
@@ -354,7 +359,7 @@ impl CqlAdapter {
             .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
 
         // Read query parameters
-        let _params = QueryParameters::decode(body)?;
+        let params = QueryParameters::decode(body)?;
 
         // Parse and execute query
         let parser = self.parser.read().await;
@@ -362,7 +367,13 @@ impl CqlAdapter {
         drop(parser);
 
         // Execute statement
-        self.execute_statement(&statement, frame.stream).await
+        self.execute_statement(
+            &statement,
+            frame.stream,
+            params.page_size,
+            params.paging_state,
+        )
+        .await
     }
 
     /// Handle PREPARE request
@@ -387,7 +398,10 @@ impl CqlAdapter {
             query: query.clone(),
             statement: statement_clone.clone(),
         };
-        self.prepared_statements.write().await.insert(id.clone(), prepared);
+        self.prepared_statements
+            .write()
+            .await
+            .insert(id.clone(), prepared);
 
         // Build PREPARED response
         let mut response_body = BytesMut::new();
@@ -400,7 +414,7 @@ impl CqlAdapter {
             CqlStatement::Select { columns, .. } => {
                 // Metadata flags (0x0001 = global tables spec, 0x0002 = has more pages)
                 response_body.put_i32(0x0001);
-                
+
                 // Column count
                 let col_count = if columns.contains(&"*".to_string()) {
                     // For SELECT *, we don't know column count yet - use 0
@@ -409,7 +423,7 @@ impl CqlAdapter {
                     columns.len() as i32
                 };
                 response_body.put_i32(col_count);
-                
+
                 // Column metadata (only if we know the columns)
                 if !columns.contains(&"*".to_string()) {
                     for col_name in columns {
@@ -424,7 +438,7 @@ impl CqlAdapter {
                         response_body.put_i32(0x0003);
                     }
                 }
-                
+
                 // Partition key indices (empty for now)
                 response_body.put_i16(0);
             }
@@ -432,7 +446,7 @@ impl CqlAdapter {
                 // For INSERT, metadata describes bound variables
                 response_body.put_i32(0x0001); // Flags
                 response_body.put_i32(columns.len() as i32); // Variable count
-                
+
                 // Variable metadata (bound variables)
                 for col_name in columns {
                     response_body.put_u16(0); // Keyspace
@@ -465,7 +479,7 @@ impl CqlAdapter {
         let id = body.copy_to_bytes(id_len as usize).to_vec();
 
         // Read query parameters
-        let _params = QueryParameters::decode(body)?;
+        let params = QueryParameters::decode(body)?;
 
         // Get prepared statement
         let prepared_statements = self.prepared_statements.read().await;
@@ -474,14 +488,19 @@ impl CqlAdapter {
         })?;
 
         // Execute statement
-        self.execute_statement(&prepared.statement, frame.stream)
-            .await
+        self.execute_statement(
+            &prepared.statement,
+            frame.stream,
+            params.page_size,
+            params.paging_state,
+        )
+        .await
     }
 
     /// Handle BATCH request
     async fn handle_batch(&self, frame: &CqlFrame) -> ProtocolResult<CqlFrame> {
         let mut body = frame.body.clone();
-        
+
         // Read batch type (1 byte: 0=LOGGED, 1=UNLOGGED, 2=COUNTER)
         let batch_type_byte = body.get_u8();
         let _batch_type = match batch_type_byte {
@@ -490,29 +509,32 @@ impl CqlAdapter {
             2 => "COUNTER",
             _ => "LOGGED", // Default
         };
-        
+
         // Read number of statements
         let statement_count = body.get_u16();
-        
+
         // Execute each statement in the batch
         let mut errors = Vec::new();
         for _ in 0..statement_count {
             // Read statement kind (1 byte: 0=query string, 1=prepared statement ID)
             let kind = body.get_u8();
-            
+
             if kind == 0 {
                 // Query string
                 let query_len = body.get_u32();
                 let query_bytes = body.copy_to_bytes(query_len as usize);
                 let query = String::from_utf8(query_bytes.to_vec())
                     .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
-                
+
                 // Parse and execute
                 let parser = self.parser.read().await;
                 match parser.parse(&query) {
                     Ok(statement) => {
                         drop(parser);
-                        match self.execute_statement(&statement, frame.stream).await {
+                        match self
+                            .execute_statement(&statement, frame.stream, None, None)
+                            .await
+                        {
                             Ok(_) => {} // Statement executed successfully
                             Err(e) => {
                                 errors.push(format!("Batch statement error: {}", e));
@@ -527,15 +549,18 @@ impl CqlAdapter {
                 // Prepared statement ID
                 let id_len = body.get_u16();
                 let id = body.copy_to_bytes(id_len as usize).to_vec();
-                
+
                 // Get prepared statement
                 let statement_to_execute = {
                     let prepared_statements = self.prepared_statements.read().await;
                     prepared_statements.get(&id).map(|p| p.statement.clone())
                 };
-                
+
                 if let Some(statement) = statement_to_execute {
-                    match self.execute_statement(&statement, frame.stream).await {
+                    match self
+                        .execute_statement(&statement, frame.stream, None, None)
+                        .await
+                    {
                         Ok(_) => {} // Statement executed successfully
                         Err(e) => {
                             errors.push(format!("Batch prepared statement error: {}", e));
@@ -545,14 +570,14 @@ impl CqlAdapter {
                     errors.push("Prepared statement not found".to_string());
                 }
             }
-            
+
             // Skip query parameters for this statement (simplified - we don't use them in batch)
             // In a full implementation, we'd decode and use QueryParameters here
         }
-        
+
         // Read consistency level (not used for execution, but must be read)
         let _consistency = body.get_u16();
-        
+
         // If there were errors, return error response
         if !errors.is_empty() {
             return Ok(build_error_response(
@@ -561,7 +586,7 @@ impl CqlAdapter {
                 &format!("Batch execution errors: {}", errors.join("; ")),
             ));
         }
-        
+
         // Return VOID result for successful batch
         Ok(build_void_result(frame.stream))
     }
@@ -572,6 +597,8 @@ impl CqlAdapter {
         &self,
         statement: &CqlStatement,
         stream: i16,
+        page_size: Option<i32>,
+        paging_state: Option<Bytes>,
     ) -> ProtocolResult<CqlFrame> {
         match statement {
             CqlStatement::Select {
@@ -589,12 +616,13 @@ impl CqlAdapter {
                 };
 
                 let mut sql = format!("SELECT {} FROM {}", sql_columns, table);
-                
+
                 // Add WHERE clause
                 if let Some(conditions) = where_clause {
                     if !conditions.is_empty() {
                         sql.push_str(" WHERE ");
-                        let where_parts: Vec<String> = conditions.iter()
+                        let where_parts: Vec<String> = conditions
+                            .iter()
                             .map(|cond| {
                                 let op_str = match cond.operator {
                                     ComparisonOperator::Equal => "=",
@@ -624,7 +652,7 @@ impl CqlAdapter {
                         sql.push_str(&where_parts.join(" AND "));
                     }
                 }
-                
+
                 if let Some(lim) = limit {
                     sql.push_str(&format!(" LIMIT {}", lim));
                 }
@@ -635,22 +663,33 @@ impl CqlAdapter {
                     Ok(result) => {
                         // Convert QueryResult to CQL format
                         match result {
-                            crate::protocols::postgres_wire::QueryResult::Select { columns, rows } => {
+                            crate::protocols::postgres_wire::QueryResult::Select {
+                                columns,
+                                rows,
+                            } => {
                                 // Convert Vec<Vec<Option<String>>> to Vec<HashMap<String, SqlValue>>
                                 let cql_rows: Vec<HashMap<String, SqlValue>> = rows
                                     .into_iter()
                                     .map(|row| {
                                         let mut map = HashMap::new();
                                         for (i, col) in columns.iter().enumerate() {
-                                            if let Some(val_str) = &row.get(i).and_then(|v| v.as_ref()) {
+                                            if let Some(val_str) =
+                                                &row.get(i).and_then(|v| v.as_ref())
+                                            {
                                                 // Try to parse as appropriate type
-                                                let sql_val = if let Ok(int_val) = val_str.parse::<i32>() {
+                                                let sql_val = if let Ok(int_val) =
+                                                    val_str.parse::<i32>()
+                                                {
                                                     SqlValue::Integer(int_val)
-                                                } else if let Ok(bigint_val) = val_str.parse::<i64>() {
+                                                } else if let Ok(bigint_val) =
+                                                    val_str.parse::<i64>()
+                                                {
                                                     SqlValue::BigInt(bigint_val)
-                                                } else if let Ok(bool_val) = val_str.parse::<bool>() {
+                                                } else if let Ok(bool_val) = val_str.parse::<bool>()
+                                                {
                                                     SqlValue::Boolean(bool_val)
-                                                } else if let Ok(float_val) = val_str.parse::<f64>() {
+                                                } else if let Ok(float_val) = val_str.parse::<f64>()
+                                                {
                                                     SqlValue::DoublePrecision(float_val)
                                                 } else {
                                                     SqlValue::Text(val_str.to_string())
@@ -663,9 +702,14 @@ impl CqlAdapter {
                                         map
                                     })
                                     .collect();
-                                Ok(self.build_rows_result(stream, cql_rows))
+                                Ok(self.build_rows_result(
+                                    stream,
+                                    cql_rows,
+                                    page_size,
+                                    paging_state,
+                                ))
                             }
-                            _ => Ok(self.build_rows_result(stream, vec![])),
+                            _ => Ok(self.build_rows_result(stream, vec![], None, None)),
                         }
                     }
                     Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
@@ -683,11 +727,12 @@ impl CqlAdapter {
                 } else {
                     format!("({})", columns.join(", "))
                 };
-                
+
                 let val_str = if values.is_empty() {
                     "".to_string()
                 } else {
-                    let val_parts: Vec<String> = values.iter()
+                    let val_parts: Vec<String> = values
+                        .iter()
                         .map(|v| match v {
                             CqlValue::Text(s) => format!("'{}'", s.replace('\'', "''")),
                             CqlValue::Int(i) => i.to_string(),
@@ -702,9 +747,9 @@ impl CqlAdapter {
                         .collect();
                     format!(" VALUES ({})", val_parts.join(", "))
                 };
-                
+
                 let sql = format!("INSERT INTO {}{}{}", table, col_str, val_str);
-                
+
                 match self.query_engine.execute_sql_direct(&sql).await {
                     Ok(_) => Ok(build_void_result(stream)),
                     Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
@@ -717,7 +762,8 @@ impl CqlAdapter {
                 ..
             } => {
                 // Convert CQL UPDATE to SQL and execute
-                let set_parts: Vec<String> = assignments.iter()
+                let set_parts: Vec<String> = assignments
+                    .iter()
                     .map(|(col, val)| {
                         let val_str = match val {
                             CqlValue::Text(s) => format!("'{}'", s.replace('\'', "''")),
@@ -733,12 +779,13 @@ impl CqlAdapter {
                         format!("{} = {}", col, val_str)
                     })
                     .collect();
-                
+
                 let mut sql = format!("UPDATE {} SET {}", table, set_parts.join(", "));
-                
+
                 if !where_clause.is_empty() {
                     sql.push_str(" WHERE ");
-                    let where_parts: Vec<String> = where_clause.iter()
+                    let where_parts: Vec<String> = where_clause
+                        .iter()
                         .map(|cond| {
                             let op_str = match cond.operator {
                                 ComparisonOperator::Equal => "=",
@@ -765,7 +812,7 @@ impl CqlAdapter {
                         .collect();
                     sql.push_str(&where_parts.join(" AND "));
                 }
-                
+
                 match self.query_engine.execute_sql_direct(&sql).await {
                     Ok(_) => Ok(build_void_result(stream)),
                     Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
@@ -778,10 +825,11 @@ impl CqlAdapter {
             } => {
                 // Convert CQL DELETE to SQL and execute
                 let mut sql = format!("DELETE FROM {}", table);
-                
+
                 if !where_clause.is_empty() {
                     sql.push_str(" WHERE ");
-                    let where_parts: Vec<String> = where_clause.iter()
+                    let where_parts: Vec<String> = where_clause
+                        .iter()
                         .map(|cond| {
                             let op_str = match cond.operator {
                                 ComparisonOperator::Equal => "=",
@@ -808,10 +856,10 @@ impl CqlAdapter {
                         .collect();
                     sql.push_str(&where_parts.join(" AND "));
                 }
-                
+
                 #[cfg(test)]
                 println!("[CQL] Executing DELETE SQL: {}", sql);
-                
+
                 match self.query_engine.execute_sql_direct(&sql).await {
                     Ok(result) => {
                         #[cfg(test)]
@@ -871,11 +919,47 @@ impl CqlAdapter {
     }
 
     /// Build a ROWS result
-    fn build_rows_result(&self, stream: i16, rows: Vec<HashMap<String, SqlValue>>) -> CqlFrame {
+    fn build_rows_result(
+        &self,
+        stream: i16,
+        all_rows: Vec<HashMap<String, SqlValue>>,
+        page_size: Option<i32>,
+        paging_state: Option<Bytes>,
+    ) -> CqlFrame {
         let mut body = BytesMut::new();
         body.put_i32(0x0002); // RESULT::Rows
 
-        if rows.is_empty() {
+        // Determine offset from paging_state
+        let offset = if let Some(state) = paging_state {
+            if state.len() >= 4 {
+                let mut s = state.clone();
+                s.get_i32() as usize
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
+        // Slice rows based on offset and page_size
+        let total_rows = all_rows.len();
+        let (rows, has_more_pages, next_offset) = if offset >= total_rows {
+            (Vec::new(), false, 0)
+        } else {
+            let remaining_rows = &all_rows[offset..];
+            if let Some(size) = page_size {
+                let size = size as usize;
+                if remaining_rows.len() > size {
+                    (remaining_rows[..size].to_vec(), true, offset + size)
+                } else {
+                    (remaining_rows.to_vec(), false, 0)
+                }
+            } else {
+                (remaining_rows.to_vec(), false, 0)
+            }
+        };
+
+        if rows.is_empty() && !has_more_pages {
             // No rows - return empty result
             body.put_i32(0x0001); // Global tables spec
             body.put_i32(0); // Column count
@@ -883,15 +967,37 @@ impl CqlAdapter {
             return CqlFrame::response(stream, CqlOpcode::Result, body.freeze());
         }
 
-        // Extract column names from first row
-        let column_names: Vec<String> = rows[0].keys().cloned().collect();
+        // Extract column names from first row (or use empty if no rows but we have metadata from previous page?)
+        // For simplicity, we assume we have at least one row or we can't easily determine columns without schema
+        // In a real implementation, we should get columns from schema, not rows.
+        let column_names: Vec<String> = if !rows.is_empty() {
+            rows[0].keys().cloned().collect()
+        } else if !all_rows.is_empty() {
+            all_rows[0].keys().cloned().collect()
+        } else {
+            Vec::new()
+        };
+
         let column_count = column_names.len() as i32;
 
         // Metadata flags (0x0001 = global tables spec)
-        body.put_i32(0x0001);
+        let mut flags = 0x0001;
+        if has_more_pages {
+            flags |= 0x0002;
+        }
+        body.put_i32(flags);
 
         // Column count
         body.put_i32(column_count);
+
+        // Paging state (if has_more_pages)
+        if has_more_pages {
+            let mut state = BytesMut::with_capacity(4);
+            state.put_i32(next_offset as i32);
+            let state_bytes = state.freeze();
+            body.put_i32(state_bytes.len() as i32);
+            body.put(state_bytes);
+        }
 
         // Column metadata (simplified - all as TEXT for now)
         for col_name in &column_names {

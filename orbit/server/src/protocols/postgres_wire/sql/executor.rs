@@ -3,6 +3,9 @@
 //! This module provides a comprehensive SQL executor that handles all types of SQL statements
 //! including DDL, DML, DCL, TCL operations with full PostgreSQL compatibility and vector support.
 
+use crate::protocols::common::storage::{
+    StorageBackendConfig, StorageBackendFactory, TableStorage,
+};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::{
     ast::{
@@ -20,7 +23,6 @@ use crate::protocols::postgres_wire::sql::{
     parser::SqlParser,
     types::{SqlType, SqlValue},
 };
-use crate::protocols::common::storage::{StorageBackendConfig, StorageBackendFactory, TableStorage};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -1054,7 +1056,7 @@ impl SqlExecutor {
             // INSERT ... SELECT
             // Execute the SELECT statement first
             let select_result = self.execute_select(*select_stmt.clone()).await?;
-            
+
             // Extract rows from SELECT result
             let rows_to_insert = match select_result {
                 ExecutionResult::Select { rows, columns, .. } => {
@@ -1062,35 +1064,37 @@ impl SqlExecutor {
                         // If no columns specified, use all columns from SELECT
                         columns.clone()
                     });
-                    
+
                     // Map SELECT rows to INSERT rows
-                    rows.into_iter().map(|row| {
-                        let mut insert_row = HashMap::new();
-                        for (i, col_name) in insert_columns.iter().enumerate() {
-                            if i < row.len() {
-                                if let Some(value_str) = &row[i] {
-                                    // Convert string value to appropriate SqlValue
-                                    // Try to infer type from the value string
-                                    let sql_value = match value_str.parse::<i64>() {
-                                        Ok(i) => {
-                                            // Check if it fits in i32
-                                            if i >= i32::MIN as i64 && i <= i32::MAX as i64 {
-                                                SqlValue::Integer(i as i32)
-                                            } else {
-                                                SqlValue::BigInt(i)
+                    rows.into_iter()
+                        .map(|row| {
+                            let mut insert_row = HashMap::new();
+                            for (i, col_name) in insert_columns.iter().enumerate() {
+                                if i < row.len() {
+                                    if let Some(value_str) = &row[i] {
+                                        // Convert string value to appropriate SqlValue
+                                        // Try to infer type from the value string
+                                        let sql_value = match value_str.parse::<i64>() {
+                                            Ok(i) => {
+                                                // Check if it fits in i32
+                                                if i >= i32::MIN as i64 && i <= i32::MAX as i64 {
+                                                    SqlValue::Integer(i as i32)
+                                                } else {
+                                                    SqlValue::BigInt(i)
+                                                }
                                             }
-                                        }
-                                        Err(_) => match value_str.parse::<f64>() {
-                                            Ok(f) => SqlValue::DoublePrecision(f),
-                                            Err(_) => SqlValue::Text(value_str.clone()),
-                                        },
-                                    };
-                                    insert_row.insert(col_name.clone(), sql_value);
+                                            Err(_) => match value_str.parse::<f64>() {
+                                                Ok(f) => SqlValue::DoublePrecision(f),
+                                                Err(_) => SqlValue::Text(value_str.clone()),
+                                            },
+                                        };
+                                        insert_row.insert(col_name.clone(), sql_value);
+                                    }
                                 }
                             }
-                        }
-                        insert_row
-                    }).collect::<Vec<_>>()
+                            insert_row
+                        })
+                        .collect::<Vec<_>>()
                 }
                 _ => {
                     return Err(ProtocolError::PostgresError(
@@ -1098,18 +1102,18 @@ impl SqlExecutor {
                     ));
                 }
             };
-            
+
             // Insert the rows
             let mut table_data = self.table_data.write().await;
             let data = table_data
                 .entry(table_name.clone())
                 .or_insert_with(Vec::new);
-            
+
             let count = rows_to_insert.len();
             for row in rows_to_insert {
                 data.push(row);
             }
-            
+
             Ok(ExecutionResult::Insert { count })
         } else {
             // DefaultValues
@@ -1333,10 +1337,12 @@ impl SqlExecutor {
         match expr {
             Expression::Column(col_ref) => Some(col_ref.name.clone()),
             Expression::Function(func_call) => match &func_call.name {
-                crate::protocols::postgres_wire::sql::ast::FunctionName::Simple(name) => Some(name.clone()),
-                crate::protocols::postgres_wire::sql::ast::FunctionName::Qualified { name, .. } => {
+                crate::protocols::postgres_wire::sql::ast::FunctionName::Simple(name) => {
                     Some(name.clone())
                 }
+                crate::protocols::postgres_wire::sql::ast::FunctionName::Qualified {
+                    name, ..
+                } => Some(name.clone()),
             },
             _ => None,
         }
@@ -1373,7 +1379,9 @@ impl SqlExecutor {
 
                     // Check if the column exists (case-insensitive)
                     let col_name_lower = col_ref.name.to_lowercase();
-                    let exists = valid_columns.iter().any(|c| c.to_lowercase() == col_name_lower);
+                    let exists = valid_columns
+                        .iter()
+                        .any(|c| c.to_lowercase() == col_name_lower);
 
                     if !exists {
                         return Err(ProtocolError::PostgresError(format!(
@@ -1387,7 +1395,8 @@ impl SqlExecutor {
                     self.validate_expression_columns(right, from_clause).await?;
                 }
                 Expression::Unary { operand, .. } => {
-                    self.validate_expression_columns(operand, from_clause).await?;
+                    self.validate_expression_columns(operand, from_clause)
+                        .await?;
                 }
                 Expression::Function(func) => {
                     for arg in &func.args {
@@ -1399,22 +1408,29 @@ impl SqlExecutor {
                         self.validate_expression_columns(op, from_clause).await?;
                     }
                     for when_clause in &case_expr.when_clauses {
-                        self.validate_expression_columns(&when_clause.condition, from_clause).await?;
-                        self.validate_expression_columns(&when_clause.result, from_clause).await?;
+                        self.validate_expression_columns(&when_clause.condition, from_clause)
+                            .await?;
+                        self.validate_expression_columns(&when_clause.result, from_clause)
+                            .await?;
                     }
                     if let Some(else_expr) = &case_expr.else_clause {
-                        self.validate_expression_columns(else_expr, from_clause).await?;
+                        self.validate_expression_columns(else_expr, from_clause)
+                            .await?;
                     }
                 }
                 Expression::In { expr, list, .. } => {
                     self.validate_expression_columns(expr, from_clause).await?;
-                    if let crate::protocols::postgres_wire::sql::ast::InList::Expressions(items) = list {
+                    if let crate::protocols::postgres_wire::sql::ast::InList::Expressions(items) =
+                        list
+                    {
                         for item in items {
                             self.validate_expression_columns(item, from_clause).await?;
                         }
                     }
                 }
-                Expression::Between { expr, low, high, .. } => {
+                Expression::Between {
+                    expr, low, high, ..
+                } => {
                     self.validate_expression_columns(expr, from_clause).await?;
                     self.validate_expression_columns(low, from_clause).await?;
                     self.validate_expression_columns(high, from_clause).await?;
@@ -1425,17 +1441,23 @@ impl SqlExecutor {
                 Expression::Literal(_) | Expression::Cast { .. } | Expression::Parameter(_) => {
                     // Literals, casts, and parameters don't need column validation
                 }
-                Expression::WindowFunction { partition_by, order_by, .. } => {
+                Expression::WindowFunction {
+                    partition_by,
+                    order_by,
+                    ..
+                } => {
                     for expr in partition_by {
                         self.validate_expression_columns(expr, from_clause).await?;
                     }
                     for item in order_by {
-                        self.validate_expression_columns(&item.expression, from_clause).await?;
+                        self.validate_expression_columns(&item.expression, from_clause)
+                            .await?;
                     }
                 }
                 Expression::Like { expr, pattern, .. } => {
                     self.validate_expression_columns(expr, from_clause).await?;
-                    self.validate_expression_columns(pattern, from_clause).await?;
+                    self.validate_expression_columns(pattern, from_clause)
+                        .await?;
                 }
                 Expression::IsNull { expr, .. } => {
                     self.validate_expression_columns(expr, from_clause).await?;
@@ -1493,7 +1515,8 @@ impl SqlExecutor {
     fn get_valid_columns_from_clause<'a>(
         &'a self,
         from_clause: &'a FromClause,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ProtocolResult<Vec<String>>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ProtocolResult<Vec<String>>> + Send + 'a>>
+    {
         Box::pin(async move {
             let mut valid_columns = Vec::new();
 

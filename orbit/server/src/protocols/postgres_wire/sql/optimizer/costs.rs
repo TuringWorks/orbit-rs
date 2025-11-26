@@ -731,7 +731,9 @@ mod tests {
                 })),
                 operator: BinaryOperator::Equal,
                 right: Box::new(Expression::Literal(
-                    crate::protocols::postgres_wire::sql::types::SqlValue::Text("active".to_string()),
+                    crate::protocols::postgres_wire::sql::types::SqlValue::Text(
+                        "active".to_string(),
+                    ),
                 )),
             }),
         };
@@ -749,7 +751,9 @@ mod tests {
                 })),
                 operator: BinaryOperator::Equal,
                 right: Box::new(Expression::Literal(
-                    crate::protocols::postgres_wire::sql::types::SqlValue::Text("active".to_string()),
+                    crate::protocols::postgres_wire::sql::types::SqlValue::Text(
+                        "active".to_string(),
+                    ),
                 )),
             }),
             operator: BinaryOperator::Or,
@@ -760,7 +764,9 @@ mod tests {
                 })),
                 operator: BinaryOperator::Equal,
                 right: Box::new(Expression::Literal(
-                    crate::protocols::postgres_wire::sql::types::SqlValue::Text("pending".to_string()),
+                    crate::protocols::postgres_wire::sql::types::SqlValue::Text(
+                        "pending".to_string(),
+                    ),
                 )),
             }),
         };
@@ -795,7 +801,9 @@ mod tests {
             })),
             operator: BinaryOperator::Equal,
             right: Box::new(Expression::Literal(
-                crate::protocols::postgres_wire::sql::types::SqlValue::Text("test@example.com".to_string()),
+                crate::protocols::postgres_wire::sql::types::SqlValue::Text(
+                    "test@example.com".to_string(),
+                ),
             )),
         };
 
@@ -874,7 +882,9 @@ mod tests {
                 })),
                 operator: BinaryOperator::Equal,
                 right: Box::new(Expression::Literal(
-                    crate::protocols::postgres_wire::sql::types::SqlValue::Text("active".to_string()),
+                    crate::protocols::postgres_wire::sql::types::SqlValue::Text(
+                        "active".to_string(),
+                    ),
                 )),
             },
         ];

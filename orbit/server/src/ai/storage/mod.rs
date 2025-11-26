@@ -4,11 +4,11 @@
 
 pub mod tiering_engine;
 
-pub use tiering_engine::{AutoTieringEngine, TieringDecision, StorageTier, AccessPattern};
+pub use tiering_engine::{AccessPattern, AutoTieringEngine, StorageTier, TieringDecision};
 
-use crate::ai::{AIDecision, AISubsystem, AISubsystemMetrics};
 use crate::ai::controller::AIConfig;
 use crate::ai::knowledge::AIKnowledgeBase;
+use crate::ai::{AIDecision, AISubsystem, AISubsystemMetrics};
 use anyhow::Result as OrbitResult;
 use std::sync::Arc;
 use tracing::info;
@@ -27,7 +27,10 @@ pub struct SmartStorageManager {
 impl AISubsystem for SmartStorageManager {
     async fn handle_decision(&self, decision: AIDecision) -> OrbitResult<()> {
         match decision {
-            AIDecision::ReorganizeStorage { table: _, strategy: _ } => {
+            AIDecision::ReorganizeStorage {
+                table: _,
+                strategy: _,
+            } => {
                 info!("Handling storage reorganization decision");
                 // TODO: Apply storage reorganization
             }
@@ -55,10 +58,7 @@ impl AISubsystem for SmartStorageManager {
 
 impl SmartStorageManager {
     /// Create a new smart storage manager
-    pub async fn new(
-        config: &AIConfig,
-        knowledge_base: Arc<AIKnowledgeBase>,
-    ) -> OrbitResult<Self> {
+    pub async fn new(config: &AIConfig, knowledge_base: Arc<AIKnowledgeBase>) -> OrbitResult<Self> {
         info!("Initializing Smart Storage Manager");
 
         Ok(Self {
@@ -73,4 +73,3 @@ impl SmartStorageManager {
         self.tiering_engine.generate_tiering_decisions().await
     }
 }
-

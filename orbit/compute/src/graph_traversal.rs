@@ -7,10 +7,10 @@
 use crate::errors::ComputeError;
 #[cfg(feature = "gpu-acceleration")]
 use crate::gpu::GPUAccelerationManager;
-#[cfg(feature = "gpu-acceleration")]
-use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
+#[cfg(feature = "gpu-acceleration")]
+use std::sync::Arc;
 use tracing::{info, warn};
 
 /// Graph representation optimized for GPU traversal
@@ -18,19 +18,19 @@ use tracing::{info, warn};
 pub struct GraphData {
     /// Node IDs (sorted for efficient access)
     pub node_ids: Vec<u64>,
-    
+
     /// Adjacency list: node_id -> list of neighbor node indices
     pub adjacency_list: Vec<Vec<u32>>,
-    
+
     /// Edge weights (optional, for weighted traversals)
     pub edge_weights: Option<Vec<f32>>,
-    
+
     /// Node properties (for filtering/scoring)
     pub node_properties: HashMap<u64, NodeProperties>,
-    
+
     /// Total number of nodes
     pub node_count: usize,
-    
+
     /// Total number of edges
     pub edge_count: usize,
 }
@@ -40,10 +40,10 @@ pub struct GraphData {
 pub struct NodeProperties {
     /// Node importance/centrality score
     pub importance: f32,
-    
+
     /// Node type/category
     pub node_type: Option<String>,
-    
+
     /// Custom metadata
     pub metadata: HashMap<String, String>,
 }
@@ -53,19 +53,19 @@ pub struct NodeProperties {
 pub struct TraversalConfig {
     /// Maximum depth/hops to traverse
     pub max_depth: u32,
-    
+
     /// Maximum number of paths to explore
     pub max_paths: usize,
-    
+
     /// Enable GPU acceleration
     pub use_gpu: bool,
-    
+
     /// Minimum path score threshold
     pub min_score: f32,
-    
+
     /// Relationship types to include (empty = all)
     pub allowed_types: Vec<String>,
-    
+
     /// Enable bidirectional search
     pub bidirectional: bool,
 }
@@ -126,16 +126,16 @@ pub struct PageRankResult {
 pub struct Path {
     /// Node IDs in the path
     pub nodes: Vec<u64>,
-    
+
     /// Edge indices (if available)
     pub edges: Vec<usize>,
-    
+
     /// Total path weight/cost
     pub weight: f32,
-    
+
     /// Path score (confidence/relevance)
     pub score: f32,
-    
+
     /// Path length (number of hops)
     pub length: usize,
 }
@@ -145,16 +145,16 @@ pub struct Path {
 pub struct TraversalStats {
     /// Number of nodes explored
     pub nodes_explored: usize,
-    
+
     /// Number of edges traversed
     pub edges_traversed: usize,
-    
+
     /// Number of paths found
     pub paths_found: usize,
-    
+
     /// Average path length
     pub avg_path_length: f32,
-    
+
     /// GPU utilization percentage (if GPU used)
     pub gpu_utilization: Option<f32>,
 }
@@ -171,7 +171,7 @@ impl GPUGraphTraversal {
     pub async fn new(config: TraversalConfig) -> Result<Self, ComputeError> {
         #[cfg(feature = "gpu-acceleration")]
         let gpu_manager = Arc::new(GPUAccelerationManager::new().await?);
-        
+
         Ok(Self {
             #[cfg(feature = "gpu-acceleration")]
             gpu_manager,
@@ -187,7 +187,7 @@ impl GPUGraphTraversal {
         target: Option<u64>,
     ) -> Result<TraversalResult, ComputeError> {
         let start_time = std::time::Instant::now();
-        
+
         if self.config.use_gpu && self.should_use_gpu(graph) {
             info!("Using GPU-accelerated BFS");
             self.bfs_gpu(graph, source, target).await
@@ -226,42 +226,46 @@ impl GPUGraphTraversal {
         #[cfg(all(feature = "gpu-acceleration", target_os = "macos"))]
         {
             use crate::gpu_metal::MetalDevice;
-            
+
             if let Ok(metal_device) = MetalDevice::new() {
                 info!("Using Metal GPU for BFS traversal");
-                return self.bfs_gpu_metal(
-                    &metal_device,
-                    graph,
-                    &gpu_graph,
-                    source,
-                    target,
-                    use_u32_indices,
-                ).await;
+                return self
+                    .bfs_gpu_metal(
+                        &metal_device,
+                        graph,
+                        &gpu_graph,
+                        source,
+                        target,
+                        use_u32_indices,
+                    )
+                    .await;
             }
         }
-        
+
         #[cfg(all(feature = "gpu-acceleration", feature = "gpu-vulkan"))]
         {
             use crate::gpu_vulkan::VulkanDevice;
-            
+
             if let Ok(mut vulkan_device) = VulkanDevice::new() {
                 info!("Using Vulkan GPU for BFS traversal");
-                return self.bfs_gpu_vulkan(
-                    &mut vulkan_device,
-                    graph,
-                    &gpu_graph,
-                    source,
-                    target,
-                    use_u32_indices,
-                ).await;
+                return self
+                    .bfs_gpu_vulkan(
+                        &mut vulkan_device,
+                        graph,
+                        &gpu_graph,
+                        source,
+                        target,
+                        use_u32_indices,
+                    )
+                    .await;
             }
         }
-        
+
         // Fall back to CPU with parallelization
         warn!("GPU BFS not available, using optimized CPU");
         self.bfs_cpu_parallel(graph, source, target).await
     }
-    
+
     /// Metal-accelerated BFS implementation
     #[cfg(all(feature = "gpu-acceleration", target_os = "macos"))]
     async fn bfs_gpu_metal(
@@ -279,10 +283,19 @@ impl GPUGraphTraversal {
             source,
             target,
             use_u32_indices,
-            |edge_array, edge_offset, current_level, visited, next_level, next_level_size, parent, current_level_size, max_nodes| {
+            |edge_array,
+             edge_offset,
+             current_level,
+             visited,
+             next_level,
+             next_level_size,
+             parent,
+             current_level_size,
+             max_nodes| {
                 if use_u32_indices {
                     // Use optimized u32 version for smaller graphs
-                    let current_level_u32: Vec<u32> = current_level.iter().map(|&x| x as u32).collect();
+                    let current_level_u32: Vec<u32> =
+                        current_level.iter().map(|&x| x as u32).collect();
                     let mut next_level_u32 = vec![0u32; next_level.len()];
                     let mut next_level_size_u32 = *next_level_size;
 
@@ -300,7 +313,11 @@ impl GPUGraphTraversal {
 
                     // Convert back to u64
                     *next_level_size = next_level_size_u32;
-                    for (i, &val) in next_level_u32.iter().enumerate().take(*next_level_size as usize) {
+                    for (i, &val) in next_level_u32
+                        .iter()
+                        .enumerate()
+                        .take(*next_level_size as usize)
+                    {
                         next_level[i] = val as u64;
                     }
                     Ok(())
@@ -319,9 +336,10 @@ impl GPUGraphTraversal {
                     )
                 }
             },
-        ).await
+        )
+        .await
     }
-    
+
     /// Vulkan-accelerated BFS implementation
     #[cfg(all(feature = "gpu-acceleration", feature = "gpu-vulkan"))]
     async fn bfs_gpu_vulkan(
@@ -339,10 +357,19 @@ impl GPUGraphTraversal {
             source,
             target,
             use_u32_indices,
-            |edge_array, edge_offset, current_level, visited, next_level, next_level_size, parent, current_level_size, max_nodes| {
+            |edge_array,
+             edge_offset,
+             current_level,
+             visited,
+             next_level,
+             next_level_size,
+             parent,
+             current_level_size,
+             max_nodes| {
                 if use_u32_indices {
                     // Use optimized u32 version for smaller graphs
-                    let current_level_u32: Vec<u32> = current_level.iter().map(|&x| x as u32).collect();
+                    let current_level_u32: Vec<u32> =
+                        current_level.iter().map(|&x| x as u32).collect();
                     let mut next_level_u32 = vec![0u32; next_level.len()];
                     let mut next_level_size_u32 = *next_level_size;
 
@@ -360,13 +387,18 @@ impl GPUGraphTraversal {
 
                     // Convert back to u64
                     *next_level_size = next_level_size_u32;
-                    for (i, &val) in next_level_u32.iter().enumerate().take(*next_level_size as usize) {
+                    for (i, &val) in next_level_u32
+                        .iter()
+                        .enumerate()
+                        .take(*next_level_size as usize)
+                    {
                         next_level[i] = val as u64;
                     }
                     Ok(())
                 } else {
                     // Convert u64 to u32 for Vulkan kernel
-                    let current_level_u32: Vec<u32> = current_level.iter().map(|&x| x as u32).collect();
+                    let current_level_u32: Vec<u32> =
+                        current_level.iter().map(|&x| x as u32).collect();
                     let mut next_level_u32 = vec![0u32; next_level.len()];
                     let mut next_level_size_u32 = *next_level_size;
 
@@ -384,15 +416,20 @@ impl GPUGraphTraversal {
 
                     // Convert back to u64
                     *next_level_size = next_level_size_u32;
-                    for (i, &val) in next_level_u32.iter().enumerate().take(*next_level_size as usize) {
+                    for (i, &val) in next_level_u32
+                        .iter()
+                        .enumerate()
+                        .take(*next_level_size as usize)
+                    {
                         next_level[i] = val as u64;
                     }
                     Ok(())
                 }
             },
-        ).await
+        )
+        .await
     }
-    
+
     /// Generic GPU BFS implementation with parent tracking
     #[allow(dead_code)]
     async fn bfs_gpu_impl<F>(
@@ -406,35 +443,39 @@ impl GPUGraphTraversal {
     ) -> Result<TraversalResult, ComputeError>
     where
         F: FnMut(
-            &[u32],          // edge_array
-            &[u32],          // edge_offset
-            &[u64],          // current_level
-            &mut [u32],      // visited
-            &mut [u64],      // next_level
-            &mut u32,        // next_level_size
-            &mut [u32],      // parent (NEW)
-            u32,             // current_level_size
-            u32,             // max_nodes
+            &[u32],     // edge_array
+            &[u32],     // edge_offset
+            &[u64],     // current_level
+            &mut [u32], // visited
+            &mut [u64], // next_level
+            &mut u32,   // next_level_size
+            &mut [u32], // parent (NEW)
+            u32,        // current_level_size
+            u32,        // max_nodes
         ) -> Result<(), ComputeError>,
     {
         // Initialize BFS state
         let mut visited = vec![0u32; graph.node_count];
-        
+
         // Convert source node ID to index
-        let source_idx = graph.node_ids.iter().position(|&id| id == source)
-            .ok_or_else(|| ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
-                kernel_name: "bfs_level_expansion".to_string(),
-                error: "Source node not found in graph".to_string(),
-            }))?;
-        
+        let source_idx = graph
+            .node_ids
+            .iter()
+            .position(|&id| id == source)
+            .ok_or_else(|| {
+                ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                    kernel_name: "bfs_level_expansion".to_string(),
+                    error: "Source node not found in graph".to_string(),
+                })
+            })?;
+
         // Mark source as visited
         visited[source_idx] = 1;
-        
+
         // Convert target node ID to index (if provided)
-        let target_idx = target.and_then(|target_id| {
-            graph.node_ids.iter().position(|&id| id == target_id)
-        });
-        
+        let target_idx =
+            target.and_then(|target_id| graph.node_ids.iter().position(|&id| id == target_id));
+
         // Parent tracking for path reconstruction: parent[node_idx] = parent_idx
         // GPU kernel will populate this array
         let mut parent_u32 = vec![u32::MAX; graph.node_count]; // u32::MAX = no parent
@@ -524,23 +565,30 @@ impl GPUGraphTraversal {
                     }
                 }
             }
-            
+
             // Prepare next level (already in index format)
             current_level_indices = next_level_slice.to_vec();
         }
-        
+
         let paths_count = paths.len();
         let avg_path_length = if !paths.is_empty() {
             paths.iter().map(|p| p.length as f32).sum::<f32>() / paths.len() as f32
         } else {
             0.0
         };
-        
+
         Ok(TraversalResult {
             paths,
-            visited_nodes: visited.iter()
+            visited_nodes: visited
+                .iter()
                 .enumerate()
-                .filter_map(|(idx, &v)| if v == 1 { graph.node_ids.get(idx).copied() } else { None })
+                .filter_map(|(idx, &v)| {
+                    if v == 1 {
+                        graph.node_ids.get(idx).copied()
+                    } else {
+                        None
+                    }
+                })
                 .collect(),
             execution_time_ms: 0, // Set by caller
             used_gpu: true,
@@ -562,22 +610,22 @@ impl GPUGraphTraversal {
         target: Option<u64>,
     ) -> Result<TraversalResult, ComputeError> {
         use rayon::prelude::*;
-        
+
         let mut visited = HashSet::new();
         let mut queue = VecDeque::new();
         let mut paths = Vec::new();
         let mut parent_map: HashMap<u64, Vec<(u64, usize)>> = HashMap::new();
-        
+
         queue.push_back((source, 0, vec![source]));
         visited.insert(source);
         parent_map.insert(source, vec![]);
-        
+
         let mut nodes_explored = 0;
         let mut edges_traversed = 0;
-        
+
         while let Some((current, depth, path)) = queue.pop_front() {
             nodes_explored += 1;
-            
+
             // Check if we reached the target
             if let Some(target_id) = target {
                 if current == target_id {
@@ -588,17 +636,17 @@ impl GPUGraphTraversal {
                         score: 1.0,
                         length: depth,
                     });
-                    
+
                     if paths.len() >= self.config.max_paths {
                         break;
                     }
                 }
             }
-            
+
             if depth >= self.config.max_depth as usize {
                 continue;
             }
-            
+
             // Get neighbors (parallel processing only for large adjacency lists to avoid Rayon overhead)
             if let Some(neighbors) = graph.adjacency_list.get(current as usize) {
                 let neighbor_batch: Vec<_> = if neighbors.len() > 1000 {
@@ -639,14 +687,14 @@ impl GPUGraphTraversal {
                 }
             }
         }
-        
+
         let paths_found = paths.len();
         let avg_path_length = if !paths.is_empty() {
             paths.iter().map(|p| p.length as f32).sum::<f32>() / paths_found as f32
         } else {
             0.0
         };
-        
+
         Ok(TraversalResult {
             paths,
             visited_nodes: visited,
@@ -683,10 +731,12 @@ impl GPUGraphTraversal {
 
         // Dijkstra requires edge weights
         if graph.edge_weights.is_none() {
-            return Err(ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
-                kernel_name: "dijkstra".to_string(),
-                error: "Edge weights required for Dijkstra's algorithm".to_string(),
-            }));
+            return Err(ComputeError::gpu(
+                crate::errors::GPUError::KernelLaunchFailed {
+                    kernel_name: "dijkstra".to_string(),
+                    error: "Edge weights required for Dijkstra's algorithm".to_string(),
+                },
+            ));
         }
 
         if self.config.use_gpu && self.should_use_gpu(graph) {
@@ -723,13 +773,9 @@ impl GPUGraphTraversal {
 
             if let Ok(metal_device) = MetalDevice::new() {
                 info!("Using Metal GPU for Dijkstra");
-                return self.dijkstra_gpu_metal(
-                    &metal_device,
-                    graph,
-                    &gpu_graph,
-                    source,
-                    target,
-                ).await;
+                return self
+                    .dijkstra_gpu_metal(&metal_device, graph, &gpu_graph, source, target)
+                    .await;
             }
         }
 
@@ -739,13 +785,9 @@ impl GPUGraphTraversal {
 
             if let Ok(mut vulkan_device) = VulkanDevice::new() {
                 info!("Using Vulkan GPU for Dijkstra");
-                return self.dijkstra_gpu_vulkan(
-                    &mut vulkan_device,
-                    graph,
-                    &gpu_graph,
-                    source,
-                    target,
-                ).await;
+                return self
+                    .dijkstra_gpu_vulkan(&mut vulkan_device, graph, &gpu_graph, source, target)
+                    .await;
             }
         }
 
@@ -781,7 +823,8 @@ impl GPUGraphTraversal {
                     graph.node_count as u32,
                 )
             },
-        ).await
+        )
+        .await
     }
 
     /// Vulkan-accelerated Dijkstra implementation
@@ -811,7 +854,8 @@ impl GPUGraphTraversal {
                     graph.node_count as u32,
                 )
             },
-        ).await
+        )
+        .await
     }
 
     /// Generic GPU Dijkstra implementation
@@ -826,33 +870,38 @@ impl GPUGraphTraversal {
     ) -> Result<TraversalResult, ComputeError>
     where
         F: FnMut(
-            &[u32],          // edge_array
-            &[u32],          // edge_offset
-            &[f32],          // edge_weights
-            &mut [f32],      // distances
-            &mut [u32],      // parent
-            &mut [u32],      // active_mask
-            &mut u32,        // changed flag
+            &[u32],     // edge_array
+            &[u32],     // edge_offset
+            &[f32],     // edge_weights
+            &mut [f32], // distances
+            &mut [u32], // parent
+            &mut [u32], // active_mask
+            &mut u32,   // changed flag
         ) -> Result<(), ComputeError>,
     {
         // Get edge weights
-        let edge_weights = graph.edge_weights.as_ref()
-            .ok_or_else(|| ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+        let edge_weights = graph.edge_weights.as_ref().ok_or_else(|| {
+            ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
                 kernel_name: "dijkstra_relax".to_string(),
                 error: "Edge weights required".to_string(),
-            }))?;
+            })
+        })?;
 
         // Convert source node ID to index
-        let source_idx = graph.node_ids.iter().position(|&id| id == source)
-            .ok_or_else(|| ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
-                kernel_name: "dijkstra_relax".to_string(),
-                error: "Source node not found in graph".to_string(),
-            }))?;
+        let source_idx = graph
+            .node_ids
+            .iter()
+            .position(|&id| id == source)
+            .ok_or_else(|| {
+                ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                    kernel_name: "dijkstra_relax".to_string(),
+                    error: "Source node not found in graph".to_string(),
+                })
+            })?;
 
         // Convert target node ID to index (if provided)
-        let target_idx = target.and_then(|target_id| {
-            graph.node_ids.iter().position(|&id| id == target_id)
-        });
+        let target_idx =
+            target.and_then(|target_id| graph.node_ids.iter().position(|&id| id == target_id));
 
         // Initialize distances to infinity, parent to u32::MAX
         let mut distances = vec![f32::INFINITY; graph.node_count];
@@ -939,7 +988,8 @@ impl GPUGraphTraversal {
 
         // Statistics
         let nodes_explored = distances.iter().filter(|&&d| d != f32::INFINITY).count();
-        let visited_nodes: HashSet<u64> = distances.iter()
+        let visited_nodes: HashSet<u64> = distances
+            .iter()
             .enumerate()
             .filter_map(|(idx, &d)| {
                 if d != f32::INFINITY {
@@ -979,8 +1029,8 @@ impl GPUGraphTraversal {
         source: u64,
         target: Option<u64>,
     ) -> Result<TraversalResult, ComputeError> {
-        use std::collections::BinaryHeap;
         use std::cmp::Ordering;
+        use std::collections::BinaryHeap;
 
         // Min-heap node wrapper
         #[derive(Copy, Clone, PartialEq)]
@@ -993,7 +1043,9 @@ impl GPUGraphTraversal {
         impl Eq for State {}
         impl Ord for State {
             fn cmp(&self, other: &Self) -> Ordering {
-                other.cost.partial_cmp(&self.cost)
+                other
+                    .cost
+                    .partial_cmp(&self.cost)
                     .unwrap_or(Ordering::Equal)
                     .then_with(|| self.node_idx.cmp(&other.node_idx))
             }
@@ -1005,18 +1057,24 @@ impl GPUGraphTraversal {
         }
 
         // Get edge weights
-        let edge_weights = graph.edge_weights.as_ref()
-            .ok_or_else(|| ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+        let edge_weights = graph.edge_weights.as_ref().ok_or_else(|| {
+            ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
                 kernel_name: "dijkstra".to_string(),
                 error: "Edge weights required".to_string(),
-            }))?;
+            })
+        })?;
 
         // Find source index
-        let source_idx = graph.node_ids.iter().position(|&id| id == source)
-            .ok_or_else(|| ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
-                kernel_name: "dijkstra".to_string(),
-                error: "Source node not found".to_string(),
-            }))?;
+        let source_idx = graph
+            .node_ids
+            .iter()
+            .position(|&id| id == source)
+            .ok_or_else(|| {
+                ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                    kernel_name: "dijkstra".to_string(),
+                    error: "Source node not found".to_string(),
+                })
+            })?;
 
         let target_idx = target.and_then(|t| graph.node_ids.iter().position(|&id| id == t));
 
@@ -1027,7 +1085,10 @@ impl GPUGraphTraversal {
 
         distances[source_idx] = 0.0;
         parent[source_idx] = source_idx;
-        heap.push(State { cost: 0.0, node_idx: source_idx });
+        heap.push(State {
+            cost: 0.0,
+            node_idx: source_idx,
+        });
 
         let mut nodes_explored = 0;
         let mut edges_traversed = 0;
@@ -1050,7 +1111,10 @@ impl GPUGraphTraversal {
 
             // Process neighbors
             if let Some(neighbors) = graph.adjacency_list.get(node_idx) {
-                let edge_start = graph.adjacency_list[..node_idx].iter().map(|v| v.len()).sum::<usize>();
+                let edge_start = graph.adjacency_list[..node_idx]
+                    .iter()
+                    .map(|v| v.len())
+                    .sum::<usize>();
 
                 for (i, &neighbor_idx) in neighbors.iter().enumerate() {
                     edges_traversed += 1;
@@ -1061,7 +1125,10 @@ impl GPUGraphTraversal {
                     if next_cost < distances[neighbor_idx as usize] {
                         distances[neighbor_idx as usize] = next_cost;
                         parent[neighbor_idx as usize] = node_idx;
-                        heap.push(State { cost: next_cost, node_idx: neighbor_idx as usize });
+                        heap.push(State {
+                            cost: next_cost,
+                            node_idx: neighbor_idx as usize,
+                        });
                     }
                 }
             }
@@ -1100,7 +1167,8 @@ impl GPUGraphTraversal {
             }
         }
 
-        let visited_nodes: HashSet<u64> = distances.iter()
+        let visited_nodes: HashSet<u64> = distances
+            .iter()
             .enumerate()
             .filter_map(|(idx, &d)| {
                 if d != f32::INFINITY {
@@ -1145,11 +1213,10 @@ impl GPUGraphTraversal {
         // DFS is inherently sequential, so CPU is usually more efficient
         // GPU version would require stack management which is complex
         info!("Using CPU DFS (inherently sequential algorithm)");
-        self.dfs_cpu(graph, source, target).await
-            .map(|mut result| {
-                result.execution_time_ms = start_time.elapsed().as_millis() as u64;
-                result
-            })
+        self.dfs_cpu(graph, source, target).await.map(|mut result| {
+            result.execution_time_ms = start_time.elapsed().as_millis() as u64;
+            result
+        })
     }
 
     /// CPU-based DFS with stack
@@ -1165,11 +1232,16 @@ impl GPUGraphTraversal {
         let mut parent_map: HashMap<u64, u64> = HashMap::new();
 
         // Verify source exists
-        let _source_idx = graph.node_ids.iter().position(|&id| id == source)
-            .ok_or_else(|| ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
-                kernel_name: "dfs".to_string(),
-                error: "Source node not found in graph".to_string(),
-            }))?;
+        let _source_idx = graph
+            .node_ids
+            .iter()
+            .position(|&id| id == source)
+            .ok_or_else(|| {
+                ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                    kernel_name: "dfs".to_string(),
+                    error: "Source node not found in graph".to_string(),
+                })
+            })?;
 
         // DFS using explicit stack: (node_id, depth)
         stack.push((source, 0));
@@ -1218,7 +1290,10 @@ impl GPUGraphTraversal {
             }
 
             // Get current node index
-            let current_idx = graph.node_ids.iter().position(|&id| id == current)
+            let current_idx = graph
+                .node_ids
+                .iter()
+                .position(|&id| id == current)
                 .unwrap_or(0);
 
             // Process neighbors (in reverse order for DFS to maintain left-to-right traversal)
@@ -1273,10 +1348,12 @@ impl GPUGraphTraversal {
         // PageRank benefits from GPU parallelization
         if self.config.use_gpu && self.should_use_gpu(graph) {
             info!("Using CPU PageRank (GPU version not yet implemented)");
-            self.pagerank_cpu(graph, damping_factor, max_iterations, convergence_threshold).await
+            self.pagerank_cpu(graph, damping_factor, max_iterations, convergence_threshold)
+                .await
         } else {
             info!("Using CPU PageRank");
-            self.pagerank_cpu(graph, damping_factor, max_iterations, convergence_threshold).await
+            self.pagerank_cpu(graph, damping_factor, max_iterations, convergence_threshold)
+                .await
         }
         .map(|mut result| {
             result.execution_time_ms = start_time.elapsed().as_millis() as u64;
@@ -1302,7 +1379,9 @@ impl GPUGraphTraversal {
         let mut new_ranks = vec![0.0f32; n];
 
         // Calculate out-degrees for each node
-        let out_degrees: Vec<usize> = graph.adjacency_list.iter()
+        let out_degrees: Vec<usize> = graph
+            .adjacency_list
+            .iter()
             .map(|neighbors| neighbors.len().max(1)) // Avoid division by zero
             .collect();
 
@@ -1318,13 +1397,15 @@ impl GPUGraphTraversal {
             // Parallel computation of rank contributions
             if n > 1000 {
                 // Use parallel iteration for large graphs
-                new_ranks.par_iter_mut()
+                new_ranks
+                    .par_iter_mut()
                     .enumerate()
                     .for_each(|(target_idx, new_rank)| {
                         // Sum contributions from all nodes pointing to this target
                         for (source_idx, neighbors) in graph.adjacency_list.iter().enumerate() {
                             if neighbors.contains(&(target_idx as u32)) {
-                                let contribution = ranks[source_idx] * damping_factor / out_degrees[source_idx] as f32;
+                                let contribution = ranks[source_idx] * damping_factor
+                                    / out_degrees[source_idx] as f32;
                                 *new_rank += contribution;
                             }
                         }
@@ -1334,7 +1415,8 @@ impl GPUGraphTraversal {
                 for target_idx in 0..n {
                     for (source_idx, neighbors) in graph.adjacency_list.iter().enumerate() {
                         if neighbors.contains(&(target_idx as u32)) {
-                            let contribution = ranks[source_idx] * damping_factor / out_degrees[source_idx] as f32;
+                            let contribution =
+                                ranks[source_idx] * damping_factor / out_degrees[source_idx] as f32;
                             new_ranks[target_idx] += contribution;
                         }
                     }
@@ -1342,7 +1424,8 @@ impl GPUGraphTraversal {
             }
 
             // Calculate convergence delta (L1 norm)
-            delta = ranks.iter()
+            delta = ranks
+                .iter()
                 .zip(new_ranks.iter())
                 .map(|(old, new)| (old - new).abs())
                 .sum();
@@ -1353,7 +1436,9 @@ impl GPUGraphTraversal {
         }
 
         // Build result map
-        let scores: HashMap<u64, f32> = graph.node_ids.iter()
+        let scores: HashMap<u64, f32> = graph
+            .node_ids
+            .iter()
             .enumerate()
             .map(|(idx, &node_id)| (node_id, ranks[idx]))
             .collect();
@@ -1392,7 +1477,8 @@ impl GPUGraphTraversal {
         // For now, prepare GPU graph format (even though we fall back to CPU)
         let __gpu_graph = self.prepare_gpu_graph(graph)?;
         warn!("GPU community detection kernel not yet implemented, using optimized CPU");
-        self.detect_communities_cpu_parallel(graph, min_community_size).await
+        self.detect_communities_cpu_parallel(graph, min_community_size)
+            .await
     }
 
     /// CPU-based community detection with parallelization
@@ -1402,25 +1488,25 @@ impl GPUGraphTraversal {
         min_community_size: usize,
     ) -> Result<Vec<Vec<u64>>, ComputeError> {
         use rayon::prelude::*;
-        
+
         let mut visited = HashSet::new();
         let mut communities = Vec::new();
-        
+
         // Parallel BFS for each unvisited node
         for &node_id in &graph.node_ids {
             if visited.contains(&node_id) {
                 continue;
             }
-            
+
             // BFS to find connected component
             let mut community = Vec::new();
             let mut queue = VecDeque::new();
             queue.push_back(node_id);
             visited.insert(node_id);
-            
+
             while let Some(current) = queue.pop_front() {
                 community.push(current);
-                
+
                 if let Some(neighbors) = graph.adjacency_list.get(current as usize) {
                     let unvisited_neighbors: Vec<_> = if neighbors.len() > 1000 {
                         // Parallel for large neighbor lists
@@ -1456,12 +1542,12 @@ impl GPUGraphTraversal {
                     }
                 }
             }
-            
+
             if community.len() >= min_community_size {
                 communities.push(community);
             }
         }
-        
+
         Ok(communities)
     }
 
@@ -1471,7 +1557,8 @@ impl GPUGraphTraversal {
         graph: &GraphData,
         min_community_size: usize,
     ) -> Result<Vec<Vec<u64>>, ComputeError> {
-        self.detect_communities_cpu_parallel(graph, min_community_size).await
+        self.detect_communities_cpu_parallel(graph, min_community_size)
+            .await
     }
 
     /// Check if GPU should be used for this graph
@@ -1481,16 +1568,19 @@ impl GPUGraphTraversal {
     }
 
     /// Prepare graph data for GPU processing
-    pub(crate) fn prepare_gpu_graph(&self, graph: &GraphData) -> Result<GPUGraphData, ComputeError> {
+    pub(crate) fn prepare_gpu_graph(
+        &self,
+        graph: &GraphData,
+    ) -> Result<GPUGraphData, ComputeError> {
         // Convert to flat arrays for GPU processing
         let mut edge_array = Vec::with_capacity(graph.edge_count);
         let mut edge_offset = Vec::with_capacity(graph.node_count + 1);
-        
+
         let mut offset = 0;
         for neighbors in graph.adjacency_list.iter() {
             edge_offset.push(offset);
             offset += neighbors.len() as u32;
-            
+
             for &neighbor_idx in neighbors {
                 edge_array.push(neighbor_idx);
             }
@@ -1511,7 +1601,7 @@ impl GPUGraphTraversal {
         let node_memory = graph.node_count * 8; // u64 per node
         let edge_memory = graph.edge_count * 4; // u32 per edge
         let temp_memory = graph.node_count * 16; // visited flags, distances, etc.
-        
+
         (node_memory + edge_memory + temp_memory) as u64
     }
 }
@@ -1541,26 +1631,26 @@ mod tests {
             use_gpu: false, // Use CPU for small graph
             ..Default::default()
         };
-        
+
         let traversal = GPUGraphTraversal::new(config).await.unwrap();
-        
+
         // Create a simple graph: 0 -> 1 -> 2 -> 3
         let graph = GraphData {
             node_ids: vec![0, 1, 2, 3],
             adjacency_list: vec![
-                vec![1],    // 0 -> 1
-                vec![2],    // 1 -> 2
-                vec![3],    // 2 -> 3
-                vec![],     // 3 -> (none)
+                vec![1], // 0 -> 1
+                vec![2], // 1 -> 2
+                vec![3], // 2 -> 3
+                vec![],  // 3 -> (none)
             ],
             edge_weights: None,
             node_properties: HashMap::new(),
             node_count: 4,
             edge_count: 3,
         };
-        
+
         let result = traversal.bfs(&graph, 0, Some(3)).await.unwrap();
-        
+
         assert!(!result.paths.is_empty());
         assert_eq!(result.paths[0].nodes, vec![0, 1, 2, 3]);
     }
@@ -1574,10 +1664,10 @@ mod tests {
         let graph = GraphData {
             node_ids: vec![0, 1, 2, 3, 4, 5],
             adjacency_list: vec![
-                vec![1],    // Component 1: 0-1-2
+                vec![1], // Component 1: 0-1-2
                 vec![0, 2],
                 vec![1],
-                vec![4],    // Component 2: 3-4-5
+                vec![4], // Component 2: 3-4-5
                 vec![3, 5],
                 vec![4],
             ],
@@ -1609,10 +1699,10 @@ mod tests {
         let graph = GraphData {
             node_ids: vec![0, 1, 2, 3],
             adjacency_list: vec![
-                vec![1, 3],    // 0 -> 1, 0 -> 3
-                vec![2],       // 1 -> 2
-                vec![3],       // 2 -> 3
-                vec![],        // 3 -> (none)
+                vec![1, 3], // 0 -> 1, 0 -> 3
+                vec![2],    // 1 -> 2
+                vec![3],    // 2 -> 3
+                vec![],     // 3 -> (none)
             ],
             edge_weights: Some(vec![1.0, 10.0, 2.0, 3.0]),
             node_properties: HashMap::new(),
@@ -1642,10 +1732,10 @@ mod tests {
         let graph = GraphData {
             node_ids: vec![0, 1, 2, 3],
             adjacency_list: vec![
-                vec![1],    // 0 -> 1
-                vec![2],    // 1 -> 2
-                vec![3],    // 2 -> 3
-                vec![],     // 3 -> (none)
+                vec![1], // 0 -> 1
+                vec![2], // 1 -> 2
+                vec![3], // 2 -> 3
+                vec![],  // 3 -> (none)
             ],
             edge_weights: None,
             node_properties: HashMap::new(),
@@ -1670,10 +1760,10 @@ mod tests {
         let graph = GraphData {
             node_ids: vec![0, 1, 2, 3],
             adjacency_list: vec![
-                vec![1],    // 0 -> 1
-                vec![],     // 1 -> (none, but receives from 0, 2, 3)
-                vec![1],    // 2 -> 1
-                vec![1],    // 3 -> 1
+                vec![1], // 0 -> 1
+                vec![],  // 1 -> (none, but receives from 0, 2, 3)
+                vec![1], // 2 -> 1
+                vec![1], // 3 -> 1
             ],
             edge_weights: None,
             node_properties: HashMap::new(),
@@ -1699,4 +1789,3 @@ mod tests {
         assert!(result.convergence_delta < 0.01);
     }
 }
-

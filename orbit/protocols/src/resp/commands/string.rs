@@ -579,8 +579,7 @@ impl StringCommands {
                 // Try integer first
                 v.as_integer().or_else(|| {
                     // Try parsing as string
-                    v.as_string()
-                        .and_then(|s| s.parse::<i64>().ok())
+                    v.as_string().and_then(|s| s.parse::<i64>().ok())
                 })
             })
             .ok_or_else(|| {
@@ -750,7 +749,9 @@ impl StringCommands {
             .execute_keyvalue(
                 &key,
                 "set_expiration",
-                &[serde_json::Value::Number(serde_json::Number::from(seconds as u64))],
+                &[serde_json::Value::Number(serde_json::Number::from(
+                    seconds as u64,
+                ))],
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;

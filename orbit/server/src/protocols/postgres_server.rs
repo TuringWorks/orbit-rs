@@ -4,8 +4,8 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::{error, info};
 
-use crate::protocols::postgres_wire::{protocol::PostgresWireProtocol, query_engine::QueryEngine};
 use crate::protocols::error::ProtocolResult;
+use crate::protocols::postgres_wire::{protocol::PostgresWireProtocol, query_engine::QueryEngine};
 
 /// PostgreSQL wire protocol server
 pub struct PostgresServer {
@@ -66,4 +66,3 @@ impl Default for PostgresServer {
         Self::new("127.0.0.1:5432")
     }
 }
-

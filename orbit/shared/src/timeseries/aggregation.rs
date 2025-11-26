@@ -482,8 +482,8 @@ mod tests {
     #[test]
     fn test_moving_average() {
         let data = create_test_data();
-        let result = TimeSeriesAggregator::moving_average(&data, Duration::from_millis(2500))
-            .unwrap();
+        let result =
+            TimeSeriesAggregator::moving_average(&data, Duration::from_millis(2500)).unwrap();
 
         assert_eq!(result.len(), 5);
 
@@ -654,12 +654,24 @@ mod tests {
     fn test_empty_data() {
         let empty: Vec<DataPoint> = Vec::new();
 
-        assert!(TimeSeriesAggregator::moving_average(&empty, Duration::from_secs(1)).unwrap().is_empty());
-        assert!(TimeSeriesAggregator::exponential_moving_average(&empty, 0.5).unwrap().is_empty());
+        assert!(
+            TimeSeriesAggregator::moving_average(&empty, Duration::from_secs(1))
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            TimeSeriesAggregator::exponential_moving_average(&empty, 0.5)
+                .unwrap()
+                .is_empty()
+        );
         assert!(TimeSeriesAggregator::rate(&empty).unwrap().is_empty());
-        assert!(TimeSeriesAggregator::detect_anomalies(&empty, 2.0).unwrap().is_empty());
+        assert!(TimeSeriesAggregator::detect_anomalies(&empty, 2.0)
+            .unwrap()
+            .is_empty());
         assert!(TimeSeriesAggregator::delta(&empty).unwrap().is_empty());
-        assert!(TimeSeriesAggregator::cumulative_sum(&empty).unwrap().is_empty());
+        assert!(TimeSeriesAggregator::cumulative_sum(&empty)
+            .unwrap()
+            .is_empty());
     }
 
     #[test]

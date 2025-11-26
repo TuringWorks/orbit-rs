@@ -3,7 +3,9 @@
 #[cfg(test)]
 mod tests {
     use super::super::aql_parser::AqlParser;
-    use super::super::data_model::{AqlDocument, AqlValue, AqlCollection, CollectionType, CollectionStatus};
+    use super::super::data_model::{
+        AqlCollection, AqlDocument, AqlValue, CollectionStatus, CollectionType,
+    };
     use super::super::query_engine::AqlQueryEngine;
     use super::super::storage::AqlStorage;
     use std::collections::HashMap;
@@ -23,7 +25,11 @@ mod tests {
         (engine, storage)
     }
 
-    fn create_test_document(collection: &str, key: &str, data: HashMap<String, AqlValue>) -> AqlDocument {
+    fn create_test_document(
+        collection: &str,
+        key: &str,
+        data: HashMap<String, AqlValue>,
+    ) -> AqlDocument {
         AqlDocument::new(collection, key.to_string(), data)
     }
 
@@ -54,7 +60,10 @@ mod tests {
 
         let mut data = HashMap::new();
         data.insert("name".to_string(), AqlValue::String("Alice".to_string()));
-        data.insert("age".to_string(), AqlValue::Number(serde_json::Number::from(30)));
+        data.insert(
+            "age".to_string(),
+            AqlValue::Number(serde_json::Number::from(30)),
+        );
 
         let doc = create_test_document("users", "alice", data);
         let result = storage.store_document(doc.clone()).await;
@@ -73,7 +82,10 @@ mod tests {
         // Create multiple documents
         for i in 0..5 {
             let mut data = HashMap::new();
-            data.insert("id".to_string(), AqlValue::Number(serde_json::Number::from(i)));
+            data.insert(
+                "id".to_string(),
+                AqlValue::Number(serde_json::Number::from(i)),
+            );
             let doc = create_test_document("users", &format!("user{}", i), data);
             storage.store_document(doc).await.unwrap();
         }
@@ -152,7 +164,7 @@ mod tests {
     #[tokio::test]
     async fn test_parser_comparison_operators() {
         let parser = AqlParser::new();
-        
+
         let queries = vec![
             "FOR doc IN users FILTER doc.age == 30 RETURN doc",
             "FOR doc IN users FILTER doc.age != 30 RETURN doc",
@@ -207,17 +219,25 @@ mod tests {
         storage.store_collection(collection).await.unwrap();
 
         let mut data1 = HashMap::new();
-        data1.insert("age".to_string(), AqlValue::Number(serde_json::Number::from(30)));
+        data1.insert(
+            "age".to_string(),
+            AqlValue::Number(serde_json::Number::from(30)),
+        );
         let doc1 = create_test_document("users", "alice", data1);
         storage.store_document(doc1).await.unwrap();
 
         let mut data2 = HashMap::new();
-        data2.insert("age".to_string(), AqlValue::Number(serde_json::Number::from(25)));
+        data2.insert(
+            "age".to_string(),
+            AqlValue::Number(serde_json::Number::from(25)),
+        );
         let doc2 = create_test_document("users", "bob", data2);
         storage.store_document(doc2).await.unwrap();
 
         // Execute filtered query
-        let result = engine.execute_query("FOR doc IN users FILTER doc.age > 25 RETURN doc").await;
+        let result = engine
+            .execute_query("FOR doc IN users FILTER doc.age > 25 RETURN doc")
+            .await;
         assert!(result.is_ok());
     }
 
@@ -241,7 +261,9 @@ mod tests {
         storage.store_document(doc).await.unwrap();
 
         // Execute query returning specific property
-        let result = engine.execute_query("FOR doc IN users RETURN doc.name").await;
+        let result = engine
+            .execute_query("FOR doc IN users RETURN doc.name")
+            .await;
         assert!(result.is_ok());
     }
 
@@ -261,12 +283,17 @@ mod tests {
 
         let mut data = HashMap::new();
         data.insert("name".to_string(), AqlValue::String("Alice".to_string()));
-        data.insert("age".to_string(), AqlValue::Number(serde_json::Number::from(30)));
+        data.insert(
+            "age".to_string(),
+            AqlValue::Number(serde_json::Number::from(30)),
+        );
         let doc = create_test_document("users", "alice", data);
         storage.store_document(doc).await.unwrap();
 
         // Execute query returning object
-        let result = engine.execute_query("FOR doc IN users RETURN {name: doc.name, age: doc.age}").await;
+        let result = engine
+            .execute_query("FOR doc IN users RETURN {name: doc.name, age: doc.age}")
+            .await;
         assert!(result.is_ok());
     }
 
@@ -286,13 +313,18 @@ mod tests {
 
         for i in 0..10 {
             let mut data = HashMap::new();
-            data.insert("id".to_string(), AqlValue::Number(serde_json::Number::from(i)));
+            data.insert(
+                "id".to_string(),
+                AqlValue::Number(serde_json::Number::from(i)),
+            );
             let doc = create_test_document("users", &format!("user{}", i), data);
             storage.store_document(doc).await.unwrap();
         }
 
         // Execute query with LIMIT
-        let result = engine.execute_query("FOR doc IN users LIMIT 5 RETURN doc").await;
+        let result = engine
+            .execute_query("FOR doc IN users LIMIT 5 RETURN doc")
+            .await;
         assert!(result.is_ok());
         let query_result = result.unwrap();
         assert!(query_result.data.len() <= 5);
@@ -321,7 +353,9 @@ mod tests {
         }
 
         // Execute query with DISTINCT
-        let result = engine.execute_query("FOR doc IN users RETURN DISTINCT doc.name").await;
+        let result = engine
+            .execute_query("FOR doc IN users RETURN DISTINCT doc.name")
+            .await;
         assert!(result.is_ok());
     }
 
@@ -379,7 +413,8 @@ mod tests {
     #[ignore = "COLLECT clause not yet implemented"]
     async fn test_parser_collect_clause() {
         let parser = AqlParser::new();
-        let result = parser.parse("FOR doc IN users COLLECT age = doc.age RETURN {age: age, count: LENGTH(doc)}");
+        let result = parser
+            .parse("FOR doc IN users COLLECT age = doc.age RETURN {age: age, count: LENGTH(doc)}");
         assert!(result.is_ok(), "Parser failed: {:?}", result.err());
     }
 
@@ -446,7 +481,9 @@ mod tests {
         let (engine, _storage) = create_test_engine_with_storage().await;
 
         // Execute query on non-existent collection
-        let result = engine.execute_query("FOR doc IN nonexistent RETURN doc").await;
+        let result = engine
+            .execute_query("FOR doc IN nonexistent RETURN doc")
+            .await;
         // Should handle gracefully (may return empty or error)
         assert!(result.is_ok() || result.is_err());
     }
@@ -467,8 +504,14 @@ mod tests {
         assert_eq!(doc.get("name"), Some(AqlValue::String("Alice".to_string())));
         assert_eq!(doc.get("_key"), Some(AqlValue::String("alice".to_string())));
 
-        doc.set("age".to_string(), AqlValue::Number(serde_json::Number::from(30)));
-        assert_eq!(doc.get("age"), Some(AqlValue::Number(serde_json::Number::from(30))));
+        doc.set(
+            "age".to_string(),
+            AqlValue::Number(serde_json::Number::from(30)),
+        );
+        assert_eq!(
+            doc.get("age"),
+            Some(AqlValue::Number(serde_json::Number::from(30)))
+        );
     }
 
     #[tokio::test]
@@ -540,20 +583,27 @@ mod tests {
 
         // Create documents with different properties
         let mut data1 = HashMap::new();
-        data1.insert("age".to_string(), AqlValue::Number(serde_json::Number::from(30)));
+        data1.insert(
+            "age".to_string(),
+            AqlValue::Number(serde_json::Number::from(30)),
+        );
         data1.insert("city".to_string(), AqlValue::String("NYC".to_string()));
         let doc1 = create_test_document("users", "alice", data1);
         storage.store_document(doc1).await.unwrap();
 
         let mut data2 = HashMap::new();
-        data2.insert("age".to_string(), AqlValue::Number(serde_json::Number::from(30)));
+        data2.insert(
+            "age".to_string(),
+            AqlValue::Number(serde_json::Number::from(30)),
+        );
         data2.insert("city".to_string(), AqlValue::String("LA".to_string()));
         let doc2 = create_test_document("users", "bob", data2);
         storage.store_document(doc2).await.unwrap();
 
         // Execute query with filter (note: AND/OR not yet in parser, but structure supports it)
-        let result = engine.execute_query("FOR doc IN users FILTER doc.age == 30 RETURN doc").await;
+        let result = engine
+            .execute_query("FOR doc IN users FILTER doc.age == 30 RETURN doc")
+            .await;
         assert!(result.is_ok());
     }
 }
-

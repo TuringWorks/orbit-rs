@@ -3,6 +3,8 @@
 //! This module provides persistent storage for GraphRAG knowledge graphs using RocksDB.
 //! It stores entities, relationships, embeddings, and metadata with full persistence support.
 
+#![cfg(feature = "storage-rocksdb")]
+
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use orbit_shared::graphrag::EntityType;
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
@@ -123,7 +125,7 @@ impl GraphRAGStorage {
             ColumnFamilyDescriptor::new("metadata", Options::default()),
             ColumnFamilyDescriptor::new("embeddings", Options::default()),
             ColumnFamilyDescriptor::new("entity_index", Options::default()), // For text-based lookup
-            ColumnFamilyDescriptor::new("rel_index", Options::default()),    // For relationship lookup
+            ColumnFamilyDescriptor::new("rel_index", Options::default()), // For relationship lookup
         ];
 
         let db_path = self.data_dir.join("rocksdb");
@@ -142,10 +144,7 @@ impl GraphRAGStorage {
                 );
             }
             Err(e) => {
-                error!(
-                    "Failed to open GraphRAG RocksDB at {:?}: {}",
-                    db_path, e
-                );
+                error!("Failed to open GraphRAG RocksDB at {:?}: {}", db_path, e);
                 return Err(ProtocolError::Other(format!(
                     "Failed to initialize GraphRAG RocksDB: {}",
                     e
@@ -158,9 +157,9 @@ impl GraphRAGStorage {
     /// Load data from RocksDB on startup
     async fn load_from_rocksdb(&self, db: &Arc<DB>) -> ProtocolResult<()> {
         // Load nodes
-        let nodes_cf = db.cf_handle("nodes").ok_or_else(|| {
-            ProtocolError::Other("Nodes column family not found".to_string())
-        })?;
+        let nodes_cf = db
+            .cf_handle("nodes")
+            .ok_or_else(|| ProtocolError::Other("Nodes column family not found".to_string()))?;
 
         let node_iter = db.iterator_cf(nodes_cf, rocksdb::IteratorMode::Start);
         let mut nodes = self.nodes.write().await;
@@ -171,7 +170,8 @@ impl GraphRAGStorage {
                 Ok((_key, value)) => {
                     if let Ok(node) = serde_json::from_slice::<GraphRAGNode>(&value) {
                         // Only load nodes for this knowledge graph
-                        if node.properties
+                        if node
+                            .properties
                             .get("kg_name")
                             .and_then(|v| v.as_str())
                             .map(|n| n == self.kg_name)
@@ -212,9 +212,9 @@ impl GraphRAGStorage {
         }
 
         // Load metadata
-        let metadata_cf = db.cf_handle("metadata").ok_or_else(|| {
-            ProtocolError::Other("Metadata column family not found".to_string())
-        })?;
+        let metadata_cf = db
+            .cf_handle("metadata")
+            .ok_or_else(|| ProtocolError::Other("Metadata column family not found".to_string()))?;
 
         let metadata_key = format!("kg:{}", self.kg_name);
         if let Ok(Some(value)) = db.get_cf(metadata_cf, metadata_key.as_bytes()) {
@@ -240,19 +240,21 @@ impl GraphRAGStorage {
             .insert("kg_name".to_string(), serde_json::json!(self.kg_name));
 
         // Store in memory
-        self.nodes.write().await.insert(node_with_kg.id.clone(), node_with_kg.clone());
+        self.nodes
+            .write()
+            .await
+            .insert(node_with_kg.id.clone(), node_with_kg.clone());
 
         // Persist to RocksDB
         let db_guard = self.db.read().await;
         if let Some(ref db) = *db_guard {
-            let nodes_cf = db.cf_handle("nodes").ok_or_else(|| {
-                ProtocolError::Other("Nodes column family not found".to_string())
-            })?;
+            let nodes_cf = db
+                .cf_handle("nodes")
+                .ok_or_else(|| ProtocolError::Other("Nodes column family not found".to_string()))?;
 
             let key = format!("node:{}:{}", self.kg_name, node_with_kg.id);
-            let value = serde_json::to_vec(&node_with_kg).map_err(|e| {
-                ProtocolError::Other(format!("Failed to serialize node: {}", e))
-            })?;
+            let value = serde_json::to_vec(&node_with_kg)
+                .map_err(|e| ProtocolError::Other(format!("Failed to serialize node: {}", e)))?;
 
             db.put_cf(nodes_cf, key.as_bytes(), &value).map_err(|e| {
                 ProtocolError::Other(format!("Failed to persist node to RocksDB: {}", e))
@@ -263,10 +265,12 @@ impl GraphRAGStorage {
                 ProtocolError::Other("Entity index column family not found".to_string())
             })?;
             let index_key = format!("text:{}:{}", self.kg_name, node_with_kg.text.to_lowercase());
-            db.put_cf(entity_index_cf, index_key.as_bytes(), node_with_kg.id.as_bytes())
-                .map_err(|e| {
-                    ProtocolError::Other(format!("Failed to update entity index: {}", e))
-                })?;
+            db.put_cf(
+                entity_index_cf,
+                index_key.as_bytes(),
+                node_with_kg.id.as_bytes(),
+            )
+            .map_err(|e| ProtocolError::Other(format!("Failed to update entity index: {}", e)))?;
         }
 
         Ok(())
@@ -303,7 +307,10 @@ impl GraphRAGStorage {
     /// Store a relationship
     pub async fn store_relationship(&self, rel: GraphRAGRelationship) -> ProtocolResult<()> {
         // Store in memory
-        self.relationships.write().await.insert(rel.id.clone(), rel.clone());
+        self.relationships
+            .write()
+            .await
+            .insert(rel.id.clone(), rel.clone());
 
         // Persist to RocksDB
         let db_guard = self.db.read().await;
@@ -325,7 +332,7 @@ impl GraphRAGStorage {
             let rel_index_cf = db.cf_handle("rel_index").ok_or_else(|| {
                 ProtocolError::Other("Relationship index column family not found".to_string())
             })?;
-            
+
             // Index by from_entity
             let from_key = format!("from:{}:{}:{}", self.kg_name, rel.from_entity_id, rel.id);
             db.put_cf(rel_index_cf, from_key.as_bytes(), rel.id.as_bytes())
@@ -345,7 +352,10 @@ impl GraphRAGStorage {
     }
 
     /// Get a relationship by ID
-    pub async fn get_relationship(&self, rel_id: &str) -> ProtocolResult<Option<GraphRAGRelationship>> {
+    pub async fn get_relationship(
+        &self,
+        rel_id: &str,
+    ) -> ProtocolResult<Option<GraphRAGRelationship>> {
         // Check memory first
         let relationships = self.relationships.read().await;
         if let Some(rel) = relationships.get(rel_id) {
@@ -406,9 +416,10 @@ impl GraphRAGStorage {
                 ProtocolError::Other(format!("Failed to serialize metadata: {}", e))
             })?;
 
-            db.put_cf(metadata_cf, key.as_bytes(), &value).map_err(|e| {
-                ProtocolError::Other(format!("Failed to persist metadata to RocksDB: {}", e))
-            })?;
+            db.put_cf(metadata_cf, key.as_bytes(), &value)
+                .map_err(|e| {
+                    ProtocolError::Other(format!("Failed to persist metadata to RocksDB: {}", e))
+                })?;
         }
 
         Ok(())
@@ -479,4 +490,3 @@ pub enum RelationshipDirection {
     /// Both directions
     Both,
 }
-

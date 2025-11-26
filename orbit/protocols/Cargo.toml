@@ -69,15 +69,15 @@ comfy-table = "7.1"
 owo-colors = "4.1"
 
 # Persistence
-rocksdb = "0.22"
+rocksdb = { version = "0.22", optional = true, default-features = false }
 
 # Apache Iceberg integration for warm/cold tiers (optional feature)
-iceberg = { version = "0.7", optional = true, features = ["storage-s3", "storage-memory"] }
-iceberg-catalog-rest = { version = "0.7", optional = true }
-arrow = { version = "55.2", optional = true }
-arrow-schema = { version = "55.2", optional = true }
-parquet = { version = "55.2", optional = true }
-opendal = { version = "0.51", optional = true, features = ["services-s3", "services-azblob", "services-memory"] }
+# iceberg = { version = "0.7", optional = true, default-features = false, features = ["storage-memory"] }
+# iceberg-catalog-rest = { version = "0.7", optional = true }
+# arrow = { version = "55.2", optional = true, default-features = false }
+# arrow-schema = { version = "55.2", optional = true, default-features = false }
+# parquet = { version = "55.2", optional = true, default-features = false }
+# opendal = { version = "0.51", optional = true, features = ["services-azblob", "services-memory"] }
 
 [dev-dependencies]
 redis = "0.32"
@@ -85,15 +85,18 @@ tokio-postgres = "0.7"
 neo4rs = "0.7"
 reqwest = { version = "0.12", features = ["json"] }
 orbit-util = { path = "../util" }
-orbit-server = { path = "../server" }
+orbit-server = { path = "../server", default-features = false, features = ["actor-system", "persistence", "protocol-mysql"] }
 
 [features]
-default = ["resp", "postgres-wire", "cypher", "rest"]
+default = ["resp", "postgres-wire", "cypher", "rest", "storage-rocksdb"]
 resp = []
 postgres-wire = []
 cypher = []
 rest = []
+# Enable RocksDB storage backend
+storage-rocksdb = ["rocksdb"]
 # Enable integration tests that require network access
 integration = []
 # Enable Apache Iceberg cold tier storage
-iceberg-cold = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet", "opendal"]
+iceberg-cold = []
+# iceberg-cold = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet", "opendal"]

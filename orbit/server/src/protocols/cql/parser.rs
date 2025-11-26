@@ -254,7 +254,9 @@ impl CqlParser {
         }
 
         // Extract columns (SELECT columns FROM table)
-        let from_index = parts.iter().position(|&p| p.to_uppercase() == "FROM")
+        let from_index = parts
+            .iter()
+            .position(|&p| p.to_uppercase() == "FROM")
             .ok_or_else(|| ProtocolError::ParseError("Missing FROM clause".to_string()))?;
 
         let columns_str = parts[1..from_index].join(" ");
@@ -268,24 +270,28 @@ impl CqlParser {
         };
 
         // Extract table name
-        let table = parts.get(from_index + 1)
+        let table = parts
+            .get(from_index + 1)
             .ok_or_else(|| ProtocolError::ParseError("Missing table name".to_string()))?
             .to_string();
 
         // Look for WHERE clause
-        let where_clause = if let Some(where_index) = parts.iter().position(|&p| p.to_uppercase() == "WHERE") {
-            Some(self.parse_where_clause(&parts[where_index + 1..])?)
-        } else {
-            None
-        };
+        let where_clause =
+            if let Some(where_index) = parts.iter().position(|&p| p.to_uppercase() == "WHERE") {
+                Some(self.parse_where_clause(&parts[where_index + 1..])?)
+            } else {
+                None
+            };
 
         // Look for LIMIT
-        let limit = if let Some(limit_index) = parts.iter().position(|&p| p.to_uppercase() == "LIMIT") {
-            parts.get(limit_index + 1)
-                .and_then(|s| s.parse::<usize>().ok())
-        } else {
-            None
-        };
+        let limit =
+            if let Some(limit_index) = parts.iter().position(|&p| p.to_uppercase() == "LIMIT") {
+                parts
+                    .get(limit_index + 1)
+                    .and_then(|s| s.parse::<usize>().ok())
+            } else {
+                None
+            };
 
         // Check for ALLOW FILTERING
         let allow_filtering = query.to_uppercase().contains("ALLOW FILTERING");
@@ -306,11 +312,13 @@ impl CqlParser {
         let if_not_exists = query_upper.contains("IF NOT EXISTS");
 
         // Extract table name
-        let into_index = query_upper.find("INTO ")
+        let into_index = query_upper
+            .find("INTO ")
             .ok_or_else(|| ProtocolError::ParseError("Missing INTO clause".to_string()))?;
 
         let after_into = &query[into_index + 5..];
-        let paren_index = after_into.find('(')
+        let paren_index = after_into
+            .find('(')
             .ok_or_else(|| ProtocolError::ParseError("Missing column list".to_string()))?;
 
         let table = after_into[..paren_index].trim().to_string();
@@ -320,28 +328,27 @@ impl CqlParser {
         let col_end = after_into[col_start..]
             .find(')')
             .ok_or_else(|| ProtocolError::ParseError("Unclosed column list".to_string()))?;
-        
+
         let col_str = &after_into[col_start..col_start + col_end];
-        let columns: Vec<String> = col_str
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .collect();
+        let columns: Vec<String> = col_str.split(',').map(|s| s.trim().to_string()).collect();
 
         // Find VALUES clause
-        let values_index = query_upper.find("VALUES")
+        let values_index = query_upper
+            .find("VALUES")
             .ok_or_else(|| ProtocolError::ParseError("Missing VALUES clause".to_string()))?;
-        
+
         let after_values = &query[values_index + 6..];
-        let val_paren_start = after_values.find('(')
+        let val_paren_start = after_values
+            .find('(')
             .ok_or_else(|| ProtocolError::ParseError("Missing value list".to_string()))?;
-        
+
         let val_start = val_paren_start + 1;
         let val_end = after_values[val_start..]
             .find(')')
             .ok_or_else(|| ProtocolError::ParseError("Unclosed value list".to_string()))?;
-        
+
         let val_str = &after_values[val_start..val_start + val_end];
-        
+
         // Parse values (handle quoted strings and numbers)
         let values: Vec<CqlValue> = self.parse_value_list(val_str)?;
 
@@ -410,7 +417,7 @@ impl CqlParser {
     fn parse_update(&self, query: &str) -> ProtocolResult<CqlStatement> {
         // UPDATE table SET col1 = val1, col2 = val2 WHERE ... [IF ...] [USING TTL seconds]
         let query_upper = query.to_uppercase();
-        
+
         // Find table name (after UPDATE)
         let parts: Vec<&str> = query.split_whitespace().collect();
         if parts.len() < 2 {
@@ -419,12 +426,14 @@ impl CqlParser {
         let table = self.resolve_table_name(parts[1]);
 
         // Find SET clause
-        let set_index = parts.iter()
+        let set_index = parts
+            .iter()
             .position(|&p| p.to_uppercase() == "SET")
             .ok_or_else(|| ProtocolError::ParseError("Missing SET clause".to_string()))?;
 
         // Parse assignments (col1 = val1, col2 = val2)
-        let where_index = parts.iter()
+        let where_index = parts
+            .iter()
             .position(|&p| p.to_uppercase() == "WHERE")
             .unwrap_or(parts.len());
 
@@ -441,7 +450,8 @@ impl CqlParser {
 
         // Parse IF clause (lightweight transaction)
         let if_clause = if query_upper.contains(" IF ") {
-            let if_index = parts.iter()
+            let if_index = parts
+                .iter()
                 .position(|&p| p.to_uppercase() == "IF")
                 .unwrap();
             Some(self.parse_where_clause(&parts[if_index + 1..])?)
@@ -453,7 +463,8 @@ impl CqlParser {
         let ttl = if query_upper.contains("USING TTL") {
             let ttl_index = query_upper.find("USING TTL").unwrap();
             let ttl_part = &query[ttl_index + 9..];
-            ttl_part.split_whitespace()
+            ttl_part
+                .split_whitespace()
                 .next()
                 .and_then(|s| s.parse::<i32>().ok())
         } else {
@@ -496,10 +507,11 @@ impl CqlParser {
         // Check if columns are specified
         let columns = if parts.len() > 1 && parts[1].to_uppercase() != "FROM" {
             // DELETE col1, col2 FROM table
-            let from_index = parts.iter()
+            let from_index = parts
+                .iter()
                 .position(|&p| p.to_uppercase() == "FROM")
                 .ok_or_else(|| ProtocolError::ParseError("Missing FROM clause".to_string()))?;
-            
+
             // Join the parts before FROM, then split by comma
             let columns_str = parts[1..from_index].join(" ");
             columns_str
@@ -512,7 +524,8 @@ impl CqlParser {
         };
 
         // Find FROM clause
-        let from_index = parts.iter()
+        let from_index = parts
+            .iter()
             .position(|&p| p.to_uppercase() == "FROM")
             .ok_or_else(|| ProtocolError::ParseError("Missing FROM clause".to_string()))?;
 
@@ -523,7 +536,8 @@ impl CqlParser {
         let table = self.resolve_table_name(parts[from_index + 1]);
 
         // Parse WHERE clause
-        let where_index = parts.iter()
+        let where_index = parts
+            .iter()
             .position(|&p| p.to_uppercase() == "WHERE")
             .unwrap_or(parts.len());
 
@@ -535,7 +549,8 @@ impl CqlParser {
 
         // Parse IF clause
         let if_clause = if query_upper.contains(" IF ") {
-            let if_index = parts.iter()
+            let if_index = parts
+                .iter()
                 .position(|&p| p.to_uppercase() == "IF")
                 .unwrap();
             Some(self.parse_where_clause(&parts[if_index + 1..])?)
@@ -558,7 +573,8 @@ impl CqlParser {
         // Extract keyspace name
         let parts: Vec<&str> = query.split_whitespace().collect();
         let name_index = if if_not_exists { 5 } else { 3 };
-        let name = parts.get(name_index)
+        let name = parts
+            .get(name_index)
             .ok_or_else(|| ProtocolError::ParseError("Missing keyspace name".to_string()))?
             .to_string();
 
@@ -590,7 +606,8 @@ impl CqlParser {
         let if_exists = query.to_uppercase().contains("IF EXISTS");
         let parts: Vec<&str> = query.split_whitespace().collect();
         let name_index = if if_exists { 4 } else { 2 };
-        let name = parts.get(name_index)
+        let name = parts
+            .get(name_index)
             .ok_or_else(|| ProtocolError::ParseError("Missing keyspace name".to_string()))?
             .to_string();
 
@@ -602,7 +619,8 @@ impl CqlParser {
         let if_exists = query.to_uppercase().contains("IF EXISTS");
         let parts: Vec<&str> = query.split_whitespace().collect();
         let name_index = if if_exists { 4 } else { 2 };
-        let name = parts.get(name_index)
+        let name = parts
+            .get(name_index)
             .ok_or_else(|| ProtocolError::ParseError("Missing table name".to_string()))?
             .to_string();
 
@@ -615,7 +633,8 @@ impl CqlParser {
     /// Parse USE statement
     fn parse_use(&self, query: &str) -> ProtocolResult<CqlStatement> {
         let parts: Vec<&str> = query.split_whitespace().collect();
-        let keyspace = parts.get(1)
+        let keyspace = parts
+            .get(1)
             .ok_or_else(|| ProtocolError::ParseError("Missing keyspace name".to_string()))?
             .to_string();
 
@@ -634,7 +653,8 @@ impl CqlParser {
     /// Parse TRUNCATE statement
     fn parse_truncate(&self, query: &str) -> ProtocolResult<CqlStatement> {
         let parts: Vec<&str> = query.split_whitespace().collect();
-        let table = parts.get(1)
+        let table = parts
+            .get(1)
             .ok_or_else(|| ProtocolError::ParseError("Missing table name".to_string()))?
             .to_string();
 
@@ -683,13 +703,16 @@ impl CqlParser {
                             // Remove opening paren
                             current_part = &current_part[1..];
                         } else if current_part != "(" {
-                            return Err(ProtocolError::ParseError("Expected '(' after IN".to_string()));
+                            return Err(ProtocolError::ParseError(
+                                "Expected '(' after IN".to_string(),
+                            ));
                         }
-                        
+
                         // Parse values
                         loop {
                             // Remove any leading/trailing commas or parens
-                            let cleaned = current_part.trim_matches(|c: char| c == ',' || c == '(' || c == ')');
+                            let cleaned = current_part
+                                .trim_matches(|c: char| c == ',' || c == '(' || c == ')');
                             if !cleaned.is_empty() {
                                 // Try to parse as number first, then text
                                 let value = if let Ok(int_val) = cleaned.parse::<i32>() {
@@ -702,12 +725,12 @@ impl CqlParser {
                                 };
                                 values.push(value);
                             }
-                            
+
                             // Check if we've reached the end
                             if current_part.contains(')') {
                                 break;
                             }
-                            
+
                             i += 1;
                             if i >= parts.len() {
                                 break;
@@ -715,7 +738,7 @@ impl CqlParser {
                             current_part = parts[i];
                         }
                     }
-                    
+
                     // For IN, we'll create a condition with the first value
                     // In a full implementation, we'd handle IN properly with all values
                     conditions.push(WhereCondition {
@@ -740,7 +763,9 @@ impl CqlParser {
             i += 1;
 
             if i >= parts.len() {
-                return Err(ProtocolError::ParseError("Missing value after operator".to_string()));
+                return Err(ProtocolError::ParseError(
+                    "Missing value after operator".to_string(),
+                ));
             }
 
             // Value
@@ -761,7 +786,7 @@ impl CqlParser {
     /// Parse a CQL value from string
     fn parse_value(&self, value_str: &str) -> ProtocolResult<CqlValue> {
         let trimmed = value_str.trim();
-        
+
         // Handle NULL
         if trimmed.to_uppercase() == "NULL" {
             return Ok(CqlValue::Null);
@@ -858,7 +883,11 @@ mod tests {
             .unwrap();
 
         match stmt {
-            CqlStatement::CreateKeyspace { name, if_not_exists, .. } => {
+            CqlStatement::CreateKeyspace {
+                name,
+                if_not_exists,
+                ..
+            } => {
                 assert_eq!(name, "my_ks");
                 assert!(if_not_exists);
             }

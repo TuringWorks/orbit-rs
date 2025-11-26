@@ -17,7 +17,9 @@ pub struct ListCommands {
 }
 
 impl ListCommands {
-    pub fn new(local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>) -> Self {
+    pub fn new(
+        local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>,
+    ) -> Self {
         // Use provided local_registry
         Self {
             base: BaseCommandHandler::new(local_registry),
@@ -50,8 +52,7 @@ impl ListCommands {
                 // Try integer first
                 v.as_integer().or_else(|| {
                     // Try parsing as string
-                    v.as_string()
-                        .and_then(|s| s.parse::<i64>().ok())
+                    v.as_string().and_then(|s| s.parse::<i64>().ok())
                 })
             })
             .ok_or_else(|| {
@@ -343,8 +344,17 @@ impl ListCommands {
         let value = self.get_string_arg(args, 2, "LSET")?;
 
         // Use local registry
-        let result = self.base.local_registry
-            .execute_list(&key, "lset", &[serde_json::to_value(index)?, serde_json::to_value(value.clone())?])
+        let result = self
+            .base
+            .local_registry
+            .execute_list(
+                &key,
+                "lset",
+                &[
+                    serde_json::to_value(index)?,
+                    serde_json::to_value(value.clone())?,
+                ],
+            )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
 
@@ -355,7 +365,9 @@ impl ListCommands {
             debug!("LSET {} {} {} -> OK", key, index, value);
             Ok(RespValue::SimpleString("OK".to_string()))
         } else {
-            Err(ProtocolError::RespError("ERR index out of range".to_string()))
+            Err(ProtocolError::RespError(
+                "ERR index out of range".to_string(),
+            ))
         }
     }
 
@@ -368,13 +380,21 @@ impl ListCommands {
         let element = self.get_string_arg(args, 2, "LREM")?;
 
         // Use local registry
-        let result = self.base.local_registry
-            .execute_list(&key, "lrem", &[serde_json::to_value(count)?, serde_json::to_value(element.clone())?])
+        let result = self
+            .base
+            .local_registry
+            .execute_list(
+                &key,
+                "lrem",
+                &[
+                    serde_json::to_value(count)?,
+                    serde_json::to_value(element.clone())?,
+                ],
+            )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
 
-        let num_removed: usize = serde_json::from_value(result)
-            .unwrap_or(0);
+        let num_removed: usize = serde_json::from_value(result).unwrap_or(0);
 
         debug!("LREM {} {} {} -> {}", key, count, element, num_removed);
         Ok(RespValue::Integer(num_removed as i64))
@@ -389,8 +409,14 @@ impl ListCommands {
         let stop = self.get_int_arg(args, 2, "LTRIM")?;
 
         // Use local registry
-        let _result = self.base.local_registry
-            .execute_list(&key, "ltrim", &[serde_json::to_value(start)?, serde_json::to_value(stop)?])
+        let _result = self
+            .base
+            .local_registry
+            .execute_list(
+                &key,
+                "ltrim",
+                &[serde_json::to_value(start)?, serde_json::to_value(stop)?],
+            )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
 

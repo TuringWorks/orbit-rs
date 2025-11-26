@@ -1138,9 +1138,10 @@ impl ExpressionEvaluator {
                 if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
                     Ok(SqlValue::Integer(date.year() as i32))
                 } else {
-                    Err(ProtocolError::PostgresError(
-                        format!("YEAR requires date argument, got: {}", s),
-                    ))
+                    Err(ProtocolError::PostgresError(format!(
+                        "YEAR requires date argument, got: {}",
+                        s
+                    )))
                 }
             }
             SqlValue::Null => Ok(SqlValue::Null),
@@ -1168,9 +1169,10 @@ impl ExpressionEvaluator {
                 if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
                     Ok(SqlValue::Integer(date.month() as i32))
                 } else {
-                    Err(ProtocolError::PostgresError(
-                        format!("MONTH requires date argument, got: {}", s),
-                    ))
+                    Err(ProtocolError::PostgresError(format!(
+                        "MONTH requires date argument, got: {}",
+                        s
+                    )))
                 }
             }
             SqlValue::Null => Ok(SqlValue::Null),
@@ -1198,9 +1200,10 @@ impl ExpressionEvaluator {
                 if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
                     Ok(SqlValue::Integer(date.day() as i32))
                 } else {
-                    Err(ProtocolError::PostgresError(
-                        format!("DAY requires date argument, got: {}", s),
-                    ))
+                    Err(ProtocolError::PostgresError(format!(
+                        "DAY requires date argument, got: {}",
+                        s
+                    )))
                 }
             }
             SqlValue::Null => Ok(SqlValue::Null),

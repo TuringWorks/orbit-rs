@@ -314,7 +314,7 @@ impl CdcCoordinator {
             let log_entry = TransactionLogEntry {
                 timestamp: event.timestamp,
                 transaction_id: crate::transactions::TransactionId::new(
-                    "cdc-node".to_string() // NodeId is just a String
+                    "cdc-node".to_string(), // NodeId is just a String
                 ),
                 event: crate::transactions::TransactionEvent::Started,
                 details: Some(serde_json::to_value(&event).map_err(|e| {
@@ -416,9 +416,9 @@ impl CdcCoordinator {
             info!("Removed CDC subscription {}", subscription_id);
             Ok(())
         } else {
-            Err(EngineError::AddressableNotFound(
-                format!("CDC subscription {subscription_id}")
-            ))
+            Err(EngineError::AddressableNotFound(format!(
+                "CDC subscription {subscription_id}"
+            )))
         }
     }
 

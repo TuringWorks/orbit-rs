@@ -77,8 +77,7 @@ use uuid::Uuid;
 /// - **Strict**: fsync after every write (PostgreSQL-like)
 /// - **Standard**: fsync on commit boundaries (MySQL-like)
 /// - **Performance**: OS-buffered writes with periodic fsync (MongoDB-like)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum DurabilityLevel {
     /// Maximum durability: fsync after every WAL write
     /// Guarantees no data loss but highest latency
@@ -94,14 +93,11 @@ pub enum DurabilityLevel {
     Performance,
 }
 
-
 /// WAL entry type representing different operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WalEntryType {
     /// Insert new state (stored as JSON string for bincode compatibility)
-    Insert {
-        state_data_json: String,
-    },
+    Insert { state_data_json: String },
 
     /// Update existing state (stored as JSON strings for bincode compatibility)
     Update {
@@ -110,9 +106,7 @@ pub enum WalEntryType {
     },
 
     /// Delete state (stored as JSON string for bincode compatibility)
-    Delete {
-        state_data_json: String,
-    },
+    Delete { state_data_json: String },
 
     /// Checkpoint marker (snapshot created)
     Checkpoint {
@@ -121,19 +115,13 @@ pub enum WalEntryType {
     },
 
     /// Transaction begin marker
-    TransactionBegin {
-        transaction_id: String,
-    },
+    TransactionBegin { transaction_id: String },
 
     /// Transaction commit marker
-    TransactionCommit {
-        transaction_id: String,
-    },
+    TransactionCommit { transaction_id: String },
 
     /// Transaction abort marker
-    TransactionAbort {
-        transaction_id: String,
-    },
+    TransactionAbort { transaction_id: String },
 }
 
 /// Individual WAL entry
@@ -160,11 +148,7 @@ pub struct WalEntry {
 
 impl WalEntry {
     /// Create a new WAL entry
-    pub fn new(
-        lsn: u64,
-        actor_reference: AddressableReference,
-        entry_type: WalEntryType,
-    ) -> Self {
+    pub fn new(lsn: u64, actor_reference: AddressableReference, entry_type: WalEntryType) -> Self {
         let entry_id = Uuid::new_v4().to_string();
         let timestamp = chrono::Utc::now().timestamp_millis();
 
@@ -239,7 +223,7 @@ impl Default for WalConfig {
             log_directory: PathBuf::from("/tmp/orbit/wal"),
             durability_level: DurabilityLevel::Standard,
             max_log_size_bytes: 100 * 1024 * 1024, // 100MB
-            checkpoint_interval_secs: 300, // 5 minutes
+            checkpoint_interval_secs: 300,         // 5 minutes
             retain_wal_files: 3,
             compression_enabled: false,
             buffer_size: 64 * 1024, // 64KB
@@ -307,9 +291,8 @@ impl WriteAheadLog {
     /// Create a new WriteAheadLog instance
     pub async fn new(config: WalConfig) -> OrbitResult<Self> {
         // Ensure log directory exists
-        std::fs::create_dir_all(&config.log_directory).map_err(|e| {
-            OrbitError::storage(format!("Failed to create WAL directory: {}", e))
-        })?;
+        std::fs::create_dir_all(&config.log_directory)
+            .map_err(|e| OrbitError::storage(format!("Failed to create WAL directory: {}", e)))?;
 
         let current_lsn = Arc::new(RwLock::new(0));
         let metrics = Arc::new(RwLock::new(WalMetrics::default()));
@@ -336,10 +319,7 @@ impl WriteAheadLog {
     }
 
     /// Set snapshot backend for checkpointing
-    pub fn with_snapshot_backend(
-        mut self,
-        backend: Arc<dyn PersistenceBackend>,
-    ) -> Self {
+    pub fn with_snapshot_backend(mut self, backend: Arc<dyn PersistenceBackend>) -> Self {
         self.snapshot_backend = Some(backend);
         self
     }
@@ -365,9 +345,9 @@ impl WriteAheadLog {
 
         // Flush and close current writer
         if let Some(mut writer) = self.current_writer.lock().await.take() {
-            writer.flush().map_err(|e| {
-                OrbitError::storage(format!("Failed to flush WAL: {}", e))
-            })?;
+            writer
+                .flush()
+                .map_err(|e| OrbitError::storage(format!("Failed to flush WAL: {}", e)))?;
         }
 
         info!("WAL service stopped");
@@ -379,26 +359,25 @@ impl WriteAheadLog {
         let start = Instant::now();
 
         // Serialize entry
-        let serialized = bincode::serialize(&entry).map_err(|e| {
-            OrbitError::parse(format!("Failed to serialize WAL entry: {}", e))
-        })?;
+        let serialized = bincode::serialize(&entry)
+            .map_err(|e| OrbitError::parse(format!("Failed to serialize WAL entry: {}", e)))?;
 
         // Acquire writer lock
         let mut writer_guard = self.current_writer.lock().await;
-        let writer = writer_guard.as_mut().ok_or_else(|| {
-            OrbitError::storage("WAL writer not initialized")
-        })?;
+        let writer = writer_guard
+            .as_mut()
+            .ok_or_else(|| OrbitError::storage("WAL writer not initialized"))?;
 
         // Write length prefix (for reading back)
         let length = serialized.len() as u32;
-        writer.write_all(&length.to_le_bytes()).map_err(|e| {
-            OrbitError::storage(format!("Failed to write WAL entry length: {}", e))
-        })?;
+        writer
+            .write_all(&length.to_le_bytes())
+            .map_err(|e| OrbitError::storage(format!("Failed to write WAL entry length: {}", e)))?;
 
         // Write entry data
-        writer.write_all(&serialized).map_err(|e| {
-            OrbitError::storage(format!("Failed to write WAL entry: {}", e))
-        })?;
+        writer
+            .write_all(&serialized)
+            .map_err(|e| OrbitError::storage(format!("Failed to write WAL entry: {}", e)))?;
 
         // Update file size
         let entry_size = 4 + serialized.len() as u64;
@@ -408,23 +387,24 @@ impl WriteAheadLog {
         // Flush based on durability level
         match self.config.durability_level {
             DurabilityLevel::Strict => {
-                writer.flush().map_err(|e| {
-                    OrbitError::storage(format!("Failed to flush WAL: {}", e))
-                })?;
+                writer
+                    .flush()
+                    .map_err(|e| OrbitError::storage(format!("Failed to flush WAL: {}", e)))?;
 
                 // Force fsync
-                writer.get_ref().sync_all().map_err(|e| {
-                    OrbitError::storage(format!("Failed to fsync WAL: {}", e))
-                })?;
+                writer
+                    .get_ref()
+                    .sync_all()
+                    .map_err(|e| OrbitError::storage(format!("Failed to fsync WAL: {}", e)))?;
 
                 let mut metrics = self.metrics.write().await;
                 metrics.fsync_count += 1;
             }
             DurabilityLevel::Standard => {
                 // Flush to OS buffer
-                writer.flush().map_err(|e| {
-                    OrbitError::storage(format!("Failed to flush WAL: {}", e))
-                })?;
+                writer
+                    .flush()
+                    .map_err(|e| OrbitError::storage(format!("Failed to flush WAL: {}", e)))?;
             }
             DurabilityLevel::Performance => {
                 // No immediate flush - rely on OS buffering
@@ -443,7 +423,7 @@ impl WriteAheadLog {
         } else {
             metrics.avg_write_latency_us =
                 (metrics.avg_write_latency_us * (metrics.entries_written - 1) + elapsed)
-                / metrics.entries_written;
+                    / metrics.entries_written;
         }
 
         drop(metrics);
@@ -473,11 +453,7 @@ impl WriteAheadLog {
         let lsn = self.next_lsn().await;
         let state_data_json = serde_json::to_string(&state_data)
             .map_err(|e| OrbitError::parse(format!("Failed to serialize state: {}", e)))?;
-        let entry = WalEntry::new(
-            lsn,
-            actor_ref,
-            WalEntryType::Insert { state_data_json },
-        );
+        let entry = WalEntry::new(lsn, actor_ref, WalEntryType::Insert { state_data_json });
         self.write_entry(entry).await
     }
 
@@ -496,7 +472,10 @@ impl WriteAheadLog {
         let entry = WalEntry::new(
             lsn,
             actor_ref,
-            WalEntryType::Update { old_state_json, new_state_json },
+            WalEntryType::Update {
+                old_state_json,
+                new_state_json,
+            },
         );
         self.write_entry(entry).await
     }
@@ -510,11 +489,7 @@ impl WriteAheadLog {
         let lsn = self.next_lsn().await;
         let state_data_json = serde_json::to_string(&state_data)
             .map_err(|e| OrbitError::parse(format!("Failed to serialize state: {}", e)))?;
-        let entry = WalEntry::new(
-            lsn,
-            actor_ref,
-            WalEntryType::Delete { state_data_json },
-        );
+        let entry = WalEntry::new(lsn, actor_ref, WalEntryType::Delete { state_data_json });
         self.write_entry(entry).await
     }
 
@@ -564,7 +539,11 @@ impl WriteAheadLog {
         let mut metrics = self.metrics.write().await;
         metrics.entries_replayed += entries.len() as u64;
 
-        info!("Replayed {} WAL entries from LSN {}", entries.len(), start_lsn);
+        info!(
+            "Replayed {} WAL entries from LSN {}",
+            entries.len(),
+            start_lsn
+        );
 
         Ok(entries)
     }
@@ -604,9 +583,9 @@ impl WriteAheadLog {
     async fn rotate_log_file(&self) -> OrbitResult<()> {
         // Close current writer
         if let Some(mut writer) = self.current_writer.lock().await.take() {
-            writer.flush().map_err(|e| {
-                OrbitError::storage(format!("Failed to flush WAL: {}", e))
-            })?;
+            writer
+                .flush()
+                .map_err(|e| OrbitError::storage(format!("Failed to flush WAL: {}", e)))?;
         }
 
         // Generate new file path
@@ -620,9 +599,7 @@ impl WriteAheadLog {
             .create(true)
             .append(true)
             .open(&file_path)
-            .map_err(|e| {
-                OrbitError::storage(format!("Failed to open WAL file: {}", e))
-            })?;
+            .map_err(|e| OrbitError::storage(format!("Failed to open WAL file: {}", e)))?;
 
         let writer = BufWriter::with_capacity(self.config.buffer_size, file);
 
@@ -641,9 +618,8 @@ impl WriteAheadLog {
 
     /// Read all entries from a WAL file
     async fn read_wal_file(&self, path: &Path) -> OrbitResult<Vec<WalEntry>> {
-        let file = File::open(path).map_err(|e| {
-            OrbitError::storage(format!("Failed to open WAL file: {}", e))
-        })?;
+        let file = File::open(path)
+            .map_err(|e| OrbitError::storage(format!("Failed to open WAL file: {}", e)))?;
 
         let mut reader = BufReader::new(file);
         let mut entries = Vec::new();
@@ -669,16 +645,13 @@ impl WriteAheadLog {
 
             // Read entry data
             let mut entry_bytes = vec![0u8; length];
-            reader.read_exact(&mut entry_bytes).map_err(|e| {
-                OrbitError::storage(format!("Failed to read WAL entry: {}", e))
-            })?;
+            reader
+                .read_exact(&mut entry_bytes)
+                .map_err(|e| OrbitError::storage(format!("Failed to read WAL entry: {}", e)))?;
 
             // Deserialize entry
             let entry: WalEntry = bincode::deserialize(&entry_bytes).map_err(|e| {
-                OrbitError::parse(format!(
-                    "Failed to deserialize WAL entry: {}",
-                    e
-                ))
+                OrbitError::parse(format!("Failed to deserialize WAL entry: {}", e))
             })?;
 
             entries.push(entry);
@@ -691,9 +664,8 @@ impl WriteAheadLog {
     async fn list_wal_files(&self) -> OrbitResult<Vec<PathBuf>> {
         let mut files = Vec::new();
 
-        let entries = std::fs::read_dir(&self.config.log_directory).map_err(|e| {
-            OrbitError::storage(format!("Failed to read WAL directory: {}", e))
-        })?;
+        let entries = std::fs::read_dir(&self.config.log_directory)
+            .map_err(|e| OrbitError::storage(format!("Failed to read WAL directory: {}", e)))?;
 
         for entry in entries {
             let entry = entry.map_err(|e| {
@@ -718,9 +690,8 @@ impl WriteAheadLog {
             return Ok(0);
         }
 
-        let entries = std::fs::read_dir(log_dir).map_err(|e| {
-            OrbitError::storage(format!("Failed to read WAL directory: {}", e))
-        })?;
+        let entries = std::fs::read_dir(log_dir)
+            .map_err(|e| OrbitError::storage(format!("Failed to read WAL directory: {}", e)))?;
 
         let mut max_lsn = 0u64;
 
@@ -736,7 +707,10 @@ impl WriteAheadLog {
 
             // Parse LSN from filename (wal_<LSN>_<timestamp>.log)
             if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
-                if let Some(lsn_str) = filename.strip_prefix("wal_").and_then(|s| s.split('_').next()) {
+                if let Some(lsn_str) = filename
+                    .strip_prefix("wal_")
+                    .and_then(|s| s.split('_').next())
+                {
                     if let Ok(lsn) = u64::from_str_radix(lsn_str, 16) {
                         max_lsn = max_lsn.max(lsn);
                     }
@@ -839,7 +813,10 @@ mod tests {
         let actor_ref = create_test_actor_ref();
         let state = serde_json::json!({"key": "value"});
 
-        let lsn = wal.write_insert(actor_ref.clone(), state.clone()).await.unwrap();
+        let lsn = wal
+            .write_insert(actor_ref.clone(), state.clone())
+            .await
+            .unwrap();
         assert_eq!(lsn, 1);
 
         // Stop WAL to flush
@@ -872,13 +849,7 @@ mod tests {
         let state = serde_json::json!({"test": 123});
         let state_data_json = serde_json::to_string(&state).unwrap();
 
-        let entry = WalEntry::new(
-            42,
-            actor_ref,
-            WalEntryType::Insert {
-                state_data_json,
-            },
-        );
+        let entry = WalEntry::new(42, actor_ref, WalEntryType::Insert { state_data_json });
 
         assert!(entry.verify_integrity());
 

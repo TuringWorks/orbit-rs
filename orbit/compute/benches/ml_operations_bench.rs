@@ -4,17 +4,13 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 #[cfg(feature = "gpu-acceleration")]
 use orbit_compute::ml_operations::{
-    FeatureEngineeringOp, GPUMLOperations, MatrixOp, MLOperationsConfig,
+    FeatureEngineeringOp, GPUMLOperations, MLOperationsConfig, MatrixOp,
 };
 
 #[cfg(feature = "gpu-acceleration")]
 fn create_test_features(rows: usize, cols: usize) -> Vec<Vec<f64>> {
     (0..rows)
-        .map(|i| {
-            (0..cols)
-                .map(|j| (i * cols + j) as f64)
-                .collect()
-        })
+        .map(|i| (0..cols).map(|j| (i * cols + j) as f64).collect())
         .collect()
 }
 
@@ -74,7 +70,7 @@ fn benchmark_matrix_multiplication(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = Criterion::default().sample_size(10);
-    targets = 
+    targets =
         benchmark_feature_normalization,
         benchmark_matrix_multiplication
 }
@@ -86,4 +82,3 @@ criterion_main!(benches);
 fn main() {
     println!("GPU acceleration feature not enabled");
 }
-

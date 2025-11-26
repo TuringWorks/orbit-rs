@@ -185,9 +185,8 @@ impl TimeSeriesCompressor for DeltaCompressor {
                     if pos + 8 > compressed_data.len() {
                         return Err(anyhow::anyhow!("Unexpected end of data"));
                     }
-                    let delta = f64::from_le_bytes(
-                        compressed_data[pos..pos + 8].try_into().unwrap(),
-                    );
+                    let delta =
+                        f64::from_le_bytes(compressed_data[pos..pos + 8].try_into().unwrap());
                     pos += 8;
                     prev_value += delta;
                     TimeSeriesValue::Float(prev_value)
@@ -535,9 +534,8 @@ impl TimeSeriesCompressor for GorillaCompressor {
                         if pos + 8 > compressed_data.len() {
                             return Err(anyhow::anyhow!("Unexpected end of data"));
                         }
-                        let bits = u64::from_le_bytes(
-                            compressed_data[pos..pos + 8].try_into().unwrap(),
-                        );
+                        let bits =
+                            u64::from_le_bytes(compressed_data[pos..pos + 8].try_into().unwrap());
                         pos += 8;
                         bits
                     } else {
@@ -860,8 +858,14 @@ mod tests {
         let compressed = compressor.compress(&data).unwrap();
         let decompressed = compressor.decompress(&compressed).unwrap();
 
-        assert_eq!(decompressed[0].labels.get("host"), Some(&"server1".to_string()));
-        assert_eq!(decompressed[0].labels.get("region"), Some(&"us-east".to_string()));
+        assert_eq!(
+            decompressed[0].labels.get("host"),
+            Some(&"server1".to_string())
+        );
+        assert_eq!(
+            decompressed[0].labels.get("region"),
+            Some(&"us-east".to_string())
+        );
     }
 
     #[test]
@@ -920,6 +924,10 @@ mod tests {
         let compression_ratio = compressed.len() as f64 / original_size as f64;
 
         // Expect at least 30% compression (ratio < 0.7)
-        assert!(compression_ratio < 0.7, "Compression ratio: {}", compression_ratio);
+        assert!(
+            compression_ratio < 0.7,
+            "Compression ratio: {}",
+            compression_ratio
+        );
     }
 }

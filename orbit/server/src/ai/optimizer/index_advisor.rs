@@ -158,7 +158,7 @@ impl IndexAdvisor {
         let filter_benefit = usage.filter_count as f64 * 0.1;
         let join_benefit = usage.join_count as f64 * 0.15;
         let sort_benefit = usage.sort_count as f64 * 0.05;
-        
+
         (filter_benefit + join_benefit + sort_benefit).min(1.0)
     }
 
@@ -180,12 +180,12 @@ impl IndexAdvisor {
         candidate: &IndexRecommendation,
     ) -> OrbitResult<IndexBenefitAnalysis> {
         let net_benefit = candidate.estimated_benefit - candidate.creation_cost;
-        
+
         Ok(IndexBenefitAnalysis {
             net_benefit,
             confidence: candidate.confidence,
             estimated_query_improvement: candidate.estimated_benefit * 0.3, // 30% of benefit
-            maintenance_cost: candidate.creation_cost * 0.1, // Ongoing maintenance
+            maintenance_cost: candidate.creation_cost * 0.1,                // Ongoing maintenance
         })
     }
 }
@@ -221,4 +221,3 @@ impl Default for IndexAdvisor {
         Self::new()
     }
 }
-

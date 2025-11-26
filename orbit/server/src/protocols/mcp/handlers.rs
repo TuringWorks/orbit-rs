@@ -53,7 +53,10 @@ pub fn handle_tools_list(request: &McpRequest) -> McpResponse {
 }
 
 /// Handle tool call request
-pub async fn handle_tool_call(request: &McpRequest, _server: Option<&Arc<McpServer>>) -> McpResponse {
+pub async fn handle_tool_call(
+    request: &McpRequest,
+    _server: Option<&Arc<McpServer>>,
+) -> McpResponse {
     if let (Some(name), Some(arguments)) = (
         request.params.get("name").and_then(|v| v.as_str()),
         request.params.get("arguments").and_then(|v| v.as_object()),
@@ -101,7 +104,10 @@ pub fn handle_resources_list(request: &McpRequest) -> McpResponse {
 }
 
 /// Handle resource read request
-pub async fn handle_resource_read(request: &McpRequest, server: Option<&Arc<McpServer>>) -> McpResponse {
+pub async fn handle_resource_read(
+    request: &McpRequest,
+    server: Option<&Arc<McpServer>>,
+) -> McpResponse {
     if let Some(uri) = request.params.get("uri").and_then(|v| v.as_str()) {
         // Parse resource URI
         if uri.starts_with("memory://") {
@@ -134,7 +140,7 @@ pub async fn handle_resource_read(request: &McpRequest, server: Option<&Arc<McpS
                             "note": "Use tools/actor_list to get actual actor data"
                         })
                     };
-                    
+
                     let result = json!({
                         "contents": [{
                             "uri": uri,
@@ -171,7 +177,7 @@ pub async fn handle_resource_read(request: &McpRequest, server: Option<&Arc<McpS
                             "note": "Use tools/describe_schema to get actual schema data"
                         })
                     };
-                    
+
                     let result = json!({
                         "contents": [{
                             "uri": uri,
@@ -194,7 +200,7 @@ pub async fn handle_resource_read(request: &McpRequest, server: Option<&Arc<McpS
                             "connection_count"
                         ]
                     });
-                    
+
                     let result = json!({
                         "contents": [{
                             "uri": uri,
@@ -253,13 +259,14 @@ pub fn handle_prompts_list(request: &McpRequest) -> McpResponse {
 }
 
 /// Handle prompt get request
-pub async fn handle_prompt_get(request: &McpRequest, server: Option<&Arc<McpServer>>) -> McpResponse {
+pub async fn handle_prompt_get(
+    request: &McpRequest,
+    server: Option<&Arc<McpServer>>,
+) -> McpResponse {
     if let Some(name) = request.params.get("name").and_then(|v| v.as_str()) {
         // Check if server integration is available for dynamic prompts
-        let has_integration = server
-            .and_then(|s| s.orbit_integration.as_ref())
-            .is_some();
-        
+        let has_integration = server.and_then(|s| s.orbit_integration.as_ref()).is_some();
+
         match name {
             "system_analysis" => {
                 let prompt_text = if has_integration {
@@ -267,7 +274,7 @@ pub async fn handle_prompt_get(request: &McpRequest, server: Option<&Arc<McpServ
                 } else {
                     "Analyze the Orbit-RS system and provide insights about:\n1. System health and performance\n2. Active actors and their states\n3. Database schemas and data distribution\n4. Recommendations for optimization"
                 };
-                
+
                 let result = json!({
                     "messages": [
                         {
@@ -287,7 +294,7 @@ pub async fn handle_prompt_get(request: &McpRequest, server: Option<&Arc<McpServ
                 } else {
                     "Help me write a natural language query to:\n- Retrieve data from tables\n- Analyze data patterns\n- Get system information\n\nExamples:\n- 'Show me all users from California'\n- 'What are the top 10 products by revenue?'\n- 'Analyze the distribution of customer ages'"
                 };
-                
+
                 let result = json!({
                     "messages": [
                         {
@@ -307,7 +314,7 @@ pub async fn handle_prompt_get(request: &McpRequest, server: Option<&Arc<McpServ
                 } else {
                     "Explore the database schema by asking questions like:\n- 'What tables are available?'\n- 'Show me the schema for the users table'\n- 'What columns does the products table have?'\n- 'List all indexes'"
                 };
-                
+
                 let result = json!({
                     "messages": [
                         {

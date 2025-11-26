@@ -247,7 +247,10 @@ impl StreamingInferencePipeline {
         // Start workers
         pipeline.start_workers(input_rx, output_tx).await?;
 
-        info!("Created streaming inference pipeline {}", pipeline.pipeline_id);
+        info!(
+            "Created streaming inference pipeline {}",
+            pipeline.pipeline_id
+        );
         Ok(pipeline)
     }
 
@@ -329,7 +332,8 @@ impl StreamingInferencePipeline {
                     &broadcast_tx,
                     &stats,
                     &latency_samples,
-                ).await;
+                )
+                .await;
             }
 
             debug!("Streaming inference worker stopped");
@@ -359,10 +363,17 @@ impl StreamingInferencePipeline {
 
         // Group events by model
         let mut model_groups: HashMap<String, Vec<&InferenceEvent>> = HashMap::new();
-        let default_model_name = default_model.read().await.clone().unwrap_or_else(|| "default".to_string());
+        let default_model_name = default_model
+            .read()
+            .await
+            .clone()
+            .unwrap_or_else(|| "default".to_string());
 
         for event in batch.iter() {
-            let model_name = event.model_name.clone().unwrap_or_else(|| default_model_name.clone());
+            let model_name = event
+                .model_name
+                .clone()
+                .unwrap_or_else(|| default_model_name.clone());
             model_groups.entry(model_name).or_default().push(event);
         }
 
@@ -405,12 +416,15 @@ impl StreamingInferencePipeline {
 
                 let output = match prediction_result {
                     Ok(values) => {
-                        let predictions = values.into_iter().map(|v| Prediction {
-                            value: serde_json::json!(v),
-                            confidence: Some(0.95), // Placeholder
-                            probabilities: None,
-                            explanation: None,
-                        }).collect();
+                        let predictions = values
+                            .into_iter()
+                            .map(|v| Prediction {
+                                value: serde_json::json!(v),
+                                confidence: Some(0.95), // Placeholder
+                                probabilities: None,
+                                explanation: None,
+                            })
+                            .collect();
 
                         InferenceOutput {
                             event_id: event.event_id,
@@ -482,8 +496,9 @@ impl StreamingInferencePipeline {
             let mut stats_guard = stats.write().await;
             stats_guard.batches_processed += 1;
             let total_batches = stats_guard.batches_processed as f64;
-            stats_guard.avg_batch_size =
-                (stats_guard.avg_batch_size * (total_batches - 1.0) + batch_size as f64) / total_batches;
+            stats_guard.avg_batch_size = (stats_guard.avg_batch_size * (total_batches - 1.0)
+                + batch_size as f64)
+                / total_batches;
         }
 
         // Update latency percentiles periodically
@@ -500,8 +515,8 @@ impl StreamingInferencePipeline {
 
     /// Compute cache key for features
     fn compute_cache_key(features: &[f64]) -> u64 {
-        use std::hash::{Hash, Hasher};
         use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
 
         let mut hasher = DefaultHasher::new();
         for f in features {
@@ -797,7 +812,10 @@ impl WindowedInferenceAggregator {
 
         let aggregated_value = match self.aggregation {
             WindowAggregation::Mean => predictions.iter().sum::<f64>() / predictions.len() as f64,
-            WindowAggregation::Max => predictions.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+            WindowAggregation::Max => predictions
+                .iter()
+                .cloned()
+                .fold(f64::NEG_INFINITY, f64::max),
             WindowAggregation::Min => predictions.iter().cloned().fold(f64::INFINITY, f64::min),
             WindowAggregation::Median => {
                 let mut sorted = predictions.clone();
@@ -810,7 +828,11 @@ impl WindowedInferenceAggregator {
                 for p in &predictions {
                     *counts.entry(p.round() as i64).or_default() += 1;
                 }
-                counts.into_iter().max_by_key(|(_, c)| *c).map(|(v, _)| v as f64).unwrap_or(0.0)
+                counts
+                    .into_iter()
+                    .max_by_key(|(_, c)| *c)
+                    .map(|(v, _)| v as f64)
+                    .unwrap_or(0.0)
             }
             WindowAggregation::WeightedMean => {
                 let weighted_sum: f64 = outputs
@@ -827,9 +849,15 @@ impl WindowedInferenceAggregator {
                     .flat_map(|o| o.predictions.iter())
                     .map(|p| p.confidence.unwrap_or(1.0))
                     .sum();
-                if weight_sum > 0.0 { weighted_sum / weight_sum } else { 0.0 }
+                if weight_sum > 0.0 {
+                    weighted_sum / weight_sum
+                } else {
+                    0.0
+                }
             }
-            WindowAggregation::Collect => predictions.iter().sum::<f64>() / predictions.len() as f64,
+            WindowAggregation::Collect => {
+                predictions.iter().sum::<f64>() / predictions.len() as f64
+            }
         };
 
         Some(AggregatedInference {
@@ -904,7 +932,8 @@ impl InferenceAnomalyDetector {
 
         // Calculate mean and std dev
         let mean = history.iter().sum::<f64>() / history.len() as f64;
-        let variance = history.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / history.len() as f64;
+        let variance =
+            history.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / history.len() as f64;
         let std_dev = variance.sqrt();
 
         // Update running stats
@@ -1040,10 +1069,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_windowed_aggregator() {
-        let aggregator = WindowedInferenceAggregator::tumbling(
-            Duration::from_secs(60),
-            WindowAggregation::Mean,
-        );
+        let aggregator =
+            WindowedInferenceAggregator::tumbling(Duration::from_secs(60), WindowAggregation::Mean);
 
         // Add some outputs
         for i in 1..=5 {
@@ -1116,7 +1143,10 @@ mod tests {
 
         let anomaly = detector.check(&anomalous_output).await;
         assert!(anomaly.is_some());
-        assert!(matches!(anomaly.unwrap().anomaly_type, AnomalyType::HighValue));
+        assert!(matches!(
+            anomaly.unwrap().anomaly_type,
+            AnomalyType::HighValue
+        ));
     }
 
     #[test]

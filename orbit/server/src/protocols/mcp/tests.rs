@@ -4,8 +4,8 @@
 mod tests {
     use super::super::handlers;
     use super::super::server::McpServer;
-    use super::super::types::{McpRequest, McpResponse, McpError};
-    use super::super::{McpConfig, McpCapabilities};
+    use super::super::types::{McpError, McpRequest, McpResponse};
+    use super::super::{McpCapabilities, McpConfig};
     use serde_json::json;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -25,7 +25,7 @@ mod tests {
         let request = create_test_request("initialize", params);
 
         let response = handlers::handle_initialize(&request);
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("protocolVersion").is_some());
@@ -42,7 +42,7 @@ mod tests {
         let request = create_test_request("tools/list", params);
 
         let response = handlers::handle_tools_list(&request);
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("tools").is_some());
@@ -57,7 +57,7 @@ mod tests {
         let request = create_test_request("resources/list", params);
 
         let response = handlers::handle_resources_list(&request);
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("resources").is_some());
@@ -75,7 +75,7 @@ mod tests {
         let request = create_test_request("resources/read", params);
 
         let response = handlers::handle_resource_read(&request, None).await;
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("contents").is_some());
@@ -91,7 +91,7 @@ mod tests {
         let request = create_test_request("resources/read", params);
 
         let response = handlers::handle_resource_read(&request, None).await;
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("contents").is_some());
@@ -107,7 +107,7 @@ mod tests {
         let request = create_test_request("resources/read", params);
 
         let response = handlers::handle_resource_read(&request, None).await;
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("contents").is_some());
@@ -123,14 +123,12 @@ mod tests {
         let request = create_test_request("resources/read", params);
 
         let response = handlers::handle_resource_read(&request, None).await;
-        
+
         match response {
-            McpResponse::Error { error, .. } => {
-                match error {
-                    McpError::InvalidRequest(_) => {}
-                    _ => panic!("Expected InvalidRequest error"),
-                }
-            }
+            McpResponse::Error { error, .. } => match error {
+                McpError::InvalidRequest(_) => {}
+                _ => panic!("Expected InvalidRequest error"),
+            },
             _ => panic!("Expected error response"),
         }
     }
@@ -141,14 +139,12 @@ mod tests {
         let request = create_test_request("resources/read", params);
 
         let response = handlers::handle_resource_read(&request, None).await;
-        
+
         match response {
-            McpResponse::Error { error, .. } => {
-                match error {
-                    McpError::InvalidRequest(_) => {}
-                    _ => panic!("Expected InvalidRequest error"),
-                }
-            }
+            McpResponse::Error { error, .. } => match error {
+                McpError::InvalidRequest(_) => {}
+                _ => panic!("Expected InvalidRequest error"),
+            },
             _ => panic!("Expected error response"),
         }
     }
@@ -159,7 +155,7 @@ mod tests {
         let request = create_test_request("prompts/list", params);
 
         let response = handlers::handle_prompts_list(&request);
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("prompts").is_some());
@@ -177,7 +173,7 @@ mod tests {
         let request = create_test_request("prompts/get", params);
 
         let response = handlers::handle_prompt_get(&request, None).await;
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("messages").is_some());
@@ -193,7 +189,7 @@ mod tests {
         let request = create_test_request("prompts/get", params);
 
         let response = handlers::handle_prompt_get(&request, None).await;
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("messages").is_some());
@@ -209,7 +205,7 @@ mod tests {
         let request = create_test_request("prompts/get", params);
 
         let response = handlers::handle_prompt_get(&request, None).await;
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("messages").is_some());
@@ -225,14 +221,12 @@ mod tests {
         let request = create_test_request("prompts/get", params);
 
         let response = handlers::handle_prompt_get(&request, None).await;
-        
+
         match response {
-            McpResponse::Error { error, .. } => {
-                match error {
-                    McpError::InvalidRequest(_) => {}
-                    _ => panic!("Expected InvalidRequest error"),
-                }
-            }
+            McpResponse::Error { error, .. } => match error {
+                McpError::InvalidRequest(_) => {}
+                _ => panic!("Expected InvalidRequest error"),
+            },
             _ => panic!("Expected error response"),
         }
     }
@@ -243,14 +237,12 @@ mod tests {
         let request = create_test_request("prompts/get", params);
 
         let response = handlers::handle_prompt_get(&request, None).await;
-        
+
         match response {
-            McpResponse::Error { error, .. } => {
-                match error {
-                    McpError::InvalidRequest(_) => {}
-                    _ => panic!("Expected InvalidRequest error"),
-                }
-            }
+            McpResponse::Error { error, .. } => match error {
+                McpError::InvalidRequest(_) => {}
+                _ => panic!("Expected InvalidRequest error"),
+            },
             _ => panic!("Expected error response"),
         }
     }
@@ -263,7 +255,7 @@ mod tests {
         let request = create_test_request("tools/call", params);
 
         let response = handlers::handle_tool_call(&request, None).await;
-        
+
         // Tool call may succeed or fail depending on implementation
         match response {
             McpResponse::Success { .. } | McpResponse::Error { .. } => {}
@@ -277,14 +269,12 @@ mod tests {
         let request = create_test_request("tools/call", params);
 
         let response = handlers::handle_tool_call(&request, None).await;
-        
+
         match response {
-            McpResponse::Error { error, .. } => {
-                match error {
-                    McpError::InvalidRequest(_) => {}
-                    _ => panic!("Expected InvalidRequest error"),
-                }
-            }
+            McpResponse::Error { error, .. } => match error {
+                McpError::InvalidRequest(_) => {}
+                _ => panic!("Expected InvalidRequest error"),
+            },
             _ => panic!("Expected error response"),
         }
     }
@@ -295,14 +285,12 @@ mod tests {
         let request = create_test_request("unknown/method", params);
 
         let response = handlers::handle_request(request, None).await;
-        
+
         match response {
-            McpResponse::Error { error, .. } => {
-                match error {
-                    McpError::MethodNotFound(_) => {}
-                    _ => panic!("Expected MethodNotFound error"),
-                }
-            }
+            McpResponse::Error { error, .. } => match error {
+                McpError::MethodNotFound(_) => {}
+                _ => panic!("Expected MethodNotFound error"),
+            },
             _ => panic!("Expected error response"),
         }
     }
@@ -312,7 +300,7 @@ mod tests {
         let config = McpConfig::default();
         let capabilities = McpCapabilities::default();
         let _server = McpServer::new(config, capabilities);
-        
+
         // Server should be created successfully
         assert!(true); // Just verify it doesn't panic
     }
@@ -321,7 +309,7 @@ mod tests {
     async fn test_mcp_server_with_integration() {
         let config = McpConfig::default();
         let capabilities = McpCapabilities::default();
-        
+
         // Create server without integration (should work)
         let server = McpServer::new(config.clone(), capabilities.clone());
         assert!(server.orbit_integration.is_none());
@@ -338,7 +326,7 @@ mod tests {
         let request = create_test_request("resources/read", params);
 
         let response = handlers::handle_resource_read(&request, Some(&server)).await;
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("contents").is_some());
@@ -358,7 +346,7 @@ mod tests {
         let request = create_test_request("prompts/get", params);
 
         let response = handlers::handle_prompt_get(&request, Some(&server)).await;
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("messages").is_some());
@@ -370,7 +358,7 @@ mod tests {
     #[tokio::test]
     async fn test_mcp_config_default() {
         let config = McpConfig::default();
-        
+
         assert_eq!(config.name, "orbit-mcp-server");
         assert_eq!(config.version, "0.1.0");
         assert!(config.enable_sql_queries);
@@ -380,7 +368,7 @@ mod tests {
     #[tokio::test]
     async fn test_mcp_capabilities_default() {
         let capabilities = McpCapabilities::default();
-        
+
         assert!(!capabilities.tools.is_empty());
         assert!(!capabilities.resources.is_empty());
         assert!(!capabilities.prompts.is_empty());
@@ -392,7 +380,7 @@ mod tests {
         let request = create_test_request("initialize", params);
 
         let response = handlers::handle_request(request, None).await;
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("protocolVersion").is_some());
@@ -407,7 +395,7 @@ mod tests {
         let request = create_test_request("tools/list", params);
 
         let response = handlers::handle_request(request, None).await;
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("tools").is_some());
@@ -422,7 +410,7 @@ mod tests {
         let request = create_test_request("resources/list", params);
 
         let response = handlers::handle_request(request, None).await;
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("resources").is_some());
@@ -437,7 +425,7 @@ mod tests {
         let request = create_test_request("prompts/list", params);
 
         let response = handlers::handle_request(request, None).await;
-        
+
         match response {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("prompts").is_some());
@@ -446,4 +434,3 @@ mod tests {
         }
     }
 }
-

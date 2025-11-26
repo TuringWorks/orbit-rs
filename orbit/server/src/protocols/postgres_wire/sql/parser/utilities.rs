@@ -40,14 +40,22 @@ pub fn token_to_identifier_name(token: &Token) -> Option<String> {
 
 /// Parse a table name (with optional schema qualification)
 pub fn parse_table_name(parser: &mut SqlParser) -> ParseResult<TableName> {
-    if let Some(first_name) = parser.current_token.as_ref().and_then(token_to_identifier_name) {
+    if let Some(first_name) = parser
+        .current_token
+        .as_ref()
+        .and_then(token_to_identifier_name)
+    {
         parser.advance()?;
 
         // Check for schema qualification
         if parser.matches(&[Token::Dot]) {
             parser.advance()?;
 
-            if let Some(table_name) = parser.current_token.as_ref().and_then(token_to_identifier_name) {
+            if let Some(table_name) = parser
+                .current_token
+                .as_ref()
+                .and_then(token_to_identifier_name)
+            {
                 parser.advance()?;
                 Ok(TableName::with_schema(first_name, table_name))
             } else {
@@ -689,9 +697,9 @@ fn parse_vector_elements(s: &str) -> Result<Vec<f32>, ()> {
 pub fn parse_select_statement(parser: &mut SqlParser) -> ParseResult<SelectStatement> {
     // Use the DML parser to parse SELECT, then extract the SelectStatement
     // Note: dml::parse_select expects SELECT to be the current token
-    use crate::protocols::postgres_wire::sql::parser::dml;
     use crate::protocols::postgres_wire::sql::ast::Statement;
-    
+    use crate::protocols::postgres_wire::sql::parser::dml;
+
     // Ensure we have SELECT token
     if !parser.matches(&[Token::Select]) {
         return Err(ParseError {
@@ -701,7 +709,7 @@ pub fn parse_select_statement(parser: &mut SqlParser) -> ParseResult<SelectState
             found: parser.current_token.clone(),
         });
     }
-    
+
     match dml::parse_select(parser)? {
         Statement::Select(select_stmt) => Ok(*select_stmt),
         _ => Err(ParseError {

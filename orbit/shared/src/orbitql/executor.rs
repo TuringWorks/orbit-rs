@@ -4,11 +4,11 @@
 //! against the distributed database system.
 
 use crate::orbitql::ast::{Expression, GraphPattern, TimeRange, TimeSeriesAggregation};
-use crate::orbitql::QueryValue;
 use crate::orbitql::lexer::LexError;
 use crate::orbitql::optimizer::OptimizationError;
 use crate::orbitql::parser::ParseError;
 use crate::orbitql::planner::{DataModel, ExecutionPlan, PlanNode, PlanningError};
+use crate::orbitql::QueryValue;
 use crate::orbitql::{QueryContext, QueryParams, QueryStats};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -681,9 +681,11 @@ impl QueryExecutor {
             AggregateFunction::First => {
                 Ok(values.into_iter().find_map(|v| v).unwrap_or(json!(null)))
             }
-            AggregateFunction::Last => {
-                Ok(values.into_iter().rev().find_map(|v| v).unwrap_or(json!(null)))
-            }
+            AggregateFunction::Last => Ok(values
+                .into_iter()
+                .rev()
+                .find_map(|v| v)
+                .unwrap_or(json!(null))),
             AggregateFunction::StdDev => {
                 let nums: Vec<f64> = values
                     .iter()
@@ -740,7 +742,8 @@ impl QueryExecutor {
             QueryValue::Boolean(b) => json!(b),
             QueryValue::Null => json!(null),
             QueryValue::Array(arr) => {
-                let values: Vec<serde_json::Value> = arr.iter().map(|v| self.query_value_to_json(v)).collect();
+                let values: Vec<serde_json::Value> =
+                    arr.iter().map(|v| self.query_value_to_json(v)).collect();
                 json!(values)
             }
             QueryValue::Object(map) => {
@@ -875,7 +878,8 @@ impl QueryExecutor {
                             }
                         };
 
-                        if is_match && !visited.contains(&(current_node.clone(), neighbor.clone())) {
+                        if is_match && !visited.contains(&(current_node.clone(), neighbor.clone()))
+                        {
                             visited.insert((current_node.clone(), neighbor.clone()));
 
                             let mut new_path = path.clone();
@@ -1033,9 +1037,7 @@ impl QueryExecutor {
                     let right_key_str = self.value_to_join_key(right_key_value);
                     if !matched_right_keys.contains(&right_key_str) {
                         let merged = self.merge_cross_model_rows_with_nulls(
-                            right_row,
-                            left_model,
-                            false, // right has data, left is null
+                            right_row, left_model, false, // right has data, left is null
                         );
                         results.push(merged);
                     }
@@ -1098,8 +1100,14 @@ impl QueryExecutor {
         }
 
         // Add metadata about the join
-        merged.insert("_left_model".to_string(), json!(format!("{:?}", left_model)));
-        merged.insert("_right_model".to_string(), json!(format!("{:?}", right_model)));
+        merged.insert(
+            "_left_model".to_string(),
+            json!(format!("{:?}", left_model)),
+        );
+        merged.insert(
+            "_right_model".to_string(),
+            json!(format!("{:?}", right_model)),
+        );
 
         merged
     }
@@ -1196,7 +1204,8 @@ impl QueryExecutor {
     fn resolve_time_range(
         &self,
         range: &TimeRange,
-    ) -> Result<(chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>), ExecutionError> {
+    ) -> Result<(chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>), ExecutionError>
+    {
         use crate::orbitql::ast::{TimeDirection, TimeExpression, TimeUnit};
         use chrono::{Duration, Utc};
 
@@ -1269,8 +1278,8 @@ impl QueryExecutor {
                     return Ok(json!(0.0));
                 }
                 let mean = values.iter().sum::<f64>() / values.len() as f64;
-                let variance =
-                    values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (values.len() - 1) as f64;
+                let variance = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>()
+                    / (values.len() - 1) as f64;
                 Ok(json!(variance.sqrt()))
             }
             TimeSeriesAggregation::Percentile(p) => {

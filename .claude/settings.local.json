@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout:*)",
+      "Bash(cargo check:*)",
+      "Bash(rustc:*)",
+      "Bash(cargo --version:*)",
+      "Bash(rustup update:*)",
+      "Bash(rustfmt:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat(compute): implement CUDA and WindowsML GPU backends\n\nAdd full GPU compute acceleration support for NVIDIA CUDA and Windows ML/DirectML:\n\nCUDA Backend (gpu_cuda.rs):\n- Complete cudarc integration with NVRTC runtime compilation\n- Filter operations (i32, i64, f64) with all comparison predicates\n- Bitmap operations (AND, OR, NOT) for combining filter masks\n- Aggregation operations (SUM, COUNT, MIN, MAX)\n- Vector similarity (cosine, euclidean, dot product)\n- Spatial distance (2D Euclidean, Haversine)\n- Graph traversal (BFS, Dijkstra)\n- Tiled matrix multiplication (GEMM)\n- Time-series window aggregation\n- Hash join operations (build & probe)\n- Windows and Linux platform support\n\nWindowsML Backend (gpu_windowsml.rs):\n- DirectX 12 device initialization\n- DirectML availability detection\n- GpuDevice trait implementation\n- CPU fallback with rayon parallel processing\n- Windows 10 1903+ support\n\nCUDA Kernels (shaders/cuda/database_kernels.cu):\n- Optimized CUDA kernels matching Metal shader functionality\n- Thread group optimization (256 threads per block)\n- Atomic operations for aggregations\n- Shared memory tiling for matrix operations\n\nFeature flags:\n- gpu-cuda: Enables CUDA support with cudarc dependency\n- gpu-windowsml: Enables WindowsML/DirectML (Windows only)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(where gh:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(find:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(cargo update:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo tree:*)",
+      "Bash(cargo clean:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo metadata:*)",
+      "Bash(cat:*)",
+      "Bash(export LIBCLANG_PATH=\"D:/Program Files/LLVM/bin\")",
+      "Bash(LIBCLANG_PATH=\"D:/Program Files/LLVM/bin\" cargo check:*)",
+      "Bash(1)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

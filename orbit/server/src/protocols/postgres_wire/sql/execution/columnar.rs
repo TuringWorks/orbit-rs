@@ -363,7 +363,8 @@ impl ColumnBatch {
         let num_columns = rows[0].len();
 
         // Transpose rows to columns
-        let mut column_data: Vec<Vec<Option<SqlValue>>> = vec![Vec::with_capacity(row_count); num_columns];
+        let mut column_data: Vec<Vec<Option<SqlValue>>> =
+            vec![Vec::with_capacity(row_count); num_columns];
 
         for row in rows {
             if row.len() != num_columns {
@@ -504,7 +505,12 @@ impl ColumnBatchBuilder {
 
 impl fmt::Display for ColumnBatch {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "ColumnBatch {{ rows: {}, cols: {} }}", self.row_count, self.num_columns())?;
+        writeln!(
+            f,
+            "ColumnBatch {{ rows: {}, cols: {} }}",
+            self.row_count,
+            self.num_columns()
+        )?;
 
         // Print column names if available
         if let Some(names) = &self.column_names {
@@ -622,10 +628,7 @@ mod tests {
     fn test_column_batch_get_row() {
         let mut batch = ColumnBatch::new(2, 2);
         batch
-            .add_column(
-                Column::Int32(vec![10, 20]),
-                NullBitmap::new_all_valid(2),
-            )
+            .add_column(Column::Int32(vec![10, 20]), NullBitmap::new_all_valid(2))
             .unwrap();
         batch
             .add_column(
@@ -661,10 +664,7 @@ mod tests {
     fn test_row_iterator() {
         let mut batch = ColumnBatch::new(1, 3);
         batch
-            .add_column(
-                Column::Int32(vec![1, 2, 3]),
-                NullBitmap::new_all_valid(3),
-            )
+            .add_column(Column::Int32(vec![1, 2, 3]), NullBitmap::new_all_valid(3))
             .unwrap();
 
         let rows: Vec<_> = batch.iter_rows().collect();

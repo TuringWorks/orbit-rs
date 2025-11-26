@@ -1,7 +1,7 @@
 //! MySQL packet encoding and decoding
 
-use bytes::{Buf, BufMut, Bytes, BytesMut};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 /// MySQL packet
 #[derive(Debug, Clone)]
@@ -47,9 +47,7 @@ impl MySqlPacket {
         }
 
         // Read payload length (3 bytes, little-endian)
-        let len = buf.get_u8() as u32
-            | (buf.get_u8() as u32) << 8
-            | (buf.get_u8() as u32) << 16;
+        let len = buf.get_u8() as u32 | (buf.get_u8() as u32) << 8 | (buf.get_u8() as u32) << 16;
 
         // Read sequence ID
         let sequence_id = buf.get_u8();
@@ -135,8 +133,7 @@ pub fn read_lenenc_string(buf: &mut Bytes) -> ProtocolResult<String> {
         return Err(ProtocolError::IncompleteFrame);
     }
     let bytes = buf.copy_to_bytes(len);
-    String::from_utf8(bytes.to_vec())
-        .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))
+    String::from_utf8(bytes.to_vec()).map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))
 }
 
 /// Write null-terminated string

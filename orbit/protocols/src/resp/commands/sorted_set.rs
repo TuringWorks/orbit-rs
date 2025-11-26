@@ -64,10 +64,8 @@ impl SortedSetCommands {
     ) -> ProtocolResult<i64> {
         args.get(index)
             .and_then(|v| {
-                v.as_integer().or_else(|| {
-                    v.as_string()
-                        .and_then(|s| s.parse::<i64>().ok())
-                })
+                v.as_integer()
+                    .or_else(|| v.as_string().and_then(|s| s.parse::<i64>().ok()))
             })
             .ok_or_else(|| {
                 ProtocolError::RespError(format!(
@@ -120,7 +118,9 @@ impl SortedSetCommands {
                     ],
                 )
                 .await
-                .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+                .map_err(|e| {
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                })?;
 
             let was_added: bool = serde_json::from_value(result)
                 .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
@@ -166,7 +166,11 @@ impl SortedSetCommands {
         let result = self
             .base
             .local_registry
-            .execute_sorted_set(&key, "zscore", &[serde_json::to_value(member.clone()).unwrap()])
+            .execute_sorted_set(
+                &key,
+                "zscore",
+                &[serde_json::to_value(member.clone()).unwrap()],
+            )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
@@ -178,7 +182,9 @@ impl SortedSetCommands {
         match score {
             Some(s) => {
                 debug!("ZSCORE {} {} -> {}", key, member, s);
-                Ok(RespValue::BulkString(Bytes::from(s.to_string().into_bytes())))
+                Ok(RespValue::BulkString(Bytes::from(
+                    s.to_string().into_bytes(),
+                )))
             }
             None => {
                 debug!("ZSCORE {} {} -> null", key, member);
@@ -229,12 +235,20 @@ impl SortedSetCommands {
             result_values.push(RespValue::BulkString(Bytes::from(member.into_bytes())));
             if with_scores {
                 if let Some(score) = score_opt {
-                    result_values.push(RespValue::BulkString(Bytes::from(score.to_string().into_bytes())));
+                    result_values.push(RespValue::BulkString(Bytes::from(
+                        score.to_string().into_bytes(),
+                    )));
                 }
             }
         }
 
-        debug!("ZRANGE {} {} {} -> {} members", key, start, stop, result_values.len());
+        debug!(
+            "ZRANGE {} {} {} -> {} members",
+            key,
+            start,
+            stop,
+            result_values.len()
+        );
         Ok(RespValue::Array(result_values))
     }
 
@@ -265,7 +279,9 @@ impl SortedSetCommands {
             .unwrap_or(0.0);
 
         debug!("ZINCRBY {} {} {} -> {}", key, increment, member, new_score);
-        Ok(RespValue::BulkString(Bytes::from(new_score.to_string().into_bytes())))
+        Ok(RespValue::BulkString(Bytes::from(
+            new_score.to_string().into_bytes(),
+        )))
     }
 
     /// ZREM key member [member ...] - Remove members
