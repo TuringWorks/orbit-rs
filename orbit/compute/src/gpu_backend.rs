@@ -27,6 +27,8 @@ pub enum GpuBackendType {
     Rocm,
     /// Cross-platform Vulkan compute
     Vulkan,
+    /// Windows ML / DirectML (Windows only)
+    WindowsML,
 }
 
 /// Unified GPU device trait that all backends must implement
@@ -113,6 +115,11 @@ impl GpuDeviceManager {
             // Try CUDA (NVIDIA)
             if Self::is_cuda_available() {
                 available_backends.push(GpuBackendType::Cuda);
+            }
+
+            // Try WindowsML / DirectML
+            if Self::is_windowsml_available() {
+                available_backends.push(GpuBackendType::WindowsML);
             }
         }
 
@@ -218,6 +225,23 @@ impl GpuDeviceManager {
                     },
                 ))
             }
+
+            GpuBackendType::WindowsML => {
+                #[cfg(all(target_os = "windows", feature = "gpu-windowsml"))]
+                {
+                    use crate::gpu_windowsml::WindowsMLDevice;
+                    Ok(Box::new(WindowsMLDevice::new()?))
+                }
+                #[cfg(not(all(target_os = "windows", feature = "gpu-windowsml")))]
+                Err(ComputeError::gpu(
+                    crate::errors::GPUError::APIInitializationFailed {
+                        api: "WindowsML".to_string(),
+                        error:
+                            "WindowsML is only available on Windows with 'gpu-windowsml' feature"
+                                .to_string(),
+                    },
+                ))
+            }
         }
     }
 
@@ -258,6 +282,21 @@ impl GpuDeviceManager {
         // Vulkan is generally available on most modern systems
         // We'll do a runtime check when creating the device
         true
+    }
+
+    #[cfg(target_os = "windows")]
+    fn is_windowsml_available() -> bool {
+        // Check for DirectML on Windows
+        // DirectML requires Windows 10 1903+ and DirectX 12 compatible GPU
+        let directml_path = std::path::Path::new("C:\\Windows\\System32\\DirectML.dll");
+        let d3d12_path = std::path::Path::new("C:\\Windows\\System32\\d3d12.dll");
+        directml_path.exists() || d3d12_path.exists()
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[allow(dead_code)]
+    fn is_windowsml_available() -> bool {
+        false
     }
 }
 
