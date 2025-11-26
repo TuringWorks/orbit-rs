@@ -111,6 +111,10 @@ pub mod gpu_rocm;
 #[cfg(feature = "gpu-vulkan")]
 pub mod gpu_vulkan;
 
+/// Windows ML / DirectML GPU acceleration (Windows only)
+#[cfg(all(target_os = "windows", feature = "gpu-windowsml"))]
+pub mod gpu_windowsml;
+
 /// Neural engine acceleration implementations  
 #[cfg(feature = "neural-acceleration")]
 pub mod neural;
