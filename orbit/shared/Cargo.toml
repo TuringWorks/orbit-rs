@@ -65,4 +65,4 @@ path = "src/bin/orbitql-lsp-simple.rs"
 
 [build-dependencies]
 tonic-build = "0.12"
-prost-build = "0.13"
+prost-build = "0.14"
