@@ -33,7 +33,7 @@
 //! DELETE FROM actors WHERE actor_id = 'user:123';
 //! ```
 
-use orbit_protocols::postgres_wire::QueryEngine;
+use orbit_server::protocols::postgres_wire::QueryEngine;
 use orbit_server::protocols::PostgresServer;
 use tracing_subscriber::EnvFilter;
 
