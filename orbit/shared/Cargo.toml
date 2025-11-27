@@ -26,7 +26,7 @@ sqlx = { git = "https://github.com/ravituringworks/sqlx-no-rsa.git", default-fea
 tokio-util = "0.7"
 md5 = "0.7"
 tempfile = "3.0"
-tonic = "0.12"
+tonic = "0.14"
 prost = "0.13"
 futures.workspace = true
 tower = { version = "0.5", features = ["limit", "load-shed", "timeout"] }

@@ -63,7 +63,7 @@ opendal = { version = "0.51", features = ["services-azblob", "services-memory"] 
 tracing = "0.1"
 
 # gRPC for clustering
-tonic = "0.12"
+tonic = "0.14"
 prost = "0.13"
 
 [build-dependencies]
