@@ -9,7 +9,7 @@ category: wip
 **Date:** 2025-10-03  
 **Issue:** CI/CD failure - `cargo fmt --check` error  
 **Error Message:** `failed to resolve mod core: /home/runner/work/orbit-rs/orbit-rs/orbit/shared/src/transactions/core.rs does not exist`  
-**Status:** ✅ Fixed
+**Status:**  Fixed
 
 ---
 
@@ -36,9 +36,9 @@ This pattern was intended to ignore core dump files (which are created when prog
 
 ### Detection Process
 
-1. Verified file exists locally: `ls orbit/shared/src/transactions/core.rs` ✓
-2. Checked if file was tracked in git: `git ls-files orbit/shared/src/transactions/core.rs` ✗ (empty output)
-3. Checked git history: `git log --all -- orbit/shared/src/transactions/core.rs` ✗ (no commits)
+1. Verified file exists locally: `ls orbit/shared/src/transactions/core.rs` 
+2. Checked if file was tracked in git: `git ls-files orbit/shared/src/transactions/core.rs`  (empty output)
+3. Checked git history: `git log --all -- orbit/shared/src/transactions/core.rs`  (no commits)
 4. **Found the issue**: `git check-ignore -v orbit/shared/src/transactions/core.rs`
    ```
    .gitignore:175:core.*   orbit/shared/src/transactions/core.rs
@@ -151,38 +151,38 @@ style: apply cargo fmt to transaction modules
 
 ## Verification Steps
 
-### Local Verification ✅
+### Local Verification 
 
 ```bash
 
 # 1. Check file is tracked
 git ls-files orbit/shared/src/transactions/core.rs
 
-# Output: orbit/shared/src/transactions/core.rs ✓
+# Output: orbit/shared/src/transactions/core.rs 
 
 # 2. Verify formatting
 cargo fmt --all -- --check
 
-# Output: (no errors) ✓
+# Output: (no errors) 
 
 # 3. Check file is no longer ignored
 git check-ignore orbit/shared/src/transactions/core.rs
 
-# Output: (empty) ✓
+# Output: (empty) 
 
 # 4. Verify build works
 cargo build --workspace
 
-# Output: Compiling... ✓
+# Output: Compiling... 
 ```
 
 ### CI/CD Verification
 
 After pushing commits, the CI/CD pipeline should:
-1. ✅ Clone repository with `core.rs` file present
-2. ✅ Run `cargo fmt --all -- --check` successfully
-3. ✅ Build all workspace crates
-4. ✅ Pass all tests
+1.  Clone repository with `core.rs` file present
+2.  Run `cargo fmt --all -- --check` successfully
+3.  Build all workspace crates
+4.  Pass all tests
 
 ---
 
@@ -195,10 +195,10 @@ After pushing commits, the CI/CD pipeline should:
 - Actually ignored: `core.rs`, `core.toml`, `core.json`, etc.
 
 **Best Practice:** Use specific patterns
-- ✅ `core` - Ignores exact filename
-- ✅ `core.[0-9]*` - Ignores numbered variants
-- ✅ `*.core` - Ignores files ending in .core
-- ❌ `core.*` - Too broad, matches source files
+-  `core` - Ignores exact filename
+-  `core.[0-9]*` - Ignores numbered variants
+-  `*.core` - Ignores files ending in .core
+-  `core.*` - Too broad, matches source files
 
 ### 2. Verify Files are Tracked in Git
 
@@ -245,13 +245,13 @@ Watch out for these patterns that might catch source files:
 
 ## Impact
 
-### Before Fix ❌
+### Before Fix 
 - CI/CD failing on all branches
 - Cannot merge pull requests
 - `core.rs` file (946 lines) missing from repository
 - Transaction functionality incomplete in CI/CD builds
 
-### After Fix ✅
+### After Fix 
 - CI/CD passing
 - `core.rs` properly tracked in git
 - All 946 lines of transaction code available
@@ -371,9 +371,9 @@ git commit -m "fix: update .gitignore and add previously ignored file"
 
 ---
 
-**Status:** ✅ Complete  
-**CI/CD:** ✅ Fixed  
-**Files Tracked:** ✅ All source files now in repository  
-**Formatting:** ✅ All files properly formatted
+**Status:**  Complete  
+**CI/CD:**  Fixed  
+**Files Tracked:**  All source files now in repository  
+**Formatting:**  All files properly formatted
 
 For questions or similar issues, refer to this document or check `.gitignore` patterns with `git check-ignore -v`.

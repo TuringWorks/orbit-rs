@@ -54,11 +54,73 @@ pub enum ProtocolError {
 
     /// I/O error
     #[error("I/O error: {0}")]
-    IoError(#[from] std::io::Error),
+    IoError(String),
+
+    /// CQL protocol error
+    #[error("CQL protocol error: {0}")]
+    CqlError(String),
+
+    /// Type conversion error
+    #[error("Type conversion error: {0}")]
+    ConversionError(String),
+
+    /// Unsupported type
+    #[error("Unsupported type: {0}")]
+    UnsupportedType(String),
+
+    /// Invalid opcode
+    #[error("Invalid opcode: {0}")]
+    InvalidOpcode(u8),
+
+    /// Invalid consistency level
+    #[error("Invalid consistency level: {0}")]
+    InvalidConsistencyLevel(u16),
+
+    /// Incomplete frame
+    #[error("Incomplete frame")]
+    IncompleteFrame,
+
+    /// Invalid UTF-8
+    #[error("Invalid UTF-8: {0}")]
+    InvalidUtf8(String),
+
+    /// Invalid statement
+    #[error("Invalid statement: {0}")]
+    InvalidStatement(String),
+
+    /// Connection closed
+    #[error("Connection closed")]
+    ConnectionClosed,
+
+    /// Invalid state
+    #[error("Invalid state")]
+    InvalidState,
 
     /// Generic error
     #[error("{0}")]
     Other(String),
+
+    /// Protocol handshake error
+    #[error("Handshake error: {0}")]
+    HandshakeError(String),
+
+    /// Protocol decoding error
+    #[error("Decoding error: {0}")]
+    DecodingError(String),
+
+    /// Protocol encoding error
+    #[error("Encoding error: {0}")]
+    EncodingError(String),
+
+    /// Execution error
+    #[error("Execution error: {0}")]
+    ExecutionError(String),
+}
+
+impl From<std::io::Error> for ProtocolError {
+    fn from(err: std::io::Error) -> Self {
+        ProtocolError::IoError(err.to_string())
+    }
 }
 
 impl From<orbit_shared::exception::OrbitError> for ProtocolError {
@@ -130,6 +192,16 @@ impl ProtocolError {
         ProtocolError::PostgresError(format!(
             "Column '{column_name}' does not exist in table '{table_name}'"
         ))
+    }
+
+    /// Helper for "not found" errors (alias for does_not_exist)
+    pub fn not_found(resource_type: &str, name: &str) -> Self {
+        Self::does_not_exist(resource_type, name)
+    }
+
+    /// Helper for invalid operation errors
+    pub fn invalid_operation(message: &str) -> Self {
+        ProtocolError::PostgresError(format!("Invalid operation: {message}"))
     }
 
     /// Helper for "not implemented" errors

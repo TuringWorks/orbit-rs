@@ -4,7 +4,7 @@ title: Development Guide
 category: development
 ---
 
-# Development Guide
+## Development Guide
 
 This guide covers development setup, contributing guidelines, testing procedures, and architectural considerations for Orbit-RS development.
 
@@ -57,6 +57,7 @@ cargo test --lib --package orbit-server
 #### Visual Studio Code
 
 Recommended extensions:
+
 - **rust-analyzer** - Rust language server with excellent IntelliSense
 - **CodeLLDB** - Debugger support for Rust
 - **crates** - Cargo dependency management
@@ -64,6 +65,7 @@ Recommended extensions:
 - **GitLens** - Enhanced Git capabilities
 
 VS Code settings (`.vscode/settings.json`):
+
 ```json
 {
     "rust-analyzer.cargo.features": "all",
@@ -129,7 +131,7 @@ cargo bench --workspace
 
 ### Workspace Layout
 
-```
+```text
 orbit-rs/
 ├── Cargo.toml              # Workspace configuration
 ├── README.md               # Project overview
@@ -231,6 +233,7 @@ orbit-rs/
 ### Architectural Layers
 
 #### Core Layer (`orbit-shared`, `orbit-util`)
+
 - Fundamental types and utilities
 - Actor trait definitions
 - Error handling
@@ -238,30 +241,35 @@ orbit-rs/
 - Logging and metrics utilities
 
 #### Network Layer (`orbit-proto`)
+
 - Protocol Buffer definitions
 - gRPC service specifications
 - Message serialization/deserialization
 - Cross-language type definitions
 
 #### Client Layer (`orbit-client`)
+
 - Actor proxy generation
 - Remote invocation handling
 - Lease management
 - Connection pooling
 
 #### Server Layer (`orbit-server`)
+
 - Cluster node management
 - Actor lifecycle management
 - Load balancing
 - Health monitoring
 
 #### Protocol Layer (`orbit-protocols`)
+
 - Redis RESP protocol adapter
 - PostgreSQL wire protocol adapter
 - SQL parser and executor
 - MCP server implementation
 
 #### Orchestration Layer (`orbit-operator`)
+
 - Kubernetes Custom Resource Definitions
 - Operator controller logic
 - Resource management
@@ -274,21 +282,25 @@ orbit-rs/
 Orbit-RS supports multiple pluggable storage backends:
 
 #### In-Memory Provider (`memory.rs`)
+
 - Hash-map based storage for development and testing
 - No persistence across restarts
 - Fastest performance for temporary data
 
 #### COW B+Tree Provider (`cow_btree.rs`)
+
 - Copy-on-Write B+ Tree with Write-Ahead Logging
 - Optimized for read-heavy workloads
 - Snapshots and versioning support
 
 #### LSM-Tree Provider (`lsm_tree.rs`)
+
 - Log-Structured Merge Tree implementation
 - Optimized for write-heavy workloads
 - Background compaction and bloom filters
 
 #### RocksDB Provider (`rocksdb.rs`)
+
 - Production-grade key-value store
 - ACID transactions and crash recovery
 - High-performance with tunable parameters
@@ -316,6 +328,7 @@ let provider = DynamicPersistenceProvider::new(config).await?;
 ### Adding New Storage Backends
 
 1. **Implement Required Traits**:
+
    ```rust
    impl PersistenceProvider for MyCustomProvider {
        async fn initialize(&self) -> OrbitResult<()> { /* ... */ }
@@ -330,6 +343,7 @@ let provider = DynamicPersistenceProvider::new(config).await?;
    ```
 
 2. **Add Configuration Support**:
+
    ```rust
    #[derive(Debug, Clone, Serialize, Deserialize)]
    pub struct MyCustomConfig {
@@ -339,6 +353,7 @@ let provider = DynamicPersistenceProvider::new(config).await?;
    ```
 
 3. **Register Backend**:
+
    ```rust
    // In persistence/mod.rs
    pub enum BackendType {
@@ -351,6 +366,7 @@ let provider = DynamicPersistenceProvider::new(config).await?;
    ```
 
 4. **Write Tests**:
+
    ```rust
    #[tokio::test]
    async fn test_my_custom_provider() {
@@ -389,7 +405,7 @@ ORBIT_PERSISTENCE_BACKEND=rocksdb cargo test persistence_integration
 
 ### Test Structure
 
-```
+```text
 tests/
 ├── unit/                  # Unit tests (in src/ directories)
 ├── integration/           # Integration tests
@@ -513,6 +529,7 @@ async fn test_cluster_communication() {
 #### BDD Test Example
 
 Feature file (`tests/features/actor_lifecycle.feature`):
+
 ```gherkin
 Feature: Actor Lifecycle Management
   
@@ -526,6 +543,7 @@ Feature: Actor Lifecycle Management
 ```
 
 Step definitions:
+
 ```rust
 use cucumber::{given, when, then, World};
 
@@ -592,6 +610,7 @@ cargo fmt --all -- --check
 ```
 
 Rustfmt configuration (`.rustfmt.toml`):
+
 ```toml
 edition = "2021"
 max_width = 100
@@ -617,6 +636,7 @@ cargo clippy --workspace --all-targets --fix
 ```
 
 Clippy configuration in `Cargo.toml`:
+
 ```toml
 [workspace.lints.clippy]
 pedantic = "warn"
@@ -634,6 +654,7 @@ module_name_repetitions = "allow"
 - **Safety**: Document unsafe code with safety requirements
 
 Documentation example:
+
 ```rust
 /// Manages the lifecycle of actors in the Orbit cluster.
 ///
@@ -667,6 +688,7 @@ pub struct ActorManager {
 - Use `anyhow` for application errors, custom error types for library APIs
 
 Error type example:
+
 ```rust
 use thiserror::Error;
 
@@ -691,6 +713,7 @@ pub enum ActorError {
 ### Development Workflow
 
 1. **Fork and Clone**
+
    ```bash
    git clone https://github.com/your-username/orbit-rs.git
    cd orbit-rs
@@ -698,6 +721,7 @@ pub enum ActorError {
    ```
 
 2. **Create Feature Branch**
+
    ```bash
    git checkout -b feature/amazing-new-feature
    ```
@@ -709,12 +733,14 @@ pub enum ActorError {
    - Run tests and ensure they pass
 
 4. **Commit Changes**
+
    ```bash
    git add .
    git commit -m "feat: add amazing new feature"
    ```
 
 5. **Push and Create PR**
+
    ```bash
    git push origin feature/amazing-new-feature
    # Create pull request through GitHub UI
@@ -724,7 +750,7 @@ pub enum ActorError {
 
 Follow conventional commit format:
 
-```
+```text
 <type>(<scope>): <description>
 
 [optional body]
@@ -733,6 +759,7 @@ Follow conventional commit format:
 ```
 
 Types:
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation changes
@@ -742,7 +769,8 @@ Types:
 - `chore`: Maintenance tasks
 
 Examples:
-```
+
+```text
 feat(client): add connection pooling support
 fix(server): resolve actor lifecycle race condition
 docs(readme): update installation instructions
@@ -772,12 +800,14 @@ docs(readme): update installation instructions
 ### Code Review Guidelines
 
 #### For Authors
+
 - Keep PRs focused and reasonably sized
 - Provide clear description and context
 - Respond to feedback promptly
 - Test edge cases and error conditions
 
 #### For Reviewers
+
 - Check for correctness and clarity
 - Verify test coverage
 - Consider performance implications
@@ -802,6 +832,7 @@ docs(readme): update installation instructions
 - Handle cancellation gracefully
 
 Example:
+
 ```rust
 use tokio::time::{timeout, Duration};
 

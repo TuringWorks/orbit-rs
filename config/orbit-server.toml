@@ -1,19 +1,24 @@
 # Orbit Multi-Protocol Server Configuration
 # This configuration enables orbit-rs to natively serve as:
 # - PostgreSQL server (port 5432) with full SQL and pgvector support
+# - MySQL server (port 3306) for MySQL-compatible clients
+# - CQL server (port 9042) for Cassandra-compatible clients
 # - Redis server (port 6379) with vector operations and modules
 # - gRPC server (port 50051) for actor system management
 # - REST API server (port 8080) for web applications
+# - Cypher server (port 7687) for Neo4j-compatible graph queries
+# - OrbitQL server (port 8081) for native OrbitQL queries
+# - AQL server (port 8529) for ArangoDB-compatible queries
 
 [server]
 # Unique node identifier (auto-generated if not provided)
-# node_id = "orbit-node-01"
+node_id = "orbit-node-1"
 
 # Bind address for all servers
 bind_address = "0.0.0.0"
 
 # Environment: "Development", "Testing", "Staging", "Production"
-environment = "Development"
+environment = "Production"
 
 # Data and configuration directories
 data_dir = "./data"
@@ -50,7 +55,7 @@ max_message_size = 4194304  # 4MB
 # PostgreSQL Wire Protocol Server
 [protocols.postgresql]
 enabled = true
-port = 15432
+port = 5432
 max_connections = 1000
 connection_timeout_secs = 30
 
@@ -89,6 +94,24 @@ enable_json = true           # JSON/JSONB operations
 enable_fulltext = true       # Full-text search
 enable_prepared_statements = true
 enable_transactions = true
+
+# MySQL Wire Protocol Server
+[protocols.mysql]
+enabled = true
+port = 3306
+max_connections = 1000
+connection_timeout_secs = 30
+server_version = "8.0.0-Orbit"
+authentication_enabled = false
+
+# CQL (Cassandra Query Language) Server
+[protocols.cql]
+enabled = true
+port = 9042
+max_connections = 1000
+connection_timeout_secs = 30
+protocol_version = 4
+authentication_enabled = false
 
 # Redis RESP Protocol Server
 [protocols.redis]
@@ -155,24 +178,39 @@ request_timeout_secs = 30
 # requests_per_minute = 1000
 # burst_capacity = 100
 
-# Cypher (Neo4j-compatible) Server (disabled by default)
-# [protocols.cypher]
-# enabled = false
-# port = 7474
-# max_connections = 1000
+# Cypher (Neo4j-compatible) Server
+[protocols.cypher]
+enabled = true
+port = 7687
+max_connections = 1000
 
-# [protocols.cypher.graph_engine]
-# max_query_complexity = 1000
-# query_timeout_secs = 30
-# enable_optimization = true
-# storage_backend = "memory"
+[protocols.cypher.graph_engine]
+max_query_complexity = 1000
+query_timeout_secs = 30
+enable_optimization = true
+storage_backend = "memory"
 
-# MCP (Model Context Protocol) Server (disabled by default)
+# OrbitQL Query Language Server
+[protocols.orbitql]
+enabled = true
+port = 8081
+max_connections = 1000
+connection_timeout_secs = 30
+authentication_enabled = false
+
+# AQL (ArangoDB Query Language) Server
+[protocols.aql]
+enabled = true
+port = 8529
+max_connections = 1000
+connection_timeout_secs = 30
+authentication_enabled = false
+
+# MCP (Model Context Protocol) Server
 # [protocols.mcp]
 # enabled = false
 # port = 8765
 # version = "1.0"
-
 # [protocols.mcp.tools]
 # available_tools = ["query", "vector_search", "graph_query"]
 
@@ -184,6 +222,7 @@ request_timeout_secs = 30
 enabled = false
 methods = ["Basic"]
 
+# JWT Configuration
 # [security.authentication.jwt]
 # secret_key = "your-secret-key"
 # expiration_secs = 3600
@@ -193,6 +232,12 @@ methods = ["Basic"]
 enabled = false
 model = "rbac"
 default_permissions = ["read", "write"]
+
+# Encryption in Transit
+# [security.encryption.in_transit]
+# enabled = true
+# tls_version = "TLS1.3"
+# cipher_suites = ["TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"]
 
 # ================================
 # PERFORMANCE CONFIGURATION
@@ -222,6 +267,8 @@ tcp_nodelay = true
 keep_alive = true
 
 [performance.cpu]
+# worker_threads = 4  # Defaults to number of CPU cores
+enable_affinity = false
 enable_simd = true
 
 # ================================
@@ -230,10 +277,19 @@ enable_simd = true
 
 [logging]
 level = "info"
-format = "plain"
+format = "json"
 
 [[logging.outputs]]
 output_type = "stdout"
+
+# File logging with rotation
+# [[logging.outputs]]
+# output_type = "file"
+# file_path = "/var/log/orbit/orbit-server.log"
+# [logging.outputs.rotation]
+# strategy = "size"
+# max_size_mb = 100
+# max_files = 10
 
 # Component-specific log levels
 [logging.component_levels]
@@ -254,7 +310,7 @@ retention_days = 7
 
 [monitoring.health_checks]
 enabled = true
-port = 8081
+port = 9091
 interval_secs = 30
 timeout_secs = 5
 
@@ -265,29 +321,54 @@ sampling_rate = 0.1
 # endpoint = "http://jaeger:14268/api/traces"
 
 # ================================
+# CONNECTION POOLING
+# ================================
+
+[pooling]
+enabled = true
+min_connections = 10
+max_connections = 1000
+connection_timeout_secs = 30
+idle_timeout_secs = 300
+max_lifetime_secs = 3600
+health_check_interval_secs = 60
+load_balancing_strategy = "RoundRobin"
+tier = "Standard"
+enable_dynamic_sizing = true
+target_utilization = 0.75
+
+[pooling.circuit_breaker]
+enabled = true
+failure_threshold = 5
+failure_window_secs = 60
+recovery_timeout_secs = 30
+success_threshold = 2
+half_open_max_calls = 3
+
+# ================================
 # EXAMPLE USAGE INSTRUCTIONS
 # ================================
 
 # Start the server with this configuration:
-# orbit-server --config ./config/orbit-server.toml
-
-# Development mode (all protocols enabled):
-# orbit-server --dev-mode
-
-# Enable specific protocols:
-# orbit-server --enable-postgresql --enable-redis --enable-rest
-
-# Custom ports:
-# orbit-server --enable-postgresql --postgres-port 5433 --enable-redis --redis-port 6380
+#   orbit-server --config ./config/orbit-server.toml
 
 # Connect to PostgreSQL:
-# psql -h localhost -p 5432 -U postgres
+#   psql -h localhost -p 5432 -U postgres
+
+# Connect to MySQL:
+#   mysql -h 127.0.0.1 -P 3306 -u root
+
+# Connect to CQL/Cassandra:
+#   cqlsh 127.0.0.1 9042
 
 # Connect to Redis:
-# redis-cli -h localhost -p 6379
+#   redis-cli -h localhost -p 6379
 
 # Access REST API:
-# curl http://localhost:8080/api/health
+#   curl http://localhost:8080/api/health
 
-# Generate example config:
-# orbit-server --generate-config > orbit-server.toml
+# Connect to Cypher/Neo4j:
+#   cypher-shell -a bolt://localhost:7687
+
+# Connect to AQL/ArangoDB:
+#   arangosh --server.endpoint tcp://localhost:8529

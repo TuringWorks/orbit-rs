@@ -4,7 +4,7 @@ title: Comprehensive Database Comparison Matrix
 category: documentation
 ---
 
-# Comprehensive Database Comparison Matrix: Orbit-RS vs Industry Leaders
+## Comprehensive Database Comparison Matrix: Orbit-RS vs Industry Leaders
 
 **Date**: October 13, 2025  
 **Author**: AI Assistant  
@@ -114,13 +114,13 @@ This document provides a comprehensive competitive analysis of Orbit-RS against 
 
 #### Positioning vs CockroachDB
 
-**"CockroachDB's distributed SQL + every other data model"**
+##### CockroachDB's distributed SQL + every other data model
 
 - CockroachDB excels at distributed SQL but requires separate systems for time series, vector, and graph data
 - Orbit-RS provides the same distributed ACID SQL capabilities plus native support for all other data models
 - Edge deployment advantage with 10x lower resource requirements
 
-#### Migration Strategy
+#### Migration Strategy from CockroachDB
 
 ```orbitql
 -- CockroachDB users can migrate gradually
@@ -168,7 +168,7 @@ GROUP BY u.name, u.profile_embedding;
 
 #### Positioning vs YugabyteDB
 
-**"YugabyteDB's dual-API approach expanded to all data models"**
+##### YugabyteDB's dual-API approach expanded to all data models
 
 - YugabyteDB pioneered multi-API access (SQL + Cassandra) but limited to those two models
 - Orbit-RS extends this concept to support all data models (relational, document, graph, vector, time series)
@@ -204,7 +204,7 @@ YugabyteDB users can migrate by:
 
 #### Positioning vs Snowflake
 
-**"Snowflake's analytics power without the vendor lock-in and with real-time capabilities"**
+##### "Snowflake's analytics power without the vendor lock-in and with real-time capabilities"
 
 - Snowflake excels at cloud-scale analytics but locks customers into proprietary architecture
 - Orbit-RS provides similar analytical capabilities plus real-time processing
@@ -213,7 +213,7 @@ YugabyteDB users can migrate by:
 
 #### Cost Analysis
 
-```
+```text
 Snowflake Annual Cost (Medium Enterprise):
 - Compute: $200K - $2M+ (depending on usage)
 - Storage: $50K - $500K
@@ -245,7 +245,7 @@ Orbit-RS Equivalent:
 
 #### Positioning vs Redshift
 
-**"Redshift analytics without AWS lock-in plus multi-model capabilities"**
+##### "Redshift analytics without AWS lock-in plus multi-model capabilities"
 
 ### Google BigQuery vs Orbit-RS
 
@@ -264,7 +264,7 @@ Orbit-RS Equivalent:
 
 #### Positioning vs BigQuery
 
-**"BigQuery's ML capabilities with multi-model flexibility and no cloud lock-in"**
+##### BigQuery's ML capabilities with multi-model flexibility and no cloud lock-in
 
 ### Azure Synapse Analytics vs Orbit-RS
 
@@ -282,7 +282,7 @@ Orbit-RS Equivalent:
 
 #### Positioning vs Synapse
 
-**"Synapse's unified approach without Azure lock-in plus true multi-model support"**
+"Synapse's unified approach without Azure lock-in plus true multi-model support"
 
 ## Analytics Platforms
 
@@ -328,7 +328,7 @@ Orbit-RS Equivalent:
 
 #### Positioning vs Teradata
 
-**"Next-generation Teradata with modern architecture and 70% cost savings"**
+##### Next-generation Teradata with modern architecture and 70% cost savings
 
 ### IBM Db2 vs Orbit-RS
 
@@ -387,7 +387,7 @@ Orbit-RS Equivalent:
 
 #### Positioning vs Yellowbrick
 
-**"Yellowbrick's hybrid performance with true multi-model capabilities"**
+##### "Yellowbrick's hybrid performance with true multi-model capabilities"
 
 ### Firebolt vs Orbit-RS
 
@@ -467,7 +467,7 @@ ORDER BY total_sales DESC;
 
 #### Positioning vs Cassandra
 
-**"Cassandra's scale with ACID guarantees and multi-model support"**
+##### "Cassandra's scale with ACID guarantees and multi-model support"
 
 - Cassandra excels at massive scale for wide-column data but lacks ACID guarantees
 - Orbit-RS provides the same distributed scale with full ACID transactions

@@ -26,6 +26,10 @@ export enum ConnectionType {
   PostgreSQL = 'PostgreSQL',
   OrbitQL = 'OrbitQL',
   Redis = 'Redis',
+  MySQL = 'MySQL',
+  CQL = 'CQL',
+  Cypher = 'Cypher',
+  AQL = 'AQL',
 }
 
 export enum ConnectionStatus {
@@ -47,6 +51,10 @@ export enum QueryType {
   SQL = 'SQL',
   OrbitQL = 'OrbitQL',
   Redis = 'Redis',
+  MySQL = 'MySQL',
+  CQL = 'CQL',
+  Cypher = 'Cypher',
+  AQL = 'AQL',
 }
 
 export interface QueryResult {

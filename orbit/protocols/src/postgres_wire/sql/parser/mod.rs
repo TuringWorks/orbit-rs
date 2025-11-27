@@ -169,10 +169,37 @@ impl SqlParser {
     fn parse_create_statement(&mut self) -> ParseResult<Statement> {
         self.expect(Token::Create)?;
 
+        // Check for CREATE OR REPLACE VIEW
+        let or_replace = if self.matches(&[Token::Or]) {
+            self.advance()?;
+            self.expect(Token::Replace)?;
+            true
+        } else {
+            false
+        };
+
         match &self.current_token {
+            Some(Token::Database) => ddl::parse_create_database(self),
             Some(Token::Table) => ddl::parse_create_table(self),
+            Some(Token::Unique) => {
+                // CREATE UNIQUE INDEX
+                self.advance()?; // consume UNIQUE
+                self.expect(Token::Index)?;
+                let mut stmt = ddl::parse_create_index_internal(self)?;
+                if let Statement::CreateIndex(ref mut idx_stmt) = stmt {
+                    idx_stmt.unique = true;
+                }
+                Ok(stmt)
+            },
             Some(Token::Index) => ddl::parse_create_index(self),
-            Some(Token::View) => ddl::parse_create_view(self),
+            Some(Token::View) => {
+                self.advance()?; // consume VIEW token
+                let mut stmt = ddl::parse_create_view_internal(self)?;
+                if let Statement::CreateView(ref mut view_stmt) = stmt {
+                    view_stmt.replace = or_replace;
+                }
+                Ok(stmt)
+            },
             Some(Token::Schema) => ddl::parse_create_schema(self),
             Some(Token::Extension) => ddl::parse_create_extension(self),
 
@@ -180,8 +207,11 @@ impl SqlParser {
                 message: format!("Unexpected token after CREATE: {token:?}"),
                 position: self.position,
                 expected: vec![
+                    "DATABASE".to_string(),
                     "TABLE".to_string(),
+                    "UNIQUE".to_string(),
                     "INDEX".to_string(),
+                    "OR".to_string(),
                     "VIEW".to_string(),
                     "SCHEMA".to_string(),
                     "EXTENSION".to_string(),
@@ -192,7 +222,7 @@ impl SqlParser {
             None => Err(ParseError {
                 message: "Expected object type after CREATE".to_string(),
                 position: self.position,
-                expected: vec!["TABLE, INDEX, VIEW, SCHEMA, or EXTENSION".to_string()],
+                expected: vec!["DATABASE, TABLE, UNIQUE INDEX, INDEX, OR REPLACE VIEW, VIEW, SCHEMA, or EXTENSION".to_string()],
                 found: None,
             }),
         }
@@ -226,6 +256,7 @@ impl SqlParser {
         self.expect(Token::Drop)?;
 
         match &self.current_token {
+            Some(Token::Database) => ddl::parse_drop_database(self),
             Some(Token::Table) => ddl::parse_drop_table(self),
             Some(Token::Index) => ddl::parse_drop_index(self),
             Some(Token::View) => ddl::parse_drop_view(self),
@@ -236,6 +267,7 @@ impl SqlParser {
                 message: format!("Unexpected token after DROP: {token:?}"),
                 position: self.position,
                 expected: vec![
+                    "DATABASE".to_string(),
                     "TABLE".to_string(),
                     "INDEX".to_string(),
                     "VIEW".to_string(),
@@ -248,7 +280,7 @@ impl SqlParser {
             None => Err(ParseError {
                 message: "Expected object type after DROP".to_string(),
                 position: self.position,
-                expected: vec!["TABLE, INDEX, VIEW, SCHEMA, or EXTENSION".to_string()],
+                expected: vec!["DATABASE, TABLE, INDEX, VIEW, SCHEMA, or EXTENSION".to_string()],
                 found: None,
             }),
         }

@@ -43,8 +43,8 @@ impl PersistenceMetrics {
     /// Update metrics for a read operation
     pub fn record_read(&mut self, duration: Duration, success: bool) {
         self.read_operations += 1;
-        self.read_latency_avg =
-            (self.read_latency_avg * (self.read_operations - 1) as f64 + duration.as_secs_f64())
+        self.read_latency_avg = (self.read_latency_avg * (self.read_operations - 1) as f64
+            + duration.as_secs_f64())
             / self.read_operations as f64;
         if !success {
             self.error_count += 1;
@@ -54,8 +54,8 @@ impl PersistenceMetrics {
     /// Update metrics for a write operation
     pub fn record_write(&mut self, duration: Duration, success: bool) {
         self.write_operations += 1;
-        self.write_latency_avg =
-            (self.write_latency_avg * (self.write_operations - 1) as f64 + duration.as_secs_f64())
+        self.write_latency_avg = (self.write_latency_avg * (self.write_operations - 1) as f64
+            + duration.as_secs_f64())
             / self.write_operations as f64;
         if !success {
             self.error_count += 1;
@@ -65,8 +65,8 @@ impl PersistenceMetrics {
     /// Update metrics for a delete operation
     pub fn record_delete(&mut self, duration: Duration, success: bool) {
         self.delete_operations += 1;
-        self.delete_latency_avg =
-            (self.delete_latency_avg * (self.delete_operations - 1) as f64 + duration.as_secs_f64())
+        self.delete_latency_avg = (self.delete_latency_avg * (self.delete_operations - 1) as f64
+            + duration.as_secs_f64())
             / self.delete_operations as f64;
         if !success {
             self.error_count += 1;
@@ -95,11 +95,7 @@ where
     Self::Metrics: From<PersistenceMetrics> + Into<PersistenceMetrics>,
 {
     /// Execute operation with automatic metrics collection
-    async fn with_metrics<F, T>(
-        &self,
-        operation: &str,
-        f: F,
-    ) -> OrbitResult<T>
+    async fn with_metrics<F, T>(&self, operation: &str, f: F) -> OrbitResult<T>
     where
         F: std::future::Future<Output = OrbitResult<T>> + Send,
         T: Send,
@@ -162,18 +158,13 @@ pub struct TransactionContext {
     pub timeout: Duration,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum IsolationLevel {
     ReadUncommitted,
+    #[default]
     ReadCommitted,
     RepeatableRead,
     Serializable,
-}
-
-impl Default for IsolationLevel {
-    fn default() -> Self {
-        Self::ReadCommitted
-    }
 }
 
 /// Trait for transaction management with default implementations
@@ -344,14 +335,12 @@ pub trait DataDirectoryProvider {
     /// Ensure data directory exists
     async fn ensure_data_dir(&self) -> OrbitResult<()> {
         let data_dir = self.data_dir();
-        tokio::fs::create_dir_all(data_dir)
-            .await
-            .map_err(|e| {
-                OrbitError::io_with_source(
-                    format!("Failed to create data directory: {}", data_dir.display()),
-                    e.to_string(),
-                )
-            })?;
+        tokio::fs::create_dir_all(data_dir).await.map_err(|e| {
+            OrbitError::io_with_source(
+                format!("Failed to create data directory: {}", data_dir.display()),
+                e.to_string(),
+            )
+        })?;
         tracing::info!("Data directory ensured at: {}", data_dir.display());
         Ok(())
     }
@@ -388,15 +377,14 @@ mod tests {
 
         let encoder = TestEncoder;
 
-        let string_key = Key::StringKey { key: "test".to_string() };
+        let string_key = Key::StringKey {
+            key: "test".to_string(),
+        };
         assert_eq!(encoder.encode_key(&string_key), "test");
 
         let int_key = Key::Int32Key { key: 42 };
         assert_eq!(encoder.encode_key(&int_key), "42");
 
-        assert_eq!(
-            encoder.composite_key("Actor", &string_key),
-            "Actor:test"
-        );
+        assert_eq!(encoder.composite_key("Actor", &string_key), "Actor:test");
     }
 }

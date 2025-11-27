@@ -6,20 +6,20 @@ category: backlog
 
 ## Unified Multi-Model Query Language - Feature Backlog
 
-## 📋 Epic Overview
+##  Epic Overview
 
 **Epic ID**: ORBIT-020  
 **Epic Title**: SurrealQL-Compatible Unified Multi-Model Query Language  
-**Priority**: 🔥 Critical  
+**Priority**:  Critical  
 **Phase**: Q2 2025  
 **Total Effort**: 16-20 weeks  
 **Status**: Planned  
 
-## 🎯 Epic Description
+##  Epic Description
 
 Implement a unified query language (OrbitQL) that combines document, graph, time-series, and key-value operations in a single query, inspired by SurrealQL but optimized for distributed actor systems. This will be our primary competitive differentiator against traditional multi-model databases.
 
-## 📈 Business Value
+##  Business Value
 
 ### Primary Benefits
 
@@ -36,7 +36,7 @@ Implement a unified query language (OrbitQL) that combines document, graph, time
 4. **E-commerce**: Products, relationships, reviews, and transaction history
 5. **Financial Services**: Transactions, relationships, compliance data, and time-series
 
-## 🏗️ Technical Architecture
+##  Technical Architecture
 
 ### Core Components
 
@@ -289,7 +289,7 @@ FOR user IN users
 - **Development Velocity**: 40% faster feature development for cross-model use cases
 - **Market Differentiation**: First distributed database with unified multi-model queries
 
-## 🚀 Innovation Opportunities
+##  Innovation Opportunities
 
 ### Future Enhancements
 

@@ -12,13 +12,13 @@ permalink: /legal/terms/
 
 ---
 
-## 📄 Overview
+##  Overview
 
 These Terms of Service ("Terms") govern your use of Orbit-RS software and services provided by TuringWorks ("we", "our", or "us").
 
 ---
 
-## 🔓 Open Source License
+##  Open Source License
 
 Orbit-RS is licensed under the **Apache License 2.0**. The full license text is available at:
 
@@ -33,25 +33,25 @@ Orbit-RS is licensed under the **Apache License 2.0**. The full license text is 
 
 ---
 
-## 🛡️ Disclaimer of Warranties
+##  Disclaimer of Warranties
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
 
 ---
 
-## ⚖️ Limitation of Liability
+##  Limitation of Liability
 
 IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ---
 
-## 🤝 Enterprise Services
+##  Enterprise Services
 
 For enterprise support, consulting, or custom development services, separate commercial agreements may apply. Contact [enterprise@turingworks.com](mailto:enterprise@turingworks.com) for details.
 
 ---
 
-## 📧 Contact
+##  Contact
 
 For questions about these terms:
 

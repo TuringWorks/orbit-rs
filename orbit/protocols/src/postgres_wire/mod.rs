@@ -36,23 +36,33 @@ pub mod auth;
 pub mod graphrag_engine;
 pub mod jsonb;
 pub mod messages;
+#[cfg(feature = "storage-rocksdb")]
 pub mod persistent_storage;
+#[cfg(feature = "storage-rocksdb")]
 pub mod protocol;
+#[cfg(feature = "storage-rocksdb")]
 pub mod query_engine;
-pub mod server;
+// pub mod server;  // Moved to orbit_server::protocols
 pub mod sql;
-pub mod storage;
+#[cfg(feature = "storage-rocksdb")]
 pub mod vector_engine;
 
-pub use auth::{AuthManager, AuthMethod, ScramAuth, UserCredentials, UserStore, compute_md5_hash};
+// Re-export storage from common for backward compatibility
+pub use crate::common::storage;
+
+pub use auth::{compute_md5_hash, AuthManager, AuthMethod, ScramAuth, UserCredentials, UserStore};
 pub use graphrag_engine::GraphRAGQueryEngine;
 pub use messages::{BackendMessage, FieldDescription, FrontendMessage, TransactionStatus};
+#[cfg(feature = "storage-rocksdb")]
 pub use persistent_storage::{
     ColumnDefinition, ColumnType, PersistentTableStorage, QueryCondition, RocksDbTableStorage,
     TableRow, TableSchema,
 };
+#[cfg(feature = "storage-rocksdb")]
 pub use protocol::PostgresWireProtocol;
+#[cfg(feature = "storage-rocksdb")]
 pub use query_engine::{QueryEngine, QueryResult};
-pub use server::PostgresServer;
+// pub use server::PostgresServer;  // Moved to orbit_server::protocols
 pub use sql::{SqlEngine, SqlExecutor, SqlParser};
+#[cfg(feature = "storage-rocksdb")]
 pub use vector_engine::VectorQueryEngine;

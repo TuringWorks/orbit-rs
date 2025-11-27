@@ -9,7 +9,7 @@
 use crate::error::ProtocolResult;
 use crate::postgres_wire::sql::ast::{
     BinaryOperator, CaseExpression, ColumnRef, Expression, FrameBound, FunctionCall, FunctionName,
-    NullsOrder, OrderByItem, SortDirection, UnaryOperator, WhenClause, WindowFrame,
+    InList, NullsOrder, OrderByItem, SortDirection, UnaryOperator, WhenClause, WindowFrame,
     WindowFunctionType,
 };
 use crate::postgres_wire::sql::lexer::Token;
@@ -130,27 +130,96 @@ impl ExpressionParser {
         let mut left = self.parse_additive_expression(tokens, pos)?;
 
         while *pos < tokens.len() {
-            let operator = match &tokens[*pos] {
-                Token::LessThan => BinaryOperator::LessThan,
-                Token::LessThanOrEqual => BinaryOperator::LessThanOrEqual,
-                Token::GreaterThan => BinaryOperator::GreaterThan,
-                Token::GreaterThanOrEqual => BinaryOperator::GreaterThanOrEqual,
-                Token::Like => BinaryOperator::Like,
-                Token::ILike => BinaryOperator::ILike,
-                Token::In => BinaryOperator::In,
-                Token::VectorDistance => BinaryOperator::VectorDistance,
-                Token::VectorInnerProduct => BinaryOperator::VectorInnerProduct,
-                Token::VectorCosineDistance => BinaryOperator::VectorCosineDistance,
-                _ => break,
-            };
+            if matches!(&tokens[*pos], Token::In) {
+                // Handle IN operator specially to support both value lists and subqueries
+                *pos += 1; // consume IN
 
-            *pos += 1;
-            let right = self.parse_additive_expression(tokens, pos)?;
-            left = Expression::Binary {
-                left: Box::new(left),
-                operator,
-                right: Box::new(right),
-            };
+                // Check for NOT IN
+                let negated = if *pos < tokens.len() && matches!(&tokens[*pos], Token::Not) {
+                    *pos += 1;
+                    true
+                } else {
+                    false
+                };
+
+                // Parse IN list or subquery
+                if *pos >= tokens.len() {
+                    return Err(crate::error::ProtocolError::ParseError(
+                        "Expected '(' after IN".to_string(),
+                    ));
+                }
+
+                if !matches!(&tokens[*pos], Token::LeftParen) {
+                    return Err(crate::error::ProtocolError::ParseError(
+                        "Expected '(' after IN".to_string(),
+                    ));
+                }
+                *pos += 1; // consume '('
+
+                // Check if this is a subquery
+                let in_list = if *pos < tokens.len() && matches!(&tokens[*pos], Token::Select) {
+                    // Parse as subquery
+                    use crate::postgres_wire::sql::parser::select::SelectParser;
+                    let mut select_parser = SelectParser::new();
+                    let select_stmt = select_parser.parse_select(tokens, pos)?;
+
+                    if *pos >= tokens.len() || !matches!(&tokens[*pos], Token::RightParen) {
+                        return Err(crate::error::ProtocolError::ParseError(
+                            "Expected ')' after subquery in IN clause".to_string(),
+                        ));
+                    }
+                    *pos += 1; // consume ')'
+                    InList::Subquery(Box::new(select_stmt))
+                } else {
+                    // Parse as expression list
+                    let mut exprs = Vec::new();
+                    if *pos < tokens.len() && !matches!(&tokens[*pos], Token::RightParen) {
+                        loop {
+                            exprs.push(self.parse_expression(tokens, pos)?);
+                            if *pos < tokens.len() && matches!(&tokens[*pos], Token::Comma) {
+                                *pos += 1; // consume ','
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+
+                    if *pos >= tokens.len() || !matches!(&tokens[*pos], Token::RightParen) {
+                        return Err(crate::error::ProtocolError::ParseError(
+                            "Expected ')' after IN list".to_string(),
+                        ));
+                    }
+                    *pos += 1; // consume ')'
+                    InList::Expressions(exprs)
+                };
+
+                left = Expression::In {
+                    expr: Box::new(left),
+                    list: in_list,
+                    negated,
+                };
+            } else {
+                let operator = match &tokens[*pos] {
+                    Token::LessThan => BinaryOperator::LessThan,
+                    Token::LessThanOrEqual => BinaryOperator::LessThanOrEqual,
+                    Token::GreaterThan => BinaryOperator::GreaterThan,
+                    Token::GreaterThanOrEqual => BinaryOperator::GreaterThanOrEqual,
+                    Token::Like => BinaryOperator::Like,
+                    Token::ILike => BinaryOperator::ILike,
+                    Token::VectorDistance => BinaryOperator::VectorDistance,
+                    Token::VectorInnerProduct => BinaryOperator::VectorInnerProduct,
+                    Token::VectorCosineDistance => BinaryOperator::VectorCosineDistance,
+                    _ => break,
+                };
+
+                *pos += 1;
+                let right = self.parse_additive_expression(tokens, pos)?;
+                left = Expression::Binary {
+                    left: Box::new(left),
+                    operator,
+                    right: Box::new(right),
+                };
+            }
         }
 
         Ok(left)

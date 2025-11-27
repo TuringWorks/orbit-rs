@@ -193,6 +193,12 @@ recovery_test.db*
 
 # Runtime data directories
 /data/
+data/cold/
+data/hot/
+data/redis/
+data/rocksdb/
+data/wal/
+data/warm/
 demo_cow_data/
 orbit_integrated_data/
 orbit_integrated_data_cluster/

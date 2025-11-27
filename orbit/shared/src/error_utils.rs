@@ -26,14 +26,10 @@ mod tests {
     use super::*;
     use crate::{config_error, io_error, parse_error};
 
-    #[deprecated(since = "0.1.0", note = "Use error module instead")]
     #[test]
     fn test_error_macros() {
         let config_err = config_error!("Missing configuration");
-        assert!(matches!(
-            config_err,
-            OrbitError::ConfigurationError { .. }
-        ));
+        assert!(matches!(config_err, OrbitError::ConfigurationError { .. }));
 
         let io_err = io_error!("File not found", "test.txt");
         assert!(matches!(io_err, OrbitError::IoError { .. }));
@@ -41,8 +37,6 @@ mod tests {
         let parse_err = parse_error!("Invalid syntax", "SELECT * FROM", 10);
         assert!(matches!(parse_err, OrbitError::ParseError { .. }));
     }
-
-    #[deprecated(since = "0.1.0", note = "Use error module instead")]
 
     #[test]
     fn test_error_context() {

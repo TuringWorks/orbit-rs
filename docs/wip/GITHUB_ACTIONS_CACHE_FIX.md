@@ -9,7 +9,7 @@ category: wip
 **Date:** 2025-10-03  
 **Issue:** CI/CD still failing with "core.rs does not exist" error despite file being in repository  
 **Root Cause:** Stale GitHub Actions cache  
-**Status:** ✅ Fixed
+**Status:**  Fixed
 
 ---
 
@@ -28,31 +28,31 @@ Error writing files: failed to resolve mod `core`:
 1. **Confirmed file exists locally:**
    ```bash
    ls -lh orbit/shared/src/transactions/core.rs
-   # Result: -rw-r--r-- 30K Oct 2 23:41 core.rs ✓
+   # Result: -rw-r--r-- 30K Oct 2 23:41 core.rs 
    ```
 
 2. **Confirmed file is in git:**
    ```bash
    git ls-files orbit/shared/src/transactions/core.rs
-   # Result: orbit/shared/src/transactions/core.rs ✓
+   # Result: orbit/shared/src/transactions/core.rs 
    ```
 
 3. **Confirmed file is on remote:**
    ```bash
    git ls-tree -r origin/main --name-only | grep core.rs
-   # Result: orbit/shared/src/transactions/core.rs ✓
+   # Result: orbit/shared/src/transactions/core.rs 
    ```
 
 4. **Confirmed file content exists:**
    ```bash
    git show origin/main:orbit/shared/src/transactions/core.rs | wc -l
-   # Result: 945 lines ✓
+   # Result: 945 lines 
    ```
 
 5. **Confirmed local build works:**
    ```bash
    cargo fmt --all -- --check
-   # Result: No errors ✓
+   # Result: No errors 
    ```
 
 ### Root Cause: Stale GitHub Actions Cache
@@ -130,12 +130,12 @@ restore-keys: |
 
 ### Next CI/CD Run Will:
 
-1. **Checkout fresh code** ✓ (includes core.rs)
+1. **Checkout fresh code**  (includes core.rs)
 2. **Look for cache** with key `Linux-cargo-v2-<hash>`
 3. **Cache miss** (no cache exists with v2 key)
 4. **Fresh build** from scratch
 5. **Discover core.rs** during build
-6. **cargo fmt succeeds** ✓
+6. **cargo fmt succeeds** 
 7. **Create new cache** with v2 key for future runs
 
 ### Future Runs Will:
@@ -220,7 +220,7 @@ key: ${{ runner.os }}-cargo-v2-${{ hashFiles('**/Cargo.lock') }}
 
 Bump the cache version (`v2` → `v3`, etc.) when:
 
-### ✅ DO Bump Version When:
+###  DO Bump Version When:
 - Adding new source files that change module structure
 - Upgrading Rust toolchain version
 - Changing build flags or environment variables
@@ -228,7 +228,7 @@ Bump the cache version (`v2` → `v3`, etc.) when:
 - CI/CD builds failing with "file does not exist" errors
 - Suspecting stale cache is causing issues
 
-### ❌ DON'T Bump Version When:
+###  DON'T Bump Version When:
 - Normal code changes to existing files (cache handles this)
 - Dependency updates (Cargo.lock hash changes automatically)
 - Documentation-only changes
@@ -350,7 +350,7 @@ After the fix is deployed:
 
 ---
 
-**Status:** ✅ Fixed (cache key updated)  
+**Status:**  Fixed (cache key updated)  
 **Next Steps:** Monitor next CI/CD run to confirm fix  
 **Cache Version:** v2  
 **Last Updated:** 2025-10-03

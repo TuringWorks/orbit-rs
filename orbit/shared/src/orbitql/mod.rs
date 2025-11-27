@@ -222,6 +222,7 @@ pub struct OrbitQLEngine {
 }
 
 impl OrbitQLEngine {
+    /// Create a new OrbitQLEngine with an empty executor
     pub fn new() -> Self {
         Self {
             lexer: Lexer::new(),
@@ -229,6 +230,19 @@ impl OrbitQLEngine {
             optimizer: QueryOptimizer::new(),
             planner: QueryPlanner::new(),
             executor: QueryExecutor::new(),
+            profiler: None,
+        }
+    }
+
+    /// Create an OrbitQLEngine with sample data for testing
+    #[cfg(test)]
+    pub fn with_sample_data() -> Self {
+        Self {
+            lexer: Lexer::new(),
+            parser: Parser::new(),
+            optimizer: QueryOptimizer::new(),
+            planner: QueryPlanner::new(),
+            executor: QueryExecutor::with_sample_data(),
             profiler: None,
         }
     }

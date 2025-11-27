@@ -50,7 +50,7 @@ use telemetry::TelemetryService;
 
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::info;
+use tracing::{error, info};
 
 /// Main application instance that coordinates all components
 #[derive(Debug)]

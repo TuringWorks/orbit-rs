@@ -1,0 +1,102 @@
+#version 450
+
+// GPU-Accelerated Time-Series Window Aggregation
+// Computes aggregations (Sum, Min, Max, Avg, Count) for time-windowed data
+// Each thread processes one data point and atomically updates its window's aggregate
+
+layout(local_size_x = 256) in;
+
+layout(set = 0, binding = 0) readonly buffer Values {
+    float values[];
+};
+
+layout(set = 0, binding = 1) readonly buffer Timestamps {
+    uint timestamps[];  // Pre-computed window IDs
+};
+
+layout(set = 0, binding = 2) uniform PointCount {
+    uint point_count;
+};
+
+layout(set = 0, binding = 3) uniform AggregationType {
+    uint aggregation_type;  // 0=Sum, 1=Min, 2=Max, 3=Avg, 4=Count
+};
+
+layout(set = 0, binding = 4) buffer WindowCounts {
+    uint window_counts[];
+};
+
+layout(set = 0, binding = 5) buffer WindowResults {
+    uint window_results[];  // Results as uint (reinterpreted as float)
+};
+
+// Helper function to atomically update float using CAS loop
+void atomic_add_float(uint window_id, float value) {
+    uint old_val, new_val;
+    do {
+        old_val = window_results[window_id];
+        float old_float = uintBitsToFloat(old_val);
+        float new_float = old_float + value;
+        new_val = floatBitsToUint(new_float);
+    } while (atomicCompSwap(window_results[window_id], old_val, new_val) != old_val);
+}
+
+void atomic_min_float(uint window_id, float value) {
+    uint old_val, new_val;
+    do {
+        old_val = window_results[window_id];
+        float old_float = uintBitsToFloat(old_val);
+        float new_float = min(old_float, value);
+        new_val = floatBitsToUint(new_float);
+    } while (atomicCompSwap(window_results[window_id], old_val, new_val) != old_val);
+}
+
+void atomic_max_float(uint window_id, float value) {
+    uint old_val, new_val;
+    do {
+        old_val = window_results[window_id];
+        float old_float = uintBitsToFloat(old_val);
+        float new_float = max(old_float, value);
+        new_val = floatBitsToUint(new_float);
+    } while (atomicCompSwap(window_results[window_id], old_val, new_val) != old_val);
+}
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+
+    // Bounds check
+    if (id >= point_count) {
+        return;
+    }
+
+    // Get pre-computed window ID
+    uint window_id = timestamps[id];
+
+    float value = values[id];
+
+    // Atomic aggregation based on type
+    if (aggregation_type == 0) {
+        // Sum
+        atomic_add_float(window_id, value);
+        atomicAdd(window_counts[window_id], 1);
+
+    } else if (aggregation_type == 1) {
+        // Min
+        atomic_min_float(window_id, value);
+        atomicAdd(window_counts[window_id], 1);
+
+    } else if (aggregation_type == 2) {
+        // Max
+        atomic_max_float(window_id, value);
+        atomicAdd(window_counts[window_id], 1);
+
+    } else if (aggregation_type == 3) {
+        // Avg: accumulate sum, count separately
+        atomic_add_float(window_id, value);
+        atomicAdd(window_counts[window_id], 1);
+
+    } else if (aggregation_type == 4) {
+        // Count: just increment
+        atomicAdd(window_counts[window_id], 1);
+    }
+}

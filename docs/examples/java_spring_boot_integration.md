@@ -4,7 +4,7 @@ title: Java Spring Boot Integration with Orbit-RS
 category: examples
 ---
 
-# Java Spring Boot Integration with Orbit-RS
+## Java Spring Boot Integration with Orbit-RS
 
 This example demonstrates how to integrate Rust Orbit services with Java Spring Boot applications using multiple communication methods: HTTP REST API, gRPC, and JNI (Java Native Interface).
 
@@ -18,30 +18,30 @@ The `orbit-client-spring` crate now provides comprehensive Java Spring Boot inte
 
 ## Architecture
 
-```
-┌─────────────────────┐    ┌─────────────────────────────────┐
-│   Java Spring Boot  │    │         Orbit-RS Rust           │
-│    Application      │    │                                 │
+```text
+┌─────────────────────┐    ┌────────────────────────────--────┐
+│   Java Spring Boot  │    │         Orbit-RS Rust            │
+│    Application      │    │                                  │
 │                     │    │  ┌─────────────────────────────┐ │
 │  ┌─────────────────┐│    │  │   ApplicationContext        │ │
 │  │ HTTP Client     ││───▶│  │   (Spring-like IoC)         │ │
 │  └─────────────────┘│    │  └─────────────────────────────┘ │
-│                     │    │                                 │
+│                     │    │                                  │
 │  ┌─────────────────┐│    │  ┌─────────────────────────────┐ │
 │  │ gRPC Client     ││───▶│  │   HTTP Server               │ │
-│  └─────────────────┘│    │  │   (Axum-based REST API)    │ │
+│  └─────────────────┘│    │  │   (Axum-based REST API)     │ │
 │                     │    │  └─────────────────────────────┘ │
-│  ┌─────────────────┐│    │                                 │
+│  ┌─────────────────┐│    │                                  │
 │  │ JNI Bindings    ││───▶│  ┌─────────────────────────────┐ │
 │  └─────────────────┘│    │  │   gRPC Server               │ │
 └─────────────────────┘    │  │   (Tonic-based)             │ │
                            │  └─────────────────────────────┘ │
-                           │                                 │
+                           │                                  │
                            │  ┌─────────────────────────────┐ │
                            │  │   JNI Bindings              │ │
                            │  │   (Native Interface)        │ │
                            │  └─────────────────────────────┘ │
-                           └─────────────────────────────────┘
+                           └──────────────────────────────--──┘
 ```
 
 ## Features Implemented
@@ -55,6 +55,7 @@ The `orbit-client-spring` crate now provides comprehensive Java Spring Boot inte
 - **Graceful shutdown** support
 
 **Key Endpoints:**
+
 - `GET /orbit/services` - List all registered services
 - `GET /orbit/services/{name}` - Get specific service info
 - `GET /orbit/config` - Get application configuration
@@ -71,6 +72,7 @@ The `orbit-client-spring` crate now provides comprehensive Java Spring Boot inte
 - **Configuration management** via gRPC
 
 **Key Services:**
+
 - `OrbitSpringService.ListServices()` - Get all services
 - `OrbitSpringService.GetServiceInfo()` - Service details
 - `OrbitSpringService.GetConfig()` - Configuration access
@@ -86,6 +88,7 @@ The `orbit-client-spring` crate now provides comprehensive Java Spring Boot inte
 - **Thread-safe** global state management
 
 **Key Native Methods:**
+
 - `initializeContext(String configPath)` - Initialize Orbit context
 - `startContext(long contextId)` - Start application context
 - `stopContext(long contextId)` - Stop application context
@@ -391,21 +394,27 @@ java -Djava.library.path=/path/to/rust/target/release \
 ### Common Issues
 
 1. **JNI Library Not Found**
-   ```
+
+   ```java
    java.lang.UnsatisfiedLinkError: no orbit_client_spring in java.library.path
    ```
+
    Solution: Ensure the shared library is in the Java library path.
 
 2. **gRPC Connection Refused**
-   ```
+
+   ```java
    io.grpc.StatusRuntimeException: UNAVAILABLE
    ```
+
    Solution: Check that the Rust gRPC server is running on the correct port.
 
 3. **HTTP 404 Errors**
-   ```
+
+   ```text
    404 Not Found
    ```
+
    Solution: Verify the base path configuration matches between client and server.
 
 ### Debugging

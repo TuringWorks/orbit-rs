@@ -1,0 +1,33 @@
+{
+  "SELECT": {
+    "prefix": "select",
+    "body": "SELECT ${1:*} FROM ${2:table} WHERE ${3:condition};",
+    "description": "SELECT query"
+  },
+  "INSERT": {
+    "prefix": "insert",
+    "body": "INSERT INTO ${1:table} (${2:columns}) VALUES (${3:values});",
+    "description": "INSERT statement"
+  },
+  "UPDATE": {
+    "prefix": "update",
+    "body": "UPDATE ${1:table} SET ${2:column} = ${3:value} WHERE ${4:condition};",
+    "description": "UPDATE statement"
+  },
+  "DELETE": {
+    "prefix": "delete",
+    "body": "DELETE FROM ${1:table} WHERE ${2:condition};",
+    "description": "DELETE statement"
+  },
+  "CREATE TABLE": {
+    "prefix": "create table",
+    "body": "CREATE TABLE ${1:table} (\n  ${2:column} ${3:type}${4:,}\n  ${5:column} ${6:type}\n);",
+    "description": "CREATE TABLE statement"
+  },
+  "CREATE INDEX": {
+    "prefix": "create index",
+    "body": "CREATE INDEX ${1:index_name} ON ${2:table} (${3:column});",
+    "description": "CREATE INDEX statement"
+  }
+}
+

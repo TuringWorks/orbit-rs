@@ -112,11 +112,11 @@ pub enum Value {
 }
 ```
 
-## 📦 Feature Breakdown
+##  Feature Breakdown
 
 ### Phase 13.1: Neo4j Foundation (12-14 weeks)
 
-#### 📋 User Stories
+####  User Stories
 
 ##### ORBIT-013-001: Core Graph Actors
 
@@ -356,7 +356,7 @@ pub enum Value {
 - [ ] Integration examples for major use cases
 - [ ] Monitoring and alerting setup guides
 
-## 🔗 Dependencies & Prerequisites
+##  Dependencies & Prerequisites
 
 ### Internal Dependencies
 
@@ -373,7 +373,7 @@ pub enum Value {
 - **Visualization Tools**: Neo4j Desktop and Browser for testing
 - **Cloud Platforms**: Testing on AWS, Azure, GCP for deployment scenarios
 
-## 📅 Milestone Schedule
+##  Milestone Schedule
 
 | Milestone | Target Date | Deliverables | Success Criteria |
 |-----------|-------------|--------------|------------------|
@@ -385,7 +385,7 @@ pub enum Value {
 | **M6** | Week 30 | Performance optimization | Benchmarks within 50% of Neo4j performance |
 | **M7** | Week 36 | Ecosystem compatibility | Neo4j tools working with Orbit-RS |
 
-## 🎯 Success Metrics
+##  Success Metrics
 
 ### Adoption Metrics
 

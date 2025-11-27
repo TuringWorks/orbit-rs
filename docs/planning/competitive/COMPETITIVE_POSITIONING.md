@@ -269,7 +269,7 @@ The comprehensive DB-Engines ranking of 425 database systems reveals unprecedent
 - **Actor frameworks**: Require separate persistence layer
 - **Event stores**: Limited to event sourcing patterns
 
-#### Market Impact
+#### Market Impact (Actor-Native Architecture)
 
 - **Modern Architecture Support**: Native support for microservices, serverless, edge computing
 - **Performance Optimization**: Actor-aware query optimization and data placement
@@ -285,7 +285,7 @@ The comprehensive DB-Engines ranking of 425 database systems reveals unprecedent
 - **Modern databases**: Basic RBAC without zero trust
 - **Enterprise solutions**: Require additional security layers
 
-#### Market Impact
+#### Market Impact (Zero Trust Security)
 
 - **Security Compliance**: Built-in SOC2, GDPR, HIPAA compliance
 - **Reduced Attack Surface**: Zero trust by default across all access patterns

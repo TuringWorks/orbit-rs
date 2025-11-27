@@ -1,0 +1,88 @@
+#version 450
+
+// GPU-Accelerated Hash Join - Probe Phase
+// Probes hash table with probe relation (larger table)
+// Outputs matching pairs to result buffers
+
+layout(local_size_x = 256) in;
+
+layout(set = 0, binding = 0) readonly buffer ProbeKeys {
+    uint probe_keys[];
+};
+
+layout(set = 0, binding = 1) readonly buffer ProbeValues {
+    uint probe_values[];  // Row IDs
+};
+
+layout(set = 0, binding = 2) uniform ProbeCount {
+    uint probe_count;
+};
+
+layout(set = 0, binding = 3) uniform TableSize {
+    uint table_size;
+};
+
+layout(set = 0, binding = 4) readonly buffer HashTable {
+    uint hash_table[];  // From build phase
+};
+
+layout(set = 0, binding = 5) buffer OutputCount {
+    uint output_count;  // Atomic counter for output
+};
+
+layout(set = 0, binding = 6) writeonly buffer OutputBuildIds {
+    uint output_build_ids[];
+};
+
+layout(set = 0, binding = 7) writeonly buffer OutputProbeIds {
+    uint output_probe_ids[];
+};
+
+layout(set = 0, binding = 8) uniform MaxOutput {
+    uint max_output;
+};
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+
+    // Bounds check
+    if (id >= probe_count) {
+        return;
+    }
+
+    uint key = probe_keys[id];
+    uint probe_value = probe_values[id];
+
+    // Hash and probe
+    uint hash = key % table_size;
+    uint probe_slot = hash;
+
+    // Linear probing to find matching key
+    for (uint i = 0; i < table_size; i++) {
+        uint slot_idx = probe_slot * 2;
+        uint stored_key = hash_table[slot_idx];
+
+        if (stored_key == 0xFFFFFFFF) {
+            // Empty slot, key not found
+            return;
+        }
+
+        if (stored_key == key) {
+            // Found matching key
+            uint build_value = hash_table[slot_idx + 1];
+
+            // Atomically get output index and increment
+            uint output_idx = atomicAdd(output_count, 1);
+
+            if (output_idx < max_output) {
+                output_build_ids[output_idx] = build_value;
+                output_probe_ids[output_idx] = probe_value;
+            }
+
+            return;
+        }
+
+        // Key mismatch, continue probing
+        probe_slot = (probe_slot + 1) % table_size;
+    }
+}

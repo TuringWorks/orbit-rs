@@ -1,0 +1,51 @@
+[package]
+name = "orbit-cli"
+version = "0.1.0"
+edition = "2021"
+authors = ["TuringWorks"]
+license = "BSD-3-Clause OR MIT"
+description = "Interactive CLI client for Orbit database with syntax highlighting and formatted output"
+repository = "https://github.com/TuringWorks/orbit-rs"
+
+[[bin]]
+name = "orbit"
+path = "src/main.rs"
+
+[dependencies]
+# Core Orbit dependencies
+orbit-server = { path = "../server" }
+orbit-client = { path = "../client" }
+
+# Async runtime
+tokio = { version = "1.48", features = ["full"] }
+
+# CLI and TUI
+clap = { version = "4.5", features = ["derive", "cargo"] }
+rustyline = "14.0"  # Interactive line editing with history
+nu-ansi-term = "0.50"  # ANSI color codes
+
+# Syntax highlighting
+syntect = "5.3"
+
+# Table formatting (re-exported from protocols, but listing for clarity)
+comfy-table = "7.1"
+owo-colors = "4.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Utilities
+chrono = "0.4"
+dirs = "5.0"
+
+# PostgreSQL client
+tokio-postgres = "0.7"

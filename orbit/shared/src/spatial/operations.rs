@@ -138,6 +138,148 @@ impl SpatialOperations {
             )),
         }
     }
+
+    /// Test if geometry1 is within geometry2.
+    /// A is within B if A is completely inside B and their boundaries do not touch.
+    pub fn within(geom1: &SpatialGeometry, geom2: &SpatialGeometry) -> Result<bool, SpatialError> {
+        // ST_Within(A, B) is equivalent to ST_Contains(B, A)
+        Self::contains(geom2, geom1)
+    }
+
+    /// Test if geometry1 contains geometry2.
+    /// A contains B if B is completely inside A and their boundaries do not touch.
+    pub fn contains(
+        geom1: &SpatialGeometry,
+        geom2: &SpatialGeometry,
+    ) -> Result<bool, SpatialError> {
+        match (geom1, geom2) {
+            (SpatialGeometry::Polygon(poly), SpatialGeometry::Point(point)) => {
+                Self::point_in_polygon(point, poly)
+            }
+            (SpatialGeometry::Point(p1), SpatialGeometry::Point(p2)) => {
+                Ok(p1.x == p2.x && p1.y == p2.y)
+            }
+            _ => {
+                // For more complex cases, check if bounding boxes indicate containment
+                let bbox1 = Self::bounding_box(geom1)?;
+                let bbox2 = Self::bounding_box(geom2)?;
+
+                // Quick rejection: if bbox2 is not within bbox1, then geom2 is not within geom1
+                if bbox2.min_x < bbox1.min_x
+                    || bbox2.max_x > bbox1.max_x
+                    || bbox2.min_y < bbox1.min_y
+                    || bbox2.max_y > bbox1.max_y
+                {
+                    return Ok(false);
+                }
+
+                // For complex geometries, we'd need more sophisticated algorithms
+                // For now, return false for unsupported combinations
+                Err(SpatialError::OperationError(
+                    "Contains operation not fully implemented for this geometry combination"
+                        .to_string(),
+                ))
+            }
+        }
+    }
+
+    /// Test if two geometries overlap.
+    /// Overlaps means they share some but not all interior points.
+    pub fn overlaps(
+        geom1: &SpatialGeometry,
+        geom2: &SpatialGeometry,
+    ) -> Result<bool, SpatialError> {
+        // Overlaps is true if geometries intersect but neither contains the other
+        let intersects = Self::intersects(geom1, geom2)?;
+        if !intersects {
+            return Ok(false);
+        }
+
+        let contains1 = Self::contains(geom1, geom2).unwrap_or(false);
+        let contains2 = Self::contains(geom2, geom1).unwrap_or(false);
+
+        // Overlaps if they intersect but neither fully contains the other
+        Ok(!contains1 && !contains2)
+    }
+
+    /// Test if two geometries touch (share boundary but not interior).
+    pub fn touches(geom1: &SpatialGeometry, geom2: &SpatialGeometry) -> Result<bool, SpatialError> {
+        // Touches means they share boundary points but not interior points
+        // This is a simplified implementation
+        let intersects = Self::intersects(geom1, geom2)?;
+        if !intersects {
+            return Ok(false);
+        }
+
+        // Check if they share boundary but not interior
+        // For now, return false as this requires more complex boundary analysis
+        // TODO: Implement proper boundary intersection detection
+        Ok(false)
+    }
+
+    /// Test if geometry1 crosses geometry2.
+    /// Crosses means they share some interior points but not all.
+    pub fn crosses(geom1: &SpatialGeometry, geom2: &SpatialGeometry) -> Result<bool, SpatialError> {
+        // Crosses is similar to overlaps but with different semantics
+        // For now, use a simplified check
+        let intersects = Self::intersects(geom1, geom2)?;
+        if !intersects {
+            return Ok(false);
+        }
+
+        // Crosses typically applies to LineString-Polygon or LineString-LineString
+        // For now, return false as this requires more complex analysis
+        // TODO: Implement proper crossing detection
+        Ok(false)
+    }
+
+    /// Test if two geometries are disjoint (do not intersect).
+    pub fn disjoint(
+        geom1: &SpatialGeometry,
+        geom2: &SpatialGeometry,
+    ) -> Result<bool, SpatialError> {
+        let intersects = Self::intersects(geom1, geom2)?;
+        Ok(!intersects)
+    }
+
+    /// Test if two geometries are equal (same shape and position).
+    pub fn equals(geom1: &SpatialGeometry, geom2: &SpatialGeometry) -> Result<bool, SpatialError> {
+        // For now, use simple equality check
+        // In production, this would need more sophisticated comparison
+        match (geom1, geom2) {
+            (SpatialGeometry::Point(p1), SpatialGeometry::Point(p2)) => {
+                Ok((p1.x - p2.x).abs() < 1e-9 && (p1.y - p2.y).abs() < 1e-9)
+            }
+            _ => {
+                // For complex geometries, check bounding boxes first
+                let bbox1 = Self::bounding_box(geom1)?;
+                let bbox2 = Self::bounding_box(geom2)?;
+
+                if bbox1.min_x != bbox2.min_x
+                    || bbox1.max_x != bbox2.max_x
+                    || bbox1.min_y != bbox2.min_y
+                    || bbox1.max_y != bbox2.max_y
+                {
+                    return Ok(false);
+                }
+
+                // TODO: Implement full geometry equality check
+                Ok(false)
+            }
+        }
+    }
+
+    /// Get the bounding box of a geometry.
+    pub fn bounding_box(geometry: &SpatialGeometry) -> Result<super::BoundingBox, SpatialError> {
+        match geometry {
+            SpatialGeometry::Point(p) => Ok(super::BoundingBox::new(p.x, p.y, p.x, p.y, p.srid)),
+            SpatialGeometry::LineString(ls) => Ok(ls.bounding_box()),
+            SpatialGeometry::Polygon(poly) => Ok(poly.bounding_box()),
+            _ => Err(SpatialError::OperationError(
+                "Bounding box calculation not implemented for this geometry type".to_string(),
+            )),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -198,5 +340,60 @@ mod tests {
 
         let area = SpatialOperations::area(&geom).unwrap();
         assert_eq!(area, 16.0);
+    }
+
+    #[test]
+    fn test_within() {
+        let inner_point = SpatialGeometry::Point(Point::new(2.0, 2.0, None));
+        let outer_points = vec![
+            Point::new(0.0, 0.0, None),
+            Point::new(4.0, 0.0, None),
+            Point::new(4.0, 4.0, None),
+            Point::new(0.0, 4.0, None),
+            Point::new(0.0, 0.0, None),
+        ];
+        let exterior_ring = LinearRing::new(outer_points).unwrap();
+        let outer_polygon =
+            SpatialGeometry::Polygon(Polygon::new(exterior_ring, vec![], None).unwrap());
+
+        assert!(SpatialOperations::within(&inner_point, &outer_polygon).unwrap());
+    }
+
+    #[test]
+    fn test_contains() {
+        let inner_point = SpatialGeometry::Point(Point::new(2.0, 2.0, None));
+        let outer_points = vec![
+            Point::new(0.0, 0.0, None),
+            Point::new(4.0, 0.0, None),
+            Point::new(4.0, 4.0, None),
+            Point::new(0.0, 4.0, None),
+            Point::new(0.0, 0.0, None),
+        ];
+        let exterior_ring = LinearRing::new(outer_points).unwrap();
+        let outer_polygon =
+            SpatialGeometry::Polygon(Polygon::new(exterior_ring, vec![], None).unwrap());
+
+        assert!(SpatialOperations::contains(&outer_polygon, &inner_point).unwrap());
+    }
+
+    #[test]
+    fn test_disjoint() {
+        let p1 = SpatialGeometry::Point(Point::new(0.0, 0.0, None));
+        let p2 = SpatialGeometry::Point(Point::new(10.0, 10.0, None));
+
+        assert!(SpatialOperations::disjoint(&p1, &p2).unwrap());
+
+        let p3 = SpatialGeometry::Point(Point::new(0.0, 0.0, None));
+        assert!(!SpatialOperations::disjoint(&p1, &p3).unwrap());
+    }
+
+    #[test]
+    fn test_equals() {
+        let p1 = SpatialGeometry::Point(Point::new(1.0, 2.0, None));
+        let p2 = SpatialGeometry::Point(Point::new(1.0, 2.0, None));
+        let p3 = SpatialGeometry::Point(Point::new(1.0, 3.0, None));
+
+        assert!(SpatialOperations::equals(&p1, &p2).unwrap());
+        assert!(!SpatialOperations::equals(&p1, &p3).unwrap());
     }
 }

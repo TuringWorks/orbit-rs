@@ -123,12 +123,14 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
                     }
                 } else if let Some(Token::Identifier(alias_name)) = &parser.current_token {
                     // Check if this might be an alias (not a reserved word)
+                    // Don't consume if next token is FROM, WHERE, GROUP BY, ORDER BY, or LIMIT
                     if !parser.matches(&[
                         Token::From,
                         Token::Where,
                         Token::Group,
                         Token::Order,
                         Token::Limit,
+                        Token::Comma, // Also don't treat as alias if followed by comma
                     ]) {
                         let alias = alias_name.clone();
                         parser.advance()?;

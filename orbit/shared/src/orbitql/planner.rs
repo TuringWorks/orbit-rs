@@ -6,9 +6,10 @@
 #[cfg(test)]
 use crate::orbitql::ast::BinaryOperator;
 use crate::orbitql::ast::{
-    AggregateFunction, DeleteStatement, Expression, FromClause, GraphPattern, InsertStatement,
-    JoinType, SelectField, SelectStatement, SortDirection, Statement, TimeRange,
-    TimeSeriesAggregation, TimeWindow, UpdateStatement,
+    AggregateFunction, DeleteStatement, EdgeDirection, Expression, FromClause, GraphPath,
+    GraphPattern, GraphStep, InsertStatement, JoinType, SelectField, SelectStatement,
+    SortDirection, Statement, TimeRange, TimeSeriesAggregation, TimeWindow, TraverseStatement,
+    UpdateStatement,
 };
 use crate::orbitql::optimizer::OptimizationError;
 use serde::{Deserialize, Serialize};
@@ -47,6 +48,15 @@ impl From<OptimizationError> for PlanningError {
     }
 }
 
+/// Data model types for cross-model operations
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum DataModel {
+    Document,
+    Graph,
+    TimeSeries,
+    Vector,
+}
+
 /// Execution plan node types
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PlanNode {
@@ -64,6 +74,16 @@ pub enum PlanNode {
         left: Box<PlanNode>,
         right: Box<PlanNode>,
         condition: Expression,
+    },
+    /// Cross-model join for joining data from different data models
+    CrossModelJoin {
+        left: Box<PlanNode>,
+        right: Box<PlanNode>,
+        left_model: DataModel,
+        right_model: DataModel,
+        left_key: Expression,
+        right_key: Expression,
+        join_type: JoinType,
     },
     Aggregation {
         input: Box<PlanNode>,
@@ -170,6 +190,32 @@ impl QueryPlanner {
             Statement::Insert(insert) => self.plan_insert(insert),
             Statement::Update(update) => self.plan_update(update),
             Statement::Delete(delete) => self.plan_delete(delete),
+            Statement::Traverse(traverse) => self.plan_traverse(traverse),
+            Statement::Transaction(_) => {
+                // Transaction statements don't need complex planning
+                Ok(ExecutionPlan {
+                    root: PlanNode::TableScan {
+                        table: "_transaction".to_string(),
+                        columns: vec![],
+                        filter: None,
+                    },
+                    estimated_cost: 0.1,
+                    estimated_rows: 0,
+                })
+            }
+            Statement::Relate(_) => {
+                // RELATE creates graph edges
+                Ok(ExecutionPlan {
+                    root: PlanNode::TableScan {
+                        table: "_relate".to_string(),
+                        columns: vec![],
+                        filter: None,
+                    },
+                    estimated_cost: 1.0,
+                    estimated_rows: 1,
+                })
+            }
+            Statement::Live(live) => self.plan_select(*live.query),
             _ => Err(PlanningError::UnsupportedOperation(
                 "Statement type not yet supported in planner".to_string(),
             )),
@@ -224,9 +270,9 @@ impl QueryPlanner {
             };
         }
 
-        // Add GROUP BY aggregation
-        if !stmt.group_by.is_empty() {
-            let aggregates = self.extract_aggregates_from_fields(&stmt.fields)?;
+        // Add GROUP BY aggregation, or aggregation without GROUP BY (e.g., SELECT COUNT(*))
+        let aggregates = self.extract_aggregates_from_fields(&stmt.fields)?;
+        if !stmt.group_by.is_empty() || !aggregates.is_empty() {
             root = PlanNode::Aggregation {
                 input: Box::new(root),
                 group_by: stmt.group_by,
@@ -388,6 +434,48 @@ impl QueryPlanner {
         })
     }
 
+    /// Plan TRAVERSE statement for graph traversal
+    fn plan_traverse(&self, stmt: TraverseStatement) -> Result<ExecutionPlan, PlanningError> {
+        // Create a GraphPattern from the TRAVERSE statement
+        let graph_pattern = GraphPattern {
+            path: GraphPath {
+                steps: vec![
+                    // Start node
+                    GraphStep::Node {
+                        label: None,
+                        properties: None,
+                    },
+                    // Edge traversal
+                    GraphStep::Edge {
+                        direction: EdgeDirection::Outgoing,
+                        label: Some(stmt.edge_type),
+                        properties: None,
+                    },
+                    // Target nodes
+                    GraphStep::Node {
+                        label: None,
+                        properties: None,
+                    },
+                ],
+            },
+            where_clause: stmt.where_clause,
+        };
+
+        let root = PlanNode::GraphTraversal {
+            pattern: graph_pattern,
+            start_nodes: vec![stmt.from_node],
+            max_depth: stmt.max_depth,
+        };
+
+        let (estimated_cost, estimated_rows) = self.estimate_plan_cost(&root)?;
+
+        Ok(ExecutionPlan {
+            root,
+            estimated_cost,
+            estimated_rows,
+        })
+    }
+
     /// Estimate the cost and cardinality of a plan
     fn estimate_plan_cost(&self, node: &PlanNode) -> Result<(f64, u64), PlanningError> {
         match node {
@@ -436,6 +524,33 @@ impl QueryPlanner {
                 // Time series query cost depends on time range
                 // For now, use a simple heuristic
                 Ok((500.0, 1000))
+            }
+            PlanNode::CrossModelJoin {
+                left,
+                right,
+                left_model,
+                right_model,
+                ..
+            } => {
+                let (left_cost, left_rows) = self.estimate_plan_cost(left)?;
+                let (right_cost, right_rows) = self.estimate_plan_cost(right)?;
+
+                // Cross-model joins have higher overhead due to schema unification
+                let model_conversion_cost = match (left_model, right_model) {
+                    (DataModel::Document, DataModel::Document) => 1.0,
+                    (DataModel::Graph, DataModel::Document)
+                    | (DataModel::Document, DataModel::Graph) => 1.5,
+                    (DataModel::TimeSeries, DataModel::Document)
+                    | (DataModel::Document, DataModel::TimeSeries) => 1.3,
+                    (DataModel::Graph, DataModel::TimeSeries)
+                    | (DataModel::TimeSeries, DataModel::Graph) => 2.0,
+                    _ => 1.5,
+                };
+
+                let output_rows = (left_rows * right_rows / 10).max(1); // Join selectivity estimate
+                let cost = (left_cost + right_cost + (left_rows * right_rows) as f64 * 0.01)
+                    * model_conversion_cost;
+                Ok((cost, output_rows))
             }
         }
     }

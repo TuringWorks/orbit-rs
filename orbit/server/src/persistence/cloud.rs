@@ -559,19 +559,17 @@ impl S3ClusterNodeProvider {
         }
     }
 
-    #[allow(dead_code)]
     fn get_node_key(&self, node_id: &NodeId) -> String {
         let prefix = self.config.prefix.as_deref().unwrap_or("orbit");
         format!("{}/nodes/{}", prefix, node_id)
     }
 
-    #[allow(dead_code)]
-    async fn update_metrics<F>(
-        &self,
-        operation: &str,
-        duration: Duration,
-        result: &OrbitResult<F>,
-    ) {
+    fn get_nodes_prefix(&self) -> String {
+        let prefix = self.config.prefix.as_deref().unwrap_or("orbit");
+        format!("{}/nodes/", prefix)
+    }
+
+    async fn update_metrics(&self, operation: &str, duration: Duration, success: bool) {
         let mut metrics = self.metrics.write().await;
         match operation {
             "read" => {
@@ -591,9 +589,119 @@ impl S3ClusterNodeProvider {
             }
             _ => {}
         }
-        if result.is_err() {
+        if !success {
             metrics.error_count += 1;
         }
+    }
+
+    // Common S3 object operations
+    async fn put_object(&self, key: &str, data: Vec<u8>) -> OrbitResult<()> {
+        let url = format!("{}/{}/{}", self.config.endpoint, self.config.bucket, key);
+
+        let response = self
+            .client
+            .put(&url)
+            .header("Content-Type", "application/json")
+            .body(data)
+            .send()
+            .await
+            .map_err(|e| OrbitError::network(format!("S3 PUT request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(OrbitError::network(format!(
+                "S3 PUT failed with status: {}",
+                response.status()
+            )));
+        }
+
+        Ok(())
+    }
+
+    async fn get_object(&self, key: &str) -> OrbitResult<Option<Vec<u8>>> {
+        let url = format!("{}/{}/{}", self.config.endpoint, self.config.bucket, key);
+
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| OrbitError::network(format!("S3 GET request failed: {}", e)))?;
+
+        if response.status().is_success() {
+            let data = response
+                .bytes()
+                .await
+                .map_err(|e| OrbitError::network(format!("Failed to read S3 response: {}", e)))?;
+            Ok(Some(data.to_vec()))
+        } else if response.status() == reqwest::StatusCode::NOT_FOUND {
+            Ok(None)
+        } else {
+            Err(OrbitError::network(format!(
+                "S3 GET failed with status: {}",
+                response.status()
+            )))
+        }
+    }
+
+    async fn delete_object(&self, key: &str) -> OrbitResult<()> {
+        let url = format!("{}/{}/{}", self.config.endpoint, self.config.bucket, key);
+
+        let response = self
+            .client
+            .delete(&url)
+            .send()
+            .await
+            .map_err(|e| OrbitError::network(format!("S3 DELETE request failed: {}", e)))?;
+
+        if response.status().is_success() || response.status() == reqwest::StatusCode::NOT_FOUND {
+            Ok(())
+        } else {
+            Err(OrbitError::network(format!(
+                "S3 DELETE failed with status: {}",
+                response.status()
+            )))
+        }
+    }
+
+    async fn list_objects(&self, prefix: &str) -> OrbitResult<Vec<String>> {
+        let url = format!("{}/{}", self.config.endpoint, self.config.bucket);
+
+        let response = self
+            .client
+            .get(&url)
+            .query(&[("list-type", "2"), ("prefix", prefix)])
+            .send()
+            .await
+            .map_err(|e| OrbitError::network(format!("S3 LIST request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(OrbitError::network(format!(
+                "S3 LIST failed with status: {}",
+                response.status()
+            )));
+        }
+
+        // Parse XML response - simplified implementation
+        let text = response
+            .text()
+            .await
+            .map_err(|e| OrbitError::network(format!("Failed to read S3 list response: {}", e)))?;
+
+        // In a real implementation, you would parse the XML properly
+        // This is a simplified version for demonstration
+        let mut keys = Vec::new();
+        for line in text.lines() {
+            if line.contains("<Key>") && line.contains("</Key>") {
+                if let Some(start) = line.find("<Key>") {
+                    if let Some(end) = line.find("</Key>") {
+                        let key = &line[start + 5..end];
+                        keys.push(key.to_string());
+                    }
+                }
+            }
+        }
+
+        Ok(keys)
     }
 }
 
@@ -633,54 +741,179 @@ impl PersistenceProvider for S3ClusterNodeProvider {
 
 #[async_trait]
 impl ClusterNodeProvider for S3ClusterNodeProvider {
-    async fn store_node(&self, _node: &NodeInfo) -> OrbitResult<()> {
-        // TODO: Implement S3 node storage
-        Err(OrbitError::internal("S3 node storage not yet implemented"))
+    async fn store_node(&self, node: &NodeInfo) -> OrbitResult<()> {
+        let start = Instant::now();
+
+        let result = async {
+            let key = self.get_node_key(&node.id);
+            let stored_node = StoredNode {
+                node: node.clone(),
+                metadata: ObjectMetadata {
+                    version: 1,
+                    created_at: chrono::Utc::now(),
+                    updated_at: chrono::Utc::now(),
+                    checksum: None,
+                },
+            };
+
+            let data = serde_json::to_vec(&stored_node)
+                .map_err(|e| OrbitError::internal(format!("Failed to serialize node: {}", e)))?;
+
+            self.put_object(&key, data).await?;
+
+            tracing::debug!("Stored node: {}", node.id);
+            Ok::<(), OrbitError>(())
+        }
+        .await;
+
+        let success = result.is_ok();
+        let duration = start.elapsed();
+        self.update_metrics("write", duration, success).await;
+
+        result
     }
 
-    async fn get_node(&self, _node_id: &NodeId) -> OrbitResult<Option<NodeInfo>> {
-        // TODO: Implement S3 node retrieval
-        Err(OrbitError::internal(
-            "S3 node retrieval not yet implemented",
-        ))
+    async fn get_node(&self, node_id: &NodeId) -> OrbitResult<Option<NodeInfo>> {
+        let start = Instant::now();
+
+        let result = async {
+            let key = self.get_node_key(node_id);
+
+            if let Some(data) = self.get_object(&key).await? {
+                let stored_node: StoredNode = serde_json::from_slice(&data).map_err(|e| {
+                    OrbitError::internal(format!("Failed to deserialize node: {}", e))
+                })?;
+
+                tracing::debug!("Retrieved node: {}", node_id);
+                Ok(Some(stored_node.node))
+            } else {
+                tracing::debug!("Node not found: {}", node_id);
+                Ok(None)
+            }
+        }
+        .await;
+
+        let success = result.is_ok();
+        let duration = start.elapsed();
+        self.update_metrics("read", duration, success).await;
+
+        result
     }
 
-    async fn update_node(&self, _node: &NodeInfo) -> OrbitResult<()> {
-        // TODO: Implement S3 node update
-        Err(OrbitError::internal("S3 node update not yet implemented"))
+    async fn update_node(&self, node: &NodeInfo) -> OrbitResult<()> {
+        // For S3, update is the same as store (overwrite)
+        self.store_node(node).await
     }
 
-    async fn remove_node(&self, _node_id: &NodeId) -> OrbitResult<bool> {
-        // TODO: Implement S3 node removal
-        Err(OrbitError::internal("S3 node removal not yet implemented"))
+    async fn remove_node(&self, node_id: &NodeId) -> OrbitResult<bool> {
+        let start = Instant::now();
+
+        let result = async {
+            let key = self.get_node_key(node_id);
+
+            // Check if node exists first
+            if self.get_object(&key).await?.is_none() {
+                tracing::debug!("Node not found for removal: {}", node_id);
+                return Ok(false);
+            }
+
+            self.delete_object(&key).await?;
+
+            tracing::debug!("Removed node: {}", node_id);
+            Ok(true)
+        }
+        .await;
+
+        let success = result.is_ok();
+        let duration = start.elapsed();
+        self.update_metrics("delete", duration, success).await;
+
+        result
     }
 
     async fn list_active_nodes(&self) -> OrbitResult<Vec<NodeInfo>> {
-        // TODO: Implement S3 active node listing
-        Err(OrbitError::internal(
-            "S3 active node listing not yet implemented",
-        ))
+        let all_nodes = self.list_all_nodes().await?;
+        let current_time = chrono::Utc::now();
+
+        let active_nodes: Vec<NodeInfo> = all_nodes
+            .into_iter()
+            .filter(|node| {
+                if let Some(lease) = &node.lease {
+                    lease.expires_at > current_time
+                } else {
+                    false
+                }
+            })
+            .collect();
+
+        tracing::debug!("Found {} active nodes", active_nodes.len());
+        Ok(active_nodes)
     }
 
     async fn list_all_nodes(&self) -> OrbitResult<Vec<NodeInfo>> {
-        // TODO: Implement S3 all node listing
-        Err(OrbitError::internal(
-            "S3 all node listing not yet implemented",
-        ))
+        let start = Instant::now();
+
+        let result = async {
+            let prefix = self.get_nodes_prefix();
+            let objects = self.list_objects(&prefix).await?;
+
+            let mut nodes = Vec::new();
+            for key in objects {
+                if let Some(data) = self.get_object(&key).await? {
+                    if let Ok(stored_node) = serde_json::from_slice::<StoredNode>(&data) {
+                        nodes.push(stored_node.node);
+                    }
+                }
+            }
+
+            tracing::debug!("Found {} total nodes", nodes.len());
+            Ok(nodes)
+        }
+        .await;
+
+        let success = result.is_ok();
+        let duration = start.elapsed();
+        self.update_metrics("read", duration, success).await;
+
+        result
     }
 
     async fn cleanup_expired_nodes(&self) -> OrbitResult<u64> {
-        // TODO: Implement S3 expired node cleanup
-        Err(OrbitError::internal(
-            "S3 expired node cleanup not yet implemented",
-        ))
+        let all_nodes = self.list_all_nodes().await?;
+        let current_time = chrono::Utc::now();
+
+        let mut expired_count = 0;
+        for node in all_nodes {
+            let is_expired = if let Some(lease) = &node.lease {
+                lease.expires_at < current_time
+            } else {
+                true // Nodes without leases are considered expired
+            };
+
+            if is_expired {
+                if self.remove_node(&node.id).await? {
+                    expired_count += 1;
+                }
+            }
+        }
+
+        tracing::debug!("Cleaned up {} expired nodes", expired_count);
+        Ok(expired_count)
     }
 
-    async fn renew_node_lease(&self, _node_id: &NodeId, _lease: &NodeLease) -> OrbitResult<()> {
-        // TODO: Implement S3 node lease renewal
-        Err(OrbitError::internal(
-            "S3 node lease renewal not yet implemented",
-        ))
+    async fn renew_node_lease(&self, node_id: &NodeId, lease: &NodeLease) -> OrbitResult<()> {
+        if let Some(mut node) = self.get_node(node_id).await? {
+            node.lease = Some(lease.clone());
+            self.store_node(&node).await?;
+
+            tracing::debug!("Renewed lease for node: {}", node_id);
+            Ok(())
+        } else {
+            Err(OrbitError::internal(format!(
+                "Node {} not found for lease renewal",
+                node_id
+            )))
+        }
     }
 }
 

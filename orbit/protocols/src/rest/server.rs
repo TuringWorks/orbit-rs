@@ -51,6 +51,8 @@ pub struct RestApiServer {
     config: RestApiConfig,
     orbit_client: Arc<OrbitClient>,
     ws_handler: Arc<WebSocketHandler>,
+    /// Optional MCP server for natural language queries
+    mcp_server: Option<Arc<crate::mcp::server::McpServer>>,
 }
 
 impl RestApiServer {
@@ -60,6 +62,21 @@ impl RestApiServer {
             config,
             orbit_client: Arc::new(orbit_client),
             ws_handler: Arc::new(WebSocketHandler::new()),
+            mcp_server: None,
+        }
+    }
+
+    /// Create a new REST API server with MCP support
+    pub fn with_mcp(
+        orbit_client: OrbitClient,
+        config: RestApiConfig,
+        mcp_server: Arc<crate::mcp::server::McpServer>,
+    ) -> Self {
+        Self {
+            config,
+            orbit_client: Arc::new(orbit_client),
+            ws_handler: Arc::new(WebSocketHandler::new()),
+            mcp_server: Some(mcp_server),
         }
     }
 
@@ -72,6 +89,7 @@ impl RestApiServer {
     fn build_router(&self) -> Router {
         let state = ApiState {
             orbit_client: self.orbit_client.clone(),
+            mcp_server: self.mcp_server.clone(),
         };
 
         // API v1 routes
@@ -95,6 +113,15 @@ impl RestApiServer {
             .route(
                 "/transactions/:transaction_id/abort",
                 post(handlers::abort_transaction),
+            )
+            // Natural Language Queries
+            .route(
+                "/query/natural-language",
+                post(handlers::natural_language_query),
+            )
+            .route(
+                "/query/generate-sql",
+                post(handlers::generate_sql_from_natural_language),
             )
             // WebSocket endpoints
             .route(
@@ -143,6 +170,11 @@ impl RestApiServer {
             addr
         );
         info!("Health check available at http://{}/health", addr);
+        if self.mcp_server.is_some() {
+            info!("Natural language query endpoints enabled:");
+            info!("  POST http://{}/api/v1/query/natural-language", addr);
+            info!("  POST http://{}/api/v1/query/generate-sql", addr);
+        }
 
         let listener = TcpListener::bind(addr)
             .await

@@ -19,13 +19,17 @@ cpu-simd-avx512 = []
 cpu-simd-arm-neon = []
 cpu-simd-arm-sve = []
 
-# GPU acceleration features (placeholder - real dependencies commented out)
-gpu-acceleration = ["gpu-metal", "gpu-cuda", "gpu-rocm", "gpu-opencl", "gpu-vulkan"]
-gpu-metal = [] # Apple Metal (dependencies commented out)
-gpu-cuda = [] # NVIDIA CUDA (dependencies commented out)
-gpu-rocm = [] # AMD ROCm (dependencies commented out)
-gpu-opencl = [] # Cross-platform OpenCL (dependencies commented out)
-gpu-vulkan = [] # Cross-platform Vulkan compute (dependencies commented out)
+# GPU acceleration features
+gpu-acceleration = ["gpu-metal", "gpu-cuda", "gpu-rocm", "gpu-opencl", "gpu-vulkan", "gpu-windowsml"]
+gpu-metal = [] # Apple Metal (fully implemented on macOS)
+gpu-cuda = ["cudarc"] # NVIDIA CUDA (fully implemented with cudarc)
+gpu-rocm = [] # AMD ROCm (placeholder - needs implementation)
+gpu-opencl = [] # Cross-platform OpenCL (placeholder - needs implementation)
+gpu-vulkan = ["vulkano"] # Cross-platform Vulkan compute
+gpu-windowsml = [] # Windows ML / DirectML (Windows only)
+
+# Graph traversal feature
+graph-traversal = []
 
 # Neural engine features (placeholder - real dependencies commented out)
 neural-acceleration = ["neural-apple", "neural-qualcomm", "neural-intel"]
@@ -62,41 +66,29 @@ anyhow = "1.0"
 thiserror = "1.0"
 
 # Mathematics and algorithms
-nalgebra = "0.32"
+nalgebra = "0.33"
 ndarray = "0.15"
 num-traits = "0.2"
 num-complex = "0.4"
+
+# Parallel processing
+rayon = "1.8"
 
 # SIMD intrinsics
 # CPU feature detection
 raw-cpuid = { version = "11.0", optional = true }
 
 # Apple ecosystem (macOS/iOS)
-# metal = { version = "0.27", optional = true }
-# objc = { version = "0.2", optional = true }
-# core-foundation = { version = "0.9", optional = true }
-# core-ml = { version = "0.1", optional = true }
-# metal-performance-shaders = { version = "0.4", optional = true }
+bytemuck = "1.14"
 
-# NVIDIA CUDA
-# cudarc = { version = "0.11", features = ["std", "cuda-11080"], optional = true }
+# NVIDIA CUDA (cross-platform)
+cudarc = { version = "0.12", features = ["std"], optional = true }
 
-# AMD ROCm/HIP
-# hip-runtime-sys = { version = "0.3", optional = true }
-# rocblas-sys = { version = "0.1", optional = true }
-
-# Cross-platform GPU compute
-# opencl3 = { version = "0.9", optional = true }
-# vulkano = { version = "0.34", optional = true }
-
-# ARM/Qualcomm specific (hypothetical crates for demonstration)
-# hexagon-sdk = { version = "0.1", optional = true }
-
-# Intel Neural Compute
-# openvino = { version = "0.7", optional = true }
+# Cross-platform Vulkan compute
+vulkano = { version = "0.34", optional = true }
 
 # Logging and metrics
-tracing = { workspace = true }
+tracing = "0.1"
 metrics = "0.23"
 
 # Memory management
@@ -107,20 +99,23 @@ aligned-vec = "0.5"
 libc = "0.2"
 num_cpus = "1.16"
 rand = "0.8"
+which = "6.0"
 
 # Benchmarking
 criterion = { version = "0.7", features = ["html_reports"], optional = true }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+metal = "0.29"
+objc = "0.2"
+core-foundation = "0.9"
+# core-ml = { version = "0.1", optional = true }
+# metal-performance-shaders = { version = "0.4", optional = true }
+
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 # x86-64 specific SIMD intrinsics are built-in to std::arch
 
-[target.'cfg(target_arch = "aarch64")'.dependencies]  
+[target.'cfg(target_arch = "aarch64")'.dependencies]
 # ARM NEON intrinsics are built-in to std::arch
-
-# [target.'cfg(target_os = "macos")'.dependencies]
-# # Additional macOS-specific dependencies
-# cocoa = "0.25"
-# core-graphics = "0.23"
 
 # [target.'cfg(target_os = "linux")'.dependencies]
 # # Linux-specific GPU libraries
@@ -149,25 +144,46 @@ wmi = "0.18"
 sysinfo = "0.30"
 
 [dev-dependencies]
-criterion = { version = "0.7", features = ["html_reports"] }
+criterion = { version = "0.7", features = ["html_reports", "async_tokio"] }
 proptest = "1.0"
 tempfile = "3.0"
 env_logger = "0.11"
+tokio = { version = "1.0", features = ["full"] }
 
-# [[bench]]
-# name = "simd_operations"
-# harness = false
-# required-features = ["cpu-simd"]
+[[bench]]
+name = "graph_traversal_bench"
+harness = false
+required-features = ["graph-traversal"]
 
-# [[bench]]
-# name = "gpu_acceleration" 
-# harness = false
-# required-features = ["gpu-acceleration"]
+[[bench]]
+name = "vector_similarity_bench"
+harness = false
+required-features = ["gpu-acceleration"]
 
-# [[bench]]
-# name = "heterogeneous_query"
-# harness = false
-# required-features = ["gpu-acceleration", "cpu-simd"]
+[[bench]]
+name = "spatial_operations_bench"
+harness = false
+required-features = ["gpu-acceleration"]
+
+[[bench]]
+name = "columnar_analytics_bench"
+harness = false
+required-features = ["gpu-acceleration"]
+
+[[bench]]
+name = "timeseries_operations_bench"
+harness = false
+required-features = ["gpu-acceleration"]
+
+[[bench]]
+name = "columnar_joins_bench"
+harness = false
+required-features = ["gpu-acceleration"]
+
+[[bench]]
+name = "ml_operations_bench"
+harness = false
+required-features = ["gpu-acceleration"]
 
 [package.metadata.docs.rs]
 features = ["cpu-simd", "gpu-metal", "neural-apple"]

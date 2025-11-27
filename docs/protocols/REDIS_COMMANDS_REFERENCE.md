@@ -10,11 +10,11 @@ category: protocols
 
 Orbit-RS provides full Redis compatibility through the RESP (Redis Serialization Protocol) adapter, supporting:
 
-- ✅ **Standard Redis Commands** - All core Redis functionality
-- ✅ **Vector Operations** - AI/ML vector search with multiple similarity metrics
-- ✅ **Time Series** - Complete RedisTimeSeries compatibility
-- ✅ **Graph Database** - Cypher-like graph queries and operations
-- ✅ **Search Engine** - RedisSearch-compatible full-text and vector search
+-  **Standard Redis Commands** - All core Redis functionality
+-  **Vector Operations** - AI/ML vector search with multiple similarity metrics
+-  **Time Series** - Complete RedisTimeSeries compatibility
+-  **Graph Database** - Cypher-like graph queries and operations
+-  **Search Engine** - RedisSearch-compatible full-text and vector search
 
 ## Connection Commands
 
@@ -1482,10 +1482,10 @@ enable_query_cache = true
 
 ## Compatibility
 
-- ✅ **Redis Clients**: Compatible with all standard Redis clients
-- ✅ **Protocol Version**: Full RESP2 support
-- ✅ **Extensions**: Vector, Time Series, Graph extensions
-- ✅ **Error Handling**: Redis-compatible error responses
-- ✅ **Type System**: Full Redis type compatibility
+-  **Redis Clients**: Compatible with all standard Redis clients
+-  **Protocol Version**: Full RESP2 support
+-  **Extensions**: Vector, Time Series, Graph extensions
+-  **Error Handling**: Redis-compatible error responses
+-  **Type System**: Full Redis type compatibility
 
 This comprehensive command set makes Orbit-RS a drop-in replacement for Redis with enterprise-grade distributed computing capabilities and advanced AI/ML features.

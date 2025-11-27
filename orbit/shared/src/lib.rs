@@ -1,4 +1,5 @@
 pub mod actor_communication;
+pub mod actor_memory;
 pub mod addressable;
 pub mod benchmarks;
 pub mod builder_pattern;
@@ -11,14 +12,11 @@ pub mod election_metrics;
 pub mod election_state;
 // Unified error module - use this for all error handling
 pub mod error;
-// Deprecated: Use error module instead
-#[deprecated(since = "0.1.0", note = "Use error module instead")]
+// Legacy modules - use error module instead for new code
 pub mod error_handling;
-#[deprecated(since = "0.1.0", note = "Use error module instead")]
 pub mod error_utils;
-#[deprecated(since = "0.1.0", note = "Use error module instead")]
-pub mod exception;
 pub mod event_sourcing;
+pub mod exception;
 pub mod execution_utils;
 pub mod extensions;
 pub mod graph;
@@ -137,12 +135,16 @@ pub use spatial::{
 // Re-export security functionality
 pub use security::authentication::AuthToken;
 pub use security::{
-    AnomalyDetector, AuditEvent, AuditLogger, AuditPolicy, AuthenticationManager,
-    AuthenticationProvider, ComplianceMonitor, EncryptionManager, KeyManagementSystem,
-    KeyRotationPolicy, LdapAuthProvider, OAuth2AuthProvider, PolicyEngine, QueryValidator,
-    RbacEngine, RoleBasedAccessControl, SamlAuthProvider, SecurityAction, SecurityContext,
-    SecurityFramework, SecurityResource, SecuritySubject, SqlInjectionDetector,
-    ThreatDetectionEngine, TlsConfig, TlsVersion,
+    AccessLevel, AnomalyDetector, AuditEvent, AuditLogger, AuditPolicy, AuthenticationManager,
+    AuthenticationProvider, ComplianceMonitor, CrossTenantAction, CrossTenantPolicy,
+    DataMaskingEngine, DatePrecision, EncryptedFieldValue, EncryptionManager, EncryptionType,
+    FieldEncryptionConfig, FieldEncryptionEngine, FieldEncryptionPolicy, FieldMaskingConfig,
+    IsolationLevel, KeyManagementSystem, KeyRotationPolicy, LdapAuthProvider, MaskingContext,
+    MaskingPolicy, MaskingStrategy, OAuth2AuthProvider, PolicyEngine, QueryValidator, RbacEngine,
+    ResourceQuota, ResourceUsage, RoleBasedAccessControl, SamlAuthProvider, SecurityAction,
+    SecurityContext, SecurityFramework, SecurityResource, SecuritySubject, SensitivityLevel,
+    SqlInjectionDetector, TenantAccessResult, TenantConfig, TenantContext, TenantId, TenantManager,
+    TenantStatus, ThreatDetectionEngine, TlsConfig, TlsVersion, TokenStore,
 };
 
 // Re-export trigger functionality

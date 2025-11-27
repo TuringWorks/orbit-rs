@@ -3,14 +3,15 @@
 use crate::mesh::{AddressableDirectory, ClusterManager, ClusterStats, DirectoryStats};
 use crate::persistence::config::PersistenceProviderConfig;
 use crate::persistence::PersistenceProviderRegistry;
+use crate::protocols::postgres_wire::QueryEngine;
+#[cfg(feature = "storage-rocksdb")]
+use crate::protocols::postgres_wire::RocksDbTableStorage;
+use crate::protocols::{PostgresServer, RespServer};
 use crate::LoadBalancer;
-use orbit_client::OrbitClient;
 use orbit_proto::{
     connection_service_server, health_check_response, health_service_server,
     OrbitConnectionService, OrbitHealthService,
 };
-use orbit_protocols::postgres_wire::{PostgresServer, QueryEngine, RocksDbTableStorage};
-use orbit_protocols::resp::RespServer;
 use orbit_shared::{NodeCapabilities, NodeId, NodeInfo, NodeStatus, OrbitError, OrbitResult};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -27,6 +28,18 @@ pub struct ProtocolConfig {
     pub postgres_enabled: bool,
     pub postgres_port: u16,
     pub postgres_bind_address: String,
+    pub mysql_enabled: bool,
+    pub mysql_port: u16,
+    pub mysql_bind_address: String,
+    pub cql_enabled: bool,
+    pub cql_port: u16,
+    pub cql_bind_address: String,
+    pub cypher_enabled: bool,
+    pub cypher_port: u16,
+    pub cypher_bind_address: String,
+    pub aql_enabled: bool,
+    pub aql_port: u16,
+    pub aql_bind_address: String,
 }
 
 impl Default for ProtocolConfig {
@@ -38,6 +51,18 @@ impl Default for ProtocolConfig {
             postgres_enabled: true,
             postgres_port: 5432,
             postgres_bind_address: "127.0.0.1".to_string(),
+            mysql_enabled: true,
+            mysql_port: 3306,
+            mysql_bind_address: "127.0.0.1".to_string(),
+            cql_enabled: true,
+            cql_port: 9042,
+            cql_bind_address: "127.0.0.1".to_string(),
+            cypher_enabled: true,
+            cypher_port: 7687,
+            cypher_bind_address: "127.0.0.1".to_string(),
+            aql_enabled: true,
+            aql_port: 8529,
+            aql_bind_address: "127.0.0.1".to_string(),
         }
     }
 }
@@ -230,35 +255,43 @@ impl OrbitServer {
 
             // Try to create QueryEngine with persistent storage if RocksDB is available
             let query_engine = {
-                // Check if we have a RocksDB provider configured
-                // The addressable provider is registered as "rocksdb_addressable"
-                match persistence_registry
-                    .get_addressable_provider("rocksdb_addressable")
-                    .await
+                #[cfg(feature = "storage-rocksdb")]
                 {
-                    Ok(_provider) => {
-                        // Create a separate RocksDB instance for PostgreSQL table storage
-                        // Use the same data directory structure as the server but with postgresql subdirectory
-                        let pg_data_path = "./orbit_integrated_data/postgresql";
+                    // Check if we have a RocksDB provider configured
+                    // The addressable provider is registered as "rocksdb_addressable"
+                    match persistence_registry
+                        .get_addressable_provider("rocksdb_addressable")
+                        .await
+                    {
+                        Ok(_provider) => {
+                            // Create a separate RocksDB instance for PostgreSQL table storage
+                            // Use the same data directory structure as the server but with postgresql subdirectory
+                            let pg_data_path = "./orbit_integrated_data/postgresql";
 
-                        match RocksDbTableStorage::new(&pg_data_path) {
-                            Ok(storage) => {
-                                tracing::info!(
-                                    "PostgreSQL using persistent RocksDB storage at: {}",
-                                    pg_data_path
-                                );
-                                QueryEngine::new_with_persistent_storage(Arc::new(storage))
-                            }
-                            Err(e) => {
-                                tracing::warn!("Failed to create PostgreSQL persistent storage, falling back to memory: {}", e);
-                                QueryEngine::new()
+                            match RocksDbTableStorage::new(&pg_data_path) {
+                                Ok(storage) => {
+                                    tracing::info!(
+                                        "PostgreSQL using persistent RocksDB storage at: {}",
+                                        pg_data_path
+                                    );
+                                    QueryEngine::new_with_persistent_storage(Arc::new(storage))
+                                }
+                                Err(e) => {
+                                    tracing::warn!("Failed to create PostgreSQL persistent storage, falling back to memory: {}", e);
+                                    QueryEngine::new()
+                                }
                             }
                         }
+                        Err(_) => {
+                            tracing::info!("PostgreSQL using in-memory storage (no RocksDB persistence configured)");
+                            QueryEngine::new()
+                        }
                     }
-                    Err(_) => {
-                        tracing::info!("PostgreSQL using in-memory storage (no RocksDB persistence configured)");
-                        QueryEngine::new()
-                    }
+                }
+                #[cfg(not(feature = "storage-rocksdb"))]
+                {
+                    tracing::info!("PostgreSQL using in-memory storage (RocksDB support disabled)");
+                    QueryEngine::new()
                 }
             };
 
@@ -347,25 +380,49 @@ impl OrbitServer {
             );
             tracing::info!("Starting RESP (Redis) server on {}", redis_addr);
 
-            // Create OrbitClient that connects to this server
-            let server_url = format!("http://{}:{}", self.config.bind_address, self.config.port);
-            match OrbitClient::builder()
-                .with_namespace(self.config.namespace.clone())
-                .with_server_urls(vec![server_url])
-                .build()
-                .await
+            // Create RESP server without OrbitClient
             {
-                Ok(client) => {
-                    let resp_server = RespServer::new(redis_addr, client);
-                    server_tasks.push(tokio::spawn(async move {
-                        if let Err(e) = resp_server.run().await {
-                            tracing::error!("RESP server failed: {}", e);
-                        }
-                    }));
-                }
-                Err(e) => {
-                    tracing::error!("Failed to create OrbitClient for RESP server: {}", e);
-                }
+                // Create RocksDB storage for Redis persistence
+                // Use consistent path structure: data/redis/rocksdb/ (matching other protocols)
+                let redis_data_path = "./data/redis/rocksdb";
+
+                #[cfg(feature = "storage-rocksdb")]
+                    let redis_provider: Option<Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>> =
+                        match crate::protocols::persistence::rocksdb_redis_provider::RocksDbRedisDataProvider::new(
+                            redis_data_path,
+                            crate::protocols::persistence::redis_data::RedisDataConfig::default(),
+                        ) {
+                            Ok(provider) => {
+                                tracing::info!("Redis using persistent RocksDB storage at: {}", redis_data_path);
+                                let provider_arc: Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider> = Arc::new(provider);
+                                // Initialize the provider
+                                if let Err(e) = crate::protocols::persistence::redis_data::RedisDataProvider::initialize(&*provider_arc).await {
+                                    tracing::warn!("Failed to initialize Redis persistent storage: {}", e);
+                                    None
+                                } else {
+                                    Some(provider_arc)
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to create Redis persistent storage, using in-memory: {}", e);
+                                None
+                            }
+                        };
+
+                #[cfg(not(feature = "storage-rocksdb"))]
+                let redis_provider: Option<
+                    Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>,
+                > = {
+                    tracing::info!("Redis using in-memory storage (RocksDB support disabled)");
+                    None
+                };
+
+                let resp_server = RespServer::new_with_persistence(redis_addr, redis_provider);
+                server_tasks.push(tokio::spawn(async move {
+                    if let Err(e) = resp_server.run().await {
+                        tracing::error!("RESP server failed: {}", e);
+                    }
+                }));
             }
         }
 
@@ -402,6 +459,34 @@ impl OrbitServer {
                 "  - PostgreSQL: {}:{}",
                 self.config.protocols.postgres_bind_address,
                 self.config.protocols.postgres_port
+            );
+        }
+        if self.config.protocols.mysql_enabled {
+            tracing::info!(
+                "  - MySQL: {}:{}",
+                self.config.protocols.mysql_bind_address,
+                self.config.protocols.mysql_port
+            );
+        }
+        if self.config.protocols.cql_enabled {
+            tracing::info!(
+                "  - CQL/Cassandra: {}:{}",
+                self.config.protocols.cql_bind_address,
+                self.config.protocols.cql_port
+            );
+        }
+        if self.config.protocols.cypher_enabled {
+            tracing::info!(
+                "  - Cypher/Neo4j: {}:{}",
+                self.config.protocols.cypher_bind_address,
+                self.config.protocols.cypher_port
+            );
+        }
+        if self.config.protocols.aql_enabled {
+            tracing::info!(
+                "  - AQL/ArangoDB: {}:{}",
+                self.config.protocols.aql_bind_address,
+                self.config.protocols.aql_port
             );
         }
 
@@ -468,6 +553,42 @@ impl OrbitServer {
             } else {
                 None
             },
+            mysql_enabled: self.config.protocols.mysql_enabled,
+            mysql_address: if self.config.protocols.mysql_enabled {
+                Some(format!(
+                    "{}:{}",
+                    self.config.protocols.mysql_bind_address, self.config.protocols.mysql_port
+                ))
+            } else {
+                None
+            },
+            cql_enabled: self.config.protocols.cql_enabled,
+            cql_address: if self.config.protocols.cql_enabled {
+                Some(format!(
+                    "{}:{}",
+                    self.config.protocols.cql_bind_address, self.config.protocols.cql_port
+                ))
+            } else {
+                None
+            },
+            cypher_enabled: self.config.protocols.cypher_enabled,
+            cypher_address: if self.config.protocols.cypher_enabled {
+                Some(format!(
+                    "{}:{}",
+                    self.config.protocols.cypher_bind_address, self.config.protocols.cypher_port
+                ))
+            } else {
+                None
+            },
+            aql_enabled: self.config.protocols.aql_enabled,
+            aql_address: if self.config.protocols.aql_enabled {
+                Some(format!(
+                    "{}:{}",
+                    self.config.protocols.aql_bind_address, self.config.protocols.aql_port
+                ))
+            } else {
+                None
+            },
         };
 
         Ok(ServerStats {
@@ -526,6 +647,14 @@ pub struct ProtocolStats {
     pub redis_address: Option<String>,
     pub postgres_enabled: bool,
     pub postgres_address: Option<String>,
+    pub mysql_enabled: bool,
+    pub mysql_address: Option<String>,
+    pub cql_enabled: bool,
+    pub cql_address: Option<String>,
+    pub cypher_enabled: bool,
+    pub cypher_address: Option<String>,
+    pub aql_enabled: bool,
+    pub aql_address: Option<String>,
 }
 
 /// Statistics about the Orbit server

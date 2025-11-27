@@ -22,7 +22,14 @@
 //! - Rate limiting and resource quotas
 
 pub mod handlers;
+pub mod integration;
+pub mod ml_nlp;
+pub mod nlp;
+pub mod result_processor;
+pub mod schema;
+pub mod schema_discovery;
 pub mod server;
+pub mod sql_generator;
 pub mod tools;
 pub mod types;
 

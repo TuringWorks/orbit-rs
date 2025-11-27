@@ -70,13 +70,27 @@ pub enum MemoryStrategy {
 }
 
 /// GPU acceleration manager with runtime detection and optimization
-#[derive(Debug)]
 pub struct GPUAccelerationManager {
     devices: Arc<RwLock<Vec<GPUDevice>>>,
     active_device: Arc<RwLock<Option<u32>>>,
     #[allow(dead_code)]
     memory_strategies: HashMap<u32, MemoryStrategy>,
     initialization_complete: Arc<RwLock<bool>>,
+    // Device pools for reuse (initialized once, reused many times)
+    #[cfg(target_os = "macos")]
+    metal_device: Arc<RwLock<Option<crate::gpu_metal::MetalDevice>>>,
+    #[cfg(feature = "gpu-vulkan")]
+    vulkan_device: Arc<RwLock<Option<crate::gpu_vulkan::VulkanDevice>>>,
+}
+
+impl std::fmt::Debug for GPUAccelerationManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GPUAccelerationManager")
+            .field("devices", &self.devices)
+            .field("active_device", &self.active_device)
+            .field("initialization_complete", &self.initialization_complete)
+            .finish()
+    }
 }
 
 impl GPUAccelerationManager {
@@ -87,12 +101,54 @@ impl GPUAccelerationManager {
             active_device: Arc::new(RwLock::new(None)),
             memory_strategies: HashMap::new(),
             initialization_complete: Arc::new(RwLock::new(false)),
+            #[cfg(target_os = "macos")]
+            metal_device: Arc::new(RwLock::new(None)),
+            #[cfg(feature = "gpu-vulkan")]
+            vulkan_device: Arc::new(RwLock::new(None)),
         };
 
         // Perform initial device detection
         manager.detect_gpu_devices().await?;
 
+        // Initialize device pools
+        manager.initialize_device_pools().await?;
+
         Ok(manager)
+    }
+
+    /// Initialize GPU device pools for reuse (called once during construction)
+    async fn initialize_device_pools(&self) -> Result<(), ComputeError> {
+        // Initialize Metal device if on macOS
+        #[cfg(target_os = "macos")]
+        {
+            match crate::gpu_metal::MetalDevice::new() {
+                Ok(device) => {
+                    let mut metal = self.metal_device.write().await;
+                    *metal = Some(device);
+                    info!("Metal device pool initialized");
+                }
+                Err(e) => {
+                    warn!("Failed to initialize Metal device: {}", e);
+                }
+            }
+        }
+
+        // Initialize Vulkan device if available
+        #[cfg(feature = "gpu-vulkan")]
+        {
+            match crate::gpu_vulkan::VulkanDevice::new() {
+                Ok(device) => {
+                    let mut vulkan = self.vulkan_device.write().await;
+                    *vulkan = Some(device);
+                    info!("Vulkan device pool initialized");
+                }
+                Err(e) => {
+                    warn!("Failed to initialize Vulkan device: {}", e);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Detect available GPU devices across all supported APIs
@@ -370,6 +426,200 @@ impl GPUAccelerationManager {
         info!("Executing Vulkan workload (placeholder)");
         Ok(ComputeResult::default())
     }
+
+    /// GPU Operation Methods - High-level API using pooled devices
+
+    /// Execute matrix multiplication using GPU acceleration
+    pub async fn execute_matrix_multiply(
+        &self,
+        a: &[f32],
+        b: &[f32],
+        m: usize,
+        n: usize,
+        k: usize,
+    ) -> Result<Vec<f32>, ComputeError> {
+        // Try Metal first on macOS
+        #[cfg(target_os = "macos")]
+        {
+            let metal = self.metal_device.read().await;
+            if let Some(device) = metal.as_ref() {
+                return device.execute_matrix_multiply(a, b, m, n, k);
+            }
+        }
+
+        // Try Vulkan as fallback
+        #[cfg(feature = "gpu-vulkan")]
+        {
+            let vulkan = self.vulkan_device.read().await;
+            if let Some(device) = vulkan.as_ref() {
+                return device.execute_matrix_multiply(a, b, m, n, k);
+            }
+        }
+
+        Err(ComputeError::NoGPUAvailable)
+    }
+
+    /// Execute spatial distance calculation (planar coordinates)
+    pub async fn execute_spatial_distance(
+        &self,
+        query_x: f32,
+        query_y: f32,
+        points_x: &[f32],
+        points_y: &[f32],
+        point_count: usize,
+    ) -> Result<Vec<f32>, ComputeError> {
+        // Try Metal first on macOS
+        #[cfg(target_os = "macos")]
+        {
+            let metal = self.metal_device.read().await;
+            if let Some(device) = metal.as_ref() {
+                return device.execute_spatial_distance(
+                    query_x,
+                    query_y,
+                    points_x,
+                    points_y,
+                    point_count,
+                );
+            }
+        }
+
+        // Try Vulkan as fallback
+        #[cfg(feature = "gpu-vulkan")]
+        {
+            let vulkan = self.vulkan_device.read().await;
+            if let Some(device) = vulkan.as_ref() {
+                return device.execute_spatial_distance(
+                    query_x,
+                    query_y,
+                    points_x,
+                    points_y,
+                    point_count,
+                );
+            }
+        }
+
+        Err(ComputeError::NoGPUAvailable)
+    }
+
+    /// Execute spatial distance calculation (spherical coordinates - lat/lon)
+    pub async fn execute_spatial_distance_sphere(
+        &self,
+        query_lon: f32,
+        query_lat: f32,
+        points_lon: &[f32],
+        points_lat: &[f32],
+        point_count: usize,
+    ) -> Result<Vec<f32>, ComputeError> {
+        // Try Metal first on macOS
+        #[cfg(target_os = "macos")]
+        {
+            let metal = self.metal_device.read().await;
+            if let Some(device) = metal.as_ref() {
+                return device.execute_spatial_distance_sphere(
+                    query_lon,
+                    query_lat,
+                    points_lon,
+                    points_lat,
+                    point_count,
+                );
+            }
+        }
+
+        // Try Vulkan as fallback
+        #[cfg(feature = "gpu-vulkan")]
+        {
+            let vulkan = self.vulkan_device.read().await;
+            if let Some(device) = vulkan.as_ref() {
+                return device.execute_spatial_distance_sphere(
+                    query_lon,
+                    query_lat,
+                    points_lon,
+                    points_lat,
+                    point_count,
+                );
+            }
+        }
+
+        Err(ComputeError::NoGPUAvailable)
+    }
+
+    /// Execute time-series window aggregation
+    pub async fn execute_timeseries_window_aggregate(
+        &self,
+        timestamps: &[u64],
+        values: &[f32],
+        window_size_ms: u64,
+        aggregation_type: u32,
+    ) -> Result<(Vec<f32>, Vec<u32>, u32), ComputeError> {
+        // Try Metal first on macOS
+        #[cfg(target_os = "macos")]
+        {
+            let metal = self.metal_device.read().await;
+            if let Some(device) = metal.as_ref() {
+                return device.execute_timeseries_window_aggregate(
+                    timestamps,
+                    values,
+                    window_size_ms,
+                    aggregation_type,
+                );
+            }
+        }
+
+        // Try Vulkan as fallback
+        #[cfg(feature = "gpu-vulkan")]
+        {
+            let vulkan = self.vulkan_device.read().await;
+            if let Some(device) = vulkan.as_ref() {
+                return device.execute_timeseries_window_aggregate(
+                    timestamps,
+                    values,
+                    window_size_ms,
+                    aggregation_type,
+                );
+            }
+        }
+
+        Err(ComputeError::NoGPUAvailable)
+    }
+
+    /// Execute hash join operation
+    pub async fn execute_hash_join(
+        &self,
+        build_keys: &[u32],
+        build_values: &[u32],
+        probe_keys: &[u32],
+        probe_values: &[u32],
+    ) -> Result<(Vec<u32>, Vec<u32>, u32), ComputeError> {
+        // Try Metal first on macOS
+        #[cfg(target_os = "macos")]
+        {
+            let metal = self.metal_device.read().await;
+            if let Some(device) = metal.as_ref() {
+                return device.execute_hash_join(
+                    build_keys,
+                    build_values,
+                    probe_keys,
+                    probe_values,
+                );
+            }
+        }
+
+        // Try Vulkan as fallback
+        #[cfg(feature = "gpu-vulkan")]
+        {
+            let vulkan = self.vulkan_device.read().await;
+            if let Some(device) = vulkan.as_ref() {
+                return device.execute_hash_join(
+                    build_keys,
+                    build_values,
+                    probe_keys,
+                    probe_values,
+                );
+            }
+        }
+
+        Err(ComputeError::NoGPUAvailable)
+    }
 }
 
 impl Default for GPUAccelerationManager {
@@ -381,6 +631,10 @@ impl Default for GPUAccelerationManager {
             active_device: Arc::new(RwLock::new(None)),
             memory_strategies: HashMap::new(),
             initialization_complete: Arc::new(RwLock::new(false)),
+            #[cfg(target_os = "macos")]
+            metal_device: Arc::new(RwLock::new(None)),
+            #[cfg(feature = "gpu-vulkan")]
+            vulkan_device: Arc::new(RwLock::new(None)),
         }
     }
 }

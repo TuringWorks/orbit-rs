@@ -3,9 +3,73 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 
-// Re-use types from orbit-shared to avoid duplication
-pub use orbit_shared::error::{OrbitError, OrbitResult};
-pub use orbit_shared::{AddressableReference, Key, NodeId};
+// Lightweight test types to avoid dependency cycles
+// These mirror types from orbit-shared but are defined here for testing only
+
+/// Test-only node ID wrapper
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct NodeId(pub String);
+
+/// Test-only addressable key types
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Key {
+    /// String key
+    StringKey { key: String },
+    /// 32-bit integer key
+    Int32Key { key: i32 },
+    /// 64-bit integer key
+    Int64Key { key: i64 },
+    /// No key (singleton)
+    NoKey,
+}
+
+/// Test-only addressable reference
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AddressableReference {
+    /// Addressable type name
+    pub addressable_type: String,
+    /// Addressable key
+    pub key: Key,
+}
+
+/// Test-only error type
+#[derive(Debug, thiserror::Error)]
+pub enum OrbitError {
+    /// Network error
+    #[error("Network error: {0}")]
+    NetworkError(String),
+    /// Timeout error
+    #[error("Timeout: {details}")]
+    Timeout {
+        /// Timeout details
+        details: String,
+    },
+    /// Internal error
+    #[error("Internal error: {0}")]
+    Internal(String),
+}
+
+impl OrbitError {
+    /// Create a network error
+    pub fn network(msg: impl Into<String>) -> Self {
+        Self::NetworkError(msg.into())
+    }
+
+    /// Create a timeout error
+    pub fn timeout(msg: impl Into<String>) -> Self {
+        Self::Timeout {
+            details: msg.into(),
+        }
+    }
+
+    /// Create an internal error
+    pub fn internal(msg: impl Into<String>) -> Self {
+        Self::Internal(msg.into())
+    }
+}
+
+/// Test-only result type
+pub type OrbitResult<T> = Result<T, OrbitError>;
 
 /// Test utilities for CI-friendly testing without external dependencies
 pub struct TestUtils;

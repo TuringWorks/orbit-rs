@@ -8,14 +8,14 @@ category: documentation
 
 This roadmap outlines the current status and future development plans for Orbit-RS, including completed phases and upcoming features.
 
-## Current Status: Phase 8 Complete! 🎉
+## Current Status: Phase 8 Complete! 
 
 **Phase 8: SQL Query Engine** has been completed and significantly exceeded original scope, delivering a comprehensive SQL query engine with PostgreSQL compatibility and advanced features.
 
 ## GitHub Project Tracking
 
 The development roadmap is actively tracked in our GitHub project:
-**[📋 Orbit-RS Development Roadmap](https://github.com/orgs/TuringWorks/projects/1)**
+**[ Orbit-RS Development Roadmap](https://github.com/orgs/TuringWorks/projects/1)**
 
 ### Upcoming Phases (GitHub Issues)
 
@@ -23,7 +23,7 @@ The development roadmap is actively tracked in our GitHub project:
 - **Phase 10:** [Production Readiness](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-10) (5 issues)  
 - **Phase 11:** [Advanced Features](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-11) (5 issues)
 
-## Completed Phases ✅
+## Completed Phases 
 
 ### Phase 1: Foundation (Complete)
 
@@ -100,7 +100,7 @@ The development roadmap is actively tracked in our GitHub project:
 - [x] **SQL Integration**: AI agents can execute SQL through MCP
 - [x] **Actor Management**: AI agents can manage actor lifecycles through MCP
 
-### Phase 8: SQL Query Engine (Complete) 🎉
+### Phase 8: SQL Query Engine (Complete) 
 
 - [x] **DDL Operations**: CREATE/ALTER/DROP TABLE, INDEX, VIEW, SCHEMA, EXTENSION
 - [x] **DCL Operations**: GRANT/REVOKE permissions with privilege management
@@ -115,7 +115,7 @@ The development roadmap is actively tracked in our GitHub project:
 - [x] **Advanced SQL**: Subqueries, CTEs, window functions, complex expressions
 - [x] **Vector Database**: Complete pgvector compatibility with similarity search
 
-## Upcoming Phases 🚀
+## Upcoming Phases 
 
 ### Phase 9: Query Optimization & Performance
 

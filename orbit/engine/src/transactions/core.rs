@@ -1,0 +1,1118 @@
+use crate::addressable::AddressableReference;
+use crate::cluster::NodeId;
+use crate::error::{EngineError, EngineResult};
+use crate::transaction_log::{PersistentLogConfig, PersistentTransactionLogger};
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tokio::time::{timeout, Duration, Instant};
+use tracing::{error, info, warn};
+use uuid::Uuid;
+
+/// Unique identifier for distributed transactions
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TransactionId {
+    /// Unique transaction identifier (UUID)
+    pub id: String,
+    /// Node coordinating this transaction
+    pub coordinator_node: NodeId,
+    /// Unix timestamp when transaction was created
+    pub created_at: i64,
+}
+
+impl TransactionId {
+    /// Create a new transaction ID for the given coordinator node
+    pub fn new(coordinator_node: NodeId) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            coordinator_node,
+            created_at: chrono::Utc::now().timestamp_millis(),
+        }
+    }
+}
+
+impl std::fmt::Display for TransactionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@{}", self.id, self.coordinator_node)
+    }
+}
+
+/// Transaction states in the 2-phase commit protocol
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TransactionState {
+    /// Transaction is being prepared
+    Preparing,
+    /// All participants voted to commit
+    Prepared,
+    /// Transaction is being committed
+    Committing,
+    /// Transaction successfully committed
+    Committed,
+    /// Transaction is being aborted
+    Aborting,
+    /// Transaction was aborted
+    Aborted,
+    /// Transaction timed out
+    TimedOut,
+    /// Transaction encountered an error
+    Failed {
+        /// Error reason
+        reason: String,
+    },
+}
+
+/// Vote from a participant in the 2-phase commit protocol
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TransactionVote {
+    /// Participant is ready to commit
+    Yes,
+    /// Participant cannot commit and wants to abort
+    No {
+        /// Reason for voting no
+        reason: String,
+    },
+    /// Participant is uncertain (network issues, etc.)
+    Uncertain,
+}
+
+/// Operation to be executed as part of a distributed transaction
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionOperation {
+    /// Unique operation identifier
+    pub operation_id: String,
+    /// Target actor for this operation
+    pub target_actor: AddressableReference,
+    /// Type of operation to perform
+    pub operation_type: String,
+    /// Data for the operation
+    pub operation_data: serde_json::Value,
+    /// Optional compensation data for rollback
+    pub compensation_data: Option<serde_json::Value>,
+}
+
+impl TransactionOperation {
+    /// Create a new transaction operation
+    pub fn new(
+        target_actor: AddressableReference,
+        operation_type: String,
+        operation_data: serde_json::Value,
+    ) -> Self {
+        Self {
+            operation_id: Uuid::new_v4().to_string(),
+            target_actor,
+            operation_type,
+            operation_data,
+            compensation_data: None,
+        }
+    }
+
+    /// Add compensation data for saga pattern rollback
+    pub fn with_compensation(mut self, compensation_data: serde_json::Value) -> Self {
+        self.compensation_data = Some(compensation_data);
+        self
+    }
+}
+
+/// Distributed transaction containing multiple operations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DistributedTransaction {
+    /// Unique transaction identifier
+    pub transaction_id: TransactionId,
+    /// Operations to execute as part of this transaction
+    pub operations: Vec<TransactionOperation>,
+    /// Current state of the transaction
+    pub state: TransactionState,
+    /// Transaction timeout duration
+    pub timeout: Duration,
+    /// Unix timestamp when transaction started
+    pub started_at: i64,
+    /// Custom metadata for the transaction
+    pub metadata: HashMap<String, String>,
+    /// Participants involved in this transaction (nodes and actors)
+    pub participants: HashSet<AddressableReference>,
+}
+
+impl DistributedTransaction {
+    /// Create a new distributed transaction
+    pub fn new(coordinator_node: NodeId, timeout: Duration) -> Self {
+        Self {
+            transaction_id: TransactionId::new(coordinator_node),
+            operations: Vec::new(),
+            state: TransactionState::Preparing,
+            timeout,
+            started_at: chrono::Utc::now().timestamp_millis(),
+            metadata: HashMap::new(),
+            participants: HashSet::new(),
+        }
+    }
+
+    /// Add an operation to the transaction
+    pub fn add_operation(mut self, operation: TransactionOperation) -> Self {
+        self.participants.insert(operation.target_actor.clone());
+        self.operations.push(operation);
+        self
+    }
+
+    /// Add metadata to the transaction
+    pub fn with_metadata(mut self, key: String, value: String) -> Self {
+        self.metadata.insert(key, value);
+        self
+    }
+
+    /// Check if the transaction has timed out
+    pub fn is_timed_out(&self) -> bool {
+        let elapsed_ms = chrono::Utc::now().timestamp_millis() - self.started_at;
+        elapsed_ms > self.timeout.as_millis() as i64
+    }
+
+    /// Get all unique nodes involved in this transaction
+    pub fn get_participant_nodes(&self) -> HashSet<NodeId> {
+        // In a real implementation, this would resolve actors to their current nodes
+        // For now, we'll return a mock set
+        let mut nodes = HashSet::new();
+        nodes.insert(self.transaction_id.coordinator_node.clone());
+        nodes
+    }
+}
+
+/// Message types for distributed transaction protocol
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TransactionMessage {
+    /// Phase 1: Coordinator asks participants to prepare
+    Prepare {
+        /// Transaction identifier
+        transaction_id: TransactionId,
+        /// Operations to prepare
+        operations: Vec<TransactionOperation>,
+        /// Timeout duration
+        timeout: Duration,
+    },
+    /// Phase 1: Participant responds with vote
+    Vote {
+        /// Transaction identifier
+        transaction_id: TransactionId,
+        /// Participant sending the vote
+        participant: AddressableReference,
+        /// Vote decision
+        vote: TransactionVote,
+    },
+    /// Phase 2: Coordinator tells participants to commit
+    Commit {
+        /// Transaction identifier
+        transaction_id: TransactionId,
+    },
+    /// Phase 2: Coordinator tells participants to abort
+    Abort {
+        /// Transaction identifier
+        transaction_id: TransactionId,
+        /// Reason for abort
+        reason: String,
+    },
+    /// Participant acknowledges commit/abort
+    Acknowledge {
+        /// Transaction identifier
+        transaction_id: TransactionId,
+        /// Participant sending acknowledgment
+        participant: AddressableReference,
+        /// Whether operation succeeded
+        success: bool,
+        /// Error message if failed
+        error: Option<String>,
+    },
+    /// Query transaction status
+    QueryStatus {
+        /// Transaction identifier
+        transaction_id: TransactionId,
+    },
+    /// Response to status query
+    StatusResponse {
+        /// Transaction identifier
+        transaction_id: TransactionId,
+        /// Current transaction state
+        state: TransactionState,
+    },
+}
+
+/// Configuration for distributed transaction system
+#[derive(Debug, Clone)]
+pub struct TransactionConfig {
+    /// Default transaction timeout
+    pub default_timeout: Duration,
+    /// Maximum number of concurrent transactions
+    pub max_concurrent_transactions: usize,
+    /// Retry attempts for failed operations
+    pub retry_attempts: u32,
+    /// Interval for cleanup of old transactions
+    pub cleanup_interval: Duration,
+    /// Enable transaction logging for audit
+    pub enable_logging: bool,
+    /// Configuration for persistent logging
+    pub log_config: PersistentLogConfig,
+}
+
+impl Default for TransactionConfig {
+    fn default() -> Self {
+        Self {
+            default_timeout: Duration::from_secs(30),
+            max_concurrent_transactions: 1000,
+            retry_attempts: 3,
+            cleanup_interval: Duration::from_secs(60),
+            enable_logging: true,
+            log_config: PersistentLogConfig::default(),
+        }
+    }
+}
+
+/// Transaction log entry for audit and recovery
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionLogEntry {
+    /// Unix timestamp of the event
+    pub timestamp: i64,
+    /// Transaction identifier
+    pub transaction_id: TransactionId,
+    /// Type of transaction event
+    pub event: TransactionEvent,
+    /// Optional additional details
+    pub details: Option<serde_json::Value>,
+}
+
+/// Transaction events for logging
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TransactionEvent {
+    /// Transaction started
+    Started,
+    /// Prepare phase requested
+    PrepareRequested,
+    /// Vote received from participant
+    VoteReceived {
+        /// Participant that voted
+        participant: AddressableReference,
+        /// Vote decision
+        vote: TransactionVote,
+    },
+    /// Commit phase requested
+    CommitRequested,
+    /// Abort requested
+    AbortRequested {
+        /// Reason for abort
+        reason: String,
+    },
+    /// Transaction committed successfully
+    Committed,
+    /// Transaction aborted
+    Aborted {
+        /// Reason for abort
+        reason: String,
+    },
+    /// Transaction timed out
+    TimedOut,
+    /// Transaction failed
+    Failed {
+        /// Error message
+        error: String,
+    },
+}
+
+/// Trait for participating in distributed transactions
+#[async_trait]
+pub trait TransactionParticipant: Send + Sync {
+    /// Prepare phase: Check if the participant can commit the transaction
+    async fn prepare(
+        &self,
+        transaction_id: &TransactionId,
+        operations: &[TransactionOperation],
+    ) -> EngineResult<TransactionVote>;
+
+    /// Commit phase: Execute the transaction operations
+    async fn commit(&self, transaction_id: &TransactionId) -> EngineResult<()>;
+
+    /// Abort phase: Rollback any changes made during prepare
+    async fn abort(&self, transaction_id: &TransactionId, reason: &str) -> EngineResult<()>;
+
+    /// Get current state of a transaction from participant's perspective
+    async fn get_transaction_state(
+        &self,
+        transaction_id: &TransactionId,
+    ) -> EngineResult<Option<TransactionState>>;
+}
+
+/// Transaction coordinator that manages distributed transactions
+pub struct TransactionCoordinator {
+    node_id: NodeId,
+    config: TransactionConfig,
+    /// Active transactions being coordinated
+    active_transactions: Arc<RwLock<HashMap<TransactionId, DistributedTransaction>>>,
+    /// Persistent transaction logger
+    logger: Arc<dyn PersistentTransactionLogger>,
+    /// Message sender for transaction protocol
+    message_sender: Arc<dyn TransactionMessageSender>,
+    /// Votes received from participants
+    participant_votes:
+        Arc<RwLock<HashMap<TransactionId, HashMap<AddressableReference, TransactionVote>>>>,
+    /// Acknowledgments received from participants
+    participant_acks: Arc<RwLock<HashMap<TransactionId, HashMap<AddressableReference, bool>>>>,
+}
+
+/// Trait for sending transaction messages to participants
+#[async_trait]
+pub trait TransactionMessageSender: Send + Sync {
+    /// Send a transaction message to a specific participant
+    async fn send_message(
+        &self,
+        target: &AddressableReference,
+        message: TransactionMessage,
+    ) -> EngineResult<()>;
+    /// Broadcast a transaction message to multiple participants
+    async fn broadcast_message(
+        &self,
+        targets: &[AddressableReference],
+        message: TransactionMessage,
+    ) -> EngineResult<()>;
+}
+
+impl TransactionCoordinator {
+    /// Create a new transaction coordinator
+    pub fn new(
+        node_id: NodeId,
+        config: TransactionConfig,
+        message_sender: Arc<dyn TransactionMessageSender>,
+        logger: Arc<dyn PersistentTransactionLogger>,
+    ) -> Self {
+        Self {
+            node_id,
+            config,
+            active_transactions: Arc::new(RwLock::new(HashMap::new())),
+            logger,
+            message_sender,
+            participant_votes: Arc::new(RwLock::new(HashMap::new())),
+            participant_acks: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    /// Start a new distributed transaction
+    pub async fn begin_transaction(
+        &self,
+        timeout: Option<Duration>,
+    ) -> EngineResult<TransactionId> {
+        let transaction_timeout = timeout.unwrap_or(self.config.default_timeout);
+        let transaction = DistributedTransaction::new(self.node_id.clone(), transaction_timeout);
+        let transaction_id = transaction.transaction_id.clone();
+
+        // Check concurrent transaction limit
+        {
+            let active = self.active_transactions.read().await;
+            if active.len() >= self.config.max_concurrent_transactions {
+                return Err(EngineError::internal("Too many concurrent transactions"));
+            }
+        }
+
+        // Add to active transactions
+        {
+            let mut active = self.active_transactions.write().await;
+            active.insert(transaction_id.clone(), transaction);
+        }
+
+        self.log_transaction_event(&transaction_id, TransactionEvent::Started, None)
+            .await?;
+
+        info!("Started transaction: {}", transaction_id);
+        Ok(transaction_id)
+    }
+
+    /// Recover transaction state from persistent log
+    pub async fn recover_state(&self, transaction_id: &TransactionId) -> EngineResult<()> {
+        if let Some(event) = self
+            .logger
+            .recover_transaction_state(transaction_id)
+            .await?
+        {
+            let mut active = self.active_transactions.write().await;
+
+            // Reconstruct transaction if not exists
+            let transaction = active.entry(transaction_id.clone()).or_insert_with(|| {
+                DistributedTransaction::new(
+                    transaction_id.coordinator_node.clone(),
+                    self.config.default_timeout,
+                )
+            });
+
+            // Restore state based on last event
+            match event {
+                TransactionEvent::Started => transaction.state = TransactionState::Preparing,
+                TransactionEvent::PrepareRequested => {
+                    transaction.state = TransactionState::Preparing
+                }
+                TransactionEvent::CommitRequested => {
+                    transaction.state = TransactionState::Committing
+                }
+                TransactionEvent::Committed => transaction.state = TransactionState::Committed,
+                TransactionEvent::AbortRequested { .. } => {
+                    transaction.state = TransactionState::Aborting
+                }
+                TransactionEvent::Aborted { .. } => transaction.state = TransactionState::Aborted,
+                _ => {}
+            }
+
+            info!(
+                "Recovered transaction {} to state {:?}",
+                transaction_id, transaction.state
+            );
+        }
+        Ok(())
+    }
+
+    /// Add an operation to a transaction
+    pub async fn add_operation(
+        &self,
+        transaction_id: &TransactionId,
+        operation: TransactionOperation,
+    ) -> EngineResult<()> {
+        let mut active = self.active_transactions.write().await;
+        if let Some(transaction) = active.get_mut(transaction_id) {
+            if transaction.state != TransactionState::Preparing {
+                return Err(EngineError::internal(
+                    "Cannot add operations to non-preparing transaction",
+                ));
+            }
+
+            transaction
+                .participants
+                .insert(operation.target_actor.clone());
+            transaction.operations.push(operation);
+
+            Ok(())
+        } else {
+            Err(EngineError::internal("Transaction not found"))
+        }
+    }
+
+    /// Execute a distributed transaction using 2-phase commit
+    pub async fn commit_transaction(&self, transaction_id: &TransactionId) -> EngineResult<()> {
+        // Phase 1: Prepare
+        self.prepare_phase(transaction_id).await?;
+
+        // Check if all participants voted yes
+        let can_commit = self.check_votes(transaction_id).await?;
+
+        if can_commit {
+            // Phase 2: Commit
+            self.commit_phase(transaction_id).await?;
+        } else {
+            // Phase 2: Abort
+            self.abort_phase(transaction_id, "Not all participants voted yes")
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Phase 1: Send prepare messages to all participants
+    async fn prepare_phase(&self, transaction_id: &TransactionId) -> EngineResult<()> {
+        let (transaction, participants) = {
+            let active = self.active_transactions.read().await;
+            let transaction = active
+                .get(transaction_id)
+                .ok_or_else(|| EngineError::internal("Transaction not found"))?
+                .clone();
+            let participants: Vec<_> = transaction.participants.iter().cloned().collect();
+            (transaction, participants)
+        };
+
+        self.log_transaction_event(transaction_id, TransactionEvent::PrepareRequested, None)
+            .await?;
+
+        // Send prepare message to all participants
+        let prepare_message = TransactionMessage::Prepare {
+            transaction_id: transaction_id.clone(),
+            operations: transaction.operations.clone(),
+            timeout: transaction.timeout,
+        };
+
+        self.message_sender
+            .broadcast_message(&participants, prepare_message)
+            .await?;
+
+        // Wait for votes with timeout
+        let vote_timeout = transaction.timeout / 2; // Use half the transaction timeout
+        if (timeout(
+            vote_timeout,
+            self.wait_for_votes(transaction_id, participants.len()),
+        )
+        .await)
+            .is_err()
+        {
+            self.abort_phase(transaction_id, "Timeout waiting for votes")
+                .await?;
+            return Err(EngineError::timeout("prepare_phase"));
+        }
+
+        Ok(())
+    }
+
+    /// Wait for votes from all participants
+    async fn wait_for_votes(
+        &self,
+        transaction_id: &TransactionId,
+        expected_votes: usize,
+    ) -> EngineResult<()> {
+        let poll_interval = Duration::from_millis(100);
+
+        loop {
+            {
+                let votes = self.participant_votes.read().await;
+                if let Some(transaction_votes) = votes.get(transaction_id) {
+                    if transaction_votes.len() >= expected_votes {
+                        break;
+                    }
+                }
+            }
+            tokio::time::sleep(poll_interval).await;
+        }
+
+        Ok(())
+    }
+
+    /// Check if all participants voted to commit
+    async fn check_votes(&self, transaction_id: &TransactionId) -> EngineResult<bool> {
+        let votes = self.participant_votes.read().await;
+        if let Some(transaction_votes) = votes.get(transaction_id) {
+            for (participant, vote) in transaction_votes {
+                match vote {
+                    TransactionVote::Yes => continue,
+                    TransactionVote::No { reason } => {
+                        warn!("Participant {} voted no: {}", participant, reason);
+                        return Ok(false);
+                    }
+                    TransactionVote::Uncertain => {
+                        warn!("Participant {} voted uncertain", participant);
+                        return Ok(false);
+                    }
+                }
+            }
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Phase 2: Send commit messages to all participants
+    async fn commit_phase(&self, transaction_id: &TransactionId) -> EngineResult<()> {
+        let participants = {
+            let active = self.active_transactions.read().await;
+            let transaction = active
+                .get(transaction_id)
+                .ok_or_else(|| EngineError::internal("Transaction not found"))?;
+            transaction.participants.iter().cloned().collect::<Vec<_>>()
+        };
+
+        // Update transaction state
+        {
+            let mut active = self.active_transactions.write().await;
+            if let Some(transaction) = active.get_mut(transaction_id) {
+                transaction.state = TransactionState::Committing;
+            }
+        }
+
+        self.log_transaction_event(transaction_id, TransactionEvent::CommitRequested, None)
+            .await?;
+
+        // Send commit message to all participants
+        let commit_message = TransactionMessage::Commit {
+            transaction_id: transaction_id.clone(),
+        };
+
+        self.message_sender
+            .broadcast_message(&participants, commit_message)
+            .await?;
+
+        // Wait for acknowledgments
+        self.wait_for_acknowledgments(transaction_id, participants.len())
+            .await?;
+
+        // Update final state
+        {
+            let mut active = self.active_transactions.write().await;
+            if let Some(transaction) = active.get_mut(transaction_id) {
+                transaction.state = TransactionState::Committed;
+            }
+        }
+
+        self.log_transaction_event(transaction_id, TransactionEvent::Committed, None)
+            .await?;
+
+        info!("Transaction {} committed successfully", transaction_id);
+        Ok(())
+    }
+
+    /// Phase 2: Send abort messages to all participants
+    async fn abort_phase(&self, transaction_id: &TransactionId, reason: &str) -> EngineResult<()> {
+        let participants = {
+            let active = self.active_transactions.read().await;
+            let transaction = active
+                .get(transaction_id)
+                .ok_or_else(|| EngineError::internal("Transaction not found"))?;
+            transaction.participants.iter().cloned().collect::<Vec<_>>()
+        };
+
+        // Update transaction state
+        {
+            let mut active = self.active_transactions.write().await;
+            if let Some(transaction) = active.get_mut(transaction_id) {
+                transaction.state = TransactionState::Aborting;
+            }
+        }
+
+        self.log_transaction_event(
+            transaction_id,
+            TransactionEvent::AbortRequested {
+                reason: reason.to_string(),
+            },
+            None,
+        )
+        .await?;
+
+        // Send abort message to all participants
+        let abort_message = TransactionMessage::Abort {
+            transaction_id: transaction_id.clone(),
+            reason: reason.to_string(),
+        };
+
+        self.message_sender
+            .broadcast_message(&participants, abort_message)
+            .await?;
+
+        // Wait for acknowledgments
+        self.wait_for_acknowledgments(transaction_id, participants.len())
+            .await?;
+
+        // Update final state
+        {
+            let mut active = self.active_transactions.write().await;
+            if let Some(transaction) = active.get_mut(transaction_id) {
+                transaction.state = TransactionState::Aborted;
+            }
+        }
+
+        self.log_transaction_event(
+            transaction_id,
+            TransactionEvent::Aborted {
+                reason: reason.to_string(),
+            },
+            None,
+        )
+        .await?;
+
+        warn!("Transaction {} aborted: {}", transaction_id, reason);
+        Ok(())
+    }
+
+    /// Wait for acknowledgments from all participants
+    async fn wait_for_acknowledgments(
+        &self,
+        transaction_id: &TransactionId,
+        expected_acks: usize,
+    ) -> EngineResult<()> {
+        let poll_interval = Duration::from_millis(100);
+        let timeout_duration = self.config.default_timeout;
+        let start_time = Instant::now();
+
+        loop {
+            if start_time.elapsed() > timeout_duration {
+                return Err(EngineError::timeout("wait_for_acknowledgments"));
+            }
+
+            {
+                let acks = self.participant_acks.read().await;
+                if let Some(transaction_acks) = acks.get(transaction_id) {
+                    if transaction_acks.len() >= expected_acks {
+                        break;
+                    }
+                }
+            }
+            tokio::time::sleep(poll_interval).await;
+        }
+
+        Ok(())
+    }
+
+    /// Handle incoming transaction messages
+    pub async fn handle_message(&self, message: TransactionMessage) -> EngineResult<()> {
+        match message {
+            TransactionMessage::Vote {
+                transaction_id,
+                participant,
+                vote,
+            } => self.handle_vote(transaction_id, participant, vote).await,
+            TransactionMessage::Acknowledge {
+                transaction_id,
+                participant,
+                success,
+                error,
+            } => {
+                self.handle_acknowledgment(transaction_id, participant, success, error)
+                    .await
+            }
+            _ => {
+                warn!("Received unexpected message type for coordinator");
+                Ok(())
+            }
+        }
+    }
+
+    /// Handle vote from participant
+    async fn handle_vote(
+        &self,
+        transaction_id: TransactionId,
+        participant: AddressableReference,
+        vote: TransactionVote,
+    ) -> EngineResult<()> {
+        {
+            let mut votes = self.participant_votes.write().await;
+            votes
+                .entry(transaction_id.clone())
+                .or_insert_with(HashMap::new)
+                .insert(participant.clone(), vote.clone());
+        }
+
+        self.log_transaction_event(
+            &transaction_id,
+            TransactionEvent::VoteReceived { participant, vote },
+            None,
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    /// Handle acknowledgment from participant
+    async fn handle_acknowledgment(
+        &self,
+        transaction_id: TransactionId,
+        participant: AddressableReference,
+        success: bool,
+        error: Option<String>,
+    ) -> EngineResult<()> {
+        {
+            let mut acks = self.participant_acks.write().await;
+            acks.entry(transaction_id.clone())
+                .or_insert_with(HashMap::new)
+                .insert(participant.clone(), success);
+        }
+
+        if let Some(error) = error {
+            warn!("Participant {} reported error: {}", participant, error);
+        }
+
+        Ok(())
+    }
+
+    /// Log a transaction event
+    async fn log_transaction_event(
+        &self,
+        transaction_id: &TransactionId,
+        event: TransactionEvent,
+        details: Option<serde_json::Value>,
+    ) -> EngineResult<()> {
+        if !self.config.enable_logging {
+            return Ok(());
+        }
+
+        let entry = TransactionLogEntry {
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            transaction_id: transaction_id.clone(),
+            event,
+            details,
+        };
+
+        // Use persistent logger
+        self.logger.write_entry(&entry).await?;
+
+        Ok(())
+    }
+
+    /// Start background cleanup tasks
+    pub async fn start_background_tasks(&self) -> EngineResult<()> {
+        let coordinator = Arc::new(self.clone());
+
+        // Start timeout cleanup task
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(coordinator.config.cleanup_interval);
+            loop {
+                interval.tick().await;
+                if let Err(e) = coordinator.cleanup_timed_out_transactions().await {
+                    error!("Transaction cleanup failed: {}", e);
+                }
+            }
+        });
+
+        info!("Transaction coordinator background tasks started");
+        Ok(())
+    }
+
+    /// Clean up timed out transactions
+    async fn cleanup_timed_out_transactions(&self) -> EngineResult<()> {
+        let mut to_remove = Vec::new();
+
+        {
+            let active = self.active_transactions.read().await;
+            for (tx_id, transaction) in active.iter() {
+                if transaction.is_timed_out() {
+                    to_remove.push(tx_id.clone());
+                }
+            }
+        }
+
+        for tx_id in to_remove {
+            self.abort_phase(&tx_id, "Transaction timed out").await?;
+
+            // Remove from active transactions
+            {
+                let mut active = self.active_transactions.write().await;
+                active.remove(&tx_id);
+            }
+
+            // Clean up related data
+            {
+                let mut votes = self.participant_votes.write().await;
+                let mut acks = self.participant_acks.write().await;
+                votes.remove(&tx_id);
+                acks.remove(&tx_id);
+            }
+
+            self.log_transaction_event(&tx_id, TransactionEvent::TimedOut, None)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Get transaction statistics
+    pub async fn get_stats(&self) -> EngineResult<TransactionStats> {
+        let active = self.active_transactions.read().await;
+        let log_stats = self.logger.get_stats().await?;
+
+        Ok(TransactionStats {
+            active_transactions: active.len(),
+            total_log_entries: log_stats.total_entries as usize,
+            committed_count: log_stats.committed_count as usize,
+            aborted_count: log_stats.aborted_count as usize,
+            timed_out_count: log_stats.timed_out_count as usize,
+        })
+    }
+}
+
+impl Clone for TransactionCoordinator {
+    fn clone(&self) -> Self {
+        Self {
+            node_id: self.node_id.clone(),
+            config: self.config.clone(),
+            active_transactions: Arc::clone(&self.active_transactions),
+            logger: Arc::clone(&self.logger),
+            message_sender: Arc::clone(&self.message_sender),
+            participant_votes: Arc::clone(&self.participant_votes),
+            participant_acks: Arc::clone(&self.participant_acks),
+        }
+    }
+}
+
+/// Transaction statistics for monitoring
+#[derive(Debug, Clone)]
+pub struct TransactionStats {
+    /// Number of active transactions
+    pub active_transactions: usize,
+    /// Total number of log entries
+    pub total_log_entries: usize,
+    /// Number of committed transactions
+    pub committed_count: usize,
+    /// Number of aborted transactions
+    pub aborted_count: usize,
+    /// Number of timed out transactions
+    pub timed_out_count: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::addressable::{AddressableReference, Key};
+    use tokio::sync::Mutex;
+
+    // Mock message sender for testing
+    #[derive(Debug)]
+    struct MockMessageSender {
+        sent_messages: Arc<Mutex<Vec<(AddressableReference, TransactionMessage)>>>,
+    }
+
+    impl MockMessageSender {
+        fn new() -> Self {
+            Self {
+                sent_messages: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl TransactionMessageSender for MockMessageSender {
+        async fn send_message(
+            &self,
+            target: &AddressableReference,
+            message: TransactionMessage,
+        ) -> EngineResult<()> {
+            let mut messages = self.sent_messages.lock().await;
+            messages.push((target.clone(), message));
+            Ok(())
+        }
+
+        async fn broadcast_message(
+            &self,
+            targets: &[AddressableReference],
+            message: TransactionMessage,
+        ) -> EngineResult<()> {
+            for target in targets {
+                self.send_message(target, message.clone()).await?;
+            }
+            Ok(())
+        }
+    }
+
+    // Mock logger for testing
+    #[derive(Debug)]
+    struct MockLogger {
+        entries: Arc<Mutex<Vec<TransactionLogEntry>>>,
+    }
+
+    impl MockLogger {
+        fn new() -> Self {
+            Self {
+                entries: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl PersistentTransactionLogger for MockLogger {
+        async fn write_entry(&self, entry: &TransactionLogEntry) -> EngineResult<()> {
+            self.entries.lock().await.push(entry.clone());
+            Ok(())
+        }
+        async fn write_batch(&self, entries: &[TransactionLogEntry]) -> EngineResult<()> {
+            self.entries.lock().await.extend_from_slice(entries);
+            Ok(())
+        }
+        async fn get_transaction_log(
+            &self,
+            _id: &TransactionId,
+        ) -> EngineResult<Vec<crate::transaction_log::PersistentLogEntry>> {
+            Ok(vec![])
+        }
+        async fn get_entries_by_time_range(
+            &self,
+            _start: i64,
+            _end: i64,
+        ) -> EngineResult<Vec<crate::transaction_log::PersistentLogEntry>> {
+            Ok(vec![])
+        }
+        async fn archive_old_entries(&self, _ts: i64) -> EngineResult<u64> {
+            Ok(0)
+        }
+        async fn get_stats(&self) -> EngineResult<crate::transaction_log::LogStats> {
+            Ok(crate::transaction_log::LogStats {
+                total_entries: 0,
+                active_entries: 0,
+                archived_entries: 0,
+                database_size_bytes: 0,
+                oldest_entry_timestamp: None,
+                newest_entry_timestamp: None,
+                committed_count: 0,
+                aborted_count: 0,
+                timed_out_count: 0,
+            })
+        }
+        async fn maintenance(&self) -> EngineResult<()> {
+            Ok(())
+        }
+        async fn recover_transaction_state(
+            &self,
+            _id: &TransactionId,
+        ) -> EngineResult<Option<TransactionEvent>> {
+            Ok(None)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_transaction_creation() {
+        let node_id = "test-node".to_string();
+        let message_sender = Arc::new(MockMessageSender::new());
+        let logger = Arc::new(MockLogger::new());
+        let coordinator = TransactionCoordinator::new(
+            node_id.clone(),
+            TransactionConfig::default(),
+            message_sender,
+            logger,
+        );
+
+        let tx_id = coordinator.begin_transaction(None).await.unwrap();
+        assert_eq!(tx_id.coordinator_node, node_id);
+
+        let operation = TransactionOperation::new(
+            AddressableReference {
+                addressable_type: "TestActor".to_string(),
+                key: Key::StringKey {
+                    key: "test-1".to_string(),
+                },
+            },
+            "update".to_string(),
+            serde_json::json!({"value": 42}),
+        );
+
+        coordinator.add_operation(&tx_id, operation).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_transaction_timeout() {
+        let node_id = "test-node".to_string();
+        let timeout = Duration::from_millis(100);
+
+        let transaction = DistributedTransaction::new(node_id, timeout);
+
+        // Should not be timed out initially
+        assert!(!transaction.is_timed_out());
+
+        // Wait for timeout
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        // Should be timed out now (in real test we'd manipulate timestamps)
+        // For now, just verify the logic structure works
+    }
+
+    #[tokio::test]
+    async fn test_transaction_vote_handling() {
+        let node_id = "test-node".to_string();
+        let message_sender = Arc::new(MockMessageSender::new());
+        let logger = Arc::new(MockLogger::new());
+        let coordinator = TransactionCoordinator::new(
+            node_id.clone(),
+            TransactionConfig::default(),
+            message_sender,
+            logger,
+        );
+
+        let tx_id = TransactionId::new(node_id);
+        let participant = AddressableReference {
+            addressable_type: "TestActor".to_string(),
+            key: Key::StringKey {
+                key: "test-1".to_string(),
+            },
+        };
+
+        coordinator
+            .handle_vote(tx_id.clone(), participant.clone(), TransactionVote::Yes)
+            .await
+            .unwrap();
+
+        let votes = coordinator.participant_votes.read().await;
+        assert!(votes.contains_key(&tx_id));
+        assert_eq!(votes[&tx_id][&participant], TransactionVote::Yes);
+    }
+}

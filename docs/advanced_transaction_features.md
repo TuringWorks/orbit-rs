@@ -4,7 +4,7 @@ title: Advanced Transaction Features Guide
 category: documentation
 ---
 
-# Advanced Transaction Features Guide
+## Advanced Transaction Features Guide
 
 ## Table of Contents
 
@@ -125,7 +125,7 @@ println!("Deadlocks resolved: {}", stats.deadlocks_resolved);
 
 ## Metrics Integration
 
-### Overview
+### Metrics Overview
 
 Comprehensive Prometheus metrics for transaction monitoring and observability.
 
@@ -229,7 +229,7 @@ rate(orbit_locks_deadlock_detected_total[5m])
 
 ## Security Features
 
-### Overview
+### Security Overview
 
 Token-based authentication, scope-based authorization, and comprehensive audit logging.
 
@@ -425,7 +425,7 @@ println!("Memory: {}MB, Concurrent: {}", memory / 1_000_000, concurrent);
 
 ## Saga Pattern
 
-### Overview
+### Saga Overview
 
 Long-running distributed transactions with automatic compensation on failure.
 
@@ -696,8 +696,8 @@ if failed_auths.len() > threshold {
 
 ## Additional Resources
 
-- [Implementation Summary](../ADVANCED_FEATURES_IMPLEMENTATION.md)
-- [Architecture Documentation](../ORBIT_ARCHITECTURE.md)
+- [Implementation Summary](wip/ADVANCED_FEATURES_IMPLEMENTATION.md)
+- [Architecture Documentation](architecture/ORBIT_ARCHITECTURE.md)
 - [API Documentation](https://turingworks.github.io/orbit-rs/api/)
 - [Examples](../examples/)
 

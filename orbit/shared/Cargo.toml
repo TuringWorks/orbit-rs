@@ -44,6 +44,13 @@ rayon = "1.10"
 bytes = "1.0"
 # Security dependencies
 regex.workspace = true
+# WAL integrity checking
+crc32fast = "1.4"
+# Encryption at rest (AES-256-GCM)
+aes-gcm = "0.10"
+rand = "0.8"
+base64 = "0.22"
+hex = "0.4"
 
 # Code quality patterns
 paste.workspace = true

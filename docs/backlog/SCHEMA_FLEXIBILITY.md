@@ -10,7 +10,7 @@ category: backlog
 
 **Epic ID**: ORBIT-022  
 **Epic Title**: Flexible Schema Management System  
-**Priority**: 🔥 High  
+**Priority**:  High  
 **Phase**: Q2 2025  
 **Total Effort**: 8-10 weeks  
 **Status**: Planned  

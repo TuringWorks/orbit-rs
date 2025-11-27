@@ -11,7 +11,7 @@ import styled from 'styled-components';
 import { QueryType, QueryRequest, QueryResult, Connection } from '@/types';
 import { TauriService } from '@/services/tauri';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { orbitqlKeywords, redisCommands } from '@/constants/queryKeywords';
+import { orbitqlKeywords, redisCommands, mysqlKeywords, cqlKeywords, cypherKeywords, aqlKeywords } from '@/constants/queryKeywords';
 
 interface QueryEditorProps {
   value: string;
@@ -141,6 +141,14 @@ const QueryTypeIndicator = styled.div<{ type: QueryType }>`
         return 'background: #107c10; color: white;';
       case QueryType.Redis:
         return 'background: #d83b01; color: white;';
+      case QueryType.MySQL:
+        return 'background: #00758f; color: white;';
+      case QueryType.CQL:
+        return 'background: #1287b1; color: white;';
+      case QueryType.Cypher:
+        return 'background: #008cc1; color: white;';
+      case QueryType.AQL:
+        return 'background: #dd5324; color: white;';
       default:
         return 'background: #5a5a5a; color: white;';
     }
@@ -185,6 +193,18 @@ export const QueryEditor: React.FC<QueryEditorProps> = ({
         break;
       case QueryType.Redis:
         keywords = redisCommands;
+        break;
+      case QueryType.MySQL:
+        keywords = mysqlKeywords;
+        break;
+      case QueryType.CQL:
+        keywords = cqlKeywords;
+        break;
+      case QueryType.Cypher:
+        keywords = cypherKeywords;
+        break;
+      case QueryType.AQL:
+        keywords = aqlKeywords;
         break;
     }
     
@@ -237,10 +257,20 @@ export const QueryEditor: React.FC<QueryEditorProps> = ({
     switch (queryType) {
       case QueryType.SQL:
       case QueryType.OrbitQL:
+      case QueryType.MySQL:
         extensions.push(sql());
         break;
       case QueryType.Redis:
         extensions.push(javascript()); // Use JavaScript for Redis commands
+        break;
+      case QueryType.CQL:
+        extensions.push(sql()); // CQL is SQL-like
+        break;
+      case QueryType.Cypher:
+        extensions.push(javascript()); // Cypher syntax highlighting
+        break;
+      case QueryType.AQL:
+        extensions.push(javascript()); // AQL syntax highlighting
         break;
     }
 
@@ -347,7 +377,7 @@ export const QueryEditor: React.FC<QueryEditorProps> = ({
   };
 
   const handleFormat = () => {
-    if (queryType === QueryType.SQL || queryType === QueryType.OrbitQL) {
+    if (queryType === QueryType.SQL || queryType === QueryType.OrbitQL || queryType === QueryType.MySQL || queryType === QueryType.CQL) {
       try {
         const formatted = safeFormatQuery(value);
         onChange(formatted);
@@ -372,6 +402,14 @@ export const QueryEditor: React.FC<QueryEditorProps> = ({
         return 'OrbitQL with ML functions - try ML_XGBOOST(), ML_TRAIN_MODEL()';
       case QueryType.Redis:
         return 'Redis commands - GET, SET, HGET, etc.';
+      case QueryType.MySQL:
+        return 'MySQL syntax - similar to PostgreSQL with MySQL extensions';
+      case QueryType.CQL:
+        return 'Cassandra Query Language - SELECT, INSERT, UPDATE, DELETE';
+      case QueryType.Cypher:
+        return 'Neo4j Cypher - MATCH, CREATE, RETURN for graph queries';
+      case QueryType.AQL:
+        return 'ArangoDB AQL - FOR, FILTER, RETURN for document and graph queries';
       default:
         return '';
     }
@@ -392,13 +430,13 @@ export const QueryEditor: React.FC<QueryEditorProps> = ({
           )}
         </Button>
         
-        {(queryType === QueryType.SQL || queryType === QueryType.OrbitQL) && (
+        {(queryType === QueryType.SQL || queryType === QueryType.OrbitQL || queryType === QueryType.MySQL) && (
           <Button onClick={handleExplain} disabled={isExecuting || !value.trim() || !onExplain}>
             <span>📊</span> Explain
           </Button>
         )}
         
-        {(queryType === QueryType.SQL || queryType === QueryType.OrbitQL) && (
+        {(queryType === QueryType.SQL || queryType === QueryType.OrbitQL || queryType === QueryType.MySQL || queryType === QueryType.CQL) && (
           <Button onClick={handleFormat}>
             <span>📝</span> Format
           </Button>

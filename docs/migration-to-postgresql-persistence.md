@@ -20,7 +20,7 @@ This guide helps you migrate from in-memory PostgreSQL to persistent RocksDB-bac
 
 #### Before (In-Memory)
 
-```
+```text
 ✅ Fast read/write operations
 ❌ Data lost on server restart
 ❌ No durability guarantees
@@ -30,7 +30,7 @@ This guide helps you migrate from in-memory PostgreSQL to persistent RocksDB-bac
 
 #### After (RocksDB Persistent)
 
-```
+```text
 ✅ Fast read/write operations (LSM-tree optimized)
 ✅ Data survives server restarts
 ✅ Full ACID durability guarantees  

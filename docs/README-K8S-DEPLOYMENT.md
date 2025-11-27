@@ -8,7 +8,7 @@ category: documentation
 
 This document provides comprehensive guidance for deploying Orbit-RS in Kubernetes environments with optimized resource allocation, GPU acceleration, and various workload profiles.
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Prerequisites
 
@@ -31,7 +31,7 @@ helm install orbit-rs orbit-rs/orbit-rs -f helm/orbit-rs/values-small.yaml
 helm install orbit-rs orbit-rs/orbit-rs -f helm/orbit-rs/values-enterprise.yaml
 ```
 
-## 📊 Workload Profiles
+##  Workload Profiles
 
 ### Small Profile (Development/Testing)
 
@@ -82,9 +82,9 @@ helm install orbit-rs-enterprise orbit-rs/orbit-rs -f values-large.yaml
 helm install orbit-rs-hyperscale orbit-rs/orbit-rs -f values-enterprise.yaml
 ```
 
-## 🖥️ GPU Acceleration Support
+##  GPU Acceleration Support
 
-Orbit-RS provides comprehensive compute acceleration through the [orbit-compute framework](docs/COMPUTE_ACCELERATION_GUIDE.md) supporting various workload types:
+Orbit-RS provides comprehensive compute acceleration through the [orbit-compute framework](COMPUTE_ACCELERATION_GUIDE.md) supporting various workload types:
 
 ### GPU-Accelerated Database Workloads
 
@@ -94,18 +94,18 @@ Orbit-RS provides comprehensive compute acceleration through the [orbit-compute 
 - **Graph Operations**: Traversals, community detection (4-10x speedup)
 - **Text Processing**: Search, NLP, regex operations (2-8x speedup)
 
-📖 **See the [Compute Acceleration Guide](docs/COMPUTE_ACCELERATION_GUIDE.md) for detailed workload types, client configuration options, and performance tuning.**
+ **See the [Compute Acceleration Guide](COMPUTE_ACCELERATION_GUIDE.md) for detailed workload types, client configuration options, and performance tuning.**
 
 ### Supported GPU Types
 
 | Vendor | Architecture | Models | Support Status |
 |--------|-------------|---------|---------------|
-| NVIDIA | Ampere | A100, A40, RTX 4090 | ✅ Full |
-| NVIDIA | Ada Lovelace | RTX 4080, RTX 4070 | ✅ Full |  
-| NVIDIA | Hopper | H100, H200 | ✅ Full |
-| AMD | RDNA3 | RX 7900 XTX | 🚧 Experimental |
-| AMD | CDNA2 | MI250X, MI210 | 🚧 Experimental |
-| Apple | M1/M2/M3 | Mac Studio, MacBook Pro | 🚧 Metal Support |
+| NVIDIA | Ampere | A100, A40, RTX 4090 |  Full |
+| NVIDIA | Ada Lovelace | RTX 4080, RTX 4070 |  Full |  
+| NVIDIA | Hopper | H100, H200 |  Full |
+| AMD | RDNA3 | RX 7900 XTX |  Experimental |
+| AMD | CDNA2 | MI250X, MI210 |  Experimental |
+| Apple | M1/M2/M3 | Mac Studio, MacBook Pro |  Metal Support |
 
 ### GPU-Enabled Deployment
 
@@ -133,7 +133,7 @@ podman run -d --gpus all -p 8080:8080 \
   ghcr.io/turingworks/orbit-rs/orbit-compute:latest-release-gpu-linux-amd64
 ```
 
-## 💾 Storage Configuration
+##  Storage Configuration
 
 ### Storage Classes
 
@@ -169,7 +169,7 @@ orbitServer:
     mountPath: "/mmap-cache"
 ```
 
-## 📈 Monitoring and Autoscaling
+##  Monitoring and Autoscaling
 
 ### Horizontal Pod Autoscaling (HPA)
 
@@ -205,7 +205,7 @@ For GPU workloads, configure GPU utilization metrics:
       averageValue: "80"
 ```
 
-## 🔒 Security Configuration
+##  Security Configuration
 
 ### Pod Security Standards
 
@@ -239,7 +239,7 @@ networkPolicy:
           name: orbit-clients
 ```
 
-## 🛠️ Deployment Validation
+##  Deployment Validation
 
 Use the validation script to check your configuration:
 
@@ -252,14 +252,14 @@ Use the validation script to check your configuration:
 ./scripts/validate-k8s-deployments.sh --dry-run
 ```
 
-## 📋 Container Image Download Page
+##  Container Image Download Page
 
 Visit the automatically generated container image page for easy access to all available images:
 
 - **GitHub Pages**: `https://turingworks.github.io/orbit-rs/container-images/`
 - **Features**: Click-to-copy pull commands, GPU variants, multi-platform support
 
-## 🔧 Troubleshooting
+##  Troubleshooting
 
 ### Common Issues
 
@@ -305,7 +305,7 @@ kubectl get hpa -n <namespace>
 kubectl get --raw /apis/custom.metrics.k8s.io/v1beta1
 ```
 
-## 🚀 Performance Tuning
+##  Performance Tuning
 
 ### CPU Optimization
 
@@ -352,14 +352,14 @@ orbitCompute:
     ORBIT_GPU_PEER_ACCESS: "true"
 ```
 
-## 📚 Additional Resources
+##  Additional Resources
 
-- [Kubernetes Deployment Sizing Guide](docs/k8s-deployment-sizing-guide.md)
+- [Kubernetes Deployment Sizing Guide](k8s-deployment-sizing-guide.md)
 - [Container Images Page](https://turingworks.github.io/orbit-rs/container-images/)
-- [GPU Support Documentation](docs/gpu-acceleration.md)
-- [Performance Tuning Guide](docs/performance-tuning.md)
+- [GPU Support Documentation](GPU_COMPLETE_DOCUMENTATION.md)
+- [Performance Tuning Guide](PETABYTE_SCALE_PERFORMANCE.md)
 
-## 🤝 Contributing
+##  Contributing
 
 When adding new deployment configurations:
 
@@ -377,9 +377,9 @@ When adding new deployment configurations:
 cargo fmt --all
 ```
 
-## 📄 License
+##  License
 
-This project is licensed under the BSD-3-Clause OR MIT license - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the BSD-3-Clause OR MIT license - see the [LICENSE](../LICENSE) file for details.
 
 ---
 

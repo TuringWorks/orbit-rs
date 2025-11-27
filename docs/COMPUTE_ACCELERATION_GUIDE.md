@@ -6,11 +6,11 @@ category: "performance"
 permalink: /compute-acceleration/
 ---
 
-# Hardware Acceleration Guide
+## Hardware Acceleration Guide
 
-**Orbit-Compute: Heterogeneous Computing for Maximum Performance**
+### Orbit-Compute: Heterogeneous Computing for Maximum Performance
 
-**Status**: ✅ Production Ready  
+**Status**:  Production Ready  
 **Updated**: 2025-10-09  
 **Applies to**: orbit-compute v1.0+
 
@@ -531,6 +531,6 @@ For workloads involving large datasets, vector operations, matrix computations, 
 
 **See Also**:
 
-- [README-K8S-DEPLOYMENT.md](../README-K8S-DEPLOYMENT.md) - Kubernetes deployment with GPU support
+- [README-K8S-DEPLOYMENT.md](README-K8S-DEPLOYMENT.md) - Kubernetes deployment with GPU support
 - [RFC Heterogeneous Compute](rfcs/rfc_heterogeneous_compute.md) - Technical architecture details
 - [Kubernetes Deployment Sizing Guide](k8s-deployment-sizing-guide.md) - Hardware sizing recommendations

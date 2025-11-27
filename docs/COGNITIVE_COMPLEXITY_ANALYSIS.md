@@ -190,7 +190,7 @@ cognitive-complexity-threshold = 15
 # Check cognitive complexity before commit
 cargo clippy -- -W clippy::cognitive-complexity
 if [ $? -ne 0 ]; then
-    echo "❌ Cognitive complexity check failed"
+    echo " Cognitive complexity check failed"
     echo "Please refactor functions with complexity > 15"
     exit 1
 fi

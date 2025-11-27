@@ -1,0 +1,63 @@
+#version 450
+
+// GPU-Accelerated Hash Join - Build Phase
+// Constructs hash table from build relation (smaller table)
+// Uses open addressing with linear probing for collision resolution
+
+layout(local_size_x = 256) in;
+
+layout(set = 0, binding = 0) readonly buffer BuildKeys {
+    uint build_keys[];
+};
+
+layout(set = 0, binding = 1) readonly buffer BuildValues {
+    uint build_values[];  // Row IDs
+};
+
+layout(set = 0, binding = 2) uniform BuildCount {
+    uint build_count;
+};
+
+layout(set = 0, binding = 3) uniform TableSize {
+    uint table_size;  // Hash table size (2x build_count)
+};
+
+layout(set = 0, binding = 4) buffer HashTable {
+    uint hash_table[];  // Layout: [key0, value0, key1, value1, ...]
+};
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+
+    // Bounds check
+    if (id >= build_count) {
+        return;
+    }
+
+    uint key = build_keys[id];
+    uint value = build_values[id];
+
+    // Simple hash function
+    uint hash = key % table_size;
+
+    // Linear probing to find empty slot
+    uint probe = hash;
+    for (uint i = 0; i < table_size; i++) {
+        uint slot_idx = probe * 2;  // Each entry is 2 elements (key, value)
+
+        // Try to insert key using atomic compare-exchange
+        uint expected = 0xFFFFFFFF;  // UINT_MAX as empty marker
+        uint result = atomicCompSwap(hash_table[slot_idx], expected, key);
+
+        if (result == expected) {
+            // Successfully inserted key, now insert value
+            hash_table[slot_idx + 1] = value;
+            return;
+        }
+
+        // Slot occupied, try next slot (linear probing)
+        probe = (probe + 1) % table_size;
+    }
+
+    // Table full (should not happen if sized correctly)
+}

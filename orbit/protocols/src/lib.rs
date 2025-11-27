@@ -18,18 +18,22 @@
 
 pub mod aql;
 pub mod arangodb;
-pub mod bolt;
+// pub mod bolt; // Moved to neo4j module
+pub mod common; // Common functionality (storage, etc.)
+pub mod cql; // Cassandra Query Language
 pub mod cypher;
 pub mod error;
 pub mod graph_database;
 pub mod graphrag;
 pub mod mcp;
 pub mod ml; // New ML module
+pub mod mysql; // MySQL Wire Protocol
 pub mod neo4j;
 pub mod orbitql;
 pub mod persistence;
 pub mod postgres_wire;
 pub mod resp;
+// pub mod rest; // Has compilation issues, disabled for now
 pub mod time_series;
 pub mod vector_store;
 

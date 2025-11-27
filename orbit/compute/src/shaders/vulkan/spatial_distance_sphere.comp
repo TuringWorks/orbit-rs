@@ -1,0 +1,64 @@
+#version 450
+
+// GPU-Accelerated Haversine Distance Calculation
+// Computes great circle distance on a sphere (Earth) from a query point to multiple candidates
+// Using the Haversine formula for geographic coordinates (longitude, latitude)
+
+layout(local_size_x = 256) in;
+
+layout(set = 0, binding = 0) uniform QueryPoint {
+    float query_lon;
+    float query_lat;
+};
+
+layout(set = 0, binding = 1) readonly buffer CandidatesLon {
+    float candidates_lon[];
+};
+
+layout(set = 0, binding = 2) readonly buffer CandidatesLat {
+    float candidates_lat[];
+};
+
+layout(set = 0, binding = 3) writeonly buffer Distances {
+    float distances[];
+};
+
+layout(set = 0, binding = 4) uniform Params {
+    uint point_count;
+};
+
+const float EARTH_RADIUS_KM = 6371.0;
+const float PI = 3.14159265359;
+
+// Convert degrees to radians
+float to_radians(float degrees) {
+    return degrees * PI / 180.0;
+}
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+
+    // Bounds check
+    if (id >= point_count) {
+        return;
+    }
+
+    // Convert to radians
+    float lat1 = to_radians(query_lat);
+    float lon1 = to_radians(query_lon);
+    float lat2 = to_radians(candidates_lat[id]);
+    float lon2 = to_radians(candidates_lon[id]);
+
+    // Haversine formula
+    float dlat = lat2 - lat1;
+    float dlon = lon2 - lon1;
+
+    float a = sin(dlat / 2.0) * sin(dlat / 2.0) +
+              cos(lat1) * cos(lat2) *
+              sin(dlon / 2.0) * sin(dlon / 2.0);
+
+    float c = 2.0 * atan(sqrt(a), sqrt(1.0 - a));
+    float distance = EARTH_RADIUS_KM * c;
+
+    distances[id] = distance;
+}

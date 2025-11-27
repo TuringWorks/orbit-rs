@@ -1,0 +1,23 @@
+{
+  "MATCH": {
+    "prefix": "match",
+    "body": "MATCH (${1:n}) WHERE ${2:condition} RETURN ${1:n};",
+    "description": "MATCH query"
+  },
+  "CREATE": {
+    "prefix": "create",
+    "body": "CREATE (${1:n}:${2:Label} {${3:property}: ${4:value}});",
+    "description": "CREATE node"
+  },
+  "MERGE": {
+    "prefix": "merge",
+    "body": "MERGE (${1:n}:${2:Label} {${3:property}: ${4:value}});",
+    "description": "MERGE node"
+  },
+  "CREATE RELATIONSHIP": {
+    "prefix": "create rel",
+    "body": "MATCH (${1:a}), (${2:b}) CREATE (${1:a})-[:${3:TYPE}]->(${2:b});",
+    "description": "CREATE relationship"
+  }
+}
+

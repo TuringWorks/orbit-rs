@@ -52,8 +52,8 @@ thiserror = "1.0"
 anyhow = "1.0"
 
 # OpenAPI documentation
-utoipa = { version = "4.2", features = ["axum_extras"] }
-utoipa-swagger-ui = { version = "7.1", features = ["axum"] }
+utoipa = { version = "5.4", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "8.0", features = ["axum"] }
 
 # Utilities
 async-trait = "0.1"
@@ -64,17 +64,20 @@ rand = "0.8"
 rust_decimal = { version = "1.36", features = ["serde"] }
 ordered-float = { version = "4.2", features = ["serde"] }
 
+# Table formatting and terminal colors
+comfy-table = "7.1"
+owo-colors = "4.1"
+
 # Persistence
-rocksdb = "0.22"
-tikv-client = "0.3"
+rocksdb = { version = "0.22", optional = true, default-features = false }
 
 # Apache Iceberg integration for warm/cold tiers (optional feature)
-iceberg = { version = "0.7", optional = true, features = ["storage-s3", "storage-memory"] }
-iceberg-catalog-rest = { version = "0.7", optional = true }
-arrow = { version = "55.2", optional = true }
-arrow-schema = { version = "55.2", optional = true }
-parquet = { version = "55.2", optional = true }
-opendal = { version = "0.51", optional = true, features = ["services-s3", "services-memory"] }
+# iceberg = { version = "0.7", optional = true, default-features = false, features = ["storage-memory"] }
+# iceberg-catalog-rest = { version = "0.7", optional = true }
+# arrow = { version = "55.2", optional = true, default-features = false }
+# arrow-schema = { version = "55.2", optional = true, default-features = false }
+# parquet = { version = "55.2", optional = true, default-features = false }
+# opendal = { version = "0.51", optional = true, features = ["services-azblob", "services-memory"] }
 
 [dev-dependencies]
 redis = "0.32"
@@ -82,14 +85,24 @@ tokio-postgres = "0.7"
 neo4rs = "0.7"
 reqwest = { version = "0.12", features = ["json"] }
 orbit-util = { path = "../util" }
+orbit-server = { path = "../server", default-features = false, features = ["actor-system", "persistence", "protocol-mysql", "storage-rocksdb"] }
 
 [features]
-default = ["resp", "postgres-wire", "cypher", "rest"]
+default = ["resp", "postgres-wire", "mysql", "cql", "cypher", "neo4j", "arangodb", "rest", "storage-rocksdb"]
+# Protocol features
 resp = []
 postgres-wire = []
+mysql = []
+cql = []
 cypher = []
+neo4j = []
+arangodb = []
 rest = []
+mcp = []
+# Enable RocksDB storage backend
+storage-rocksdb = ["rocksdb"]
 # Enable integration tests that require network access
 integration = []
 # Enable Apache Iceberg cold tier storage
-iceberg-cold = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet", "opendal"]
+iceberg-cold = []
+# iceberg-cold = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet", "opendal"]

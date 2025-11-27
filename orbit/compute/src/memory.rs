@@ -187,6 +187,7 @@ impl AcceleratedMemoryAllocator {
 
     /// Try large page allocation (Linux/Windows)
     #[cfg(any(target_os = "linux", target_os = "windows"))]
+    #[allow(dead_code)]
     fn try_large_page_allocation(&self, size: usize) -> ComputeResult<AlignedMemory> {
         // This would use platform-specific large page APIs
         // For now, fall back to standard allocation

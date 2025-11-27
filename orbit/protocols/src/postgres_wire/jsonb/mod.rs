@@ -70,22 +70,28 @@
 //! ## 📝 Usage Examples
 //!
 //! ```rust
-//! use crate::postgres_wire::jsonb::{JsonbValue, JsonbPath};
+//! use orbit_protocols::postgres_wire::jsonb::{JsonbValue, JsonbPath};
+//! use orbit_shared::serialization::SerializableData;
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!
 //! // Create JSONB from JSON string
 //! let json = JsonbValue::from_json_str(r#"{"name": "Alice", "age": 30}"#)?;
 //!
 //! // Path-based access
-//! let path = JsonbPath::parse("$.name")?;
+//! let path = JsonbPath::from_str("name")?;
 //! let name = json.path_text(&path)?; // Some("Alice")
 //!
 //! // Operator usage
+//! let json1 = JsonbValue::from_json_str(r#"{"name": "Alice", "tags": ["dev"]}"#)?;
+//! let json2 = JsonbValue::from_json_str(r#"{"name": "Alice"}"#)?;
 //! let contains = json1.contains(&json2)?;
 //! let has_key = json.has_key("name")?;
 //!
 //! // Binary storage
 //! let binary = json.to_binary()?;
 //! let restored = JsonbValue::from_binary(&binary)?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## 🧪 Test Coverage

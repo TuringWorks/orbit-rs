@@ -1,0 +1,49 @@
+#version 450
+
+// Parallel sum reduction for i32 data
+// Uses shared memory for efficient reduction within workgroups
+// Requires GL_ARB_gpu_shader_int64 extension
+#extension GL_ARB_gpu_shader_int64 : require
+
+layout(local_size_x = 256) in;
+
+// Input data buffer
+layout(set = 0, binding = 0) buffer InputData {
+    int data[];
+};
+
+// Output buffer (partial sums from each workgroup)
+layout(set = 0, binding = 1) buffer Output {
+    int64_t partial_sums[];
+};
+
+// Shared memory for reduction within workgroup
+shared int64_t shared_data[256];
+
+void main() {
+    uint global_idx = gl_GlobalInvocationID.x;
+    uint local_idx = gl_LocalInvocationID.x;
+    uint workgroup_idx = gl_WorkGroupID.x;
+
+    // Load data into shared memory
+    if (global_idx < data.length()) {
+        shared_data[local_idx] = int64_t(data[global_idx]);
+    } else {
+        shared_data[local_idx] = 0;
+    }
+
+    barrier();
+
+    // Parallel reduction in shared memory
+    for (uint stride = 128; stride > 0; stride >>= 1) {
+        if (local_idx < stride) {
+            shared_data[local_idx] += shared_data[local_idx + stride];
+        }
+        barrier();
+    }
+
+    // Write workgroup result
+    if (local_idx == 0) {
+        partial_sums[workgroup_idx] = shared_data[0];
+    }
+}

@@ -1,0 +1,262 @@
+{
+  "name": "orbit-rs",
+  "displayName": "Orbit-RS",
+  "description": "VSCode extension for Orbit-RS multi-model database",
+  "version": "0.1.0",
+  "publisher": "orbit-rs",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Database",
+    "Other"
+  ],
+  "keywords": [
+    "database",
+    "multi-model",
+    "orbit",
+    "postgresql",
+    "mysql",
+    "redis",
+    "cassandra",
+    "neo4j",
+    "arangodb"
+  ],
+  "activationEvents": [
+    "onLanguage:orbitql",
+    "onLanguage:sql",
+    "onLanguage:cypher",
+    "onLanguage:aql",
+    "onCommand:orbit.connect",
+    "onCommand:orbit.executeQuery"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "orbitql",
+        "aliases": ["OrbitQL", "orbitql"],
+        "extensions": [".orbitql", ".orbit"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "cypher",
+        "aliases": ["Cypher", "cypher"],
+        "extensions": [".cypher", ".cql"],
+        "configuration": "./cypher-language-configuration.json"
+      },
+      {
+        "id": "aql",
+        "aliases": ["AQL", "aql"],
+        "extensions": [".aql"],
+        "configuration": "./aql-language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "orbitql",
+        "scopeName": "source.orbitql",
+        "path": "./syntaxes/orbitql.tmLanguage.json"
+      },
+      {
+        "language": "cypher",
+        "scopeName": "source.cypher",
+        "path": "./syntaxes/cypher.tmLanguage.json"
+      },
+      {
+        "language": "aql",
+        "scopeName": "source.aql",
+        "path": "./syntaxes/aql.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "orbit.connect",
+        "title": "Connect to Orbit-RS",
+        "category": "Orbit"
+      },
+      {
+        "command": "orbit.disconnect",
+        "title": "Disconnect from Orbit-RS",
+        "category": "Orbit"
+      },
+      {
+        "command": "orbit.executeQuery",
+        "title": "Execute Query",
+        "category": "Orbit",
+        "icon": "$(play)"
+      },
+      {
+        "command": "orbit.executeSelection",
+        "title": "Execute Selection",
+        "category": "Orbit",
+        "icon": "$(play)"
+      },
+      {
+        "command": "orbit.showConnections",
+        "title": "Show Connections",
+        "category": "Orbit"
+      },
+      {
+        "command": "orbit.addConnection",
+        "title": "Add Connection",
+        "category": "Orbit"
+      },
+      {
+        "command": "orbit.browseSchema",
+        "title": "Browse Schema",
+        "category": "Orbit"
+      },
+      {
+        "command": "orbit.showResults",
+        "title": "Show Query Results",
+        "category": "Orbit"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "when": "editorTextFocus && (resourceLangId == 'orbitql' || resourceLangId == 'sql' || resourceLangId == 'cypher' || resourceLangId == 'aql')",
+          "command": "orbit.executeSelection",
+          "group": "orbit"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "orbit.connect",
+          "when": "!orbit.connected"
+        },
+        {
+          "command": "orbit.disconnect",
+          "when": "orbit.connected"
+        },
+        {
+          "command": "orbit.executeQuery",
+          "when": "editorTextFocus && (resourceLangId == 'orbitql' || resourceLangId == 'sql' || resourceLangId == 'cypher' || resourceLangId == 'aql')"
+        },
+        {
+          "command": "orbit.executeSelection",
+          "when": "editorTextFocus && (resourceLangId == 'orbitql' || resourceLangId == 'sql' || resourceLangId == 'cypher' || resourceLangId == 'aql')"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "orbit.addConnection",
+          "when": "view == orbit.connectionsView",
+          "group": "navigation"
+        },
+        {
+          "command": "orbit.connect",
+          "when": "view == orbit.connectionsView && !orbit.connected",
+          "group": "navigation"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "orbit.connectionsView",
+          "name": "Orbit Connections",
+          "when": "true"
+        },
+        {
+          "id": "orbit.schemaView",
+          "name": "Orbit Schema",
+          "when": "orbit.connected"
+        },
+        {
+          "id": "orbit.resultsView",
+          "name": "Query Results",
+          "when": "true"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "orbit",
+          "title": "Orbit-RS",
+          "icon": "resources/orbit-icon.svg"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Orbit-RS",
+      "properties": {
+        "orbit.connections": {
+          "type": "array",
+          "default": [],
+          "description": "Orbit-RS connection configurations"
+        },
+        "orbit.defaultProtocol": {
+          "type": "string",
+          "enum": ["postgres", "mysql", "cql", "redis", "cypher", "aql", "mcp"],
+          "default": "postgres",
+          "description": "Default protocol to use"
+        },
+        "orbit.queryTimeout": {
+          "type": "number",
+          "default": 30,
+          "description": "Query execution timeout in seconds"
+        },
+        "orbit.maxResults": {
+          "type": "number",
+          "default": 1000,
+          "description": "Maximum number of results to display"
+        },
+        "orbit.enableSyntaxHighlighting": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable syntax highlighting for OrbitQL, Cypher, and AQL"
+        }
+      }
+    },
+    "snippets": [
+      {
+        "language": "orbitql",
+        "path": "./snippets/orbitql.json"
+      },
+      {
+        "language": "sql",
+        "path": "./snippets/sql.json"
+      },
+      {
+        "language": "cypher",
+        "path": "./snippets/cypher.json"
+      },
+      {
+        "language": "aql",
+        "path": "./snippets/aql.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "dependencies": {
+    "pg": "^8.11.0",
+    "mysql2": "^3.6.0",
+    "cassandra-driver": "^4.6.0",
+    "redis": "^4.6.0",
+    "neo4j-driver": "^5.14.0",
+    "arangojs": "^7.8.0",
+    "axios": "^1.6.0"
+  }
+}
+

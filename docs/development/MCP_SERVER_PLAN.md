@@ -4,7 +4,7 @@ title: MCP Server for Orbit-RS: LLM Integration Plan
 category: development
 ---
 
-# MCP Server for Orbit-RS: LLM Integration Plan
+## MCP Server for Orbit-RS: LLM Integration Plan
 
 ## Overview
 
@@ -12,55 +12,55 @@ The Model Context Protocol (MCP) server for Orbit-RS will provide Large Language
 
 ## Architecture
 
-```
-LLM Client (Claude, GPT, etc.)
-       ↓
-   MCP Protocol
-       ↓ 
+```text
+    LLM Client (Claude, GPT, etc.)
+                ↓
+           MCP Protocol
+                ↓ 
 ┌─────────────────────────────────────┐
 │           MCP Server                │
-│  ┌─────────────────────────────────┐│
-│  │     Natural Language            ││
-│  │     Query Processor             ││  
-│  │  ┌─────────────────────────┐    ││
-│  │  │   Intent Classification │    ││
-│  │  │   Entity Recognition    │    ││
-│  │  │   Query Understanding   │    ││
-│  │  └─────────────────────────┘    ││
-│  └─────────────────────────────────┘│
-│  ┌─────────────────────────────────┐│
-│  │      SQL Generation             ││
-│  │  ┌─────────────────────────┐    ││
-│  │  │   Schema Analysis       │    ││
-│  │  │   Query Construction    │    ││
-│  │  │   Optimization          │    ││
-│  │  └─────────────────────────┘    ││
-│  └─────────────────────────────────┘│
-│  ┌─────────────────────────────────┐│
-│  │      Result Processing          ││
-│  │  ┌─────────────────────────┐    ││
-│  │  │   Data Formatting       │    ││
-│  │  │   Summarization         │    ││
-│  │  │   Visualization Hints   │    ││
-│  │  └─────────────────────────┘    ││
-│  └─────────────────────────────────┘│
+│  ┌───────────────────────────────┐  │
+│  │     Natural Language          │  │
+│  │     Query Processor           │  │  
+│  │  ┌─────────────────────────┐  │  │
+│  │  │   Intent Classification │  │  │
+│  │  │   Entity Recognition    │  │  │
+│  │  │   Query Understanding   │  │  │
+│  │  └─────────────────────────┘  │  │  
+│  └───────────────────────────────┘  │
+│  ┌───────────────────────────────┐  │
+│  │      SQL Generation           │  │
+│  │  ┌─────────────────────────┐  │  │
+│  │  │   Schema Analysis       │  │  │
+│  │  │   Query Construction    │  │  │
+│  │  │   Optimization          │  │  │
+│  │  └─────────────────────────┘  │  │
+│  └───────────────────────────────┘  │
+│  ┌───────────────────────────────┐  │
+│  │      Result Processing        │  │
+│  │  ┌─────────────────────────┐  │  │
+│  │  │   Data Formatting       │  │  │
+│  │  │   Summarization         │  │  │
+│  │  │   Visualization Hints   │  │  │
+│  │  └─────────────────────────┘  │  │
+│  └───────────────────────────────┘  │
 └─────────────────────────────────────┘
-       ↓
-  Orbit PostgreSQL 
-  Wire Protocol
-       ↓
+               ↓
+        Orbit PostgreSQL 
+         Wire Protocol
+               ↓
 ┌─────────────────────────────────────┐
 │         Orbit-RS Cluster            │
-│  ┌─────────────────────────────────┐│
-│  │      SQL Query Engine           ││
-│  │   (Phase 8 Implementation)      ││
-│  └─────────────────────────────────┘│
-│  ┌─────────────────────────────────┐│
-│  │      Actor System               ││
-│  │   - Table Actors                ││
-│  │   - Collection Actors           ││
-│  │   - Transaction Coordinators    ││
-│  └─────────────────────────────────┘│
+│  ┌───────────────────────────────┐  │
+│  │      SQL Query Engine         │  │
+│  │   (Phase 8 Implementation)    │  │
+│  └───────────────────────────────┘  │
+│  ┌───────────────────────────────┐  │
+│  │      Actor System             │  │
+│  │   - Table Actors              │  │
+│  │   - Collection Actors         │  │
+│  │   - Transaction Coordinators  │  │
+│  └───────────────────────────────┘  │
 └─────────────────────────────────────┘
 ```
 
@@ -71,12 +71,14 @@ LLM Client (Claude, GPT, etc.)
 **Responsibility**: Handle the Model Context Protocol communication with LLMs
 
 **Key Features:**
+
 - Protocol-compliant message handling
 - Authentication and authorization
 - Session management
 - Error handling and recovery
 
 **Implementation:**
+
 ```rust
 pub struct McpServer {
     pub config: McpConfig,
@@ -97,12 +99,14 @@ pub trait McpProtocolHandler {
 **Responsibility**: Parse and understand natural language queries
 
 **Key Features:**
+
 - Intent classification (SELECT, INSERT, UPDATE, DELETE, ANALYZE, SUMMARIZE)
 - Entity recognition (table names, column names, values)
 - Query context understanding
 - Ambiguity resolution
 
 **Implementation:**
+
 ```rust
 pub struct NlpQueryProcessor {
     pub schema_analyzer: SchemaAnalyzer,
@@ -144,6 +148,7 @@ pub enum SqlOperation {
 **Responsibility**: Convert natural language intents to SQL queries
 
 **Key Features:**
+
 - Schema-aware query generation
 - Type-safe parameter binding
 - Query optimization hints
@@ -151,6 +156,7 @@ pub enum SqlOperation {
 - Complex query construction
 
 **Implementation:**
+
 ```rust
 pub struct SqlGenerator {
     pub schema_cache: SchemaCache,
@@ -180,6 +186,7 @@ pub trait QueryBuilder {
 **Responsibility**: Maintain up-to-date schema information for intelligent query generation
 
 **Key Features:**
+
 - Real-time schema discovery
 - Column statistics and metadata
 - Relationship inference
@@ -187,6 +194,7 @@ pub trait QueryBuilder {
 - Data distribution analysis
 
 **Implementation:**
+
 ```rust
 pub struct SchemaAnalyzer {
     pub orbit_client: OrbitClient,
@@ -217,6 +225,7 @@ pub struct TableSchema {
 **Responsibility**: Process query results for optimal LLM consumption
 
 **Key Features:**
+
 - Intelligent data summarization
 - Format optimization for LLM context
 - Large result set handling
@@ -224,6 +233,7 @@ pub struct TableSchema {
 - Statistical summary generation
 
 **Implementation:**
+
 ```rust
 pub struct ResultProcessor {
     pub formatter: ResultFormatter,
@@ -260,36 +270,39 @@ pub trait DataSummarizer {
 
 ### Administrative Tools
 
-6. **list_tables**: Get available tables and basic metadata
-7. **check_performance**: Query performance analysis and optimization
-8. **get_statistics**: Database and table-level statistics
-9. **validate_query**: Validate SQL queries without execution
+1. **list_tables**: Get available tables and basic metadata
+2. **check_performance**: Query performance analysis and optimization
+3. **get_statistics**: Database and table-level statistics
+4. **validate_query**: Validate SQL queries without execution
 
 ### Advanced Analytics Tools
 
-10. **trend_analysis**: Time-series trend analysis
-11. **correlation_analysis**: Column correlation analysis
-12. **distribution_analysis**: Data distribution profiling
-13. **outlier_detection**: Statistical outlier identification
+1. **trend_analysis**: Time-series trend analysis
+2. **correlation_analysis**: Column correlation analysis
+3. **distribution_analysis**: Data distribution profiling
+4. **outlier_detection**: Statistical outlier identification
 
 ## Natural Language Processing Capabilities
 
 ### Intent Classification Examples
 
 **Data Retrieval:**
+
 - "Show me all users from California"
 - "What are the top 10 products by revenue?"
 - "Find documents similar to this embedding vector"
 - "Get the average order value by month"
 
 **Data Analysis:**
+
 - "Analyze the distribution of customer ages"
 - "What's the correlation between price and sales volume?"
 - "Show me trends in user sign-ups over the past year"
 - "Identify outliers in the transaction amounts"
 
 **Data Modification:**
-- "Add a new user with email john@example.com"
+
+- "Add a new user with email <john@example.com>"
 - "Update all products in category 'electronics' to have free shipping"
 - "Delete old log entries from before last month"
 
@@ -353,24 +366,28 @@ impl ActorWithStringKey for TableActor {
 ## Implementation Plan
 
 ### Phase 1: MCP Foundation (Week 1)
+
 - [ ] Set up MCP server infrastructure
 - [ ] Implement basic protocol handlers
 - [ ] Create Orbit client integration
 - [ ] Basic tool definitions
 
 ### Phase 2: Natural Language Processing (Week 2)
+
 - [ ] Intent classification system
 - [ ] Entity recognition for SQL elements
 - [ ] Schema analysis and caching
 - [ ] Basic SQL generation
 
 ### Phase 3: Advanced Features (Week 3)
+
 - [ ] Vector similarity search integration
 - [ ] Advanced analytics tools
 - [ ] Result processing and summarization
 - [ ] Performance optimization
 
 ### Phase 4: Integration and Testing (Week 4)
+
 - [ ] End-to-end integration testing
 - [ ] LLM client testing (Claude, GPT-4)
 - [ ] Performance benchmarking
@@ -379,7 +396,8 @@ impl ActorWithStringKey for TableActor {
 ## Example Usage Scenarios
 
 ### Data Exploration
-```
+
+```text
 LLM: "I need to understand the customer data structure"
 MCP: Executes describe_schema("customers") and provides detailed schema information
 
@@ -391,14 +409,16 @@ MCP: Executes analyze_data with distribution analysis on age column
 ```
 
 ### Vector Search
-```
+
+```text
 LLM: "Find documents similar to 'machine learning algorithms'"
 MCP: Converts text to embedding vector and executes similarity search
 MCP: Returns top results with distance scores and content summaries
 ```
 
 ### Analytical Queries
-```
+
+```text
 LLM: "Analyze sales trends over the past year by product category"
 MCP: Generates complex analytical query with time-series grouping
 MCP: Returns processed results with statistical insights and visualization hints

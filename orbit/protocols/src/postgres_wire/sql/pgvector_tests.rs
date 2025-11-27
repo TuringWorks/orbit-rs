@@ -11,7 +11,7 @@
 #[cfg(test)]
 mod tests {
     use crate::error::ProtocolResult;
-    use crate::postgres_wire::sql::{ast::*, lexer::*, parser::SqlParser, types::*};
+    use crate::postgres_wire::sql::{ast::*, parser::SqlParser, types::*};
 
     fn parse_sql(sql: &str) -> ProtocolResult<Statement> {
         let mut parser = SqlParser::new();
@@ -281,7 +281,7 @@ mod tests {
     #[test]
     fn test_vector_cast_operation() {
         let sql = "SELECT embedding::vector(512) FROM embeddings";
-        let result = parse_sql(sql);
+        let _result = parse_sql(sql);
         // This might not be supported yet, but should parse without crashing
         // assert!(result.is_ok(), "Failed to parse vector cast: {:?}", result);
     }
@@ -365,7 +365,7 @@ mod tests {
     #[test]
     fn test_invalid_vector_literal() {
         let sql = "INSERT INTO items (embedding) VALUES ('[1,2,invalid]')";
-        let result = parse_sql(sql);
+        let _result = parse_sql(sql);
         // Should either parse as string literal or fail gracefully
         // The important thing is that it doesn't panic
     }
@@ -374,7 +374,7 @@ mod tests {
     fn test_vector_dimension_mismatch() {
         // This should parse fine - dimension validation happens at execution time
         let sql = "INSERT INTO items (embedding) VALUES ('[1,2,3,4,5]')";
-        let result = parse_sql(sql);
+        let _result = parse_sql(sql);
         // Should parse successfully even if dimensions don't match table definition
     }
 }

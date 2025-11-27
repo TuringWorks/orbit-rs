@@ -8,10 +8,10 @@ Workflow run #54 (commit c252e46) failed with errors indicating missing binaries
 
 The `.github/workflows/k8s-container-pipeline.yml` workflow was attempting to build container images for four components:
 
-- `orbit-server` ✅ (has binary target)
-- `orbit-client` ❌ (library-only, no binary)
-- `orbit-operator` ✅ (has binary target)
-- `orbit-compute` ❌ (library-only, no binary)
+- `orbit-server`  (has binary target)
+- `orbit-client`  (library-only, no binary)
+- `orbit-operator`  (has binary target)
+- `orbit-compute`  (library-only, no binary)
 
 The workflow's build step at line 250 attempted to build binaries:
 
@@ -39,8 +39,8 @@ Updated `.github/workflows/k8s-container-pipeline.yml` to only build components 
 
 ## Verification
 
-- ✅ YAML syntax validated successfully
-- ✅ Confirmed package structure:
+-  YAML syntax validated successfully
+-  Confirmed package structure:
   - `orbit/client/src/lib.rs` - library only
   - `orbit-compute/src/lib.rs` - library only  
   - `orbit/server/src/main.rs` - has binary

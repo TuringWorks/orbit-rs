@@ -38,13 +38,19 @@ pub enum OrbitError {
     Timeout { operation: String },
 
     #[error("Configuration error: {message}{}", .key.as_ref().map(|k| format!(" (key: {})", k)).unwrap_or_default())]
-    ConfigurationError { message: String, key: Option<String> },
+    ConfigurationError {
+        message: String,
+        key: Option<String>,
+    },
 
     #[error("Cluster error: {0}")]
     ClusterError(String),
 
     #[error("IO error: {message}{}", .source_info.as_ref().map(|s| format!(" (source: {})", s)).unwrap_or_default())]
-    IoError { message: String, source_info: Option<String> },
+    IoError {
+        message: String,
+        source_info: Option<String>,
+    },
 
     #[error("Parse error: {message}{}{}",
         .position.as_ref().map(|p| format!(" at position {}", p)).unwrap_or_default(),
@@ -63,10 +69,16 @@ pub enum OrbitError {
     },
 
     #[error("Authentication error: {message}{}", .user.as_ref().map(|u| format!(" (user: {})", u)).unwrap_or_default())]
-    AuthError { message: String, user: Option<String> },
+    AuthError {
+        message: String,
+        user: Option<String>,
+    },
 
     #[error("Internal error: {message}{}", .context.as_ref().map(|c| format!(" (context: {})", c)).unwrap_or_default())]
-    Internal { message: String, context: Option<String> },
+    Internal {
+        message: String,
+        context: Option<String>,
+    },
 }
 
 impl From<String> for OrbitError {
@@ -525,7 +537,6 @@ macro_rules! orbit_log_error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::error::Error;
 
     #[test]
     fn test_error_creation() {
@@ -551,7 +562,10 @@ mod tests {
         assert!(matches!(timeout_error, OrbitError::Timeout { .. }));
 
         let config_error = OrbitError::configuration("Invalid config");
-        assert!(matches!(config_error, OrbitError::ConfigurationError { .. }));
+        assert!(matches!(
+            config_error,
+            OrbitError::ConfigurationError { .. }
+        ));
 
         let cluster_error = OrbitError::cluster("Cluster unreachable");
         assert!(matches!(cluster_error, OrbitError::ClusterError(_)));

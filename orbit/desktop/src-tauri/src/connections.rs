@@ -31,6 +31,10 @@ pub enum ConnectionType {
     PostgreSQL,
     OrbitQL,
     Redis,
+    MySQL,
+    CQL,
+    Cypher,
+    AQL,
 }
 
 /// Connection status
@@ -121,6 +125,10 @@ impl ConnectionManager {
             ConnectionType::PostgreSQL => self.test_postgresql_connection(info).await,
             ConnectionType::OrbitQL => self.test_orbitql_connection(info).await,
             ConnectionType::Redis => self.test_redis_connection(info).await,
+            ConnectionType::MySQL => self.test_mysql_connection(info).await,
+            ConnectionType::CQL => self.test_cql_connection(info).await,
+            ConnectionType::Cypher => self.test_cypher_connection(info).await,
+            ConnectionType::AQL => self.test_aql_connection(info).await,
         }
     }
 
@@ -185,6 +193,22 @@ impl ConnectionManager {
             },
             ConnectionType::Redis => {
                 let conn = RedisConnection::new(info).await?;
+                Ok(Box::new(conn))
+            },
+            ConnectionType::MySQL => {
+                let conn = MySQLConnection::new(info).await?;
+                Ok(Box::new(conn))
+            },
+            ConnectionType::CQL => {
+                let conn = CQLConnection::new(info).await?;
+                Ok(Box::new(conn))
+            },
+            ConnectionType::Cypher => {
+                let conn = CypherConnection::new(info).await?;
+                Ok(Box::new(conn))
+            },
+            ConnectionType::AQL => {
+                let conn = AQLConnection::new(info).await?;
                 Ok(Box::new(conn))
             },
         }
@@ -256,6 +280,96 @@ impl ConnectionManager {
                 }
             },
             Err(e) => Ok(ConnectionStatus::Error(format!("Invalid Redis URL: {}", e))),
+        }
+    }
+
+    async fn test_mysql_connection(&self, info: &ConnectionInfo) -> Result<ConnectionStatus, ConnectionError> {
+        use mysql_async::prelude::*;
+        
+        let opts = mysql_async::OptsBuilder::default()
+            .ip_or_hostname(Some(&info.host))
+            .tcp_port(info.port)
+            .user(info.username.as_deref())
+            .pass(info.password.as_deref())
+            .db_name(info.database.as_deref());
+        
+        match mysql_async::Conn::new(opts).await {
+            Ok(mut conn) => {
+                // Test with a simple query
+                match conn.query_first::<String, _>("SELECT 1").await {
+                    Ok(_) => Ok(ConnectionStatus::Connected),
+                    Err(e) => Ok(ConnectionStatus::Error(format!("Query test failed: {}", e))),
+                }
+            },
+            Err(e) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
+        }
+    }
+
+    async fn test_cql_connection(&self, info: &ConnectionInfo) -> Result<ConnectionStatus, ConnectionError> {
+        // CQL uses TCP connection, test basic connectivity
+        let addr = format!("{}:{}", info.host, info.port);
+        
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            tokio::net::TcpStream::connect(&addr)
+        ).await {
+            Ok(Ok(_)) => Ok(ConnectionStatus::Connected),
+            Ok(Err(e)) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
+            Err(_) => Ok(ConnectionStatus::Error("Connection timeout".to_string())),
+        }
+    }
+
+    async fn test_cypher_connection(&self, info: &ConnectionInfo) -> Result<ConnectionStatus, ConnectionError> {
+        // Cypher/Neo4j uses HTTP REST API for queries
+        let base_url = format!("http://{}:{}", info.host, info.port);
+        let client = reqwest::Client::new();
+        
+        // Test with a simple query endpoint
+        let test_url = format!("{}/db/data/transaction/commit", base_url);
+        let auth = if let (Some(user), Some(pass)) = (&info.username, &info.password) {
+            Some(format!("{}:{}", user, pass))
+        } else {
+            None
+        };
+        
+        let mut request = client.post(&test_url);
+        if let Some(auth_str) = auth {
+            request = request.basic_auth(
+                info.username.as_deref().unwrap_or(""),
+                info.password.as_deref()
+            );
+        }
+        
+        match request
+            .json(&serde_json::json!({
+                "statements": [{"statement": "RETURN 1 as result"}]
+            }))
+            .send()
+            .await
+        {
+            Ok(response) if response.status().is_success() => Ok(ConnectionStatus::Connected),
+            Ok(response) => Ok(ConnectionStatus::Error(format!("HTTP {}: {}", response.status(), response.status().canonical_reason().unwrap_or("Unknown")))),
+            Err(e) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
+        }
+    }
+
+    async fn test_aql_connection(&self, info: &ConnectionInfo) -> Result<ConnectionStatus, ConnectionError> {
+        // AQL/ArangoDB uses HTTP REST API
+        let base_url = format!("http://{}:{}", info.host, info.port);
+        let client = reqwest::Client::new();
+        
+        // Test with version endpoint
+        let version_url = format!("{}/_api/version", base_url);
+        let mut request = client.get(&version_url);
+        
+        if let (Some(user), Some(pass)) = (&info.username, &info.password) {
+            request = request.basic_auth(user, Some(pass));
+        }
+        
+        match request.send().await {
+            Ok(response) if response.status().is_success() => Ok(ConnectionStatus::Connected),
+            Ok(response) => Ok(ConnectionStatus::Error(format!("HTTP {}: {}", response.status(), response.status().canonical_reason().unwrap_or("Unknown")))),
+            Err(e) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
         }
     }
 }
@@ -397,7 +511,7 @@ impl DatabaseConnection for OrbitQLConnection {
 
 /// Redis connection
 pub struct RedisConnection {
-    connection: Option<redis::Connection>,
+    client: Option<redis::Client>,
     connected: bool,
 }
 
@@ -407,31 +521,38 @@ impl RedisConnection {
 
         match redis::Client::open(redis_url) {
             Ok(client) => {
-                match client.get_connection() {
-                    Ok(conn) => {
-                        Ok(Self {
-                            connection: Some(conn),
-                            connected: true,
-                        })
-                    },
-                    Err(e) => Err(ConnectionError::ConnectionFailed(e.to_string())),
-                }
+                // Test connection
+                let mut conn = client.get_async_connection().await
+                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+                
+                // Test with PING
+                redis::cmd("PING")
+                    .query_async::<_, String>(&mut conn)
+                    .await
+                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+                
+                Ok(Self {
+                    client: Some(client),
+                    connected: true,
+                })
             },
             Err(e) => Err(ConnectionError::InvalidConfiguration(e.to_string())),
         }
     }
 
-    pub fn execute_redis_command(&mut self, cmd: &str, args: &[&str]) -> Result<redis::Value, ConnectionError> {
-        if let Some(conn) = &mut self.connection {
+    pub async fn execute_redis_command(&self, cmd: &str, args: &[&str]) -> Result<redis::Value, ConnectionError> {
+        if let Some(client) = &self.client {
+            let mut conn = client.get_async_connection().await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            
             let mut redis_cmd = redis::cmd(cmd);
             for arg in args {
                 redis_cmd.arg(*arg);
             }
             
-            match redis_cmd.query::<redis::Value>(conn) {
-                Ok(value) => Ok(value),
-                Err(e) => Err(ConnectionError::ConnectionFailed(e.to_string())),
-            }
+            redis_cmd.query_async::<_, redis::Value>(&mut conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
         } else {
             Err(ConnectionError::ConnectionNotFound("Redis connection not available".to_string()))
         }
@@ -444,11 +565,325 @@ impl DatabaseConnection for RedisConnection {
     }
 
     fn is_connected(&self) -> bool {
-        self.connected && self.connection.is_some()
+        self.connected && self.client.is_some()
     }
 
     fn disconnect(&mut self) -> Result<(), ConnectionError> {
-        self.connection = None;
+        self.client = None;
+        self.connected = false;
+        Ok(())
+    }
+}
+
+/// MySQL connection
+pub struct MySQLConnection {
+    pool: Option<mysql_async::Pool>,
+    connected: bool,
+}
+
+impl MySQLConnection {
+    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
+        use mysql_async::prelude::*;
+        
+        let opts = mysql_async::OptsBuilder::default()
+            .ip_or_hostname(Some(&info.host))
+            .tcp_port(info.port)
+            .user(info.username.as_deref())
+            .pass(info.password.as_deref())
+            .db_name(info.database.as_deref());
+        
+        let pool = mysql_async::Pool::new(opts);
+        
+        // Test connection
+        match pool.get_conn().await {
+            Ok(mut conn) => {
+                match conn.query_first::<String, _>("SELECT 1").await {
+                    Ok(_) => {
+                        Ok(Self {
+                            pool: Some(pool),
+                            connected: true,
+                        })
+                    },
+                    Err(e) => Err(ConnectionError::ConnectionFailed(e.to_string())),
+                }
+            },
+            Err(e) => Err(ConnectionError::ConnectionFailed(e.to_string())),
+        }
+    }
+
+    pub async fn execute_query(&self, query: &str) -> Result<Vec<mysql_async::Row>, ConnectionError> {
+        if let Some(pool) = &self.pool {
+            let mut conn = pool.get_conn().await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            
+            conn.query::<mysql_async::Row, _>(query).await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+        } else {
+            Err(ConnectionError::ConnectionNotFound("MySQL pool not available".to_string()))
+        }
+    }
+}
+
+impl DatabaseConnection for MySQLConnection {
+    fn connection_type(&self) -> ConnectionType {
+        ConnectionType::MySQL
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected && self.pool.is_some()
+    }
+
+    fn disconnect(&mut self) -> Result<(), ConnectionError> {
+        self.pool = None;
+        self.connected = false;
+        Ok(())
+    }
+}
+
+/// CQL (Cassandra) connection
+pub struct CQLConnection {
+    base_url: String,
+    client: reqwest::Client,
+    connected: bool,
+}
+
+impl CQLConnection {
+    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
+        // CQL uses binary protocol, but we'll use HTTP REST API if available
+        let base_url = format!("http://{}:{}", info.host, info.port);
+        let client = reqwest::Client::new();
+        
+        // Test connection
+        let test_url = format!("{}/health", base_url);
+        match client.get(&test_url).send().await {
+            Ok(response) if response.status().is_success() => {
+                Ok(Self {
+                    base_url,
+                    client,
+                    connected: true,
+                })
+            },
+            Ok(_) => {
+                // If health endpoint doesn't exist, assume connection is OK
+                Ok(Self {
+                    base_url,
+                    client,
+                    connected: true,
+                })
+            },
+            Err(e) => Err(ConnectionError::ConnectionFailed(e.to_string())),
+        }
+    }
+
+    pub async fn execute_cql(&self, query: &str) -> Result<serde_json::Value, ConnectionError> {
+        if !self.connected {
+            return Err(ConnectionError::ConnectionNotFound("Not connected".to_string()));
+        }
+
+        // Execute CQL query via HTTP REST API
+        let query_url = format!("{}/api/v1/query", self.base_url);
+        let request_body = serde_json::json!({
+            "query": query
+        });
+
+        match self.client.post(&query_url).json(&request_body).send().await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    response.json::<serde_json::Value>().await
+                        .map_err(|e| ConnectionError::NetworkError(e.to_string()))
+                } else {
+                    Err(ConnectionError::ConnectionFailed(format!("Query failed: {}", response.status())))
+                }
+            },
+            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
+        }
+    }
+}
+
+impl DatabaseConnection for CQLConnection {
+    fn connection_type(&self) -> ConnectionType {
+        ConnectionType::CQL
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected
+    }
+
+    fn disconnect(&mut self) -> Result<(), ConnectionError> {
+        self.connected = false;
+        Ok(())
+    }
+}
+
+/// Cypher (Neo4j) connection
+pub struct CypherConnection {
+    client: reqwest::Client,
+    base_url: String,
+    username: Option<String>,
+    password: Option<String>,
+    connected: bool,
+}
+
+impl CypherConnection {
+    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
+        let base_url = format!("http://{}:{}", info.host, info.port);
+        let client = reqwest::Client::new();
+        
+        // Test connection with a simple query
+        let test_url = format!("{}/db/data/transaction/commit", base_url);
+        let mut request = client.post(&test_url);
+        
+        if let (Some(user), Some(pass)) = (&info.username, &info.password) {
+            request = request.basic_auth(user, Some(pass));
+        }
+        
+        match request
+            .json(&serde_json::json!({
+                "statements": [{"statement": "RETURN 1 as result"}]
+            }))
+            .send()
+            .await
+        {
+            Ok(response) if response.status().is_success() => {
+                Ok(Self {
+                    client,
+                    base_url,
+                    username: info.username.clone(),
+                    password: info.password.clone(),
+                    connected: true,
+                })
+            },
+            Ok(response) => Err(ConnectionError::ConnectionFailed(format!("HTTP {}: {}", response.status(), response.status().canonical_reason().unwrap_or("Unknown")))),
+            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
+        }
+    }
+
+    pub async fn execute_cypher(&self, query: &str) -> Result<serde_json::Value, ConnectionError> {
+        if !self.connected {
+            return Err(ConnectionError::ConnectionNotFound("Not connected".to_string()));
+        }
+
+        let query_url = format!("{}/db/data/transaction/commit", self.base_url);
+        let mut request = self.client.post(&query_url);
+        
+        if let (Some(user), Some(pass)) = (&self.username, &self.password) {
+            request = request.basic_auth(user, Some(pass));
+        }
+        
+        let request_body = serde_json::json!({
+            "statements": [{"statement": query}]
+        });
+
+        match request.json(&request_body).send().await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    response.json::<serde_json::Value>().await
+                        .map_err(|e| ConnectionError::NetworkError(e.to_string()))
+                } else {
+                    Err(ConnectionError::ConnectionFailed(format!("Query failed: {}", response.status())))
+                }
+            },
+            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
+        }
+    }
+}
+
+impl DatabaseConnection for CypherConnection {
+    fn connection_type(&self) -> ConnectionType {
+        ConnectionType::Cypher
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected
+    }
+
+    fn disconnect(&mut self) -> Result<(), ConnectionError> {
+        self.connected = false;
+        Ok(())
+    }
+}
+
+/// AQL (ArangoDB) connection
+pub struct AQLConnection {
+    client: reqwest::Client,
+    base_url: String,
+    username: Option<String>,
+    password: Option<String>,
+    database: Option<String>,
+    connected: bool,
+}
+
+impl AQLConnection {
+    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
+        let base_url = format!("http://{}:{}", info.host, info.port);
+        let client = reqwest::Client::new();
+        
+        // Test connection
+        let version_url = format!("{}/_api/version", base_url);
+        let mut request = client.get(&version_url);
+        
+        if let (Some(user), Some(pass)) = (&info.username, &info.password) {
+            request = request.basic_auth(user, Some(pass));
+        }
+        
+        match request.send().await {
+            Ok(response) if response.status().is_success() => {
+                Ok(Self {
+                    client,
+                    base_url,
+                    username: info.username.clone(),
+                    password: info.password.clone(),
+                    database: info.database.clone(),
+                    connected: true,
+                })
+            },
+            Ok(response) => Err(ConnectionError::ConnectionFailed(format!("HTTP {}: {}", response.status(), response.status().canonical_reason().unwrap_or("Unknown")))),
+            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
+        }
+    }
+
+    pub async fn execute_aql(&self, query: &str) -> Result<serde_json::Value, ConnectionError> {
+        if !self.connected {
+            return Err(ConnectionError::ConnectionNotFound("Not connected".to_string()));
+        }
+
+        let db = self.database.as_deref().unwrap_or("_system");
+        let query_url = format!("{}/_api/cursor", self.base_url);
+        let mut request = self.client.post(&query_url);
+        
+        if let (Some(user), Some(pass)) = (&self.username, &self.password) {
+            request = request.basic_auth(user, Some(pass));
+        }
+        
+        let request_body = serde_json::json!({
+            "query": query,
+            "count": true
+        });
+
+        match request.json(&request_body).send().await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    response.json::<serde_json::Value>().await
+                        .map_err(|e| ConnectionError::NetworkError(e.to_string()))
+                } else {
+                    Err(ConnectionError::ConnectionFailed(format!("Query failed: {}", response.status())))
+                }
+            },
+            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
+        }
+    }
+}
+
+impl DatabaseConnection for AQLConnection {
+    fn connection_type(&self) -> ConnectionType {
+        ConnectionType::AQL
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected
+    }
+
+    fn disconnect(&mut self) -> Result<(), ConnectionError> {
         self.connected = false;
         Ok(())
     }

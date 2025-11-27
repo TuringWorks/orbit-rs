@@ -82,6 +82,8 @@ pub mod sql_extensions;
 pub mod data;
 pub mod inference;
 pub mod models;
+/// Streaming ML inference for real-time data processing
+pub mod streaming_inference;
 pub mod training;
 /// General utility functions and helpers
 pub mod utils;
@@ -94,6 +96,12 @@ pub use graph_neural_networks::{GNNBuilder, GraphNeuralNetwork};
 pub use inference::{InferenceConfig, Predictor};
 pub use models::{Model, ModelMetadata, ModelRegistry};
 pub use neural_networks::{NeuralNetwork, NeuralNetworkBuilder};
+pub use streaming_inference::{
+    AggregatedInference, InferenceAnomaly, InferenceAnomalyDetector, InferenceEvent,
+    InferenceOutput, StreamingInferenceConfig, StreamingInferencePipeline,
+    StreamingInferencePipelineBuilder, StreamingInferenceStats, WindowAggregation,
+    WindowedInferenceAggregator,
+};
 pub use training::{Trainer, TrainingConfig};
 pub use transformers::{Transformer, TransformerBuilder};
 

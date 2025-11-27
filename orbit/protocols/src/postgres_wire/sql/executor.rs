@@ -3,24 +3,24 @@
 //! This module provides a comprehensive SQL executor that handles all types of SQL statements
 //! including DDL, DML, DCL, TCL operations with full PostgreSQL compatibility and vector support.
 
+use crate::common::storage::{StorageBackendConfig, StorageBackendFactory, TableStorage};
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::sql::{
     ast::{
         AccessMode, AlterTableStatement, AssignmentTarget, BeginStatement, ColumnConstraint,
-        CommitStatement, CreateExtensionStatement, CreateIndexStatement, CreateSchemaStatement,
-        CreateTableStatement, CreateViewStatement, DeleteStatement, DescribeStatement,
-        DropExtensionStatement, DropIndexStatement, DropSchemaStatement, DropTableStatement,
-        DropViewStatement, ExplainStatement, Expression, FromClause, GrantStatement, IndexType,
-        InsertSource, InsertStatement, IsolationLevel, JoinCondition, JoinType, Privilege,
-        ReleaseSavepointStatement, RevokeStatement, RollbackStatement, SavepointStatement,
-        SelectItem, SelectStatement, ShowStatement, ShowVariable, Statement, TableConstraint,
-        TableName, UpdateStatement, UseStatement,
+        CommitStatement, CreateDatabaseStatement, CreateExtensionStatement, CreateIndexStatement,
+        CreateSchemaStatement, CreateTableStatement, CreateViewStatement, DeleteStatement,
+        DescribeStatement, DropDatabaseStatement, DropExtensionStatement, DropIndexStatement,
+        DropSchemaStatement, DropTableStatement, DropViewStatement, ExplainStatement, Expression,
+        FromClause, GrantStatement, IndexType, InsertSource, InsertStatement, IsolationLevel,
+        JoinCondition, JoinType, Privilege, ReleaseSavepointStatement, RevokeStatement,
+        RollbackStatement, SavepointStatement, SelectItem, SelectStatement, ShowStatement,
+        ShowVariable, Statement, TableConstraint, TableName, UpdateStatement, UseStatement,
     },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator},
     parser::SqlParser,
     types::{SqlType, SqlValue},
 };
-use crate::postgres_wire::storage::{StorageBackendConfig, StorageBackendFactory, TableStorage};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -42,6 +42,9 @@ pub enum ExecutionResult {
     Delete {
         count: usize,
     },
+    CreateDatabase {
+        database_name: String,
+    },
     CreateTable {
         table_name: String,
     },
@@ -57,6 +60,9 @@ pub enum ExecutionResult {
     },
     CreateExtension {
         extension_name: String,
+    },
+    DropDatabase {
+        database_names: Vec<String>,
     },
     DropTable {
         table_names: Vec<String>,
@@ -177,6 +183,18 @@ pub struct ExtensionDefinition {
     pub version: Option<String>,
 }
 
+/// Database definition
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DatabaseDefinition {
+    pub name: String,
+    pub owner: Option<String>,
+    pub template: Option<String>,
+    pub encoding: Option<String>,
+    pub locale: Option<String>,
+    pub connection_limit: Option<i32>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
 /// Transaction state
 #[derive(Debug, Clone)]
 pub struct TransactionState {
@@ -258,6 +276,7 @@ pub struct SqlExecutor {
     storage: Arc<dyn TableStorage>,
 
     // Legacy in-memory storage for backward compatibility during transition
+    databases: Arc<RwLock<HashMap<String, DatabaseDefinition>>>,
     tables: Arc<RwLock<HashMap<String, TableSchema>>>,
     views: Arc<RwLock<HashMap<String, ViewSchema>>>,
     schemas: Arc<RwLock<HashMap<String, SchemaDefinition>>>,
@@ -284,6 +303,7 @@ pub struct SqlExecutor {
 
     // Settings and configuration
     settings: Arc<RwLock<HashMap<String, String>>>,
+    current_database: Arc<RwLock<String>>,
     current_schema: Arc<RwLock<String>>,
 
     // Vector support
@@ -342,7 +362,7 @@ impl SqlExecutor {
 
     /// Simple constructor for testing that creates basic in-memory storage without tokio runtime
     pub fn new_simple_memory() -> Self {
-        use crate::postgres_wire::storage::memory::MemoryTableStorage;
+        use crate::common::storage::memory::MemoryTableStorage;
         let storage = Arc::new(MemoryTableStorage::default());
         Self::with_storage(storage as Arc<dyn TableStorage>)
     }
@@ -367,8 +387,24 @@ impl SqlExecutor {
             },
         );
 
+        // Initialize with default "actors" database for backward compatibility
+        let mut databases = HashMap::new();
+        databases.insert(
+            "actors".to_string(),
+            DatabaseDefinition {
+                name: "actors".to_string(),
+                owner: Some("postgres".to_string()),
+                template: None,
+                encoding: Some("UTF8".to_string()),
+                locale: Some("en_US.UTF-8".to_string()),
+                connection_limit: None,
+                created_at: chrono::Utc::now(),
+            },
+        );
+
         Self {
             storage,
+            databases: Arc::new(RwLock::new(databases)),
             tables: Arc::new(RwLock::new(HashMap::new())),
             views: Arc::new(RwLock::new(HashMap::new())),
             schemas: Arc::new(RwLock::new(HashMap::new())),
@@ -381,6 +417,7 @@ impl SqlExecutor {
             current_user: Arc::new(RwLock::new("postgres".to_string())),
             permissions: Arc::new(RwLock::new(HashMap::new())),
             settings: Arc::new(RwLock::new(settings)),
+            current_database: Arc::new(RwLock::new("actors".to_string())),
             current_schema: Arc::new(RwLock::new("public".to_string())),
             vector_extensions: Arc::new(RwLock::new(HashMap::new())),
             expression_evaluator: Arc::new(RwLock::new(ExpressionEvaluator::new())),
@@ -393,8 +430,20 @@ impl SqlExecutor {
     }
 
     /// Get storage metrics
-    pub async fn storage_metrics(&self) -> crate::postgres_wire::storage::StorageMetrics {
+    pub async fn storage_metrics(&self) -> crate::common::storage::StorageMetrics {
         self.storage.metrics().await
+    }
+
+    /// Set the current database context
+    pub async fn set_current_database(&self, database: &str) {
+        let mut current_db = self.current_database.write().await;
+        *current_db = database.to_string();
+    }
+
+    /// Get the current database name
+    pub async fn get_current_database(&self) -> String {
+        let db = self.current_database.read().await;
+        db.clone()
     }
 
     /// Execute a SQL statement from string
@@ -410,12 +459,14 @@ impl SqlExecutor {
     pub async fn execute_statement(&self, statement: Statement) -> ProtocolResult<ExecutionResult> {
         match statement {
             // DDL Operations
+            Statement::CreateDatabase(stmt) => self.execute_create_database(stmt).await,
             Statement::CreateTable(stmt) => self.execute_create_table(stmt).await,
             Statement::CreateIndex(stmt) => self.execute_create_index(stmt).await,
             Statement::CreateView(stmt) => self.execute_create_view(stmt).await,
             Statement::CreateSchema(stmt) => self.execute_create_schema(stmt).await,
             Statement::CreateExtension(stmt) => self.execute_create_extension(stmt).await,
             Statement::AlterTable(stmt) => self.execute_alter_table(stmt).await,
+            Statement::DropDatabase(stmt) => self.execute_drop_database(stmt).await,
             Statement::DropTable(stmt) => self.execute_drop_table(stmt).await,
             Statement::DropIndex(stmt) => self.execute_drop_index(stmt).await,
             Statement::DropView(stmt) => self.execute_drop_view(stmt).await,
@@ -448,6 +499,75 @@ impl SqlExecutor {
     }
 
     // DDL Implementation methods
+    async fn execute_create_database(
+        &self,
+        stmt: CreateDatabaseStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let database_name = &stmt.name;
+
+        // Check if database already exists
+        let databases = self.databases.read().await;
+        if databases.contains_key(database_name) && !stmt.if_not_exists {
+            return Err(ProtocolError::already_exists("Database", database_name));
+        }
+        drop(databases);
+
+        // Create database definition
+        let database_def = DatabaseDefinition {
+            name: database_name.clone(),
+            owner: stmt.owner.or_else(|| Some("postgres".to_string())),
+            template: stmt.template,
+            encoding: stmt.encoding.or_else(|| Some("UTF8".to_string())),
+            locale: stmt.locale.or_else(|| Some("en_US.UTF-8".to_string())),
+            connection_limit: stmt.connection_limit,
+            created_at: chrono::Utc::now(),
+        };
+
+        // Store database
+        let mut databases = self.databases.write().await;
+        databases.insert(database_name.clone(), database_def);
+
+        Ok(ExecutionResult::CreateDatabase {
+            database_name: database_name.clone(),
+        })
+    }
+
+    async fn execute_drop_database(
+        &self,
+        stmt: DropDatabaseStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let mut dropped = Vec::new();
+
+        for database_name in &stmt.names {
+            let mut databases = self.databases.write().await;
+
+            // Check if database exists
+            if !databases.contains_key(database_name) {
+                if !stmt.if_exists {
+                    return Err(ProtocolError::not_found("Database", database_name));
+                }
+                continue;
+            }
+
+            // Prevent dropping the current database
+            let current_db = self.current_database.read().await;
+            if *current_db == *database_name && !stmt.force {
+                return Err(ProtocolError::invalid_operation(
+                    "cannot drop the currently open database",
+                ));
+            }
+            drop(current_db);
+
+            // Remove the database
+            databases.remove(database_name);
+            dropped.push(database_name.clone());
+        }
+
+        Ok(ExecutionResult::DropDatabase {
+            database_names: dropped,
+        })
+    }
+
     async fn execute_create_table(
         &self,
         stmt: CreateTableStatement,
@@ -595,7 +715,7 @@ impl SqlExecutor {
                 IndexType::IvfFlat { .. } => "ivfflat".to_string(),
                 IndexType::Hnsw { .. } => "hnsw".to_string(),
             },
-            unique: false, // TODO: Support UNIQUE indexes
+            unique: stmt.unique,
             condition: stmt
                 .where_clause
                 .map(|_| "TODO: serialize condition".to_string()),
@@ -615,9 +735,9 @@ impl SqlExecutor {
     ) -> ProtocolResult<ExecutionResult> {
         let view_name = stmt.name.full_name();
 
-        // Check if view already exists
+        // Check if view already exists (allow if replace=true or if_not_exists=true)
         let views = self.views.read().await;
-        if views.contains_key(&view_name) && !stmt.if_not_exists {
+        if views.contains_key(&view_name) && !stmt.if_not_exists && !stmt.replace {
             return Err(ProtocolError::already_exists("View", &view_name));
         }
         drop(views);
@@ -930,9 +1050,73 @@ impl SqlExecutor {
             }
 
             Ok(ExecutionResult::Insert { count })
+        } else if let InsertSource::Query(select_stmt) = stmt.source {
+            // INSERT ... SELECT
+            // Execute the SELECT statement first
+            let select_result = self.execute_select(*select_stmt.clone()).await?;
+
+            // Extract rows from SELECT result
+            let rows_to_insert = match select_result {
+                ExecutionResult::Select { rows, columns, .. } => {
+                    let insert_columns = stmt.columns.unwrap_or_else(|| {
+                        // If no columns specified, use all columns from SELECT
+                        columns.clone()
+                    });
+
+                    // Map SELECT rows to INSERT rows
+                    rows.into_iter()
+                        .map(|row| {
+                            let mut insert_row = HashMap::new();
+                            for (i, col_name) in insert_columns.iter().enumerate() {
+                                if i < row.len() {
+                                    if let Some(value_str) = &row[i] {
+                                        // Convert string value to appropriate SqlValue
+                                        // Try to infer type from the value string
+                                        let sql_value = match value_str.parse::<i64>() {
+                                            Ok(i) => {
+                                                // Check if it fits in i32
+                                                if i >= i32::MIN as i64 && i <= i32::MAX as i64 {
+                                                    SqlValue::Integer(i as i32)
+                                                } else {
+                                                    SqlValue::BigInt(i)
+                                                }
+                                            }
+                                            Err(_) => match value_str.parse::<f64>() {
+                                                Ok(f) => SqlValue::DoublePrecision(f),
+                                                Err(_) => SqlValue::Text(value_str.clone()),
+                                            },
+                                        };
+                                        insert_row.insert(col_name.clone(), sql_value);
+                                    }
+                                }
+                            }
+                            insert_row
+                        })
+                        .collect::<Vec<_>>()
+                }
+                _ => {
+                    return Err(ProtocolError::PostgresError(
+                        "SELECT statement in INSERT ... SELECT must return rows".to_string(),
+                    ));
+                }
+            };
+
+            // Insert the rows
+            let mut table_data = self.table_data.write().await;
+            let data = table_data
+                .entry(table_name.clone())
+                .or_insert_with(Vec::new);
+
+            let count = rows_to_insert.len();
+            for row in rows_to_insert {
+                data.push(row);
+            }
+
+            Ok(ExecutionResult::Insert { count })
         } else {
+            // DefaultValues
             Err(ProtocolError::PostgresError(
-                "Only VALUES clause supported currently".to_string(),
+                "DEFAULT VALUES not yet supported".to_string(),
             ))
         }
     }
@@ -1074,6 +1258,11 @@ impl SqlExecutor {
                     }
                 }
                 SelectItem::Expression { expr, alias } => {
+                    // Validate column references in the expression against table schema
+                    if let Some(from) = from_clause {
+                        self.validate_expression_columns(expr, from).await?;
+                    }
+
                     // Try to resolve the column name from the expression
                     let column_name = if let Some(alias) = alias {
                         alias.clone()
@@ -1153,6 +1342,207 @@ impl SqlExecutor {
             },
             _ => None,
         }
+    }
+
+    /// Validate that column references in an expression exist in the table schema
+    fn validate_expression_columns<'a>(
+        &'a self,
+        expr: &'a Expression,
+        from_clause: &'a FromClause,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ProtocolResult<()>> + Send + 'a>> {
+        Box::pin(async move {
+            match expr {
+                Expression::Column(col_ref) => {
+                    // Skip validation for qualified column references (e.g., o.amount, t.name)
+                    // since proper validation would require tracking table aliases
+                    if col_ref.table.is_some() {
+                        return Ok(());
+                    }
+
+                    // Skip validation for information_schema tables (they have virtual columns)
+                    if self.is_information_schema_query(from_clause) {
+                        return Ok(());
+                    }
+
+                    // Get all valid column names from the FROM clause
+                    let valid_columns = self.get_valid_columns_from_clause(from_clause).await?;
+
+                    // If we got an empty list but there's a FROM clause, skip validation
+                    // (table might not exist yet or be a special table)
+                    if valid_columns.is_empty() {
+                        return Ok(());
+                    }
+
+                    // Check if the column exists (case-insensitive)
+                    let col_name_lower = col_ref.name.to_lowercase();
+                    let exists = valid_columns
+                        .iter()
+                        .any(|c| c.to_lowercase() == col_name_lower);
+
+                    if !exists {
+                        return Err(ProtocolError::PostgresError(format!(
+                            "Column '{}' does not exist",
+                            col_ref.name
+                        )));
+                    }
+                }
+                Expression::Binary { left, right, .. } => {
+                    self.validate_expression_columns(left, from_clause).await?;
+                    self.validate_expression_columns(right, from_clause).await?;
+                }
+                Expression::Unary { operand, .. } => {
+                    self.validate_expression_columns(operand, from_clause)
+                        .await?;
+                }
+                Expression::Function(func) => {
+                    for arg in &func.args {
+                        self.validate_expression_columns(arg, from_clause).await?;
+                    }
+                }
+                Expression::Case(case_expr) => {
+                    if let Some(op) = &case_expr.operand {
+                        self.validate_expression_columns(op, from_clause).await?;
+                    }
+                    for when_clause in &case_expr.when_clauses {
+                        self.validate_expression_columns(&when_clause.condition, from_clause)
+                            .await?;
+                        self.validate_expression_columns(&when_clause.result, from_clause)
+                            .await?;
+                    }
+                    if let Some(else_expr) = &case_expr.else_clause {
+                        self.validate_expression_columns(else_expr, from_clause)
+                            .await?;
+                    }
+                }
+                Expression::In { expr, list, .. } => {
+                    self.validate_expression_columns(expr, from_clause).await?;
+                    if let crate::postgres_wire::sql::ast::InList::Expressions(items) = list {
+                        for item in items {
+                            self.validate_expression_columns(item, from_clause).await?;
+                        }
+                    }
+                }
+                Expression::Between {
+                    expr, low, high, ..
+                } => {
+                    self.validate_expression_columns(expr, from_clause).await?;
+                    self.validate_expression_columns(low, from_clause).await?;
+                    self.validate_expression_columns(high, from_clause).await?;
+                }
+                Expression::Subquery(_) | Expression::Exists(_) => {
+                    // Subqueries have their own scope; skip validation here
+                }
+                Expression::Literal(_) | Expression::Cast { .. } | Expression::Parameter(_) => {
+                    // Literals, casts, and parameters don't need column validation
+                }
+                Expression::WindowFunction {
+                    partition_by,
+                    order_by,
+                    ..
+                } => {
+                    for expr in partition_by {
+                        self.validate_expression_columns(expr, from_clause).await?;
+                    }
+                    for item in order_by {
+                        self.validate_expression_columns(&item.expression, from_clause)
+                            .await?;
+                    }
+                }
+                Expression::Like { expr, pattern, .. } => {
+                    self.validate_expression_columns(expr, from_clause).await?;
+                    self.validate_expression_columns(pattern, from_clause)
+                        .await?;
+                }
+                Expression::IsNull { expr, .. } => {
+                    self.validate_expression_columns(expr, from_clause).await?;
+                }
+                Expression::Array(items) => {
+                    for item in items {
+                        self.validate_expression_columns(item, from_clause).await?;
+                    }
+                }
+                Expression::ArraySlice { array, start, end } => {
+                    self.validate_expression_columns(array, from_clause).await?;
+                    if let Some(s) = start {
+                        self.validate_expression_columns(s, from_clause).await?;
+                    }
+                    if let Some(e) = end {
+                        self.validate_expression_columns(e, from_clause).await?;
+                    }
+                }
+                Expression::VectorSimilarity { left, right, .. } => {
+                    self.validate_expression_columns(left, from_clause).await?;
+                    self.validate_expression_columns(right, from_clause).await?;
+                }
+                Expression::Row(items) => {
+                    for item in items {
+                        self.validate_expression_columns(item, from_clause).await?;
+                    }
+                }
+                Expression::ArrayIndex { array, index } => {
+                    self.validate_expression_columns(array, from_clause).await?;
+                    self.validate_expression_columns(index, from_clause).await?;
+                }
+            }
+            Ok(())
+        })
+    }
+
+    /// Check if the FROM clause references information_schema tables
+    fn is_information_schema_query(&self, from_clause: &FromClause) -> bool {
+        match from_clause {
+            FromClause::Table { name, .. } => {
+                if let Some(schema) = &name.schema {
+                    schema.to_lowercase() == "information_schema"
+                } else {
+                    false
+                }
+            }
+            FromClause::Join { left, right, .. } => {
+                self.is_information_schema_query(left) || self.is_information_schema_query(right)
+            }
+            _ => false,
+        }
+    }
+
+    /// Get all valid column names from a FROM clause
+    fn get_valid_columns_from_clause<'a>(
+        &'a self,
+        from_clause: &'a FromClause,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ProtocolResult<Vec<String>>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            let mut valid_columns = Vec::new();
+
+            match from_clause {
+                FromClause::Table { name, alias: _ } => {
+                    // Handle information_schema tables
+                    if let Some(schema) = &name.schema {
+                        if schema.to_lowercase() == "information_schema" {
+                            // For information_schema, we'll be lenient
+                            return Ok(valid_columns);
+                        }
+                    }
+
+                    let table_name = name.full_name();
+                    let tables = self.tables.read().await;
+                    if let Some(table_schema) = tables.get(&table_name) {
+                        for col in &table_schema.columns {
+                            valid_columns.push(col.name.clone());
+                        }
+                    }
+                }
+                FromClause::Join { left, right, .. } => {
+                    let mut left_cols = self.get_valid_columns_from_clause(left).await?;
+                    let mut right_cols = self.get_valid_columns_from_clause(right).await?;
+                    valid_columns.append(&mut left_cols);
+                    valid_columns.append(&mut right_cols);
+                }
+                _ => {} // Handle other FROM clause types as needed
+            }
+
+            Ok(valid_columns)
+        })
     }
 
     /// Add columns for information_schema tables

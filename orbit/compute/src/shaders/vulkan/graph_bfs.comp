@@ -1,0 +1,79 @@
+#version 450
+
+// GPU-Accelerated BFS Level Expansion with Parent Tracking
+// Each work item processes one node's neighbors in the current level
+
+layout(local_size_x = 256) in;
+
+// Graph structure
+layout(set = 0, binding = 0) readonly buffer EdgeArray {
+    uint edges[];
+};
+
+layout(set = 0, binding = 1) readonly buffer EdgeOffset {
+    uint offsets[];
+};
+
+// Current BFS level
+layout(set = 0, binding = 2) readonly buffer CurrentLevel {
+    uint current_level[];
+};
+
+// Visited nodes mask
+layout(set = 0, binding = 3) buffer Visited {
+    uint visited[];
+};
+
+// Next level output
+layout(set = 0, binding = 4) buffer NextLevel {
+    uint next_level[];
+};
+
+// Next level size (atomic counter)
+layout(set = 0, binding = 5) buffer NextLevelSize {
+    uint next_level_size;
+};
+
+// Parent array for path reconstruction
+layout(set = 0, binding = 6) buffer Parent {
+    uint parent[];
+};
+
+// Parameters
+layout(set = 0, binding = 7) uniform Params {
+    uint current_level_size;
+    uint max_nodes;
+};
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+
+    if (id >= current_level_size) {
+        return;
+    }
+
+    uint node_id = current_level[id];
+    uint start_idx = offsets[node_id];
+    uint end_idx = offsets[node_id + 1];
+
+    // Process all neighbors of this node
+    for (uint i = start_idx; i < end_idx; i++) {
+        uint neighbor = edges[i];
+
+        // Check if neighbor is already visited (atomic exchange)
+        uint original = atomicExchange(visited[neighbor], 1);
+
+        if (original == 0) {
+            // Set parent for path reconstruction (first visit wins)
+            parent[neighbor] = node_id;
+
+            // Add neighbor to next level
+            uint next_idx = atomicAdd(next_level_size, 1);
+
+            if (next_idx < max_nodes) {
+                next_level[next_idx] = neighbor;
+            }
+        }
+    }
+}
+

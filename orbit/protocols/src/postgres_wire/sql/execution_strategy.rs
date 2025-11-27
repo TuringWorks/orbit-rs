@@ -16,7 +16,10 @@
 
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::sql::{
-    ast::{AssignmentTarget, Expression, FromClause, InsertSource, IsolationLevel, Statement},
+    ast::{
+        AssignmentTarget, Expression, FromClause, InsertSource, IsolationLevel, SelectItem,
+        Statement,
+    },
     executor::{ExecutionResult, SqlExecutor},
     mvcc_executor::{MvccSqlExecutor, TransactionId},
     parser::SqlParser,
@@ -249,6 +252,9 @@ pub trait SqlExecutionStrategy: Send + Sync {
 
     /// Get strategy name
     fn strategy_name(&self) -> &'static str;
+
+    /// Set the current database context
+    async fn set_current_database(&mut self, database: &str);
 }
 
 /// MVCC execution strategy
@@ -303,7 +309,49 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
 
         match statement {
             Statement::Select(select_stmt) => {
-                let table_name = self.extract_table_name(&Statement::Select(select_stmt))?;
+                let table_name =
+                    self.extract_table_name(&Statement::Select(select_stmt.clone()))?;
+
+                // Determine result columns from SELECT list
+                // For SELECT *, get columns from table schema
+                let mut columns = Vec::new();
+                for item in &select_stmt.select_list {
+                    match item {
+                        SelectItem::Wildcard => {
+                            // Get all columns from table schema using get_table_schema
+                            if let Ok(Some(table_schema)) =
+                                self.executor.get_table_schema(&table_name).await
+                            {
+                                for col in &table_schema.columns {
+                                    columns.push(col.name.clone());
+                                }
+                            }
+                        }
+                        SelectItem::Expression { expr, alias } => {
+                            // Try to resolve column name from expression
+                            let column_name = if let Some(alias) = alias {
+                                alias.clone()
+                            } else if let Expression::Column(col_ref) = expr {
+                                col_ref.name.clone()
+                            } else {
+                                "expr".to_string()
+                            };
+                            columns.push(column_name);
+                        }
+                        SelectItem::QualifiedWildcard { qualifier: _ } => {
+                            // For qualified wildcard, get columns from specified table
+                            // For now, treat same as wildcard
+                            if let Ok(Some(table_schema)) =
+                                self.executor.get_table_schema(&table_name).await
+                            {
+                                for col in &table_schema.columns {
+                                    columns.push(col.name.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+
                 let rows = self
                     .executor
                     .mvcc_read(&table_name, transaction_id, None)
@@ -311,10 +359,12 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
 
                 // Convert MVCC rows to string format for compatibility
                 let mut string_rows = Vec::new();
-                let mut columns = Vec::new();
 
-                if let Some(first_row) = rows.first() {
-                    columns = first_row.keys().cloned().collect();
+                // If columns still empty (no schema or empty table), get from first row
+                if columns.is_empty() {
+                    if let Some(first_row) = rows.first() {
+                        columns = first_row.keys().cloned().collect();
+                    }
                 }
 
                 for row in rows {
@@ -342,12 +392,27 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                 let mut count = 0;
 
                 if let InsertSource::Values(values_list) = insert_stmt.source {
+                    // Get column names from table schema if not explicitly specified
+                    let columns = if let Some(explicit_columns) = &insert_stmt.columns {
+                        explicit_columns.clone()
+                    } else {
+                        // Get columns from table schema using get_table_schema
+                        if let Ok(Some(table_schema)) =
+                            self.executor.get_table_schema(&table_name).await
+                        {
+                            table_schema
+                                .columns
+                                .iter()
+                                .map(|c| c.name.clone())
+                                .collect()
+                        } else {
+                            // Fallback to default if table doesn't exist (shouldn't happen)
+                            vec!["data".to_string()]
+                        }
+                    };
+
                     for values in values_list {
                         let mut row_data = HashMap::new();
-                        let columns = insert_stmt
-                            .columns
-                            .clone()
-                            .unwrap_or_else(|| vec!["data".to_string()]);
 
                         for (i, value_expr) in values.iter().enumerate() {
                             if i < columns.len() {
@@ -385,9 +450,16 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                     updates.insert(column, value);
                 }
 
+                // Convert WHERE clause to predicate
+                let predicate = update_stmt
+                    .where_clause
+                    .as_ref()
+                    .map(|where_expr| self.create_row_predicate(where_expr.clone()))
+                    .flatten();
+
                 let count = self
                     .executor
-                    .mvcc_update(&table_name, transaction_id, updates, None)
+                    .mvcc_update(&table_name, transaction_id, updates, predicate)
                     .await?;
 
                 Ok(UnifiedExecutionResult::Update {
@@ -397,9 +469,17 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
             }
             Statement::Delete(delete_stmt) => {
                 let table_name = delete_stmt.table.full_name();
+
+                // Convert WHERE clause to predicate
+                let predicate = delete_stmt
+                    .where_clause
+                    .as_ref()
+                    .map(|where_expr| self.create_row_predicate(where_expr.clone()))
+                    .flatten();
+
                 let count = self
                     .executor
-                    .mvcc_delete(&table_name, transaction_id, None)
+                    .mvcc_delete(&table_name, transaction_id, predicate)
                     .await?;
 
                 Ok(UnifiedExecutionResult::Delete {
@@ -409,7 +489,38 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
             }
             Statement::CreateTable(create_stmt) => {
                 let table_name = create_stmt.name.full_name();
-                self.executor.create_table(&table_name).await?;
+
+                // Build table schema from CREATE TABLE statement
+                use crate::postgres_wire::sql::ast::ColumnConstraint;
+                use crate::postgres_wire::sql::executor::{ColumnSchema, TableSchema};
+                let mut columns = Vec::new();
+                for col_def in &create_stmt.columns {
+                    columns.push(ColumnSchema {
+                        name: col_def.name.clone(),
+                        data_type: col_def.data_type.clone(),
+                        nullable: !col_def
+                            .constraints
+                            .iter()
+                            .any(|c| matches!(c, ColumnConstraint::NotNull)),
+                        default: None, // TODO: Evaluate default expressions
+                        constraints: col_def
+                            .constraints
+                            .iter()
+                            .map(|c| format!("{c:?}"))
+                            .collect(),
+                    });
+                }
+
+                let table_schema = TableSchema {
+                    name: table_name.clone(),
+                    columns,
+                    constraints: Vec::new(), // TODO: Parse table-level constraints
+                    indexes: Vec::new(),
+                };
+
+                self.executor
+                    .create_table_with_schema(&table_name, Some(table_schema))
+                    .await?;
 
                 Ok(UnifiedExecutionResult::CreateTable {
                     table_name,
@@ -510,6 +621,11 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
     fn strategy_name(&self) -> &'static str {
         "MVCC"
     }
+
+    async fn set_current_database(&mut self, _database: &str) {
+        // MVCC execution doesn't currently support database switching
+        // This is a no-op for now, but can be implemented when MVCC supports multiple databases
+    }
 }
 
 impl MvccExecutionStrategy {
@@ -528,6 +644,30 @@ impl MvccExecutionStrategy {
                 "Cannot extract table name".to_string(),
             )),
         }
+    }
+
+    /// Create a row predicate from a WHERE clause expression
+    fn create_row_predicate(
+        &self,
+        where_expr: Expression,
+    ) -> crate::postgres_wire::sql::mvcc_executor::RowPredicate {
+        use crate::postgres_wire::sql::expression_evaluator::ExpressionEvaluator;
+
+        let expr = where_expr.clone();
+        Some(Box::new(move |row: &HashMap<String, SqlValue>| -> bool {
+            let context =
+                crate::postgres_wire::sql::expression_evaluator::EvaluationContext::with_row(
+                    row.clone(),
+                );
+            let mut evaluator = ExpressionEvaluator::new();
+
+            match evaluator.evaluate(&expr, &context) {
+                Ok(SqlValue::Boolean(b)) => b,
+                Ok(SqlValue::Null) => false,
+                Ok(_) => false,  // Non-boolean result is false
+                Err(_) => false, // Error in evaluation is false
+            }
+        }))
     }
 
     fn evaluate_expression(&self, expr: &Expression) -> ProtocolResult<SqlValue> {
@@ -617,6 +757,11 @@ impl SqlExecutionStrategy for TraditionalExecutionStrategy {
 
     fn strategy_name(&self) -> &'static str {
         "Traditional"
+    }
+
+    async fn set_current_database(&mut self, database: &str) {
+        // Set the current database in the underlying SqlExecutor
+        self.executor.set_current_database(database).await;
     }
 }
 
@@ -818,6 +963,11 @@ impl ConfigurableSqlEngine {
     /// Get current strategy name
     pub fn strategy_name(&self) -> &'static str {
         self.strategy.strategy_name()
+    }
+
+    /// Set the current database context
+    pub async fn set_current_database(&mut self, database: &str) {
+        self.strategy.set_current_database(database).await;
     }
 
     /// Cleanup old data/transactions

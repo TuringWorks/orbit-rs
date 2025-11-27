@@ -4,7 +4,7 @@ title: Cluster Management
 category: documentation
 ---
 
-# Cluster Management
+## Cluster Management
 
 *This documentation is currently under development. Please check back soon for comprehensive cluster management information.*
 
@@ -28,6 +28,6 @@ Orbit-RS provides robust cluster management capabilities for distributed deploym
 
 For immediate assistance, please refer to:
 
-- [Kubernetes Deployment Guide](kubernetes_deployment.md)
+- [Kubernetes Complete Documentation](KUBERNETES_COMPLETE_DOCUMENTATION.md)
 - [Network Layer Documentation](NETWORK_LAYER.md)
 - [Contributing Guide](contributing.md)

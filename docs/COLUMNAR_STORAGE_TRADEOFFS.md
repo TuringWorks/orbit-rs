@@ -24,6 +24,7 @@ Columnar storage excels at **analytical reads** (10-100x faster) but faces chall
 **Advantages:**
 
 1. **Column Pruning** - Only read needed columns
+
    ```sql
    SELECT SUM(price) FROM orders WHERE date > '2024-01-01';
    -- Row-based: Read ALL columns (order_id, customer_id, price, date, status, ...)
@@ -32,6 +33,7 @@ Columnar storage excels at **analytical reads** (10-100x faster) but faces chall
    ```
 
 2. **Better Compression** - Similar values compress well
+
    ```
    Row-based (poor compression):
    [id=1, status="shipped", date="2024-01-01"]
@@ -46,6 +48,7 @@ Columnar storage excels at **analytical reads** (10-100x faster) but faces chall
    ```
 
 3. **SIMD-Friendly** - Process 8-16 values per instruction
+
    ```rust
    // Columnar: Contiguous memory → SIMD perfect
    let prices: [i32; 8] = [100, 200, 150, 300, 250, 175, 225, 180];
@@ -57,7 +60,8 @@ Columnar storage excels at **analytical reads** (10-100x faster) but faces chall
    ```
 
 4. **Cache-Friendly** - Sequential access patterns
-   ```
+
+   ```text
    Cache line (64 bytes):
    Columnar: 16 i32 prices in ONE cache line
    Row-based: 1-2 full rows (with wasted columns)
@@ -65,6 +69,7 @@ Columnar storage excels at **analytical reads** (10-100x faster) but faces chall
    ```
 
 5. **Predicate Pushdown** - Filter before decompression
+
    ```sql
    SELECT name FROM users WHERE age > 30;
    -- Columnar: Filter age column → Decompress ONLY matching names
@@ -72,6 +77,7 @@ Columnar storage excels at **analytical reads** (10-100x faster) but faces chall
    ```
 
 **Benchmark Evidence (from Phase 9):**
+
 - **SUM aggregation**: 14.8x faster (56.8µs → 3.8µs)
 - **Throughput**: 1.76 Gelem/s → 25.99 Gelem/s
 - **Memory bandwidth**: 2GB/s → 6GB/s (3x improvement)
@@ -79,6 +85,7 @@ Columnar storage excels at **analytical reads** (10-100x faster) but faces chall
 **Disadvantages:**
 
 1. **Random Row Access** - Slower for point queries
+
    ```sql
    SELECT * FROM users WHERE id = 12345;
    -- Row-based: Single seek → Read 1 row
@@ -87,6 +94,7 @@ Columnar storage excels at **analytical reads** (10-100x faster) but faces chall
    ```
 
 2. **Multi-Column Access** - Need to reassemble rows
+
    ```sql
    SELECT id, name, email, phone FROM users LIMIT 100;
    -- Columnar: Read 4 separate arrays → Zip together
@@ -101,6 +109,7 @@ Columnar storage excels at **analytical reads** (10-100x faster) but faces chall
 ### Row-Based Storage: ✓✓ GOOD
 
 **Use Case:**
+
 ```sql
 -- Web application: Fetch user profile
 SELECT * FROM users WHERE user_id = 42;
@@ -115,7 +124,8 @@ SELECT * FROM accounts WHERE account_number = '1234567890';
 **Why Row-Based Wins:**
 
 1. **Single Seek** - One I/O operation
-   ```
+
+   ```text
    Row-based:
    Seek to row → Read 256 bytes → Done
    Latency: 1ms (SSD) or 10µs (RAM)
@@ -128,24 +138,28 @@ SELECT * FROM accounts WHERE account_number = '1234567890';
    ```
 
 2. **Locality** - All columns together
-   ```
+
+   ```text
    Row-based: All data in one cache line
    Columnar: Data scattered across memory/disk
    ```
 
 3. **Index Efficiency** - Direct row pointers
-   ```
+
+   ```text
    B-Tree index:
    Row-based: user_id → Row offset (single pointer)
    Columnar: user_id → Offset in EACH column array (10 pointers)
    ```
 
 **Columnar Disadvantages for OLTP:**
+
 - **5-10x slower** for single-row fetches
 - **High latency** due to multiple seeks
 - **Index overhead** storing column offsets
 
 **Real-World Evidence:**
+
 - DuckDB (columnar OLAP): 1ms for point query
 - PostgreSQL (row-based): 0.1ms for point query
 - **10x difference** for small transactions
@@ -156,13 +170,14 @@ SELECT * FROM accounts WHERE account_number = '1234567890';
 
 ### Comparison: Row-Based (Good) vs Columnar (Poor)
 
-**Scenario: Insert 1,000 new orders**
+#### Scenario: Insert 1,000 new orders
 
-### Row-Based Storage: ✓✓ GOOD
+### Row-Based Storage for Inserts: ✓✓ GOOD
 
 **Advantages:**
 
 1. **Sequential Append** - Simple write pattern
+
    ```rust
    // Row-based: Append to end of file/buffer
    for order in orders {
@@ -172,27 +187,31 @@ SELECT * FROM accounts WHERE account_number = '1234567890';
    ```
 
 2. **Minimal Fragmentation** - Contiguous storage
-   ```
+
+   ```text
    Heap file:
    [...existing rows...][new row 1][new row 2][new row 3]
                         ↑ Just append here
    ```
 
 3. **Fast Transaction Commit** - Single fsync
-   ```
+
+   ```text
    Write all rows → Single fsync → Commit
    Latency: ~1-5ms
    ```
 
 **Disadvantages:**
+
 - No compression during writes (apply later)
 - Larger write amplification (all columns written)
 
-### Columnar Storage: ✗✗ POOR
+### Columnar Storage for Inserts: ✗✗ POOR
 
 **Disadvantages:**
 
 1. **Scattered Writes** - Update multiple column files
+
    ```rust
    // Columnar: Write to N separate arrays/files
    for order in orders {
@@ -206,7 +225,8 @@ SELECT * FROM accounts WHERE account_number = '1234567890';
    ```
 
 2. **Write Amplification** - Multiple small writes
-   ```
+
+   ```text
    Column files:
    id_column: [...existing...][new IDs]
    customer_column: [...existing...][new customers]
@@ -222,7 +242,8 @@ SELECT * FROM accounts WHERE account_number = '1234567890';
    ```
 
 3. **Synchronization Overhead** - Coordinate column writes
-   ```
+
+   ```text
    Need to ensure:
    - All columns updated atomically
    - Same number of rows in each column
@@ -232,7 +253,8 @@ SELECT * FROM accounts WHERE account_number = '1234567890';
    ```
 
 4. **Poor Cache Utilization** - Scatter-gather pattern
-   ```
+
+   ```text
    CPU cache thrashing:
    Write to column 1 (loads cache line)
    Write to column 2 (evicts column 1)
@@ -242,6 +264,7 @@ SELECT * FROM accounts WHERE account_number = '1234567890';
    ```
 
 **Measured Performance:**
+
 - **Row-based**: 10,000 inserts/sec
 - **Naive columnar**: 2,000-5,000 inserts/sec
 - **Penalty**: 2-5x slower
@@ -249,7 +272,8 @@ SELECT * FROM accounts WHERE account_number = '1234567890';
 **Optimizations for Columnar Inserts:**
 
 1. **Delta Stores** (used by ClickHouse, DuckDB)
-   ```
+
+   ```text
    Main store (columnar, compressed, immutable)
    └─ Read-optimized
 
@@ -260,6 +284,7 @@ SELECT * FROM accounts WHERE account_number = '1234567890';
    ```
 
 2. **Batch Buffering**
+
    ```rust
    let mut buffer = Vec::new();
 
@@ -274,7 +299,8 @@ SELECT * FROM accounts WHERE account_number = '1234567890';
    ```
 
 3. **Parquet-Style Write Pattern**
-   ```
+
+   ```text
    Write 1024-row batch:
    1. Buffer all rows in memory (row format)
    2. Transpose to columnar format
@@ -285,6 +311,7 @@ SELECT * FROM accounts WHERE account_number = '1234567890';
    ```
 
 **With Optimizations:**
+
 - **Buffered columnar**: 8,000-9,000 inserts/sec
 - **Penalty reduced**: 1.1-1.25x slower
 
@@ -292,9 +319,9 @@ SELECT * FROM accounts WHERE account_number = '1234567890';
 
 ## 4. Heavy Updates (Modify Existing Rows)
 
-### Row-Based Storage: ✓✓✓ EXCELLENT
+### Row-Based Storage for Updates: ✓✓✓ EXCELLENT
 
-**Scenario: Update 10% of rows**
+#### Scenario: Update 10% of rows
 
 ```sql
 UPDATE orders SET status = 'shipped' WHERE order_id IN (...);
@@ -303,7 +330,8 @@ UPDATE orders SET status = 'shipped' WHERE order_id IN (...);
 **Advantages:**
 
 1. **In-Place Updates** - Modify single row
-   ```
+
+   ```text
    Row-based:
    1. Seek to row offset
    2. Overwrite 256-byte row
@@ -313,7 +341,8 @@ UPDATE orders SET status = 'shipped' WHERE order_id IN (...);
    ```
 
 2. **HOT Updates** (Heap-Only Tuples in PostgreSQL)
-   ```
+
+   ```text
    If updated row fits in same page:
    1. Mark old version dead
    2. Write new version in same page
@@ -323,18 +352,20 @@ UPDATE orders SET status = 'shipped' WHERE order_id IN (...);
    ```
 
 3. **Atomic Updates** - Single write operation
-   ```
+
+   ```text
    Old row: [id=1, status="pending", ...]
    New row: [id=1, status="shipped", ...]
 
    Single atomic write → Consistent
    ```
 
-### Columnar Storage: ✗✗✗ VERY POOR
+### Columnar Storage for Updates: ✗✗✗ VERY POOR
 
 **Disadvantages:**
 
 1. **Update All Columns** - Even if changing one field
+
    ```sql
    UPDATE orders SET status = 'shipped' WHERE order_id = 123;
 
@@ -350,7 +381,8 @@ UPDATE orders SET status = 'shipped' WHERE order_id IN (...);
    ```
 
 2. **Compression Invalidation** - Recompress entire block
-   ```
+
+   ```text
    Compressed column block (1024 rows):
    [dictionary compressed status column]
 
@@ -364,7 +396,8 @@ UPDATE orders SET status = 'shipped' WHERE order_id IN (...);
    ```
 
 3. **Fragmentation** - Breaks sequential layout
-   ```
+
+   ```text
    Original (sequential):
    [Row 0][Row 1][Row 2][Row 3]...[Row 1023]
 
@@ -379,7 +412,8 @@ UPDATE orders SET status = 'shipped' WHERE order_id IN (...);
    ```
 
 4. **Multi-Version Concurrency Control (MVCC) Overhead**
-   ```
+
+   ```text
    Need to maintain:
    - Original version (for concurrent readers)
    - Updated version (for new readers)
@@ -390,6 +424,7 @@ UPDATE orders SET status = 'shipped' WHERE order_id IN (...);
    ```
 
 **Measured Performance:**
+
 - **Row-based**: 5,000 updates/sec (in-place)
 - **Naive columnar**: 500-1,500 updates/sec
 - **Penalty**: 3-10x slower
@@ -397,6 +432,7 @@ UPDATE orders SET status = 'shipped' WHERE order_id IN (...);
 **Columnar Update Strategies:**
 
 1. **Delete + Insert** (used by ClickHouse)
+
    ```sql
    UPDATE table SET x = y WHERE condition;
 
@@ -409,7 +445,8 @@ UPDATE orders SET status = 'shipped' WHERE order_id IN (...);
    ```
 
 2. **Delta Overlays** (used by Snowflake)
-   ```
+
+   ```text
    Base layer (columnar, immutable)
    └─ Original data
 
@@ -422,7 +459,8 @@ UPDATE orders SET status = 'shipped' WHERE order_id IN (...);
    ```
 
 3. **Versioned Column Chunks**
-   ```
+
+   ```text
    status_column:
    - Chunk 0-1023: Version 1 (compressed)
    - Chunk 1024-2047: Version 1 (compressed)
@@ -432,6 +470,7 @@ UPDATE orders SET status = 'shipped' WHERE order_id IN (...);
    ```
 
 **Best Case (Optimized):**
+
 - **Delta-based columnar**: 3,000-4,000 updates/sec
 - **Penalty reduced**: 1.25-1.67x slower
 
@@ -439,9 +478,9 @@ UPDATE orders SET status = 'shipped' WHERE order_id IN (...);
 
 ## 5. Heavy Deletes
 
-### Row-Based Storage: ✓✓ GOOD
+### Row-Based Storage for Deletes: ✓✓ GOOD
 
-**Scenario: Delete 20% of rows**
+### Scenario: Delete 20% of rows
 
 ```sql
 DELETE FROM orders WHERE order_date < '2020-01-01';
@@ -450,7 +489,8 @@ DELETE FROM orders WHERE order_date < '2020-01-01';
 **Advantages:**
 
 1. **Tombstone Marking** - Fast logical delete
-   ```
+
+   ```text
    Row-based (PostgreSQL-style):
    1. Set xmax (transaction ID of deleter)
    2. Mark row invisible to new transactions
@@ -460,7 +500,8 @@ DELETE FROM orders WHERE order_date < '2020-01-01';
    ```
 
 2. **Space Reclamation** - Localized compaction
-   ```
+
+   ```text
    Page-level compaction:
    [Live row][Dead row][Live row][Dead row]
    ↓ VACUUM
@@ -470,7 +511,8 @@ DELETE FROM orders WHERE order_date < '2020-01-01';
    ```
 
 3. **Index Updates** - Simple pointer removal
-   ```
+
+   ```text
    B-Tree index:
    1. Mark entry as deleted (lazy)
    2. Eventually: Remove during index vacuum
@@ -478,12 +520,13 @@ DELETE FROM orders WHERE order_date < '2020-01-01';
    No immediate rebalancing needed
    ```
 
-### Columnar Storage: ✗✗ POOR
+### Columnar Storage for Deletes: ✗✗ POOR
 
 **Disadvantages:**
 
 1. **Fragmentation** - Holes in column arrays
-   ```
+
+   ```text
    Original:
    Column: [A, B, C, D, E, F, G, H]
    Rows:    0  1  2  3  4  5  6  7
@@ -498,7 +541,8 @@ DELETE FROM orders WHERE order_date < '2020-01-01';
    ```
 
 2. **Coordinate Deletion Across Columns** - All-or-nothing
-   ```
+
+   ```text
    Need to delete from ALL columns:
    - id_column: Remove row N
    - name_column: Remove row N
@@ -509,7 +553,8 @@ DELETE FROM orders WHERE order_date < '2020-01-01';
    ```
 
 3. **Compression Invalidation** - Recompress blocks
-   ```
+
+   ```text
    Compressed block (1024 rows):
    Delete 200 rows:
    1. Decompress block
@@ -521,7 +566,8 @@ DELETE FROM orders WHERE order_date < '2020-01-01';
    ```
 
 4. **Index Maintenance** - Complex row number mapping
-   ```
+
+   ```text
    Original row numbers: 0, 1, 2, 3, 4, 5
    After deleting row 2:
    New row numbers:      0, 1, _, 2, 3, 4
@@ -533,6 +579,7 @@ DELETE FROM orders WHERE order_date < '2020-01-01';
    ```
 
 **Measured Performance:**
+
 - **Row-based**: 10,000 deletes/sec (tombstone marking)
 - **Naive columnar**: 3,000-6,000 deletes/sec
 - **Penalty**: 1.67-3.33x slower
@@ -540,6 +587,7 @@ DELETE FROM orders WHERE order_date < '2020-01-01';
 **Columnar Delete Strategies:**
 
 1. **Deletion Bitmaps** (used by Apache Arrow, DuckDB)
+
    ```rust
    struct ColumnChunk {
        data: Vec<i32>,
@@ -560,7 +608,8 @@ DELETE FROM orders WHERE order_date < '2020-01-01';
    ```
 
 2. **Lazy Compaction** (used by ClickHouse)
-   ```
+
+   ```text
    Mark deleted (fast):
    - Update deletion bitmap
    - Continue serving queries
@@ -574,7 +623,8 @@ DELETE FROM orders WHERE order_date < '2020-01-01';
    ```
 
 3. **Partitioned Deletes** (used by Snowflake)
-   ```
+
+   ```text
    Partition by date:
    - partition_2020_01/
    - partition_2020_02/
@@ -588,6 +638,7 @@ DELETE FROM orders WHERE order_date < '2020-01-01';
    ```
 
 **Best Case (Optimized):**
+
 - **Bitmap-based columnar**: 8,000-9,000 deletes/sec
 - **Penalty reduced**: 1.1-1.25x slower
 
@@ -597,11 +648,11 @@ DELETE FROM orders WHERE order_date < '2020-01-01';
 
 ### Lambda Architecture for Databases
 
-**Combine row-based (hot) + columnar (cold)**
+#### Combine row-based (hot) + columnar (cold)
 
-```
+```text
 ┌─────────────────────────────────────┐
-│         Application Layer            │
+│         Application Layer           │
 └─────────────────┬───────────────────┘
                   │
         ┌─────────┴─────────┐
@@ -688,6 +739,7 @@ impl QueryEngine {
 7. **High compression ratio matters** (storage costs)
 
 **Examples:**
+
 - Clickstream analysis
 - Financial reporting
 - Scientific datasets
@@ -707,6 +759,7 @@ impl QueryEngine {
 7. **Narrow tables** or **most columns accessed together**
 
 **Examples:**
+
 - E-commerce transactions
 - User management systems
 - Banking applications
@@ -723,6 +776,7 @@ impl QueryEngine {
 4. **Cost optimization** (fast SSD vs cheap object storage)
 
 **Implementation:**
+
 - Hot tier: Row-based (PostgreSQL, MySQL)
 - Cold tier: Columnar (Parquet, ORC)
 - Query engine: Federated (Presto, Trino)
@@ -768,23 +822,23 @@ impl PostgresExecutor {
 
 ### Proposed Tiered Storage
 
-```
+```text
 ┌────────────────────────────────────────┐
 │           Orbit Query Router           │
 └─────────┬─────────┬────────────────────┘
           │         │
     ┌─────▼─────┐   └──────┬─────────┐
     │  Hot Tier │          │         │
-    │ (Row)     │    ┌─────▼────┐ ┌──▼──────┐
-    │           │    │Warm Tier │ │Cold Tier│
+    │ (Row)     │    ┌─────▼────┐ ┌──▼─────-─┐
+    │           │    │Warm Tier │ │Cold Tier │
     │ - Writes  │    │(Hybrid)  │ │(Columnar)│
-    │ - Updates │    │          │ │         │
-    │ - Deletes │    │- Recent  │ │- Archive│
-    │ - OLTP    │    │- OLAP OK │ │- OLAP   │
-    ├───────────┤    ├──────────┤ ├─────────┤
-    │ Last 24h  │    │ 7-30 days│ │ >30 days│
-    │ SSD/RAM   │    │ SSD      │ │ S3/Disk │
-    └───────────┘    └──────────┘ └─────────┘
+    │ - Updates │    │          │ │          │
+    │ - Deletes │    │- Recent  │ │- Archive │
+    │ - OLTP    │    │- OLAP OK │ │- OLAP    │
+    ├───────────┤    ├──────────┤ ├─────────-┤
+    │ Last 24h  │    │ 7-30 days│ │ >30 days │
+    │ SSD/RAM   │    │ SSD      │ │ S3/Disk  │
+    └───────────┘    └──────────┘ └─────────-┘
 ```
 
 **Classification Heuristics:**
@@ -855,6 +909,7 @@ impl AdaptiveQueryPlanner {
 ---
 
 **References:**
+
 - [Phase 9 Benchmark Results](./PHASE_09_BENCHMARK_RESULTS.md)
 - [ClickHouse Architecture](https://clickhouse.com/docs/en/development/architecture)
 - [Snowflake Micro-Partitions](https://docs.snowflake.com/en/user-guide/tables-clustering-micropartitions)

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Cypher",
+  "patterns": [
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#comments"
+    }
+  ],
+  "repository": {
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.cypher",
+          "match": "\\b(MATCH|WHERE|RETURN|WITH|UNWIND|SET|REMOVE|MERGE|CREATE|DELETE|DETACH|OPTIONAL|ORDER|BY|LIMIT|SKIP|DISTINCT|AS|AND|OR|NOT|XOR|IN|STARTS|ENDS|CONTAINS|IS|NULL|TRUE|FALSE|CASE|WHEN|THEN|ELSE|END|UNION|ALL|CALL|YIELD|LOAD|CSV|USING|PERIODIC|COMMIT|SCAN|USING|INDEX|CONSTRAINT|ASSERT|DROP|IF|EXISTS|FOREACH|IN|DO|REMOVE|SET|CREATE|UNIQUE|INDEX|ON|FOR|EACH|NODE|RELATIONSHIP|OF|REQUIRE|ALLOW|DENY|ROLE|ROLES|USER|USERS|GRANT|REVOKE|TO|FROM|SHOW|PROCEDURE|FUNCTION|FUNCTIONS|PROCEDURES|TRANSACTION|BEGIN|COMMIT|ROLLBACK|EXPLAIN|PROFILE|USING|PERIODIC|COMMIT|SCAN|USING|INDEX|CONSTRAINT|ASSERT|DROP|IF|EXISTS|FOREACH|IN|DO|REMOVE|SET|CREATE|UNIQUE|INDEX|ON|FOR|EACH|NODE|RELATIONSHIP|OF|REQUIRE|ALLOW|DENY|ROLE|ROLES|USER|USERS|GRANT|REVOKE|TO|FROM|SHOW|PROCEDURE|FUNCTION|FUNCTIONS|PROCEDURES|TRANSACTION|BEGIN|COMMIT|ROLLBACK|EXPLAIN|PROFILE)\\b",
+          "caseInsensitive": true
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.cypher",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.cypher",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.cypher",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    },
+    "comments": {
+      "name": "comment.line.cypher",
+      "match": "//.*$"
+    }
+  },
+  "scopeName": "source.cypher"
+}
+

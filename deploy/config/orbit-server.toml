@@ -1,100 +1,349 @@
-# Orbit-RS Server Configuration for Docker Deployment
-# This configuration is optimized for containerized environments
+# =============================================================================
+# Orbit Server Configuration for Docker/Container Deployment
+# =============================================================================
+# This configuration extends the base orbit-server config with deployment-specific
+# settings optimized for containerized environments.
+# =============================================================================
 
+# -----------------------------------------------------------------------------
+# Server Identification
+# -----------------------------------------------------------------------------
+[server]
+node_id = "orbit-server"
+bind_address = "0.0.0.0"
+environment = "Production"
+data_dir = "/app/data"
+config_dir = "/app/config"
+
+# -----------------------------------------------------------------------------
+# Actor System
+# -----------------------------------------------------------------------------
+[actor_system]
+max_actors = 10000
+mailbox_size = 1000
+supervision_strategy = "OneForOne"
+
+# -----------------------------------------------------------------------------
+# Protocol Servers - All enabled by default
+# -----------------------------------------------------------------------------
+[protocols.grpc]
+enabled = true
+port = 50051
+max_concurrent_streams = 1000
+max_message_size = 4194304
+
+[protocols.postgresql]
+enabled = true
+port = 5432
+max_connections = 1000
+connection_timeout_secs = 30
+
+[protocols.postgresql.sql_engine]
+max_query_complexity = 1000
+query_timeout_secs = 30
+enable_optimization = true
+enable_caching = true
+cache_size_mb = 256
+
+[protocols.postgresql.vector_ops]
+default_metric = "cosine"
+max_dimensions = 4096
+batch_size = 1000
+enable_simd = true
+
+[protocols.postgresql.vector_ops.indexing]
+default_algorithm = "hnsw"
+
+[protocols.postgresql.vector_ops.indexing.hnsw]
+m = 16
+ef_construction = 200
+ef_search = 50
+
+[protocols.postgresql.vector_ops.indexing.ivf]
+nlist = 100
+nprobe = 10
+
+[protocols.postgresql.features]
+enable_pgvector = true
+enable_postgis = false
+enable_json = true
+enable_fulltext = true
+enable_prepared_statements = true
+enable_transactions = true
+
+[protocols.mysql]
+enabled = true
+port = 3306
+max_connections = 1000
+connection_timeout_secs = 30
+server_version = "8.0.0-Orbit"
+authentication_enabled = false
+
+[protocols.cql]
+enabled = true
+port = 9042
+max_connections = 1000
+connection_timeout_secs = 30
+protocol_version = 4
+authentication_enabled = false
+
+[protocols.redis]
+enabled = true
+port = 6379
+max_connections = 1000
+connection_timeout_secs = 30
+
+[protocols.redis.commands]
+enabled_groups = [
+    "generic", "string", "list", "hash", "set", "zset",
+    "vector", "search", "json", "graph", "stream", "pubsub"
+]
+disabled_commands = []
+command_timeout_secs = 30
+max_pipeline_size = 1000
+
+[protocols.redis.vector_ops]
+default_metric = "cosine"
+max_dimensions = 4096
+batch_size = 1000
+enable_simd = true
+
+[protocols.redis.vector_ops.indexing]
+default_algorithm = "hnsw"
+
+[protocols.redis.vector_ops.indexing.hnsw]
+m = 16
+ef_construction = 200
+ef_search = 50
+
+[protocols.redis.vector_ops.indexing.ivf]
+nlist = 100
+nprobe = 10
+
+[protocols.redis.features]
+enable_streams = true
+enable_pubsub = true
+enable_modules = false
+enable_redisearch = true
+enable_redisjson = true
+enable_redisgraph = true
+enable_cluster = false
+
+[protocols.rest]
+enabled = true
+port = 8080
+max_connections = 1000
+request_timeout_secs = 30
+
+[protocols.cypher]
+enabled = true
+port = 7687
+max_connections = 1000
+
+[protocols.orbitql]
+enabled = true
+port = 8081
+max_connections = 1000
+connection_timeout_secs = 30
+authentication_enabled = false
+
+[protocols.aql]
+enabled = true
+port = 8529
+max_connections = 1000
+connection_timeout_secs = 30
+authentication_enabled = false
+
+# -----------------------------------------------------------------------------
+# Security
+# -----------------------------------------------------------------------------
+[security.authentication]
+enabled = false
+methods = ["Basic"]
+
+[security.authorization]
+enabled = false
+model = "rbac"
+default_permissions = ["read", "write"]
+
+# TLS Configuration (enable in production)
+# [security.encryption.in_transit]
+# enabled = true
+# tls_version = "TLS1.3"
+
+# -----------------------------------------------------------------------------
+# Performance (optimized for containers)
+# -----------------------------------------------------------------------------
+[performance.memory]
+max_memory_mb = 4096
+
+[performance.memory.pool_config]
+initial_size_mb = 256
+max_size_mb = 2048
+growth_factor = 1.5
+
+[performance.memory.gc_settings]
+auto_gc = true
+interval_secs = 300
+memory_threshold_pct = 80.0
+
+[performance.io]
+max_concurrent_ops = 1000
+timeout_secs = 30
+buffer_size_kb = 64
+enable_direct_io = false
+
+[performance.network]
+tcp_nodelay = true
+keep_alive = true
+
+[performance.cpu]
+worker_threads = 4
+enable_affinity = false
+enable_simd = true
+
+# -----------------------------------------------------------------------------
+# Logging (JSON for container log aggregation)
+# -----------------------------------------------------------------------------
+[logging]
+level = "info"
+format = "json"
+
+[[logging.outputs]]
+output_type = "stdout"
+
+# -----------------------------------------------------------------------------
+# Monitoring
+# -----------------------------------------------------------------------------
+[monitoring.metrics]
+enabled = true
+port = 9090
+format = "prometheus"
+collection_interval_secs = 30
+retention_days = 7
+
+[monitoring.health_checks]
+enabled = true
+port = 8082
+interval_secs = 30
+timeout_secs = 5
+
+[monitoring.tracing]
+enabled = false
+backend = "jaeger"
+sampling_rate = 0.1
+
+# -----------------------------------------------------------------------------
+# Connection Pooling
+# -----------------------------------------------------------------------------
+[pooling]
+enabled = true
+min_connections = 10
+max_connections = 100
+connection_timeout_secs = 30
+idle_timeout_secs = 300
+max_lifetime_secs = 3600
+health_check_interval_secs = 30
+load_balancing_strategy = "LeastConnections"
+tier = "Application"
+enable_dynamic_sizing = true
+target_utilization = 0.75
+
+[pooling.circuit_breaker]
+enabled = true
+failure_threshold = 5
+failure_window_secs = 60
+recovery_timeout_secs = 30
+success_threshold = 3
+half_open_max_calls = 3
+
+# -----------------------------------------------------------------------------
+# Persistence
+# -----------------------------------------------------------------------------
+[persistence.defaults]
+addressable = "memory"
+cluster = "memory"
+
+[persistence.dynamic]
+enable_performance_monitoring = true
+performance_window = 300
+enable_auto_scaling = false
+
+[persistence.dynamic.health_monitor]
+check_interval = 30
+check_timeout = 5
+failure_threshold = 3
+success_threshold = 2
+enable_circuit_breaker = true
+circuit_breaker_timeout = 300
+
+[persistence.dynamic.failover]
+enable_auto_failover = true
+strategy = "Priority"
+max_attempts = 3
+retry_delay = 10
+enable_failback = true
+failback_delay = 300
+
+[persistence.providers.memory]
+type = "Memory"
+max_entries = 100000
+
+# -----------------------------------------------------------------------------
+# Deployment (Docker-specific)
+# -----------------------------------------------------------------------------
 [deployment]
 mode = "docker"
 cluster_name = "orbit-docker-cluster"
 
-[node]
-id = "orbit-server"
-namespace = "default"
+[deployment.discovery]
+method = "dns"
 
-[network]
-grpc_port = 50051
-health_port = 8080
-metrics_port = 9090
-bind_address = "0.0.0.0"
-
-# Node discovery configuration
-[discovery]
-method = "dns"  # Use DNS discovery for Docker environments
-
-# DNS-based discovery for Docker Compose or Kubernetes
-[discovery.dns]
+[deployment.discovery.dns]
 service_name = "orbit-server"
 port = 50051
 query_interval = "30s"
 
-# Leader election configuration
-[election]
+[deployment.election]
 method = "raft"
-enable_k8s_fallback = true  # Allow Kubernetes fallback if available
+enable_k8s_fallback = true
 
-# Raft consensus configuration
-[election.raft]
+[deployment.election.raft]
 election_timeout_min = "150ms"
 election_timeout_max = "300ms"
 heartbeat_interval = "50ms"
 max_entries_per_request = 100
 log_compaction_threshold = 1000
 
-# Storage configuration
-[storage]
+[deployment.storage]
 data_dir = "/app/data"
 election_state_file = "election-state.json"
 transaction_log_file = "transactions.db"
 backup_enabled = true
 backup_interval = "1h"
 
-# Performance configuration
-[performance]
-worker_threads = 4
-max_blocking_threads = 512
-connection_pool_size = 100
-max_concurrent_requests = 1000
-
-[performance.batch]
-max_batch_size = 1000
-batch_timeout = "100ms"
-
-# Security configuration
-[security]
-enable_tls = false
-cert_file = "/app/certs/tls.crt"
-key_file = "/app/certs/tls.key"
-ca_file = "/app/certs/ca.crt"
-
-[security.auth]
-enabled = false
-method = "mtls"
-
-# Monitoring configuration
-[monitoring]
-enable_metrics = true
-enable_health_checks = true
-enable_distributed_tracing = false
-
-[monitoring.logging]
-level = "info"
-format = "json"
-file = "stdout"  # Log to stdout for container environments
-
-# Environment-specific configurations
+# -----------------------------------------------------------------------------
+# Environment Overrides
+# -----------------------------------------------------------------------------
 [environments.docker]
-[environments.docker.monitoring.logging]
+[environments.docker.logging]
 level = "info"
 format = "json"
 
 [environments.kubernetes]
-[environments.kubernetes.discovery]
+[environments.kubernetes.deployment.discovery]
 method = "kubernetes_api"
 
-[environments.kubernetes.election]
-method = "k8s_lease"  # Use Kubernetes lease API for leader election
+[environments.kubernetes.deployment.election]
+method = "k8s_lease"
 
 [environments.production]
-[environments.production.security]
-enable_tls = true
+[environments.production.security.authentication]
+enabled = true
 
-[environments.production.monitoring.logging]
+[environments.production.security.encryption.in_transit]
+enabled = true
+tls_version = "TLS1.3"
+
+[environments.production.logging]
 level = "warn"

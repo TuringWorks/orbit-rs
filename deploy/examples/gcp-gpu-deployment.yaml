@@ -1,0 +1,611 @@
+# GCP GPU Deployment Configuration for Orbit-RS
+# Supports H100, A100, V100, T4 instances and ARM-based VMs
+
+apiVersion: v1
+kind: Config
+metadata:
+  name: "gcp-orbit-rs-gpu-deployment"
+  description: "Complete GCP deployment with GPU support for Orbit-RS"
+  version: "1.0.0"
+
+# GCP Infrastructure Configuration
+gcp:
+  # GCP project and authentication
+  project_id: "${GCP_PROJECT_ID}"
+  region: "us-central1"  # Primary region
+  zone: "us-central1-a"  # Primary zone
+  
+  # Backup regions for high availability
+  backup_regions:
+    - "us-west1"
+    - "europe-west1"
+  
+  # VPC Network Configuration
+  vpc_network:
+    name: "orbit-rs-vpc"
+    auto_create_subnetworks: false
+    
+    # Subnets for different workloads
+    subnets:
+      # Public subnet for load balancers
+      public:
+        - name: "orbit-public-subnet"
+          ip_cidr_range: "10.0.1.0/24"
+          region: "us-central1"
+          
+      # Private subnets for compute instances
+      private:
+        - name: "orbit-private-subnet"
+          ip_cidr_range: "10.0.10.0/24"
+          region: "us-central1"
+          
+      # GPU-specific subnet
+      gpu:
+        - name: "orbit-gpu-subnet"
+          ip_cidr_range: "10.0.20.0/24"
+          region: "us-central1"
+
+  # Load Balancer Configuration
+  load_balancer:
+    name: "orbit-rs-lb"
+    type: "HTTP(S)"  # or "TCP/UDP"
+    
+    # Backend services
+    backend_services:
+      - name: "orbit-server-backend"
+        protocol: "HTTP"
+        port: 8080
+        health_check:
+          path: "/health"
+          port: 8080
+          check_interval_sec: 30
+          timeout_sec: 5
+          healthy_threshold: 2
+          unhealthy_threshold: 5
+          
+      - name: "orbit-grpc-backend"
+        protocol: "HTTP"
+        port: 50051
+        health_check:
+          path: "/health"
+          port: 50051
+
+# Compute Engine Instance Configurations
+compute_engine:
+  
+  # ARM-based VMs for CPU workloads
+  arm_cpu:
+    name: "orbit-arm-vm"
+    machine_type: "t2a-standard-8"  # ARM-based, 8 vCPUs, 32GB RAM
+    instance_count:
+      min: 2
+      max: 10
+      default: 3
+    
+    # OS configuration
+    os_image:
+      family: "ubuntu-2204-lts-arm64"
+      project: "ubuntu-os-cloud"
+      
+    # Boot disk
+    boot_disk:
+      size_gb: 128
+      disk_type: "pd-ssd"
+      auto_delete: true
+      
+    # Data disks
+    data_disks:
+      - name: "orbit-data-disk"
+        size_gb: 1024
+        disk_type: "pd-ssd"
+        mount_point: "/opt/orbit-rs/data"
+    
+    # ARM-specific optimizations
+    arm_optimizations:
+      compiler_flags: "-march=armv8.2-a+crypto"
+      enable_neon_simd: true
+      use_arm_optimized_libraries: true
+      
+    # Auto-scaling configuration
+    auto_scaling:
+      - name: "scale-out-cpu"
+        metric: "compute.googleapis.com/instance/cpu/utilization"
+        threshold: 70
+        action: "increase"
+        cooldown: "PT5M"
+        scale_by: 1
+        
+      - name: "scale-in-cpu"
+        metric: "compute.googleapis.com/instance/cpu/utilization"
+        threshold: 30
+        action: "decrease"
+        cooldown: "PT10M"
+        scale_by: 1
+
+  # H100 GPU instances for large-scale ML training
+  h100:
+    name: "orbit-h100-vm"
+    machine_type: "a3-highgpu-8g"  # 8x H100, 208 vCPUs, 1872GB RAM
+    instance_count:
+      min: 1
+      max: 4
+      default: 2
+    
+    # GPU configuration
+    gpu_config:
+      type: "nvidia-h100-80gb"
+      count: 8
+      driver_version: "535.154.05"
+      cuda_version: "12.2"
+      cudnn_version: "8.9"
+      nccl_version: "2.18"
+      
+      # H100 optimization settings
+      enable_mig: false
+      enable_fabric_manager: true
+      nvlink_topology: "fully_connected"
+      
+      # Performance tuning
+      memory_clock: 4800  # MHz
+      graphics_clock: 1980  # MHz
+      power_limit: 700   # Watts
+      
+      # Advanced H100 features
+      transformer_engine: true
+      enable_fp8_precision: true
+      enable_sparse_attention: true
+      enable_flash_attention: true
+    
+    # OS configuration
+    os_image:
+      family: "ubuntu-2204-lts"
+      project: "ubuntu-os-cloud"
+      
+    # Boot disk
+    boot_disk:
+      size_gb: 512
+      disk_type: "pd-ssd"
+      auto_delete: true
+      
+    # Large data disks for ML datasets
+    data_disks:
+      - name: "orbit-data-disk"
+        size_gb: 4096  # 4TB for datasets
+        disk_type: "pd-ssd"
+        mount_point: "/opt/orbit-rs/data"
+      - name: "orbit-models-disk"
+        size_gb: 2048  # 2TB for models
+        disk_type: "pd-ssd"
+        mount_point: "/opt/orbit-rs/models"
+    
+    # Conservative auto-scaling for expensive instances
+    auto_scaling:
+      - name: "scale-out-gpu"
+        metric: "compute.googleapis.com/instance/gpu/utilization"
+        threshold: 80
+        action: "increase"
+        cooldown: "PT10M"
+        scale_by: 1
+        
+      - name: "scale-in-gpu"
+        metric: "compute.googleapis.com/instance/gpu/utilization"
+        threshold: 20
+        action: "decrease"
+        cooldown: "PT20M"
+        scale_by: 1
+
+  # A100 GPU instances for ML training and inference
+  a100:
+    name: "orbit-a100-vm"
+    machine_type: "a2-highgpu-8g"  # 8x A100, 96 vCPUs, 680GB RAM
+    instance_count:
+      min: 1
+      max: 6
+      default: 2
+      
+    # GPU configuration
+    gpu_config:
+      type: "nvidia-a100-80gb"
+      count: 8
+      driver_version: "535.154.05"
+      cuda_version: "12.2"
+      cudnn_version: "8.9"
+      
+      # A100 settings
+      enable_mig: false  # Can be enabled for multi-tenancy
+      mig_profiles: []
+      
+      # Performance settings
+      memory_clock: 1593  # MHz
+      graphics_clock: 1410  # MHz
+      power_limit: 400    # Watts
+      
+      # A100 features
+      enable_tensor_cores: true
+      mixed_precision: true
+      enable_nvlink: true
+      
+    # OS configuration
+    os_image:
+      family: "ubuntu-2204-lts"
+      project: "ubuntu-os-cloud"
+      
+    boot_disk:
+      size_gb: 256
+      disk_type: "pd-ssd"
+      auto_delete: true
+      
+    data_disks:
+      - name: "orbit-data-disk"
+        size_gb: 2048
+        disk_type: "pd-ssd"
+        mount_point: "/opt/orbit-rs/data"
+        
+    auto_scaling:
+      - name: "scale-out-a100"
+        metric: "compute.googleapis.com/instance/gpu/utilization"
+        threshold: 75
+        action: "increase"
+        cooldown: "PT8M"
+        scale_by: 1
+
+  # T4 GPU instances for cost-effective inference
+  t4:
+    name: "orbit-t4-vm"
+    machine_type: "n1-standard-4"  # 4 vCPUs, 15GB RAM
+    instance_count:
+      min: 2
+      max: 20
+      default: 4
+      
+    # GPU configuration
+    gpu_config:
+      type: "nvidia-tesla-t4"
+      count: 4
+      driver_version: "535.154.05"
+      cuda_version: "12.2"
+      tensorrt_version: "8.6"
+      
+      # T4 optimization for inference
+      enable_tensor_cores: true
+      enable_int8_inference: true
+      enable_fp16_inference: true
+      enable_tensorrt_optimization: true
+      
+      # Performance settings
+      power_limit: 70  # Watts
+      memory_clock: 1300  # MHz
+      graphics_clock: 1590  # MHz
+      
+    os_image:
+      family: "ubuntu-2204-lts"
+      project: "ubuntu-os-cloud"
+      
+    boot_disk:
+      size_gb: 100
+      disk_type: "pd-standard"
+      auto_delete: true
+      
+    data_disks:
+      - name: "orbit-data-disk"
+        size_gb: 300
+        disk_type: "pd-standard"
+        mount_point: "/opt/orbit-rs/data"
+
+# GCP Services Integration
+gcp_services:
+  
+  # Cloud Storage for object storage
+  cloud_storage:
+    buckets:
+      - name: "orbit-rs-data-${GCP_PROJECT_ID}"
+        location: "us-central1"
+        storage_class: "STANDARD"
+        versioning: true
+        lifecycle_rules:
+          - name: "transition-to-nearline"
+            days: 30
+            storage_class: "NEARLINE"
+          - name: "transition-to-coldline"
+            days: 90
+            storage_class: "COLDLINE"
+            
+      - name: "orbit-rs-models-${GCP_PROJECT_ID}"
+        location: "us-central1"
+        storage_class: "STANDARD"
+        
+      - name: "orbit-rs-backups-${GCP_PROJECT_ID}"
+        location: "us-central1"
+        storage_class: "STANDARD"
+
+  # Google Kubernetes Engine (GKE)
+  kubernetes:
+    cluster_name: "orbit-rs-gke"
+    kubernetes_version: "1.28"
+    location: "us-central1"
+    
+    # System node pool (ARM-based)
+    system_node_pool:
+      name: "systempool"
+      machine_type: "t2a-standard-4"
+      node_count: 3
+      max_pods: 30
+      os_type: "Linux"
+      
+    # GPU node pools
+    gpu_node_pools:
+      - name: "h100pool"
+        machine_type: "a3-highgpu-8g"
+        node_count: 2
+        max_node_count: 4
+        enable_auto_scaling: true
+        gpu_type: "nvidia-h100-80gb"
+        gpu_count: 8
+        taints:
+          - key: "gpu"
+            value: "h100"
+            effect: "NoSchedule"
+            
+      - name: "a100pool"
+        machine_type: "a2-highgpu-8g"
+        node_count: 1
+        max_node_count: 3
+        enable_auto_scaling: true
+        gpu_type: "nvidia-a100-80gb"
+        gpu_count: 8
+        taints:
+          - key: "gpu"
+            value: "a100"
+            effect: "NoSchedule"
+    
+    # Network configuration
+    network_config:
+      network: "orbit-rs-vpc"
+      subnetwork: "orbit-private-subnet"
+      enable_ip_alias: true
+      cluster_ipv4_cidr: "172.16.0.0/16"
+      services_ipv4_cidr: "172.17.0.0/16"
+
+  # Cloud Monitoring for observability
+  monitoring:
+    workspace_name: "orbit-rs-workspace"
+    
+    # Custom metrics
+    custom_metrics:
+      - name: "gpu_utilization"
+        metric_type: "GAUGE"
+        value_type: "DOUBLE"
+        unit: "percent"
+        display_name: "GPU Utilization"
+        
+      - name: "gpu_memory_usage"
+        metric_type: "GAUGE"
+        value_type: "DOUBLE"
+        unit: "bytes"
+        display_name: "GPU Memory Usage"
+        
+      - name: "gpu_temperature"
+        metric_type: "GAUGE"
+        value_type: "DOUBLE"
+        unit: "celsius"
+        display_name: "GPU Temperature"
+    
+    # Dashboards
+    dashboards:
+      - name: "Orbit-RS-Overview"
+        widgets:
+          - type: "metric"
+            metric: "compute.googleapis.com/instance/cpu/utilization"
+          - type: "metric"
+            metric: "compute.googleapis.com/instance/network/received_bytes_count"
+          - type: "custom"
+            metric: "gpu_utilization"
+            
+      - name: "GPU-Performance"
+        widgets:
+          - type: "custom"
+            metric: "gpu_utilization"
+          - type: "custom"
+            metric: "gpu_memory_usage"
+          - type: "custom"
+            metric: "gpu_temperature"
+
+  # Secret Manager for secrets
+  secret_manager:
+    secrets:
+      - name: "database-connection-string"
+      - name: "api-keys"
+      - name: "ssl-certificates"
+
+# Application Deployment Configuration
+deployment:
+  # Container registry
+  container_registry:
+    name: "gcr.io/${GCP_PROJECT_ID}/orbit-rs"
+    
+  # Application services
+  services:
+    orbit_server:
+      image: "orbit-server"
+      tag: "latest"
+      
+      # Resource allocation
+      resources:
+        cpu: "2000m"
+        memory: "4Gi"
+        
+      environment:
+        DEPLOYMENT_MODE: "gcp"
+        CLOUD_PROVIDER: "GCP"
+        GCP_REGION: "us-central1"
+        RUST_LOG: "info"
+        ORBIT_CLUSTER_SIZE: "auto"
+        
+    orbit_compute_gpu:
+      image: "orbit-compute-gpu"
+      tag: "latest"
+      
+      # GPU resource allocation
+      resources:
+        cpu: "8000m"
+        memory: "32Gi"
+        gpu:
+          count: 1
+          type: "nvidia-h100-80gb"
+          memory_fraction: 0.9
+          
+      environment:
+        CUDA_VISIBLE_DEVICES: "0"
+        GPU_MEMORY_FRACTION: "0.9"
+        ORBIT_GPU_PROVIDER: "NVIDIA"
+        ORBIT_GPU_ARCHITECTURE: "auto-detect"
+        
+      # Node selector for GPU nodes
+      node_selector:
+        accelerator: "nvidia-h100-80gb"
+        
+      tolerations:
+        - key: "gpu"
+          operator: "Equal"
+          value: "h100"
+          effect: "NoSchedule"
+          
+    orbit_compute_arm:
+      image: "orbit-compute-arm64"
+      tag: "latest"
+      
+      # ARM64 resource allocation
+      resources:
+        cpu: "4000m"
+        memory: "8Gi"
+        
+      environment:
+        ORBIT_CPU_ARCHITECTURE: "arm64"
+        ORBIT_ARM_OPTIMIZATIONS: "true"
+        ORBIT_NEON_SIMD: "true"
+        
+      # Node selector for ARM nodes
+      node_selector:
+        kubernetes.io/arch: "arm64"
+
+# Monitoring and Observability
+monitoring:
+  # Cloud Monitoring dashboards
+  dashboards:
+    - name: "Orbit-RS-Overview"
+      widgets:
+        - type: "metric"
+          metric: "compute.googleapis.com/instance/cpu/utilization"
+        - type: "metric"
+          metric: "compute.googleapis.com/instance/network/received_bytes_count"
+        - type: "custom"
+          metric: "gpu_utilization"
+          
+    - name: "GPU-Performance"
+      widgets:
+        - type: "custom"
+          metric: "gpu_utilization"
+        - type: "custom"
+          metric: "gpu_memory_usage"
+        - type: "custom"
+          metric: "gpu_temperature"
+
+  # Alerts
+  alerts:
+    - name: "High-GPU-Utilization"
+      metric: "gpu_utilization"
+      threshold: 90
+      comparison: "GT"
+      duration: "300s"
+      notification_channels:
+        - "email:devops@company.com"
+        
+    - name: "GPU-Temperature-Critical"
+      metric: "gpu_temperature"
+      threshold: 80
+      comparison: "GT"
+      duration: "60s"
+      notification_channels:
+        - "email:devops@company.com"
+
+# Cost Optimization
+cost_optimization:
+  # Preemptible instances for non-critical workloads
+  preemptible_instances:
+    enabled: true
+    max_price: 0.50  # USD per hour
+    machine_types: ["n1-standard-4", "t2a-standard-8"]
+    
+  # Committed use discounts for predictable workloads
+  committed_use_discounts:
+    enabled: true
+    machine_types: ["t2a-standard-8"]
+    term: "1Year"
+    payment_option: "Monthly"
+    
+  # Right-sizing recommendations
+  recommender:
+    enabled: true
+    cpu_threshold: 20  # Recommend downsize if CPU < 20%
+    implementation: "manual"  # or "automatic"
+
+# Security Configuration
+security:
+  # Firewall rules
+  firewall_rules:
+    - name: "allow-http"
+      direction: "INGRESS"
+      protocol: "TCP"
+      source_ranges: ["0.0.0.0/0"]
+      target_tags: ["orbit-server"]
+      allowed:
+        - ports: ["8080"]
+          
+    - name: "allow-grpc"
+      direction: "INGRESS"
+      protocol: "TCP"
+      source_ranges: ["10.0.0.0/16"]
+      target_tags: ["orbit-server"]
+      allowed:
+        - ports: ["50051"]
+          
+    - name: "allow-ssh"
+      direction: "INGRESS"
+      protocol: "TCP"
+      source_ranges: ["${MANAGEMENT_IP_RANGE}"]
+      target_tags: ["orbit-server"]
+      allowed:
+        - ports: ["22"]
+  
+  # IAM roles and permissions
+  iam:
+    service_accounts:
+      - name: "orbit-rs-sa"
+        display_name: "Orbit-RS Service Account"
+        roles:
+          - "roles/compute.instanceAdmin"
+          - "roles/storage.objectAdmin"
+          - "roles/monitoring.metricWriter"
+          - "roles/logging.logWriter"
+
+# Example usage commands:
+#
+# # Set up GCP CLI and deploy
+# gcloud auth login
+# gcloud config set project ${GCP_PROJECT_ID}
+# export GCP_PROJECT_ID="your-project-id"
+# export MANAGEMENT_IP_RANGE="203.0.113.0/24"
+#
+# # Create VPC network
+# gcloud compute networks create orbit-rs-vpc --subnet-mode custom
+# gcloud compute networks subnets create orbit-public-subnet \
+#   --network orbit-rs-vpc --range 10.0.1.0/24 --region us-central1
+#
+# # Deploy infrastructure
+# gcloud deployment-manager deployments create orbit-rs-deployment \
+#   --config gcp-gpu-deployment.yaml
+#
+# # Deploy to GKE
+# gcloud container clusters get-credentials orbit-rs-gke --region us-central1
+# kubectl apply -f gcp-gpu-k8s-manifests/
+

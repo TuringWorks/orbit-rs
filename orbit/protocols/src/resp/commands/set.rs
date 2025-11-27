@@ -26,6 +26,36 @@ impl SetCommands {
         }
     }
 
+    // Helper methods for argument parsing
+    fn get_string_arg(
+        &self,
+        args: &[RespValue],
+        index: usize,
+        command_name: &str,
+    ) -> ProtocolResult<String> {
+        args.get(index).and_then(|v| v.as_string()).ok_or_else(|| {
+            ProtocolError::RespError(format!(
+                "ERR invalid argument for '{}' command",
+                command_name.to_lowercase()
+            ))
+        })
+    }
+
+    fn validate_arg_count(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+        expected: usize,
+    ) -> ProtocolResult<()> {
+        if args.len() != expected {
+            return Err(ProtocolError::RespError(format!(
+                "ERR wrong number of arguments for '{}' command",
+                command_name.to_lowercase()
+            )));
+        }
+        Ok(())
+    }
+
     /// SADD key member [member ...] - Add members to a set
     async fn cmd_sadd(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() < 2 {
@@ -133,23 +163,20 @@ impl SetCommands {
 
         let key = self.get_string_arg(args, 0, "SCARD")?;
 
-        // Get SetActor reference
-        let actor_ref = self
+        // Use local registry for consistency
+        let result = self
             .base
-            .orbit_client
-            .actor_reference::<SetActor>(Key::StringKey { key: key.clone() })
+            .local_registry
+            .execute_set(&key, "scard", &[])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
-        let size_result: Result<usize, _> = actor_ref.invoke("scard", vec![]).await;
+        let size: i64 = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .unwrap_or(0);
 
-        match size_result {
-            Ok(size) => {
-                debug!("SCARD {} -> {}", key, size);
-                Ok(RespValue::Integer(size as i64))
-            }
-            Err(_) => Ok(RespValue::Integer(0)),
-        }
+        debug!("SCARD {} -> {}", key, size);
+        Ok(RespValue::Integer(size))
     }
 
     /// SISMEMBER key member - Check if member exists in set
@@ -159,25 +186,24 @@ impl SetCommands {
         let key = self.get_string_arg(args, 0, "SISMEMBER")?;
         let member = self.get_string_arg(args, 1, "SISMEMBER")?;
 
-        // Get SetActor reference
-        let actor_ref = self
+        // Use local registry for consistency
+        let result = self
             .base
-            .orbit_client
-            .actor_reference::<SetActor>(Key::StringKey { key: key.clone() })
+            .local_registry
+            .execute_set(
+                &key,
+                "sismember",
+                &[serde_json::to_value(member.clone()).unwrap()],
+            )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
-        let is_member_result: Result<bool, _> = actor_ref
-            .invoke("sismember", vec![member.clone().into()])
-            .await;
+        let is_member: bool = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .unwrap_or(false);
 
-        match is_member_result {
-            Ok(is_member) => {
-                debug!("SISMEMBER {} {} -> {}", key, member, is_member);
-                Ok(RespValue::Integer(if is_member { 1 } else { 0 }))
-            }
-            Err(_) => Ok(RespValue::Integer(0)),
-        }
+        debug!("SISMEMBER {} {} -> {}", key, member, is_member);
+        Ok(RespValue::Integer(if is_member { 1 } else { 0 }))
     }
 
     /// SUNION key [key ...] - Get union of multiple sets
