@@ -42,6 +42,12 @@ impl WebSocketHandler {
         }
     }
 
+    /// Subscribe to receive broadcast events
+    /// Returns a receiver that will receive all events broadcast through this handler
+    pub fn subscribe(&self) -> broadcast::Receiver<WebSocketMessage> {
+        self.actor_events.subscribe()
+    }
+
     /// Handle new WebSocket connection for actor events
     pub async fn handle_actor_socket(
         ws: WebSocketUpgrade,

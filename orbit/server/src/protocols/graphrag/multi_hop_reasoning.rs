@@ -8,7 +8,9 @@ use orbit_client::OrbitClient;
 use orbit_shared::graphrag::{ConnectionExplanation, ReasoningPath};
 use orbit_shared::{Addressable, Key, OrbitError, OrbitResult};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
+#[cfg(feature = "gpu-acceleration")]
+use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 

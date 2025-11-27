@@ -85,16 +85,18 @@ tokio-postgres = "0.7"
 neo4rs = "0.7"
 reqwest = { version = "0.12", features = ["json"] }
 orbit-util = { path = "../util" }
-orbit-server = { path = "../server", default-features = false, features = ["actor-system", "persistence", "protocol-mysql"] }
+orbit-server = { path = "../server", default-features = false, features = ["actor-system", "persistence", "protocol-mysql", "storage-rocksdb"] }
 
 [features]
-default = ["resp", "postgres-wire", "mysql", "cql", "cypher", "rest", "storage-rocksdb"]
+default = ["resp", "postgres-wire", "mysql", "cql", "cypher", "neo4j", "arangodb", "rest", "storage-rocksdb"]
 # Protocol features
 resp = []
 postgres-wire = []
 mysql = []
 cql = []
 cypher = []
+neo4j = []
+arangodb = []
 rest = []
 mcp = []
 # Enable RocksDB storage backend

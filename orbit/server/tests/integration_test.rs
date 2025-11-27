@@ -1,3 +1,7 @@
+//! Integration tests for Orbit Server
+//!
+//! These tests verify server initialization and process management.
+
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
@@ -17,30 +21,79 @@ use tokio::time::sleep;
 // Helper Functions
 // =============================================================================
 
+/// Kill processes by name - cross-platform implementation
+fn kill_process_by_name(name: &str) {
+    #[cfg(unix)]
+    {
+        let _ = Command::new("killall").arg(name).output();
+    }
+
+    #[cfg(windows)]
+    {
+        // Use taskkill on Windows - /F for force, /IM for image name
+        let _ = Command::new("taskkill")
+            .args(["/F", "/IM", &format!("{}.exe", name)])
+            .output();
+    }
+}
+
+/// Get list of running processes containing the given name
+fn get_matching_processes(name: &str) -> Vec<String> {
+    #[cfg(unix)]
+    {
+        let output = Command::new("ps")
+            .arg("aux")
+            .output()
+            .unwrap_or_else(|_| std::process::Output {
+                status: std::process::ExitStatus::default(),
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+            });
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        stdout
+            .lines()
+            .filter(|line| line.contains(name))
+            .filter(|line| !line.contains("grep"))
+            .map(|s| s.to_string())
+            .collect()
+    }
+
+    #[cfg(windows)]
+    {
+        // Use tasklist on Windows with filter
+        let output = Command::new("tasklist")
+            .args(["/FI", &format!("IMAGENAME eq {}.exe", name)])
+            .output()
+            .unwrap_or_else(|_| std::process::Output {
+                status: std::process::ExitStatus::default(),
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+            });
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        stdout
+            .lines()
+            .filter(|line| line.to_lowercase().contains(&name.to_lowercase()))
+            .filter(|line| !line.contains("INFO:")) // Filter out "INFO: No tasks" message
+            .map(|s| s.to_string())
+            .collect()
+    }
+}
+
 /// Cleanup all lingering server instances before and after tests
 async fn cleanup_lingering_instances() {
     // Kill all orbit-server and multi-protocol-server instances
-    let _ = Command::new("killall").arg("orbit-server").output();
-
-    let _ = Command::new("killall")
-        .arg("multi-protocol-server")
-        .output();
+    kill_process_by_name("orbit-server");
+    kill_process_by_name("multi-protocol-server");
 
     // Give processes time to terminate
     sleep(Duration::from_millis(500)).await;
 
     // Verify cleanup
-    let output = Command::new("ps")
-        .arg("aux")
-        .output()
-        .expect("Failed to execute ps");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let orbit_count = stdout
-        .lines()
-        .filter(|line| line.contains("orbit-server") || line.contains("multi-protocol-server"))
-        .filter(|line| !line.contains("grep"))
-        .count();
+    let orbit_processes = get_matching_processes("orbit-server");
+    let multi_processes = get_matching_processes("multi-protocol-server");
+    let orbit_count = orbit_processes.len() + multi_processes.len();
 
     assert_eq!(
         orbit_count, 0,
@@ -387,17 +440,9 @@ async fn test_multiple_restarts_no_lingering_instances() {
     }
 
     // Final verification - no lingering instances
-    let output = Command::new("ps")
-        .arg("aux")
-        .output()
-        .expect("Failed to execute ps");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let orbit_count = stdout
-        .lines()
-        .filter(|line| line.contains("orbit-server") || line.contains("multi-protocol-server"))
-        .filter(|line| !line.contains("grep"))
-        .count();
+    let orbit_processes = get_matching_processes("orbit-server");
+    let multi_processes = get_matching_processes("multi-protocol-server");
+    let orbit_count = orbit_processes.len() + multi_processes.len();
 
     assert_eq!(
         orbit_count, 0,

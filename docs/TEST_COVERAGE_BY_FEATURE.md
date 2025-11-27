@@ -25,6 +25,8 @@ This document provides a comprehensive analysis of test coverage organized by fe
 | `mysql` | `mysql_integration_tests.rs`, `mysql_query_execution_tests.rs`, `mysql_syntax_tests.rs`, `mysql_unit_tests.rs` | `#![cfg(feature = "mysql")]` |
 | `cql` | `cql_integration_tests.rs`, `cql_query_execution_tests.rs`, `cql_test_helpers.rs` | `#![cfg(feature = "cql")]` |
 | `mcp` | `mcp_integration_test.rs` | `#![cfg(feature = "mcp")]` |
+| `neo4j` | `neo4j_integration_tests.rs` (25 tests) | `#![cfg(feature = "neo4j")]` |
+| `arangodb` | `arangodb_integration_tests.rs` (39 tests) | `#![cfg(feature = "arangodb")]` |
 | `iceberg-cold` | `iceberg_azurite_integration.rs`, `iceberg_minio_integration.rs`, `iceberg_table_operations.rs` | `#![cfg(feature = "iceberg-cold")]` |
 | `integration` | `resp_integration_tests.rs`, `postgres_integration_tests.rs` | `#![cfg(feature = "integration")]` |
 
@@ -39,6 +41,8 @@ This document provides a comprehensive analysis of test coverage organized by fe
 
 | Feature | Test Files | Gate Applied |
 |---------|-----------|--------------|
+| `transactions` | `distributed_tx_integration_tests.rs` (42 tests) | `#![cfg(feature = "transactions")]` |
+| CDC (core) | `cdc_integration_tests.rs` (39 tests) | Always available |
 | `icelake-evaluation` | `icelake_evaluation.rs` | `#![cfg(feature = "icelake-evaluation")]` |
 | macOS only | `gpu_acceleration_integration.rs` | `#![cfg(target_os = "macos")]` |
 
@@ -48,21 +52,21 @@ This document provides a comprehensive analysis of test coverage organized by fe
 
 ### High Priority
 
-1. **`protocol-neo4j`** - Neo4j Bolt protocol
-   - Current coverage: Minimal inline tests
-   - Recommendation: Add integration tests for Bolt protocol connections
+1. ~~**`protocol-neo4j`** - Neo4j Bolt protocol~~ ✅ **COMPLETED**
+   - Added: `neo4j_integration_tests.rs` with 25 tests
+   - Coverage: Cypher spatial functions, Node/Relationship/Path operations, Spatial indexes
 
-2. **`protocol-arangodb`** - ArangoDB protocol
-   - Current coverage: Inline tests only
-   - Recommendation: Add AQL query execution tests
+2. ~~**`protocol-arangodb`** - ArangoDB protocol~~ ✅ **COMPLETED**
+   - Added: `arangodb_integration_tests.rs` with 39 tests
+   - Coverage: AQL spatial functions, Document/Collection operations, HTTP protocol
 
 3. **`storage-rocksdb`** - RocksDB storage backend
    - Current coverage: Used implicitly in many tests
    - Recommendation: Add explicit persistence/recovery tests
 
-4. **`distributed-tx`** - Distributed transactions
-   - Current coverage: Limited
-   - Recommendation: Add multi-node transaction tests
+4. ~~**`distributed-tx`** - Distributed transactions~~ ✅ **COMPLETED**
+   - Added: `distributed_tx_integration_tests.rs` with 42 tests
+   - Coverage: TransactionCoordinator, DistributedLockManager, DeadlockDetector, 2PC protocol
 
 ### Medium Priority
 
@@ -74,9 +78,9 @@ This document provides a comprehensive analysis of test coverage organized by fe
    - Current coverage: Good via gpu_vector_similarity_test.rs
    - Recommendation: Add more similarity metric tests
 
-7. **`cdc`** - Change Data Capture
-   - Current coverage: Minimal
-   - Recommendation: Add CDC event streaming tests
+7. ~~**`cdc`** - Change Data Capture~~ ✅ **COMPLETED**
+   - Added: `cdc_integration_tests.rs` with 39 tests
+   - Coverage: CdcEvent lifecycle, CdcFilter, CdcSubscription, CdcCoordinator, high-throughput streaming
 
 8. **`streaming`** - Stream processing
    - Current coverage: Minimal
@@ -145,13 +149,17 @@ Based on analysis of test modules:
 | `mysql` | ~30 | 4 files | ~50 |
 | `cql` | ~25 | 3 files | ~40 |
 | `resp` | ~40 | 4 files | ~60 |
+| `neo4j` | ~10 | 1 file (25 tests) | ~35 |
+| `arangodb` | ~15 | 1 file (39 tests) | ~54 |
+| `transactions` | ~20 | 1 file (42 tests) | ~62 |
+| `cdc` | ~15 | 1 file (39 tests) | ~54 |
 | `gpu-acceleration` | ~100 | 7 files | ~120 |
 | `ai-native` | ~30 | 1 file | ~35 |
 | `graphrag` | ~15 | 0 | ~15 |
 | `storage-rocksdb` | ~20 | implicit | ~20 |
 | Core (always on) | ~500 | 3 files | ~520 |
 
-**Total estimated tests: ~1000+**
+**Total estimated tests: ~1145+**
 
 ---
 
@@ -159,10 +167,10 @@ Based on analysis of test modules:
 
 ### Immediate Actions
 
-1. **Add integration tests for Neo4j/Bolt protocol** - No integration tests exist
+1. ~~**Add integration tests for Neo4j/Bolt protocol**~~ ✅ DONE - 25 tests added
 2. **Add RocksDB persistence tests** - Verify data survives restarts
-3. **Add distributed transaction tests** - Multi-node scenarios
-4. **Add CDC event tests** - Verify change capture works
+3. ~~**Add distributed transaction tests**~~ ✅ DONE - 42 tests added (DeadlockDetector, LockManager, 2PC)
+4. ~~**Add CDC event tests**~~ ✅ DONE - 39 tests added (CdcCoordinator, subscriptions, streaming)
 
 ### Medium-term Actions
 
