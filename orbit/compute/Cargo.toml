@@ -81,32 +81,14 @@ raw-cpuid = { version = "11.0", optional = true }
 # Apple ecosystem (macOS/iOS)
 bytemuck = "1.14"
 
-[target.'cfg(target_os = "macos")'.dependencies]
-metal = "0.29"
-objc = "0.2"
-core-foundation = "0.9"
-# core-ml = { version = "0.1", optional = true }
-# metal-performance-shaders = { version = "0.4", optional = true }
-
-# NVIDIA CUDA
+# NVIDIA CUDA (cross-platform)
 cudarc = { version = "0.12", features = ["std"], optional = true }
 
-# AMD ROCm/HIP
-# hip-runtime-sys = { version = "0.3", optional = true }
-# rocblas-sys = { version = "0.1", optional = true }
-
-# Cross-platform GPU compute
-# opencl3 = { version = "0.9", optional = true }
+# Cross-platform Vulkan compute
 vulkano = { version = "0.34", optional = true }
 
-# ARM/Qualcomm specific (hypothetical crates for demonstration)
-# hexagon-sdk = { version = "0.1", optional = true }
-
-# Intel Neural Compute
-# openvino = { version = "0.7", optional = true }
-
 # Logging and metrics
-tracing = { workspace = true }
+tracing = "0.1"
 metrics = "0.23"
 
 # Memory management
@@ -121,6 +103,13 @@ which = "6.0"
 
 # Benchmarking
 criterion = { version = "0.7", features = ["html_reports"], optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+metal = "0.29"
+objc = "0.2"
+core-foundation = "0.9"
+# core-ml = { version = "0.1", optional = true }
+# metal-performance-shaders = { version = "0.4", optional = true }
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 # x86-64 specific SIMD intrinsics are built-in to std::arch

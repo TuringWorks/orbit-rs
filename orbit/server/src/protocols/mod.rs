@@ -7,8 +7,8 @@
 pub mod aql;
 pub mod arangodb;
 pub mod bolt;
-pub mod cql;
 pub mod common;
+pub mod cql;
 pub mod cypher;
 pub mod error;
 pub mod graph_database;
@@ -26,15 +26,15 @@ pub mod time_series;
 pub mod vector_store;
 
 // Server wrappers (these use the protocol implementations above)
-mod resp_server;
-mod postgres_server;
-mod mysql_server;
 mod cql_server;
+mod mysql_server;
+mod postgres_server;
+mod resp_server;
 
-pub use resp_server::RespServer;
-pub use postgres_server::PostgresServer;
-pub use mysql_server::MySqlServer;
 pub use cql_server::CqlServer;
+pub use mysql_server::MySqlServer;
+pub use postgres_server::PostgresServer;
+pub use resp_server::RespServer;
 
 // Re-export commonly used types
 pub use error::{ProtocolError, ProtocolResult};

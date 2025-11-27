@@ -101,9 +101,9 @@ impl PersistentLogConfig {
         Self {
             enable_wal: true,
             sync_mode: SyncMode::Normal,
-            cache_size: -20000, // Larger cache (~20MB)
+            cache_size: -20000,             // Larger cache (~20MB)
             wal_checkpoint_interval: 50000, // Less frequent checkpoints
-            batch_size: 5000, // Larger batches
+            batch_size: 5000,               // Larger batches
             ..Default::default()
         }
     }
@@ -174,6 +174,12 @@ pub struct LogStats {
     pub oldest_entry_timestamp: Option<i64>,
     /// Timestamp of the newest entry in the log
     pub newest_entry_timestamp: Option<i64>,
+    /// Number of committed transactions
+    pub committed_count: u64,
+    /// Number of aborted transactions
+    pub aborted_count: u64,
+    /// Number of timed out transactions
+    pub timed_out_count: u64,
 }
 
 /// Trait for persistent transaction logging backends
@@ -360,7 +366,9 @@ impl SqliteTransactionLogger {
             sqlx::query(&checkpoint_pragma)
                 .execute(&self.pool)
                 .await
-                .map_err(|e| EngineError::internal(format!("Failed to set WAL autocheckpoint: {e}")))?;
+                .map_err(|e| {
+                    EngineError::internal(format!("Failed to set WAL autocheckpoint: {e}"))
+                })?;
         }
 
         info!(
@@ -588,7 +596,10 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
                 COUNT(CASE WHEN archived = FALSE THEN 1 END) as active,
                 COUNT(CASE WHEN archived = TRUE THEN 1 END) as archived,
                 MIN(timestamp) as oldest,
-                MAX(timestamp) as newest
+                MAX(timestamp) as newest,
+                COUNT(CASE WHEN event_type = 'Committed' THEN 1 END) as committed,
+                COUNT(CASE WHEN event_type = 'Aborted' THEN 1 END) as aborted,
+                COUNT(CASE WHEN event_type = 'TimedOut' THEN 1 END) as timed_out
                FROM transaction_log"#,
         )
         .fetch_one(&self.pool)
@@ -607,6 +618,9 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
             database_size_bytes: database_size,
             oldest_entry_timestamp: stats_row.get::<Option<i64>, _>("oldest"),
             newest_entry_timestamp: stats_row.get::<Option<i64>, _>("newest"),
+            committed_count: stats_row.get::<i64, _>("committed") as u64,
+            aborted_count: stats_row.get::<i64, _>("aborted") as u64,
+            timed_out_count: stats_row.get::<i64, _>("timed_out") as u64,
         };
 
         // Update cache
@@ -694,14 +708,13 @@ impl SqliteTransactionLogger {
         let event: TransactionEvent = serde_json::from_str(&event_data)
             .map_err(|e| EngineError::internal(format!("Failed to deserialize event: {e}")))?;
 
-        let details =
-            if let Some(details_str) = details_str {
-                Some(serde_json::from_str(&details_str).map_err(|e| {
-                    EngineError::internal(format!("Failed to deserialize details: {e}"))
-                })?)
-            } else {
-                None
-            };
+        let details = if let Some(details_str) = details_str {
+            Some(serde_json::from_str(&details_str).map_err(|e| {
+                EngineError::internal(format!("Failed to deserialize details: {e}"))
+            })?)
+        } else {
+            None
+        };
 
         Ok(PersistentLogEntry {
             id,
@@ -770,8 +783,7 @@ mod tests {
 
         let logger = SqliteTransactionLogger::new(config).await.unwrap();
 
-        let transaction_id =
-            TransactionId::new("test".to_string());
+        let transaction_id = TransactionId::new("test".to_string());
         let entry = TransactionLogEntry {
             timestamp: chrono::Utc::now().timestamp_millis(),
             transaction_id: transaction_id.clone(),
@@ -800,8 +812,7 @@ mod tests {
 
         let logger = SqliteTransactionLogger::new(config).await.unwrap();
 
-        let transaction_id =
-            TransactionId::new("test".to_string());
+        let transaction_id = TransactionId::new("test".to_string());
         let entries: Vec<_> = (0..5)
             .map(|i| TransactionLogEntry {
                 timestamp: chrono::Utc::now().timestamp_millis() + i,

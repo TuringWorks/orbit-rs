@@ -432,7 +432,9 @@ impl GraphRAGActor {
 
         // Step 3: Collect context from various sources
         let context_start_time = std::time::Instant::now();
-        let context_items = self.collect_context(orbit_client.clone(), &query, &reasoning_paths).await?;
+        let context_items = self
+            .collect_context(orbit_client.clone(), &query, &reasoning_paths)
+            .await?;
         processing_times.vector_search_ms = context_start_time.elapsed().as_millis() as u64;
 
         // Step 4: Generate response using LLM
@@ -590,11 +592,14 @@ impl GraphRAGActor {
         }
 
         // Add vector similarity search context
-        if let Ok(similar_entities) = self.find_similar_entities_via_vector_search(
-            orbit_client,
-            &query.query_text,
-            5, // Top 5 similar entities
-        ).await {
+        if let Ok(similar_entities) = self
+            .find_similar_entities_via_vector_search(
+                orbit_client,
+                &query.query_text,
+                5, // Top 5 similar entities
+            )
+            .await
+        {
             for entity in similar_entities {
                 let context_item = ContextItem {
                     content: format!("Similar entity found: {}", entity),
@@ -606,7 +611,7 @@ impl GraphRAGActor {
                 context_items.push(context_item);
             }
         }
-        
+
         // TODO: Add full-text search context
 
         // Sort by relevance and limit context size
@@ -627,7 +632,7 @@ impl GraphRAGActor {
         context_items: &[ContextItem],
     ) -> OrbitResult<RAGResponse> {
         use crate::protocols::graphrag::llm_client::{create_llm_client, LLMGenerationRequest};
-        
+
         let llm_provider_name = query
             .llm_provider
             .as_ref()
@@ -652,11 +657,11 @@ impl GraphRAGActor {
         // Build RAG prompt
         let system_message = Some(
             "You are a helpful assistant that answers questions based on knowledge graph context. "
-            .to_string() +
-            "Use the provided context to answer the user's question accurately. " +
-            "If the context doesn't contain enough information, say so clearly."
+                .to_string()
+                + "Use the provided context to answer the user's question accurately. "
+                + "If the context doesn't contain enough information, say so clearly.",
         );
-        
+
         let prompt = format!(
             "Context from knowledge graph:\n{}\n\nQuestion: {}\n\nAnswer:",
             context_text, query.query_text
@@ -664,7 +669,7 @@ impl GraphRAGActor {
 
         // Create LLM client and generate response
         let llm_client = create_llm_client(llm_provider)?;
-        
+
         let generation_request = LLMGenerationRequest {
             prompt,
             max_tokens: match llm_provider {
@@ -683,7 +688,9 @@ impl GraphRAGActor {
         };
 
         let start_time = std::time::Instant::now();
-        let llm_response = llm_client.generate(generation_request).await
+        let llm_response = llm_client
+            .generate(generation_request)
+            .await
             .map_err(|e| OrbitError::internal(format!("LLM generation failed: {}", e)))?;
         let processing_time_ms = start_time.elapsed().as_millis() as u64;
 
@@ -700,7 +707,8 @@ impl GraphRAGActor {
             let avg_relevance: f32 = context_items
                 .iter()
                 .map(|item| item.relevance_score)
-                .sum::<f32>() / context_items.len() as f32;
+                .sum::<f32>()
+                / context_items.len() as f32;
             (0.5 + avg_relevance * 0.5).min(1.0)
         };
 

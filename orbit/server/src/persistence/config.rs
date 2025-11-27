@@ -1069,7 +1069,6 @@ impl EnvironmentConfig {
             tags,
         })
     }
-
 }
 
 #[cfg(test)]
@@ -1120,5 +1119,4 @@ mod tests {
         assert_eq!(config.provider_names().len(), 1);
         assert!(config.provider_names().contains(&&"memory".to_string()));
     }
-
 }

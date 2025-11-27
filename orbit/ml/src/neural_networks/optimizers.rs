@@ -4,6 +4,49 @@ use async_trait::async_trait;
 use ndarray::Array2;
 
 use crate::error::Result;
+use crate::neural_networks::{OptimizerConfig, OptimizerType};
+
+/// Create an optimizer from configuration
+pub fn create_optimizer(config: &OptimizerConfig) -> Box<dyn Optimizer> {
+    match config.optimizer_type {
+        OptimizerType::SGD => {
+            let momentum = config.parameters.get("momentum").cloned().unwrap_or(0.0);
+            Box::new(SGDOptimizer::new(config.learning_rate, momentum))
+        }
+        OptimizerType::Adam => {
+            let beta1 = config.parameters.get("beta1").cloned().unwrap_or(0.9);
+            let beta2 = config.parameters.get("beta2").cloned().unwrap_or(0.999);
+            let epsilon = config.parameters.get("epsilon").cloned().unwrap_or(1e-8);
+            Box::new(AdamOptimizer::new(
+                config.learning_rate,
+                beta1,
+                beta2,
+                epsilon,
+            ))
+        }
+        OptimizerType::AdaGrad => {
+            let epsilon = config.parameters.get("epsilon").cloned().unwrap_or(1e-8);
+            Box::new(AdaGradOptimizer::new(config.learning_rate, epsilon))
+        }
+        OptimizerType::RMSprop => {
+            let alpha = config.parameters.get("alpha").cloned().unwrap_or(0.99);
+            let epsilon = config.parameters.get("epsilon").cloned().unwrap_or(1e-8);
+            Box::new(RMSpropOptimizer::new(config.learning_rate, alpha, epsilon))
+        }
+        OptimizerType::AdamW => {
+            // Fallback to Adam for MVP
+            let beta1 = config.parameters.get("beta1").cloned().unwrap_or(0.9);
+            let beta2 = config.parameters.get("beta2").cloned().unwrap_or(0.999);
+            let epsilon = config.parameters.get("epsilon").cloned().unwrap_or(1e-8);
+            Box::new(AdamOptimizer::new(
+                config.learning_rate,
+                beta1,
+                beta2,
+                epsilon,
+            ))
+        }
+    }
+}
 
 /// Generic optimizer trait
 #[async_trait]

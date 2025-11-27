@@ -40,7 +40,10 @@ impl NlpQueryProcessor {
         let projections = self.entity_extractor.extract_projections(query)?;
 
         // Step 5: If no table was found, try to infer from context
-        if entities.iter().all(|e| !matches!(e.entity_type, EntityType::Table)) {
+        if entities
+            .iter()
+            .all(|e| !matches!(e.entity_type, EntityType::Table))
+        {
             // Try to find table name from common patterns
             let query_lower = query.to_lowercase();
             // Look for plural nouns that might be table names
@@ -102,12 +105,18 @@ impl NlpQueryProcessor {
         let mut confidence: f64 = 0.5;
 
         // Increase confidence if we found table names
-        if entities.iter().any(|e| matches!(e.entity_type, EntityType::Table)) {
+        if entities
+            .iter()
+            .any(|e| matches!(e.entity_type, EntityType::Table))
+        {
             confidence += 0.2;
         }
 
         // Increase confidence if we found column names
-        if entities.iter().any(|e| matches!(e.entity_type, EntityType::Column)) {
+        if entities
+            .iter()
+            .any(|e| matches!(e.entity_type, EntityType::Column))
+        {
             confidence += 0.2;
         }
 
@@ -315,15 +324,23 @@ impl IntentClassifier {
     pub fn new() -> Self {
         Self {
             select_keywords: vec![
-                "show", "display", "list", "get", "find", "search", "select", "fetch",
-                "retrieve", "query", "what", "which", "who", "where", "when", "how many",
+                "show", "display", "list", "get", "find", "search", "select", "fetch", "retrieve",
+                "query", "what", "which", "who", "where", "when", "how many",
             ],
             insert_keywords: vec!["add", "insert", "create", "new", "add new"],
             update_keywords: vec!["update", "modify", "change", "set", "edit"],
             delete_keywords: vec!["delete", "remove", "drop", "clear"],
             analyze_keywords: vec![
-                "analyze", "analysis", "statistics", "stats", "summary", "summarize",
-                "distribution", "trend", "correlation", "outlier",
+                "analyze",
+                "analysis",
+                "statistics",
+                "stats",
+                "summary",
+                "summarize",
+                "distribution",
+                "trend",
+                "correlation",
+                "outlier",
             ],
         }
     }
@@ -333,7 +350,11 @@ impl IntentClassifier {
         let query_lower = query.to_lowercase();
 
         // Check for ANALYZE intent first (more specific)
-        if self.analyze_keywords.iter().any(|kw| query_lower.contains(kw)) {
+        if self
+            .analyze_keywords
+            .iter()
+            .any(|kw| query_lower.contains(kw))
+        {
             let analysis_type = if query_lower.contains("distribution") {
                 AnalysisType::Distribution
             } else if query_lower.contains("trend") {
@@ -348,19 +369,31 @@ impl IntentClassifier {
         }
 
         // Check for DELETE intent
-        if self.delete_keywords.iter().any(|kw| query_lower.contains(kw)) {
+        if self
+            .delete_keywords
+            .iter()
+            .any(|kw| query_lower.contains(kw))
+        {
             let conditional = query_lower.contains("where") || query_lower.contains("from");
             return Ok(SqlOperation::Delete { conditional });
         }
 
         // Check for UPDATE intent
-        if self.update_keywords.iter().any(|kw| query_lower.contains(kw)) {
+        if self
+            .update_keywords
+            .iter()
+            .any(|kw| query_lower.contains(kw))
+        {
             let conditional = query_lower.contains("where");
             return Ok(SqlOperation::Update { conditional });
         }
 
         // Check for INSERT intent
-        if self.insert_keywords.iter().any(|kw| query_lower.contains(kw)) {
+        if self
+            .insert_keywords
+            .iter()
+            .any(|kw| query_lower.contains(kw))
+        {
             let mode = if query_lower.contains("batch") || query_lower.contains("multiple") {
                 InsertMode::Batch
             } else if query_lower.contains("from") && query_lower.contains("select") {
@@ -491,18 +524,18 @@ impl EntityExtractor {
 
         // Extract table names (after "from", "in", "table", or common patterns)
         let table_patterns = vec![
-            r"from\s+(\w+)",                    // "from users"
-            r"in\s+the\s+(\w+)\s+table",        // "in the users table"
-            r"table\s+(\w+)",                    // "table users"
-            r"(\w+)\s+table",                    // "users table"
-            r"all\s+(\w+)",                      // "all users"
+            r"from\s+(\w+)",                                   // "from users"
+            r"in\s+the\s+(\w+)\s+table",                       // "in the users table"
+            r"table\s+(\w+)",                                  // "table users"
+            r"(\w+)\s+table",                                  // "users table"
+            r"all\s+(\w+)",                                    // "all users"
             r"show\s+(?:me\s+)?(?:all\s+)?(\w+)", // "show me all users" or "show users"
-            r"get\s+(?:all\s+)?(\w+)",          // "get all users" or "get users"
-            r"list\s+(?:all\s+)?(\w+)",         // "list all users" or "list users"
-            r"find\s+(?:all\s+)?(\w+)",         // "find all users" or "find users"
+            r"get\s+(?:all\s+)?(\w+)",            // "get all users" or "get users"
+            r"list\s+(?:all\s+)?(\w+)",           // "list all users" or "list users"
+            r"find\s+(?:all\s+)?(\w+)",           // "find all users" or "find users"
             r"what\s+are\s+(?:the\s+)?(?:top\s+\d+\s+)?(\w+)", // "what are the top 10 products"
-            r"(\w+)\s+from",                     // "users from California"
-            r"(\w+)\s+where",                    // "users where age > 25"
+            r"(\w+)\s+from",                      // "users from California"
+            r"(\w+)\s+where",                     // "users where age > 25"
         ];
 
         let query_lower = query.to_lowercase();
@@ -565,7 +598,10 @@ impl EntityExtractor {
         let patterns = vec![
             (r"where\s+(\w+)\s*=\s*([^\s]+)", ComparisonOperator::Equal),
             (r"(\w+)\s+is\s+(.+)", ComparisonOperator::Equal),
-            (r"(\w+)\s+greater\s+than\s+(\d+)", ComparisonOperator::GreaterThan),
+            (
+                r"(\w+)\s+greater\s+than\s+(\d+)",
+                ComparisonOperator::GreaterThan,
+            ),
             (r"(\w+)\s+less\s+than\s+(\d+)", ComparisonOperator::LessThan),
         ];
 
@@ -574,8 +610,7 @@ impl EntityExtractor {
                 .ok()
                 .and_then(|re| re.captures(&query_lower))
             {
-                if let (Some(column_match), Some(value_match)) =
-                    (captures.get(1), captures.get(2))
+                if let (Some(column_match), Some(value_match)) = (captures.get(1), captures.get(2))
                 {
                     let column = column_match.as_str().to_string();
                     let value_str = value_match.as_str().trim();
@@ -629,10 +664,10 @@ impl EntityExtractor {
 
         // Look for explicit column mentions like "show name, email" or "get id and name"
         let patterns = vec![
-            r"select\s+([\w\s,]+?)(?:\s+from|\s+where|$)",  // "select name, email from"
+            r"select\s+([\w\s,]+?)(?:\s+from|\s+where|$)", // "select name, email from"
             r"show\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?([\w\s,]+?)(?:\s+from|\s+where|$)", // "show name, email"
-            r"get\s+([\w\s,]+?)(?:\s+from|\s+where|$)",     // "get id, name"
-            r"display\s+([\w\s,]+?)(?:\s+from|\s+where|$)",  // "display columns"
+            r"get\s+([\w\s,]+?)(?:\s+from|\s+where|$)", // "get id, name"
+            r"display\s+([\w\s,]+?)(?:\s+from|\s+where|$)", // "display columns"
         ];
 
         for pattern in patterns {
@@ -647,7 +682,9 @@ impl EntityExtractor {
                         // Multiple columns
                         for col in cols_str.split(',') {
                             let col_trimmed = col.trim();
-                            if !col_trimmed.is_empty() && !matches!(col_trimmed, "all" | "me" | "the") {
+                            if !col_trimmed.is_empty()
+                                && !matches!(col_trimmed, "all" | "me" | "the")
+                            {
                                 projections.push(ProjectionColumn {
                                     name: col_trimmed.to_string(),
                                     alias: None,
@@ -719,4 +756,3 @@ impl std::fmt::Display for NlpError {
 }
 
 impl std::error::Error for NlpError {}
-

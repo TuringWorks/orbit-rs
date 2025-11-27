@@ -61,7 +61,7 @@ impl SchemaAnalyzer {
         let mut cache = self.schema_cache.write().unwrap();
         let old_schema = cache.tables.insert(schema.name.clone(), schema.clone());
         cache.last_updated = SystemTime::now();
-        
+
         // Log schema update
         if old_schema.is_some() {
             tracing::debug!("Updated schema for table: {}", schema.name);
@@ -83,9 +83,16 @@ impl SchemaAnalyzer {
     }
 
     /// Get column statistics for a table/column
-    pub fn get_column_statistics(&self, table_name: &str, column_name: &str) -> Option<ColumnStatistics> {
+    pub fn get_column_statistics(
+        &self,
+        table_name: &str,
+        column_name: &str,
+    ) -> Option<ColumnStatistics> {
         let cache = self.schema_cache.read().unwrap();
-        cache.statistics.get(&format!("{}.{}", table_name, column_name)).cloned()
+        cache
+            .statistics
+            .get(&format!("{}.{}", table_name, column_name))
+            .cloned()
     }
 
     /// Discover schema for a table from Orbit-RS storage
@@ -100,10 +107,10 @@ impl SchemaAnalyzer {
             if let Some(pg_schema) = pg_schema {
                 // Convert PostgreSQL TableSchema to MCP TableSchema
                 let mcp_schema = self.convert_pg_schema_to_mcp(pg_schema);
-                
+
                 // Update cache
                 self.update_schema(mcp_schema.clone());
-                
+
                 Ok(mcp_schema)
             } else {
                 Err(SchemaError::TableNotFound(table_name.to_string()))
@@ -147,28 +154,46 @@ impl SchemaAnalyzer {
             .map(|col| {
                 // Convert SqlType to string representation
                 let data_type_str = match &col.data_type {
-                    crate::protocols::postgres_wire::sql::types::SqlType::Integer => "INTEGER".to_string(),
-                    crate::protocols::postgres_wire::sql::types::SqlType::BigInt => "BIGINT".to_string(),
-                    crate::protocols::postgres_wire::sql::types::SqlType::Text => "TEXT".to_string(),
-                    crate::protocols::postgres_wire::sql::types::SqlType::Varchar(Some(n)) => format!("VARCHAR({})", n),
-                    crate::protocols::postgres_wire::sql::types::SqlType::Varchar(None) => "VARCHAR".to_string(),
-                    crate::protocols::postgres_wire::sql::types::SqlType::Boolean => "BOOLEAN".to_string(),
-                    crate::protocols::postgres_wire::sql::types::SqlType::Json => "JSON".to_string(),
-                    crate::protocols::postgres_wire::sql::types::SqlType::Jsonb => "JSONB".to_string(),
-                    crate::protocols::postgres_wire::sql::types::SqlType::Timestamp { with_timezone } => {
+                    crate::protocols::postgres_wire::sql::types::SqlType::Integer => {
+                        "INTEGER".to_string()
+                    }
+                    crate::protocols::postgres_wire::sql::types::SqlType::BigInt => {
+                        "BIGINT".to_string()
+                    }
+                    crate::protocols::postgres_wire::sql::types::SqlType::Text => {
+                        "TEXT".to_string()
+                    }
+                    crate::protocols::postgres_wire::sql::types::SqlType::Varchar(Some(n)) => {
+                        format!("VARCHAR({})", n)
+                    }
+                    crate::protocols::postgres_wire::sql::types::SqlType::Varchar(None) => {
+                        "VARCHAR".to_string()
+                    }
+                    crate::protocols::postgres_wire::sql::types::SqlType::Boolean => {
+                        "BOOLEAN".to_string()
+                    }
+                    crate::protocols::postgres_wire::sql::types::SqlType::Json => {
+                        "JSON".to_string()
+                    }
+                    crate::protocols::postgres_wire::sql::types::SqlType::Jsonb => {
+                        "JSONB".to_string()
+                    }
+                    crate::protocols::postgres_wire::sql::types::SqlType::Timestamp {
+                        with_timezone,
+                    } => {
                         if *with_timezone {
                             "TIMESTAMPTZ".to_string()
                         } else {
                             "TIMESTAMP".to_string()
                         }
-                    },
+                    }
                     _ => format!("{:?}", col.data_type), // Default: use debug format
                 };
-                
+
                 // Check if column has NOT NULL constraint
                 let has_not_null = col.constraints.iter().any(|c| c == "NOT NULL");
                 let is_primary_key = col.constraints.iter().any(|c| c == "PRIMARY KEY");
-                
+
                 ColumnInfo {
                     name: col.name.clone(),
                     data_type: data_type_str,
@@ -184,7 +209,7 @@ impl SchemaAnalyzer {
             name: pg_schema.name.clone(),
             columns,
             constraints: vec![], // TODO: Convert table constraints
-            indexes: vec![], // TODO: Convert indexes
+            indexes: vec![],     // TODO: Convert indexes
             row_estimate: None,
             data_size_estimate: None,
         }
@@ -228,7 +253,7 @@ impl SchemaCache {
     pub fn is_valid(&self) -> bool {
         // Cache is valid for 5 minutes
         const CACHE_TTL_SECONDS: u64 = 300;
-        
+
         self.last_updated
             .duration_since(UNIX_EPOCH)
             .ok()
@@ -291,9 +316,14 @@ pub struct ConstraintInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConstraintType {
     PrimaryKey,
-    ForeignKey { referenced_table: String, referenced_column: String },
+    ForeignKey {
+        referenced_table: String,
+        referenced_column: String,
+    },
     Unique,
-    Check { expression: String },
+    Check {
+        expression: String,
+    },
     NotNull,
 }
 
@@ -440,4 +470,3 @@ impl std::fmt::Display for SchemaError {
 }
 
 impl std::error::Error for SchemaError {}
-

@@ -81,8 +81,11 @@ impl QueryPatternClassifier {
             QueryPattern::ComplexJoin
         } else if query_lower.contains("group by") || query_lower.contains("having") {
             QueryPattern::Aggregation
-        } else if query_lower.contains("select") && query_lower.contains("from") 
-            && !query_lower.contains("join") && !query_lower.contains("group") {
+        } else if query_lower.contains("select")
+            && query_lower.contains("from")
+            && !query_lower.contains("join")
+            && !query_lower.contains("group")
+        {
             QueryPattern::SimpleSelect
         } else if query_lower.contains("with ") && query_lower.contains(" as ") {
             QueryPattern::Cte
@@ -148,4 +151,3 @@ impl Default for QueryPatternClassifier {
         Self::new()
     }
 }
-

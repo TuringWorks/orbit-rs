@@ -16,7 +16,10 @@
 
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::{
-    ast::{AssignmentTarget, Expression, FromClause, InsertSource, IsolationLevel, SelectItem, Statement},
+    ast::{
+        AssignmentTarget, Expression, FromClause, InsertSource, IsolationLevel, SelectItem,
+        Statement,
+    },
     executor::{ExecutionResult, SqlExecutor},
     mvcc_executor::{MvccSqlExecutor, TransactionId},
     parser::SqlParser,
@@ -306,8 +309,9 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
 
         match statement {
             Statement::Select(select_stmt) => {
-                let table_name = self.extract_table_name(&Statement::Select(select_stmt.clone()))?;
-                
+                let table_name =
+                    self.extract_table_name(&Statement::Select(select_stmt.clone()))?;
+
                 // Determine result columns from SELECT list
                 // For SELECT *, get columns from table schema
                 let mut columns = Vec::new();
@@ -315,7 +319,9 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                     match item {
                         SelectItem::Wildcard => {
                             // Get all columns from table schema using get_table_schema
-                            if let Ok(Some(table_schema)) = self.executor.get_table_schema(&table_name).await {
+                            if let Ok(Some(table_schema)) =
+                                self.executor.get_table_schema(&table_name).await
+                            {
                                 for col in &table_schema.columns {
                                     columns.push(col.name.clone());
                                 }
@@ -335,7 +341,9 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                         SelectItem::QualifiedWildcard { qualifier: _ } => {
                             // For qualified wildcard, get columns from specified table
                             // For now, treat same as wildcard
-                            if let Ok(Some(table_schema)) = self.executor.get_table_schema(&table_name).await {
+                            if let Ok(Some(table_schema)) =
+                                self.executor.get_table_schema(&table_name).await
+                            {
                                 for col in &table_schema.columns {
                                     columns.push(col.name.clone());
                                 }
@@ -343,7 +351,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                         }
                     }
                 }
-                
+
                 let rows = self
                     .executor
                     .mvcc_read(&table_name, transaction_id, None)
@@ -351,7 +359,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
 
                 // Convert MVCC rows to string format for compatibility
                 let mut string_rows = Vec::new();
-                
+
                 // If columns still empty (no schema or empty table), get from first row
                 if columns.is_empty() {
                     if let Some(first_row) = rows.first() {
@@ -389,8 +397,14 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                         explicit_columns.clone()
                     } else {
                         // Get columns from table schema using get_table_schema
-                        if let Ok(Some(table_schema)) = self.executor.get_table_schema(&table_name).await {
-                            table_schema.columns.iter().map(|c| c.name.clone()).collect()
+                        if let Ok(Some(table_schema)) =
+                            self.executor.get_table_schema(&table_name).await
+                        {
+                            table_schema
+                                .columns
+                                .iter()
+                                .map(|c| c.name.clone())
+                                .collect()
                         } else {
                             // Fallback to default if table doesn't exist (shouldn't happen)
                             vec!["data".to_string()]
@@ -437,7 +451,9 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                 }
 
                 // Convert WHERE clause to predicate
-                let predicate = update_stmt.where_clause.as_ref()
+                let predicate = update_stmt
+                    .where_clause
+                    .as_ref()
                     .map(|where_expr| self.create_row_predicate(where_expr.clone()))
                     .flatten();
 
@@ -453,9 +469,11 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
             }
             Statement::Delete(delete_stmt) => {
                 let table_name = delete_stmt.table.full_name();
-                
+
                 // Convert WHERE clause to predicate
-                let predicate = delete_stmt.where_clause.as_ref()
+                let predicate = delete_stmt
+                    .where_clause
+                    .as_ref()
                     .map(|where_expr| self.create_row_predicate(where_expr.clone()))
                     .flatten();
 
@@ -471,7 +489,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
             }
             Statement::CreateTable(create_stmt) => {
                 let table_name = create_stmt.name.full_name();
-                
+
                 // Build table schema from CREATE TABLE statement
                 use crate::protocols::postgres_wire::sql::ast::ColumnConstraint;
                 use crate::protocols::postgres_wire::sql::executor::{ColumnSchema, TableSchema};
@@ -480,20 +498,29 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                     columns.push(ColumnSchema {
                         name: col_def.name.clone(),
                         data_type: col_def.data_type.clone(),
-                        nullable: !col_def.constraints.iter().any(|c| matches!(c, ColumnConstraint::NotNull)),
+                        nullable: !col_def
+                            .constraints
+                            .iter()
+                            .any(|c| matches!(c, ColumnConstraint::NotNull)),
                         default: None, // TODO: Evaluate default expressions
-                        constraints: col_def.constraints.iter().map(|c| format!("{c:?}")).collect(),
+                        constraints: col_def
+                            .constraints
+                            .iter()
+                            .map(|c| format!("{c:?}"))
+                            .collect(),
                     });
                 }
-                
+
                 let table_schema = TableSchema {
                     name: table_name.clone(),
                     columns,
                     constraints: Vec::new(), // TODO: Parse table-level constraints
                     indexes: Vec::new(),
                 };
-                
-                self.executor.create_table_with_schema(&table_name, Some(table_schema)).await?;
+
+                self.executor
+                    .create_table_with_schema(&table_name, Some(table_schema))
+                    .await?;
 
                 Ok(UnifiedExecutionResult::CreateTable {
                     table_name,
@@ -620,18 +647,21 @@ impl MvccExecutionStrategy {
     }
 
     /// Create a row predicate from a WHERE clause expression
-    fn create_row_predicate(&self, where_expr: Expression) -> crate::protocols::postgres_wire::sql::mvcc_executor::RowPredicate {
+    fn create_row_predicate(
+        &self,
+        where_expr: Expression,
+    ) -> crate::protocols::postgres_wire::sql::mvcc_executor::RowPredicate {
         use crate::protocols::postgres_wire::sql::expression_evaluator::ExpressionEvaluator;
-        
+
         let expr = where_expr.clone();
         Some(Box::new(move |row: &HashMap<String, SqlValue>| -> bool {
             let context = crate::protocols::postgres_wire::sql::expression_evaluator::EvaluationContext::with_row(row.clone());
             let mut evaluator = ExpressionEvaluator::new();
-            
+
             match evaluator.evaluate(&expr, &context) {
                 Ok(SqlValue::Boolean(b)) => b,
                 Ok(SqlValue::Null) => false,
-                Ok(_) => false, // Non-boolean result is false
+                Ok(_) => false,  // Non-boolean result is false
                 Err(_) => false, // Error in evaluation is false
             }
         }))

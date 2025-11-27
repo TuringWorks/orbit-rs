@@ -13,18 +13,21 @@ use crate::error::EngineResult;
 use crate::metrics::StorageMetrics;
 
 // Module declarations
-pub mod config;
 pub mod columnar;
+pub mod config;
 pub mod hybrid;
+#[cfg(feature = "iceberg-cold")]
 pub mod iceberg;
+#[cfg(feature = "iceberg-cold")]
 pub mod iceberg_ext;
-// TODO: memory.rs needs to be decoupled from PostgreSQL protocol types
+// TODO: Re-enable once memory.rs is updated to match current TableStorage trait
 // pub mod memory;
 
 // Re-exports
-pub use config::{AzureConfig, S3Config, StorageBackend};
 pub use columnar::{Column, ColumnBatch, ColumnBatchBuilder, NullBitmap, DEFAULT_BATCH_SIZE};
-pub use hybrid::{HybridStorageManager, HybridStorageConfig, ColumnSchema};
+pub use config::{AzureConfig, S3Config, StorageBackend};
+pub use hybrid::{ColumnSchema, HybridStorageConfig, HybridStorageManager};
+#[cfg(feature = "iceberg-cold")]
 pub use iceberg::IcebergColdStore;
 // pub use memory::MemoryTableStorage;
 
@@ -320,11 +323,7 @@ pub trait TableStorage: StorageEngine {
     async fn insert_rows(&self, table_name: &str, rows: Vec<Row>) -> EngineResult<()>;
 
     /// Query data
-    async fn query(
-        &self,
-        table_name: &str,
-        pattern: AccessPattern,
-    ) -> EngineResult<QueryResult>;
+    async fn query(&self, table_name: &str, pattern: AccessPattern) -> EngineResult<QueryResult>;
 
     /// Update rows matching filter
     async fn update(

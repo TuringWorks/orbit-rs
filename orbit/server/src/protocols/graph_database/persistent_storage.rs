@@ -3,6 +3,8 @@
 //! This module provides adapters that implement GraphStorage trait using
 //! persistent storage backends like CypherGraphStorage.
 
+#![cfg(feature = "storage-rocksdb")]
+
 use crate::protocols::cypher::storage::CypherGraphStorage;
 use orbit_shared::graph::{
     Direction, GraphNode, GraphRelationship, GraphStorage, NodeId, RelationshipId,
@@ -33,8 +35,11 @@ impl PersistentGraphStorage {
     }
 
     /// Convert orbit GraphNode to CypherGraphStorage GraphNode
-    fn convert_node_to_cypher(&self, node: &GraphNode) -> crate::protocols::cypher::storage::GraphNode {
-        crate::protocols::cypher::storage::GraphNode {
+    fn convert_node_to_cypher(
+        &self,
+        node: &GraphNode,
+    ) -> crate::protocols::cypher::types::GraphNode {
+        crate::protocols::cypher::types::GraphNode {
             id: node.id.as_str().to_string(),
             labels: node.labels.clone(),
             properties: node.properties.clone(),
@@ -44,7 +49,7 @@ impl PersistentGraphStorage {
     /// Convert CypherGraphStorage GraphNode to orbit GraphNode
     fn convert_node_from_cypher(
         &self,
-        cypher_node: &crate::protocols::cypher::storage::GraphNode,
+        cypher_node: &crate::protocols::cypher::types::GraphNode,
     ) -> GraphNode {
         GraphNode::with_id(
             NodeId::from_string(&cypher_node.id),
@@ -57,8 +62,8 @@ impl PersistentGraphStorage {
     fn convert_rel_to_cypher(
         &self,
         rel: &GraphRelationship,
-    ) -> crate::protocols::cypher::storage::GraphRelationship {
-        crate::protocols::cypher::storage::GraphRelationship {
+    ) -> crate::protocols::cypher::types::GraphRelationship {
+        crate::protocols::cypher::types::GraphRelationship {
             id: rel.id.as_str().to_string(),
             start_node: rel.start_node.as_str().to_string(),
             end_node: rel.end_node.as_str().to_string(),
@@ -70,7 +75,7 @@ impl PersistentGraphStorage {
     /// Convert CypherGraphStorage GraphRelationship to orbit GraphRelationship
     fn convert_rel_from_cypher(
         &self,
-        cypher_rel: &crate::protocols::cypher::storage::GraphRelationship,
+        cypher_rel: &crate::protocols::cypher::types::GraphRelationship,
     ) -> GraphRelationship {
         GraphRelationship {
             id: RelationshipId::from_string(&cypher_rel.id),
@@ -111,7 +116,7 @@ impl GraphStorage for PersistentGraphStorage {
 
     async fn get_node(&self, node_id: &NodeId) -> OrbitResult<Option<GraphNode>> {
         let node_id_str = node_id.as_str();
-        
+
         // Try to get from CypherGraphStorage
         if let Ok(Some(cypher_node)) = self.cypher_storage.get_node(node_id_str).await {
             return Ok(Some(self.convert_node_from_cypher(&cypher_node)));
@@ -191,9 +196,12 @@ impl GraphStorage for PersistentGraphStorage {
         Ok(rel)
     }
 
-    async fn get_relationship(&self, rel_id: &RelationshipId) -> OrbitResult<Option<GraphRelationship>> {
+    async fn get_relationship(
+        &self,
+        rel_id: &RelationshipId,
+    ) -> OrbitResult<Option<GraphRelationship>> {
         let rel_id_str = rel_id.as_str();
-        
+
         // Try to get from CypherGraphStorage
         if let Ok(Some(cypher_rel)) = self.cypher_storage.get_relationship(rel_id_str).await {
             return Ok(Some(self.convert_rel_from_cypher(&cypher_rel)));
@@ -253,7 +261,9 @@ impl GraphStorage for PersistentGraphStorage {
             self.cypher_storage
                 .store_relationship(cypher_rel)
                 .await
-                .map_err(|e| OrbitError::internal(format!("Failed to update relationship: {}", e)))?;
+                .map_err(|e| {
+                    OrbitError::internal(format!("Failed to update relationship: {}", e))
+                })?;
 
             Ok(())
         } else {
@@ -299,7 +309,9 @@ impl GraphStorage for PersistentGraphStorage {
             self.cypher_storage
                 .store_node(cypher_node)
                 .await
-                .map_err(|e| OrbitError::internal(format!("Failed to update node labels: {}", e)))?;
+                .map_err(|e| {
+                    OrbitError::internal(format!("Failed to update node labels: {}", e))
+                })?;
 
             Ok(())
         } else {
@@ -318,7 +330,9 @@ impl GraphStorage for PersistentGraphStorage {
             self.cypher_storage
                 .store_node(cypher_node)
                 .await
-                .map_err(|e| OrbitError::internal(format!("Failed to update node labels: {}", e)))?;
+                .map_err(|e| {
+                    OrbitError::internal(format!("Failed to update node labels: {}", e))
+                })?;
 
             Ok(())
         } else {
@@ -328,4 +342,3 @@ impl GraphStorage for PersistentGraphStorage {
         }
     }
 }
-

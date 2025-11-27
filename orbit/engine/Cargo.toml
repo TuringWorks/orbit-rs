@@ -41,23 +41,23 @@ md5 = "0.7"
 metrics = "0.24"
 
 # Persistence
-rocksdb = "0.22"
+rocksdb = { version = "0.22", default-features = false, optional = true }
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"] }
 
 # Apache Iceberg for cold tier storage
-iceberg = { version = "0.7", features = ["storage-s3", "storage-memory"] }
-iceberg-catalog-rest = { version = "0.7" }
+# iceberg = { version = "0.7", default-features = false, features = ["storage-memory"] }
+# iceberg-catalog-rest = { version = "0.7" }
 
 # Alternative Iceberg implementation for evaluation
 icelake = { version = "0.3.141592654", optional = true }
 
 # Columnar formats
-arrow = { version = "55.2" }
-arrow-schema = { version = "55.2" }
-parquet = { version = "55.2" }
+arrow = { version = "55.2", default-features = false }
+arrow-schema = { version = "55.2", default-features = false }
+parquet = { version = "55.2", default-features = false }
 
 # Multi-cloud storage backends
-opendal = { version = "0.51", features = ["services-s3", "services-azblob", "services-memory"] }
+opendal = { version = "0.51", features = ["services-azblob", "services-memory"] }
 
 # Tracing
 tracing = "0.1"
@@ -75,10 +75,11 @@ criterion = "0.5"
 tempfile = "3.8"
 
 [features]
-default = ["tiered-storage", "transactions", "clustering", "iceberg-cold"]
+default = ["tiered-storage", "transactions", "clustering", "storage-rocksdb"]
 tiered-storage = []
 transactions = []
 clustering = []
+storage-rocksdb = ["rocksdb"]
 iceberg-cold = []
 icelake-evaluation = ["icelake"]
 # GPU acceleration features (not yet implemented)

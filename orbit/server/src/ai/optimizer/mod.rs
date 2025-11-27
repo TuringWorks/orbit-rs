@@ -6,13 +6,15 @@ pub mod cost_model;
 pub mod index_advisor;
 pub mod pattern_classifier;
 
-pub use cost_model::{CostEstimationModel, ExecutionCost, ExecutionMetrics, FeatureExtractor, QueryPlan};
+pub use cost_model::{
+    CostEstimationModel, ExecutionCost, ExecutionMetrics, FeatureExtractor, QueryPlan,
+};
 pub use index_advisor::{IndexAdvisor, IndexRecommendation, IndexType};
-pub use pattern_classifier::{QueryClass, QueryPatternClassifier, OptimizationStrategy};
+pub use pattern_classifier::{OptimizationStrategy, QueryClass, QueryPatternClassifier};
 
-use crate::ai::{AIDecision, AISubsystem, AISubsystemMetrics};
 use crate::ai::controller::AIConfig;
 use crate::ai::knowledge::AIKnowledgeBase;
+use crate::ai::{AIDecision, AISubsystem, AISubsystemMetrics};
 use anyhow::Result as OrbitResult;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -70,7 +72,10 @@ pub struct OptimizerStats {
 impl AISubsystem for IntelligentQueryOptimizer {
     async fn handle_decision(&self, decision: AIDecision) -> OrbitResult<()> {
         match decision {
-            AIDecision::OptimizeQuery { query_id, optimization: _ } => {
+            AIDecision::OptimizeQuery {
+                query_id,
+                optimization: _,
+            } => {
                 info!(
                     query_id = %query_id,
                     "Handling query optimization decision"
@@ -102,10 +107,7 @@ impl AISubsystem for IntelligentQueryOptimizer {
 
 impl IntelligentQueryOptimizer {
     /// Create a new intelligent query optimizer
-    pub async fn new(
-        config: &AIConfig,
-        knowledge_base: Arc<AIKnowledgeBase>,
-    ) -> OrbitResult<Self> {
+    pub async fn new(config: &AIConfig, knowledge_base: Arc<AIKnowledgeBase>) -> OrbitResult<Self> {
         info!("Initializing Intelligent Query Optimizer");
 
         Ok(Self {
@@ -170,9 +172,7 @@ impl IntelligentQueryOptimizer {
         let predicted_cost = self.cost_model.estimate_cost(&plan).await?;
 
         // Get index recommendations
-        let index_recommendations = self.index_advisor
-            .recommend_indexes(query, &plan)
-            .await?;
+        let index_recommendations = self.index_advisor.recommend_indexes(query, &plan).await?;
 
         let optimized_plan = OptimizedPlan {
             plan_id: format!("plan_{}", uuid::Uuid::new_v4()),
@@ -213,4 +213,3 @@ impl IntelligentQueryOptimizer {
         Ok(format!("query_{}", hasher.finish()))
     }
 }
-

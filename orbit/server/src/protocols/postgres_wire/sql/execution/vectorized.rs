@@ -12,14 +12,14 @@
 
 use std::collections::HashSet;
 
+use super::simd::aggregates::{SimdAggregateF64, SimdAggregateI32, SimdAggregateI64};
+use super::simd::filters::{SimdFilterF64, SimdFilterI32, SimdFilterI64};
+use super::{
+    simd::{simd_capability, SimdAggregate, SimdCapability, SimdFilter},
+    Column, ColumnBatch, NullBitmap, DEFAULT_BATCH_SIZE,
+};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::types::SqlValue;
-use super::{
-    Column, ColumnBatch, NullBitmap, DEFAULT_BATCH_SIZE,
-    simd::{SimdCapability, SimdFilter, SimdAggregate, simd_capability},
-};
-use super::simd::filters::{SimdFilterI32, SimdFilterI64, SimdFilterF64};
-use super::simd::aggregates::{SimdAggregateI32, SimdAggregateI64, SimdAggregateF64};
 
 /// Plan node types that break pipeline execution
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -201,10 +201,12 @@ impl VectorizedExecutor {
         // Verify all columns have same length
         for (idx, col) in columns.iter().enumerate() {
             if col.len() != row_count {
-                return Err(ProtocolError::PostgresError(
-                    format!("Column {} has mismatched length: expected {}, got {}",
-                            idx, row_count, col.len()),
-                ));
+                return Err(ProtocolError::PostgresError(format!(
+                    "Column {} has mismatched length: expected {}, got {}",
+                    idx,
+                    row_count,
+                    col.len()
+                )));
             }
         }
 
@@ -227,9 +229,10 @@ impl VectorizedExecutor {
         value: SqlValue,
     ) -> ProtocolResult<ColumnBatch> {
         if column_index >= batch.columns.len() {
-            return Err(ProtocolError::PostgresError(
-                format!("Column index {} out of bounds", column_index),
-            ));
+            return Err(ProtocolError::PostgresError(format!(
+                "Column index {} out of bounds",
+                column_index
+            )));
         }
 
         let column = &batch.columns[column_index];
@@ -273,9 +276,10 @@ impl VectorizedExecutor {
 
         for &idx in column_indices {
             if idx >= batch.columns.len() {
-                return Err(ProtocolError::PostgresError(
-                    format!("Column index {} out of bounds", idx),
-                ));
+                return Err(ProtocolError::PostgresError(format!(
+                    "Column index {} out of bounds",
+                    idx
+                )));
             }
 
             new_columns.push(batch.columns[idx].clone());
@@ -308,9 +312,10 @@ impl VectorizedExecutor {
         function: AggregateFunction,
     ) -> ProtocolResult<SqlValue> {
         if column_index >= batch.columns.len() {
-            return Err(ProtocolError::PostgresError(
-                format!("Column index {} out of bounds", column_index),
-            ));
+            return Err(ProtocolError::PostgresError(format!(
+                "Column index {} out of bounds",
+                column_index
+            )));
         }
 
         let column = &batch.columns[column_index];
@@ -351,15 +356,21 @@ impl VectorizedExecutor {
             }
             (Column::Float64(values), AggregateFunction::Sum) => {
                 let result = self.simd_aggregate_f64.sum(values, null_bitmap);
-                Ok(result.map(SqlValue::DoublePrecision).unwrap_or(SqlValue::Null))
+                Ok(result
+                    .map(SqlValue::DoublePrecision)
+                    .unwrap_or(SqlValue::Null))
             }
             (Column::Float64(values), AggregateFunction::Min) => {
                 let result = self.simd_aggregate_f64.min(values, null_bitmap);
-                Ok(result.map(SqlValue::DoublePrecision).unwrap_or(SqlValue::Null))
+                Ok(result
+                    .map(SqlValue::DoublePrecision)
+                    .unwrap_or(SqlValue::Null))
             }
             (Column::Float64(values), AggregateFunction::Max) => {
                 let result = self.simd_aggregate_f64.max(values, null_bitmap);
-                Ok(result.map(SqlValue::DoublePrecision).unwrap_or(SqlValue::Null))
+                Ok(result
+                    .map(SqlValue::DoublePrecision)
+                    .unwrap_or(SqlValue::Null))
             }
             (Column::Float64(_), AggregateFunction::Count) => {
                 let count = self.simd_aggregate_f64.count(null_bitmap);
@@ -369,9 +380,7 @@ impl VectorizedExecutor {
                 let sum = self.simd_aggregate_i32.sum(values, null_bitmap);
                 let count = self.simd_aggregate_i32.count(null_bitmap);
                 match (sum, count) {
-                    (Some(s), c) if c > 0 => {
-                        Ok(SqlValue::DoublePrecision(s as f64 / c as f64))
-                    }
+                    (Some(s), c) if c > 0 => Ok(SqlValue::DoublePrecision(s as f64 / c as f64)),
                     _ => Ok(SqlValue::Null),
                 }
             }
@@ -379,9 +388,7 @@ impl VectorizedExecutor {
                 let sum = self.simd_aggregate_i64.sum(values, null_bitmap);
                 let count = self.simd_aggregate_i64.count(null_bitmap);
                 match (sum, count) {
-                    (Some(s), c) if c > 0 => {
-                        Ok(SqlValue::DoublePrecision(s as f64 / c as f64))
-                    }
+                    (Some(s), c) if c > 0 => Ok(SqlValue::DoublePrecision(s as f64 / c as f64)),
                     _ => Ok(SqlValue::Null),
                 }
             }
@@ -405,9 +412,7 @@ impl VectorizedExecutor {
                 let sum = self.simd_aggregate_f64.sum(values, null_bitmap);
                 let count = self.simd_aggregate_f64.count(null_bitmap);
                 match (sum, count) {
-                    (Some(s), c) if c > 0 => {
-                        Ok(SqlValue::DoublePrecision(s / c as f64))
-                    }
+                    (Some(s), c) if c > 0 => Ok(SqlValue::DoublePrecision(s / c as f64)),
                     _ => Ok(SqlValue::Null),
                 }
             }
@@ -418,22 +423,20 @@ impl VectorizedExecutor {
                     return Ok(SqlValue::Null);
                 }
                 // For non-numeric types, average doesn't make sense
-                Err(ProtocolError::PostgresError(
-                    format!("AVG not supported for column type: {:?}", column),
-                ))
+                Err(ProtocolError::PostgresError(format!(
+                    "AVG not supported for column type: {:?}",
+                    column
+                )))
             }
-            _ => Err(ProtocolError::PostgresError(
-                format!("Unsupported column type for {:?}", function),
-            )),
+            _ => Err(ProtocolError::PostgresError(format!(
+                "Unsupported column type for {:?}",
+                function
+            ))),
         }
     }
 
     /// Execute LIMIT operation
-    pub fn execute_limit(
-        &self,
-        batch: &ColumnBatch,
-        limit: usize,
-    ) -> ProtocolResult<ColumnBatch> {
+    pub fn execute_limit(&self, batch: &ColumnBatch, limit: usize) -> ProtocolResult<ColumnBatch> {
         if limit == 0 || limit >= batch.row_count {
             return Ok(batch.clone());
         }
@@ -472,9 +475,13 @@ impl VectorizedExecutor {
                 ComparisonOp::Equal => self.simd_filter_i32.filter_eq(values, target, result),
                 ComparisonOp::NotEqual => self.simd_filter_i32.filter_ne(values, target, result),
                 ComparisonOp::LessThan => self.simd_filter_i32.filter_lt(values, target, result),
-                ComparisonOp::LessThanOrEqual => self.simd_filter_i32.filter_le(values, target, result),
+                ComparisonOp::LessThanOrEqual => {
+                    self.simd_filter_i32.filter_le(values, target, result)
+                }
                 ComparisonOp::GreaterThan => self.simd_filter_i32.filter_gt(values, target, result),
-                ComparisonOp::GreaterThanOrEqual => self.simd_filter_i32.filter_ge(values, target, result),
+                ComparisonOp::GreaterThanOrEqual => {
+                    self.simd_filter_i32.filter_ge(values, target, result)
+                }
             }
         } else {
             self.filter_scalar_generic(values, target, op, result);
@@ -496,7 +503,9 @@ impl VectorizedExecutor {
             ComparisonOp::LessThan => self.simd_filter_i64.filter_lt(values, target, result),
             ComparisonOp::LessThanOrEqual => self.simd_filter_i64.filter_le(values, target, result),
             ComparisonOp::GreaterThan => self.simd_filter_i64.filter_gt(values, target, result),
-            ComparisonOp::GreaterThanOrEqual => self.simd_filter_i64.filter_ge(values, target, result),
+            ComparisonOp::GreaterThanOrEqual => {
+                self.simd_filter_i64.filter_ge(values, target, result)
+            }
         }
         Ok(())
     }
@@ -515,7 +524,9 @@ impl VectorizedExecutor {
             ComparisonOp::LessThan => self.simd_filter_f64.filter_lt(values, target, result),
             ComparisonOp::LessThanOrEqual => self.simd_filter_f64.filter_le(values, target, result),
             ComparisonOp::GreaterThan => self.simd_filter_f64.filter_gt(values, target, result),
-            ComparisonOp::GreaterThanOrEqual => self.simd_filter_f64.filter_ge(values, target, result),
+            ComparisonOp::GreaterThanOrEqual => {
+                self.simd_filter_f64.filter_ge(values, target, result)
+            }
         }
         Ok(())
     }
@@ -593,20 +604,14 @@ impl VectorizedExecutor {
     }
 
     /// Select specific rows from a batch
-    fn select_rows(
-        &self,
-        batch: &ColumnBatch,
-        indices: &[usize],
-    ) -> ProtocolResult<ColumnBatch> {
+    fn select_rows(&self, batch: &ColumnBatch, indices: &[usize]) -> ProtocolResult<ColumnBatch> {
         let mut new_columns = Vec::new();
         let mut new_null_bitmaps = Vec::new();
 
         for (col_idx, column) in batch.columns.iter().enumerate() {
             let new_column = self.select_column_rows(column, indices)?;
-            let new_null_bitmap = self.select_null_bitmap_rows(
-                &batch.null_bitmaps[col_idx],
-                indices,
-            );
+            let new_null_bitmap =
+                self.select_null_bitmap_rows(&batch.null_bitmaps[col_idx], indices);
 
             new_columns.push(new_column);
             new_null_bitmaps.push(new_null_bitmap);
@@ -621,11 +626,7 @@ impl VectorizedExecutor {
     }
 
     /// Select specific rows from a column
-    fn select_column_rows(
-        &self,
-        column: &Column,
-        indices: &[usize],
-    ) -> ProtocolResult<Column> {
+    fn select_column_rows(&self, column: &Column, indices: &[usize]) -> ProtocolResult<Column> {
         let result = match column {
             Column::Bool(values) => {
                 let selected: Vec<bool> = indices.iter().map(|&i| values[i]).collect();
@@ -665,11 +666,7 @@ impl VectorizedExecutor {
     }
 
     /// Select specific rows from a null bitmap
-    fn select_null_bitmap_rows(
-        &self,
-        null_bitmap: &NullBitmap,
-        indices: &[usize],
-    ) -> NullBitmap {
+    fn select_null_bitmap_rows(&self, null_bitmap: &NullBitmap, indices: &[usize]) -> NullBitmap {
         let mut new_bitmap = NullBitmap::new_all_valid(indices.len());
 
         for (new_idx, &old_idx) in indices.iter().enumerate() {
@@ -718,13 +715,16 @@ mod tests {
 
         let columns = vec![
             Column::Int32(vec![1, 2, 3, 4, 5]),
-            Column::String(vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string(), "e".to_string()]),
+            Column::String(vec![
+                "a".to_string(),
+                "b".to_string(),
+                "c".to_string(),
+                "d".to_string(),
+                "e".to_string(),
+            ]),
         ];
 
-        let null_bitmaps = vec![
-            NullBitmap::new_all_valid(5),
-            NullBitmap::new_all_valid(5),
-        ];
+        let null_bitmaps = vec![NullBitmap::new_all_valid(5), NullBitmap::new_all_valid(5)];
 
         let result = executor.execute_table_scan(
             columns,
@@ -773,7 +773,8 @@ mod tests {
             column_names: Some(vec!["value".to_string()]),
         };
 
-        let result = executor.execute_filter(&batch, 0, ComparisonOp::GreaterThan, SqlValue::Integer(4));
+        let result =
+            executor.execute_filter(&batch, 0, ComparisonOp::GreaterThan, SqlValue::Integer(4));
 
         assert!(result.is_ok());
         let filtered = result.unwrap();
@@ -802,7 +803,11 @@ mod tests {
                 NullBitmap::new_all_valid(3),
             ],
             row_count: 3,
-            column_names: Some(vec!["id".to_string(), "name".to_string(), "score".to_string()]),
+            column_names: Some(vec![
+                "id".to_string(),
+                "name".to_string(),
+                "score".to_string(),
+            ]),
         };
 
         // Select columns 0 and 2 (id and score)

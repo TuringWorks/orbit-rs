@@ -1,15 +1,16 @@
 //! Comprehensive tests for AI-Native Database Features
 
-use orbit_server::ai::{
-    AIMasterController, AIConfig, LearningMode, OptimizationLevel,
-    IntelligentQueryOptimizer, PredictiveResourceManager, SmartStorageManager,
-    AdaptiveTransactionManager, SystemState,
-};
+#![cfg(feature = "ai-native")]
+
 use orbit_server::ai::knowledge::AIKnowledgeBase;
 use orbit_server::ai::optimizer::QueryPlan;
 use orbit_server::ai::transaction::{
-    TransactionDependencyGraph, TransactionNode, TransactionStatus, LockResource, LockType,
-    DependencyEdge,
+    DependencyEdge, LockResource, LockType, TransactionDependencyGraph, TransactionNode,
+    TransactionStatus,
+};
+use orbit_server::ai::{
+    AIConfig, AIMasterController, AdaptiveTransactionManager, IntelligentQueryOptimizer,
+    LearningMode, OptimizationLevel, PredictiveResourceManager, SmartStorageManager, SystemState,
 };
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -27,7 +28,7 @@ async fn test_ai_master_controller_initialization() {
     };
 
     let _controller = AIMasterController::initialize(config).await.unwrap();
-    
+
     // Controller should be initialized
     assert!(true); // Basic initialization test
 }
@@ -142,37 +143,43 @@ async fn test_deadlock_prevention() {
     };
 
     // Add transactions
-    graph.transactions.insert(1, TransactionNode {
-        id: 1,
-        status: TransactionStatus::Running,
-        waiting_for: vec![2],
-        held_locks: vec![LockResource {
-            table: "users".to_string(),
-            key: "1".to_string(),
-            lock_type: LockType::Exclusive,
-        }],
-        waiting_for_locks: vec![LockResource {
-            table: "orders".to_string(),
-            key: "1".to_string(),
-            lock_type: LockType::Exclusive,
-        }],
-    });
+    graph.transactions.insert(
+        1,
+        TransactionNode {
+            id: 1,
+            status: TransactionStatus::Running,
+            waiting_for: vec![2],
+            held_locks: vec![LockResource {
+                table: "users".to_string(),
+                key: "1".to_string(),
+                lock_type: LockType::Exclusive,
+            }],
+            waiting_for_locks: vec![LockResource {
+                table: "orders".to_string(),
+                key: "1".to_string(),
+                lock_type: LockType::Exclusive,
+            }],
+        },
+    );
 
-    graph.transactions.insert(2, TransactionNode {
-        id: 2,
-        status: TransactionStatus::Running,
-        waiting_for: vec![1],
-        held_locks: vec![LockResource {
-            table: "orders".to_string(),
-            key: "1".to_string(),
-            lock_type: LockType::Exclusive,
-        }],
-        waiting_for_locks: vec![LockResource {
-            table: "users".to_string(),
-            key: "1".to_string(),
-            lock_type: LockType::Exclusive,
-        }],
-    });
+    graph.transactions.insert(
+        2,
+        TransactionNode {
+            id: 2,
+            status: TransactionStatus::Running,
+            waiting_for: vec![1],
+            held_locks: vec![LockResource {
+                table: "orders".to_string(),
+                key: "1".to_string(),
+                lock_type: LockType::Exclusive,
+            }],
+            waiting_for_locks: vec![LockResource {
+                table: "users".to_string(),
+                key: "1".to_string(),
+                lock_type: LockType::Exclusive,
+            }],
+        },
+    );
 
     // Add dependency edges (cycle)
     graph.dependencies.push(DependencyEdge {
@@ -329,7 +336,10 @@ async fn test_index_advisor() {
     };
 
     // Get recommendations
-    let recommendations = advisor.recommend_indexes("SELECT * FROM users WHERE age > 25", &plan).await.unwrap();
+    let recommendations = advisor
+        .recommend_indexes("SELECT * FROM users WHERE age > 25", &plan)
+        .await
+        .unwrap();
 
     // Should generate some recommendations for filters/joins/sorts
     // Vector length is always >= 0, so just verify we got a result
@@ -354,7 +364,9 @@ async fn test_subsystem_registration() {
     let controller = AIMasterController::initialize(config).await.unwrap();
 
     let kb = Arc::new(AIKnowledgeBase::new(&AIConfig::default()).await.unwrap());
-    let optimizer = IntelligentQueryOptimizer::new(&AIConfig::default(), kb).await.unwrap();
+    let optimizer = IntelligentQueryOptimizer::new(&AIConfig::default(), kb)
+        .await
+        .unwrap();
 
     // Register subsystem
     controller
@@ -366,4 +378,3 @@ async fn test_subsystem_registration() {
     let subsystem_metrics = controller.get_subsystem_metrics().await;
     assert!(subsystem_metrics.contains_key("test_optimizer"));
 }
-

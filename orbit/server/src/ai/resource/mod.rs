@@ -4,11 +4,13 @@
 
 pub mod workload_predictor;
 
-pub use workload_predictor::{WorkloadForecast, WorkloadPredictor, ResourceDemand, WorkloadMeasurement};
+pub use workload_predictor::{
+    ResourceDemand, WorkloadForecast, WorkloadMeasurement, WorkloadPredictor,
+};
 
-use crate::ai::{AIDecision, AISubsystem, AISubsystemMetrics};
 use crate::ai::controller::AIConfig;
 use crate::ai::knowledge::AIKnowledgeBase;
+use crate::ai::{AIDecision, AISubsystem, AISubsystemMetrics};
 use anyhow::Result as OrbitResult;
 use std::sync::Arc;
 use tracing::info;
@@ -58,10 +60,7 @@ impl AISubsystem for PredictiveResourceManager {
 
 impl PredictiveResourceManager {
     /// Create a new predictive resource manager
-    pub async fn new(
-        config: &AIConfig,
-        knowledge_base: Arc<AIKnowledgeBase>,
-    ) -> OrbitResult<Self> {
+    pub async fn new(config: &AIConfig, knowledge_base: Arc<AIKnowledgeBase>) -> OrbitResult<Self> {
         info!("Initializing Predictive Resource Manager");
 
         Ok(Self {
@@ -79,4 +78,3 @@ impl PredictiveResourceManager {
         self.workload_predictor.forecast_workload(horizon).await
     }
 }
-

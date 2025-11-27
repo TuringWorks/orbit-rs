@@ -3,7 +3,7 @@ use crate::{
     PrometheusResult,
 };
 use std::sync::Arc;
-use tracing::info;
+use tracing::{error, info};
 
 /// Main Prometheus exporter that coordinates all components
 pub struct PrometheusExporter {
@@ -134,9 +134,10 @@ impl PrometheusExporter {
             {
                 use tokio::signal;
 
-                let mut ctrl_c = signal::ctrl_c().expect("Failed to setup Ctrl+C handler");
-
-                ctrl_c.recv().await.expect("Failed to listen for Ctrl+C");
+                if let Err(e) = signal::ctrl_c().await {
+                    error!("Failed to listen for Ctrl+C: {}", e);
+                    return;
+                }
                 info!("📡 Received Ctrl+C");
                 shutdown_token.cancel();
             }

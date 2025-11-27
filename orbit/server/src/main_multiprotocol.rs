@@ -37,6 +37,8 @@ use orbit_protocols::{
     rest::RestServer,
     cql::{CqlAdapter, CqlConfig},
     mysql::{MySqlAdapter, MySqlConfig},
+    neo4j::BoltServer,
+    arangodb::ArangoServer,
 };
 
 // Import configuration
@@ -54,11 +56,13 @@ use config::OrbitServerConfig;
     • MySQL wire protocol (port 3306) - MySQL-compatible SQL interface\n\
     • CQL protocol (port 9042) - Cassandra Query Language for wide-column access\n\
     • Redis RESP protocol (port 6379) - Key-value storage with vector operations\n\
+    • Neo4j Bolt protocol (port 7687) - Graph database access\n\
+    • ArangoDB HTTP protocol (port 8529) - Multi-model graph access\n\
     • gRPC API (port 50051) - Actor system management\n\
     • HTTP REST API (port 8080) - Web-friendly interface\n\
     \n\
     Simply run 'cargo run --bin orbit-server' to start all protocols.\n\
-    This single server replaces PostgreSQL, MySQL, Cassandra, and Redis instances."
+    This single server replaces PostgreSQL, MySQL, Cassandra, Redis, Neo4j, and ArangoDB instances."
 )]
 struct Args {
     /// Configuration file path
@@ -166,6 +170,36 @@ struct Args {
     )]
     mysql_port: Option<u16>,
 
+    /// Enable Neo4j Bolt server (enabled by default)
+    #[arg(
+        long,
+        help = "Explicitly enable Neo4j Bolt protocol server (enabled by default)"
+    )]
+    enable_neo4j: bool,
+
+    /// Neo4j Bolt port
+    #[arg(
+        long,
+        value_name = "PORT",
+        help = "Neo4j Bolt server port (default: 7687)"
+    )]
+    neo4j_port: Option<u16>,
+
+    /// Enable ArangoDB server (enabled by default)
+    #[arg(
+        long,
+        help = "Explicitly enable ArangoDB HTTP protocol server (enabled by default)"
+    )]
+    enable_arangodb: bool,
+
+    /// ArangoDB port
+    #[arg(
+        long,
+        value_name = "PORT",
+        help = "ArangoDB server port (default: 8529)"
+    )]
+    arangodb_port: Option<u16>,
+
     /// Metrics port
     #[arg(
         short = 'm',
@@ -239,6 +273,8 @@ struct MultiProtocolServer {
     rest_server: Option<RestServer>,
     cql_server: Option<CqlAdapter>,
     mysql_server: Option<MySqlAdapter>,
+    bolt_server: Option<BoltServer>,
+    arango_server: Option<ArangoServer>,
 }
 
 impl MultiProtocolServer {
@@ -264,6 +300,8 @@ impl MultiProtocolServer {
             rest_server: None,
             cql_server: None,
             mysql_server: None,
+            bolt_server: None,
+            arango_server: None,
         })
     }
     
@@ -475,6 +513,34 @@ impl MultiProtocolServer {
             }
         }
 
+        // Initialize Neo4j Bolt server
+        if let Some(cypher_config) = &self.config.protocols.cypher {
+            if cypher_config.enabled {
+                info!("  ⚡ Setting up Neo4j Bolt protocol server...");
+
+                let bolt_server = BoltServer::new(
+                    format!("{}:{}", self.config.server.bind_address, cypher_config.port),
+                );
+
+                self.bolt_server = Some(bolt_server);
+                info!("    ✅ Neo4j Bolt server initialized on port {}", cypher_config.port);
+            }
+        }
+
+        // Initialize ArangoDB server
+        if let Some(aql_config) = &self.config.protocols.aql {
+            if aql_config.enabled {
+                info!("  🥑 Setting up ArangoDB HTTP protocol server...");
+
+                let arango_server = ArangoServer::new(
+                    format!("{}:{}", self.config.server.bind_address, aql_config.port),
+                );
+
+                self.arango_server = Some(arango_server);
+                info!("    ✅ ArangoDB server initialized on port {}", aql_config.port);
+            }
+        }
+
         info!("✅ All protocol servers initialized");
         Ok(())
     }
@@ -535,6 +601,28 @@ impl MultiProtocolServer {
                 info!("🐬 MySQL server starting...");
                 if let Err(e) = mysql_server.start().await {
                     error!("MySQL server error: {}", e);
+                }
+            });
+            handles.push(handle);
+        }
+
+        // Start Neo4j Bolt server
+        if let Some(bolt_server) = self.bolt_server {
+            let handle = tokio::spawn(async move {
+                info!("⚡ Neo4j Bolt server starting...");
+                if let Err(e) = bolt_server.start().await {
+                    error!("Neo4j Bolt server error: {}", e);
+                }
+            });
+            handles.push(handle);
+        }
+
+        // Start ArangoDB server
+        if let Some(arango_server) = self.arango_server {
+            let handle = tokio::spawn(async move {
+                info!("🥑 ArangoDB server starting...");
+                if let Err(e) = arango_server.start().await {
+                    error!("ArangoDB server error: {}", e);
                 }
             });
             handles.push(handle);
@@ -752,6 +840,38 @@ fn apply_cli_overrides(config: &mut OrbitServerConfig, args: &Args) {
         }
     }
 
+    // Neo4j overrides
+    if args.enable_neo4j {
+        if let Some(cypher_config) = &mut config.protocols.cypher {
+            cypher_config.enabled = true;
+            if let Some(port) = args.neo4j_port {
+                cypher_config.port = port;
+            }
+        } else {
+            config.protocols.cypher = Some(config::CypherConfig {
+                enabled: true,
+                port: args.neo4j_port.unwrap_or(7687),
+                ..Default::default()
+            });
+        }
+    }
+
+    // ArangoDB overrides
+    if args.enable_arangodb {
+        if let Some(aql_config) = &mut config.protocols.aql {
+            aql_config.enabled = true;
+            if let Some(port) = args.arangodb_port {
+                aql_config.port = port;
+            }
+        } else {
+            config.protocols.aql = Some(config::AqlConfig {
+                enabled: true,
+                port: args.arangodb_port.unwrap_or(8529),
+                ..Default::default()
+            });
+        }
+    }
+
     // Development mode overrides - ensure all protocols are enabled
     if args.dev_mode {
         // In dev mode, ensure everything is definitely enabled (they should be by default)
@@ -772,6 +892,12 @@ fn apply_cli_overrides(config: &mut OrbitServerConfig, args: &Args) {
         }
         if let Some(mysql_config) = &mut config.protocols.mysql {
             mysql_config.enabled = true;
+        }
+        if let Some(cypher_config) = &mut config.protocols.cypher {
+            cypher_config.enabled = true;
+        }
+        if let Some(aql_config) = &mut config.protocols.aql {
+            aql_config.enabled = true;
         }
 
         info!("🔧 Development mode: Verbose logging and monitoring enabled");

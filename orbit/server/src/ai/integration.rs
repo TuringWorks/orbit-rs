@@ -2,19 +2,20 @@
 //!
 //! Example of how to integrate the AI system into the Orbit server.
 
-use crate::ai::{
-    AIMasterController, AIConfig, LearningMode, OptimizationLevel,
-    IntelligentQueryOptimizer, PredictiveResourceManager, SmartStorageManager,
-    AdaptiveTransactionManager,
-};
 use crate::ai::knowledge::AIKnowledgeBase;
+use crate::ai::{
+    AIConfig, AIMasterController, AdaptiveTransactionManager, IntelligentQueryOptimizer,
+    LearningMode, OptimizationLevel, PredictiveResourceManager, SmartStorageManager,
+};
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
-use tracing::{info, error, warn};
+use tracing::{error, info, warn};
 
 /// Initialize and start the AI system
-pub async fn initialize_ai_system(config: Option<AIConfig>) -> Result<(Arc<AIMasterController>, JoinHandle<()>)> {
+pub async fn initialize_ai_system(
+    config: Option<AIConfig>,
+) -> Result<(Arc<AIMasterController>, JoinHandle<()>)> {
     let ai_config = config.unwrap_or_else(|| AIConfig {
         learning_mode: LearningMode::Continuous,
         optimization_level: OptimizationLevel::Balanced,
@@ -34,7 +35,8 @@ pub async fn initialize_ai_system(config: Option<AIConfig>) -> Result<(Arc<AIMas
 
     // Initialize and register subsystems
     if ai_config.autonomous_indexes {
-        let query_optimizer = IntelligentQueryOptimizer::new(&ai_config, knowledge_base.clone()).await?;
+        let query_optimizer =
+            IntelligentQueryOptimizer::new(&ai_config, knowledge_base.clone()).await?;
         ai_controller
             .register_subsystem("query_optimizer".to_string(), Box::new(query_optimizer))
             .await?;
@@ -42,7 +44,8 @@ pub async fn initialize_ai_system(config: Option<AIConfig>) -> Result<(Arc<AIMas
     }
 
     if ai_config.predictive_scaling {
-        let resource_manager = PredictiveResourceManager::new(&ai_config, knowledge_base.clone()).await?;
+        let resource_manager =
+            PredictiveResourceManager::new(&ai_config, knowledge_base.clone()).await?;
         ai_controller
             .register_subsystem("resource_manager".to_string(), Box::new(resource_manager))
             .await?;
@@ -55,9 +58,13 @@ pub async fn initialize_ai_system(config: Option<AIConfig>) -> Result<(Arc<AIMas
         .await?;
     info!("Registered Smart Storage Manager");
 
-    let transaction_manager = AdaptiveTransactionManager::new(&ai_config, knowledge_base.clone()).await?;
+    let transaction_manager =
+        AdaptiveTransactionManager::new(&ai_config, knowledge_base.clone()).await?;
     ai_controller
-        .register_subsystem("transaction_manager".to_string(), Box::new(transaction_manager))
+        .register_subsystem(
+            "transaction_manager".to_string(),
+            Box::new(transaction_manager),
+        )
         .await?;
     info!("Registered Adaptive Transaction Manager");
 
@@ -125,9 +132,7 @@ pub async fn example_workload_prediction(
 }
 
 /// Example: Use auto-tiering
-pub async fn example_auto_tiering(
-    storage_manager: &SmartStorageManager,
-) -> Result<()> {
+pub async fn example_auto_tiering(storage_manager: &SmartStorageManager) -> Result<()> {
     let decisions = storage_manager.generate_tiering_decisions().await?;
 
     info!(
@@ -153,7 +158,9 @@ pub async fn example_deadlock_prevention(
     transaction_manager: &AdaptiveTransactionManager,
     dependency_graph: &crate::ai::transaction::TransactionDependencyGraph,
 ) -> Result<()> {
-    let predictions = transaction_manager.prevent_deadlocks(dependency_graph).await?;
+    let predictions = transaction_manager
+        .prevent_deadlocks(dependency_graph)
+        .await?;
 
     if !predictions.is_empty() {
         warn!(
@@ -173,4 +180,3 @@ pub async fn example_deadlock_prevention(
 
     Ok(())
 }
-

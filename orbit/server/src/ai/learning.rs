@@ -2,9 +2,9 @@
 //!
 //! Continuous model improvement and adaptation for the AI system.
 
-use crate::ai::LearningMode;
 use crate::ai::controller::AIConfig;
 use crate::ai::knowledge::AIKnowledgeBase;
+use crate::ai::LearningMode;
 use anyhow::Result as OrbitResult;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -157,4 +157,3 @@ impl LearningEngine {
         self.stats.read().await.clone()
     }
 }
-

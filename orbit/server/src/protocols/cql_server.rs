@@ -1,9 +1,9 @@
 //! CQL protocol server wrapper
 
-use std::sync::Arc;
 use super::cql::{adapter::CqlAdapter, CqlConfig};
-use crate::protocols::error::ProtocolResult;
 use crate::protocols::common::storage::TableStorage;
+use crate::protocols::error::ProtocolResult;
+use std::sync::Arc;
 
 /// CQL protocol server
 pub struct CqlServer {
@@ -31,4 +31,3 @@ impl CqlServer {
         self.adapter.start().await
     }
 }
-

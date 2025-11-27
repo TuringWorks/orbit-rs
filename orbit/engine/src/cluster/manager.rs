@@ -1,7 +1,7 @@
 use super::consensus::{RaftConfig, RaftConsensus, RaftEventHandler};
-use crate::error::{EngineError, EngineResult};
 use super::NodeId;
 use crate::cluster::recovery::{ClusterConfig, ClusterManager};
+use crate::error::{EngineError, EngineResult};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -469,9 +469,7 @@ impl ClusterManager for EnhancedClusterManager {
 
         // Only this node can start its own election
         if candidate != &self.node_id {
-            return Err(EngineError::config(
-                "Can only start election for self",
-            ));
+            return Err(EngineError::config("Can only start election for self"));
         }
 
         // Check if already leader
@@ -529,7 +527,9 @@ pub struct RecoveryRaftEventHandler {
 
 impl RecoveryRaftEventHandler {
     /// Create a new recovery event handler
-    pub fn new(recovery_manager: Arc<crate::cluster::recovery::TransactionRecoveryManager>) -> Self {
+    pub fn new(
+        recovery_manager: Arc<crate::cluster::recovery::TransactionRecoveryManager>,
+    ) -> Self {
         Self { recovery_manager }
     }
 

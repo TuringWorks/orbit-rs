@@ -247,4 +247,3 @@ criterion_group!(
     bench_aggregate_f64_sum
 );
 criterion_main!(benches);
-

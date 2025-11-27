@@ -2,33 +2,17 @@
 //!
 //! This module provides persistent storage for Cypher/Neo4j graph data using RocksDB.
 
+#![cfg(feature = "storage-rocksdb")]
+
+use crate::protocols::cypher::types::{GraphNode, GraphRelationship};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
-use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{error, info};
-
-/// Graph node stored in RocksDB
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GraphNode {
-    pub id: String,
-    pub labels: Vec<String>,
-    pub properties: HashMap<String, serde_json::Value>,
-}
-
-/// Graph relationship stored in RocksDB
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GraphRelationship {
-    pub id: String,
-    pub start_node: String,
-    pub end_node: String,
-    pub rel_type: String,
-    pub properties: HashMap<String, serde_json::Value>,
-}
 
 /// Cypher graph storage with RocksDB persistence
 #[derive(Debug)]
@@ -93,9 +77,9 @@ impl CypherGraphStorage {
     /// Load data from RocksDB on startup
     async fn load_from_rocksdb(&self, db: &Arc<DB>) -> ProtocolResult<()> {
         // Load nodes
-        let nodes_cf = db.cf_handle("nodes").ok_or_else(|| {
-            ProtocolError::Other("Nodes column family not found".to_string())
-        })?;
+        let nodes_cf = db
+            .cf_handle("nodes")
+            .ok_or_else(|| ProtocolError::Other("Nodes column family not found".to_string()))?;
 
         let node_iter = db.iterator_cf(nodes_cf, rocksdb::IteratorMode::Start);
         let mut nodes = self.nodes.write().await;
@@ -148,19 +132,21 @@ impl CypherGraphStorage {
     /// Store a node
     pub async fn store_node(&self, node: GraphNode) -> ProtocolResult<()> {
         // Store in memory
-        self.nodes.write().await.insert(node.id.clone(), node.clone());
+        self.nodes
+            .write()
+            .await
+            .insert(node.id.clone(), node.clone());
 
         // Persist to RocksDB
         let db_guard = self.db.read().await;
         if let Some(ref db) = *db_guard {
-            let nodes_cf = db.cf_handle("nodes").ok_or_else(|| {
-                ProtocolError::Other("Nodes column family not found".to_string())
-            })?;
+            let nodes_cf = db
+                .cf_handle("nodes")
+                .ok_or_else(|| ProtocolError::Other("Nodes column family not found".to_string()))?;
 
             let key = format!("node:{}", node.id);
-            let value = serde_json::to_vec(&node).map_err(|e| {
-                ProtocolError::Other(format!("Failed to serialize node: {}", e))
-            })?;
+            let value = serde_json::to_vec(&node)
+                .map_err(|e| ProtocolError::Other(format!("Failed to serialize node: {}", e)))?;
 
             db.put_cf(nodes_cf, key.as_bytes(), &value).map_err(|e| {
                 ProtocolError::Other(format!("Failed to persist node to RocksDB: {}", e))
@@ -183,7 +169,10 @@ impl CypherGraphStorage {
     /// Store a relationship
     pub async fn store_relationship(&self, rel: GraphRelationship) -> ProtocolResult<()> {
         // Store in memory
-        self.relationships.write().await.insert(rel.id.clone(), rel.clone());
+        self.relationships
+            .write()
+            .await
+            .insert(rel.id.clone(), rel.clone());
 
         // Persist to RocksDB
         let db_guard = self.db.read().await;
@@ -206,7 +195,10 @@ impl CypherGraphStorage {
     }
 
     /// Get a relationship by ID
-    pub async fn get_relationship(&self, rel_id: &str) -> ProtocolResult<Option<GraphRelationship>> {
+    pub async fn get_relationship(
+        &self,
+        rel_id: &str,
+    ) -> ProtocolResult<Option<GraphRelationship>> {
         // Check memory first
         let relationships = self.relationships.read().await;
         if let Some(rel) = relationships.get(rel_id) {
@@ -240,4 +232,3 @@ impl CypherGraphStorage {
         Ok(())
     }
 }
-

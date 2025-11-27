@@ -1,6 +1,7 @@
 //! MCP server implementation
 
 use super::{McpCapabilities, McpConfig};
+#[cfg(feature = "storage-rocksdb")]
 use crate::protocols::mcp::integration::OrbitMcpIntegration;
 use crate::protocols::mcp::nlp::{NlpQueryProcessor, SchemaAnalyzer};
 use crate::protocols::mcp::result_processor::ResultProcessor;
@@ -19,7 +20,8 @@ pub struct McpServer {
     pub sql_generator: SqlGenerator,
     /// Result processor for formatting results
     pub result_processor: ResultProcessor,
-    /// Orbit-RS integration (optional)
+    /// Orbit-RS integration (optional, requires storage-rocksdb feature)
+    #[cfg(feature = "storage-rocksdb")]
     pub orbit_integration: Option<Arc<OrbitMcpIntegration>>,
 }
 
@@ -37,11 +39,13 @@ impl McpServer {
             nlp_processor,
             sql_generator,
             result_processor,
+            #[cfg(feature = "storage-rocksdb")]
             orbit_integration: None,
         }
     }
 
     /// Create a new MCP server with Orbit-RS integration
+    #[cfg(feature = "storage-rocksdb")]
     pub fn with_orbit_integration(
         config: McpConfig,
         capabilities: McpCapabilities,
@@ -63,6 +67,7 @@ impl McpServer {
     }
 
     /// Create a new MCP server with Orbit-RS integration and storage-backed schema analyzer
+    #[cfg(feature = "storage-rocksdb")]
     pub fn with_storage_and_integration(
         config: McpConfig,
         capabilities: McpCapabilities,
@@ -88,13 +93,15 @@ impl McpServer {
     pub async fn process_natural_language_query(
         &self,
         query: &str,
-    ) -> Result<crate::protocols::mcp::sql_generator::GeneratedQuery, crate::protocols::mcp::types::McpError> {
+    ) -> Result<
+        crate::protocols::mcp::sql_generator::GeneratedQuery,
+        crate::protocols::mcp::types::McpError,
+    > {
         // Step 1: Process natural language
-        let intent = self
-            .nlp_processor
-            .process_query(query)
-            .await
-            .map_err(|e| crate::protocols::mcp::types::McpError::InternalError(e.to_string()))?;
+        let intent =
+            self.nlp_processor.process_query(query).await.map_err(|e| {
+                crate::protocols::mcp::types::McpError::InternalError(e.to_string())
+            })?;
 
         // Step 2: Generate SQL
         let generated_query = self
@@ -109,7 +116,10 @@ impl McpServer {
     pub async fn execute_natural_language_query(
         &self,
         query: &str,
-    ) -> Result<crate::protocols::mcp::result_processor::ProcessedResult, crate::protocols::mcp::types::McpError> {
+    ) -> Result<
+        crate::protocols::mcp::result_processor::ProcessedResult,
+        crate::protocols::mcp::types::McpError,
+    > {
         // Step 1: Generate SQL from natural language
         let generated_query = self.process_natural_language_query(query).await?;
 

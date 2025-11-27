@@ -7,6 +7,7 @@
 //! This module creates properly configured FileIO instances for Iceberg
 //! based on the storage backend type and credentials.
 
+#[cfg(feature = "iceberg-cold")]
 use iceberg::io::{FileIO, FileIOBuilder};
 
 use crate::error::{ProtocolError, ProtocolResult};
@@ -80,12 +81,7 @@ impl S3Config {
     }
 
     /// Create MinIO configuration with default settings
-    pub fn minio(
-        endpoint: String,
-        access_key: String,
-        secret_key: String,
-        bucket: String,
-    ) -> Self {
+    pub fn minio(endpoint: String, access_key: String, secret_key: String, bucket: String) -> Self {
         Self {
             endpoint,
             access_key_id: access_key,
@@ -141,11 +137,7 @@ impl AzureConfig {
     }
 
     /// Create Azure Storage configuration (production)
-    pub fn azure_storage(
-        account_name: String,
-        account_key: String,
-        container: String,
-    ) -> Self {
+    pub fn azure_storage(account_name: String, account_key: String, container: String) -> Self {
         Self {
             account_name,
             account_key,
@@ -158,7 +150,10 @@ impl AzureConfig {
     ///
     /// Example connection string:
     /// "AccountName=devstoreaccount1;AccountKey=...;DefaultEndpointsProtocol=http;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;..."
-    pub fn from_connection_string(connection_string: &str, container: String) -> ProtocolResult<Self> {
+    pub fn from_connection_string(
+        connection_string: &str,
+        container: String,
+    ) -> ProtocolResult<Self> {
         let mut account_name = None;
         let mut account_key = None;
         let mut blob_endpoint = None;
@@ -178,10 +173,12 @@ impl AzureConfig {
             }
         }
 
-        let account_name = account_name
-            .ok_or_else(|| ProtocolError::PostgresError("Missing AccountName in connection string".to_string()))?;
-        let account_key = account_key
-            .ok_or_else(|| ProtocolError::PostgresError("Missing AccountKey in connection string".to_string()))?;
+        let account_name = account_name.ok_or_else(|| {
+            ProtocolError::PostgresError("Missing AccountName in connection string".to_string())
+        })?;
+        let account_key = account_key.ok_or_else(|| {
+            ProtocolError::PostgresError("Missing AccountKey in connection string".to_string())
+        })?;
 
         Ok(Self {
             account_name,
@@ -194,6 +191,7 @@ impl AzureConfig {
 
 impl StorageBackend {
     /// Create a FileIO instance for this storage backend
+    #[cfg(feature = "iceberg-cold")]
     pub fn create_file_io(&self) -> ProtocolResult<FileIO> {
         match self {
             StorageBackend::S3(config) => create_s3_file_io(config),
@@ -215,6 +213,7 @@ impl StorageBackend {
 }
 
 /// Create a FileIO for S3-compatible storage
+#[cfg(feature = "iceberg-cold")]
 fn create_s3_file_io(config: &S3Config) -> ProtocolResult<FileIO> {
     let mut builder = FileIOBuilder::new("s3");
 
@@ -234,6 +233,7 @@ fn create_s3_file_io(config: &S3Config) -> ProtocolResult<FileIO> {
 }
 
 /// Create a FileIO for Azure Blob Storage
+#[cfg(feature = "iceberg-cold")]
 fn create_azure_file_io(config: &AzureConfig) -> ProtocolResult<FileIO> {
     let mut builder = FileIOBuilder::new("azblob");
 
@@ -288,7 +288,10 @@ mod tests {
         assert_eq!(config.account_name, "devstoreaccount1");
         assert_eq!(config.container, "orbitstore");
         assert!(config.endpoint.is_some());
-        assert_eq!(config.endpoint.unwrap(), "http://127.0.0.1:10000/devstoreaccount1");
+        assert_eq!(
+            config.endpoint.unwrap(),
+            "http://127.0.0.1:10000/devstoreaccount1"
+        );
     }
 
     #[test]

@@ -24,13 +24,13 @@ impl RespServer {
     /// Create a new RESP server with optional persistent storage
     pub fn new_with_persistence(
         bind_addr: impl Into<String>,
-        persistent_storage: Option<Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>>,
+        persistent_storage: Option<
+            Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>,
+        >,
     ) -> Self {
         Self {
             bind_addr: bind_addr.into(),
-            command_handler: Arc::new(CommandHandler::new_with_persistence(
-                persistent_storage,
-            )),
+            command_handler: Arc::new(CommandHandler::new_with_persistence(persistent_storage)),
         }
     }
 
@@ -119,4 +119,3 @@ impl RespServer {
         }
     }
 }
-

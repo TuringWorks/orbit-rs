@@ -1,3 +1,7 @@
+//! Integration tests for Orbit Server
+//!
+//! These tests verify server initialization and process management.
+
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
@@ -17,34 +21,85 @@ use tokio::time::sleep;
 // Helper Functions
 // =============================================================================
 
+/// Kill processes by name - cross-platform implementation
+fn kill_process_by_name(name: &str) {
+    #[cfg(unix)]
+    {
+        let _ = Command::new("killall").arg(name).output();
+    }
+
+    #[cfg(windows)]
+    {
+        // Use taskkill on Windows - /F for force, /IM for image name
+        let _ = Command::new("taskkill")
+            .args(["/F", "/IM", &format!("{}.exe", name)])
+            .output();
+    }
+}
+
+/// Get list of running processes containing the given name
+fn get_matching_processes(name: &str) -> Vec<String> {
+    #[cfg(unix)]
+    {
+        let output = Command::new("ps")
+            .arg("aux")
+            .output()
+            .unwrap_or_else(|_| std::process::Output {
+                status: std::process::ExitStatus::default(),
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+            });
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        stdout
+            .lines()
+            .filter(|line| line.contains(name))
+            .filter(|line| !line.contains("grep"))
+            .map(|s| s.to_string())
+            .collect()
+    }
+
+    #[cfg(windows)]
+    {
+        // Use tasklist on Windows with filter
+        let output = Command::new("tasklist")
+            .args(["/FI", &format!("IMAGENAME eq {}.exe", name)])
+            .output()
+            .unwrap_or_else(|_| std::process::Output {
+                status: std::process::ExitStatus::default(),
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+            });
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        stdout
+            .lines()
+            .filter(|line| line.to_lowercase().contains(&name.to_lowercase()))
+            .filter(|line| !line.contains("INFO:")) // Filter out "INFO: No tasks" message
+            .map(|s| s.to_string())
+            .collect()
+    }
+}
+
 /// Cleanup all lingering server instances before and after tests
 async fn cleanup_lingering_instances() {
     // Kill all orbit-server and multi-protocol-server instances
-    let _ = Command::new("killall")
-        .arg("orbit-server")
-        .output();
-
-    let _ = Command::new("killall")
-        .arg("multi-protocol-server")
-        .output();
+    kill_process_by_name("orbit-server");
+    kill_process_by_name("multi-protocol-server");
 
     // Give processes time to terminate
     sleep(Duration::from_millis(500)).await;
 
     // Verify cleanup
-    let output = Command::new("ps")
-        .arg("aux")
-        .output()
-        .expect("Failed to execute ps");
+    let orbit_processes = get_matching_processes("orbit-server");
+    let multi_processes = get_matching_processes("multi-protocol-server");
+    let orbit_count = orbit_processes.len() + multi_processes.len();
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let orbit_count = stdout
-        .lines()
-        .filter(|line| line.contains("orbit-server") || line.contains("multi-protocol-server"))
-        .filter(|line| !line.contains("grep"))
-        .count();
-
-    assert_eq!(orbit_count, 0, "Expected 0 lingering instances, found {}", orbit_count);
+    assert_eq!(
+        orbit_count, 0,
+        "Expected 0 lingering instances, found {}",
+        orbit_count
+    );
 }
 
 /// Check if a TCP port is listening
@@ -54,7 +109,7 @@ async fn is_port_listening(port: u16) -> bool {
     // Try to bind to the port - if it fails, the port is already in use (listening)
     match TcpListener::bind(format!("127.0.0.1:{}", port)).await {
         Ok(_) => false, // Port is free
-        Err(_) => true,  // Port is in use
+        Err(_) => true, // Port is in use
     }
 }
 
@@ -124,12 +179,30 @@ async fn test_data_directories_created() {
 
     // Verify data directories exist
     let base_path = "./data";
-    assert!(data_directory_exists(base_path), "Base data directory should exist");
-    assert!(data_directory_exists(&format!("{}/hot", base_path)), "Hot tier directory should exist");
-    assert!(data_directory_exists(&format!("{}/warm", base_path)), "Warm tier directory should exist");
-    assert!(data_directory_exists(&format!("{}/cold", base_path)), "Cold tier directory should exist");
-    assert!(wal_directory_exists(base_path), "WAL directory should exist");
-    assert!(data_directory_exists(&format!("{}/rocksdb", base_path)), "RocksDB directory should exist");
+    assert!(
+        data_directory_exists(base_path),
+        "Base data directory should exist"
+    );
+    assert!(
+        data_directory_exists(&format!("{}/hot", base_path)),
+        "Hot tier directory should exist"
+    );
+    assert!(
+        data_directory_exists(&format!("{}/warm", base_path)),
+        "Warm tier directory should exist"
+    );
+    assert!(
+        data_directory_exists(&format!("{}/cold", base_path)),
+        "Cold tier directory should exist"
+    );
+    assert!(
+        wal_directory_exists(base_path),
+        "WAL directory should exist"
+    );
+    assert!(
+        data_directory_exists(&format!("{}/rocksdb", base_path)),
+        "RocksDB directory should exist"
+    );
 
     // Cleanup
     let _ = child.kill();
@@ -151,7 +224,10 @@ async fn test_rocksdb_persistence_initialized() {
     sleep(Duration::from_secs(5)).await;
 
     // Verify RocksDB is initialized (contains files)
-    assert!(rocksdb_initialized("./data"), "RocksDB should be initialized with database files");
+    assert!(
+        rocksdb_initialized("./data"),
+        "RocksDB should be initialized with database files"
+    );
 
     // Cleanup
     let _ = child.kill();
@@ -180,7 +256,11 @@ async fn test_all_protocol_ports_listening() {
 
     for (port, protocol) in ports {
         let listening = wait_for_port(port, 15).await;
-        assert!(listening, "{} protocol should be listening on port {}", protocol, port);
+        assert!(
+            listening,
+            "{} protocol should be listening on port {}",
+            protocol, port
+        );
     }
 
     // Cleanup
@@ -201,7 +281,10 @@ async fn test_prometheus_metrics_endpoint() {
 
     // Wait for metrics endpoint to start
     let listening = wait_for_port(9090, 15).await;
-    assert!(listening, "Prometheus metrics endpoint should be listening on port 9090");
+    assert!(
+        listening,
+        "Prometheus metrics endpoint should be listening on port 9090"
+    );
 
     // Try to fetch metrics (requires reqwest)
     // This will be tested manually or with a separate HTTP client test
@@ -285,7 +368,10 @@ async fn test_postgresql_wire_protocol_connection() {
 
     // Wait for PostgreSQL protocol to start
     let listening = wait_for_port(5432, 15).await;
-    assert!(listening, "PostgreSQL protocol should be listening on port 5432");
+    assert!(
+        listening,
+        "PostgreSQL protocol should be listening on port 5432"
+    );
 
     // Try to connect using psql or a PostgreSQL client library
     // This would require tokio-postgres or similar
@@ -354,19 +440,15 @@ async fn test_multiple_restarts_no_lingering_instances() {
     }
 
     // Final verification - no lingering instances
-    let output = Command::new("ps")
-        .arg("aux")
-        .output()
-        .expect("Failed to execute ps");
+    let orbit_processes = get_matching_processes("orbit-server");
+    let multi_processes = get_matching_processes("multi-protocol-server");
+    let orbit_count = orbit_processes.len() + multi_processes.len();
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let orbit_count = stdout
-        .lines()
-        .filter(|line| line.contains("orbit-server") || line.contains("multi-protocol-server"))
-        .filter(|line| !line.contains("grep"))
-        .count();
-
-    assert_eq!(orbit_count, 0, "Expected 0 lingering instances after 5 restarts, found {}", orbit_count);
+    assert_eq!(
+        orbit_count, 0,
+        "Expected 0 lingering instances after 5 restarts, found {}",
+        orbit_count
+    );
 }
 
 #[tokio::test]

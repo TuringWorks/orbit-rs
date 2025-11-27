@@ -1,5 +1,7 @@
 //! MCP server implementation
 
+#![cfg(feature = "storage-rocksdb")]
+
 use super::{McpCapabilities, McpConfig};
 use crate::mcp::integration::OrbitMcpIntegration;
 use crate::mcp::nlp::{NlpQueryProcessor, SchemaAnalyzer};

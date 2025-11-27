@@ -127,11 +127,11 @@ enum Token {
     Comma,
     Colon,
     Equals,
-    NotEquals,      // !=
-    GreaterThan,     // >
-    LessThan,        // <
+    NotEquals,          // !=
+    GreaterThan,        // >
+    LessThan,           // <
     GreaterThanOrEqual, // >=
-    LessThanOrEqual,   // <=
+    LessThanOrEqual,    // <=
 }
 
 /// Specialized tokenizer for Cypher queries with reduced complexity
@@ -666,7 +666,10 @@ impl TokenParser {
                 if let Some(Token::Identifier(label)) = self.current_token() {
                     let label = label.clone();
                     self.advance();
-                    return Ok(Condition::HasLabel { variable: var, label });
+                    return Ok(Condition::HasLabel {
+                        variable: var,
+                        label,
+                    });
                 }
             }
 
@@ -679,7 +682,7 @@ impl TokenParser {
 
     fn parse_property_condition(&mut self, property: &str) -> ProtocolResult<Condition> {
         let prop = property.to_string();
-        
+
         // Check for comparison operator
         let operator = match self.current_token() {
             Some(Token::Equals) => {
@@ -725,7 +728,9 @@ impl TokenParser {
                 if let Ok(num) = n.parse::<i64>() {
                     serde_json::Value::Number(num.into())
                 } else if let Ok(num) = n.parse::<f64>() {
-                    serde_json::Value::Number(serde_json::Number::from_f64(num).unwrap_or(serde_json::Number::from(0)))
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(num).unwrap_or(serde_json::Number::from(0)),
+                    )
                 } else {
                     serde_json::Value::String(n)
                 }
@@ -840,9 +845,7 @@ pub enum Condition {
         value: serde_json::Value,
     },
     /// Property exists check
-    PropertyExists {
-        property: String,
-    },
+    PropertyExists { property: String },
     /// Logical AND
     And {
         left: Box<Condition>,
@@ -854,19 +857,11 @@ pub enum Condition {
         right: Box<Condition>,
     },
     /// Logical NOT
-    Not {
-        condition: Box<Condition>,
-    },
+    Not { condition: Box<Condition> },
     /// Node label check
-    HasLabel {
-        variable: String,
-        label: String,
-    },
+    HasLabel { variable: String, label: String },
     /// Relationship type check
-    HasRelationshipType {
-        variable: String,
-        rel_type: String,
-    },
+    HasRelationshipType { variable: String, rel_type: String },
 }
 
 /// Comparison operators for WHERE clauses

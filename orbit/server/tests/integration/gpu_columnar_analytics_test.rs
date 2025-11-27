@@ -3,6 +3,8 @@
 //! Tests the integration of GPU-accelerated columnar aggregations and verifies
 //! correctness and performance routing.
 
+#![cfg(feature = "gpu-acceleration")]
+
 use orbit_compute::columnar_analytics::{
     AggregateFunction, ColumnarAnalyticsConfig, GPUColumnarAnalytics,
 };

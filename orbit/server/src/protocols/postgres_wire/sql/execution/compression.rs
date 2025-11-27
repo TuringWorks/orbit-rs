@@ -10,10 +10,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum CompressionCodec {
     /// Delta compression for integer sequences
-    Delta {
-        base_value: i64,
-        deltas: Vec<i64>,
-    },
+    Delta { base_value: i64, deltas: Vec<i64> },
     /// Double delta compression (for timestamps)
     DoubleDelta {
         base_value: i64,
@@ -26,10 +23,7 @@ pub enum CompressionCodec {
         values: Vec<i64>,
     },
     /// Bit-packing for small integer ranges
-    BitPacking {
-        bit_width: u8,
-        packed_data: Vec<u8>,
-    },
+    BitPacking { bit_width: u8, packed_data: Vec<u8> },
     /// Gorilla compression for floating-point time series
     Gorilla {
         precision: f64,
@@ -41,22 +35,16 @@ pub enum CompressionCodec {
         encoded_values: Vec<u32>,
     },
     /// LZ4 compression (general purpose)
-    LZ4 {
-        compressed_data: Vec<u8>,
-    },
+    LZ4 { compressed_data: Vec<u8> },
     /// Zstd compression (high compression ratio)
     Zstd {
         level: i32,
         compressed_data: Vec<u8>,
     },
     /// Snappy compression (fast)
-    Snappy {
-        compressed_data: Vec<u8>,
-    },
+    Snappy { compressed_data: Vec<u8> },
     /// Uncompressed (for small columns or when compression doesn't help)
-    Uncompressed {
-        data: Vec<u8>,
-    },
+    Uncompressed { data: Vec<u8> },
 }
 
 /// Column compression utilities
@@ -76,10 +64,7 @@ impl ColumnCompression {
             deltas.push(values[i] - values[i - 1]);
         }
 
-        Ok(CompressionCodec::Delta {
-            base_value,
-            deltas,
-        })
+        Ok(CompressionCodec::Delta { base_value, deltas })
     }
 
     /// Decompress delta-encoded column
@@ -343,7 +328,9 @@ impl ColumnCompression {
                     + values.len() * std::mem::size_of::<i64>()
             }
             CompressionCodec::BitPacking { packed_data, .. } => packed_data.len(),
-            CompressionCodec::Gorilla { compressed_data, .. } => compressed_data.len(),
+            CompressionCodec::Gorilla {
+                compressed_data, ..
+            } => compressed_data.len(),
             CompressionCodec::Dictionary {
                 dictionary,
                 encoded_values,
@@ -352,7 +339,9 @@ impl ColumnCompression {
                     + encoded_values.len() * std::mem::size_of::<u32>()
             }
             CompressionCodec::LZ4 { compressed_data } => compressed_data.len(),
-            CompressionCodec::Zstd { compressed_data, .. } => compressed_data.len(),
+            CompressionCodec::Zstd {
+                compressed_data, ..
+            } => compressed_data.len(),
             CompressionCodec::Snappy { compressed_data } => compressed_data.len(),
             CompressionCodec::Uncompressed { data } => data.len(),
         };
@@ -407,4 +396,3 @@ mod tests {
         assert!(ratio > 0.0);
     }
 }
-

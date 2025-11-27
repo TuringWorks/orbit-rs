@@ -13,11 +13,11 @@
 use std::sync::Arc;
 
 use iceberg::io::{FileIO, FileIOBuilder};
-use iceberg::spec::{Schema, NestedField, PrimitiveType, Type};
+use iceberg::spec::{NestedField, PrimitiveType, Schema, Type};
 use opendal::Operator;
 
 use orbit_protocols::postgres_wire::sql::execution::{
-    Column, ColumnBatch, NullBitmap, column_batch_to_arrow,
+    column_batch_to_arrow, Column, ColumnBatch, NullBitmap,
 };
 
 /// MinIO configuration for testing
@@ -70,12 +70,8 @@ fn create_test_schema() -> Schema {
 /// Create test data as ColumnBatch
 fn create_test_data(row_count: usize) -> ColumnBatch {
     let ids: Vec<i32> = (0..row_count as i32).collect();
-    let names: Vec<String> = (0..row_count)
-        .map(|i| format!("user_{}", i))
-        .collect();
-    let values: Vec<i32> = (0..row_count as i32)
-        .map(|i| i * 10)
-        .collect();
+    let names: Vec<String> = (0..row_count).map(|i| format!("user_{}", i)).collect();
+    let values: Vec<i32> = (0..row_count as i32).map(|i| i * 10).collect();
 
     ColumnBatch {
         columns: vec![
@@ -114,7 +110,11 @@ async fn test_minio_connection() {
 
     // Try to list the bucket
     let result = op.list("/").await;
-    assert!(result.is_ok(), "Failed to connect to MinIO: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to connect to MinIO: {:?}",
+        result.err()
+    );
 
     println!("✅ MinIO connection successful");
 }
@@ -130,29 +130,28 @@ async fn test_write_parquet_to_minio() {
     let batch = create_test_data(1000);
 
     // Convert to Arrow
-    let arrow_batch = column_batch_to_arrow(&batch)
-        .expect("Failed to convert to Arrow");
+    let arrow_batch = column_batch_to_arrow(&batch).expect("Failed to convert to Arrow");
 
-    println!("✅ Created Arrow batch with {} rows", arrow_batch.num_rows());
+    println!(
+        "✅ Created Arrow batch with {} rows",
+        arrow_batch.num_rows()
+    );
 
     // Write to Parquet in memory
     let mut buffer = Vec::new();
     {
         let props = WriterProperties::builder()
-            .set_compression(parquet::basic::Compression::ZSTD(parquet::basic::ZstdLevel::default()))
+            .set_compression(parquet::basic::Compression::ZSTD(
+                parquet::basic::ZstdLevel::default(),
+            ))
             .build();
 
-        let mut writer = ArrowWriter::try_new(
-            &mut buffer,
-            arrow_batch.schema(),
-            Some(props),
-        ).expect("Failed to create Parquet writer");
+        let mut writer = ArrowWriter::try_new(&mut buffer, arrow_batch.schema(), Some(props))
+            .expect("Failed to create Parquet writer");
 
-        writer.write(&arrow_batch)
-            .expect("Failed to write batch");
+        writer.write(&arrow_batch).expect("Failed to write batch");
 
-        writer.close()
-            .expect("Failed to close writer");
+        writer.close().expect("Failed to close writer");
     }
 
     println!("✅ Wrote Parquet file ({} bytes)", buffer.len());
@@ -178,14 +177,17 @@ async fn test_write_parquet_to_minio() {
 
     // Verify file exists
     let metadata = op.stat(path).await.expect("Failed to stat file");
-    println!("✅ Verified file exists (size: {} bytes)", metadata.content_length());
+    println!(
+        "✅ Verified file exists (size: {} bytes)",
+        metadata.content_length()
+    );
 }
 
 #[tokio::test]
 #[ignore] // Requires MinIO running
 async fn test_read_parquet_from_minio() {
-    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
     use bytes::Bytes;
+    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
     // Setup MinIO operator
     let builder = opendal::services::S3::default()
@@ -201,8 +203,7 @@ async fn test_read_parquet_from_minio() {
 
     // First, write test data
     let batch = create_test_data(500);
-    let arrow_batch = column_batch_to_arrow(&batch)
-        .expect("Failed to convert to Arrow");
+    let arrow_batch = column_batch_to_arrow(&batch).expect("Failed to convert to Arrow");
 
     let mut buffer = Vec::new();
     {
@@ -221,22 +222,20 @@ async fn test_read_parquet_from_minio() {
     println!("✅ Uploaded {} bytes to MinIO", buffer.len());
 
     // Now read it back
-    let downloaded: opendal::Buffer = op.read(path)
-        .await
-        .expect("Failed to download from MinIO");
+    let downloaded: opendal::Buffer = op.read(path).await.expect("Failed to download from MinIO");
 
     println!("✅ Downloaded {} bytes from MinIO", downloaded.len());
 
     // Convert to Bytes for Parquet reader
     let bytes = Bytes::from(downloaded.to_vec());
-    let builder = ParquetRecordBatchReaderBuilder::try_new(bytes)
-        .expect("Failed to create Parquet reader");
+    let builder =
+        ParquetRecordBatchReaderBuilder::try_new(bytes).expect("Failed to create Parquet reader");
 
-    let mut reader = builder.build()
-        .expect("Failed to build reader");
+    let mut reader = builder.build().expect("Failed to build reader");
 
     // Read batch
-    let read_batch = reader.next()
+    let read_batch = reader
+        .next()
         .expect("No batches found")
         .expect("Failed to read batch");
 
@@ -248,18 +247,20 @@ async fn test_read_parquet_from_minio() {
 #[tokio::test]
 #[ignore] // Requires MinIO running
 async fn test_column_batch_roundtrip() {
-    use parquet::arrow::ArrowWriter;
-    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
     use bytes::Bytes;
+    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+    use parquet::arrow::ArrowWriter;
 
     // Original data
     let original_batch = create_test_data(100);
-    println!("Original batch: {} rows, {} columns",
-        original_batch.row_count, original_batch.columns.len());
+    println!(
+        "Original batch: {} rows, {} columns",
+        original_batch.row_count,
+        original_batch.columns.len()
+    );
 
     // Convert to Arrow
-    let arrow_batch = column_batch_to_arrow(&original_batch)
-        .expect("Failed to convert to Arrow");
+    let arrow_batch = column_batch_to_arrow(&original_batch).expect("Failed to convert to Arrow");
 
     // Write to Parquet (in memory)
     let mut buffer = Vec::new();
@@ -272,8 +273,7 @@ async fn test_column_batch_roundtrip() {
 
     // Read back from Parquet
     let bytes = Bytes::from(buffer);
-    let builder = ParquetRecordBatchReaderBuilder::try_new(bytes)
-        .expect("Failed to create reader");
+    let builder = ParquetRecordBatchReaderBuilder::try_new(bytes).expect("Failed to create reader");
     let mut reader = builder.build().expect("Failed to build reader");
     let read_batch = reader.next().unwrap().expect("Failed to read");
 
@@ -282,13 +282,15 @@ async fn test_column_batch_roundtrip() {
     assert_eq!(read_batch.num_columns(), original_batch.columns.len());
 
     // Verify first column (IDs)
-    let id_array = read_batch.column(0)
+    let id_array = read_batch
+        .column(0)
         .as_any()
         .downcast_ref::<arrow::array::Int32Array>()
         .expect("Wrong type for ID column");
 
     if let Column::Int32(ref ids) = original_batch.columns[0] {
-        for i in 0..10 {  // Check first 10 values
+        for i in 0..10 {
+            // Check first 10 values
             assert_eq!(id_array.value(i), ids[i], "ID mismatch at row {}", i);
         }
     }
@@ -310,8 +312,7 @@ async fn test_large_dataset_performance() {
 
     // Convert to Arrow
     let start = Instant::now();
-    let arrow_batch = column_batch_to_arrow(&batch)
-        .expect("Failed to convert");
+    let arrow_batch = column_batch_to_arrow(&batch).expect("Failed to convert");
     println!("✅ Converted to Arrow in {:?}", start.elapsed());
 
     // Write to Parquet with compression
@@ -320,7 +321,7 @@ async fn test_large_dataset_performance() {
     {
         let props = WriterProperties::builder()
             .set_compression(parquet::basic::Compression::ZSTD(
-                parquet::basic::ZstdLevel::try_new(3).unwrap()
+                parquet::basic::ZstdLevel::try_new(3).unwrap(),
             ))
             .build();
 
@@ -331,7 +332,8 @@ async fn test_large_dataset_performance() {
     }
     let write_time = start.elapsed();
 
-    println!("✅ Wrote Parquet in {:?} ({} bytes, {:.2} MB/s)",
+    println!(
+        "✅ Wrote Parquet in {:?} ({} bytes, {:.2} MB/s)",
         write_time,
         buffer.len(),
         (buffer.len() as f64 / 1024.0 / 1024.0) / write_time.as_secs_f64()
@@ -355,7 +357,8 @@ async fn test_large_dataset_performance() {
         .await
         .expect("Failed to upload");
 
-    println!("✅ Uploaded to MinIO in {:?} ({:.2} MB/s)",
+    println!(
+        "✅ Uploaded to MinIO in {:?} ({:.2} MB/s)",
         start.elapsed(),
         (buffer.len() as f64 / 1024.0 / 1024.0) / start.elapsed().as_secs_f64()
     );
@@ -363,7 +366,10 @@ async fn test_large_dataset_performance() {
     // Compression ratio
     let uncompressed_size = 100_000 * (4 + 20 + 4); // id + name (avg) + value
     let compression_ratio = uncompressed_size as f64 / buffer.len() as f64;
-    println!("✅ Compression ratio: {:.2}x ({} → {} bytes)",
-        compression_ratio, uncompressed_size, buffer.len()
+    println!(
+        "✅ Compression ratio: {:.2}x ({} → {} bytes)",
+        compression_ratio,
+        uncompressed_size,
+        buffer.len()
     );
 }

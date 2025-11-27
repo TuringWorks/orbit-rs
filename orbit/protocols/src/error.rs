@@ -99,6 +99,22 @@ pub enum ProtocolError {
     /// Generic error
     #[error("{0}")]
     Other(String),
+
+    /// Protocol handshake error
+    #[error("Handshake error: {0}")]
+    HandshakeError(String),
+
+    /// Protocol decoding error
+    #[error("Decoding error: {0}")]
+    DecodingError(String),
+
+    /// Protocol encoding error
+    #[error("Encoding error: {0}")]
+    EncodingError(String),
+
+    /// Execution error
+    #[error("Execution error: {0}")]
+    ExecutionError(String),
 }
 
 impl From<std::io::Error> for ProtocolError {

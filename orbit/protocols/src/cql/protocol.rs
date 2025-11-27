@@ -413,7 +413,7 @@ pub mod error_codes {
 pub fn map_error_to_cql_code(error: &crate::error::ProtocolError) -> i32 {
     use crate::error::ProtocolError;
     use error_codes::*;
-    
+
     match error {
         ProtocolError::ParseError(_) => SYNTAX_ERROR,
         ProtocolError::CqlError(_) => PROTOCOL_ERROR,
@@ -460,7 +460,10 @@ pub fn build_error_response(stream: i16, error_code: i32, message: &str) -> CqlF
 }
 
 /// Build an ERROR response from a ProtocolError
-pub fn build_error_from_protocol_error(stream: i16, error: &crate::error::ProtocolError) -> CqlFrame {
+pub fn build_error_from_protocol_error(
+    stream: i16,
+    error: &crate::error::ProtocolError,
+) -> CqlFrame {
     let error_code = map_error_to_cql_code(error);
     let message = error.to_string();
     build_error_response(stream, error_code, &message)
@@ -476,8 +479,7 @@ fn write_string(buf: &mut BytesMut, s: &str) {
 pub fn read_string(buf: &mut Bytes) -> ProtocolResult<String> {
     let len = buf.get_u16();
     let bytes = buf.copy_to_bytes(len as usize);
-    String::from_utf8(bytes.to_vec())
-        .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))
+    String::from_utf8(bytes.to_vec()).map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))
 }
 
 /// Read a CQL string map

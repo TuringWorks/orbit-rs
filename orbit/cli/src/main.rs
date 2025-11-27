@@ -191,19 +191,21 @@ impl ReplState {
                 self.pg_connection_handle = Some(handle);
                 Ok(())
             }
-            Err(e) => {
-                Err(anyhow::anyhow!("Failed to connect to PostgreSQL: {}", e))
-            }
+            Err(e) => Err(anyhow::anyhow!("Failed to connect to PostgreSQL: {}", e)),
         }
     }
 
     /// Execute a PostgreSQL query
     async fn execute_query(&self, query: &str) -> Result<()> {
         if self.protocol != Protocol::Postgres {
-            return Err(anyhow::anyhow!("Only PostgreSQL protocol is currently supported"));
+            return Err(anyhow::anyhow!(
+                "Only PostgreSQL protocol is currently supported"
+            ));
         }
 
-        let client = self.pg_client.as_ref()
+        let client = self
+            .pg_client
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Not connected to database"))?;
 
         // Try to execute as a simple query first (for SELECT, etc.)
@@ -219,9 +221,7 @@ impl ReplState {
                         self.format_rows(rows)?;
                         Ok(())
                     }
-                    Err(e) => {
-                        Err(anyhow::anyhow!("Query execution failed: {}", e))
-                    }
+                    Err(e) => Err(anyhow::anyhow!("Query execution failed: {}", e)),
                 }
             }
         }
@@ -233,7 +233,8 @@ impl ReplState {
             match result {
                 tokio_postgres::SimpleQueryMessage::Row(row) => {
                     // Collect column names
-                    let columns: Vec<String> = row.columns()
+                    let columns: Vec<String> = row
+                        .columns()
                         .iter()
                         .map(|col| col.name().to_string())
                         .collect();
@@ -251,14 +252,22 @@ impl ReplState {
                     // Print as table
                     if !columns.is_empty() {
                         let mut table = Table::new();
-                        table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS);
+                        table
+                            .load_preset(UTF8_FULL)
+                            .apply_modifier(UTF8_ROUND_CORNERS);
                         table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
                         table.add_row(values.iter().map(|v| Cell::new(v)));
                         println!("\n{}", table);
                     }
                 }
                 tokio_postgres::SimpleQueryMessage::CommandComplete(count) => {
-                    println!("{}", format_success(&format!("Query executed successfully ({} rows affected)", count)));
+                    println!(
+                        "{}",
+                        format_success(&format!(
+                            "Query executed successfully ({} rows affected)",
+                            count
+                        ))
+                    );
                 }
                 _ => {}
             }
@@ -281,7 +290,9 @@ impl ReplState {
             .collect();
 
         let mut table = Table::new();
-        table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS);
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS);
         table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
 
         // Add rows
@@ -292,7 +303,7 @@ impl ReplState {
                     // Try to get value as text (most generic)
                     let col_type = row.columns()[i].type_();
                     let type_name = col_type.name();
-                    
+
                     // Try different types based on PostgreSQL type name
                     if type_name == "text" || type_name == "varchar" || type_name == "char" {
                         row.get::<_, Option<String>>(i)
@@ -394,8 +405,12 @@ async fn execute_single_command(cli: &Cli, query: &str) -> Result<()> {
 
     println!(
         "{}",
-        format!("Connecting to {} at {}...", cli.protocol.name(), state.connection_string())
-            .dimmed()
+        format!(
+            "Connecting to {} at {}...",
+            cli.protocol.name(),
+            state.connection_string()
+        )
+        .dimmed()
     );
 
     // Establish connection
@@ -431,8 +446,12 @@ async fn execute_file(cli: &Cli, file_path: &PathBuf) -> Result<()> {
 
     println!(
         "{}",
-        format!("Connecting to {} at {}...", cli.protocol.name(), state.connection_string())
-            .dimmed()
+        format!(
+            "Connecting to {} at {}...",
+            cli.protocol.name(),
+            state.connection_string()
+        )
+        .dimmed()
     );
 
     // Establish connection
@@ -451,9 +470,15 @@ async fn execute_file(cli: &Cli, file_path: &PathBuf) -> Result<()> {
         .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
 
     // Split into statements (simple split on semicolon for now)
-    let statements: Vec<&str> = content.split(';').filter(|s| !s.trim().is_empty()).collect();
+    let statements: Vec<&str> = content
+        .split(';')
+        .filter(|s| !s.trim().is_empty())
+        .collect();
 
-    println!("{}", format!("Executing {} statements from file...", statements.len()).dimmed());
+    println!(
+        "{}",
+        format!("Executing {} statements from file...", statements.len()).dimmed()
+    );
 
     for (i, statement) in statements.iter().enumerate() {
         println!("\n{}", format!("Statement {}:", i + 1).cyan());
@@ -667,7 +692,9 @@ async fn handle_meta_command(
 /// Print welcome banner
 fn print_banner(state: &ReplState) {
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS);
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS);
 
     table.add_row(vec![
         Cell::new("Orbit CLI").fg(Color::Cyan),

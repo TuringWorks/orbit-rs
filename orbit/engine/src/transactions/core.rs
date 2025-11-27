@@ -1,11 +1,12 @@
 use crate::addressable::AddressableReference;
-use crate::error::{EngineError, EngineResult};
 use crate::cluster::NodeId;
+use crate::error::{EngineError, EngineResult};
+use crate::transaction_log::{PersistentLogConfig, PersistentTransactionLogger};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use tokio::time::{timeout, Duration, Instant};
 use tracing::{error, info, warn};
 use uuid::Uuid;
@@ -58,7 +59,7 @@ pub enum TransactionState {
     /// Transaction encountered an error
     Failed {
         /// Error reason
-        reason: String
+        reason: String,
     },
 }
 
@@ -70,7 +71,7 @@ pub enum TransactionVote {
     /// Participant cannot commit and wants to abort
     No {
         /// Reason for voting no
-        reason: String
+        reason: String,
     },
     /// Participant is uncertain (network issues, etc.)
     Uncertain,
@@ -200,7 +201,7 @@ pub enum TransactionMessage {
     /// Phase 2: Coordinator tells participants to commit
     Commit {
         /// Transaction identifier
-        transaction_id: TransactionId
+        transaction_id: TransactionId,
     },
     /// Phase 2: Coordinator tells participants to abort
     Abort {
@@ -223,7 +224,7 @@ pub enum TransactionMessage {
     /// Query transaction status
     QueryStatus {
         /// Transaction identifier
-        transaction_id: TransactionId
+        transaction_id: TransactionId,
     },
     /// Response to status query
     StatusResponse {
@@ -247,8 +248,8 @@ pub struct TransactionConfig {
     pub cleanup_interval: Duration,
     /// Enable transaction logging for audit
     pub enable_logging: bool,
-    /// Maximum transaction log size
-    pub max_log_entries: usize,
+    /// Configuration for persistent logging
+    pub log_config: PersistentLogConfig,
 }
 
 impl Default for TransactionConfig {
@@ -259,7 +260,7 @@ impl Default for TransactionConfig {
             retry_attempts: 3,
             cleanup_interval: Duration::from_secs(60),
             enable_logging: true,
-            max_log_entries: 10000,
+            log_config: PersistentLogConfig::default(),
         }
     }
 }
@@ -343,8 +344,8 @@ pub struct TransactionCoordinator {
     config: TransactionConfig,
     /// Active transactions being coordinated
     active_transactions: Arc<RwLock<HashMap<TransactionId, DistributedTransaction>>>,
-    /// Transaction logs for audit and recovery
-    transaction_log: Arc<Mutex<Vec<TransactionLogEntry>>>,
+    /// Persistent transaction logger
+    logger: Arc<dyn PersistentTransactionLogger>,
     /// Message sender for transaction protocol
     message_sender: Arc<dyn TransactionMessageSender>,
     /// Votes received from participants
@@ -377,12 +378,13 @@ impl TransactionCoordinator {
         node_id: NodeId,
         config: TransactionConfig,
         message_sender: Arc<dyn TransactionMessageSender>,
+        logger: Arc<dyn PersistentTransactionLogger>,
     ) -> Self {
         Self {
             node_id,
             config,
             active_transactions: Arc::new(RwLock::new(HashMap::new())),
-            transaction_log: Arc::new(Mutex::new(Vec::new())),
+            logger,
             message_sender,
             participant_votes: Arc::new(RwLock::new(HashMap::new())),
             participant_acks: Arc::new(RwLock::new(HashMap::new())),
@@ -390,7 +392,10 @@ impl TransactionCoordinator {
     }
 
     /// Start a new distributed transaction
-    pub async fn begin_transaction(&self, timeout: Option<Duration>) -> EngineResult<TransactionId> {
+    pub async fn begin_transaction(
+        &self,
+        timeout: Option<Duration>,
+    ) -> EngineResult<TransactionId> {
         let transaction_timeout = timeout.unwrap_or(self.config.default_timeout);
         let transaction = DistributedTransaction::new(self.node_id.clone(), transaction_timeout);
         let transaction_id = transaction.transaction_id.clone();
@@ -414,6 +419,48 @@ impl TransactionCoordinator {
 
         info!("Started transaction: {}", transaction_id);
         Ok(transaction_id)
+    }
+
+    /// Recover transaction state from persistent log
+    pub async fn recover_state(&self, transaction_id: &TransactionId) -> EngineResult<()> {
+        if let Some(event) = self
+            .logger
+            .recover_transaction_state(transaction_id)
+            .await?
+        {
+            let mut active = self.active_transactions.write().await;
+
+            // Reconstruct transaction if not exists
+            let transaction = active.entry(transaction_id.clone()).or_insert_with(|| {
+                DistributedTransaction::new(
+                    transaction_id.coordinator_node.clone(),
+                    self.config.default_timeout,
+                )
+            });
+
+            // Restore state based on last event
+            match event {
+                TransactionEvent::Started => transaction.state = TransactionState::Preparing,
+                TransactionEvent::PrepareRequested => {
+                    transaction.state = TransactionState::Preparing
+                }
+                TransactionEvent::CommitRequested => {
+                    transaction.state = TransactionState::Committing
+                }
+                TransactionEvent::Committed => transaction.state = TransactionState::Committed,
+                TransactionEvent::AbortRequested { .. } => {
+                    transaction.state = TransactionState::Aborting
+                }
+                TransactionEvent::Aborted { .. } => transaction.state = TransactionState::Aborted,
+                _ => {}
+            }
+
+            info!(
+                "Recovered transaction {} to state {:?}",
+                transaction_id, transaction.state
+            );
+        }
+        Ok(())
     }
 
     /// Add an operation to a transaction
@@ -779,14 +826,8 @@ impl TransactionCoordinator {
             details,
         };
 
-        let mut log = self.transaction_log.lock().await;
-        log.push(entry);
-
-        // Limit log size
-        if log.len() > self.config.max_log_entries {
-            let log_len = log.len();
-            log.drain(0..log_len - self.config.max_log_entries);
-        }
+        // Use persistent logger
+        self.logger.write_entry(&entry).await?;
 
         Ok(())
     }
@@ -848,26 +889,17 @@ impl TransactionCoordinator {
     }
 
     /// Get transaction statistics
-    pub async fn get_stats(&self) -> TransactionStats {
+    pub async fn get_stats(&self) -> EngineResult<TransactionStats> {
         let active = self.active_transactions.read().await;
-        let log = self.transaction_log.lock().await;
+        let log_stats = self.logger.get_stats().await?;
 
-        TransactionStats {
+        Ok(TransactionStats {
             active_transactions: active.len(),
-            total_log_entries: log.len(),
-            committed_count: log
-                .iter()
-                .filter(|e| matches!(e.event, TransactionEvent::Committed))
-                .count(),
-            aborted_count: log
-                .iter()
-                .filter(|e| matches!(e.event, TransactionEvent::Aborted { .. }))
-                .count(),
-            timed_out_count: log
-                .iter()
-                .filter(|e| matches!(e.event, TransactionEvent::TimedOut))
-                .count(),
-        }
+            total_log_entries: log_stats.total_entries as usize,
+            committed_count: log_stats.committed_count as usize,
+            aborted_count: log_stats.aborted_count as usize,
+            timed_out_count: log_stats.timed_out_count as usize,
+        })
     }
 }
 
@@ -877,7 +909,7 @@ impl Clone for TransactionCoordinator {
             node_id: self.node_id.clone(),
             config: self.config.clone(),
             active_transactions: Arc::clone(&self.active_transactions),
-            transaction_log: Arc::clone(&self.transaction_log),
+            logger: Arc::clone(&self.logger),
             message_sender: Arc::clone(&self.message_sender),
             participant_votes: Arc::clone(&self.participant_votes),
             participant_acks: Arc::clone(&self.participant_acks),
@@ -904,6 +936,7 @@ pub struct TransactionStats {
 mod tests {
     use super::*;
     use crate::addressable::{AddressableReference, Key};
+    use tokio::sync::Mutex;
 
     // Mock message sender for testing
     #[derive(Debug)]
@@ -943,14 +976,80 @@ mod tests {
         }
     }
 
+    // Mock logger for testing
+    #[derive(Debug)]
+    struct MockLogger {
+        entries: Arc<Mutex<Vec<TransactionLogEntry>>>,
+    }
+
+    impl MockLogger {
+        fn new() -> Self {
+            Self {
+                entries: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl PersistentTransactionLogger for MockLogger {
+        async fn write_entry(&self, entry: &TransactionLogEntry) -> EngineResult<()> {
+            self.entries.lock().await.push(entry.clone());
+            Ok(())
+        }
+        async fn write_batch(&self, entries: &[TransactionLogEntry]) -> EngineResult<()> {
+            self.entries.lock().await.extend_from_slice(entries);
+            Ok(())
+        }
+        async fn get_transaction_log(
+            &self,
+            _id: &TransactionId,
+        ) -> EngineResult<Vec<crate::transaction_log::PersistentLogEntry>> {
+            Ok(vec![])
+        }
+        async fn get_entries_by_time_range(
+            &self,
+            _start: i64,
+            _end: i64,
+        ) -> EngineResult<Vec<crate::transaction_log::PersistentLogEntry>> {
+            Ok(vec![])
+        }
+        async fn archive_old_entries(&self, _ts: i64) -> EngineResult<u64> {
+            Ok(0)
+        }
+        async fn get_stats(&self) -> EngineResult<crate::transaction_log::LogStats> {
+            Ok(crate::transaction_log::LogStats {
+                total_entries: 0,
+                active_entries: 0,
+                archived_entries: 0,
+                database_size_bytes: 0,
+                oldest_entry_timestamp: None,
+                newest_entry_timestamp: None,
+                committed_count: 0,
+                aborted_count: 0,
+                timed_out_count: 0,
+            })
+        }
+        async fn maintenance(&self) -> EngineResult<()> {
+            Ok(())
+        }
+        async fn recover_transaction_state(
+            &self,
+            _id: &TransactionId,
+        ) -> EngineResult<Option<TransactionEvent>> {
+            Ok(None)
+        }
+    }
+
     #[tokio::test]
     async fn test_transaction_creation() {
         let node_id = "test-node".to_string();
         let message_sender = Arc::new(MockMessageSender::new());
+        let logger = Arc::new(MockLogger::new());
         let coordinator = TransactionCoordinator::new(
             node_id.clone(),
             TransactionConfig::default(),
             message_sender,
+            logger,
         );
 
         let tx_id = coordinator.begin_transaction(None).await.unwrap();
@@ -991,10 +1090,12 @@ mod tests {
     async fn test_transaction_vote_handling() {
         let node_id = "test-node".to_string();
         let message_sender = Arc::new(MockMessageSender::new());
+        let logger = Arc::new(MockLogger::new());
         let coordinator = TransactionCoordinator::new(
             node_id.clone(),
             TransactionConfig::default(),
             message_sender,
+            logger,
         );
 
         let tx_id = TransactionId::new(node_id);

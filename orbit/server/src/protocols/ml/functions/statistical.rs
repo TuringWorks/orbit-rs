@@ -3,7 +3,9 @@
 //! Provides fundamental statistical functions for machine learning operations
 //! including correlation, regression, and descriptive statistics.
 
-use crate::protocols::ml::{FeatureType, FunctionSignature, MLFunction, MLResult, MLValue, ParameterSpec};
+use crate::protocols::ml::{
+    FeatureType, FunctionSignature, MLFunction, MLResult, MLValue, ParameterSpec,
+};
 use async_trait::async_trait;
 
 /// Linear regression function

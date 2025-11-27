@@ -2,11 +2,11 @@
 //!
 //! This module provides a complete AQL query engine that includes GraphRAG function support.
 
-use crate::protocols::aql::{
-    AqlGraphRAGEngine, AqlParser, AqlQuery, AqlValue, AqlStorage, AqlDocument,
-};
 use crate::protocols::aql::aql_parser::{
-    AqlClause, AqlExpression, AqlCondition, ComparisonOperator,
+    AqlClause, AqlCondition, AqlExpression, ComparisonOperator,
+};
+use crate::protocols::aql::{
+    AqlDocument, AqlGraphRAGEngine, AqlParser, AqlQuery, AqlStorage, AqlValue,
 };
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use orbit_client::OrbitClient;
@@ -146,7 +146,6 @@ impl AqlQueryEngine {
 
     /// Execute parsed AQL query
     async fn execute_parsed_query(&self, query: AqlQuery) -> ProtocolResult<AqlQueryResult> {
-
         let storage = self.storage.as_ref().ok_or_else(|| {
             ProtocolError::AqlError("Storage backend required for query execution".to_string())
         })?;
@@ -158,10 +157,13 @@ impl AqlQueryEngine {
         // Process clauses in order
         let mut for_variable: Option<String> = None;
         let mut for_documents: Vec<AqlDocument> = Vec::new();
-        
+
         for clause in &query.clauses {
             match clause {
-                AqlClause::For { variable, data_source } => {
+                AqlClause::For {
+                    variable,
+                    data_source,
+                } => {
                     // Execute FOR clause - iterate over collection
                     for_documents = self.execute_for_clause(storage, data_source).await?;
                     for_variable = Some(variable.clone());
@@ -179,7 +181,10 @@ impl AqlQueryEngine {
                             .collect();
                     }
                 }
-                AqlClause::Return { distinct, expression } => {
+                AqlClause::Return {
+                    distinct,
+                    expression,
+                } => {
                     // Process RETURN clause
                     if let Some(ref var) = for_variable {
                         // Return documents from FOR clause
@@ -193,7 +198,7 @@ impl AqlQueryEngine {
                         let value = self.evaluate_expression(expression, &context)?;
                         result_data.push(value);
                     }
-                    
+
                     if *distinct {
                         result_data = self.deduplicate_results(result_data);
                     }
@@ -203,7 +208,10 @@ impl AqlQueryEngine {
                     // Sorting is deferred until after all rows are collected
                     continue;
                 }
-                AqlClause::Limit { offset: _, count: _ } => {
+                AqlClause::Limit {
+                    offset: _,
+                    count: _,
+                } => {
                     // Limiting is deferred until after all rows are collected
                     continue;
                 }
@@ -243,7 +251,6 @@ impl AqlQueryEngine {
         storage.get_collection_documents(collection_name).await
     }
 
-
     /// Evaluate an AQL expression
     fn evaluate_expression(
         &self,
@@ -253,23 +260,24 @@ impl AqlQueryEngine {
         use crate::protocols::aql::aql_parser::AqlExpression;
 
         match expression {
-            AqlExpression::Variable(name) => {
-                context.get(name).cloned().ok_or_else(|| {
-                    ProtocolError::AqlError(format!("Variable '{}' not found", name))
-                })
-            }
+            AqlExpression::Variable(name) => context
+                .get(name)
+                .cloned()
+                .ok_or_else(|| ProtocolError::AqlError(format!("Variable '{}' not found", name))),
             AqlExpression::Literal(value) => Ok(value.clone()),
             AqlExpression::PropertyAccess { object, property } => {
                 let obj_value = context.get(object).ok_or_else(|| {
                     ProtocolError::AqlError(format!("Object '{}' not found", object))
                 })?;
-                
+
                 if let AqlValue::Object(obj_map) = obj_value {
                     obj_map.get(property).cloned().ok_or_else(|| {
                         ProtocolError::AqlError(format!("Property '{}' not found", property))
                     })
                 } else {
-                    Err(ProtocolError::AqlError("Property access on non-object".to_string()))
+                    Err(ProtocolError::AqlError(
+                        "Property access on non-object".to_string(),
+                    ))
                 }
             }
             AqlExpression::Object(fields) => {
@@ -306,9 +314,8 @@ impl AqlQueryEngine {
                 let left_val = self.evaluate_expression(left, context)?;
                 let right_val = self.evaluate_expression(right, context)?;
                 self.compare_values(&left_val, operator, &right_val)
-            }
-            // Note: AqlCondition currently only supports Comparison
-            // AND, OR, NOT would need to be added to the enum
+            } // Note: AqlCondition currently only supports Comparison
+              // AND, OR, NOT would need to be added to the enum
         }
     }
 
@@ -334,16 +341,14 @@ impl AqlQueryEngine {
                     ComparisonOperator::LessOrEqual => l_f64 <= r_f64,
                 })
             }
-            (AqlValue::String(l), AqlValue::String(r)) => {
-                Ok(match operator {
-                    ComparisonOperator::Equals => l == r,
-                    ComparisonOperator::NotEquals => l != r,
-                    ComparisonOperator::Greater => l > r,
-                    ComparisonOperator::Less => l < r,
-                    ComparisonOperator::GreaterOrEqual => l >= r,
-                    ComparisonOperator::LessOrEqual => l <= r,
-                })
-            }
+            (AqlValue::String(l), AqlValue::String(r)) => Ok(match operator {
+                ComparisonOperator::Equals => l == r,
+                ComparisonOperator::NotEquals => l != r,
+                ComparisonOperator::Greater => l > r,
+                ComparisonOperator::Less => l < r,
+                ComparisonOperator::GreaterOrEqual => l >= r,
+                ComparisonOperator::LessOrEqual => l <= r,
+            }),
             _ => Ok(false),
         }
     }
@@ -387,7 +392,7 @@ impl AqlQueryEngine {
     fn deduplicate_results(&self, results: Vec<AqlValue>) -> Vec<AqlValue> {
         let mut seen = std::collections::HashSet::new();
         let mut unique = Vec::new();
-        
+
         for result in results {
             // Simple deduplication based on string representation
             let key = format!("{:?}", result);
@@ -395,7 +400,7 @@ impl AqlQueryEngine {
                 unique.push(result);
             }
         }
-        
+
         unique
     }
 }

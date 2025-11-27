@@ -2,14 +2,12 @@
 
 use super::auth::{AuthPlugin, AuthState, HandshakeResponse, MySqlAuth};
 use super::packet::MySqlPacket;
-use super::protocol::{
-    build_handshake, MySqlCommand, MySqlPacket as MySqlPacketBuilder,
-};
+use super::protocol::{build_handshake, MySqlCommand, MySqlPacket as MySqlPacketBuilder};
 use super::types::MySqlType;
 use super::MySqlConfig;
+use crate::protocols::common::storage::memory::MemoryTableStorage;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::types::{SqlType, SqlValue};
-use crate::protocols::common::storage::memory::MemoryTableStorage;
 use crate::protocols::postgres_wire::SqlEngine;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
@@ -84,10 +82,7 @@ impl MySqlAdapter {
             .await
             .map_err(|e| ProtocolError::IoError(e.to_string()))?;
 
-        println!(
-            "[MySQL] Server listening on {}",
-            self.config.listen_addr
-        );
+        println!("[MySQL] Server listening on {}", self.config.listen_addr);
 
         loop {
             match listener.accept().await {
@@ -133,7 +128,8 @@ impl MySqlAdapter {
         let connection_id = (std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_micros() as u32) % u32::MAX;
+            .as_micros() as u32)
+            % u32::MAX;
 
         // Create authentication handler with credentials if enabled
         let mut auth = if self.config.authentication_enabled {
@@ -191,8 +187,7 @@ impl MySqlAdapter {
                             }
                             Ok(false) => {
                                 // Send error packet
-                                let err =
-                                    MySqlPacketBuilder::error(1045, "Access denied");
+                                let err = MySqlPacketBuilder::error(1045, "Access denied");
                                 let response_packet = MySqlPacket::new(sequence_id, err);
                                 socket
                                     .write_all(&response_packet.encode())
@@ -216,10 +211,7 @@ impl MySqlAdapter {
                     }
                     Err(e) => {
                         eprintln!("[MySQL] Failed to parse handshake response: {}", e);
-                        let err = MySqlPacketBuilder::error(
-                            1043,
-                            "Invalid handshake response",
-                        );
+                        let err = MySqlPacketBuilder::error(1043, "Invalid handshake response");
                         let response_packet = MySqlPacket::new(sequence_id, err);
                         socket
                             .write_all(&response_packet.encode())
@@ -259,16 +251,13 @@ impl MySqlAdapter {
     async fn read_packet(&self, socket: &mut TcpStream) -> ProtocolResult<MySqlPacket> {
         // Read header (4 bytes)
         let mut header = [0u8; 4];
-        socket
-            .read_exact(&mut header)
-            .await
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::UnexpectedEof {
-                    ProtocolError::ConnectionClosed
-                } else {
-                    ProtocolError::IoError(e.to_string())
-                }
-            })?;
+        socket.read_exact(&mut header).await.map_err(|e| {
+            if e.kind() == std::io::ErrorKind::UnexpectedEof {
+                ProtocolError::ConnectionClosed
+            } else {
+                ProtocolError::IoError(e.to_string())
+            }
+        })?;
 
         // Parse header
         let payload_length = u32::from_le_bytes([header[0], header[1], header[2], 0]);
@@ -321,6 +310,8 @@ impl MySqlAdapter {
             MySqlCommand::CreateDb => self.handle_create_db(payload).await,
             MySqlCommand::DropDb => self.handle_drop_db(payload).await,
             MySqlCommand::Refresh => self.handle_refresh(payload).await,
+            MySqlCommand::SetOption => self.handle_set_option(payload).await,
+            MySqlCommand::ResetConnection => self.handle_reset_connection().await,
             _ => {
                 // Unsupported command
                 Ok(vec![MySqlPacketBuilder::error(
@@ -411,27 +402,27 @@ impl MySqlAdapter {
             .iter()
             .map(|schema| {
                 vec![
-                    Some("def".to_string()),           // TABLE_CATALOG
-                    Some("orbit".to_string()),          // TABLE_SCHEMA
-                    Some(schema.name.clone()),          // TABLE_NAME
-                    Some("BASE TABLE".to_string()),     // TABLE_TYPE
-                    Some("Orbit".to_string()),          // ENGINE
-                    Some("10".to_string()),             // VERSION
-                    Some("Dynamic".to_string()),        // ROW_FORMAT
-                    Some("0".to_string()),              // TABLE_ROWS
-                    Some("0".to_string()),              // AVG_ROW_LENGTH
-                    Some("0".to_string()),              // DATA_LENGTH
-                    Some("0".to_string()),              // MAX_DATA_LENGTH
-                    Some("0".to_string()),              // INDEX_LENGTH
-                    Some("0".to_string()),              // DATA_FREE
-                    None,                               // AUTO_INCREMENT
-                    None,                               // CREATE_TIME
-                    None,                               // UPDATE_TIME
-                    None,                               // CHECK_TIME
+                    Some("def".to_string()),                // TABLE_CATALOG
+                    Some("orbit".to_string()),              // TABLE_SCHEMA
+                    Some(schema.name.clone()),              // TABLE_NAME
+                    Some("BASE TABLE".to_string()),         // TABLE_TYPE
+                    Some("Orbit".to_string()),              // ENGINE
+                    Some("10".to_string()),                 // VERSION
+                    Some("Dynamic".to_string()),            // ROW_FORMAT
+                    Some("0".to_string()),                  // TABLE_ROWS
+                    Some("0".to_string()),                  // AVG_ROW_LENGTH
+                    Some("0".to_string()),                  // DATA_LENGTH
+                    Some("0".to_string()),                  // MAX_DATA_LENGTH
+                    Some("0".to_string()),                  // INDEX_LENGTH
+                    Some("0".to_string()),                  // DATA_FREE
+                    None,                                   // AUTO_INCREMENT
+                    None,                                   // CREATE_TIME
+                    None,                                   // UPDATE_TIME
+                    None,                                   // CHECK_TIME
                     Some("utf8mb4_0900_ai_ci".to_string()), // TABLE_COLLATION
-                    None,                               // CHECKSUM
-                    Some("".to_string()),               // CREATE_OPTIONS
-                    Some("".to_string()),               // TABLE_COMMENT
+                    None,                                   // CHECKSUM
+                    Some("".to_string()),                   // CREATE_OPTIONS
+                    Some("".to_string()),                   // TABLE_COMMENT
                 ]
             })
             .collect();
@@ -526,8 +517,17 @@ impl MySqlAdapter {
         match self.sql_engine.write().await.execute(&query).await {
             Ok(result) => {
                 // Debug: Log result structure
-                if let crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select { columns, rows, .. } = &result {
-                    println!("[MySQL] Result: {} columns, {} rows", columns.len(), rows.len());
+                if let crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select {
+                    columns,
+                    rows,
+                    ..
+                } = &result
+                {
+                    println!(
+                        "[MySQL] Result: {} columns, {} rows",
+                        columns.len(),
+                        rows.len()
+                    );
                     println!("[MySQL] Columns: {:?}", columns);
                     if let Some(first_row) = rows.first() {
                         println!("[MySQL] First row: {:?}", first_row);
@@ -608,18 +608,19 @@ impl MySqlAdapter {
             // Each parameter gets a column definition packet
             for i in 0..num_params {
                 let param_name = format!("?{}", i + 1);
-                let param_type = param_types.get(i as usize)
+                let param_type = param_types
+                    .get(i as usize)
                     .copied()
                     .unwrap_or(super::types::MySqlType::VarString);
-                
+
                 let param_def = MySqlPacketBuilder::column_definition(
-                    "def",           // catalog
-                    "",              // schema (empty for parameters)
-                    "",              // table (empty for parameters)
-                    "",              // org_table (empty for parameters)
-                    &param_name,     // name
-                    &param_name,     // org_name
-                    param_type,       // column_type
+                    "def",       // catalog
+                    "",          // schema (empty for parameters)
+                    "",          // table (empty for parameters)
+                    "",          // org_table (empty for parameters)
+                    &param_name, // name
+                    &param_name, // org_name
+                    param_type,  // column_type
                 );
                 packets.push(param_def);
             }
@@ -639,8 +640,8 @@ impl MySqlAdapter {
             return Ok("NULL".to_string());
         }
 
-        use super::types::MySqlType;
         use super::packet::read_lenenc_string;
+        use super::types::MySqlType;
 
         match param_type {
             MySqlType::Tiny => {
@@ -682,6 +683,44 @@ impl MySqlAdapter {
             MySqlType::VarString | MySqlType::VarChar | MySqlType::String => {
                 read_lenenc_string(payload).map(|s| format!("'{}'", s.replace('\'', "''")))
             }
+            MySqlType::Date | MySqlType::DateTime | MySqlType::Timestamp => {
+                let len = payload.get_u8();
+                let year = if len >= 4 { payload.get_u16_le() } else { 0 };
+                let month = if len >= 4 { payload.get_u8() } else { 0 };
+                let day = if len >= 4 { payload.get_u8() } else { 0 };
+                let hour = if len >= 7 { payload.get_u8() } else { 0 };
+                let minute = if len >= 7 { payload.get_u8() } else { 0 };
+                let second = if len >= 7 { payload.get_u8() } else { 0 };
+                let _microsecond = if len >= 11 { payload.get_u32_le() } else { 0 };
+
+                if len == 0 {
+                    Ok("'0000-00-00'".to_string())
+                } else if len == 4 {
+                    Ok(format!("'{:04}-{:02}-{:02}'", year, month, day))
+                } else {
+                    Ok(format!(
+                        "'{:04}-{:02}-{:02} {:02}:{:02}:{:02}'",
+                        year, month, day, hour, minute, second
+                    ))
+                }
+            }
+            MySqlType::Time => {
+                let len = payload.get_u8();
+                let _is_negative = if len >= 8 { payload.get_u8() } else { 0 };
+                let _days = if len >= 8 { payload.get_u32_le() } else { 0 };
+                let hour = if len >= 8 { payload.get_u8() } else { 0 };
+                let minute = if len >= 8 { payload.get_u8() } else { 0 };
+                let second = if len >= 8 { payload.get_u8() } else { 0 };
+                let _microsecond = if len >= 12 { payload.get_u32_le() } else { 0 };
+
+                // Note: We are ignoring days and microseconds for simplicity in this string representation
+                // A proper implementation would handle intervals correctly
+                if len == 0 {
+                    Ok("'00:00:00'".to_string())
+                } else {
+                    Ok(format!("'{:02}:{:02}:{:02}'", hour, minute, second))
+                }
+            }
             _ => {
                 // Default: try to read as string
                 read_lenenc_string(payload).map(|s| format!("'{}'", s.replace('\'', "''")))
@@ -699,16 +738,17 @@ impl MySqlAdapter {
         let flags = payload.get_u8(); // Flags
         let _iteration_count = payload.get_u32_le(); // Usually 1
 
-        println!("[MySQL] Execute statement: {} (flags: {})", statement_id, flags);
+        println!(
+            "[MySQL] Execute statement: {} (flags: {})",
+            statement_id, flags
+        );
 
         // Look up prepared statement
         let statements = self.prepared_statements.read().await;
-        let stmt = statements
-            .get(&statement_id)
-            .ok_or_else(|| {
-                // Note: Error metrics will be updated in error response handler
-                ProtocolError::InvalidStatement(format!("Statement {} not found", statement_id))
-            })?;
+        let stmt = statements.get(&statement_id).ok_or_else(|| {
+            // Note: Error metrics will be updated in error response handler
+            ProtocolError::InvalidStatement(format!("Statement {} not found", statement_id))
+        })?;
 
         let num_params = stmt.num_params;
         let query_template = stmt.query.clone();
@@ -851,8 +891,7 @@ impl MySqlAdapter {
                 }
                 name_bytes.push(byte);
             }
-            String::from_utf8(name_bytes)
-                .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?
+            String::from_utf8(name_bytes).map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?
         };
 
         println!("[MySQL] Field list for table: {}", table_name);
@@ -862,7 +901,11 @@ impl MySqlAdapter {
         match self.sql_engine.write().await.execute(&query).await {
             Ok(result) => {
                 // Extract column information from result
-                if let crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select { columns, .. } = result {
+                if let crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select {
+                    columns,
+                    ..
+                } = result
+                {
                     let mut packets = Vec::new();
 
                     // Send column definition packets
@@ -970,6 +1013,39 @@ impl MySqlAdapter {
         Ok(vec![MySqlPacketBuilder::ok(0, 0)])
     }
 
+    /// Handle COM_SET_OPTION
+    async fn handle_set_option(&self, mut payload: Bytes) -> ProtocolResult<Vec<Bytes>> {
+        if payload.len() < 2 {
+            return Err(ProtocolError::IncompleteFrame);
+        }
+
+        let option = payload.get_u16_le();
+        println!("[MySQL] Set option: {}", option);
+
+        // Options:
+        // 0 = MYSQL_OPTION_MULTI_STATEMENTS_ON
+        // 1 = MYSQL_OPTION_MULTI_STATEMENTS_OFF
+
+        // We'll just acknowledge it for now
+        Ok(vec![MySqlPacketBuilder::eof()])
+    }
+
+    /// Handle COM_RESET_CONNECTION
+    async fn handle_reset_connection(&self) -> ProtocolResult<Vec<Bytes>> {
+        println!("[MySQL] Reset connection");
+
+        // Reset connection state (user variables, prepared statements, etc.)
+        // For now, we just clear prepared statements for this connection
+        // Note: In a real implementation, this would be per-connection state,
+        // but here we are sharing state across the adapter.
+        // Since we clone the adapter for each connection, this might be okay if the state was truly local.
+        // However, prepared_statements is Arc<RwLock<...>>, so it's shared.
+        // To do this correctly, we should have per-connection state.
+        // For now, we'll just return OK.
+
+        Ok(vec![MySqlPacketBuilder::ok(0, 0)])
+    }
+
     /// Build result set from SQL execution result
     fn build_result_set(
         &self,
@@ -1014,12 +1090,12 @@ impl MySqlAdapter {
                     // Try to get table name from query context if available
                     // For now, use generic values
                     let col_def = MySqlPacketBuilder::column_definition(
-                        "def",      // catalog
-                        "orbit",    // schema
-                        "",         // table (empty if unknown)
-                        "",         // org_table (empty if unknown)
-                        column,     // name
-                        column,     // org_name
+                        "def",   // catalog
+                        "orbit", // schema
+                        "",      // table (empty if unknown)
+                        "",      // org_table (empty if unknown)
+                        column,  // name
+                        column,  // org_name
                         mysql_type,
                     );
                     packets.push(col_def);

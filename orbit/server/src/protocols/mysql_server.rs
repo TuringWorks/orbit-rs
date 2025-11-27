@@ -1,9 +1,9 @@
 //! MySQL protocol server wrapper
 
-use std::sync::Arc;
 use super::mysql::{adapter::MySqlAdapter, MySqlConfig};
-use crate::protocols::error::ProtocolResult;
 use crate::protocols::common::storage::TableStorage;
+use crate::protocols::error::ProtocolResult;
+use std::sync::Arc;
 
 /// MySQL protocol server
 pub struct MySqlServer {
@@ -31,4 +31,3 @@ impl MySqlServer {
         self.adapter.start().await
     }
 }
-

@@ -120,7 +120,12 @@ impl RedisAdapter {
             )),
         };
 
-        match self.context.storage.query(&self.strings_table, pattern).await? {
+        match self
+            .context
+            .storage
+            .query(&self.strings_table, pattern)
+            .await?
+        {
             crate::storage::QueryResult::Rows(rows) => {
                 if let Some(row) = rows.first() {
                     // Check if expired
@@ -149,7 +154,11 @@ impl RedisAdapter {
     pub async fn del(&self, key: &str) -> EngineResult<CommandResult> {
         let filter = FilterPredicate::Eq("key".to_string(), SqlValue::String(key.to_string()));
 
-        let count = self.context.storage.delete(&self.strings_table, filter).await?;
+        let count = self
+            .context
+            .storage
+            .delete(&self.strings_table, filter)
+            .await?;
         Ok(CommandResult::RowsAffected(count))
     }
 
@@ -183,7 +192,12 @@ impl RedisAdapter {
             ])),
         };
 
-        match self.context.storage.query(&self.hashes_table, pattern).await? {
+        match self
+            .context
+            .storage
+            .query(&self.hashes_table, pattern)
+            .await?
+        {
             crate::storage::QueryResult::Rows(rows) => {
                 if let Some(row) = rows.first() {
                     if let Some(SqlValue::String(value)) = row.get("value") {
@@ -209,7 +223,12 @@ impl RedisAdapter {
             )),
         };
 
-        match self.context.storage.query(&self.hashes_table, pattern).await? {
+        match self
+            .context
+            .storage
+            .query(&self.hashes_table, pattern)
+            .await?
+        {
             crate::storage::QueryResult::Rows(rows) => {
                 let mut result = HashMap::new();
                 for row in rows {
@@ -232,7 +251,11 @@ impl RedisAdapter {
             FilterPredicate::Eq("field".to_string(), SqlValue::String(field.to_string())),
         ]);
 
-        let count = self.context.storage.delete(&self.hashes_table, filter).await?;
+        let count = self
+            .context
+            .storage
+            .delete(&self.hashes_table, filter)
+            .await?;
         Ok(CommandResult::RowsAffected(count))
     }
 
@@ -248,19 +271,23 @@ impl RedisAdapter {
         };
 
         // Find minimum index
-        let min_index = match self.context.storage.query(&self.lists_table, pattern).await? {
-            crate::storage::QueryResult::Rows(rows) => {
-                rows.iter()
-                    .filter_map(|r| {
-                        if let Some(SqlValue::Int64(idx)) = r.get("index") {
-                            Some(*idx)
-                        } else {
-                            None
-                        }
-                    })
-                    .min()
-                    .unwrap_or(0)
-            }
+        let min_index = match self
+            .context
+            .storage
+            .query(&self.lists_table, pattern)
+            .await?
+        {
+            crate::storage::QueryResult::Rows(rows) => rows
+                .iter()
+                .filter_map(|r| {
+                    if let Some(SqlValue::Int64(idx)) = r.get("index") {
+                        Some(*idx)
+                    } else {
+                        None
+                    }
+                })
+                .min()
+                .unwrap_or(0),
             _ => 0,
         };
 
@@ -269,7 +296,10 @@ impl RedisAdapter {
         row.insert("index".to_string(), SqlValue::Int64(min_index - 1));
         row.insert("value".to_string(), SqlValue::String(value.to_string()));
 
-        self.context.storage.insert_row(&self.lists_table, row).await?;
+        self.context
+            .storage
+            .insert_row(&self.lists_table, row)
+            .await?;
         Ok(CommandResult::Ok)
     }
 
@@ -285,19 +315,23 @@ impl RedisAdapter {
         };
 
         // Find maximum index
-        let max_index = match self.context.storage.query(&self.lists_table, pattern).await? {
-            crate::storage::QueryResult::Rows(rows) => {
-                rows.iter()
-                    .filter_map(|r| {
-                        if let Some(SqlValue::Int64(idx)) = r.get("index") {
-                            Some(*idx)
-                        } else {
-                            None
-                        }
-                    })
-                    .max()
-                    .unwrap_or(-1)
-            }
+        let max_index = match self
+            .context
+            .storage
+            .query(&self.lists_table, pattern)
+            .await?
+        {
+            crate::storage::QueryResult::Rows(rows) => rows
+                .iter()
+                .filter_map(|r| {
+                    if let Some(SqlValue::Int64(idx)) = r.get("index") {
+                        Some(*idx)
+                    } else {
+                        None
+                    }
+                })
+                .max()
+                .unwrap_or(-1),
             _ => -1,
         };
 
@@ -306,7 +340,10 @@ impl RedisAdapter {
         row.insert("index".to_string(), SqlValue::Int64(max_index + 1));
         row.insert("value".to_string(), SqlValue::String(value.to_string()));
 
-        self.context.storage.insert_row(&self.lists_table, row).await?;
+        self.context
+            .storage
+            .insert_row(&self.lists_table, row)
+            .await?;
         Ok(CommandResult::Ok)
     }
 }

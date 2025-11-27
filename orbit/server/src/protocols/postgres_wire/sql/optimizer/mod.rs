@@ -761,7 +761,9 @@ mod tests {
                 })),
                 operator: BinaryOperator::Equal,
                 right: Box::new(Expression::Literal(
-                    crate::protocols::postgres_wire::sql::types::SqlValue::Text("pending".to_string()),
+                    crate::protocols::postgres_wire::sql::types::SqlValue::Text(
+                        "pending".to_string(),
+                    ),
                 )),
             }),
             group_by: None,

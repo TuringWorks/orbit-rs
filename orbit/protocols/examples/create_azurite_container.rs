@@ -35,7 +35,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if e.to_string().contains("ContainerNotFound") {
                 eprintln!("\n✗ Container creation failed.");
                 eprintln!("\nPlease create the container manually using Azure Storage Explorer:");
-                eprintln!("1. Download: https://azure.microsoft.com/products/storage/storage-explorer/");
+                eprintln!(
+                    "1. Download: https://azure.microsoft.com/products/storage/storage-explorer/"
+                );
                 eprintln!("2. Connect to: Local & Attached > Storage Accounts > (Emulator - Default Ports)");
                 eprintln!("3. Right-click 'Blob Containers' and create 'orbitstore'");
                 eprintln!("\nOr use Azure CLI:");

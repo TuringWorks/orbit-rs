@@ -5,11 +5,12 @@
 //! 2. ExecutionPlan containing acceleration metadata
 //! 3. VectorizedExecutor routing execution based on acceleration strategies
 
-use orbit_engine::query::{
-    ExecutionPlan, Query, QueryOptimizer, VectorizedExecutor,
-};
-use orbit_engine::storage::{Column, ColumnBatch, FilterPredicate, NullBitmap, SqlValue};
+// These tests require the cpu-simd feature from orbit-compute
+// In the future, this could be made conditional on a feature flag
+
 use orbit_compute::AccelerationStrategy;
+use orbit_engine::query::{ExecutionPlan, Query, QueryOptimizer, VectorizedExecutor};
+use orbit_engine::storage::{Column, ColumnBatch, FilterPredicate, NullBitmap, SqlValue};
 
 /// Helper to create test data
 fn create_test_data(row_count: usize) -> ColumnBatch {
@@ -26,7 +27,11 @@ fn create_test_data(row_count: usize) -> ColumnBatch {
             NullBitmap::new_all_valid(row_count),
         ],
         row_count,
-        column_names: Some(vec!["id".to_string(), "value".to_string(), "score".to_string()]),
+        column_names: Some(vec![
+            "id".to_string(),
+            "value".to_string(),
+            "score".to_string(),
+        ]),
     }
 }
 
@@ -60,10 +65,7 @@ async fn test_optimizer_with_acceleration_simple_filter() {
     let query = Query {
         table: "users".to_string(),
         projection: Some(vec!["id".to_string(), "value".to_string()]),
-        filter: Some(FilterPredicate::Eq(
-            "id".to_string(),
-            SqlValue::Int32(100),
-        )),
+        filter: Some(FilterPredicate::Eq("id".to_string(), SqlValue::Int32(100))),
         limit: None,
         offset: None,
     };
@@ -80,7 +82,10 @@ async fn test_optimizer_with_acceleration_simple_filter() {
     assert!(analysis.confidence <= 1.0);
 
     // Cost should be adjusted based on acceleration
-    if matches!(plan.acceleration_strategy, Some(AccelerationStrategy::CpuSimd)) {
+    if matches!(
+        plan.acceleration_strategy,
+        Some(AccelerationStrategy::CpuSimd)
+    ) {
         // With SIMD acceleration, cost should be lower than base
         assert!(plan.estimated_cost > 0.0);
     }
@@ -160,10 +165,7 @@ async fn test_executor_with_acceleration_routing() {
     let query = Query {
         table: "test_table".to_string(),
         projection: Some(vec!["id".to_string(), "value".to_string()]),
-        filter: Some(FilterPredicate::Eq(
-            "id".to_string(),
-            SqlValue::Int32(42),
-        )),
+        filter: Some(FilterPredicate::Eq("id".to_string(), SqlValue::Int32(42))),
         limit: Some(10),
         offset: None,
     };
@@ -351,7 +353,10 @@ async fn test_multiple_queries_with_different_complexities() {
     let query2 = Query {
         table: "t2".to_string(),
         projection: Some(vec!["id".to_string(), "value".to_string()]),
-        filter: Some(FilterPredicate::Eq("status".to_string(), SqlValue::Int32(1))),
+        filter: Some(FilterPredicate::Eq(
+            "status".to_string(),
+            SqlValue::Int32(1),
+        )),
         limit: Some(100),
         offset: None,
     };
@@ -384,7 +389,10 @@ async fn test_multiple_queries_with_different_complexities() {
         plan3.query_analysis,
     ) {
         // Simple query should have lowest complexity
-        assert!(a1.complexity_score < 5.0, "Simple query should have low complexity");
+        assert!(
+            a1.complexity_score < 5.0,
+            "Simple query should have low complexity"
+        );
 
         // Complex query should have higher complexity than simple
         assert!(

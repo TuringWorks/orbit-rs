@@ -118,7 +118,8 @@ impl PostgresAdapter {
         columns: Option<Vec<String>>,
         filter: Option<PostgresFilter>,
     ) -> EngineResult<CommandResult> {
-        self.select_with_time_travel(table_name, columns, filter, None).await
+        self.select_with_time_travel(table_name, columns, filter, None)
+            .await
     }
 
     /// Execute a SELECT statement with explicit time travel
@@ -134,7 +135,9 @@ impl PostgresAdapter {
     ) -> EngineResult<CommandResult> {
         // If time travel is requested, use specialized query
         if let Some(spec) = time_travel {
-            return self.execute_time_travel_query(table_name, columns, filter, spec).await;
+            return self
+                .execute_time_travel_query(table_name, columns, filter, spec)
+                .await;
         }
 
         // Regular query without time travel
@@ -189,14 +192,30 @@ impl PostgresAdapter {
                             SqlValue::Null
                         } else {
                             match column {
-                                crate::storage::Column::Bool(vals) => SqlValue::Boolean(vals[row_idx]),
-                                crate::storage::Column::Int16(vals) => SqlValue::Int16(vals[row_idx]),
-                                crate::storage::Column::Int32(vals) => SqlValue::Int32(vals[row_idx]),
-                                crate::storage::Column::Int64(vals) => SqlValue::Int64(vals[row_idx]),
-                                crate::storage::Column::Float32(vals) => SqlValue::Float32(vals[row_idx]),
-                                crate::storage::Column::Float64(vals) => SqlValue::Float64(vals[row_idx]),
-                                crate::storage::Column::String(vals) => SqlValue::String(vals[row_idx].clone()),
-                                crate::storage::Column::Binary(vals) => SqlValue::Binary(vals[row_idx].clone()),
+                                crate::storage::Column::Bool(vals) => {
+                                    SqlValue::Boolean(vals[row_idx])
+                                }
+                                crate::storage::Column::Int16(vals) => {
+                                    SqlValue::Int16(vals[row_idx])
+                                }
+                                crate::storage::Column::Int32(vals) => {
+                                    SqlValue::Int32(vals[row_idx])
+                                }
+                                crate::storage::Column::Int64(vals) => {
+                                    SqlValue::Int64(vals[row_idx])
+                                }
+                                crate::storage::Column::Float32(vals) => {
+                                    SqlValue::Float32(vals[row_idx])
+                                }
+                                crate::storage::Column::Float64(vals) => {
+                                    SqlValue::Float64(vals[row_idx])
+                                }
+                                crate::storage::Column::String(vals) => {
+                                    SqlValue::String(vals[row_idx].clone())
+                                }
+                                crate::storage::Column::Binary(vals) => {
+                                    SqlValue::Binary(vals[row_idx].clone())
+                                }
                             }
                         };
 
@@ -219,11 +238,7 @@ impl PostgresAdapter {
     }
 
     /// Execute an INSERT statement
-    pub async fn insert(
-        &self,
-        table_name: &str,
-        rows: Vec<Row>,
-    ) -> EngineResult<CommandResult> {
+    pub async fn insert(&self, table_name: &str, rows: Vec<Row>) -> EngineResult<CommandResult> {
         let count = rows.len();
         self.context.storage.insert_rows(table_name, rows).await?;
         Ok(CommandResult::RowsAffected(count))
@@ -252,7 +267,11 @@ impl PostgresAdapter {
         filter: PostgresFilter,
     ) -> EngineResult<CommandResult> {
         let engine_filter = filter.to_engine_filter_predicate();
-        let count = self.context.storage.delete(table_name, engine_filter).await?;
+        let count = self
+            .context
+            .storage
+            .delete(table_name, engine_filter)
+            .await?;
         Ok(CommandResult::RowsAffected(count))
     }
 
@@ -319,14 +338,30 @@ impl PostgresAdapter {
                             SqlValue::Null
                         } else {
                             match column {
-                                crate::storage::Column::Bool(vals) => SqlValue::Boolean(vals[row_idx]),
-                                crate::storage::Column::Int16(vals) => SqlValue::Int16(vals[row_idx]),
-                                crate::storage::Column::Int32(vals) => SqlValue::Int32(vals[row_idx]),
-                                crate::storage::Column::Int64(vals) => SqlValue::Int64(vals[row_idx]),
-                                crate::storage::Column::Float32(vals) => SqlValue::Float32(vals[row_idx]),
-                                crate::storage::Column::Float64(vals) => SqlValue::Float64(vals[row_idx]),
-                                crate::storage::Column::String(vals) => SqlValue::String(vals[row_idx].clone()),
-                                crate::storage::Column::Binary(vals) => SqlValue::Binary(vals[row_idx].clone()),
+                                crate::storage::Column::Bool(vals) => {
+                                    SqlValue::Boolean(vals[row_idx])
+                                }
+                                crate::storage::Column::Int16(vals) => {
+                                    SqlValue::Int16(vals[row_idx])
+                                }
+                                crate::storage::Column::Int32(vals) => {
+                                    SqlValue::Int32(vals[row_idx])
+                                }
+                                crate::storage::Column::Int64(vals) => {
+                                    SqlValue::Int64(vals[row_idx])
+                                }
+                                crate::storage::Column::Float32(vals) => {
+                                    SqlValue::Float32(vals[row_idx])
+                                }
+                                crate::storage::Column::Float64(vals) => {
+                                    SqlValue::Float64(vals[row_idx])
+                                }
+                                crate::storage::Column::String(vals) => {
+                                    SqlValue::String(vals[row_idx].clone())
+                                }
+                                crate::storage::Column::Binary(vals) => {
+                                    SqlValue::Binary(vals[row_idx].clone())
+                                }
                             }
                         };
                         row.insert(col_name.clone(), value);
@@ -336,7 +371,8 @@ impl PostgresAdapter {
 
                 // Apply projection if needed
                 if let Some(cols) = columns {
-                    let projected_rows = rows.into_iter()
+                    let projected_rows = rows
+                        .into_iter()
                         .map(|mut row| {
                             row.retain(|k, _| cols.contains(k));
                             row
@@ -398,7 +434,11 @@ impl PostgresAdapter {
     /// Create a named tag for current snapshot
     ///
     /// Equivalent to `ALTER TABLE table CREATE TAG tag_name`
-    pub async fn create_tag(&self, table_name: &str, tag_name: &str) -> EngineResult<CommandResult> {
+    pub async fn create_tag(
+        &self,
+        table_name: &str,
+        tag_name: &str,
+    ) -> EngineResult<CommandResult> {
         Err(EngineError::not_implemented(format!(
             "CREATE TAG '{}' for table '{}' not yet implemented. Requires Iceberg tag management.",
             tag_name, table_name
@@ -408,7 +448,11 @@ impl PostgresAdapter {
     /// Create a named branch
     ///
     /// Equivalent to `ALTER TABLE table CREATE BRANCH branch_name`
-    pub async fn create_branch(&self, table_name: &str, branch_name: &str) -> EngineResult<CommandResult> {
+    pub async fn create_branch(
+        &self,
+        table_name: &str,
+        branch_name: &str,
+    ) -> EngineResult<CommandResult> {
         Err(EngineError::not_implemented(format!(
             "CREATE BRANCH '{}' for table '{}' not yet implemented. Requires Iceberg branch management.",
             branch_name, table_name
@@ -604,9 +648,9 @@ impl PostgresFilter {
                     .map(|f| f.to_engine_filter_predicate())
                     .collect(),
             ),
-            PostgresFilter::Not(filter) => crate::storage::FilterPredicate::Not(Box::new(
-                filter.to_engine_filter_predicate(),
-            )),
+            PostgresFilter::Not(filter) => {
+                crate::storage::FilterPredicate::Not(Box::new(filter.to_engine_filter_predicate()))
+            }
         }
     }
 
@@ -627,12 +671,12 @@ impl super::error_mapping::ErrorMapper for PostgresErrorMapper {
         match error {
             EngineError::NotFound(_) => "42P01".to_string(), // undefined_table
             EngineError::AlreadyExists(_) => "42P07".to_string(), // duplicate_table
-            EngineError::Conflict(_) => "40001".to_string(),   // serialization_failure
-            EngineError::Timeout(_) => "57014".to_string(),    // query_canceled
+            EngineError::Conflict(_) => "40001".to_string(), // serialization_failure
+            EngineError::Timeout(_) => "57014".to_string(),  // query_canceled
             EngineError::InvalidInput(_) => "22000".to_string(), // data_exception
             EngineError::Transaction(_) => "25000".to_string(), // invalid_transaction_state
             EngineError::NotImplemented(_) => "0A000".to_string(), // feature_not_supported
-            _ => "XX000".to_string(),                          // internal_error
+            _ => "XX000".to_string(),                        // internal_error
         }
     }
 }

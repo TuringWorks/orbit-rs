@@ -8,8 +8,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Load balancing strategies
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum LoadBalancingStrategy {
     /// Round-robin distribution
     RoundRobin,
@@ -23,7 +22,6 @@ pub enum LoadBalancingStrategy {
     /// Route based on connection affinity
     AffinityBased,
 }
-
 
 /// Node health information
 #[derive(Debug, Clone)]

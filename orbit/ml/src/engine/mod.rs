@@ -279,7 +279,9 @@ impl MLEngine {
         match Device::cuda_if_available(0) {
             Ok(device) => {
                 info!("[OK] GPU acceleration enabled: {:?}", device);
-                info!("[GPU] CUDA device successfully initialized for high-performance ML operations");
+                info!(
+                    "[GPU] CUDA device successfully initialized for high-performance ML operations"
+                );
 
                 // Update metrics to reflect successful GPU initialization
                 {

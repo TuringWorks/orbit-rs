@@ -33,9 +33,7 @@ impl ResultProcessor {
         max_preview_rows: usize,
     ) -> ProcessedResult {
         // Format data preview
-        let data_preview = self
-            .formatter
-            .format_preview(results, max_preview_rows);
+        let data_preview = self.formatter.format_preview(results, max_preview_rows);
 
         // Generate summary
         let summary = self.summarizer.summarize(results);
@@ -205,12 +203,7 @@ impl ResultFormatter {
 
     /// Format data preview
     pub fn format_preview(&self, results: &QueryResult, max_rows: usize) -> Vec<Row> {
-        results
-            .rows
-            .iter()
-            .take(max_rows)
-            .cloned()
-            .collect()
+        results.rows.iter().take(max_rows).cloned().collect()
     }
 }
 
@@ -337,11 +330,7 @@ impl DataSummarizer {
         let sum: f64 = sorted.iter().sum();
         let mean = sum / n;
 
-        let variance = sorted
-            .iter()
-            .map(|x| (x - mean).powi(2))
-            .sum::<f64>()
-            / n;
+        let variance = sorted.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n;
         let std_dev = variance.sqrt();
 
         let median = if sorted.len() % 2 == 0 {
@@ -438,10 +427,7 @@ impl VisualizationHintGenerator {
             hints.push(VisualizationHint {
                 viz_type: VisualizationType::BarChart,
                 columns: vec![text_cols[0].clone(), numeric_cols[0].clone()],
-                description: format!(
-                    "Bar chart showing {} by {}",
-                    numeric_cols[0], text_cols[0]
-                ),
+                description: format!("Bar chart showing {} by {}", numeric_cols[0], text_cols[0]),
             });
         }
 
@@ -482,4 +468,3 @@ impl Default for VisualizationHintGenerator {
         Self::new()
     }
 }
-

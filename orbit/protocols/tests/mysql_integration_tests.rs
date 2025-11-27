@@ -2,9 +2,11 @@
 //!
 //! Integration tests for MySQL protocol adapter including authentication and prepared statements
 
-use orbit_protocols::mysql::{MySqlAdapter, MySqlConfig};
-use orbit_protocols::mysql::auth::{AuthPlugin, AuthState, MySqlAuth, HandshakeResponse};
+#![cfg(feature = "mysql")]
+
 use bytes::Bytes;
+use orbit_protocols::mysql::auth::{AuthPlugin, AuthState, HandshakeResponse, MySqlAuth};
+use orbit_protocols::mysql::{MySqlAdapter, MySqlConfig};
 
 // ============================================================================
 // Authentication Integration Tests
@@ -17,7 +19,7 @@ async fn test_authentication_with_credentials() {
         Some("admin".to_string()),
         Some("password123".to_string()),
     );
-    
+
     // Create a mock handshake response
     let mut handshake_bytes = Vec::new();
     // Capability flags (4 bytes)
@@ -34,10 +36,10 @@ async fn test_authentication_with_credentials() {
     handshake_bytes.push(10);
     // Auth response (10 bytes)
     handshake_bytes.extend_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    
+
     let response = HandshakeResponse::parse(Bytes::from(handshake_bytes)).unwrap();
     assert_eq!(response.username, "admin");
-    
+
     // Process handshake - should accept if no password validation is strict
     let result = auth.process_handshake(response);
     assert!(result.is_ok());
@@ -46,7 +48,7 @@ async fn test_authentication_with_credentials() {
 #[tokio::test]
 async fn test_authentication_without_credentials() {
     let mut auth = MySqlAuth::new(AuthPlugin::NativePassword);
-    
+
     // Create a mock handshake response
     let mut handshake_bytes = Vec::new();
     handshake_bytes.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]); // Capability flags
@@ -56,10 +58,10 @@ async fn test_authentication_without_credentials() {
     handshake_bytes.extend_from_slice(b"user\0"); // Username
     handshake_bytes.push(5); // Auth response length
     handshake_bytes.extend_from_slice(&[1, 2, 3, 4, 5]); // Auth response
-    
+
     let response = HandshakeResponse::parse(Bytes::from(handshake_bytes)).unwrap();
     let result = auth.process_handshake(response);
-    
+
     // Should accept when no credentials are configured
     assert!(result.is_ok());
     assert_eq!(auth.state(), &AuthState::Authenticated);
@@ -72,7 +74,7 @@ async fn test_authentication_wrong_username() {
         Some("admin".to_string()),
         Some("password123".to_string()),
     );
-    
+
     let mut handshake_bytes = Vec::new();
     handshake_bytes.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
     handshake_bytes.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
@@ -81,10 +83,10 @@ async fn test_authentication_wrong_username() {
     handshake_bytes.extend_from_slice(b"wronguser\0"); // Wrong username
     handshake_bytes.push(5);
     handshake_bytes.extend_from_slice(&[1, 2, 3, 4, 5]);
-    
+
     let response = HandshakeResponse::parse(Bytes::from(handshake_bytes)).unwrap();
     let result = auth.process_handshake(response);
-    
+
     // Should reject wrong username
     assert!(result.is_ok());
     let success = result.unwrap();
@@ -117,7 +119,7 @@ async fn test_prepared_statement_parameter_types() {
     // Test that parameter types are correctly stored
     let config = MySqlConfig::default();
     let _adapter = MySqlAdapter::new(config).await.unwrap();
-    
+
     // This would be tested through the actual prepare/execute flow
     // For now, we verify the counting function works correctly
     let queries = vec![
@@ -126,7 +128,7 @@ async fn test_prepared_statement_parameter_types() {
         ("INSERT INTO users (id, name) VALUES (?, ?)", 2),
         ("UPDATE users SET name = ? WHERE id = ?", 2),
     ];
-    
+
     for (query, expected_count) in queries {
         assert_eq!(
             MySqlAdapter::count_parameters(query),
@@ -145,11 +147,11 @@ async fn test_prepared_statement_parameter_types() {
 async fn test_error_handling_invalid_query() {
     let config = MySqlConfig::default();
     let adapter = MySqlAdapter::new(config).await.unwrap();
-    
+
     // Execute an invalid query
     let mut engine = adapter.sql_engine().write().await;
     let result = engine.execute("INVALID SQL SYNTAX").await;
-    
+
     // Should return an error
     assert!(result.is_err());
 }
@@ -158,11 +160,11 @@ async fn test_error_handling_invalid_query() {
 async fn test_error_handling_missing_table() {
     let config = MySqlConfig::default();
     let adapter = MySqlAdapter::new(config).await.unwrap();
-    
+
     // Try to query a non-existent table
     let mut engine = adapter.sql_engine().write().await;
     let result = engine.execute("SELECT * FROM nonexistent_table").await;
-    
+
     // Should return an error
     assert!(result.is_err());
 }
@@ -175,18 +177,18 @@ async fn test_error_handling_missing_table() {
 async fn test_metrics_tracking() {
     let config = MySqlConfig::default();
     let adapter = MySqlAdapter::new(config).await.unwrap();
-    
+
     // Get initial metrics
     let metrics = adapter.metrics().read().await;
     let initial_queries = metrics.total_queries;
     let initial_errors = metrics.total_errors;
     drop(metrics);
-    
+
     // Execute a query
     let mut engine = adapter.sql_engine().write().await;
     let _ = engine.execute("SELECT 1").await;
     drop(engine);
-    
+
     // Note: Metrics are updated in handle_query, which requires a full connection
     // This test verifies the metrics structure exists and is accessible
     let metrics = adapter.metrics().read().await;
@@ -202,13 +204,15 @@ async fn test_metrics_tracking() {
 async fn test_stmt_reset_integration() {
     let config = MySqlConfig::default();
     let adapter = MySqlAdapter::new(config).await.unwrap();
-    
+
     // Test that COM_STMT_RESET is handled (returns OK)
     // This is a basic test - full integration would require a MySQL client
     let mut engine = adapter.sql_engine().write().await;
-    let _ = engine.execute("CREATE TABLE test_reset (id INT PRIMARY KEY, name TEXT)").await;
+    let _ = engine
+        .execute("CREATE TABLE test_reset (id INT PRIMARY KEY, name TEXT)")
+        .await;
     drop(engine);
-    
+
     // Note: Full COM_STMT_RESET test would require preparing a statement first
     // This verifies the command handler exists and doesn't crash
 }
@@ -217,12 +221,15 @@ async fn test_stmt_reset_integration() {
 async fn test_field_list_integration() {
     let config = MySqlConfig::default();
     let adapter = MySqlAdapter::new(config).await.unwrap();
-    
+
     // Create a test table
     let mut engine = adapter.sql_engine().write().await;
-    engine.execute("CREATE TABLE test_fields (id INT PRIMARY KEY, name TEXT, age INT)").await.unwrap();
+    engine
+        .execute("CREATE TABLE test_fields (id INT PRIMARY KEY, name TEXT, age INT)")
+        .await
+        .unwrap();
     drop(engine);
-    
+
     // Test that COM_FIELD_LIST would work (requires full MySQL client)
     // This verifies the command handler exists
 }
@@ -231,7 +238,7 @@ async fn test_field_list_integration() {
 async fn test_statistics_integration() {
     let config = MySqlConfig::default();
     let adapter = MySqlAdapter::new(config).await.unwrap();
-    
+
     // Test that COM_STATISTICS returns a response
     // This verifies the command handler exists
     let metrics = adapter.metrics().read().await;
@@ -248,4 +255,3 @@ async fn test_create_drop_db_integration() {
     // These are no-ops in Orbit but should return OK
     // This verifies the command handlers exist
 }
-

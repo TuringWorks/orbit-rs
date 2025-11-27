@@ -179,27 +179,23 @@ impl GPUColumnarJoins {
         let left_key_col = left_columns
             .iter()
             .find(|c| c.name == left_join_key)
-            .ok_or_else(|| {
-                ComputeError::Execution {
-                    source: crate::errors::ExecutionError::InvalidKernelParameters {
-                        parameter: "left_join_key".to_string(),
-                        value: left_join_key.to_string(),
-                    },
-                    compute_unit: None,
-                }
+            .ok_or_else(|| ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "left_join_key".to_string(),
+                    value: left_join_key.to_string(),
+                },
+                compute_unit: None,
             })?;
 
         let right_key_col = right_columns
             .iter()
             .find(|c| c.name == right_join_key)
-            .ok_or_else(|| {
-                ComputeError::Execution {
-                    source: crate::errors::ExecutionError::InvalidKernelParameters {
-                        parameter: "right_join_key".to_string(),
-                        value: right_join_key.to_string(),
-                    },
-                    compute_unit: None,
-                }
+            .ok_or_else(|| ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "right_join_key".to_string(),
+                    value: right_join_key.to_string(),
+                },
+                compute_unit: None,
             })?;
 
         let left_row_count = left_key_col.row_count();
@@ -225,9 +221,7 @@ impl GPUColumnarJoins {
         }
 
         // Fall back to CPU execution
-        if self.config.use_cpu_parallel
-            && (left_row_count > 1000 || right_row_count > 1000)
-        {
+        if self.config.use_cpu_parallel && (left_row_count > 1000 || right_row_count > 1000) {
             self.hash_join_cpu_parallel(
                 left_columns,
                 right_columns,
@@ -349,7 +343,8 @@ impl GPUColumnarJoins {
 
             // Add unmatched right rows
             for right_idx in 0..right_key_col.row_count() {
-                if !matched_right_indices.contains(&right_idx) && !right_key_col.is_null(right_idx) {
+                if !matched_right_indices.contains(&right_idx) && !right_key_col.is_null(right_idx)
+                {
                     final_results.push(self.create_result_row(
                         left_columns,
                         right_columns,
@@ -437,7 +432,8 @@ impl GPUColumnarJoins {
                 .collect();
 
             for right_idx in 0..right_row_count {
-                if !matched_right_indices.contains(&right_idx) && !right_key_col.is_null(right_idx) {
+                if !matched_right_indices.contains(&right_idx) && !right_key_col.is_null(right_idx)
+                {
                     results.push(self.create_result_row(
                         left_columns,
                         right_columns,
@@ -451,7 +447,11 @@ impl GPUColumnarJoins {
         Ok(results)
     }
 
-    fn extract_join_key(&self, column: &ColumnarColumn, index: usize) -> Result<JoinKey, ComputeError> {
+    fn extract_join_key(
+        &self,
+        column: &ColumnarColumn,
+        index: usize,
+    ) -> Result<JoinKey, ComputeError> {
         if column.is_null(index) {
             return Err(ComputeError::Execution {
                 source: crate::errors::ExecutionError::InvalidKernelParameters {
@@ -591,7 +591,12 @@ mod tests {
             },
             ColumnarColumn {
                 name: "name".to_string(),
-                string_values: Some(vec!["Alice".to_string(), "Bob".to_string(), "Charlie".to_string(), "David".to_string()]),
+                string_values: Some(vec![
+                    "Alice".to_string(),
+                    "Bob".to_string(),
+                    "Charlie".to_string(),
+                    "David".to_string(),
+                ]),
                 i32_values: None,
                 i64_values: None,
                 f64_values: None,
@@ -665,4 +670,3 @@ mod tests {
         assert!(result.is_err()); // Should fail - right columns empty
     }
 }
-

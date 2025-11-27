@@ -28,18 +28,20 @@ pub mod integration;
 // Re-export optimizer submodules
 pub use optimizer::cost_model::{ExecutionCost, ExecutionMetrics, QueryPlan};
 pub use optimizer::index_advisor::{IndexRecommendation, IndexType};
-pub use optimizer::pattern_classifier::{QueryClass, OptimizationStrategy};
+pub use optimizer::pattern_classifier::{OptimizationStrategy, QueryClass};
 
-pub use controller::{AIMasterController, AIConfig, SystemState};
-pub use decision::{DecisionEngine, AIDecision};
+pub use controller::{AIConfig, AIMasterController, SystemState};
+pub use decision::{AIDecision, DecisionEngine};
 pub use knowledge::{AIKnowledgeBase, KnowledgePattern};
-pub use learning::{LearningEngine, LearningConfig};
-pub use optimizer::{IntelligentQueryOptimizer, OptimizedQuery, OptimizedPlan};
-pub use resource::{PredictiveResourceManager, WorkloadForecast, WorkloadPredictor, ResourceDemand};
-pub use storage::{SmartStorageManager, TieringDecision, AutoTieringEngine, StorageTier};
+pub use learning::{LearningConfig, LearningEngine};
+pub use optimizer::{IntelligentQueryOptimizer, OptimizedPlan, OptimizedQuery};
+pub use resource::{
+    PredictiveResourceManager, ResourceDemand, WorkloadForecast, WorkloadPredictor,
+};
+pub use storage::{AutoTieringEngine, SmartStorageManager, StorageTier, TieringDecision};
 pub use transaction::{
-    AdaptiveTransactionManager, IsolationLevel, DeadlockPreventer, DeadlockPrediction,
-    TransactionDependencyGraph, TransactionId, ResolutionAction,
+    AdaptiveTransactionManager, DeadlockPrediction, DeadlockPreventer, IsolationLevel,
+    ResolutionAction, TransactionDependencyGraph, TransactionId,
 };
 
 use anyhow::Result as OrbitResult;
@@ -49,10 +51,10 @@ use anyhow::Result as OrbitResult;
 pub trait AISubsystem: Send + Sync {
     /// Handle an AI decision
     async fn handle_decision(&self, decision: AIDecision) -> OrbitResult<()>;
-    
+
     /// Get subsystem metrics
     async fn get_metrics(&self) -> OrbitResult<AISubsystemMetrics>;
-    
+
     /// Shutdown subsystem
     async fn shutdown(&self) -> OrbitResult<()>;
 }
@@ -89,4 +91,3 @@ pub enum OptimizationLevel {
     /// Conservative optimization
     Conservative,
 }
-

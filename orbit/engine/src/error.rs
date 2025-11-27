@@ -67,6 +67,14 @@ pub enum EngineError {
     /// Internal errors (should not happen in normal operation)
     #[error("Internal error: {0}")]
     Internal(String),
+
+    /// Lock acquisition errors
+    #[error("Lock acquisition failed")]
+    LockError,
+
+    /// Execution errors
+    #[error("Execution error: {0}")]
+    ExecutionError(String),
 }
 
 impl EngineError {

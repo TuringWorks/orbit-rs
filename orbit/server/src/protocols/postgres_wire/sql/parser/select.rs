@@ -41,9 +41,10 @@ impl SelectParser {
 
         // Expect SELECT keyword
         if *pos >= tokens.len() || !matches!(tokens[*pos], Token::Select) {
-            return Err(
-                crate::protocols::error::ProtocolError::ParseError("Expected SELECT".to_string()).into(),
-            );
+            return Err(crate::protocols::error::ProtocolError::ParseError(
+                "Expected SELECT".to_string(),
+            )
+            .into());
         }
         *pos += 1;
 
@@ -140,8 +141,9 @@ impl SelectParser {
         let offset = if self.matches_at(tokens, *pos, &Token::Offset) {
             *pos += 1;
             if let Ok(expr) = self.expression_parser.parse_expression(tokens, pos) {
-                if let Expression::Literal(crate::protocols::postgres_wire::sql::types::SqlValue::Integer(n)) =
-                    expr
+                if let Expression::Literal(
+                    crate::protocols::postgres_wire::sql::types::SqlValue::Integer(n),
+                ) = expr
                 {
                     Some(n as u64)
                 } else {
@@ -235,9 +237,10 @@ impl SelectParser {
             *pos += 1;
             n.clone()
         } else {
-            return Err(
-                crate::protocols::error::ProtocolError::ParseError("Expected CTE name".to_string()).into(),
-            );
+            return Err(crate::protocols::error::ProtocolError::ParseError(
+                "Expected CTE name".to_string(),
+            )
+            .into());
         };
 
         let columns = if self.matches_at(tokens, *pos, &Token::LeftParen) {
@@ -273,7 +276,9 @@ impl SelectParser {
 
         loop {
             if let Token::Identifier(name) = tokens.get(*pos).ok_or_else(|| {
-                crate::protocols::error::ProtocolError::ParseError("Expected identifier".to_string())
+                crate::protocols::error::ProtocolError::ParseError(
+                    "Expected identifier".to_string(),
+                )
             })? {
                 identifiers.push(name.clone());
                 *pos += 1;
@@ -442,10 +447,10 @@ impl SelectParser {
 
             Ok(FromClause::Table { name: table, alias })
         } else {
-            Err(
-                crate::protocols::error::ProtocolError::ParseError("Expected table reference".to_string())
-                    .into(),
+            Err(crate::protocols::error::ProtocolError::ParseError(
+                "Expected table reference".to_string(),
             )
+            .into())
         }
     }
 

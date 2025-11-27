@@ -4,10 +4,10 @@
 //! parallelize query processing across multiple actor nodes with intelligent
 //! data locality optimization.
 
+use crate::error::{OrbitError, OrbitResult};
 use crate::orbitql::ast::AggregateFunction;
 use crate::orbitql::executor::QueryResult;
 use crate::orbitql::planner::{ExecutionPlan, PlanNode, QueryPlanner};
-use crate::error::{OrbitError, OrbitResult};
 // Temporarily disable ActorId since it's not defined in this crate yet
 // use crate::ActorId;
 type ActorId = String; // Placeholder

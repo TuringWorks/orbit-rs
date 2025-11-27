@@ -3,8 +3,8 @@
 //! Provides high-performance aggregations (SUM, MIN, MAX, COUNT).
 //! Uses SIMD instructions when available with automatic fallback.
 
-use super::{SimdAggregate, simd_capability, SimdCapability};
 use super::types::NullBitmap;
+use super::{simd_capability, SimdAggregate, SimdCapability};
 
 /// SIMD aggregate for i32 values
 pub struct SimdAggregateI32 {
@@ -76,7 +76,13 @@ fn min_scalar<T: PartialOrd + Copy>(values: &[T], null_bitmap: &NullBitmap) -> O
         if null_bitmap.is_valid(index) {
             min_val = Some(match min_val {
                 None => value,
-                Some(current) => if value < current { value } else { current },
+                Some(current) => {
+                    if value < current {
+                        value
+                    } else {
+                        current
+                    }
+                }
             });
         }
     }
@@ -92,7 +98,13 @@ fn max_scalar<T: PartialOrd + Copy>(values: &[T], null_bitmap: &NullBitmap) -> O
         if null_bitmap.is_valid(index) {
             max_val = Some(match max_val {
                 None => value,
-                Some(current) => if value > current { value } else { current },
+                Some(current) => {
+                    if value > current {
+                        value
+                    } else {
+                        current
+                    }
+                }
             });
         }
     }

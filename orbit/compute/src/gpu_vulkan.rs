@@ -23,7 +23,8 @@ use vulkano::{
     instance::{Instance, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{
-        compute::ComputePipelineCreateInfo, layout::{PipelineDescriptorSetLayoutCreateInfo, PipelineLayoutCreateInfo},
+        compute::ComputePipelineCreateInfo,
+        layout::{PipelineDescriptorSetLayoutCreateInfo, PipelineLayoutCreateInfo},
         ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout,
         PipelineShaderStageCreateInfo,
     },
@@ -75,9 +76,7 @@ impl VulkanDevice {
         // Select best physical device (prefer discrete GPU)
         let physical_device = instance
             .enumerate_physical_devices()
-            .map_err(|_e| {
-                ComputeError::gpu(GPUError::DeviceNotFound { device_id: 0 })
-            })?
+            .map_err(|_e| ComputeError::gpu(GPUError::DeviceNotFound { device_id: 0 }))?
             .filter(|p| {
                 // Must support compute queue
                 p.queue_family_properties()
@@ -92,9 +91,7 @@ impl VulkanDevice {
                 PhysicalDeviceType::Other => 4,
                 _ => 5,
             })
-            .ok_or_else(|| {
-                ComputeError::gpu(GPUError::DeviceNotFound { device_id: 0 })
-            })?;
+            .ok_or_else(|| ComputeError::gpu(GPUError::DeviceNotFound { device_id: 0 }))?;
 
         let device_name = physical_device.properties().device_name.clone();
 
@@ -138,10 +135,14 @@ impl VulkanDevice {
 
         // Create allocators
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
-        let command_buffer_allocator =
-            Arc::new(StandardCommandBufferAllocator::new(device.clone(), Default::default()));
-        let descriptor_set_allocator =
-            Arc::new(StandardDescriptorSetAllocator::new(device.clone(), Default::default()));
+        let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
+            device.clone(),
+            Default::default(),
+        ));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device.clone(),
+            Default::default(),
+        ));
 
         tracing::info!("Initialized Vulkan device: {}", device_name);
 
@@ -172,15 +173,16 @@ impl VulkanDevice {
                 error: format!("Failed to convert shader bytes to words: {}", e),
             })
         })?;
-        
+
         unsafe {
-            ShaderModule::new(self.device.clone(), ShaderModuleCreateInfo::new(&words))
-                .map_err(|e| {
+            ShaderModule::new(self.device.clone(), ShaderModuleCreateInfo::new(&words)).map_err(
+                |e| {
                     ComputeError::gpu(GPUError::APIInitializationFailed {
                         api: "Vulkan".to_string(),
                         error: format!("Failed to load shader: {}", e),
                     })
-                })
+                },
+            )
         }
     }
 
@@ -194,7 +196,7 @@ impl VulkanDevice {
         // Note: Shader must be compiled with: glslc graph_bfs.comp -o graph_bfs.spv
         let shader_code = include_bytes!("shaders/vulkan/graph_bfs.spv");
         let shader_module = self.load_shader_module(shader_code)?;
-        
+
         // Get entry point
         let entry_point = shader_module.entry_point("main").ok_or_else(|| {
             ComputeError::gpu(GPUError::APIInitializationFailed {
@@ -202,27 +204,27 @@ impl VulkanDevice {
                 error: "BFS shader entry point 'main' not found".to_string(),
             })
         })?;
-        
+
         // Create shader stage
         let stage = PipelineShaderStageCreateInfo::new(entry_point);
-        
+
         // Create pipeline layout from shader reflection
-        let descriptor_set_layouts_info = PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage]);
+        let descriptor_set_layouts_info =
+            PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage]);
         // Create descriptor set layouts from the set_layouts field
         let descriptor_set_layouts: Vec<_> = descriptor_set_layouts_info
             .set_layouts
             .iter()
             .map(|info| {
-                DescriptorSetLayout::new(self.device.clone(), info.clone())
-                    .map_err(|e| {
-                        ComputeError::gpu(GPUError::APIInitializationFailed {
-                            api: "Vulkan".to_string(),
-                            error: format!("Failed to create descriptor set layout: {}", e),
-                        })
+                DescriptorSetLayout::new(self.device.clone(), info.clone()).map_err(|e| {
+                    ComputeError::gpu(GPUError::APIInitializationFailed {
+                        api: "Vulkan".to_string(),
+                        error: format!("Failed to create descriptor set layout: {}", e),
                     })
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
-        
+
         let layout = PipelineLayout::new(
             self.device.clone(),
             PipelineLayoutCreateInfo {
@@ -236,7 +238,7 @@ impl VulkanDevice {
                 error: format!("Failed to create pipeline layout: {}", e),
             })
         })?;
-        
+
         // Create compute pipeline using stage_layout
         let pipeline = ComputePipeline::new(
             self.device.clone(),
@@ -249,7 +251,7 @@ impl VulkanDevice {
                 error: format!("Failed to create BFS pipeline: {}", e),
             })
         })?;
-        
+
         // Cache the pipeline
         self.bfs_pipeline = Some(pipeline.clone());
         Ok(pipeline)
@@ -264,7 +266,7 @@ impl VulkanDevice {
         // Try to load pre-compiled SPIR-V shader
         let shader_code = include_bytes!("shaders/vulkan/vector_similarity.spv");
         let shader_module = self.load_shader_module(shader_code)?;
-        
+
         // Get entry point
         let entry_point = shader_module.entry_point("main").ok_or_else(|| {
             ComputeError::gpu(GPUError::APIInitializationFailed {
@@ -272,27 +274,27 @@ impl VulkanDevice {
                 error: "Vector similarity shader entry point 'main' not found".to_string(),
             })
         })?;
-        
+
         // Create shader stage
         let stage = PipelineShaderStageCreateInfo::new(entry_point);
-        
+
         // Create pipeline layout from shader reflection
-        let descriptor_set_layouts_info = PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage]);
+        let descriptor_set_layouts_info =
+            PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage]);
         // Create descriptor set layouts from the set_layouts field
         let descriptor_set_layouts: Vec<_> = descriptor_set_layouts_info
             .set_layouts
             .iter()
             .map(|info| {
-                DescriptorSetLayout::new(self.device.clone(), info.clone())
-                    .map_err(|e| {
-                        ComputeError::gpu(GPUError::APIInitializationFailed {
-                            api: "Vulkan".to_string(),
-                            error: format!("Failed to create descriptor set layout: {}", e),
-                        })
+                DescriptorSetLayout::new(self.device.clone(), info.clone()).map_err(|e| {
+                    ComputeError::gpu(GPUError::APIInitializationFailed {
+                        api: "Vulkan".to_string(),
+                        error: format!("Failed to create descriptor set layout: {}", e),
                     })
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
-        
+
         let layout = PipelineLayout::new(
             self.device.clone(),
             PipelineLayoutCreateInfo {
@@ -306,7 +308,7 @@ impl VulkanDevice {
                 error: format!("Failed to create pipeline layout: {}", e),
             })
         })?;
-        
+
         // Create compute pipeline using stage_layout
         let pipeline = ComputePipeline::new(
             self.device.clone(),
@@ -319,7 +321,7 @@ impl VulkanDevice {
                 error: format!("Failed to create vector similarity pipeline: {}", e),
             })
         })?;
-        
+
         // Cache the pipeline
         self.vector_similarity_pipeline = Some(pipeline.clone());
         Ok(pipeline)
@@ -596,49 +598,48 @@ impl VulkanDevice {
         })?;
 
         // Read results back
-        let visited_content = visited_buffer.read().map_err(|_e| {
-            ComputeError::Execution {
+        let visited_content = visited_buffer
+            .read()
+            .map_err(|_e| ComputeError::Execution {
                 source: crate::errors::ExecutionError::DataTransferError {
                     source: "GPU".to_string(),
                     destination: "CPU".to_string(),
                 },
                 compute_unit: Some("Vulkan".to_string()),
-            }
-        })?;
+            })?;
         visited.copy_from_slice(&visited_content);
 
-        let next_level_content = next_level_buffer.read().map_err(|_e| {
-            ComputeError::Execution {
-                source: crate::errors::ExecutionError::DataTransferError {
-                    source: "GPU".to_string(),
-                    destination: "CPU".to_string(),
-                },
-                compute_unit: Some("Vulkan".to_string()),
-            }
-        })?;
+        let next_level_content =
+            next_level_buffer
+                .read()
+                .map_err(|_e| ComputeError::Execution {
+                    source: crate::errors::ExecutionError::DataTransferError {
+                        source: "GPU".to_string(),
+                        destination: "CPU".to_string(),
+                    },
+                    compute_unit: Some("Vulkan".to_string()),
+                })?;
         let next_level_slice = &next_level_content[..next_level.len().min(max_nodes as usize)];
         next_level[..next_level_slice.len()].copy_from_slice(next_level_slice);
 
-        let size_content = next_level_size_buffer.read().map_err(|_e| {
-            ComputeError::Execution {
+        let size_content = next_level_size_buffer
+            .read()
+            .map_err(|_e| ComputeError::Execution {
                 source: crate::errors::ExecutionError::DataTransferError {
                     source: "GPU".to_string(),
                     destination: "CPU".to_string(),
                 },
                 compute_unit: Some("Vulkan".to_string()),
-            }
-        })?;
+            })?;
         *next_level_size = *size_content;
 
         // Read parent buffer back
-        let parent_content = parent_buffer.read().map_err(|_e| {
-            ComputeError::Execution {
-                source: crate::errors::ExecutionError::DataTransferError {
-                    source: "GPU".to_string(),
-                    destination: "CPU".to_string(),
-                },
-                compute_unit: Some("Vulkan".to_string()),
-            }
+        let parent_content = parent_buffer.read().map_err(|_e| ComputeError::Execution {
+            source: crate::errors::ExecutionError::DataTransferError {
+                source: "GPU".to_string(),
+                destination: "CPU".to_string(),
+            },
+            compute_unit: Some("Vulkan".to_string()),
         })?;
         parent.copy_from_slice(&parent_content);
 
@@ -671,7 +672,11 @@ impl VulkanDevice {
             return Err(ComputeError::Execution {
                 source: ExecutionError::InvalidKernelParameters {
                     parameter: "candidate_vectors_length".to_string(),
-                    value: format!("expected {}, got {}", vector_count * dimension, candidate_vectors.len()),
+                    value: format!(
+                        "expected {}, got {}",
+                        vector_count * dimension,
+                        candidate_vectors.len()
+                    ),
                 },
                 compute_unit: Some("Vulkan".to_string()),
             });
@@ -869,14 +874,12 @@ impl VulkanDevice {
         })?;
 
         // Read results back
-        let scores_content = scores_buffer.read().map_err(|_e| {
-            ComputeError::Execution {
-                source: ExecutionError::DataTransferError {
-                    source: "GPU".to_string(),
-                    destination: "CPU".to_string(),
-                },
-                compute_unit: Some("Vulkan".to_string()),
-            }
+        let scores_content = scores_buffer.read().map_err(|_e| ComputeError::Execution {
+            source: ExecutionError::DataTransferError {
+                source: "GPU".to_string(),
+                destination: "CPU".to_string(),
+            },
+            compute_unit: Some("Vulkan".to_string()),
         })?;
 
         Ok(scores_content.to_vec())
@@ -1040,14 +1043,12 @@ impl VulkanDevice {
         })?;
 
         // Read result
-        let output_content = output_buffer.read().map_err(|_e| {
-            ComputeError::Execution {
-                source: crate::errors::ExecutionError::DataTransferError {
-                    source: "GPU".to_string(),
-                    destination: "CPU".to_string(),
-                },
-                compute_unit: Some("Vulkan".to_string()),
-            }
+        let output_content = output_buffer.read().map_err(|_e| ComputeError::Execution {
+            source: crate::errors::ExecutionError::DataTransferError {
+                source: "GPU".to_string(),
+                destination: "CPU".to_string(),
+            },
+            compute_unit: Some("Vulkan".to_string()),
         })?;
 
         Ok(output_content.to_vec())
@@ -1069,11 +1070,12 @@ impl VulkanDevice {
         // Load the Dijkstra shader
         let shader_bytes = include_bytes!("shaders/vulkan/dijkstra_relax.spv");
         let shader = unsafe {
-            ShaderModule::from_bytes(self.device.clone(), shader_bytes)
-                .map_err(|e| ComputeError::gpu(crate::errors::GPUError::ShaderCompilationFailed {
+            ShaderModule::from_bytes(self.device.clone(), shader_bytes).map_err(|e| {
+                ComputeError::gpu(crate::errors::GPUError::ShaderCompilationFailed {
                     shader_type: "dijkstra_relax".to_string(),
                     error: format!("{:?}", e),
-                }))?
+                })
+            })?
         };
 
         // Create buffers
@@ -1569,7 +1571,13 @@ impl VulkanDevice {
             return Err(ComputeError::Execution {
                 source: crate::errors::ExecutionError::InvalidKernelParameters {
                     parameter: "matrix_a".to_string(),
-                    value: format!("expected {}×{} = {} elements, got {}", m, k, m * k, matrix_a.len()),
+                    value: format!(
+                        "expected {}×{} = {} elements, got {}",
+                        m,
+                        k,
+                        m * k,
+                        matrix_a.len()
+                    ),
                 },
                 compute_unit: None,
             });
@@ -1578,7 +1586,13 @@ impl VulkanDevice {
             return Err(ComputeError::Execution {
                 source: crate::errors::ExecutionError::InvalidKernelParameters {
                     parameter: "matrix_b".to_string(),
-                    value: format!("expected {}×{} = {} elements, got {}", k, n, k * n, matrix_b.len()),
+                    value: format!(
+                        "expected {}×{} = {} elements, got {}",
+                        k,
+                        n,
+                        k * n,
+                        matrix_b.len()
+                    ),
                 },
                 compute_unit: None,
             });
@@ -1670,11 +1684,12 @@ impl VulkanDevice {
         // Load shader
         let shader_bytes = include_bytes!("shaders/vulkan/matrix_multiply.spv");
         let shader = unsafe {
-            ShaderModule::from_bytes(self.device.clone(), shader_bytes)
-                .map_err(|e| ComputeError::gpu(crate::errors::GPUError::ShaderCompilationFailed {
+            ShaderModule::from_bytes(self.device.clone(), shader_bytes).map_err(|e| {
+                ComputeError::gpu(crate::errors::GPUError::ShaderCompilationFailed {
                     shader_type: "matrix_multiply".to_string(),
                     error: format!("{:?}", e),
-                }))?
+                })
+            })?
         };
 
         // Create pipeline
@@ -1924,12 +1939,13 @@ impl VulkanDevice {
         // Load shader
         let shader_bytes = include_bytes!("shaders/vulkan/spatial_distance.spv");
         let shader = unsafe {
-            ShaderModule::from_bytes(self.device.clone(), shader_bytes)
-                .map_err(|e| ComputeError::GPU {
+            ShaderModule::from_bytes(self.device.clone(), shader_bytes).map_err(|e| {
+                ComputeError::GPU {
                     source: crate::errors::GPUError::InitializationFailed {
                         message: format!("Failed to load spatial_distance shader: {}", e),
                     },
-                })?
+                }
+            })?
         };
 
         // Create pipeline
@@ -2172,12 +2188,13 @@ impl VulkanDevice {
         // Load shader
         let shader_bytes = include_bytes!("shaders/vulkan/spatial_distance_sphere.spv");
         let shader = unsafe {
-            ShaderModule::from_bytes(self.device.clone(), shader_bytes)
-                .map_err(|e| ComputeError::GPU {
+            ShaderModule::from_bytes(self.device.clone(), shader_bytes).map_err(|e| {
+                ComputeError::GPU {
                     source: crate::errors::GPUError::InitializationFailed {
                         message: format!("Failed to load spatial_distance_sphere shader: {}", e),
                     },
-                })?
+                }
+            })?
         };
 
         // Create pipeline
@@ -2280,7 +2297,11 @@ impl VulkanDevice {
             return Err(ComputeError::Execution {
                 source: crate::errors::ExecutionError::InvalidKernelParameters {
                     parameter: "timestamps/values".to_string(),
-                    value: format!("empty or mismatched: {} vs {}", timestamps.len(), values.len()),
+                    value: format!(
+                        "empty or mismatched: {} vs {}",
+                        timestamps.len(),
+                        values.len()
+                    ),
                 },
                 compute_unit: None,
             });
@@ -2381,9 +2402,9 @@ impl VulkanDevice {
 
         // Initialize result buffers
         let init_value = match aggregation_type {
-            1 => f32::INFINITY,      // Min
-            2 => f32::NEG_INFINITY,  // Max
-            _ => 0.0,                // Sum, Avg, Count
+            1 => f32::INFINITY,     // Min
+            2 => f32::NEG_INFINITY, // Max
+            _ => 0.0,               // Sum, Avg, Count
         };
 
         let window_results_init: Vec<u32> = vec![init_value.to_bits(); max_window_id as usize];
@@ -2434,12 +2455,16 @@ impl VulkanDevice {
         // Load shader
         let shader_bytes = include_bytes!("shaders/vulkan/timeseries_window_aggregate.spv");
         let shader = unsafe {
-            ShaderModule::from_bytes(self.device.clone(), shader_bytes)
-                .map_err(|e| ComputeError::GPU {
+            ShaderModule::from_bytes(self.device.clone(), shader_bytes).map_err(|e| {
+                ComputeError::GPU {
                     source: crate::errors::GPUError::InitializationFailed {
-                        message: format!("Failed to load timeseries_window_aggregate shader: {}", e),
+                        message: format!(
+                            "Failed to load timeseries_window_aggregate shader: {}",
+                            e
+                        ),
                     },
-                })?
+                }
+            })?
         };
 
         // Create pipeline
@@ -2460,7 +2485,10 @@ impl VulkanDevice {
         )
         .map_err(|e| ComputeError::GPU {
             source: crate::errors::GPUError::InitializationFailed {
-                message: format!("Failed to create timeseries_window_aggregate pipeline: {}", e),
+                message: format!(
+                    "Failed to create timeseries_window_aggregate pipeline: {}",
+                    e
+                ),
             },
         })?;
 
@@ -2568,14 +2596,19 @@ impl VulkanDevice {
             })?;
 
             // Load finalization shader
-            let finalize_shader_bytes = include_bytes!("shaders/vulkan/timeseries_finalize_avg.spv");
+            let finalize_shader_bytes =
+                include_bytes!("shaders/vulkan/timeseries_finalize_avg.spv");
             let finalize_shader = unsafe {
-                ShaderModule::from_bytes(self.device.clone(), finalize_shader_bytes)
-                    .map_err(|e| ComputeError::GPU {
+                ShaderModule::from_bytes(self.device.clone(), finalize_shader_bytes).map_err(
+                    |e| ComputeError::GPU {
                         source: crate::errors::GPUError::InitializationFailed {
-                            message: format!("Failed to load timeseries_finalize_avg shader: {}", e),
+                            message: format!(
+                                "Failed to load timeseries_finalize_avg shader: {}",
+                                e
+                            ),
                         },
-                    })?
+                    },
+                )?
             };
 
             let cs = finalize_shader.entry_point("main").unwrap();
@@ -2651,7 +2684,11 @@ impl VulkanDevice {
                 max_window_id,
             ))
         } else {
-            Ok((window_results, window_counts.iter().copied().collect(), max_window_id))
+            Ok((
+                window_results,
+                window_counts.iter().copied().collect(),
+                max_window_id,
+            ))
         }
     }
 
@@ -2810,12 +2847,13 @@ impl VulkanDevice {
         // Load build shader and create pipeline
         let build_shader_bytes = include_bytes!("shaders/vulkan/hash_join_build.spv");
         let build_shader = unsafe {
-            ShaderModule::from_bytes(self.device.clone(), build_shader_bytes)
-                .map_err(|e| ComputeError::GPU {
+            ShaderModule::from_bytes(self.device.clone(), build_shader_bytes).map_err(|e| {
+                ComputeError::GPU {
                     source: crate::errors::GPUError::InitializationFailed {
                         message: format!("Failed to load hash_join_build shader: {}", e),
                     },
-                })?
+                }
+            })?
         };
 
         let cs = build_shader.entry_point("main").unwrap();
@@ -3040,12 +3078,13 @@ impl VulkanDevice {
         // Load probe shader
         let probe_shader_bytes = include_bytes!("shaders/vulkan/hash_join_probe.spv");
         let probe_shader = unsafe {
-            ShaderModule::from_bytes(self.device.clone(), probe_shader_bytes)
-                .map_err(|e| ComputeError::GPU {
+            ShaderModule::from_bytes(self.device.clone(), probe_shader_bytes).map_err(|e| {
+                ComputeError::GPU {
                     source: crate::errors::GPUError::InitializationFailed {
                         message: format!("Failed to load hash_join_probe shader: {}", e),
                     },
-                })?
+                }
+            })?
         };
 
         let cs = probe_shader.entry_point("main").unwrap();
@@ -3128,8 +3167,16 @@ impl VulkanDevice {
         let output_probe_ids = output_probe_ids_buffer.read().unwrap();
 
         Ok((
-            output_build_ids.iter().take(match_count as usize).copied().collect(),
-            output_probe_ids.iter().take(match_count as usize).copied().collect(),
+            output_build_ids
+                .iter()
+                .take(match_count as usize)
+                .copied()
+                .collect(),
+            output_probe_ids
+                .iter()
+                .take(match_count as usize)
+                .copied()
+                .collect(),
             match_count,
         ))
     }

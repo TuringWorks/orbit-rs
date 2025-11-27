@@ -3,6 +3,8 @@
 //! This module provides Cypher stored procedures for GraphRAG operations,
 //! allowing users to call GraphRAG functionality through Cypher procedure syntax.
 
+#![cfg(feature = "storage-rocksdb")]
+
 use crate::protocols::cypher::graph_engine::QueryResult;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::graphrag::{
@@ -522,35 +524,38 @@ impl BoltGraphRAGProcedures {
             }
         } else {
             // Embedding similarity
-            let mut similarities: Vec<(f32, &crate::protocols::graphrag::storage::GraphRAGNode)> = nodes
-                .iter()
-                .filter(|n| n.id != target.id)
-                .filter_map(|n| {
-                    let node_embedding = n.embeddings.values().next()?;
-                    if node_embedding.len() != target_embedding.len() {
-                        return None;
-                    }
+            let mut similarities: Vec<(f32, &crate::protocols::graphrag::storage::GraphRAGNode)> =
+                nodes
+                    .iter()
+                    .filter(|n| n.id != target.id)
+                    .filter_map(|n| {
+                        let node_embedding = n.embeddings.values().next()?;
+                        if node_embedding.len() != target_embedding.len() {
+                            return None;
+                        }
 
-                    let dot_product: f32 = target_embedding
-                        .iter()
-                        .zip(node_embedding.iter())
-                        .map(|(a, b)| a * b)
-                        .sum();
-                    let target_norm: f32 = target_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-                    let node_norm: f32 = node_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+                        let dot_product: f32 = target_embedding
+                            .iter()
+                            .zip(node_embedding.iter())
+                            .map(|(a, b)| a * b)
+                            .sum();
+                        let target_norm: f32 =
+                            target_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+                        let node_norm: f32 =
+                            node_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
 
-                    if target_norm == 0.0 || node_norm == 0.0 {
-                        return None;
-                    }
+                        if target_norm == 0.0 || node_norm == 0.0 {
+                            return None;
+                        }
 
-                    let similarity = dot_product / (target_norm * node_norm);
-                    if similarity >= similarity_threshold {
-                        Some((similarity, n))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+                        let similarity = dot_product / (target_norm * node_norm);
+                        if similarity >= similarity_threshold {
+                            Some((similarity, n))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
 
             similarities.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
@@ -600,11 +605,19 @@ impl BoltGraphRAGProcedures {
             max_hops: config
                 .get("max_hops")
                 .and_then(|v| v.as_u64().map(|n| n as u32))
-                .or_else(|| config.get("max_hops").and_then(|v| v.as_i64().map(|n| n as u32))),
+                .or_else(|| {
+                    config
+                        .get("max_hops")
+                        .and_then(|v| v.as_i64().map(|n| n as u32))
+                }),
             context_size: config
                 .get("context_size")
                 .and_then(|v| v.as_u64().map(|n| n as usize))
-                .or_else(|| config.get("context_size").and_then(|v| v.as_i64().map(|n| n as usize))),
+                .or_else(|| {
+                    config
+                        .get("context_size")
+                        .and_then(|v| v.as_i64().map(|n| n as usize))
+                }),
             llm_provider: config
                 .get("llm_provider")
                 .and_then(|v| v.as_str())
@@ -832,12 +845,15 @@ impl BoltGraphRAGProcedures {
             .iter()
             .filter(|n| {
                 n.text.to_lowercase().contains(&concept.to_lowercase())
-                    || n.labels.iter().any(|l| l.to_lowercase().contains(&concept.to_lowercase()))
+                    || n.labels
+                        .iter()
+                        .any(|l| l.to_lowercase().contains(&concept.to_lowercase()))
             })
             .collect();
 
         // Analyze relationship trends over time
-        let mut time_buckets: std::collections::BTreeMap<i64, usize> = std::collections::BTreeMap::new();
+        let mut time_buckets: std::collections::BTreeMap<i64, usize> =
+            std::collections::BTreeMap::new();
         let bucket_size_ms = 24 * 60 * 60 * 1000; // 1 day buckets
 
         for rel in &relationships {
@@ -897,7 +913,8 @@ impl BoltGraphRAGProcedures {
         let relationships = storage.list_relationships().await?;
 
         // Build adjacency list
-        let mut adjacency: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        let mut adjacency: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
         for rel in &relationships {
             adjacency
                 .entry(rel.from_entity_id.clone())

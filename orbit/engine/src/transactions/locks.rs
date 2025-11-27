@@ -1,5 +1,5 @@
-use crate::error::EngineResult;
 use crate::cluster::NodeId;
+use crate::error::EngineResult;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -87,17 +87,17 @@ pub enum LockStatus {
     /// Lock is held exclusively by a single owner
     HeldExclusive {
         /// The owner holding the exclusive lock
-        owner: LockOwner
+        owner: LockOwner,
     },
     /// Lock is held by one or more shared holders
     HeldShared {
         /// The owners holding shared locks
-        owners: Vec<LockOwner>
+        owners: Vec<LockOwner>,
     },
     /// Lock request is waiting in queue
     Waiting {
         /// Position in the wait queue
-        position: usize
+        position: usize,
     },
 }
 

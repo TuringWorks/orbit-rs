@@ -22,11 +22,13 @@
 //! - Rate limiting and resource quotas
 
 pub mod handlers;
+#[cfg(feature = "storage-rocksdb")]
 pub mod integration;
 pub mod ml_nlp;
 pub mod nlp;
 pub mod result_processor;
 pub mod schema;
+#[cfg(feature = "storage-rocksdb")]
 pub mod schema_discovery;
 pub mod server;
 pub mod sql_generator;

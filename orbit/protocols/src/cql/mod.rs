@@ -40,8 +40,8 @@ pub mod protocol;
 pub mod types;
 
 pub use adapter::CqlAdapter;
-pub use parser::{CqlParser, CqlStatement, ComparisonOperator};
-pub use protocol::{CqlFrame, CqlOpcode, ConsistencyLevel};
+pub use parser::{ComparisonOperator, CqlParser, CqlStatement};
+pub use protocol::{ConsistencyLevel, CqlFrame, CqlOpcode};
 pub use types::{CqlType, CqlValue};
 
 /// CQL configuration

@@ -169,7 +169,10 @@ impl SizePartitionAssignment {
             });
 
         // Update size estimate
-        *self.partition_sizes.entry(partition_id.clone()).or_insert(0) += estimated_size;
+        *self
+            .partition_sizes
+            .entry(partition_id.clone())
+            .or_insert(0) += estimated_size;
 
         partition_id
     }
@@ -235,7 +238,9 @@ impl PartitionManager {
             PartitionStrategy::DataSize(max_size) => {
                 // Estimate size of this data point (timestamp + value + labels overhead)
                 let estimated_size = Self::estimate_data_point_size(data_point);
-                Ok(self.size_assignment.get_partition(estimated_size, *max_size))
+                Ok(self
+                    .size_assignment
+                    .get_partition(estimated_size, *max_size))
             }
             PartitionStrategy::Composite(strategies) => {
                 // Apply strategies in order, combining their partition IDs
@@ -399,9 +404,7 @@ impl PartitionManager {
         valid_split_points.dedup();
 
         if valid_split_points.is_empty() {
-            return Err(anyhow!(
-                "No valid split points within partition time range"
-            ));
+            return Err(anyhow!("No valid split points within partition time range"));
         }
 
         // Create new partitions
@@ -582,10 +585,7 @@ impl PartitionManager {
             for group in merge_groups {
                 suggestions.push(RebalanceSuggestion::Merge {
                     partition_ids: group.clone(),
-                    reason: format!(
-                        "Merging {} small contiguous partitions",
-                        group.len()
-                    ),
+                    reason: format!("Merging {} small contiguous partitions", group.len()),
                 });
             }
         }
@@ -861,7 +861,9 @@ mod tests {
         let suggestions = manager.suggest_rebalancing();
 
         // Should suggest splitting the large partition
-        assert!(suggestions.iter().any(|s| matches!(s, RebalanceSuggestion::Split { .. })));
+        assert!(suggestions
+            .iter()
+            .any(|s| matches!(s, RebalanceSuggestion::Split { .. })));
     }
 
     #[test]

@@ -32,12 +32,13 @@
 use opendal::Operator;
 
 use orbit_protocols::postgres_wire::sql::execution::{
-    Column, ColumnBatch, NullBitmap, column_batch_to_arrow,
+    column_batch_to_arrow, Column, ColumnBatch, NullBitmap,
 };
 
 /// Azurite configuration for testing (default Azurite development credentials)
 const AZURITE_ACCOUNT_NAME: &str = "devstoreaccount1";
-const AZURITE_ACCOUNT_KEY: &str = "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==";
+const AZURITE_ACCOUNT_KEY: &str =
+    "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==";
 const AZURITE_ENDPOINT: &str = "http://127.0.0.1:10000/devstoreaccount1";
 const AZURITE_CONTAINER: &str = "orbitstore";
 
@@ -62,12 +63,8 @@ async fn create_azure_operator() -> opendal::Result<Operator> {
 /// Create test data as ColumnBatch
 fn create_test_data(row_count: usize) -> ColumnBatch {
     let ids: Vec<i32> = (0..row_count as i32).collect();
-    let names: Vec<String> = (0..row_count)
-        .map(|i| format!("user_{}", i))
-        .collect();
-    let values: Vec<i32> = (0..row_count as i32)
-        .map(|i| i * 10)
-        .collect();
+    let names: Vec<String> = (0..row_count).map(|i| format!("user_{}", i)).collect();
+    let values: Vec<i32> = (0..row_count as i32).map(|i| i * 10).collect();
 
     ColumnBatch {
         columns: vec![
@@ -102,7 +99,7 @@ async fn test_azurite_connection() {
     let test_data = "Hello from Orbit + Azure!";
 
     match op.write(test_path, test_data).await {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             if e.to_string().contains("ContainerNotFound") {
                 eprintln!("\n❌ ERROR: Container 'orbitstore' does not exist in Azurite!");
@@ -179,18 +176,16 @@ pub async fn test_write_parquet_to_azure() {
 
     let batch = RecordBatch::try_new(
         arrow_schema.clone(),
-        vec![
-            StdArc::new(ids),
-            StdArc::new(names),
-            StdArc::new(values),
-        ],
+        vec![StdArc::new(ids), StdArc::new(names), StdArc::new(values)],
     )
     .expect("Failed to create RecordBatch");
 
     // Write to in-memory buffer first
     let mut buffer = Vec::new();
     let props = WriterProperties::builder()
-        .set_compression(Compression::ZSTD(parquet::basic::ZstdLevel::try_new(3).unwrap()))
+        .set_compression(Compression::ZSTD(
+            parquet::basic::ZstdLevel::try_new(3).unwrap(),
+        ))
         .build();
 
     {
@@ -226,10 +221,10 @@ async fn test_read_parquet_from_azure() {
     use arrow::array::{Int32Array, StringArray};
     use arrow::datatypes::{DataType, Field, Schema as ArrowSchema};
     use arrow::record_batch::RecordBatch;
+    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
     use parquet::arrow::ArrowWriter;
     use parquet::basic::Compression;
     use parquet::file::properties::WriterProperties;
-    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
     use std::sync::Arc as StdArc;
 
     let op = create_azure_operator()
@@ -255,17 +250,15 @@ async fn test_read_parquet_from_azure() {
 
     let batch = RecordBatch::try_new(
         arrow_schema.clone(),
-        vec![
-            StdArc::new(ids),
-            StdArc::new(names),
-            StdArc::new(values),
-        ],
+        vec![StdArc::new(ids), StdArc::new(names), StdArc::new(values)],
     )
     .expect("Failed to create RecordBatch");
 
     let mut buffer = Vec::new();
     let props = WriterProperties::builder()
-        .set_compression(Compression::ZSTD(parquet::basic::ZstdLevel::try_new(3).unwrap()))
+        .set_compression(Compression::ZSTD(
+            parquet::basic::ZstdLevel::try_new(3).unwrap(),
+        ))
         .build();
 
     {
@@ -280,7 +273,6 @@ async fn test_read_parquet_from_azure() {
         .await
         .expect("Failed to write parquet to Azure");
 
-
     let op = create_azure_operator()
         .await
         .expect("Failed to create Azure operator");
@@ -294,8 +286,8 @@ async fn test_read_parquet_from_azure() {
 
     // Parse parquet
     let bytes = data.to_bytes();
-    let builder = ParquetRecordBatchReaderBuilder::try_new(bytes)
-        .expect("Failed to create parquet reader");
+    let builder =
+        ParquetRecordBatchReaderBuilder::try_new(bytes).expect("Failed to create parquet reader");
 
     let mut reader = builder.build().expect("Failed to build reader");
 
@@ -329,28 +321,26 @@ async fn test_column_batch_roundtrip_azure() {
     let original_batch = create_test_data(100);
 
     // Convert ColumnBatch → Arrow
-    let arrow_batch = column_batch_to_arrow(&original_batch)
-        .expect("Failed to convert ColumnBatch to Arrow");
+    let arrow_batch =
+        column_batch_to_arrow(&original_batch).expect("Failed to convert ColumnBatch to Arrow");
 
     // Write Arrow → Parquet (in memory)
     let mut buffer = Vec::new();
     let props = WriterProperties::builder()
-        .set_compression(Compression::ZSTD(parquet::basic::ZstdLevel::try_new(3).unwrap()))
+        .set_compression(Compression::ZSTD(
+            parquet::basic::ZstdLevel::try_new(3).unwrap(),
+        ))
         .build();
 
     {
-        let mut writer =
-            ArrowWriter::try_new(&mut buffer, arrow_batch.schema(), Some(props))
-                .expect("Failed to create ArrowWriter");
+        let mut writer = ArrowWriter::try_new(&mut buffer, arrow_batch.schema(), Some(props))
+            .expect("Failed to create ArrowWriter");
         writer.write(&arrow_batch).expect("Failed to write batch");
         writer.close().expect("Failed to close writer");
     }
 
     let original_size = buffer.len();
-    println!(
-        "✓ Compressed 100 rows to {} bytes with ZSTD",
-        original_size
-    );
+    println!("✓ Compressed 100 rows to {} bytes with ZSTD", original_size);
 
     // Upload to Azure
     let path = "test/data/roundtrip_test.parquet";
@@ -369,8 +359,8 @@ async fn test_column_batch_roundtrip_azure() {
 
     // Parse Parquet back to Arrow
     let bytes = downloaded.to_bytes();
-    let builder = ParquetRecordBatchReaderBuilder::try_new(bytes)
-        .expect("Failed to create parquet reader");
+    let builder =
+        ParquetRecordBatchReaderBuilder::try_new(bytes).expect("Failed to create parquet reader");
 
     let mut reader = builder.build().expect("Failed to build reader");
 
@@ -415,8 +405,7 @@ async fn test_large_dataset_performance_azure() {
 
     // Convert to Arrow
     let start = Instant::now();
-    let arrow_batch = column_batch_to_arrow(&large_batch)
-        .expect("Failed to convert to Arrow");
+    let arrow_batch = column_batch_to_arrow(&large_batch).expect("Failed to convert to Arrow");
     let conversion_time = start.elapsed();
     println!(
         "✓ Converted to Arrow in {:.2}ms",
@@ -427,13 +416,14 @@ async fn test_large_dataset_performance_azure() {
     let start = Instant::now();
     let mut buffer = Vec::new();
     let props = WriterProperties::builder()
-        .set_compression(Compression::ZSTD(parquet::basic::ZstdLevel::try_new(3).unwrap()))
+        .set_compression(Compression::ZSTD(
+            parquet::basic::ZstdLevel::try_new(3).unwrap(),
+        ))
         .build();
 
     {
-        let mut writer =
-            ArrowWriter::try_new(&mut buffer, arrow_batch.schema(), Some(props))
-                .expect("Failed to create ArrowWriter");
+        let mut writer = ArrowWriter::try_new(&mut buffer, arrow_batch.schema(), Some(props))
+            .expect("Failed to create ArrowWriter");
         writer.write(&arrow_batch).expect("Failed to write batch");
         writer.close().expect("Failed to close writer");
     }
@@ -501,7 +491,9 @@ async fn test_large_dataset_performance_azure() {
 #[tokio::test]
 #[ignore] // Requires running Azurite instance
 async fn test_azure_storage_config() {
-    use orbit_protocols::postgres_wire::sql::execution::storage_config::{AzureConfig, StorageBackend};
+    use orbit_protocols::postgres_wire::sql::execution::storage_config::{
+        AzureConfig, StorageBackend,
+    };
 
     // Test 1: Create AzureConfig using the azurite helper
     let azure_config = AzureConfig::azurite(AZURITE_CONTAINER.to_string());
@@ -509,10 +501,7 @@ async fn test_azure_storage_config() {
     assert_eq!(azure_config.account_name, AZURITE_ACCOUNT_NAME);
     assert_eq!(azure_config.account_key, AZURITE_ACCOUNT_KEY);
     assert_eq!(azure_config.container, AZURITE_CONTAINER);
-    assert_eq!(
-        azure_config.endpoint,
-        Some(AZURITE_ENDPOINT.to_string())
-    );
+    assert_eq!(azure_config.endpoint, Some(AZURITE_ENDPOINT.to_string()));
 
     println!("✓ AzureConfig created with azurite() helper");
 
@@ -522,10 +511,9 @@ async fn test_azure_storage_config() {
         AZURITE_ACCOUNT_NAME, AZURITE_ACCOUNT_KEY, AZURITE_ENDPOINT
     );
 
-    let azure_config_from_conn = AzureConfig::from_connection_string(
-        &connection_string,
-        AZURITE_CONTAINER.to_string(),
-    ).expect("Failed to parse connection string");
+    let azure_config_from_conn =
+        AzureConfig::from_connection_string(&connection_string, AZURITE_CONTAINER.to_string())
+            .expect("Failed to parse connection string");
 
     assert_eq!(azure_config_from_conn.account_name, AZURITE_ACCOUNT_NAME);
     assert_eq!(azure_config_from_conn.account_key, AZURITE_ACCOUNT_KEY);
@@ -541,7 +529,10 @@ async fn test_azure_storage_config() {
         "Warehouse path should start with az:// scheme"
     );
 
-    println!("✓ StorageBackend created with warehouse path: {}", warehouse_path);
+    println!(
+        "✓ StorageBackend created with warehouse path: {}",
+        warehouse_path
+    );
 
     // Test 4: Verify we can create an OpenDAL operator from the config
     let op = create_azure_operator()
@@ -556,7 +547,8 @@ async fn test_azure_storage_config() {
         .await
         .expect("Failed to write test marker");
 
-    let read_data = op.read(test_path)
+    let read_data = op
+        .read(test_path)
         .await
         .expect("Failed to read test marker");
 

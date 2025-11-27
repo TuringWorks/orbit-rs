@@ -3,6 +3,8 @@
 //! This module provides real-time schema discovery and updates
 //! by connecting to Orbit-RS metadata system.
 
+#![cfg(feature = "storage-rocksdb")]
+
 use crate::mcp::integration::OrbitMcpIntegration;
 use crate::mcp::schema::{SchemaAnalyzer, TableSchema};
 use crate::mcp::types::McpError;
@@ -69,11 +71,8 @@ impl SchemaDiscoveryManager {
                 }
 
                 // Discover and update schemas
-                if let Err(e) = Self::discover_and_update_schemas(
-                    &schema_analyzer,
-                    &integration,
-                )
-                .await
+                if let Err(e) =
+                    Self::discover_and_update_schemas(&schema_analyzer, &integration).await
                 {
                     tracing::warn!("Schema discovery error: {}", e);
                 }
@@ -153,15 +152,27 @@ pub struct SchemaCacheStats {
 #[derive(Debug, Clone)]
 pub enum SchemaChange {
     /// Table was created
-    TableCreated { table_name: String, schema: TableSchema },
+    TableCreated {
+        table_name: String,
+        schema: TableSchema,
+    },
     /// Table was dropped
     TableDropped { table_name: String },
     /// Table schema was modified
-    TableModified { table_name: String, schema: TableSchema },
+    TableModified {
+        table_name: String,
+        schema: TableSchema,
+    },
     /// Column was added
-    ColumnAdded { table_name: String, column: crate::mcp::schema::ColumnInfo },
+    ColumnAdded {
+        table_name: String,
+        column: crate::mcp::schema::ColumnInfo,
+    },
     /// Column was removed
-    ColumnRemoved { table_name: String, column_name: String },
+    ColumnRemoved {
+        table_name: String,
+        column_name: String,
+    },
 }
 
 /// Schema change listener trait
@@ -203,4 +214,3 @@ impl Default for SchemaChangeNotifier {
         Self::new()
     }
 }
-

@@ -1,6 +1,6 @@
+use super::NodeId;
 use crate::addressable::AddressableReference;
 use crate::error::{EngineError, EngineResult};
-use super::NodeId;
 use crate::transaction_log::PersistentTransactionLogger;
 use crate::transactions::{
     DistributedTransaction, TransactionCoordinator, TransactionId, TransactionOperation,
@@ -242,7 +242,10 @@ impl TransactionRecoveryManager {
     }
 
     /// Create a checkpoint for a transaction
-    pub async fn create_checkpoint(&self, transaction: &DistributedTransaction) -> EngineResult<()> {
+    pub async fn create_checkpoint(
+        &self,
+        transaction: &DistributedTransaction,
+    ) -> EngineResult<()> {
         let checkpoint = TransactionCheckpoint::from_transaction(transaction);
 
         // Store checkpoint in memory

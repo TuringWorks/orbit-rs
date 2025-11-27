@@ -1,5 +1,6 @@
 //! RocksDB-backed Redis data persistence provider implementation
-//!
+#![cfg(feature = "storage-rocksdb")]
+
 //! This implementation uses RocksDB for persistent storage of Redis key-value data
 //! with proper TTL handling and background cleanup.
 

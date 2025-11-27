@@ -38,7 +38,9 @@ pub use metrics::{
 };
 
 pub use performance::{
-    BatchConfig, BatchProcessor, BatchStats,
+    BatchConfig,
+    BatchProcessor,
+    BatchStats,
     // TODO: Re-enable when pooling module is added
     // ConnectionPool, ConnectionPoolConfig, PoolStats,
     ResourceManager,

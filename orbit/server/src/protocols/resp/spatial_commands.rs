@@ -5,7 +5,7 @@
 
 use orbit_shared::spatial::{
     crs::utils::haversine_distance, BoundingBox, ClusteringAlgorithm, GPUSpatialEngine, Point,
-    SpatialError, SpatialGeometry, SpatialOperations, SpatialStreamProcessor, SpatialFunctions,
+    SpatialError, SpatialFunctions, SpatialGeometry, SpatialOperations, SpatialStreamProcessor,
     WGS84_SRID,
 };
 use std::collections::HashMap;
@@ -485,7 +485,9 @@ impl RedisSpatialCommands {
         let alert_types = args[2].as_string()?;
 
         // Parse geometry using shared WKT parser
-        let geometry = self.spatial_functions.st_geomfromtext(&geometry_wkt, Some(WGS84_SRID))?;
+        let geometry = self
+            .spatial_functions
+            .st_geomfromtext(&geometry_wkt, Some(WGS84_SRID))?;
 
         let alert_on_enter = alert_types.to_uppercase().contains("ENTER");
         let alert_on_exit = alert_types.to_uppercase().contains("EXIT");
@@ -615,18 +617,20 @@ impl RedisSpatialCommands {
         let wkt = args[2].as_string()?;
 
         // Parse polygon WKT
-        let geometry = self.spatial_functions.st_geomfromtext(&wkt, Some(WGS84_SRID))?;
-        
+        let geometry = self
+            .spatial_functions
+            .st_geomfromtext(&wkt, Some(WGS84_SRID))?;
+
         match geometry {
             SpatialGeometry::Polygon(_) => {
                 let mut indexes = self.indexes.write().await;
                 let dataset = indexes
                     .entry(key.clone())
                     .or_insert_with(|| SpatialDataSet::new(key.clone()));
-                
+
                 dataset.geometries.insert(member, geometry);
                 dataset.update_bounds();
-                
+
                 Ok(RedisValue::String("OK".to_string()))
             }
             _ => Err(SpatialError::OperationError(
@@ -648,18 +652,20 @@ impl RedisSpatialCommands {
         let wkt = args[2].as_string()?;
 
         // Parse linestring WKT
-        let geometry = self.spatial_functions.st_geomfromtext(&wkt, Some(WGS84_SRID))?;
-        
+        let geometry = self
+            .spatial_functions
+            .st_geomfromtext(&wkt, Some(WGS84_SRID))?;
+
         match geometry {
             SpatialGeometry::LineString(_) => {
                 let mut indexes = self.indexes.write().await;
                 let dataset = indexes
                     .entry(key.clone())
                     .or_insert_with(|| SpatialDataSet::new(key.clone()));
-                
+
                 dataset.geometries.insert(member, geometry);
                 dataset.update_bounds();
-                
+
                 Ok(RedisValue::String("OK".to_string()))
             }
             _ => Err(SpatialError::OperationError(
@@ -730,7 +736,9 @@ impl RedisSpatialCommands {
         let wkt = args[1].as_string()?;
 
         // Parse query polygon
-        let query_geometry = self.spatial_functions.st_geomfromtext(&wkt, Some(WGS84_SRID))?;
+        let query_geometry = self
+            .spatial_functions
+            .st_geomfromtext(&wkt, Some(WGS84_SRID))?;
 
         let indexes = self.indexes.read().await;
         let mut results = Vec::new();
@@ -761,7 +769,9 @@ impl RedisSpatialCommands {
         let wkt = args[1].as_string()?;
 
         // Parse query geometry
-        let query_geometry = self.spatial_functions.st_geomfromtext(&wkt, Some(WGS84_SRID))?;
+        let query_geometry = self
+            .spatial_functions
+            .st_geomfromtext(&wkt, Some(WGS84_SRID))?;
 
         let indexes = self.indexes.read().await;
         let mut results = Vec::new();
@@ -792,7 +802,9 @@ impl RedisSpatialCommands {
         let wkt = args[1].as_string()?;
 
         // Parse query geometry
-        let query_geometry = self.spatial_functions.st_geomfromtext(&wkt, Some(WGS84_SRID))?;
+        let query_geometry = self
+            .spatial_functions
+            .st_geomfromtext(&wkt, Some(WGS84_SRID))?;
 
         let indexes = self.indexes.read().await;
         let mut results = Vec::new();
@@ -823,7 +835,9 @@ impl RedisSpatialCommands {
         let wkt = args[1].as_string()?;
 
         // Parse query geometry
-        let query_geometry = self.spatial_functions.st_geomfromtext(&wkt, Some(WGS84_SRID))?;
+        let query_geometry = self
+            .spatial_functions
+            .st_geomfromtext(&wkt, Some(WGS84_SRID))?;
 
         let indexes = self.indexes.read().await;
         let mut results = Vec::new();
@@ -956,33 +970,56 @@ impl RedisSpatialCommands {
         match geometry {
             SpatialGeometry::Point(point) => {
                 if point.z.is_some() && point.m.is_some() {
-                    Ok(format!("POINT ZM ({} {} {} {})", point.x, point.y, point.z.unwrap(), point.m.unwrap()))
+                    Ok(format!(
+                        "POINT ZM ({} {} {} {})",
+                        point.x,
+                        point.y,
+                        point.z.unwrap(),
+                        point.m.unwrap()
+                    ))
                 } else if point.z.is_some() {
-                    Ok(format!("POINT Z ({} {} {})", point.x, point.y, point.z.unwrap()))
+                    Ok(format!(
+                        "POINT Z ({} {} {})",
+                        point.x,
+                        point.y,
+                        point.z.unwrap()
+                    ))
                 } else if point.m.is_some() {
-                    Ok(format!("POINT M ({} {} {})", point.x, point.y, point.m.unwrap()))
+                    Ok(format!(
+                        "POINT M ({} {} {})",
+                        point.x,
+                        point.y,
+                        point.m.unwrap()
+                    ))
                 } else {
                     Ok(format!("POINT ({} {})", point.x, point.y))
                 }
-            },
+            }
             SpatialGeometry::LineString(ls) => {
-                let coords: String = ls.points.iter()
+                let coords: String = ls
+                    .points
+                    .iter()
                     .map(|p| format!("{} {}", p.x, p.y))
                     .collect::<Vec<_>>()
                     .join(", ");
                 Ok(format!("LINESTRING ({})", coords))
-            },
+            }
             SpatialGeometry::Polygon(poly) => {
-                let exterior_coords: String = poly.exterior_ring.points.iter()
+                let exterior_coords: String = poly
+                    .exterior_ring
+                    .points
+                    .iter()
                     .map(|p| format!("{} {}", p.x, p.y))
                     .collect::<Vec<_>>()
                     .join(", ");
                 let mut wkt = format!("POLYGON (({}))", exterior_coords);
-                
+
                 // Add interior rings (holes) if any
                 if !poly.interior_rings.is_empty() {
                     for interior_ring in &poly.interior_rings {
-                        let interior_coords: String = interior_ring.points.iter()
+                        let interior_coords: String = interior_ring
+                            .points
+                            .iter()
                             .map(|p| format!("{} {}", p.x, p.y))
                             .collect::<Vec<_>>()
                             .join(", ");
@@ -990,10 +1027,10 @@ impl RedisSpatialCommands {
                     }
                 }
                 Ok(wkt)
-            },
+            }
             _ => Err(SpatialError::OperationError(
                 "WKT output not implemented for this geometry type".to_string(),
-            ))
+            )),
         }
     }
 }

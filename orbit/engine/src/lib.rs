@@ -7,38 +7,38 @@
 //!
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────┐
-//! │                    Protocol Layer                            │
+//! │                    Protocol Layer                           │
 //! │  (PostgreSQL, RESP, OrbitQL, AQL, Cypher, REST)             │
 //! └─────────────────────────────────────────────────────────────┘
 //!                              │
 //!                              ▼
 //! ┌─────────────────────────────────────────────────────────────┐
-//! │                   Protocol Adapters                          │
-//! │  (Convert protocol-specific requests to engine operations)   │
+//! │                   Protocol Adapters                         │
+//! │  (Convert protocol-specific requests to engine operations)  │
 //! └─────────────────────────────────────────────────────────────┘
 //!                              │
 //!                              ▼
 //! ┌─────────────────────────────────────────────────────────────┐
-//! │                    Orbit Engine Core                         │
-//! │                                                              │
-//! │  ┌────────────┐  ┌──────────────┐  ┌────────────────────┐  │
-//! │  │  Storage   │  │ Transaction  │  │  Query Execution   │  │
-//! │  │            │  │              │  │                    │  │
-//! │  │  - Hot     │  │  - MVCC      │  │  - Vectorized     │  │
-//! │  │  - Warm    │  │  - Snapshot  │  │  - SIMD           │  │
-//! │  │  - Cold    │  │  - Deadlock  │  │  - Optimization   │  │
-//! │  └────────────┘  └──────────────┘  └────────────────────┘  │
-//! │                                                              │
-//! │  ┌──────────────────────────────────────────────────────┐  │
-//! │  │               Clustering & Replication                │  │
-//! │  │                                                        │  │
-//! │  │  - Raft Consensus    - Replication   - Recovery      │  │
-//! │  └──────────────────────────────────────────────────────┘  │
+//! │                    Orbit Engine Core                        │
+//! │                                                             │
+//! │  ┌────────────┐  ┌──────────────┐  ┌────────────────────┐   │
+//! │  │  Storage   │  │ Transaction  │  │  Query Execution   │   │
+//! │  │            │  │              │  │                    │   │
+//! │  │  - Hot     │  │  - MVCC      │  │  - Vectorized      │   │
+//! │  │  - Warm    │  │  - Snapshot  │  │  - SIMD            │   │
+//! │  │  - Cold    │  │  - Deadlock  │  │  - Optimization    │   │
+//! │  └────────────┘  └──────────────┘  └────────────────────┘   │
+//! │                                                             │
+//! │  ┌──────────────────────────────────────────────────────┐   │
+//! │  │               Clustering & Replication               │   │
+//! │  │                                                      │   │
+//! │  │  - Raft Consensus    - Replication   - Recovery      │   │
+//! │  └──────────────────────────────────────────────────────┘   │
 //! └─────────────────────────────────────────────────────────────┘
 //!                              │
 //!                              ▼
 //! ┌─────────────────────────────────────────────────────────────┐
-//! │                   Storage Backends                           │
+//! │                   Storage Backends                          │
 //! │  (RocksDB, S3, MinIO, Azure Blob, Memory)                   │
 //! └─────────────────────────────────────────────────────────────┘
 //! ```
@@ -92,6 +92,8 @@ pub mod cluster;
 pub mod error;
 /// Metrics collection and monitoring
 pub mod metrics;
+/// Stored procedures and triggers execution engine
+pub mod procedures;
 /// Query planning and vectorized execution engine
 pub mod query;
 /// Tiered storage engine (hot/warm/cold) with multiple backends
@@ -102,10 +104,12 @@ pub mod transaction;
 pub mod transaction_log;
 /// Distributed transaction coordination and 2-phase commit
 pub mod transactions;
+/// Database triggers
+pub mod triggers;
 
 // Re-export commonly used types
+pub use cluster::ClusterCoordinator;
 pub use error::{EngineError, EngineResult};
+pub use query::QueryExecutor;
 pub use storage::{StorageEngine, TableStorage, TieredStorage};
 pub use transaction::TransactionManager;
-pub use cluster::ClusterCoordinator;
-pub use query::QueryExecutor;

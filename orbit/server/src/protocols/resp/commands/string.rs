@@ -16,7 +16,9 @@ pub struct StringCommands {
 }
 
 impl StringCommands {
-    pub fn new(local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>) -> Self {
+    pub fn new(
+        local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>,
+    ) -> Self {
         Self {
             base: BaseCommandHandler::new(local_registry),
         }
@@ -70,7 +72,10 @@ impl StringCommands {
             })?;
 
         let value: Option<String> = serde_json::from_value(result).map_err(|e| {
-            crate::protocols::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR serialization error: {}",
+                e
+            ))
         })?;
 
         debug!("GET {} -> {:?}", key, value);
@@ -317,7 +322,10 @@ impl StringCommands {
             })?;
 
         let value: Option<String> = serde_json::from_value(result).map_err(|e| {
-            crate::protocols::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR serialization error: {}",
+                e
+            ))
         })?;
 
         let length = value.map(|v| v.len() as i64).unwrap_or(0);
@@ -577,8 +585,7 @@ impl StringCommands {
                 // Try integer first
                 v.as_integer().or_else(|| {
                     // Try parsing as string
-                    v.as_string()
-                        .and_then(|s| s.parse::<i64>().ok())
+                    v.as_string().and_then(|s| s.parse::<i64>().ok())
                 })
             })
             .ok_or_else(|| {
@@ -748,7 +755,9 @@ impl StringCommands {
             .execute_keyvalue(
                 &key,
                 "set_expiration",
-                &[serde_json::Value::Number(serde_json::Number::from(seconds as u64))],
+                &[serde_json::Value::Number(serde_json::Number::from(
+                    seconds as u64,
+                ))],
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;

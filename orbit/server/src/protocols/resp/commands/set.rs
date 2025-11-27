@@ -17,7 +17,9 @@ pub struct SetCommands {
 }
 
 impl SetCommands {
-    pub fn new(local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>) -> Self {
+    pub fn new(
+        local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>,
+    ) -> Self {
         // Use provided local_registry
         Self {
             base: BaseCommandHandler::new(local_registry),
@@ -188,7 +190,11 @@ impl SetCommands {
         let result = self
             .base
             .local_registry
-            .execute_set(&key, "sismember", &[serde_json::to_value(member.clone()).unwrap()])
+            .execute_set(
+                &key,
+                "sismember",
+                &[serde_json::to_value(member.clone()).unwrap()],
+            )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
@@ -214,7 +220,9 @@ impl SetCommands {
             let key = self.get_string_arg(args, i, "SUNION")?;
 
             // Use local registry
-            let members_result = self.base.local_registry
+            let members_result = self
+                .base
+                .local_registry
                 .execute_set(&key, "smembers", &[])
                 .await;
 
@@ -251,7 +259,9 @@ impl SetCommands {
             let key = self.get_string_arg(args, i, "SINTER")?;
 
             // Use local registry
-            let members_result = self.base.local_registry
+            let members_result = self
+                .base
+                .local_registry
                 .execute_set(&key, "smembers", &[])
                 .await;
 
@@ -322,7 +332,9 @@ impl SetCommands {
     /// Get the initial set for SDIFF operation
     async fn get_initial_set(&self, first_key: &str) -> ProtocolResult<HashSet<String>> {
         // Use local registry - get members from first set
-        let members_result = self.base.local_registry
+        let members_result = self
+            .base
+            .local_registry
             .execute_set(first_key, "smembers", &[])
             .await;
 
@@ -337,7 +349,10 @@ impl SetCommands {
                     );
                     Ok(result_set)
                 } else {
-                    debug!("SDIFF: Failed to parse members from first key {}", first_key);
+                    debug!(
+                        "SDIFF: Failed to parse members from first key {}",
+                        first_key
+                    );
                     Ok(HashSet::new())
                 }
             }
@@ -350,7 +365,9 @@ impl SetCommands {
 
     /// Remove members from a specific key
     async fn remove_members_from_key(&self, result_set: &mut HashSet<String>, key: &str) {
-        let members_result = self.base.local_registry
+        let members_result = self
+            .base
+            .local_registry
             .execute_set(key, "smembers", &[])
             .await;
 

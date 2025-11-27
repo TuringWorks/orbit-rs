@@ -34,7 +34,10 @@ mod tests {
         assert_eq!(timeout_error.to_string(), "Timeout: operation_timeout");
 
         let config_error = OrbitError::configuration("Invalid config");
-        assert!(matches!(config_error, OrbitError::ConfigurationError { .. }));
+        assert!(matches!(
+            config_error,
+            OrbitError::ConfigurationError { .. }
+        ));
         assert_eq!(
             config_error.to_string(),
             "Configuration error: Invalid config"

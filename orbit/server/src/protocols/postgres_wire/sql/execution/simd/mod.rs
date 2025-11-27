@@ -15,8 +15,8 @@
 //! - **Trait Objects**: Runtime selection of optimal implementation
 //! - **Zero-Cost Abstractions**: Compile-time monomorphization where possible
 
-pub mod filters;
 pub mod aggregates;
+pub mod filters;
 
 use super::NullBitmap;
 

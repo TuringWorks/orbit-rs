@@ -88,8 +88,9 @@ impl CqlValue {
             CqlValue::Timestamp(ts) => {
                 let seconds = *ts / 1000;
                 let nanos = ((*ts % 1000) * 1_000_000) as u32;
-                let dt = chrono::DateTime::from_timestamp(seconds, nanos)
-                    .ok_or_else(|| ProtocolError::ConversionError("Invalid timestamp".to_string()))?;
+                let dt = chrono::DateTime::from_timestamp(seconds, nanos).ok_or_else(|| {
+                    ProtocolError::ConversionError("Invalid timestamp".to_string())
+                })?;
                 Ok(SqlValue::Timestamp(dt.naive_utc()))
             }
             // Collection types stored as JSON
@@ -120,7 +121,7 @@ impl CqlValue {
     pub fn encode(&self) -> ProtocolResult<Vec<u8>> {
         use bytes::{BufMut, BytesMut};
         let mut buf = BytesMut::new();
-        
+
         match self {
             CqlValue::Null => {
                 buf.put_i32(-1); // NULL marker
@@ -211,7 +212,7 @@ impl CqlValue {
                 buf.put(tuple_buf.freeze());
             }
         }
-        
+
         Ok(buf.to_vec())
     }
 }

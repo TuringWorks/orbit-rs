@@ -780,8 +780,9 @@ impl ClusterNodeProvider for S3ClusterNodeProvider {
             let key = self.get_node_key(node_id);
 
             if let Some(data) = self.get_object(&key).await? {
-                let stored_node: StoredNode = serde_json::from_slice(&data)
-                    .map_err(|e| OrbitError::internal(format!("Failed to deserialize node: {}", e)))?;
+                let stored_node: StoredNode = serde_json::from_slice(&data).map_err(|e| {
+                    OrbitError::internal(format!("Failed to deserialize node: {}", e))
+                })?;
 
                 tracing::debug!("Retrieved node: {}", node_id);
                 Ok(Some(stored_node.node))

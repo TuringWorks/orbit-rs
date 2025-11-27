@@ -14,7 +14,9 @@ pub struct ConnectionCommands {
 }
 
 impl ConnectionCommands {
-    pub fn new(local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>) -> Self {
+    pub fn new(
+        local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>,
+    ) -> Self {
         // Connection commands don't need local registry
         // Use provided local_registry
         Self {

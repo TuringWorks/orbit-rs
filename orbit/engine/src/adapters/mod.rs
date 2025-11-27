@@ -180,24 +180,24 @@ use crate::error::{EngineError, EngineResult};
 use crate::storage::{Row, SqlValue};
 use crate::transaction::{IsolationLevel, TransactionId};
 
+pub mod aql;
+pub mod cql;
+pub mod cypher;
+pub mod mysql;
+pub mod orbitql;
 pub mod postgres;
 pub mod redis;
 pub mod rest;
-pub mod orbitql;
-pub mod cql;
-pub mod mysql;
-pub mod aql;
-pub mod cypher;
 
 // Re-exports
+pub use aql::AqlAdapter;
+pub use cql::CqlAdapter;
+pub use cypher::CypherAdapter;
+pub use mysql::MySqlAdapter;
+pub use orbitql::OrbitQLAdapter;
 pub use postgres::PostgresAdapter;
 pub use redis::RedisAdapter;
 pub use rest::RestAdapter;
-pub use orbitql::OrbitQLAdapter;
-pub use cql::CqlAdapter;
-pub use mysql::MySqlAdapter;
-pub use aql::AqlAdapter;
-pub use cypher::CypherAdapter;
 
 /// Protocol adapter context containing shared engine components
 #[derive(Clone)]
