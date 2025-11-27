@@ -2,6 +2,8 @@
 //!
 //! Integration tests for MySQL protocol adapter including authentication and prepared statements
 
+#![cfg(feature = "mysql")]
+
 use bytes::Bytes;
 use orbit_protocols::mysql::auth::{AuthPlugin, AuthState, HandshakeResponse, MySqlAuth};
 use orbit_protocols::mysql::{MySqlAdapter, MySqlConfig};

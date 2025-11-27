@@ -2,6 +2,8 @@
 //!
 //! Shared utilities for CQL integration tests with proper setup and teardown
 
+#![cfg(feature = "cql")]
+
 use orbit_protocols::cql::{CqlAdapter, CqlConfig, CqlParser};
 use orbit_protocols::postgres_wire::sql::executor::SqlExecutor;
 use orbit_protocols::postgres_wire::QueryEngine;

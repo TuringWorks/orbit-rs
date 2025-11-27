@@ -2,6 +2,8 @@
 //!
 //! Comprehensive tests for CQL query parsing and execution
 
+#![cfg(feature = "cql")]
+
 use bytes::Buf;
 use orbit_protocols::cql::{ComparisonOperator, CqlAdapter, CqlConfig, CqlParser, CqlStatement};
 // Removed unused imports: ExecutionResult, SqlExecutor

@@ -88,11 +88,15 @@ orbit-util = { path = "../util" }
 orbit-server = { path = "../server", default-features = false, features = ["actor-system", "persistence", "protocol-mysql"] }
 
 [features]
-default = ["resp", "postgres-wire", "cypher", "rest", "storage-rocksdb"]
+default = ["resp", "postgres-wire", "mysql", "cql", "cypher", "rest", "storage-rocksdb"]
+# Protocol features
 resp = []
 postgres-wire = []
+mysql = []
+cql = []
 cypher = []
 rest = []
+mcp = []
 # Enable RocksDB storage backend
 storage-rocksdb = ["rocksdb"]
 # Enable integration tests that require network access

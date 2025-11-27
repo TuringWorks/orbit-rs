@@ -2,6 +2,8 @@
 //!
 //! Comprehensive tests for SELECT operations
 
+#![cfg(feature = "postgres-wire")]
+
 use orbit_protocols::postgres_wire::sql::executor::{ExecutionResult, SqlExecutor};
 
 // ============================================================================

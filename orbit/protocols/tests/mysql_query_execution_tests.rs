@@ -2,6 +2,8 @@
 //!
 //! Comprehensive tests for MySQL query parsing and execution
 
+#![cfg(feature = "mysql")]
+
 use orbit_protocols::mysql::{MySqlAdapter, MySqlConfig};
 
 /// Test context for MySQL integration tests

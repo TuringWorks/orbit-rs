@@ -3,6 +3,8 @@
 //! These tests require proper setup and teardown of test infrastructure.
 //! They are marked as slow tests and include embedded setup/teardown.
 
+#![cfg(feature = "cql")]
+
 #[path = "cql_test_helpers.rs"]
 mod helpers;
 use helpers::*;

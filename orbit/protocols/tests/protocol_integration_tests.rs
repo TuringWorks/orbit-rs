@@ -3,7 +3,7 @@
 //! These tests verify that both protocol adapters can be instantiated,
 //! configured, and integrated with the Orbit engine.
 
-#[cfg(test)]
+#[cfg(all(test, feature = "cql"))]
 mod cql_tests {
     use orbit_protocols::cql::{CqlAdapter, CqlConfig};
 
@@ -74,7 +74,7 @@ mod cql_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "mysql"))]
 mod mysql_tests {
     use orbit_protocols::mysql::{MySqlAdapter, MySqlConfig};
 
@@ -149,7 +149,7 @@ mod mysql_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "cql", feature = "mysql"))]
 mod integration_tests {
     use orbit_protocols::cql::{CqlAdapter, CqlConfig};
     use orbit_protocols::mysql::{MySqlAdapter, MySqlConfig};

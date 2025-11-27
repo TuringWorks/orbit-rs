@@ -2,6 +2,8 @@
 //!
 //! Comprehensive tests for MySQL-specific SQL syntax features
 
+#![cfg(feature = "mysql")]
+
 use orbit_protocols::mysql::{MySqlAdapter, MySqlConfig};
 
 /// Test context for MySQL syntax tests

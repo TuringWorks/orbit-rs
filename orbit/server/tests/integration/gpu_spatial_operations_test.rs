@@ -3,6 +3,8 @@
 //! Tests the integration of GPU-accelerated spatial operations and verifies
 //! correctness and performance routing.
 
+#![cfg(feature = "gpu-acceleration")]
+
 use orbit_compute::spatial_operations::{
     GPUSpatialOperations, GPUPoint, GPUPolygon, SpatialOperationsConfig,
 };

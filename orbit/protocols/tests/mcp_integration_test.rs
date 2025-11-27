@@ -3,6 +3,8 @@
 //! These tests verify the complete pipeline:
 //! Natural Language → NLP Processing → SQL Generation → Query Execution → Result Processing
 
+#![cfg(feature = "mcp")]
+
 use orbit_protocols::mcp::{
     integration::OrbitMcpIntegration, server::McpServer, McpCapabilities, McpConfig,
 };

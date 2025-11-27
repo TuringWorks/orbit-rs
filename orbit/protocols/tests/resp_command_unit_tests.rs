@@ -3,6 +3,8 @@
 //! Comprehensive unit tests for RESP protocol commands, including all 15 previously failing tests
 //! and other important commands.
 
+#![cfg(feature = "resp")]
+
 use orbit_client::OrbitClient;
 use orbit_protocols::resp::commands::CommandHandler;
 use orbit_protocols::resp::RespValue;

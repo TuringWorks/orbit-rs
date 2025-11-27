@@ -1,5 +1,7 @@
 //! Comprehensive tests for AI-Native Database Features
 
+#![cfg(feature = "ai-native")]
+
 use orbit_server::ai::knowledge::AIKnowledgeBase;
 use orbit_server::ai::optimizer::QueryPlan;
 use orbit_server::ai::transaction::{

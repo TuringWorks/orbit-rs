@@ -5,6 +5,9 @@
 //! 2. ExecutionPlan containing acceleration metadata
 //! 3. VectorizedExecutor routing execution based on acceleration strategies
 
+// These tests require the cpu-simd feature from orbit-compute
+// In the future, this could be made conditional on a feature flag
+
 use orbit_compute::AccelerationStrategy;
 use orbit_engine::query::{ExecutionPlan, Query, QueryOptimizer, VectorizedExecutor};
 use orbit_engine::storage::{Column, ColumnBatch, FilterPredicate, NullBitmap, SqlValue};

@@ -2,6 +2,8 @@
 //!
 //! Unit tests for MySQL protocol components
 
+#![cfg(feature = "mysql")]
+
 use orbit_protocols::error::ProtocolError;
 use orbit_protocols::mysql::auth::{AuthPlugin, AuthState, MySqlAuth};
 use orbit_protocols::mysql::protocol::{error_codes, map_error_to_mysql_code};

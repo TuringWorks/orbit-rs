@@ -2,6 +2,8 @@
 //!
 //! End-to-end tests for the PostgreSQL wire protocol functionality
 
+#![cfg(feature = "postgres-wire")]
+
 use orbit_protocols::postgres_wire::sql::executor::{ExecutionResult, SqlExecutor};
 
 #[tokio::test]

@@ -3,6 +3,9 @@
 //! These tests verify that queries execute correctly with SIMD optimization
 //! and produce accurate results.
 
+// These tests require the cpu-simd feature from orbit-compute
+// In the future, this could be made conditional on a feature flag
+
 use orbit_engine::query::{Query, QueryOptimizer, VectorizedExecutor};
 use orbit_engine::storage::{Column, ColumnBatch, FilterPredicate, NullBitmap, SqlValue};
 
