@@ -152,7 +152,8 @@ mod tests {
     /// Test Cypher storage persistence
     #[tokio::test]
     async fn test_cypher_storage_persistence() {
-        use orbit_server::protocols::cypher::storage::{CypherGraphStorage, GraphNode};
+        use orbit_server::protocols::cypher::storage::CypherGraphStorage;
+        use orbit_server::protocols::cypher::types::GraphNode;
 
         let temp_dir = TempDir::new().unwrap();
         let storage1 = CypherGraphStorage::new(temp_dir.path());
