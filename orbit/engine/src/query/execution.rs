@@ -987,9 +987,9 @@ impl VectorizedExecutor {
     /// Falls back to CPU SIMD if the backend fails.
     async fn execute_gpu_with_backend(
         &self,
-        _plan: &crate::query::ExecutionPlan,
-        _query: &crate::query::Query,
-        _data: &ColumnBatch,
+        plan: &crate::query::ExecutionPlan,
+        query: &crate::query::Query,
+        data: &ColumnBatch,
         backend: orbit_compute::gpu_backend::GpuBackendType,
     ) -> EngineResult<ColumnBatch> {
         #[allow(unused_imports)]
