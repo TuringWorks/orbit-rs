@@ -6,7 +6,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Try to compile protobuf files
-    match tonic_build::configure()
+    match tonic_prost_build::configure()
         .build_server(true)
         .build_client(true)
         .compile_protos(
