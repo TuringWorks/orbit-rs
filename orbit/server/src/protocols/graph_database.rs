@@ -471,6 +471,32 @@ impl GraphActor {
                     estimated_cost += step.estimated_cost;
                     steps.push(step);
                 }
+                crate::protocols::cypher::cypher_parser::CypherClause::With {
+                    items,
+                    where_condition,
+                } => {
+                    let where_desc = if where_condition.is_some() { " with filter" } else { "" };
+                    let step = PlanStep {
+                        operation: "With".to_string(),
+                        description: format!("Pass through {} items{}", items.len(), where_desc),
+                        estimated_rows: 100,
+                        estimated_cost: 2.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::OptionalMatch { pattern } => {
+                    let step = PlanStep {
+                        operation: "OptionalMatch".to_string(),
+                        description: format!("Optional scan nodes matching pattern: {pattern:?}"),
+                        estimated_rows: 1000,
+                        estimated_cost: 12.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
             }
         }
 

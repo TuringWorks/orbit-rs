@@ -5,17 +5,25 @@
 
 use crate::protocols::cypher::graph_engine::QueryResult;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
-use orbit_shared::graph::{GraphNode, GraphRelationship, GraphStorage, Direction};
+use orbit_shared::graph::{Direction, GraphNode, GraphRelationship, GraphStorage};
 use serde_json::Value as JsonValue;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tracing::info;
+
+#[cfg(feature = "gpu-graph-traversal")]
+use orbit_compute::graph_traversal::{GPUGraphTraversal, GraphData, NodeProperties, TraversalConfig};
+#[cfg(feature = "gpu-graph-traversal")]
+use tokio::sync::RwLock;
 
 /// Graph algorithm procedure handler for Bolt/Cypher protocol
 pub struct GraphAlgorithmProcedures<S: GraphStorage> {
     storage: Arc<S>,
     /// Known labels to scan when getting all nodes
     known_labels: Vec<String>,
+    /// GPU-accelerated graph traversal engine (when feature enabled)
+    #[cfg(feature = "gpu-graph-traversal")]
+    gpu_traversal: Option<Arc<RwLock<GPUGraphTraversal>>>,
 }
 
 impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
@@ -24,7 +32,13 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         Self {
             storage,
             // Default known labels - in production this should be configurable
-            known_labels: vec!["Person".to_string(), "Node".to_string(), "Entity".to_string()],
+            known_labels: vec![
+                "Person".to_string(),
+                "Node".to_string(),
+                "Entity".to_string(),
+            ],
+            #[cfg(feature = "gpu-graph-traversal")]
+            gpu_traversal: None,
         }
     }
 
@@ -33,7 +47,32 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         Self {
             storage,
             known_labels: labels,
+            #[cfg(feature = "gpu-graph-traversal")]
+            gpu_traversal: None,
         }
+    }
+
+    /// Initialize GPU acceleration for graph algorithms
+    #[cfg(feature = "gpu-graph-traversal")]
+    pub async fn init_gpu_acceleration(&mut self) -> ProtocolResult<()> {
+        let config = TraversalConfig::default();
+        match GPUGraphTraversal::new(config).await {
+            Ok(traversal) => {
+                info!("GPU graph traversal engine initialized successfully");
+                self.gpu_traversal = Some(Arc::new(RwLock::new(traversal)));
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!("Failed to initialize GPU graph traversal: {}, using CPU fallback", e);
+                Ok(()) // Non-fatal, will use CPU fallback
+            }
+        }
+    }
+
+    /// Check if GPU acceleration is available
+    #[cfg(feature = "gpu-graph-traversal")]
+    pub fn has_gpu_acceleration(&self) -> bool {
+        self.gpu_traversal.is_some()
     }
 
     /// Add a label to the known labels list
@@ -93,6 +132,78 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             .map(|f| f as f32)
             .unwrap_or(0.0001);
 
+        // Try GPU-accelerated PageRank if available
+        #[cfg(feature = "gpu-graph-traversal")]
+        if let Some(ref gpu_traversal) = self.gpu_traversal {
+            let (graph_data, _node_index) = self.build_graph_data().await?;
+
+            if graph_data.node_count > 0 {
+                let traversal = gpu_traversal.read().await;
+                match traversal
+                    .pagerank(&graph_data, damping, max_iterations, tolerance)
+                    .await
+                {
+                    Ok(result) => {
+                        info!(
+                            "GPU PageRank completed: {} iterations in {}ms (GPU: {}, delta: {:.6})",
+                            result.iterations,
+                            result.execution_time_ms,
+                            result.used_gpu,
+                            result.convergence_delta
+                        );
+
+                        // Get all nodes for ID reverse lookup
+                        let nodes = self.get_all_nodes().await?;
+                        let idx_to_id: HashMap<u64, String> = nodes
+                            .iter()
+                            .enumerate()
+                            .map(|(i, n)| (i as u64, n.id.to_string()))
+                            .collect();
+
+                        // Build sorted results
+                        let columns = vec!["node_id".to_string(), "pagerank".to_string()];
+                        let mut results: Vec<(f32, String)> = result
+                            .scores
+                            .iter()
+                            .filter_map(|(&node_idx, &score)| {
+                                idx_to_id.get(&node_idx).map(|id| (score, id.clone()))
+                            })
+                            .collect();
+                        results.sort_by(|a, b| {
+                            b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal)
+                        });
+
+                        let rows: Vec<Vec<Option<String>>> = results
+                            .into_iter()
+                            .map(|(score, id)| vec![Some(id), Some(format!("{:.6}", score))])
+                            .collect();
+
+                        return Ok(QueryResult {
+                            nodes: Vec::new(),
+                            relationships: Vec::new(),
+                            columns,
+                            rows,
+                        });
+                    }
+                    Err(e) => {
+                        tracing::warn!("GPU PageRank failed, falling back to CPU: {}", e);
+                        // Fall through to CPU implementation
+                    }
+                }
+            }
+        }
+
+        // CPU fallback implementation
+        self.execute_pagerank_cpu(damping, max_iterations, tolerance).await
+    }
+
+    /// CPU-based PageRank implementation (fallback)
+    async fn execute_pagerank_cpu(
+        &self,
+        damping: f32,
+        max_iterations: usize,
+        tolerance: f32,
+    ) -> ProtocolResult<QueryResult> {
         // Get all nodes and relationships
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
@@ -108,7 +219,11 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         // Build adjacency information
         let node_ids: Vec<String> = nodes.iter().map(|n| n.id.to_string()).collect();
-        let node_index: HashMap<&str, usize> = node_ids.iter().enumerate().map(|(i, id)| (id.as_str(), i)).collect();
+        let node_index: HashMap<&str, usize> = node_ids
+            .iter()
+            .enumerate()
+            .map(|(i, id)| (id.as_str(), i))
+            .collect();
         let n = nodes.len();
 
         // Build outgoing edge counts and incoming edges
@@ -145,19 +260,31 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             }
 
             // Check convergence
-            let delta: f32 = scores.iter().zip(new_scores.iter()).map(|(a, b)| (a - b).abs()).sum();
+            let delta: f32 = scores
+                .iter()
+                .zip(new_scores.iter())
+                .map(|(a, b)| (a - b).abs())
+                .sum();
 
             std::mem::swap(&mut scores, &mut new_scores);
 
             if delta < tolerance {
-                info!("PageRank converged after {} iterations with delta {}", iteration + 1, delta);
+                info!(
+                    "PageRank converged after {} iterations with delta {}",
+                    iteration + 1,
+                    delta
+                );
                 break;
             }
         }
 
         // Format results
         let columns = vec!["node_id".to_string(), "pagerank".to_string()];
-        let mut results: Vec<(f32, String)> = scores.iter().zip(node_ids.iter()).map(|(&score, id)| (score, id.clone())).collect();
+        let mut results: Vec<(f32, String)> = scores
+            .iter()
+            .zip(node_ids.iter())
+            .map(|(&score, id)| (score, id.clone()))
+            .collect();
         results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
         let rows: Vec<Vec<Option<String>>> = results
@@ -178,7 +305,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
     async fn execute_shortest_path(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
         if args.len() < 2 {
             return Err(ProtocolError::CypherError(
-                "orbit.graph.shortestPath requires 2 arguments: (from_node_id, to_node_id)".to_string(),
+                "orbit.graph.shortestPath requires 2 arguments: (from_node_id, to_node_id)"
+                    .to_string(),
             ));
         }
 
@@ -196,16 +324,119 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
+        // Try GPU-accelerated shortest path if available
+        #[cfg(feature = "gpu-graph-traversal")]
+        if let Some(ref gpu_traversal) = self.gpu_traversal {
+            let (graph_data, node_index) = if weighted {
+                self.build_weighted_graph_data().await?
+            } else {
+                // For unweighted, use BFS which is faster
+                self.build_graph_data().await?
+            };
+
+            if graph_data.node_count > 0 {
+                if let (Some(&source_idx), Some(&target_idx)) =
+                    (node_index.get(&from_id), node_index.get(&to_id))
+                {
+                    let traversal = gpu_traversal.read().await;
+                    let result = if weighted && graph_data.edge_weights.is_some() {
+                        // Use Dijkstra for weighted graphs
+                        traversal
+                            .dijkstra(&graph_data, source_idx as u64, Some(target_idx as u64))
+                            .await
+                    } else {
+                        // Use BFS for unweighted graphs
+                        traversal
+                            .bfs(&graph_data, source_idx as u64, Some(target_idx as u64))
+                            .await
+                    };
+
+                    match result {
+                        Ok(result) => {
+                            info!(
+                                "GPU shortest path completed: {} nodes explored in {}ms (GPU: {})",
+                                result.stats.nodes_explored, result.execution_time_ms, result.used_gpu
+                            );
+
+                            // Get all nodes for ID reverse lookup
+                            let nodes = self.get_all_nodes().await?;
+                            let idx_to_id: HashMap<u64, String> = nodes
+                                .iter()
+                                .enumerate()
+                                .map(|(i, n)| (i as u64, n.id.to_string()))
+                                .collect();
+
+                            let columns = vec![
+                                "path".to_string(),
+                                "length".to_string(),
+                                "cost".to_string(),
+                            ];
+
+                            if result.paths.is_empty() {
+                                return Ok(QueryResult {
+                                    nodes: Vec::new(),
+                                    relationships: Vec::new(),
+                                    columns,
+                                    rows: vec![vec![
+                                        Some("[]".to_string()),
+                                        Some("0".to_string()),
+                                        Some("infinity".to_string()),
+                                    ]],
+                                });
+                            }
+
+                            // Convert path node indices to IDs
+                            let path = &result.paths[0];
+                            let path_ids: Vec<String> = path
+                                .nodes
+                                .iter()
+                                .filter_map(|&idx| idx_to_id.get(&idx).cloned())
+                                .collect();
+
+                            let rows = vec![vec![
+                                Some(serde_json::to_string(&path_ids).unwrap_or_default()),
+                                Some(path.length.to_string()),
+                                Some(format!("{:.2}", path.weight)),
+                            ]];
+
+                            return Ok(QueryResult {
+                                nodes: Vec::new(),
+                                relationships: Vec::new(),
+                                columns,
+                                rows,
+                            });
+                        }
+                        Err(e) => {
+                            tracing::warn!("GPU shortest path failed, falling back to CPU: {}", e);
+                            // Fall through to CPU implementation
+                        }
+                    }
+                }
+            }
+        }
+
+        // CPU fallback implementation
+        self.execute_shortest_path_cpu(&from_id, &to_id, weighted).await
+    }
+
+    /// CPU-based shortest path implementation (fallback)
+    async fn execute_shortest_path_cpu(
+        &self,
+        from_id: &str,
+        to_id: &str,
+        weighted: bool,
+    ) -> ProtocolResult<QueryResult> {
         // Get all nodes and relationships
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
 
         // Build node index
-        let node_index: HashMap<&str, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id.as_str(), i)).collect();
+        let node_index: HashMap<&str, usize> =
+            nodes.iter().enumerate().map(|(i, n)| (n.id.as_str(), i)).collect();
         let n = nodes.len();
 
-        let source = node_index.get(from_id.as_str()).copied();
-        let target = node_index.get(to_id.as_str()).copied();
+        let source = node_index.get(from_id).copied();
+        let target = node_index.get(to_id).copied();
 
         if source.is_none() || target.is_none() {
             return Err(ProtocolError::CypherError(
@@ -341,15 +572,87 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             .map(|n| n as usize)
             .unwrap_or(usize::MAX);
 
+        // Try GPU-accelerated BFS if available
+        #[cfg(feature = "gpu-graph-traversal")]
+        if let Some(ref gpu_traversal) = self.gpu_traversal {
+            let (graph_data, node_index) = self.build_graph_data().await?;
+
+            if graph_data.node_count > 0 {
+                if let Some(&start_idx) = node_index.get(&start_id) {
+                    let traversal = gpu_traversal.read().await;
+                    match traversal.bfs(&graph_data, start_idx as u64, None).await {
+                        Ok(result) => {
+                            info!(
+                                "GPU BFS completed: {} nodes visited in {}ms (GPU: {})",
+                                result.stats.nodes_explored,
+                                result.execution_time_ms,
+                                result.used_gpu
+                            );
+
+                            // Get all nodes for ID reverse lookup
+                            let nodes = self.get_all_nodes().await?;
+                            let idx_to_id: HashMap<u64, String> = nodes
+                                .iter()
+                                .enumerate()
+                                .map(|(i, n)| (i as u64, n.id.to_string()))
+                                .collect();
+
+                            // Build result from visited nodes
+                            let columns = vec!["node_id".to_string(), "depth".to_string()];
+                            let rows: Vec<Vec<Option<String>>> = result
+                                .visited_nodes
+                                .iter()
+                                .filter_map(|&node_idx| {
+                                    idx_to_id.get(&node_idx).map(|id| {
+                                        // Estimate depth from path if available
+                                        let depth = result
+                                            .paths
+                                            .iter()
+                                            .find(|p| p.nodes.contains(&node_idx))
+                                            .map(|p| p.length)
+                                            .unwrap_or(0);
+                                        vec![Some(id.clone()), Some(depth.to_string())]
+                                    })
+                                })
+                                .collect();
+
+                            return Ok(QueryResult {
+                                nodes: Vec::new(),
+                                relationships: Vec::new(),
+                                columns,
+                                rows,
+                            });
+                        }
+                        Err(e) => {
+                            tracing::warn!("GPU BFS failed, falling back to CPU: {}", e);
+                            // Fall through to CPU implementation
+                        }
+                    }
+                }
+            }
+        }
+
+        // CPU fallback implementation
+        self.execute_bfs_cpu(&start_id, max_depth).await
+    }
+
+    /// CPU-based BFS implementation (fallback)
+    async fn execute_bfs_cpu(
+        &self,
+        start_id: &str,
+        max_depth: usize,
+    ) -> ProtocolResult<QueryResult> {
+
         // Get all nodes and relationships
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
 
         // Build node index and adjacency
-        let node_index: HashMap<&str, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id.as_str(), i)).collect();
+        let node_index: HashMap<&str, usize> =
+            nodes.iter().enumerate().map(|(i, n)| (n.id.as_str(), i)).collect();
         let n = nodes.len();
 
-        let start = node_index.get(start_id.as_str()).copied();
+        let start = node_index.get(start_id).copied();
         if start.is_none() {
             return Err(ProtocolError::CypherError(format!(
                 "Start node '{}' not found",
@@ -515,6 +818,77 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             .map(|n| n as usize)
             .unwrap_or(2);
 
+        // Try GPU-accelerated community detection if available
+        #[cfg(feature = "gpu-graph-traversal")]
+        if let Some(ref gpu_traversal) = self.gpu_traversal {
+            let (graph_data, _node_index) = self.build_graph_data().await?;
+
+            if graph_data.node_count > 0 {
+                let traversal = gpu_traversal.read().await;
+                match traversal.detect_communities(&graph_data, min_size).await {
+                    Ok(communities) => {
+                        info!(
+                            "GPU community detection completed: {} communities found",
+                            communities.len()
+                        );
+
+                        // Get all nodes for ID reverse lookup
+                        let nodes = self.get_all_nodes().await?;
+                        let idx_to_id: HashMap<u64, String> = nodes
+                            .iter()
+                            .enumerate()
+                            .map(|(i, n)| (i as u64, n.id.to_string()))
+                            .collect();
+
+                        let columns = vec![
+                            "community_id".to_string(),
+                            "size".to_string(),
+                            "members".to_string(),
+                        ];
+
+                        let rows: Vec<Vec<Option<String>>> = communities
+                            .into_iter()
+                            .enumerate()
+                            .map(|(idx, member_indices)| {
+                                let members: Vec<String> = member_indices
+                                    .iter()
+                                    .filter_map(|&idx| idx_to_id.get(&idx).cloned())
+                                    .collect();
+                                vec![
+                                    Some(idx.to_string()),
+                                    Some(members.len().to_string()),
+                                    Some(serde_json::to_string(&members).unwrap_or_default()),
+                                ]
+                            })
+                            .collect();
+
+                        return Ok(QueryResult {
+                            nodes: Vec::new(),
+                            relationships: Vec::new(),
+                            columns,
+                            rows,
+                        });
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "GPU community detection failed, falling back to CPU: {}",
+                            e
+                        );
+                        // Fall through to CPU implementation
+                    }
+                }
+            }
+        }
+
+        // CPU fallback implementation
+        self.execute_community_detection_cpu(min_size).await
+    }
+
+    /// CPU-based community detection implementation (fallback)
+    async fn execute_community_detection_cpu(
+        &self,
+        min_size: usize,
+    ) -> ProtocolResult<QueryResult> {
         // Get all nodes and relationships
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
@@ -902,6 +1276,113 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
     }
 
     // Helper methods
+
+    /// Convert GraphStorage data to orbit-compute GraphData format for GPU processing
+    #[cfg(feature = "gpu-graph-traversal")]
+    async fn build_graph_data(&self) -> ProtocolResult<(GraphData, HashMap<String, usize>)> {
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok((
+                GraphData {
+                    node_ids: Vec::new(),
+                    adjacency_list: Vec::new(),
+                    edge_weights: None,
+                    node_properties: HashMap::new(),
+                    node_count: 0,
+                    edge_count: 0,
+                },
+                HashMap::new(),
+            ));
+        }
+
+        // Create node ID mapping (string ID -> index)
+        let node_index: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        // Build node_ids as u64 (use index as node ID for GPU)
+        let node_ids: Vec<u64> = (0..nodes.len() as u64).collect();
+
+        // Build adjacency list
+        let mut adjacency_list: Vec<Vec<u32>> = vec![Vec::new(); nodes.len()];
+        let mut edge_weights: Vec<f32> = Vec::new();
+
+        for rel in &relationships {
+            let from_str = rel.start_node.to_string();
+            let to_str = rel.end_node.to_string();
+            if let (Some(&from_idx), Some(&to_idx)) =
+                (node_index.get(&from_str), node_index.get(&to_str))
+            {
+                adjacency_list[from_idx].push(to_idx as u32);
+                // Extract edge weight if available
+                let weight = rel
+                    .properties
+                    .get("weight")
+                    .and_then(|v| v.as_f64())
+                    .map(|f| f as f32)
+                    .unwrap_or(1.0);
+                edge_weights.push(weight);
+            }
+        }
+
+        // Build node properties
+        let node_properties: HashMap<u64, NodeProperties> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| {
+                let props = NodeProperties {
+                    importance: n
+                        .properties
+                        .get("importance")
+                        .and_then(|v| v.as_f64())
+                        .map(|f| f as f32)
+                        .unwrap_or(1.0),
+                    node_type: n.labels.first().cloned(),
+                    metadata: n
+                        .properties
+                        .iter()
+                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                        .collect(),
+                };
+                (i as u64, props)
+            })
+            .collect();
+
+        let edge_count = relationships.len();
+
+        Ok((
+            GraphData {
+                node_ids,
+                adjacency_list,
+                edge_weights: if edge_weights.is_empty() {
+                    None
+                } else {
+                    Some(edge_weights)
+                },
+                node_properties,
+                node_count: nodes.len(),
+                edge_count,
+            },
+            node_index,
+        ))
+    }
+
+    /// Build weighted graph data for algorithms like Dijkstra
+    #[cfg(feature = "gpu-graph-traversal")]
+    async fn build_weighted_graph_data(&self) -> ProtocolResult<(GraphData, HashMap<String, usize>)> {
+        let (mut graph_data, node_index) = self.build_graph_data().await?;
+
+        // Ensure edge weights are present (default to 1.0 if not)
+        if graph_data.edge_weights.is_none() {
+            graph_data.edge_weights = Some(vec![1.0f32; graph_data.edge_count]);
+        }
+
+        Ok((graph_data, node_index))
+    }
 
     async fn get_all_nodes(&self) -> ProtocolResult<Vec<GraphNode>> {
         let mut all_nodes = Vec::new();

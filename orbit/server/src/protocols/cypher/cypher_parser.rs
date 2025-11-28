@@ -84,9 +84,28 @@ impl CypherParser {
             "ASCENDING" => Token::Asc,
             "CALL" => Token::Call,
             "YIELD" => Token::Yield,
+            // Aggregation functions
+            "COUNT" => Token::Count,
+            "SUM" => Token::Sum,
+            "AVG" => Token::Avg,
+            "MIN" => Token::Min,
+            "MAX" => Token::Max,
+            "COLLECT" => Token::Collect,
+            "DISTINCT" => Token::Distinct,
+            // Additional keywords
+            "NULL" => Token::Null,
+            "TRUE" => Token::True,
+            "FALSE" => Token::False,
+            "IN" => Token::In,
+            "IS" => Token::Is,
+            "CONTAINS" => Token::Contains,
+            "STARTS" => Token::Starts,
+            "ENDS" => Token::Ends,
             _ => {
-                // Check if it's a number
-                if token.chars().all(|c| c.is_ascii_digit()) {
+                // Check if it's a number (including floats)
+                if token.chars().all(|c| c.is_ascii_digit() || c == '.')
+                    && token.chars().filter(|&c| c == '.').count() <= 1
+                {
                     Token::Number(token.to_string())
                 } else {
                     Token::Identifier(token.to_string())
@@ -130,6 +149,25 @@ enum Token {
     Call,
     Yield,
 
+    // Aggregation functions
+    Count,
+    Sum,
+    Avg,
+    Min,
+    Max,
+    Collect,
+    Distinct,
+
+    // Additional keywords
+    Null,
+    True,
+    False,
+    In,
+    Is,
+    Contains,
+    Starts,
+    Ends,
+
     // Literals
     Identifier(String),
     String(String),
@@ -145,12 +183,15 @@ enum Token {
     Comma,
     Colon,
     Dot,
+    DoubleDot,      // .. for range
     Equals,
     NotEquals,      // !=
-    GreaterThan,     // >
-    LessThan,        // <
+    GreaterThan,    // >
+    LessThan,       // <
     GreaterThanOrEqual, // >=
-    LessThanOrEqual,   // <=
+    LessThanOrEqual,    // <=
+    Star,           // * for variable-length paths and COUNT(*)
+    Pipe,           // | for relationship type alternatives
 }
 
 /// Specialized tokenizer for Cypher queries with reduced complexity
@@ -221,9 +262,23 @@ impl CypherTokenizer {
         match ch {
             '"' | '\'' => self.start_string_literal(ch),
             ' ' | '\t' | '\n' | '\r' => self.handle_whitespace(),
-            '(' | ')' | '{' | '}' | '[' | ']' | ',' | ':' | '.' => self.handle_single_char_token(ch),
+            '(' | ')' | '{' | '}' | '[' | ']' | ',' | ':' | '*' | '|' => {
+                self.handle_single_char_token(ch)
+            }
+            '.' => self.handle_dot(),
             '=' | '!' | '>' | '<' => self.handle_comparison_operator(ch),
             _ => self.current_token.push(ch),
+        }
+    }
+
+    fn handle_dot(&mut self) {
+        self.flush_current_token();
+        // Check for .. (range operator)
+        if self.peek_char() == Some('.') {
+            self.advance_char();
+            self.tokens.push(Token::DoubleDot);
+        } else {
+            self.tokens.push(Token::Dot);
         }
     }
 
@@ -302,6 +357,8 @@ impl CypherTokenizer {
             ']' => Token::RightBracket,
             ',' => Token::Comma,
             ':' => Token::Colon,
+            '*' => Token::Star,
+            '|' => Token::Pipe,
             '.' => Token::Dot,
             '=' => {
                 if self.peek_char() == Some('=') {
@@ -448,6 +505,19 @@ impl TokenParser {
                 Some(Token::Call) => {
                     clauses.push(self.parse_call_clause()?);
                 }
+                Some(Token::With) => {
+                    clauses.push(self.parse_with_clause()?);
+                }
+                Some(Token::Optional) => {
+                    self.advance();
+                    if matches!(self.current_token(), Some(Token::Match)) {
+                        clauses.push(self.parse_optional_match_clause()?);
+                    } else {
+                        return Err(ProtocolError::CypherError(
+                            "Expected MATCH after OPTIONAL".to_string(),
+                        ));
+                    }
+                }
                 Some(token) => {
                     return Err(ProtocolError::CypherError(format!(
                         "Unexpected token: {token:?}"
@@ -480,12 +550,29 @@ impl TokenParser {
         self.expect_token(Token::Return)?;
         let mut items = Vec::new();
 
-        while let Some(Token::Identifier(name)) = self.current_token() {
-            let name = name.clone();
-            self.advance();
+        loop {
+            let (expr, expr_str) = self.parse_return_expression()?;
+
+            // Check for AS alias
+            let alias = if matches!(self.current_token(), Some(Token::As)) {
+                self.advance();
+                if let Some(Token::Identifier(alias_name)) = self.current_token() {
+                    let alias = alias_name.clone();
+                    self.advance();
+                    Some(alias)
+                } else {
+                    return Err(ProtocolError::CypherError(
+                        "Expected alias name after AS".to_string(),
+                    ));
+                }
+            } else {
+                None
+            };
+
             items.push(ReturnItem {
-                expression: name.clone(),
-                alias: None,
+                expr,
+                expression: expr_str,
+                alias,
             });
 
             match self.current_token() {
@@ -503,6 +590,127 @@ impl TokenParser {
         }
 
         Ok(CypherClause::Return { items })
+    }
+
+    /// Parse an expression for RETURN, WITH, ORDER BY clauses
+    fn parse_return_expression(&mut self) -> ProtocolResult<(Expression, String)> {
+        // Check for aggregation functions first
+        let agg_func = match self.current_token() {
+            Some(Token::Count) => Some(AggregationFunction::Count),
+            Some(Token::Sum) => Some(AggregationFunction::Sum),
+            Some(Token::Avg) => Some(AggregationFunction::Avg),
+            Some(Token::Min) => Some(AggregationFunction::Min),
+            Some(Token::Max) => Some(AggregationFunction::Max),
+            Some(Token::Collect) => Some(AggregationFunction::Collect),
+            _ => None,
+        };
+
+        if let Some(func) = agg_func {
+            let func_name = match func {
+                AggregationFunction::Count => "COUNT",
+                AggregationFunction::Sum => "SUM",
+                AggregationFunction::Avg => "AVG",
+                AggregationFunction::Min => "MIN",
+                AggregationFunction::Max => "MAX",
+                AggregationFunction::Collect => "COLLECT",
+            };
+            self.advance();
+            self.expect_token(Token::LeftParen)?;
+
+            // Check for DISTINCT
+            let distinct = if matches!(self.current_token(), Some(Token::Distinct)) {
+                self.advance();
+                true
+            } else {
+                false
+            };
+
+            // Check for COUNT(*)
+            if func == AggregationFunction::Count && matches!(self.current_token(), Some(Token::Star))
+            {
+                self.advance();
+                self.expect_token(Token::RightParen)?;
+                return Ok((Expression::CountAll, "COUNT(*)".to_string()));
+            }
+
+            // Parse inner expression
+            let (inner_expr, inner_str) = self.parse_return_expression()?;
+            self.expect_token(Token::RightParen)?;
+
+            let expr_str = if distinct {
+                format!("{}(DISTINCT {})", func_name, inner_str)
+            } else {
+                format!("{}({})", func_name, inner_str)
+            };
+
+            return Ok((
+                Expression::Aggregation {
+                    function: func,
+                    argument: Box::new(inner_expr),
+                    distinct,
+                },
+                expr_str,
+            ));
+        }
+
+        // Parse variable or property access
+        if let Some(Token::Identifier(name)) = self.current_token() {
+            let name = name.clone();
+            self.advance();
+
+            // Check for property access (n.name)
+            if matches!(self.current_token(), Some(Token::Dot)) {
+                self.advance();
+                if let Some(Token::Identifier(prop)) = self.current_token() {
+                    let prop = prop.clone();
+                    self.advance();
+                    let expr_str = format!("{}.{}", name, prop);
+                    return Ok((
+                        Expression::PropertyAccess {
+                            variable: name,
+                            property: prop,
+                        },
+                        expr_str,
+                    ));
+                } else {
+                    return Err(ProtocolError::CypherError(
+                        "Expected property name after '.'".to_string(),
+                    ));
+                }
+            }
+
+            // Simple variable
+            return Ok((Expression::Variable(name.clone()), name));
+        }
+
+        // Parse literals
+        if let Some(Token::String(s)) = self.current_token() {
+            let s = s.clone();
+            self.advance();
+            return Ok((
+                Expression::Literal(serde_json::Value::String(s.clone())),
+                format!("'{}'", s),
+            ));
+        }
+
+        if let Some(Token::Number(n)) = self.current_token() {
+            let n = n.clone();
+            self.advance();
+            let value = if let Ok(num) = n.parse::<i64>() {
+                serde_json::Value::Number(num.into())
+            } else if let Ok(num) = n.parse::<f64>() {
+                serde_json::Value::Number(
+                    serde_json::Number::from_f64(num).unwrap_or(serde_json::Number::from(0)),
+                )
+            } else {
+                serde_json::Value::String(n.clone())
+            };
+            return Ok((Expression::Literal(value), n));
+        }
+
+        Err(ProtocolError::CypherError(
+            "Expected expression in RETURN clause".to_string(),
+        ))
     }
 
     fn parse_where_clause(&mut self) -> ProtocolResult<CypherClause> {
@@ -996,6 +1204,65 @@ impl TokenParser {
         Ok(serde_json::Value::Object(map))
     }
 
+    /// Parse a WITH clause for query chaining
+    /// Syntax: WITH expr1 AS alias1, expr2, ... [WHERE condition]
+    fn parse_with_clause(&mut self) -> ProtocolResult<CypherClause> {
+        self.expect_token(Token::With)?;
+        let mut items = Vec::new();
+
+        loop {
+            let (expr, _expr_str) = self.parse_return_expression()?;
+
+            // Check for AS alias
+            let alias = if matches!(self.current_token(), Some(Token::As)) {
+                self.advance();
+                if let Some(Token::Identifier(alias_name)) = self.current_token() {
+                    let alias = alias_name.clone();
+                    self.advance();
+                    Some(alias)
+                } else {
+                    return Err(ProtocolError::CypherError(
+                        "Expected alias name after AS".to_string(),
+                    ));
+                }
+            } else {
+                None
+            };
+
+            items.push(WithItem {
+                expression: expr,
+                alias,
+            });
+
+            match self.current_token() {
+                Some(Token::Comma) => {
+                    self.advance();
+                }
+                _ => break,
+            }
+        }
+
+        // Parse optional WHERE clause
+        let where_condition = if matches!(self.current_token(), Some(Token::Where)) {
+            self.advance();
+            Some(self.parse_condition()?)
+        } else {
+            None
+        };
+
+        Ok(CypherClause::With {
+            items,
+            where_condition,
+        })
+    }
+
+    /// Parse an OPTIONAL MATCH clause
+    fn parse_optional_match_clause(&mut self) -> ProtocolResult<CypherClause> {
+        self.expect_token(Token::Match)?;
+        let pattern = self.parse_pattern()?;
+        Ok(CypherClause::OptionalMatch { pattern })
+    }
+
     fn parse_pattern(&mut self) -> ProtocolResult<Pattern> {
         let mut elements = Vec::new();
 
@@ -1005,9 +1272,15 @@ impl TokenParser {
             elements.push(PatternElement::Node(node));
         }
 
-        // Parse relationship patterns
-        while let Some(Token::Identifier(rel_part)) = self.current_token() {
-            if rel_part.starts_with('-') {
+        // Parse relationship patterns (support both tokenized and single-string formats)
+        loop {
+            // Check for relationship start: `-` identifier or tokenized form
+            let is_relationship_start = match self.current_token() {
+                Some(Token::Identifier(s)) => s == "-" || s.starts_with('-'),
+                _ => false,
+            };
+
+            if is_relationship_start {
                 let relationship = self.parse_relationship_pattern()?;
                 elements.push(PatternElement::Relationship(relationship));
 
@@ -1097,40 +1370,256 @@ impl TokenParser {
     }
 
     fn parse_relationship_pattern(&mut self) -> ProtocolResult<RelationshipPattern> {
-        // Simple relationship parsing - assume format like -[:TYPE]->
-        if let Some(Token::Identifier(rel_str)) = self.current_token() {
-            let rel_str = rel_str.clone();
+        // Parse relationship pattern - supports both formats:
+        // 1. Single string like "-[:KNOWS]->" (legacy)
+        // 2. Tokenized form: `-` `[` `:` `TYPE` `*` `1..3` `]` `-` `>`
+
+        let mut rel_type = None;
+        let mut rel_types = Vec::new();
+        let mut variable_length = None;
+        let mut rel_variable = None;
+        let mut direction = RelationshipDirection::Both;
+        let mut incoming_start = false;
+
+        // Check for incoming direction start: `<-`
+        if let Some(Token::LessThan) = self.current_token() {
+            incoming_start = true;
+            self.advance();
+            // Expect `-` after `<`
+            if let Some(Token::Identifier(s)) = self.current_token() {
+                if s == "-" {
+                    self.advance();
+                }
+            }
+        }
+
+        // Consume the starting `-` if present
+        if let Some(Token::Identifier(s)) = self.current_token() {
+            let s = s.clone();
+            if s == "-" {
+                self.advance();
+            } else if s.starts_with('-') {
+                // Handle legacy format: entire relationship as one string
+                self.advance();
+                return self.parse_relationship_pattern_from_string(&s);
+            }
+        }
+
+        // Check for `[` - bracket-enclosed relationship details
+        if let Some(Token::LeftBracket) = self.current_token() {
             self.advance();
 
-            // Parse relationship type from string like "-[:KNOWS]->"
-            let rel_type = if rel_str.contains(':') {
-                rel_str
-                    .split(':')
-                    .nth(1)
-                    .and_then(|s| s.split(']').next())
-                    .map(|s| s.to_string())
-            } else {
-                None
-            };
+            // Parse optional variable name
+            if let Some(Token::Identifier(var)) = self.current_token() {
+                let var = var.clone();
+                // Check if this is a variable (not starting with special chars)
+                if !var.starts_with(':') && !var.starts_with('*') {
+                    rel_variable = Some(var);
+                    self.advance();
+                }
+            }
 
-            let direction = if rel_str.ends_with("->") {
-                RelationshipDirection::Outgoing
-            } else if rel_str.starts_with("<-") {
-                RelationshipDirection::Incoming
-            } else {
-                RelationshipDirection::Both
-            };
+            // Parse optional `:TYPE` or `:TYPE1|TYPE2`
+            if let Some(Token::Colon) = self.current_token() {
+                self.advance();
+                // Collect type names
+                while let Some(Token::Identifier(type_name)) = self.current_token() {
+                    let type_name = type_name.clone();
+                    rel_types.push(type_name);
+                    self.advance();
 
-            Ok(RelationshipPattern {
-                variable: None,
-                rel_type,
-                direction,
-                properties: HashMap::new(),
-            })
+                    // Check for `|` for multiple types
+                    if let Some(Token::Pipe) = self.current_token() {
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
+                rel_type = rel_types.first().cloned();
+            }
+
+            // Parse optional `*` for variable-length paths
+            if let Some(Token::Star) = self.current_token() {
+                self.advance();
+
+                // Parse optional bounds: `1..3`, `..3`, `1..`, or just a number
+                let mut min_hops: Option<usize> = Some(1);
+                let mut max_hops: Option<usize> = None;
+
+                // Check for a number (min hops)
+                if let Some(Token::Number(n)) = self.current_token() {
+                    let n = n.clone();
+                    min_hops = n.parse().ok();
+                    self.advance();
+                }
+
+                // Check for `..` (DoubleDot) - range operator
+                if let Some(Token::DoubleDot) = self.current_token() {
+                    self.advance();
+                    // Check for max hops
+                    if let Some(Token::Number(n)) = self.current_token() {
+                        let n = n.clone();
+                        max_hops = n.parse().ok();
+                        self.advance();
+                    }
+                } else {
+                    // Just `*` or `*N` means N..N (exact) or 1..unlimited
+                    if min_hops.is_some() && min_hops != Some(1) {
+                        max_hops = min_hops;
+                    }
+                }
+
+                variable_length = Some(VariableLengthSpec { min_hops, max_hops });
+            }
+
+            // Expect `]`
+            if let Some(Token::RightBracket) = self.current_token() {
+                self.advance();
+            } else {
+                return Err(ProtocolError::CypherError(
+                    "Expected ']' in relationship pattern".to_string(),
+                ));
+            }
+        }
+
+        // Parse the ending direction: `->` or `-` or nothing
+        // After `]`, we might have `-` then `>`, or just `-`, or `<`
+        if let Some(Token::Identifier(s)) = self.current_token() {
+            let s = s.clone();
+            if s == "-" {
+                self.advance();
+                // Check for `>` (outgoing) or nothing (undirected)
+                if let Some(Token::GreaterThan) = self.current_token() {
+                    direction = RelationshipDirection::Outgoing;
+                    self.advance();
+                } else if incoming_start {
+                    direction = RelationshipDirection::Incoming;
+                }
+            } else if s == "->" {
+                direction = RelationshipDirection::Outgoing;
+                self.advance();
+            } else if s == "<-" {
+                direction = RelationshipDirection::Incoming;
+                self.advance();
+            }
+        } else if let Some(Token::GreaterThan) = self.current_token() {
+            // Just `>` after a `-` that was part of previous parsing
+            direction = RelationshipDirection::Outgoing;
+            self.advance();
+        }
+
+        // If incoming_start was set and we haven't determined direction yet
+        if incoming_start && direction == RelationshipDirection::Both {
+            direction = RelationshipDirection::Incoming;
+        }
+
+        Ok(RelationshipPattern {
+            variable: rel_variable,
+            rel_type,
+            rel_types,
+            direction,
+            properties: HashMap::new(),
+            variable_length,
+        })
+    }
+
+    /// Parse relationship pattern from a single string (legacy format)
+    fn parse_relationship_pattern_from_string(&self, rel_str: &str) -> ProtocolResult<RelationshipPattern> {
+        let mut rel_type = None;
+        let mut rel_types = Vec::new();
+        let mut variable_length = None;
+
+        // Check for relationship type
+        if rel_str.contains(':') {
+            let type_part = rel_str
+                .split(':')
+                .nth(1)
+                .and_then(|s| s.split(']').next())
+                .unwrap_or("");
+
+            // Check if type contains variable-length spec
+            if type_part.contains('*') {
+                let parts: Vec<&str> = type_part.split('*').collect();
+                if !parts[0].is_empty() {
+                    for t in parts[0].split('|') {
+                        if !t.is_empty() {
+                            rel_types.push(t.to_string());
+                        }
+                    }
+                    rel_type = rel_types.first().cloned();
+                }
+                if parts.len() > 1 {
+                    variable_length = Some(Self::parse_variable_length_spec(parts[1]));
+                } else {
+                    variable_length = Some(VariableLengthSpec::default());
+                }
+            } else {
+                for t in type_part.split('|') {
+                    if !t.is_empty() {
+                        rel_types.push(t.to_string());
+                    }
+                }
+                rel_type = rel_types.first().cloned();
+            }
+        } else if rel_str.contains('*') {
+            let star_idx = rel_str.find('*').unwrap();
+            let spec_str = &rel_str[star_idx + 1..];
+            let spec_end = spec_str.find(']').unwrap_or(spec_str.len());
+            variable_length = Some(Self::parse_variable_length_spec(&spec_str[..spec_end]));
+        }
+
+        let direction = if rel_str.ends_with("->") {
+            RelationshipDirection::Outgoing
+        } else if rel_str.starts_with("<-") {
+            RelationshipDirection::Incoming
         } else {
-            Err(ProtocolError::CypherError(
-                "Expected relationship pattern".to_string(),
-            ))
+            RelationshipDirection::Both
+        };
+
+        Ok(RelationshipPattern {
+            variable: None,
+            rel_type,
+            rel_types,
+            direction,
+            properties: HashMap::new(),
+            variable_length,
+        })
+    }
+
+    /// Parse variable-length specification like "1..3" or "..3" or "1.."
+    fn parse_variable_length_spec(spec: &str) -> VariableLengthSpec {
+        if spec.is_empty() {
+            return VariableLengthSpec::default();
+        }
+
+        let parts: Vec<&str> = spec.split("..").collect();
+        match parts.len() {
+            1 => {
+                // Just a number like "3" means exactly 3 hops
+                let n = parts[0].parse::<usize>().ok();
+                VariableLengthSpec {
+                    min_hops: n,
+                    max_hops: n,
+                }
+            }
+            2 => {
+                // Range like "1..3" or "..3" or "1.."
+                let min = if parts[0].is_empty() {
+                    Some(1)
+                } else {
+                    parts[0].parse::<usize>().ok()
+                };
+                let max = if parts[1].is_empty() {
+                    None
+                } else {
+                    parts[1].parse::<usize>().ok()
+                };
+                VariableLengthSpec {
+                    min_hops: min,
+                    max_hops: max,
+                }
+            }
+            _ => VariableLengthSpec::default(),
         }
     }
 
@@ -1347,6 +1836,17 @@ pub enum CypherClause {
         /// Optional YIELD clause to select specific output columns
         yield_items: Option<Vec<String>>,
     },
+    /// WITH clause for query chaining and intermediate result processing
+    With {
+        /// Items to pass through (with optional aliases)
+        items: Vec<WithItem>,
+        /// Optional WHERE clause applied after WITH
+        where_condition: Option<Condition>,
+    },
+    /// OPTIONAL MATCH clause (matches patterns that may not exist)
+    OptionalMatch {
+        pattern: Pattern,
+    },
 }
 
 /// Property assignment for SET clause
@@ -1408,16 +1908,20 @@ pub struct NodePattern {
 pub struct RelationshipPattern {
     /// Variable name for the relationship
     pub variable: Option<String>,
-    /// Relationship type
+    /// Relationship type(s) - can be multiple with | separator
     pub rel_type: Option<String>,
+    /// Alternative relationship types (for [r:TYPE1|TYPE2])
+    pub rel_types: Vec<String>,
     /// Relationship direction
     pub direction: RelationshipDirection,
     /// Relationship properties
     pub properties: HashMap<String, serde_json::Value>,
+    /// Variable-length path specification (for *1..3)
+    pub variable_length: Option<VariableLengthSpec>,
 }
 
 /// Direction of relationship traversal
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RelationshipDirection {
     /// --> outgoing
     Outgoing,
@@ -1430,7 +1934,9 @@ pub enum RelationshipDirection {
 /// RETURN clause item
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReturnItem {
-    /// Expression to return
+    /// Expression to return (parsed)
+    pub expr: Expression,
+    /// Raw expression string (for backwards compatibility)
     pub expression: String,
     /// Optional alias
     pub alias: Option<String>,
@@ -1495,6 +2001,79 @@ pub enum ComparisonOperator {
     GreaterThanOrEqual,
     /// <=
     LessThanOrEqual,
+}
+
+/// Expression in Cypher queries (for RETURN, WITH, ORDER BY)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Expression {
+    /// Simple variable reference: n
+    Variable(String),
+    /// Property access: n.name
+    PropertyAccess {
+        variable: String,
+        property: String,
+    },
+    /// Aggregation function: COUNT(n), SUM(n.age)
+    Aggregation {
+        function: AggregationFunction,
+        argument: Box<Expression>,
+        distinct: bool,
+    },
+    /// COUNT(*) - special case
+    CountAll,
+    /// Literal value
+    Literal(serde_json::Value),
+    /// Aliased expression: expr AS alias
+    Aliased {
+        expression: Box<Expression>,
+        alias: String,
+    },
+    /// List of expressions: [a, b, c]
+    List(Vec<Expression>),
+}
+
+/// Aggregation functions supported in Cypher
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AggregationFunction {
+    /// COUNT - count of items
+    Count,
+    /// SUM - sum of numeric values
+    Sum,
+    /// AVG - average of numeric values
+    Avg,
+    /// MIN - minimum value
+    Min,
+    /// MAX - maximum value
+    Max,
+    /// COLLECT - collect into a list
+    Collect,
+}
+
+/// Variable-length path specification for relationships
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VariableLengthSpec {
+    /// Minimum hops (None = 1)
+    pub min_hops: Option<usize>,
+    /// Maximum hops (None = unbounded)
+    pub max_hops: Option<usize>,
+}
+
+impl Default for VariableLengthSpec {
+    fn default() -> Self {
+        Self {
+            min_hops: Some(1),
+            max_hops: None,
+        }
+    }
+}
+
+/// WITH clause item for query chaining
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WithItem {
+    /// Expression to pass through
+    pub expression: Expression,
+    /// Optional alias
+    pub alias: Option<String>,
 }
 
 #[cfg(test)]
@@ -1851,6 +2430,311 @@ mod tests {
                 assert_eq!(arguments.len(), 2);
             }
             _ => panic!("Expected CALL clause"),
+        }
+    }
+
+    // ========== NEW FEATURE TESTS ==========
+
+    #[test]
+    fn test_return_property_access() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) RETURN n.name";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 2);
+
+        match &parsed.clauses[1] {
+            CypherClause::Return { items } => {
+                assert_eq!(items.len(), 1);
+                assert_eq!(items[0].expression, "n.name");
+                match &items[0].expr {
+                    Expression::PropertyAccess { variable, property } => {
+                        assert_eq!(variable, "n");
+                        assert_eq!(property, "name");
+                    }
+                    _ => panic!("Expected PropertyAccess expression"),
+                }
+            }
+            _ => panic!("Expected RETURN clause"),
+        }
+    }
+
+    #[test]
+    fn test_return_with_alias() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) RETURN n.name AS personName";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[1] {
+            CypherClause::Return { items } => {
+                assert_eq!(items.len(), 1);
+                assert_eq!(items[0].alias, Some("personName".to_string()));
+            }
+            _ => panic!("Expected RETURN clause"),
+        }
+    }
+
+    #[test]
+    fn test_count_aggregation() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) RETURN COUNT(n)";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[1] {
+            CypherClause::Return { items } => {
+                assert_eq!(items.len(), 1);
+                match &items[0].expr {
+                    Expression::Aggregation { function, distinct, .. } => {
+                        assert_eq!(*function, AggregationFunction::Count);
+                        assert!(!distinct);
+                    }
+                    _ => panic!("Expected Aggregation expression"),
+                }
+            }
+            _ => panic!("Expected RETURN clause"),
+        }
+    }
+
+    #[test]
+    fn test_count_star() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) RETURN COUNT(*)";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[1] {
+            CypherClause::Return { items } => {
+                assert_eq!(items.len(), 1);
+                match &items[0].expr {
+                    Expression::CountAll => {}
+                    _ => panic!("Expected CountAll expression"),
+                }
+            }
+            _ => panic!("Expected RETURN clause"),
+        }
+    }
+
+    #[test]
+    fn test_sum_aggregation() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) RETURN SUM(n.age)";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[1] {
+            CypherClause::Return { items } => {
+                match &items[0].expr {
+                    Expression::Aggregation { function, argument, .. } => {
+                        assert_eq!(*function, AggregationFunction::Sum);
+                        match argument.as_ref() {
+                            Expression::PropertyAccess { variable, property } => {
+                                assert_eq!(variable, "n");
+                                assert_eq!(property, "age");
+                            }
+                            _ => panic!("Expected PropertyAccess in aggregation"),
+                        }
+                    }
+                    _ => panic!("Expected Aggregation expression"),
+                }
+            }
+            _ => panic!("Expected RETURN clause"),
+        }
+    }
+
+    #[test]
+    fn test_avg_aggregation() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) RETURN AVG(n.salary)";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[1] {
+            CypherClause::Return { items } => {
+                match &items[0].expr {
+                    Expression::Aggregation { function, .. } => {
+                        assert_eq!(*function, AggregationFunction::Avg);
+                    }
+                    _ => panic!("Expected Aggregation expression"),
+                }
+            }
+            _ => panic!("Expected RETURN clause"),
+        }
+    }
+
+    #[test]
+    fn test_collect_aggregation() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) RETURN COLLECT(n.name)";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[1] {
+            CypherClause::Return { items } => {
+                match &items[0].expr {
+                    Expression::Aggregation { function, .. } => {
+                        assert_eq!(*function, AggregationFunction::Collect);
+                    }
+                    _ => panic!("Expected Aggregation expression"),
+                }
+            }
+            _ => panic!("Expected RETURN clause"),
+        }
+    }
+
+    #[test]
+    fn test_count_distinct() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) RETURN COUNT(DISTINCT n.city)";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[1] {
+            CypherClause::Return { items } => {
+                match &items[0].expr {
+                    Expression::Aggregation { function, distinct, .. } => {
+                        assert_eq!(*function, AggregationFunction::Count);
+                        assert!(*distinct);
+                    }
+                    _ => panic!("Expected Aggregation expression"),
+                }
+            }
+            _ => panic!("Expected RETURN clause"),
+        }
+    }
+
+    #[test]
+    fn test_with_clause() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) WITH n.name AS name RETURN name";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 3); // MATCH, WITH, RETURN
+
+        match &parsed.clauses[1] {
+            CypherClause::With { items, where_condition } => {
+                assert_eq!(items.len(), 1);
+                assert_eq!(items[0].alias, Some("name".to_string()));
+                assert!(where_condition.is_none());
+            }
+            _ => panic!("Expected WITH clause"),
+        }
+    }
+
+    #[test]
+    fn test_with_where() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) WITH n WHERE n.age > 18 RETURN n";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 3); // MATCH, WITH, RETURN
+
+        match &parsed.clauses[1] {
+            CypherClause::With { items, where_condition } => {
+                assert_eq!(items.len(), 1);
+                assert!(where_condition.is_some());
+            }
+            _ => panic!("Expected WITH clause"),
+        }
+    }
+
+    #[test]
+    fn test_optional_match() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) OPTIONAL MATCH (n:Friend) RETURN n";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 3); // MATCH, OPTIONAL MATCH, RETURN
+
+        match &parsed.clauses[1] {
+            CypherClause::OptionalMatch { pattern } => {
+                assert!(!pattern.elements.is_empty());
+            }
+            _ => panic!("Expected OPTIONAL MATCH clause"),
+        }
+    }
+
+    #[test]
+    fn test_multiple_return_items() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) RETURN n.name, n.age, COUNT(*)";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[1] {
+            CypherClause::Return { items } => {
+                assert_eq!(items.len(), 3);
+                // First item: n.name
+                match &items[0].expr {
+                    Expression::PropertyAccess { .. } => {}
+                    _ => panic!("Expected PropertyAccess"),
+                }
+                // Second item: n.age
+                match &items[1].expr {
+                    Expression::PropertyAccess { .. } => {}
+                    _ => panic!("Expected PropertyAccess"),
+                }
+                // Third item: COUNT(*)
+                match &items[2].expr {
+                    Expression::CountAll => {}
+                    _ => panic!("Expected CountAll"),
+                }
+            }
+            _ => panic!("Expected RETURN clause"),
+        }
+    }
+
+    #[test]
+    fn test_min_max_aggregations() {
+        let parser = CypherParser::new();
+        let query = "MATCH (n:Person) RETURN MIN(n.age), MAX(n.age)";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[1] {
+            CypherClause::Return { items } => {
+                assert_eq!(items.len(), 2);
+                match &items[0].expr {
+                    Expression::Aggregation { function, .. } => {
+                        assert_eq!(*function, AggregationFunction::Min);
+                    }
+                    _ => panic!("Expected MIN aggregation"),
+                }
+                match &items[1].expr {
+                    Expression::Aggregation { function, .. } => {
+                        assert_eq!(*function, AggregationFunction::Max);
+                    }
+                    _ => panic!("Expected MAX aggregation"),
+                }
+            }
+            _ => panic!("Expected RETURN clause"),
         }
     }
 }

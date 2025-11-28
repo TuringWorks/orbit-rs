@@ -5,12 +5,13 @@
 //! into graph operations.
 
 use crate::protocols::cypher::cypher_parser::{
-    CypherClause, CypherQuery, NodePattern, OrderByItem, Pattern, PatternElement, PropertyAssignment,
-    RelationshipDirection, RelationshipPattern, RemoveItem, ReturnItem,
+    AggregationFunction, Condition, CypherClause, CypherQuery, Expression, NodePattern, OrderByItem,
+    Pattern, PatternElement, PropertyAssignment, RelationshipDirection, RelationshipPattern,
+    RemoveItem, ReturnItem, VariableLengthSpec, WithItem,
 };
 use crate::protocols::error::{ProtocolError, ProtocolResult};
-use orbit_shared::graph::{Direction, GraphNode, GraphRelationship, GraphStorage};
-use std::collections::HashMap;
+use orbit_shared::graph::{Direction, GraphNode, GraphRelationship, GraphStorage, NodeId, RelationshipId};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tracing::{debug, info, instrument, warn};
 
@@ -129,6 +130,19 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 }
                 // ORDER BY, LIMIT, SKIP already collected in first pass
                 CypherClause::OrderBy { .. } | CypherClause::Limit { .. } | CypherClause::Skip { .. } => {}
+                CypherClause::With {
+                    items,
+                    where_condition,
+                } => {
+                    // WITH clause: filter and rename variables for next clause
+                    self.execute_with_clause(items, where_condition.as_ref(), &mut context, &mut result_nodes, &mut result_relationships).await?;
+                }
+                CypherClause::OptionalMatch { pattern } => {
+                    // OPTIONAL MATCH: like MATCH but doesn't filter out non-matches
+                    let (nodes, rels) = self.execute_optional_match_clause(pattern, &mut context).await?;
+                    result_nodes.extend(nodes);
+                    result_relationships.extend(rels);
+                }
             }
         }
 
@@ -331,14 +345,13 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         Ok(matched_nodes)
     }
 
-    /// Match relationships based on pattern  
+    /// Match relationships based on pattern
     async fn match_relationship_pattern(
         &self,
         pattern: &RelationshipPattern,
         context: &ExecutionContext,
     ) -> ProtocolResult<Vec<GraphRelationship>> {
         // For relationship matching, we need nodes from context
-        // This is a simplified implementation
         let mut matched_relationships = Vec::new();
 
         // Get all nodes from context to search their relationships
@@ -350,20 +363,125 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     RelationshipDirection::Both => Direction::Both,
                 };
 
-                let rel_types = pattern.rel_type.as_ref().map(|t| vec![t.clone()]);
+                // Get relationship types to filter by
+                let rel_types = if !pattern.rel_types.is_empty() {
+                    Some(pattern.rel_types.clone())
+                } else {
+                    pattern.rel_type.as_ref().map(|t| vec![t.clone()])
+                };
 
-                let relationships = self
-                    .storage
-                    .get_relationships(&node.id, direction, rel_types)
-                    .await
-                    .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
+                // Check if this is a variable-length path
+                if let Some(ref var_length) = pattern.variable_length {
+                    // Variable-length path traversal
+                    let relationships = self
+                        .traverse_variable_length_path(
+                            &node.id,
+                            direction,
+                            rel_types.as_deref(),
+                            var_length,
+                        )
+                        .await?;
+                    matched_relationships.extend(relationships);
+                } else {
+                    // Single-hop relationship matching
+                    let relationships = self
+                        .storage
+                        .get_relationships(&node.id, direction, rel_types)
+                        .await
+                        .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
 
-                matched_relationships.extend(relationships);
+                    matched_relationships.extend(relationships);
+                }
             }
         }
 
         debug!(pattern = ?pattern, found_count = matched_relationships.len(), "Matched relationship pattern");
         Ok(matched_relationships)
+    }
+
+    /// Traverse a variable-length path using BFS
+    /// Returns all relationships found within the hop range
+    async fn traverse_variable_length_path(
+        &self,
+        start_node_id: &NodeId,
+        direction: Direction,
+        rel_types: Option<&[String]>,
+        var_length: &VariableLengthSpec,
+    ) -> ProtocolResult<Vec<GraphRelationship>> {
+        let min_hops = var_length.min_hops.unwrap_or(1);
+        let max_hops = var_length.max_hops.unwrap_or(10); // Default max to prevent infinite traversal
+
+        let mut all_relationships = Vec::new();
+        let mut visited_nodes: HashSet<NodeId> = HashSet::new();
+        let mut visited_rels: HashSet<RelationshipId> = HashSet::new();
+
+        // BFS queue: (node_id, current_depth)
+        let mut queue: VecDeque<(NodeId, usize)> = VecDeque::new();
+        queue.push_back((start_node_id.clone(), 0));
+        visited_nodes.insert(start_node_id.clone());
+
+        while let Some((current_node_id, depth)) = queue.pop_front() {
+            // Stop if we've exceeded max hops
+            if depth >= max_hops {
+                continue;
+            }
+
+            // Get relationships from current node
+            let relationships = self
+                .storage
+                .get_relationships(
+                    &current_node_id,
+                    direction,
+                    rel_types.map(|t| t.to_vec()),
+                )
+                .await
+                .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
+
+            for rel in relationships {
+                // Skip if we've already visited this relationship
+                if visited_rels.contains(&rel.id) {
+                    continue;
+                }
+                visited_rels.insert(rel.id.clone());
+
+                let next_depth = depth + 1;
+
+                // Only include relationships at or after min_hops
+                if next_depth >= min_hops {
+                    all_relationships.push(rel.clone());
+                }
+
+                // Determine the next node to traverse to
+                let next_node_id = match direction {
+                    Direction::Outgoing => &rel.end_node,
+                    Direction::Incoming => &rel.start_node,
+                    Direction::Both => {
+                        // For undirected traversal, go to the other end
+                        if rel.start_node == current_node_id {
+                            &rel.end_node
+                        } else {
+                            &rel.start_node
+                        }
+                    }
+                };
+
+                // Continue traversal if we haven't visited this node and haven't exceeded max depth
+                if !visited_nodes.contains(next_node_id) && next_depth < max_hops {
+                    visited_nodes.insert(next_node_id.clone());
+                    queue.push_back((next_node_id.clone(), next_depth));
+                }
+            }
+        }
+
+        debug!(
+            start_node = %start_node_id,
+            min_hops = min_hops,
+            max_hops = max_hops,
+            found_relationships = all_relationships.len(),
+            "Completed variable-length path traversal"
+        );
+
+        Ok(all_relationships)
     }
 
     /// Create a node from pattern
@@ -928,6 +1046,158 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             std::cmp::Ordering::Equal
         });
     }
+
+    /// Execute a WITH clause
+    async fn execute_with_clause(
+        &self,
+        items: &[WithItem],
+        where_condition: Option<&Condition>,
+        context: &mut ExecutionContext,
+        result_nodes: &mut Vec<GraphNode>,
+        result_relationships: &mut Vec<GraphRelationship>,
+    ) -> ProtocolResult<()> {
+        // Create new context with renamed/filtered variables
+        let mut new_context = ExecutionContext::new();
+
+        for item in items {
+            let alias = item.alias.clone().unwrap_or_else(|| {
+                match &item.expression {
+                    Expression::Variable(v) => v.clone(),
+                    Expression::PropertyAccess { variable, .. } => variable.clone(),
+                    _ => "result".to_string(),
+                }
+            });
+
+            match &item.expression {
+                Expression::Variable(var) => {
+                    if let Some(nodes) = context.get_nodes(var) {
+                        new_context.bind_nodes(alias.clone(), nodes.clone());
+                    }
+                    if let Some(rels) = context.get_relationships(var) {
+                        new_context.bind_relationships(alias, rels.clone());
+                    }
+                }
+                Expression::PropertyAccess { variable, .. } => {
+                    // Property access - keep the nodes but mark for later projection
+                    if let Some(nodes) = context.get_nodes(variable) {
+                        new_context.bind_nodes(alias, nodes.clone());
+                    }
+                }
+                Expression::Aggregation { function, argument, distinct } => {
+                    // Aggregation - compute and store result
+                    let agg_result = self.evaluate_aggregation(function, argument, *distinct, context)?;
+                    // Store aggregation result in context (as a special marker node)
+                    new_context.bind_nodes(alias, vec![agg_result]);
+                }
+                Expression::CountAll => {
+                    // COUNT(*) - count all nodes
+                    let count = result_nodes.len();
+                    let mut count_node = GraphNode::new(Vec::new(), HashMap::new());
+                    count_node.properties.insert("value".to_string(), serde_json::Value::Number(count.into()));
+                    new_context.bind_nodes(alias, vec![count_node]);
+                }
+                _ => {}
+            }
+        }
+
+        // Apply WHERE condition if present
+        if let Some(condition) = where_condition {
+            *result_nodes = self.apply_where_filter_nodes(condition, result_nodes, &new_context).await?;
+            *result_relationships = self.apply_where_filter_relationships(condition, result_relationships, &new_context).await?;
+        }
+
+        // Replace context with new context
+        *context = new_context;
+        Ok(())
+    }
+
+    /// Execute an OPTIONAL MATCH clause
+    async fn execute_optional_match_clause(
+        &self,
+        pattern: &Pattern,
+        context: &mut ExecutionContext,
+    ) -> ProtocolResult<(Vec<GraphNode>, Vec<GraphRelationship>)> {
+        // OPTIONAL MATCH is like MATCH but doesn't fail if no results
+        // It returns NULL values for unmatched patterns
+        match self.execute_match_clause(pattern, context).await {
+            Ok((nodes, rels)) => Ok((nodes, rels)),
+            Err(_) => {
+                // No match found - return empty instead of error
+                Ok((Vec::new(), Vec::new()))
+            }
+        }
+    }
+
+    /// Evaluate an aggregation function
+    fn evaluate_aggregation(
+        &self,
+        function: &AggregationFunction,
+        argument: &Expression,
+        _distinct: bool,
+        context: &ExecutionContext,
+    ) -> ProtocolResult<GraphNode> {
+        let mut result_node = GraphNode::new(Vec::new(), HashMap::new());
+
+        // Get the values to aggregate
+        let values: Vec<serde_json::Value> = match argument {
+            Expression::Variable(var) => {
+                if let Some(nodes) = context.get_nodes(var) {
+                    nodes.iter().map(|n| serde_json::to_value(n).unwrap_or(serde_json::Value::Null)).collect()
+                } else {
+                    Vec::new()
+                }
+            }
+            Expression::PropertyAccess { variable, property } => {
+                if let Some(nodes) = context.get_nodes(variable) {
+                    nodes.iter().filter_map(|n| n.properties.get(property).cloned()).collect()
+                } else {
+                    Vec::new()
+                }
+            }
+            _ => Vec::new(),
+        };
+
+        let result = match function {
+            AggregationFunction::Count => {
+                serde_json::Value::Number(values.len().into())
+            }
+            AggregationFunction::Sum => {
+                let sum: f64 = values.iter()
+                    .filter_map(|v| v.as_f64())
+                    .sum();
+                serde_json::Value::Number(serde_json::Number::from_f64(sum).unwrap_or(serde_json::Number::from(0)))
+            }
+            AggregationFunction::Avg => {
+                let nums: Vec<f64> = values.iter().filter_map(|v| v.as_f64()).collect();
+                if nums.is_empty() {
+                    serde_json::Value::Null
+                } else {
+                    let avg = nums.iter().sum::<f64>() / nums.len() as f64;
+                    serde_json::Value::Number(serde_json::Number::from_f64(avg).unwrap_or(serde_json::Number::from(0)))
+                }
+            }
+            AggregationFunction::Min => {
+                values.iter()
+                    .filter_map(|v| v.as_f64())
+                    .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                    .map(|n| serde_json::Value::Number(serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0))))
+                    .unwrap_or(serde_json::Value::Null)
+            }
+            AggregationFunction::Max => {
+                values.iter()
+                    .filter_map(|v| v.as_f64())
+                    .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                    .map(|n| serde_json::Value::Number(serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0))))
+                    .unwrap_or(serde_json::Value::Null)
+            }
+            AggregationFunction::Collect => {
+                serde_json::Value::Array(values)
+            }
+        };
+
+        result_node.properties.insert("value".to_string(), result);
+        Ok(result_node)
+    }
 }
 
 /// Query execution context for variable bindings
@@ -1169,5 +1439,77 @@ mod tests {
             result.nodes[0].properties.get("name"),
             Some(&serde_json::Value::String("Alice".to_string()))
         );
+    }
+
+    #[tokio::test]
+    async fn test_variable_length_path_star() {
+        let engine = create_test_engine().await;
+
+        // Create a chain of nodes: A -> B -> C -> D
+        engine.execute_query("CREATE (a:Person {name: 'A'})").await.unwrap();
+        engine.execute_query("CREATE (b:Person {name: 'B'})").await.unwrap();
+        engine.execute_query("CREATE (c:Person {name: 'C'})").await.unwrap();
+        engine.execute_query("CREATE (d:Person {name: 'D'})").await.unwrap();
+
+        // Parse a query with variable-length path (just test parsing)
+        let parser = crate::protocols::cypher::cypher_parser::CypherParser::new();
+        let result = parser.parse("MATCH (a:Person)-[*]->(b:Person) RETURN a, b");
+        if let Err(ref e) = result {
+            eprintln!("Parse error: {:?}", e);
+        }
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+
+        let parsed = result.unwrap();
+        // Should have MATCH and RETURN clauses
+        assert_eq!(parsed.clauses.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_variable_length_path_with_bounds() {
+        let engine = create_test_engine().await;
+
+        // Create nodes
+        engine.execute_query("CREATE (a:Person {name: 'A'})").await.unwrap();
+        engine.execute_query("CREATE (b:Person {name: 'B'})").await.unwrap();
+
+        // Parse a query with variable-length path with bounds
+        let parser = crate::protocols::cypher::cypher_parser::CypherParser::new();
+        let result = parser.parse("MATCH (a:Person)-[*1..3]->(b:Person) RETURN a, b");
+        assert!(result.is_ok());
+
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_variable_length_path_min_only() {
+        // Parse a query with minimum hops only
+        let parser = crate::protocols::cypher::cypher_parser::CypherParser::new();
+        let result = parser.parse("MATCH (a:Person)-[*2..]->(b:Person) RETURN a, b");
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_variable_length_path_max_only() {
+        // Parse a query with maximum hops only
+        let parser = crate::protocols::cypher::cypher_parser::CypherParser::new();
+        let result = parser.parse("MATCH (a:Person)-[*..5]->(b:Person) RETURN a, b");
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_variable_length_path_exact() {
+        // Parse a query with exact number of hops
+        let parser = crate::protocols::cypher::cypher_parser::CypherParser::new();
+        let result = parser.parse("MATCH (a:Person)-[*3]->(b:Person) RETURN a, b");
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_variable_length_path_with_type() {
+        // Parse a query with variable-length path and relationship type
+        let parser = crate::protocols::cypher::cypher_parser::CypherParser::new();
+        let result = parser.parse("MATCH (a:Person)-[:KNOWS*1..3]->(b:Person) RETURN a, b");
+        assert!(result.is_ok());
     }
 }
