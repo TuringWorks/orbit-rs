@@ -2,6 +2,8 @@
 //!
 //! Comprehensive tests for CREATE, ALTER, and DROP operations
 
+#![cfg(feature = "postgres-wire")]
+
 use orbit_protocols::postgres_wire::sql::executor::{ExecutionResult, SqlExecutor};
 
 // ============================================================================
@@ -138,7 +140,10 @@ async fn test_create_table_with_foreign_key() {
     let executor = SqlExecutor::new().await.unwrap();
 
     // Create parent table first
-    executor.execute("CREATE TABLE departments (id INTEGER PRIMARY KEY, name TEXT)").await.unwrap();
+    executor
+        .execute("CREATE TABLE departments (id INTEGER PRIMARY KEY, name TEXT)")
+        .await
+        .unwrap();
 
     // Create child table with foreign key
     let sql = "CREATE TABLE employees (id INTEGER PRIMARY KEY, dept_id INTEGER REFERENCES departments(id))";
@@ -195,7 +200,10 @@ async fn test_drop_table() {
     let executor = SqlExecutor::new().await.unwrap();
 
     // Create table first
-    executor.execute("CREATE TABLE temp_table (id INTEGER)").await.unwrap();
+    executor
+        .execute("CREATE TABLE temp_table (id INTEGER)")
+        .await
+        .unwrap();
 
     // Drop table
     let sql = "DROP TABLE temp_table";
@@ -230,8 +238,14 @@ async fn test_drop_multiple_tables() {
     let executor = SqlExecutor::new().await.unwrap();
 
     // Create tables first
-    executor.execute("CREATE TABLE table1 (id INTEGER)").await.unwrap();
-    executor.execute("CREATE TABLE table2 (id INTEGER)").await.unwrap();
+    executor
+        .execute("CREATE TABLE table1 (id INTEGER)")
+        .await
+        .unwrap();
+    executor
+        .execute("CREATE TABLE table2 (id INTEGER)")
+        .await
+        .unwrap();
 
     // Drop multiple tables
     let sql = "DROP TABLE table1, table2";
@@ -256,14 +270,20 @@ async fn test_create_index() {
     let executor = SqlExecutor::new().await.unwrap();
 
     // Create table first
-    executor.execute("CREATE TABLE users (id INTEGER, name TEXT)").await.unwrap();
+    executor
+        .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+        .await
+        .unwrap();
 
     // Create index
     let sql = "CREATE INDEX idx_users_name ON users (name)";
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::CreateIndex { index_name, table_name } => {
+        ExecutionResult::CreateIndex {
+            index_name,
+            table_name,
+        } => {
             assert_eq!(index_name, "idx_users_name");
             assert_eq!(table_name, "users");
         }
@@ -276,14 +296,20 @@ async fn test_create_unique_index() {
     let executor = SqlExecutor::new().await.unwrap();
 
     // Create table first
-    executor.execute("CREATE TABLE users (id INTEGER, email TEXT)").await.unwrap();
+    executor
+        .execute("CREATE TABLE users (id INTEGER, email TEXT)")
+        .await
+        .unwrap();
 
     // Create unique index
     let sql = "CREATE UNIQUE INDEX idx_users_email ON users (email)";
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::CreateIndex { index_name, table_name } => {
+        ExecutionResult::CreateIndex {
+            index_name,
+            table_name,
+        } => {
             assert_eq!(index_name, "idx_users_email");
             assert_eq!(table_name, "users");
         }
@@ -296,7 +322,10 @@ async fn test_create_index_if_not_exists() {
     let executor = SqlExecutor::new().await.unwrap();
 
     // Create table first
-    executor.execute("CREATE TABLE users (id INTEGER, name TEXT)").await.unwrap();
+    executor
+        .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+        .await
+        .unwrap();
 
     // Create index
     let sql = "CREATE INDEX IF NOT EXISTS idx_users_name ON users (name)";
@@ -306,7 +335,10 @@ async fn test_create_index_if_not_exists() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::CreateIndex { index_name, table_name } => {
+        ExecutionResult::CreateIndex {
+            index_name,
+            table_name,
+        } => {
             assert_eq!(index_name, "idx_users_name");
             assert_eq!(table_name, "users");
         }
@@ -319,14 +351,20 @@ async fn test_create_composite_index() {
     let executor = SqlExecutor::new().await.unwrap();
 
     // Create table first
-    executor.execute("CREATE TABLE users (id INTEGER, first_name TEXT, last_name TEXT)").await.unwrap();
+    executor
+        .execute("CREATE TABLE users (id INTEGER, first_name TEXT, last_name TEXT)")
+        .await
+        .unwrap();
 
     // Create composite index
     let sql = "CREATE INDEX idx_users_fullname ON users (first_name, last_name)";
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::CreateIndex { index_name, table_name } => {
+        ExecutionResult::CreateIndex {
+            index_name,
+            table_name,
+        } => {
             assert_eq!(index_name, "idx_users_fullname");
             assert_eq!(table_name, "users");
         }
@@ -343,8 +381,14 @@ async fn test_drop_index() {
     let executor = SqlExecutor::new().await.unwrap();
 
     // Create table and index first
-    executor.execute("CREATE TABLE users (id INTEGER, name TEXT)").await.unwrap();
-    executor.execute("CREATE INDEX idx_users_name ON users (name)").await.unwrap();
+    executor
+        .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+        .await
+        .unwrap();
+    executor
+        .execute("CREATE INDEX idx_users_name ON users (name)")
+        .await
+        .unwrap();
 
     // Drop index
     let sql = "DROP INDEX idx_users_name";
@@ -383,7 +427,10 @@ async fn test_create_view() {
     let executor = SqlExecutor::new().await.unwrap();
 
     // Create table first
-    executor.execute("CREATE TABLE users (id INTEGER, name TEXT, active BOOLEAN)").await.unwrap();
+    executor
+        .execute("CREATE TABLE users (id INTEGER, name TEXT, active BOOLEAN)")
+        .await
+        .unwrap();
 
     // Create view
     let sql = "CREATE VIEW active_users AS SELECT id, name FROM users WHERE active = true";
@@ -402,7 +449,10 @@ async fn test_create_or_replace_view() {
     let executor = SqlExecutor::new().await.unwrap();
 
     // Create table first
-    executor.execute("CREATE TABLE users (id INTEGER, name TEXT)").await.unwrap();
+    executor
+        .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+        .await
+        .unwrap();
 
     // Create view
     let sql = "CREATE VIEW user_names AS SELECT name FROM users";
@@ -429,8 +479,14 @@ async fn test_drop_view() {
     let executor = SqlExecutor::new().await.unwrap();
 
     // Create table and view first
-    executor.execute("CREATE TABLE users (id INTEGER, name TEXT)").await.unwrap();
-    executor.execute("CREATE VIEW user_names AS SELECT name FROM users").await.unwrap();
+    executor
+        .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+        .await
+        .unwrap();
+    executor
+        .execute("CREATE VIEW user_names AS SELECT name FROM users")
+        .await
+        .unwrap();
 
     // Drop view
     let sql = "DROP VIEW user_names";

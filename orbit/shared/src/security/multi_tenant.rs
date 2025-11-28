@@ -381,7 +381,9 @@ impl CrossTenantPolicy {
         if !self.active || self.is_expired() {
             return false;
         }
-        self.shared_resources.iter().any(|r| r == resource || r == "*")
+        self.shared_resources
+            .iter()
+            .any(|r| r == resource || r == "*")
             && self.allowed_actions.contains(&action)
     }
 }
@@ -424,7 +426,10 @@ impl ResourceUsage {
         }
         if let Some(max) = quota.max_qps {
             if self.current_qps > max {
-                return Some(format!("QPS quota exceeded: {} > {}", self.current_qps, max));
+                return Some(format!(
+                    "QPS quota exceeded: {} > {}",
+                    self.current_qps, max
+                ));
             }
         }
         if let Some(max) = quota.max_connections {
@@ -747,12 +752,7 @@ impl TenantManager {
     }
 
     /// Filter data by tenant
-    pub fn filter_by_tenant<T, F>(
-        &self,
-        data: Vec<T>,
-        tenant_id: &str,
-        get_tenant: F,
-    ) -> Vec<T>
+    pub fn filter_by_tenant<T, F>(&self, data: Vec<T>, tenant_id: &str, get_tenant: F) -> Vec<T>
     where
         F: Fn(&T) -> &str,
     {
@@ -996,7 +996,10 @@ mod tests {
 
         // Enterprise tier
         let enterprise = ResourceQuota::enterprise();
-        assert_eq!(enterprise.max_storage_bytes, Some(1024 * 1024 * 1024 * 1024));
+        assert_eq!(
+            enterprise.max_storage_bytes,
+            Some(1024 * 1024 * 1024 * 1024)
+        );
         assert_eq!(enterprise.max_qps, Some(10000));
 
         // Unlimited

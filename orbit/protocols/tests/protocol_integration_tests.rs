@@ -3,7 +3,7 @@
 //! These tests verify that both protocol adapters can be instantiated,
 //! configured, and integrated with the Orbit engine.
 
-#[cfg(test)]
+#[cfg(all(test, feature = "cql"))]
 mod cql_tests {
     use orbit_protocols::cql::{CqlAdapter, CqlConfig};
 
@@ -19,7 +19,10 @@ mod cql_tests {
         };
 
         let adapter = CqlAdapter::new(config).await;
-        assert!(adapter.is_ok(), "CQL adapter should be created successfully");
+        assert!(
+            adapter.is_ok(),
+            "CQL adapter should be created successfully"
+        );
     }
 
     #[tokio::test]
@@ -71,7 +74,7 @@ mod cql_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "mysql"))]
 mod mysql_tests {
     use orbit_protocols::mysql::{MySqlAdapter, MySqlConfig};
 
@@ -87,7 +90,10 @@ mod mysql_tests {
         };
 
         let adapter = MySqlAdapter::new(config).await;
-        assert!(adapter.is_ok(), "MySQL adapter should be created successfully");
+        assert!(
+            adapter.is_ok(),
+            "MySQL adapter should be created successfully"
+        );
     }
 
     #[tokio::test]
@@ -121,8 +127,8 @@ mod mysql_tests {
 
     #[test]
     fn test_mysql_packet_encoding() {
-        use orbit_protocols::mysql::packet::MySqlPacket;
         use bytes::Bytes;
+        use orbit_protocols::mysql::packet::MySqlPacket;
 
         let packet = MySqlPacket::new(1, Bytes::from("test payload"));
         let encoded = packet.encode();
@@ -143,7 +149,7 @@ mod mysql_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "cql", feature = "mysql"))]
 mod integration_tests {
     use orbit_protocols::cql::{CqlAdapter, CqlConfig};
     use orbit_protocols::mysql::{MySqlAdapter, MySqlConfig};

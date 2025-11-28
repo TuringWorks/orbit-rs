@@ -230,7 +230,9 @@ impl AQLSpatialExecutor {
 
             let exterior_ring = LinearRing::new(points)?;
             let polygon = Polygon::new(exterior_ring, vec![], Some(WGS84_SRID))?;
-            Ok(AQLSpatialResult::Geometry(SpatialGeometry::Polygon(polygon)))
+            Ok(AQLSpatialResult::Geometry(SpatialGeometry::Polygon(
+                polygon,
+            )))
         } else {
             Err(SpatialError::OperationError(
                 "Polygon requires at least 3 points".to_string(),
@@ -290,7 +292,9 @@ impl AQLSpatialExecutor {
         }
 
         let linestring = LineString::new(points, Some(WGS84_SRID))?;
-        Ok(AQLSpatialResult::Geometry(SpatialGeometry::LineString(linestring)))
+        Ok(AQLSpatialResult::Geometry(SpatialGeometry::LineString(
+            linestring,
+        )))
     }
 
     /// GEO_MULTILINESTRING(linestrings_array)

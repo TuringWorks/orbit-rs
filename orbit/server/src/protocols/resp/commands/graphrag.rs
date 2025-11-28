@@ -8,12 +8,12 @@
 //! - GRAPHRAG.ENTITIES - List entities
 //! - GRAPHRAG.SIMILAR - Find similar entities
 
+use super::traits::CommandHandler;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::graphrag::graph_rag_actor::{
-    GraphRAGDocumentRequest, GraphRAGQuery, GraphRAGActor,
+    GraphRAGActor, GraphRAGDocumentRequest, GraphRAGQuery,
 };
 use crate::protocols::resp::simple_local::SimpleLocalRegistry;
-use super::traits::CommandHandler;
 use crate::protocols::resp::types::RespValue;
 use orbit_client::{OrbitClient, OrbitClientConfig};
 use orbit_shared::graphrag::LLMProvider;
@@ -53,12 +53,12 @@ impl GraphRAGCommands {
     ) -> ProtocolResult<Arc<GraphRAGActor>> {
         // Try to get existing actor from local registry
         let _actor_key = format!("graphrag:{}", kg_name);
-        
+
         // For now, create a new actor (in production, this would use the actor system)
         // TODO: Integrate with actual Orbit actor system
         let mut actor = GraphRAGActor::new(kg_name.to_string());
         actor.initialize_components();
-        
+
         // Try to add default LLM provider if available
         if let Ok(ollama_model) = std::env::var("OLLAMA_MODEL") {
             actor.add_llm_provider(
@@ -69,7 +69,7 @@ impl GraphRAGCommands {
                 },
             );
         }
-        
+
         if let Ok(openai_key) = std::env::var("OPENAI_API_KEY") {
             actor.add_llm_provider(
                 "openai".to_string(),
@@ -81,7 +81,7 @@ impl GraphRAGCommands {
                 },
             );
         }
-        
+
         Ok(Arc::new(actor))
     }
 
@@ -104,7 +104,7 @@ impl GraphRAGCommands {
             .ok_or_else(|| ProtocolError::RespError("ERR invalid text".to_string()))?;
 
         let _actor = self.get_or_create_graphrag_actor(&kg_name).await?;
-        
+
         // Create Orbit client if needed
         let orbit_client = if let Some(ref client) = self.orbit_client {
             client.clone()
@@ -131,7 +131,7 @@ impl GraphRAGCommands {
         // In production, this would use the actor system to get mutable access
         let mut actor_mut = GraphRAGActor::new(kg_name.clone());
         actor_mut.initialize_components();
-        
+
         let result = actor_mut
             .process_document(orbit_client, request)
             .await
@@ -200,14 +200,15 @@ impl GraphRAGCommands {
         }
 
         let _actor = self.get_or_create_graphrag_actor(&kg_name).await?;
-        
+
         let orbit_client = if let Some(ref client) = self.orbit_client {
             client.clone()
         } else {
             // Create offline client for local operations
             let config = OrbitClientConfig::default();
-            let client = OrbitClient::new_offline(config).await
-                .map_err(|e| ProtocolError::RespError(format!("ERR failed to create client: {}", e)))?;
+            let client = OrbitClient::new_offline(config).await.map_err(|e| {
+                ProtocolError::RespError(format!("ERR failed to create client: {}", e))
+            })?;
             Arc::new(client)
         };
 
@@ -226,10 +227,10 @@ impl GraphRAGCommands {
         // In production, this would use the actor system properly
         let mut actor_mut = GraphRAGActor::new(kg_name.clone());
         actor_mut.initialize_components();
-        
+
         // Copy LLM providers if any were configured
         // (This is a limitation of the current design - actors should be managed by the actor system)
-        
+
         let result = actor_mut
             .query_rag(orbit_client, query)
             .await

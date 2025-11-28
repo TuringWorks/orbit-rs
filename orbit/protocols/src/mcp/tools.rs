@@ -93,10 +93,7 @@ pub async fn execute_tool(
 ) -> McpToolResult {
     match tool_name {
         "query_data" => {
-            let query = match parameters
-                .get("query")
-                .and_then(|v| v.as_str())
-            {
+            let query = match parameters.get("query").and_then(|v| v.as_str()) {
                 Some(q) => q,
                 None => return McpToolResult::error("Missing 'query' parameter".to_string()),
             };
@@ -110,10 +107,7 @@ pub async fn execute_tool(
             }))
         }
         "describe_schema" => {
-            let table_name = match parameters
-                .get("table_name")
-                .and_then(|v| v.as_str())
-            {
+            let table_name = match parameters.get("table_name").and_then(|v| v.as_str()) {
                 Some(t) => t,
                 None => return McpToolResult::error("Missing 'table_name' parameter".to_string()),
             };
@@ -125,10 +119,7 @@ pub async fn execute_tool(
             }))
         }
         "analyze_data" => {
-            let table_name = match parameters
-                .get("table_name")
-                .and_then(|v| v.as_str())
-            {
+            let table_name = match parameters.get("table_name").and_then(|v| v.as_str()) {
                 Some(t) => t,
                 None => return McpToolResult::error("Missing 'table_name' parameter".to_string()),
             };
@@ -139,13 +130,11 @@ pub async fn execute_tool(
                 "note": "This tool requires integration with Orbit-RS analytical engine"
             }))
         }
-        "list_tables" => {
-            McpToolResult::success(serde_json::json!({
-                "tables": [],
-                "message": "Table listing is available",
-                "note": "This tool requires integration with Orbit-RS metadata system"
-            }))
-        }
+        "list_tables" => McpToolResult::success(serde_json::json!({
+            "tables": [],
+            "message": "Table listing is available",
+            "note": "This tool requires integration with Orbit-RS metadata system"
+        })),
         _ => McpToolResult::error(format!("Tool '{tool_name}' not yet implemented")),
     }
 }

@@ -29,17 +29,17 @@ pub enum Key {
     /// String-based key
     StringKey {
         /// The string key value
-        key: String
+        key: String,
     },
     /// 32-bit integer key
     Int32Key {
         /// The integer key value
-        key: i32
+        key: i32,
     },
     /// 64-bit integer key
     Int64Key {
         /// The integer key value
-        key: i64
+        key: i64,
     },
     /// No key (singleton)
     NoKey,

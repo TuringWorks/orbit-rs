@@ -236,8 +236,7 @@ pub struct BatchStats {
 
 // Re-export connection pool types from the unified pooling module
 pub use crate::pooling::{
-    AdvancedConnectionPool as ConnectionPool,
-    AdvancedPoolConfig as ConnectionPoolConfig,
+    AdvancedConnectionPool as ConnectionPool, AdvancedPoolConfig as ConnectionPoolConfig,
     ConnectionPoolMetrics as PoolStats,
 };
 

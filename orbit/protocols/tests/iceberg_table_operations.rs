@@ -15,10 +15,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use iceberg::io::{FileIO, FileIOBuilder};
-use iceberg::spec::{Schema, NestedField, PrimitiveType, Type, TableMetadataBuilder, FormatVersion, UnboundPartitionSpec, SortOrder};
+use iceberg::spec::{
+    FormatVersion, NestedField, PrimitiveType, Schema, SortOrder, TableMetadataBuilder, Type,
+    UnboundPartitionSpec,
+};
 
 use orbit_protocols::postgres_wire::sql::execution::{
-    Column, ColumnBatch, NullBitmap, column_batch_to_arrow,
+    column_batch_to_arrow, Column, ColumnBatch, NullBitmap,
 };
 
 const MINIO_ENDPOINT: &str = "http://localhost:9000";
@@ -42,26 +45,22 @@ fn create_file_io() -> FileIO {
 fn create_events_schema() -> Schema {
     Schema::builder()
         .with_fields(vec![
-            Arc::new(NestedField::required(
-                1,
-                "id",
-                Type::Primitive(PrimitiveType::Int),
-            ).with_doc("Event ID")),
-            Arc::new(NestedField::optional(
-                2,
-                "name",
-                Type::Primitive(PrimitiveType::String),
-            ).with_doc("Event name")),
-            Arc::new(NestedField::optional(
-                3,
-                "value",
-                Type::Primitive(PrimitiveType::Int),
-            ).with_doc("Event value")),
-            Arc::new(NestedField::required(
-                4,
-                "timestamp",
-                Type::Primitive(PrimitiveType::Long),
-            ).with_doc("Event timestamp (epoch seconds)")),
+            Arc::new(
+                NestedField::required(1, "id", Type::Primitive(PrimitiveType::Int))
+                    .with_doc("Event ID"),
+            ),
+            Arc::new(
+                NestedField::optional(2, "name", Type::Primitive(PrimitiveType::String))
+                    .with_doc("Event name"),
+            ),
+            Arc::new(
+                NestedField::optional(3, "value", Type::Primitive(PrimitiveType::Int))
+                    .with_doc("Event value"),
+            ),
+            Arc::new(
+                NestedField::required(4, "timestamp", Type::Primitive(PrimitiveType::Long))
+                    .with_doc("Event timestamp (epoch seconds)"),
+            ),
         ])
         .with_identifier_field_ids(vec![1])
         .build()
@@ -75,9 +74,7 @@ fn create_events_data(row_count: usize, batch_id: i32) -> ColumnBatch {
     let names: Vec<String> = (0..row_count)
         .map(|i| format!("event_{}", base + i as i32))
         .collect();
-    let values: Vec<i32> = (0..row_count)
-        .map(|i| (base + i as i32) * 10)
-        .collect();
+    let values: Vec<i32> = (0..row_count).map(|i| (base + i as i32) * 10).collect();
     let timestamps: Vec<i64> = (0..row_count)
         .map(|i| 1700000000 + (base + i as i32) as i64)
         .collect();
@@ -124,7 +121,8 @@ async fn test_create_iceberg_table_manually() {
         location.clone(),
         FormatVersion::V2,
         HashMap::new(),
-    ).expect("Failed to create builder");
+    )
+    .expect("Failed to create builder");
 
     let build_result = builder.build().expect("Failed to build metadata");
     let metadata = build_result.metadata;
@@ -148,15 +146,14 @@ async fn test_create_iceberg_table_manually() {
 #[tokio::test]
 #[ignore] // Requires MinIO
 async fn test_write_data_file_to_s3() {
+    use opendal::Operator;
     use parquet::arrow::ArrowWriter;
     use parquet::file::properties::WriterProperties;
-    use opendal::Operator;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     // Create test data
     let batch = create_events_data(1000, 0);
-    let arrow_batch = column_batch_to_arrow(&batch)
-        .expect("Failed to convert to Arrow");
+    let arrow_batch = column_batch_to_arrow(&batch).expect("Failed to convert to Arrow");
 
     println!("✅ Created {} rows of test data", arrow_batch.num_rows());
 
@@ -165,7 +162,7 @@ async fn test_write_data_file_to_s3() {
     {
         let props = WriterProperties::builder()
             .set_compression(parquet::basic::Compression::ZSTD(
-                parquet::basic::ZstdLevel::try_new(3).unwrap()
+                parquet::basic::ZstdLevel::try_new(3).unwrap(),
             ))
             .build();
 
@@ -196,30 +193,33 @@ async fn test_write_data_file_to_s3() {
         .unwrap()
         .as_millis();
 
-    let data_path = format!(
-        "warehouse/test_events/data/00000-0-{}.parquet",
-        timestamp
-    );
+    let data_path = format!("warehouse/test_events/data/00000-0-{}.parquet", timestamp);
 
     op.write(&data_path, parquet_data.clone())
         .await
         .expect("Failed to upload");
 
-    println!("✅ Uploaded data file to s3://{}/{}", MINIO_BUCKET, data_path);
+    println!(
+        "✅ Uploaded data file to s3://{}/{}",
+        MINIO_BUCKET, data_path
+    );
 
     // Verify file exists
     let metadata = op.stat(&data_path).await.expect("Failed to stat");
     assert_eq!(metadata.content_length(), parquet_data.len() as u64);
 
-    println!("✅ Verified file exists (size: {} bytes)", metadata.content_length());
+    println!(
+        "✅ Verified file exists (size: {} bytes)",
+        metadata.content_length()
+    );
 }
 
 #[tokio::test]
 #[ignore] // Requires MinIO
 async fn test_read_data_file_from_s3() {
-    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
     use bytes::Bytes;
     use opendal::Operator;
+    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
     // Setup operator
     let builder = opendal::services::S3::default()
@@ -235,8 +235,7 @@ async fn test_read_data_file_from_s3() {
 
     // First, write test data
     let batch = create_events_data(500, 1);
-    let arrow_batch = column_batch_to_arrow(&batch)
-        .expect("Failed to convert");
+    let arrow_batch = column_batch_to_arrow(&batch).expect("Failed to convert");
 
     let mut parquet_data = Vec::new();
     {
@@ -255,16 +254,13 @@ async fn test_read_data_file_from_s3() {
     println!("✅ Uploaded test file");
 
     // Now read it back (simulating Iceberg scan)
-    let downloaded = op.read(data_path)
-        .await
-        .expect("Failed to download");
+    let downloaded = op.read(data_path).await.expect("Failed to download");
 
     println!("✅ Downloaded {} bytes", downloaded.len());
 
     // Parse Parquet
     let bytes = Bytes::from(downloaded.to_vec());
-    let builder = ParquetRecordBatchReaderBuilder::try_new(bytes)
-        .expect("Failed to create reader");
+    let builder = ParquetRecordBatchReaderBuilder::try_new(bytes).expect("Failed to create reader");
 
     let mut reader = builder.build().expect("Failed to build reader");
     let read_batch = reader.next().unwrap().expect("Failed to read");
@@ -274,21 +270,25 @@ async fn test_read_data_file_from_s3() {
     assert_eq!(read_batch.num_columns(), 4);
 
     // Verify data integrity
-    let id_array = read_batch.column(0)
+    let id_array = read_batch
+        .column(0)
         .as_any()
         .downcast_ref::<arrow::array::Int32Array>()
         .expect("Wrong type for ID column");
 
     // First ID should be 500 (batch_id=1, row_count=500, base=1*500=500)
     assert_eq!(id_array.value(0), 500);
-    println!("✅ Data integrity verified (first ID: {})", id_array.value(0));
+    println!(
+        "✅ Data integrity verified (first ID: {})",
+        id_array.value(0)
+    );
 }
 
 #[tokio::test]
 #[ignore] // Requires MinIO
 async fn test_multiple_snapshots_simulation() {
-    use parquet::arrow::ArrowWriter;
     use opendal::Operator;
+    use parquet::arrow::ArrowWriter;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let builder = opendal::services::S3::default()
@@ -305,8 +305,7 @@ async fn test_multiple_snapshots_simulation() {
     // Simulate 3 snapshots (time travel scenario)
     for snapshot_id in 0..3 {
         let batch = create_events_data(100, snapshot_id);
-        let arrow_batch = column_batch_to_arrow(&batch)
-            .expect("Failed to convert");
+        let arrow_batch = column_batch_to_arrow(&batch).expect("Failed to convert");
 
         let mut parquet_data = Vec::new();
         {
@@ -330,7 +329,8 @@ async fn test_multiple_snapshots_simulation() {
             .await
             .expect("Failed to upload");
 
-        println!("✅ Snapshot {} written ({} rows, IDs {}-{})",
+        println!(
+            "✅ Snapshot {} written ({} rows, IDs {}-{})",
             snapshot_id,
             arrow_batch.num_rows(),
             snapshot_id * 100,
@@ -353,8 +353,8 @@ async fn test_multiple_snapshots_simulation() {
 #[tokio::test]
 #[ignore] // Requires MinIO
 async fn test_schema_evolution_simulation() {
-    use parquet::arrow::ArrowWriter;
     use opendal::Operator;
+    use parquet::arrow::ArrowWriter;
 
     let builder = opendal::services::S3::default()
         .endpoint(MINIO_ENDPOINT)
@@ -383,7 +383,10 @@ async fn test_schema_evolution_simulation() {
         .await
         .expect("Failed to upload");
 
-    println!("✅ Schema V1: {} columns (id, name, value, timestamp)", arrow_v1.num_columns());
+    println!(
+        "✅ Schema V1: {} columns (id, name, value, timestamp)",
+        arrow_v1.num_columns()
+    );
 
     // Version 2: Add new column (simulated - would need new schema)
     // In a real Iceberg scenario:
@@ -403,8 +406,8 @@ async fn test_schema_evolution_simulation() {
 #[tokio::test]
 #[ignore] // Requires MinIO
 async fn test_partition_pruning_simulation() {
-    use parquet::arrow::ArrowWriter;
     use opendal::Operator;
+    use parquet::arrow::ArrowWriter;
 
     let builder = opendal::services::S3::default()
         .endpoint(MINIO_ENDPOINT)
@@ -433,10 +436,7 @@ async fn test_partition_pruning_simulation() {
         }
 
         // Iceberg partition path format
-        let partition_path = format!(
-            "warehouse/test_events/data/day={}/data.parquet",
-            day
-        );
+        let partition_path = format!("warehouse/test_events/data/day={}/data.parquet", day);
 
         op.write(&partition_path, parquet_data)
             .await

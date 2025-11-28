@@ -353,7 +353,7 @@ impl VectorActor {
     }
 
     /// Perform vector similarity search
-    /// 
+    ///
     /// Note: GPU acceleration is available via `orbit-compute::vector_similarity::GPUVectorSimilarity`
     /// but requires async refactoring of this method. For now, this uses CPU-parallel execution
     /// via Rayon when available, or sequential CPU execution otherwise.
@@ -370,8 +370,8 @@ impl VectorActor {
                             return false;
                         }
                     } else {
-                            return false;
-                        }
+                        return false;
+                    }
                 }
                 true
             })

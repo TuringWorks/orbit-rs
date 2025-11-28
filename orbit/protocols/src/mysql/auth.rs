@@ -1,8 +1,8 @@
 //! MySQL authentication handling
 
-use bytes::{Buf, Bytes};
 use crate::error::{ProtocolError, ProtocolResult};
-use sha2::{Sha256, Digest};
+use bytes::{Buf, Bytes};
+use sha2::{Digest, Sha256};
 
 /// Authentication plugin types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -143,9 +143,8 @@ impl MySqlAuth {
     ) -> Self {
         // Generate random auth data (salt)
         let auth_data = [
-            0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
-            0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00,
-            0x11, 0x22, 0x33, 0x44,
+            0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE,
+            0xFF, 0x00, 0x11, 0x22, 0x33, 0x44,
         ];
 
         Self {
@@ -229,7 +228,7 @@ impl MySqlAuth {
         // For now, use a simple comparison (in production, implement proper MySQL native password)
         // This is a simplified version - full implementation would require SHA1-based validation
         let expected_password = self.expected_password.as_ref().unwrap();
-        
+
         // Simple validation: check if auth_response is not empty
         // In production, this should implement the full MySQL native password protocol
         !auth_response.is_empty() && !expected_password.is_empty()
@@ -245,10 +244,10 @@ impl MySqlAuth {
 
         let expected_password = self.expected_password.as_ref().unwrap();
         let provided_password = String::from_utf8_lossy(auth_response);
-        
+
         // Remove null terminator if present
         let provided_password = provided_password.trim_end_matches('\0');
-        
+
         provided_password == expected_password
     }
 

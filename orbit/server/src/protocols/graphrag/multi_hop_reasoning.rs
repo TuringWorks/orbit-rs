@@ -8,13 +8,15 @@ use orbit_client::OrbitClient;
 use orbit_shared::graphrag::{ConnectionExplanation, ReasoningPath};
 use orbit_shared::{Addressable, Key, OrbitError, OrbitResult};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
+#[cfg(feature = "gpu-acceleration")]
+use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 #[cfg(feature = "gpu-acceleration")]
 use orbit_compute::graph_traversal::{
-    GraphData, GPUGraphTraversal, NodeProperties, TraversalConfig, TraversalResult,
+    GPUGraphTraversal, GraphData, NodeProperties, TraversalConfig, TraversalResult,
 };
 
 /// Multi-hop reasoning engine for graph traversal
@@ -425,11 +427,12 @@ impl MultiHopReasoningEngine {
         let from_id = entity_to_id
             .get(&query.from_entity)
             .copied()
-            .ok_or_else(|| OrbitError::internal(format!("Entity not found: {}", query.from_entity)))?;
-        let to_id = entity_to_id
-            .get(&query.to_entity)
-            .copied()
-            .ok_or_else(|| OrbitError::internal(format!("Entity not found: {}", query.to_entity)))?;
+            .ok_or_else(|| {
+                OrbitError::internal(format!("Entity not found: {}", query.from_entity))
+            })?;
+        let to_id = entity_to_id.get(&query.to_entity).copied().ok_or_else(|| {
+            OrbitError::internal(format!("Entity not found: {}", query.to_entity))
+        })?;
 
         // Execute GPU traversal
         let result = traversal

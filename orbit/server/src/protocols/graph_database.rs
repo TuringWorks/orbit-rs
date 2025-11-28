@@ -5,12 +5,15 @@
 //!
 //! Supports both in-memory and persistent storage backends.
 
+#[cfg(feature = "storage-rocksdb")]
 mod persistent_storage;
+#[cfg(feature = "storage-rocksdb")]
 pub use persistent_storage::PersistentGraphStorage;
 
 use crate::protocols::cypher::graph_engine::QueryResult;
-use crate::protocols::cypher::{CypherParser, GraphEngine};
+#[cfg(feature = "storage-rocksdb")]
 use crate::protocols::cypher::storage::CypherGraphStorage;
+use crate::protocols::cypher::{CypherParser, GraphEngine};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use orbit_shared::graph::InMemoryGraphStorage;
 use orbit_shared::Addressable;
@@ -261,7 +264,7 @@ impl GraphActor {
         // For now, we'll use in-memory storage and sync to persistent storage separately
         let storage = Arc::new(InMemoryGraphStorage::new());
         let engine = GraphEngine::new(storage);
-        
+
         // TODO: Integrate persistent storage sync after query execution
         // This would require modifying GraphEngine to support persistent backends
 

@@ -34,8 +34,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// Memory profile classification for actors based on latency requirements
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum ActorMemoryProfile {
     /// Hot profile: <1ms tail latency requirement
     /// Used for: real-time analytics, high-frequency trading, gaming
@@ -69,9 +68,9 @@ impl ActorMemoryProfile {
             ActorMemoryProfile::Hot => Duration::from_micros(500),
             ActorMemoryProfile::Warm => Duration::from_millis(5),
             ActorMemoryProfile::Cold => Duration::from_millis(100),
-            ActorMemoryProfile::Custom { target_latency_us, .. } => {
-                Duration::from_micros(*target_latency_us)
-            }
+            ActorMemoryProfile::Custom {
+                target_latency_us, ..
+            } => Duration::from_micros(*target_latency_us),
         }
     }
 
@@ -103,7 +102,9 @@ impl ActorMemoryProfile {
             ActorMemoryProfile::Hot => 100,
             ActorMemoryProfile::Warm => 50,
             ActorMemoryProfile::Cold => 10,
-            ActorMemoryProfile::Custom { target_latency_us, .. } => {
+            ActorMemoryProfile::Custom {
+                target_latency_us, ..
+            } => {
                 if *target_latency_us < 1000 {
                     100
                 } else if *target_latency_us < 10000 {
@@ -115,7 +116,6 @@ impl ActorMemoryProfile {
         }
     }
 }
-
 
 /// Estimated memory footprint for an actor
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -204,7 +204,11 @@ pub enum PrefetchDataType {
     /// Document collection shard
     DocumentShard { collection: String, shard_id: u32 },
     /// Generic data extent
-    Extent { file_id: u64, offset: u64, length: u64 },
+    Extent {
+        file_id: u64,
+        offset: u64,
+        length: u64,
+    },
 }
 
 /// Trait for actors to declare their memory behavior
@@ -419,8 +423,7 @@ mod tests {
         }
 
         fn estimate_footprint(&self) -> MemoryFootprint {
-            MemoryFootprint::new(self.data_size_mb, 32)
-                .with_peak_multiplier(2.0)
+            MemoryFootprint::new(self.data_size_mb, 32).with_peak_multiplier(2.0)
         }
 
         fn connected_actors(&self) -> Vec<AddressableReference> {
@@ -441,14 +444,22 @@ mod tests {
 
     #[test]
     fn test_memory_profile_latency() {
-        assert!(ActorMemoryProfile::Hot.target_latency() < ActorMemoryProfile::Warm.target_latency());
-        assert!(ActorMemoryProfile::Warm.target_latency() < ActorMemoryProfile::Cold.target_latency());
+        assert!(
+            ActorMemoryProfile::Hot.target_latency() < ActorMemoryProfile::Warm.target_latency()
+        );
+        assert!(
+            ActorMemoryProfile::Warm.target_latency() < ActorMemoryProfile::Cold.target_latency()
+        );
     }
 
     #[test]
     fn test_memory_profile_priority() {
-        assert!(ActorMemoryProfile::Hot.priority_level() > ActorMemoryProfile::Warm.priority_level());
-        assert!(ActorMemoryProfile::Warm.priority_level() > ActorMemoryProfile::Cold.priority_level());
+        assert!(
+            ActorMemoryProfile::Hot.priority_level() > ActorMemoryProfile::Warm.priority_level()
+        );
+        assert!(
+            ActorMemoryProfile::Warm.priority_level() > ActorMemoryProfile::Cold.priority_level()
+        );
     }
 
     #[test]
@@ -498,14 +509,12 @@ mod tests {
     #[test]
     fn test_prefetch_candidate() {
         let footprint = MemoryFootprint::new(100, 50)
-            .with_prefetch(vec![
-                PrefetchCandidate {
-                    data_type: PrefetchDataType::GraphPartition { partition_id: 42 },
-                    size_mb: 64,
-                    priority: 100,
-                    id: Some("main_partition".to_string()),
-                },
-            ])
+            .with_prefetch(vec![PrefetchCandidate {
+                data_type: PrefetchDataType::GraphPartition { partition_id: 42 },
+                size_mb: 64,
+                priority: 100,
+                id: Some("main_partition".to_string()),
+            }])
             .with_gpu();
 
         assert!(footprint.uses_gpu);

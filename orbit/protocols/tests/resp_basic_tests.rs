@@ -3,6 +3,8 @@
 //! These tests verify that our RESP protocol implementation compiles and works
 //! with basic functionality like parsing and encoding.
 
+#![cfg(feature = "resp")]
+
 use orbit_protocols::resp::RespValue;
 
 #[tokio::test]

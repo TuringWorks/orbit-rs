@@ -1905,8 +1905,8 @@ fn detect_amd_microarch_and_model<R: raw_cpuid::CpuIdReader>(
     let model = feature_info.as_ref().map_or(0, |fi| fi.model_id());
 
     match family {
-        0x19 => detect_zen_3_4_architecture(&processor_brand, model),
-        0x17 => detect_zen_1_2_architecture(&processor_brand, model),
+        0x19 => detect_zen_3_4_architecture(&processor_brand, model.into()),
+        0x17 => detect_zen_1_2_architecture(&processor_brand, model.into()),
         _ => Ok((
             X86Microarch::Unknown(format!("AMD Family {:#x}", family)),
             None,

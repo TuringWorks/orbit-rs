@@ -6,8 +6,8 @@
 
 use async_trait::async_trait;
 
-use crate::error::EngineResult;
 use super::{AdapterContext, ProtocolAdapter};
+use crate::error::EngineResult;
 
 /// AQL protocol adapter
 ///

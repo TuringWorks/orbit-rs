@@ -121,10 +121,10 @@ impl Default for AutoAnalyzeConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            modification_threshold: 0.1, // 10% of rows changed
+            modification_threshold: 0.1,           // 10% of rows changed
             min_interval: Duration::from_secs(60), // 1 minute
             max_interval: Duration::from_secs(3600), // 1 hour
-            sample_rate: 0.1, // 10% sample
+            sample_rate: 0.1,                      // 10% sample
             background_mode: true,
         }
     }
@@ -301,7 +301,9 @@ impl EnhancedStatisticsCollector {
     }
 
     /// Get base statistics collector (delegation pattern)
-    pub async fn base(&self) -> tokio::sync::RwLockReadGuard<'_, super::stats::StatisticsCollector> {
+    pub async fn base(
+        &self,
+    ) -> tokio::sync::RwLockReadGuard<'_, super::stats::StatisticsCollector> {
         self.base_stats.read().await
     }
 
@@ -322,9 +324,9 @@ impl EnhancedStatisticsCollector {
 
         // Initialize or update modification tracker
         let mut trackers = self.modification_trackers.write().await;
-        trackers
-            .entry(table_name.to_string())
-            .or_insert_with(|| TableModificationTracker::new(table_name.to_string(), stats.row_count));
+        trackers.entry(table_name.to_string()).or_insert_with(|| {
+            TableModificationTracker::new(table_name.to_string(), stats.row_count)
+        });
     }
 
     /// Record data modifications and trigger auto-analyze if needed
@@ -423,7 +425,10 @@ impl EnhancedStatisticsCollector {
     }
 
     /// Get most common join patterns
-    pub async fn get_common_joins(&self, limit: usize) -> Vec<((String, String, String, String), usize)> {
+    pub async fn get_common_joins(
+        &self,
+        limit: usize,
+    ) -> Vec<((String, String, String, String), usize)> {
         let patterns = self.query_patterns.read().await;
         let mut joins: Vec<_> = patterns.join_patterns.iter().collect();
         joins.sort_by(|a, b| b.1.cmp(a.1));

@@ -42,10 +42,14 @@ impl SpatialFunctions {
     }
 
     /// ST_GeomFromText - Create geometry from Well-Known Text (WKT).
-    pub fn st_geomfromtext(&self, wkt: &str, srid: Option<i32>) -> Result<SpatialGeometry, SpatialError> {
+    pub fn st_geomfromtext(
+        &self,
+        wkt: &str,
+        srid: Option<i32>,
+    ) -> Result<SpatialGeometry, SpatialError> {
         // Simple WKT parser for common cases
         let wkt_upper = wkt.trim().to_uppercase();
-        
+
         if wkt_upper.starts_with("POINT") {
             Self::parse_point_wkt(wkt, srid)
         } else if wkt_upper.starts_with("LINESTRING") {
@@ -53,9 +57,10 @@ impl SpatialFunctions {
         } else if wkt_upper.starts_with("POLYGON") {
             Self::parse_polygon_wkt(wkt, srid)
         } else {
-            Err(SpatialError::OperationError(
-                format!("Unsupported WKT geometry type: {}", wkt_upper),
-            ))
+            Err(SpatialError::OperationError(format!(
+                "Unsupported WKT geometry type: {}",
+                wkt_upper
+            )))
         }
     }
 
@@ -71,7 +76,9 @@ impl SpatialFunctions {
             .collect();
 
         if coords.len() < 2 {
-            return Err(SpatialError::OperationError("Invalid POINT WKT".to_string()));
+            return Err(SpatialError::OperationError(
+                "Invalid POINT WKT".to_string(),
+            ));
         }
 
         let x: f64 = coords[0].parse().map_err(|_| {
@@ -142,7 +149,9 @@ impl SpatialFunctions {
             .collect();
 
         if ring_strs.is_empty() {
-            return Err(SpatialError::OperationError("POLYGON must have at least one ring".to_string()));
+            return Err(SpatialError::OperationError(
+                "POLYGON must have at least one ring".to_string(),
+            ));
         }
 
         // Parse exterior ring
@@ -170,10 +179,14 @@ impl SpatialFunctions {
                 let coords: Vec<&str> = coord_pair.split_whitespace().collect();
                 if coords.len() >= 2 {
                     let x: f64 = coords[0].parse().map_err(|_| {
-                        SpatialError::OperationError("Invalid coordinate in POLYGON WKT".to_string())
+                        SpatialError::OperationError(
+                            "Invalid coordinate in POLYGON WKT".to_string(),
+                        )
                     })?;
                     let y: f64 = coords[1].parse().map_err(|_| {
-                        SpatialError::OperationError("Invalid coordinate in POLYGON WKT".to_string())
+                        SpatialError::OperationError(
+                            "Invalid coordinate in POLYGON WKT".to_string(),
+                        )
                     })?;
                     interior_points.push(Point::new(x, y, srid));
                 }

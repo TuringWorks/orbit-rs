@@ -209,7 +209,10 @@ impl DeadlockPreventer {
     }
 
     /// Detect cycles in dependency graph
-    fn detect_cycles(&self, graph: &TransactionDependencyGraph) -> OrbitResult<Vec<Vec<TransactionId>>> {
+    fn detect_cycles(
+        &self,
+        graph: &TransactionDependencyGraph,
+    ) -> OrbitResult<Vec<Vec<TransactionId>>> {
         let mut cycles = Vec::new();
         let mut visited = HashSet::new();
         let mut rec_stack = HashSet::new();
@@ -251,14 +254,7 @@ impl DeadlockPreventer {
                 let next_id = edge.to;
 
                 if !visited.contains(&next_id) {
-                    self.dfs_cycle_detection(
-                        next_id,
-                        graph,
-                        visited,
-                        rec_stack,
-                        path,
-                        cycles,
-                    )?;
+                    self.dfs_cycle_detection(next_id, graph, visited, rec_stack, path, cycles)?;
                 } else if rec_stack.contains(&next_id) {
                     // Found a cycle
                     let cycle_start = path.iter().position(|&x| x == next_id).unwrap();
@@ -283,7 +279,7 @@ impl DeadlockPreventer {
         // Longer cycles are less likely to complete simultaneously
         let base_probability = 0.8;
         let length_factor = 1.0 / (cycle.len() as f64);
-        
+
         Ok(base_probability * length_factor)
     }
 
@@ -342,7 +338,7 @@ impl DeadlockPreventer {
         // Longer cycles take more time to resolve
         let base_time_ms = 100;
         let cycle_time_ms = base_time_ms * cycle.len() as u64;
-        
+
         Ok(tokio::time::Duration::from_millis(cycle_time_ms))
     }
 
@@ -353,7 +349,7 @@ impl DeadlockPreventer {
         graph: &TransactionDependencyGraph,
     ) -> OrbitResult<ResolutionAction> {
         let _policy = self.prevention_policy.as_ref();
-        
+
         // Use policy to determine action
         if prediction.probability > 0.8 {
             // High probability - abort a transaction
@@ -413,7 +409,7 @@ impl DeadlockPreventer {
         {
             let mut history = self.deadlock_history.write().await;
             history.push(deadlock.clone());
-            
+
             // Keep only recent history
             let current_len = history.len();
             if current_len > 1000 {
@@ -444,13 +440,10 @@ impl DeadlockPatternRecognizer {
         }
     }
 
-    pub async fn learn_from_deadlock(
-        &self,
-        graph: &TransactionDependencyGraph,
-    ) -> OrbitResult<()> {
+    pub async fn learn_from_deadlock(&self, graph: &TransactionDependencyGraph) -> OrbitResult<()> {
         // Extract pattern from graph structure
         let cycles = DeadlockPreventer::new().detect_cycles(graph)?;
-        
+
         if let Some(cycle) = cycles.first() {
             let pattern = DeadlockPattern {
                 pattern_id: format!("pattern_{}", uuid::Uuid::new_v4()),
@@ -500,4 +493,3 @@ impl Default for DeadlockPreventionPolicy {
         Self::new()
     }
 }
-

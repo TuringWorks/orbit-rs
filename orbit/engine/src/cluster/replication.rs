@@ -171,9 +171,9 @@ impl ReplicationSlotManager {
 
             Ok(())
         } else {
-            Err(EngineError::AddressableNotFound(
-                format!("Replication slot '{name}'")
-            ))
+            Err(EngineError::AddressableNotFound(format!(
+                "Replication slot '{name}'"
+            )))
         }
     }
 
@@ -196,9 +196,9 @@ impl ReplicationSlotManager {
             debug!("Advanced slot '{}' to LSN {}", name, lsn);
             Ok(())
         } else {
-            Err(EngineError::AddressableNotFound(
-                format!("Replication slot '{name}'")
-            ))
+            Err(EngineError::AddressableNotFound(format!(
+                "Replication slot '{name}'"
+            )))
         }
     }
 
@@ -220,12 +220,9 @@ impl ReplicationSlotManager {
         slot_name: &str,
         events: &[CdcEvent],
     ) -> EngineResult<Vec<CdcEvent>> {
-        let slot =
-            self.get_slot(slot_name)
-                .await
-                .ok_or_else(|| EngineError::AddressableNotFound(
-                    format!("Replication slot '{slot_name}'")
-                ))?;
+        let slot = self.get_slot(slot_name).await.ok_or_else(|| {
+            EngineError::AddressableNotFound(format!("Replication slot '{slot_name}'"))
+        })?;
 
         // Return events with LSN greater than slot's confirmed position
         let pending: Vec<_> = events
@@ -269,12 +266,9 @@ impl ReplicationSlotManager {
 
     /// Check slot lag
     pub async fn get_slot_lag(&self, slot_name: &str) -> EngineResult<u64> {
-        let slot =
-            self.get_slot(slot_name)
-                .await
-                .ok_or_else(|| EngineError::AddressableNotFound(
-                    format!("Replication slot '{slot_name}'")
-                ))?;
+        let slot = self.get_slot(slot_name).await.ok_or_else(|| {
+            EngineError::AddressableNotFound(format!("Replication slot '{slot_name}'"))
+        })?;
 
         let current = self.current_lsn().await;
         Ok(current.saturating_sub(slot.confirmed_flush_lsn))

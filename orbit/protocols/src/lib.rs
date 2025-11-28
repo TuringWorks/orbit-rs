@@ -18,9 +18,9 @@
 
 pub mod aql;
 pub mod arangodb;
-pub mod bolt;
-pub mod cql; // Cassandra Query Language
+// pub mod bolt; // Moved to neo4j module
 pub mod common; // Common functionality (storage, etc.)
+pub mod cql; // Cassandra Query Language
 pub mod cypher;
 pub mod error;
 pub mod graph_database;

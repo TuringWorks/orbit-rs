@@ -23,9 +23,8 @@ impl MetalDevice {
     pub fn new() -> Result<Self, ComputeError> {
         use crate::errors::GPUError;
 
-        let device = metal::Device::system_default().ok_or_else(|| {
-            ComputeError::gpu(GPUError::DeviceNotFound { device_id: 0 })
-        })?;
+        let device = metal::Device::system_default()
+            .ok_or_else(|| ComputeError::gpu(GPUError::DeviceNotFound { device_id: 0 }))?;
 
         tracing::info!(
             "Metal device initialized: {} ({})",
@@ -67,12 +66,8 @@ impl MetalDevice {
             is_low_power: self.device.is_low_power(),
             is_headless: self.device.is_headless(),
             is_removable: self.device.is_removable(),
-            supports_family_apple7: self
-                .device
-                .supports_family(MTLGPUFamily::Apple7),
-            supports_family_apple8: self
-                .device
-                .supports_family(MTLGPUFamily::Apple8),
+            supports_family_apple7: self.device.supports_family(MTLGPUFamily::Apple7),
+            supports_family_apple8: self.device.supports_family(MTLGPUFamily::Apple8),
             max_threads_per_threadgroup: self.device.max_threads_per_threadgroup(),
             recommended_max_working_set_size: self.device.recommended_max_working_set_size(),
         }
@@ -185,10 +180,12 @@ impl MetalDevice {
         use crate::errors::ExecutionError;
 
         if mask_a.len() != mask_b.len() {
-            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
-                parameter: "mask_length".to_string(),
-                value: format!("mask_a={}, mask_b={}", mask_a.len(), mask_b.len()),
-            }));
+            return Err(ComputeError::execution(
+                ExecutionError::InvalidKernelParameters {
+                    parameter: "mask_length".to_string(),
+                    value: format!("mask_a={}, mask_b={}", mask_a.len(), mask_b.len()),
+                },
+            ));
         }
 
         let len = mask_a.len();
@@ -196,7 +193,11 @@ impl MetalDevice {
         let buffer_b = self.create_buffer_with_data_i32(mask_b)?;
         let output_buffer = self.create_buffer_i32(len)?;
 
-        self.execute_kernel("bitmap_and", &[&buffer_a, &buffer_b, &output_buffer], len as u64)?;
+        self.execute_kernel(
+            "bitmap_and",
+            &[&buffer_a, &buffer_b, &output_buffer],
+            len as u64,
+        )?;
 
         self.read_buffer_i32(&output_buffer, len)
     }
@@ -206,10 +207,12 @@ impl MetalDevice {
         use crate::errors::ExecutionError;
 
         if mask_a.len() != mask_b.len() {
-            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
-                parameter: "mask_length".to_string(),
-                value: format!("mask_a={}, mask_b={}", mask_a.len(), mask_b.len()),
-            }));
+            return Err(ComputeError::execution(
+                ExecutionError::InvalidKernelParameters {
+                    parameter: "mask_length".to_string(),
+                    value: format!("mask_a={}, mask_b={}", mask_a.len(), mask_b.len()),
+                },
+            ));
         }
 
         let len = mask_a.len();
@@ -217,7 +220,11 @@ impl MetalDevice {
         let buffer_b = self.create_buffer_with_data_i32(mask_b)?;
         let output_buffer = self.create_buffer_i32(len)?;
 
-        self.execute_kernel("bitmap_or", &[&buffer_a, &buffer_b, &output_buffer], len as u64)?;
+        self.execute_kernel(
+            "bitmap_or",
+            &[&buffer_a, &buffer_b, &output_buffer],
+            len as u64,
+        )?;
 
         self.read_buffer_i32(&output_buffer, len)
     }
@@ -239,7 +246,11 @@ impl MetalDevice {
         let input_buffer = self.create_buffer_with_data_i32(data)?;
         let output_buffer = self.create_buffer_i32(1)?; // Single atomic counter
 
-        self.execute_kernel("aggregate_i32_sum", &[&input_buffer, &output_buffer], len as u64)?;
+        self.execute_kernel(
+            "aggregate_i32_sum",
+            &[&input_buffer, &output_buffer],
+            len as u64,
+        )?;
 
         let result = self.read_buffer_i32(&output_buffer, 1)?;
         Ok(result[0] as i64)
@@ -251,14 +262,18 @@ impl MetalDevice {
         let mask_buffer = self.create_buffer_with_data_i32(mask)?;
         let count_buffer = self.create_buffer_i32(1)?; // Single atomic counter
 
-        self.execute_kernel("aggregate_i32_count", &[&mask_buffer, &count_buffer], len as u64)?;
+        self.execute_kernel(
+            "aggregate_i32_count",
+            &[&mask_buffer, &count_buffer],
+            len as u64,
+        )?;
 
         let result = self.read_buffer_i32(&count_buffer, 1)?;
         Ok(result[0] as usize)
     }
 
     /// Execute GPU-accelerated i32 aggregation with null bitmap support
-    /// 
+    ///
     /// This method handles null bitmaps and routes to the appropriate aggregation kernel.
     pub fn execute_aggregate_i32(
         &self,
@@ -336,10 +351,12 @@ impl MetalDevice {
                     Ok(Some(result[0] as f64))
                 }
             }
-            _ => Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
-                parameter: "kernel_name".to_string(),
-                value: format!("Unknown kernel: {}", kernel_name),
-            })),
+            _ => Err(ComputeError::execution(
+                ExecutionError::InvalidKernelParameters {
+                    parameter: "kernel_name".to_string(),
+                    value: format!("Unknown kernel: {}", kernel_name),
+                },
+            )),
         }
     }
 
@@ -355,15 +372,12 @@ impl MetalDevice {
     ) -> Result<(), ComputeError> {
         use crate::errors::{ExecutionError, GPUError};
 
-        let kernel = self
-            .library
-            .get_function(kernel_name, None)
-            .map_err(|e| {
-                ComputeError::gpu(GPUError::KernelLaunchFailed {
-                    kernel_name: kernel_name.to_string(),
-                    error: format!("Kernel not found: {}", e),
-                })
-            })?;
+        let kernel = self.library.get_function(kernel_name, None).map_err(|e| {
+            ComputeError::gpu(GPUError::KernelLaunchFailed {
+                kernel_name: kernel_name.to_string(),
+                error: format!("Kernel not found: {}", e),
+            })
+        })?;
 
         // Cache pipeline state for better performance (reuse compiled pipelines)
         // TODO: Implement pipeline caching in future optimization
@@ -382,7 +396,7 @@ impl MetalDevice {
         let encoder = command_buffer.new_compute_command_encoder();
 
         encoder.set_compute_pipeline_state(&pipeline);
-        
+
         // Set buffers with optimized offset calculation
         for (i, buffer) in buffers.iter().enumerate() {
             encoder.set_buffer(i as u64, Some(buffer), 0);
@@ -489,11 +503,13 @@ impl MetalDevice {
         ))
     }
 
-    fn read_buffer_f32(&self, buffer: &metal::Buffer, len: usize) -> Result<Vec<f32>, ComputeError> {
+    fn read_buffer_f32(
+        &self,
+        buffer: &metal::Buffer,
+        len: usize,
+    ) -> Result<Vec<f32>, ComputeError> {
         let contents = buffer.contents();
-        let slice = unsafe {
-            std::slice::from_raw_parts(contents as *const f32, len)
-        };
+        let slice = unsafe { std::slice::from_raw_parts(contents as *const f32, len) };
         Ok(slice.to_vec())
     }
 
@@ -513,18 +529,26 @@ impl MetalDevice {
 
         // Validate inputs
         if query_vector.len() != dimension {
-            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
-                parameter: "query_vector_dimension".to_string(),
-                value: format!("expected {}, got {}", dimension, query_vector.len()),
-            }));
+            return Err(ComputeError::execution(
+                ExecutionError::InvalidKernelParameters {
+                    parameter: "query_vector_dimension".to_string(),
+                    value: format!("expected {}, got {}", dimension, query_vector.len()),
+                },
+            ));
         }
 
         let vector_count = candidate_vectors.len() / dimension;
         if candidate_vectors.len() != vector_count * dimension {
-            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
-                parameter: "candidate_vectors_length".to_string(),
-                value: format!("expected {}, got {}", vector_count * dimension, candidate_vectors.len()),
-            }));
+            return Err(ComputeError::execution(
+                ExecutionError::InvalidKernelParameters {
+                    parameter: "candidate_vectors_length".to_string(),
+                    value: format!(
+                        "expected {}, got {}",
+                        vector_count * dimension,
+                        candidate_vectors.len()
+                    ),
+                },
+            ));
         }
 
         // Create buffers
@@ -539,7 +563,12 @@ impl MetalDevice {
         // Execute kernel
         self.execute_kernel(
             kernel_name,
-            &[&query_buffer, &candidates_buffer, &scores_buffer, &params_buffer],
+            &[
+                &query_buffer,
+                &candidates_buffer,
+                &scores_buffer,
+                &params_buffer,
+            ],
             vector_count as u64,
         )?;
 
@@ -548,7 +577,7 @@ impl MetalDevice {
     }
 
     /// Execute GPU-accelerated spatial distance calculation
-    /// 
+    ///
     /// Calculates 2D Euclidean distance between a query point and multiple candidate points.
     pub fn execute_spatial_distance(
         &self,
@@ -562,15 +591,17 @@ impl MetalDevice {
 
         // Validate inputs
         if candidates_x.len() != point_count || candidates_y.len() != point_count {
-            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
-                parameter: "candidates_length".to_string(),
-                value: format!(
-                    "expected {}, got x={}, y={}",
-                    point_count,
-                    candidates_x.len(),
-                    candidates_y.len()
-                ),
-            }));
+            return Err(ComputeError::execution(
+                ExecutionError::InvalidKernelParameters {
+                    parameter: "candidates_length".to_string(),
+                    value: format!(
+                        "expected {}, got x={}, y={}",
+                        point_count,
+                        candidates_x.len(),
+                        candidates_y.len()
+                    ),
+                },
+            ));
         }
 
         // Create buffers
@@ -612,15 +643,17 @@ impl MetalDevice {
 
         // Validate inputs
         if candidates_lon.len() != point_count || candidates_lat.len() != point_count {
-            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
-                parameter: "candidates_length".to_string(),
-                value: format!(
-                    "expected {}, got lon={}, lat={}",
-                    point_count,
-                    candidates_lon.len(),
-                    candidates_lat.len()
-                ),
-            }));
+            return Err(ComputeError::execution(
+                ExecutionError::InvalidKernelParameters {
+                    parameter: "candidates_length".to_string(),
+                    value: format!(
+                        "expected {}, got lon={}, lat={}",
+                        point_count,
+                        candidates_lon.len(),
+                        candidates_lat.len()
+                    ),
+                },
+            ));
         }
 
         // Create buffers
@@ -698,10 +731,7 @@ impl MetalDevice {
 
         // Read results back
         let visited_slice = unsafe {
-            std::slice::from_raw_parts(
-                visited_buffer.contents() as *const u32,
-                visited.len(),
-            )
+            std::slice::from_raw_parts(visited_buffer.contents() as *const u32, visited.len())
         };
         visited.copy_from_slice(visited_slice);
 
@@ -714,25 +744,19 @@ impl MetalDevice {
         next_level[..next_level_slice.len()].copy_from_slice(next_level_slice);
 
         let size_slice = unsafe {
-            std::slice::from_raw_parts(
-                next_level_size_buffer.contents() as *const u32,
-                1,
-            )
+            std::slice::from_raw_parts(next_level_size_buffer.contents() as *const u32, 1)
         };
         *next_level_size = size_slice[0];
 
         // Read parent buffer back
         let parent_slice = unsafe {
-            std::slice::from_raw_parts(
-                parent_buffer.contents() as *const u32,
-                parent.len(),
-            )
+            std::slice::from_raw_parts(parent_buffer.contents() as *const u32, parent.len())
         };
         parent.copy_from_slice(parent_slice);
 
         Ok(())
     }
-    
+
     /// Execute GPU-accelerated BFS level expansion (u64 indices - for large graphs)
     /// This is a helper method for graph traversal operations
     pub fn execute_bfs_level_expansion(
@@ -749,9 +773,7 @@ impl MetalDevice {
     ) -> Result<(), ComputeError> {
         // Convert u64 to u32 for Metal kernel (Metal kernel expects u32)
         // Note: This assumes indices fit in u32, which is true for graphs < 4B nodes
-        let current_level_u32: Vec<u32> = current_level.iter()
-            .map(|&x| x as u32)
-            .collect();
+        let current_level_u32: Vec<u32> = current_level.iter().map(|&x| x as u32).collect();
         let mut next_level_u32 = vec![0u32; max_nodes as usize];
         let mut next_level_size_u32 = *next_level_size;
 
@@ -770,10 +792,14 @@ impl MetalDevice {
 
         // Convert results back to u64
         *next_level_size = next_level_size_u32;
-        for (i, &val) in next_level_u32.iter().enumerate().take(*next_level_size as usize) {
+        for (i, &val) in next_level_u32
+            .iter()
+            .enumerate()
+            .take(*next_level_size as usize)
+        {
             next_level[i] = val as u64;
         }
-        
+
         Ok(())
     }
 
@@ -900,18 +926,12 @@ impl MetalDevice {
 
         // Read results back
         let distances_slice = unsafe {
-            std::slice::from_raw_parts(
-                distances_buffer.contents() as *const f32,
-                distances.len(),
-            )
+            std::slice::from_raw_parts(distances_buffer.contents() as *const f32, distances.len())
         };
         distances.copy_from_slice(distances_slice);
 
         let parent_slice = unsafe {
-            std::slice::from_raw_parts(
-                parent_buffer.contents() as *const u32,
-                parent.len(),
-            )
+            std::slice::from_raw_parts(parent_buffer.contents() as *const u32, parent.len())
         };
         parent.copy_from_slice(parent_slice);
 
@@ -923,12 +943,8 @@ impl MetalDevice {
         };
         active_mask.copy_from_slice(active_mask_slice);
 
-        let changed_slice = unsafe {
-            std::slice::from_raw_parts(
-                changed_buffer.contents() as *const u32,
-                1,
-            )
-        };
+        let changed_slice =
+            unsafe { std::slice::from_raw_parts(changed_buffer.contents() as *const u32, 1) };
         *changed = changed_slice[0];
 
         Ok(())
@@ -938,27 +954,31 @@ impl MetalDevice {
     /// Uses tiled algorithm for better cache locality
     pub fn execute_matrix_multiply(
         &self,
-        matrix_a: &[f32],  // M×K matrix (row-major, flattened)
-        matrix_b: &[f32],  // K×N matrix (row-major, flattened)
-        m: usize,          // Rows in A and C
-        n: usize,          // Cols in B and C
-        k: usize,          // Cols in A, Rows in B
+        matrix_a: &[f32], // M×K matrix (row-major, flattened)
+        matrix_b: &[f32], // K×N matrix (row-major, flattened)
+        m: usize,         // Rows in A and C
+        n: usize,         // Cols in B and C
+        k: usize,         // Cols in A, Rows in B
     ) -> Result<Vec<f32>, ComputeError> {
         use crate::errors::ExecutionError;
 
         // Validate inputs
         if matrix_a.len() != m * k {
-            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
-                parameter: "matrix_a_size".to_string(),
-                value: format!("expected {}, got {}", m * k, matrix_a.len()),
-            }));
+            return Err(ComputeError::execution(
+                ExecutionError::InvalidKernelParameters {
+                    parameter: "matrix_a_size".to_string(),
+                    value: format!("expected {}, got {}", m * k, matrix_a.len()),
+                },
+            ));
         }
 
         if matrix_b.len() != k * n {
-            return Err(ComputeError::execution(ExecutionError::InvalidKernelParameters {
-                parameter: "matrix_b_size".to_string(),
-                value: format!("expected {}, got {}", k * n, matrix_b.len()),
-            }));
+            return Err(ComputeError::execution(
+                ExecutionError::InvalidKernelParameters {
+                    parameter: "matrix_b_size".to_string(),
+                    value: format!("expected {}, got {}", k * n, matrix_b.len()),
+                },
+            ));
         }
 
         // Create buffers
@@ -974,15 +994,12 @@ impl MetalDevice {
         let kernel_name = "matrix_multiply_tiled_f32";
 
         // Execute kernel with 2D grid
-        let kernel = self
-            .library
-            .get_function(kernel_name, None)
-            .map_err(|_| {
-                ComputeError::execution(ExecutionError::InvalidKernelParameters {
-                    parameter: "kernel_name".to_string(),
-                    value: kernel_name.to_string(),
-                })
-            })?;
+        let kernel = self.library.get_function(kernel_name, None).map_err(|_| {
+            ComputeError::execution(ExecutionError::InvalidKernelParameters {
+                parameter: "kernel_name".to_string(),
+                value: kernel_name.to_string(),
+            })
+        })?;
 
         let pipeline_state = self
             .device
@@ -1051,7 +1068,11 @@ impl MetalDevice {
             return Err(ComputeError::Execution {
                 source: crate::errors::ExecutionError::InvalidKernelParameters {
                     parameter: "timestamps/values".to_string(),
-                    value: format!("empty or mismatched: {} vs {}", timestamps.len(), values.len()),
+                    value: format!(
+                        "empty or mismatched: {} vs {}",
+                        timestamps.len(),
+                        values.len()
+                    ),
                 },
                 compute_unit: None,
             });
@@ -1071,9 +1092,9 @@ impl MetalDevice {
         // Initialize result buffers
         // For Min, initialize with f32::INFINITY; for Max, initialize with f32::NEG_INFINITY
         let init_value = match aggregation_type {
-            1 => f32::INFINITY,  // Min
-            2 => f32::NEG_INFINITY,  // Max
-            _ => 0.0,  // Sum, Avg, Count
+            1 => f32::INFINITY,     // Min
+            2 => f32::NEG_INFINITY, // Max
+            _ => 0.0,               // Sum, Avg, Count
         };
         let window_results_init: Vec<f32> = vec![init_value; max_window_id as usize];
         let window_counts_init: Vec<u32> = vec![0; max_window_id as usize];
@@ -1102,7 +1123,8 @@ impl MetalDevice {
         )?;
 
         // Read results
-        let window_results = self.read_buffer_f32(&window_results_buffer, max_window_id as usize)?;
+        let window_results =
+            self.read_buffer_f32(&window_results_buffer, max_window_id as usize)?;
         let window_counts = self.read_buffer_u32(&window_counts_buffer, max_window_id as usize)?;
 
         // If aggregation is Avg, we need to finalize (divide sum by count)
@@ -1121,7 +1143,8 @@ impl MetalDevice {
                 max_window_id as u64,
             )?;
 
-            let final_results = self.read_buffer_f32(&final_results_buffer, max_window_id as usize)?;
+            let final_results =
+                self.read_buffer_f32(&final_results_buffer, max_window_id as usize)?;
             Ok((final_results, window_counts, max_window_id))
         } else {
             Ok((window_results, window_counts, max_window_id))
@@ -1227,8 +1250,10 @@ impl MetalDevice {
         let output_count_vec = self.read_buffer_u32(&output_count_buffer, 1)?;
         let match_count = output_count_vec[0].min(max_output as u32);
 
-        let output_build_ids = self.read_buffer_u32(&output_build_ids_buffer, match_count as usize)?;
-        let output_probe_ids = self.read_buffer_u32(&output_probe_ids_buffer, match_count as usize)?;
+        let output_build_ids =
+            self.read_buffer_u32(&output_build_ids_buffer, match_count as usize)?;
+        let output_probe_ids =
+            self.read_buffer_u32(&output_probe_ids_buffer, match_count as usize)?;
 
         Ok((output_build_ids, output_probe_ids, match_count))
     }
@@ -1344,7 +1369,9 @@ mod tests {
         };
 
         let data: Vec<i32> = (0..1000).collect();
-        let result = device.execute_filter_i32(&data, 500, FilterOp::Equal).unwrap();
+        let result = device
+            .execute_filter_i32(&data, 500, FilterOp::Equal)
+            .unwrap();
 
         // Count matches
         let matches: i32 = result.iter().sum();
@@ -1365,7 +1392,9 @@ mod tests {
         };
 
         let data: Vec<i32> = (0..100).collect();
-        let result = device.execute_filter_i32(&data, 50, FilterOp::GreaterThan).unwrap();
+        let result = device
+            .execute_filter_i32(&data, 50, FilterOp::GreaterThan)
+            .unwrap();
 
         let matches: i32 = result.iter().sum();
         assert_eq!(matches, 49, "Values 51-99 should match (49 values)");

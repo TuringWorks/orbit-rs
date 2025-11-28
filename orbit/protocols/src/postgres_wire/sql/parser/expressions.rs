@@ -133,7 +133,7 @@ impl ExpressionParser {
             if matches!(&tokens[*pos], Token::In) {
                 // Handle IN operator specially to support both value lists and subqueries
                 *pos += 1; // consume IN
-                
+
                 // Check for NOT IN
                 let negated = if *pos < tokens.len() && matches!(&tokens[*pos], Token::Not) {
                     *pos += 1;
@@ -141,28 +141,28 @@ impl ExpressionParser {
                 } else {
                     false
                 };
-                
+
                 // Parse IN list or subquery
                 if *pos >= tokens.len() {
                     return Err(crate::error::ProtocolError::ParseError(
                         "Expected '(' after IN".to_string(),
                     ));
                 }
-                
+
                 if !matches!(&tokens[*pos], Token::LeftParen) {
                     return Err(crate::error::ProtocolError::ParseError(
                         "Expected '(' after IN".to_string(),
                     ));
                 }
                 *pos += 1; // consume '('
-                
+
                 // Check if this is a subquery
                 let in_list = if *pos < tokens.len() && matches!(&tokens[*pos], Token::Select) {
                     // Parse as subquery
                     use crate::postgres_wire::sql::parser::select::SelectParser;
                     let mut select_parser = SelectParser::new();
                     let select_stmt = select_parser.parse_select(tokens, pos)?;
-                    
+
                     if *pos >= tokens.len() || !matches!(&tokens[*pos], Token::RightParen) {
                         return Err(crate::error::ProtocolError::ParseError(
                             "Expected ')' after subquery in IN clause".to_string(),
@@ -183,7 +183,7 @@ impl ExpressionParser {
                             }
                         }
                     }
-                    
+
                     if *pos >= tokens.len() || !matches!(&tokens[*pos], Token::RightParen) {
                         return Err(crate::error::ProtocolError::ParseError(
                             "Expected ')' after IN list".to_string(),
@@ -192,7 +192,7 @@ impl ExpressionParser {
                     *pos += 1; // consume ')'
                     InList::Expressions(exprs)
                 };
-                
+
                 left = Expression::In {
                     expr: Box::new(left),
                     list: in_list,

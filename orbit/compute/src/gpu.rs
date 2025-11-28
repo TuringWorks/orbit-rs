@@ -473,7 +473,13 @@ impl GPUAccelerationManager {
         {
             let metal = self.metal_device.read().await;
             if let Some(device) = metal.as_ref() {
-                return device.execute_spatial_distance(query_x, query_y, points_x, points_y, point_count);
+                return device.execute_spatial_distance(
+                    query_x,
+                    query_y,
+                    points_x,
+                    points_y,
+                    point_count,
+                );
             }
         }
 
@@ -482,7 +488,13 @@ impl GPUAccelerationManager {
         {
             let vulkan = self.vulkan_device.read().await;
             if let Some(device) = vulkan.as_ref() {
-                return device.execute_spatial_distance(query_x, query_y, points_x, points_y, point_count);
+                return device.execute_spatial_distance(
+                    query_x,
+                    query_y,
+                    points_x,
+                    points_y,
+                    point_count,
+                );
             }
         }
 
@@ -503,7 +515,13 @@ impl GPUAccelerationManager {
         {
             let metal = self.metal_device.read().await;
             if let Some(device) = metal.as_ref() {
-                return device.execute_spatial_distance_sphere(query_lon, query_lat, points_lon, points_lat, point_count);
+                return device.execute_spatial_distance_sphere(
+                    query_lon,
+                    query_lat,
+                    points_lon,
+                    points_lat,
+                    point_count,
+                );
             }
         }
 
@@ -512,7 +530,13 @@ impl GPUAccelerationManager {
         {
             let vulkan = self.vulkan_device.read().await;
             if let Some(device) = vulkan.as_ref() {
-                return device.execute_spatial_distance_sphere(query_lon, query_lat, points_lon, points_lat, point_count);
+                return device.execute_spatial_distance_sphere(
+                    query_lon,
+                    query_lat,
+                    points_lon,
+                    points_lat,
+                    point_count,
+                );
             }
         }
 
@@ -571,7 +595,12 @@ impl GPUAccelerationManager {
         {
             let metal = self.metal_device.read().await;
             if let Some(device) = metal.as_ref() {
-                return device.execute_hash_join(build_keys, build_values, probe_keys, probe_values);
+                return device.execute_hash_join(
+                    build_keys,
+                    build_values,
+                    probe_keys,
+                    probe_values,
+                );
             }
         }
 
@@ -580,7 +609,12 @@ impl GPUAccelerationManager {
         {
             let vulkan = self.vulkan_device.read().await;
             if let Some(device) = vulkan.as_ref() {
-                return device.execute_hash_join(build_keys, build_values, probe_keys, probe_values);
+                return device.execute_hash_join(
+                    build_keys,
+                    build_values,
+                    probe_keys,
+                    probe_values,
+                );
             }
         }
 

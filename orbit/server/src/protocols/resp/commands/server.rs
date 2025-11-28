@@ -14,7 +14,9 @@ pub struct ServerCommands {
 }
 
 impl ServerCommands {
-    pub fn new(local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>) -> Self {
+    pub fn new(
+        local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>,
+    ) -> Self {
         // Use provided local_registry
         Self {
             base: BaseCommandHandler::new(local_registry),
@@ -32,7 +34,7 @@ impl ServerCommands {
 
         // Build basic INFO response
         let mut info_lines = Vec::new();
-        
+
         match section.as_deref() {
             Some("server") | None => {
                 info_lines.push("# Server");

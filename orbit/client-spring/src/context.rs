@@ -6,7 +6,7 @@ use crate::{
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// Spring-like application context that manages the application lifecycle
 /// and provides dependency injection capabilities
@@ -330,9 +330,10 @@ impl ApplicationContext {
             {
                 use tokio::signal;
 
-                let mut ctrl_c = signal::ctrl_c().expect("Failed to setup Ctrl+C handler");
-
-                ctrl_c.recv().await.expect("Failed to listen for Ctrl+C");
+                if let Err(e) = signal::ctrl_c().await {
+                    error!("Failed to listen for Ctrl+C: {}", e);
+                    return;
+                }
                 info!("📡 Received Ctrl+C");
                 shutdown_token.cancel();
             }

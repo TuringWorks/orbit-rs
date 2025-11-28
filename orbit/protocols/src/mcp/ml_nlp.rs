@@ -3,7 +3,7 @@
 //! This module provides ML-based natural language processing capabilities
 //! for improved intent classification and entity recognition.
 
-use crate::mcp::nlp::{QueryIntent, NlpError};
+use crate::mcp::nlp::{NlpError, QueryIntent};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -34,10 +34,7 @@ impl MlNlpProcessor {
     }
 
     /// Create with ML models (when available)
-    pub fn with_models(
-        intent_model: IntentModel,
-        entity_model: EntityModel,
-    ) -> Self {
+    pub fn with_models(intent_model: IntentModel, entity_model: EntityModel) -> Self {
         Self {
             intent_model: Some(intent_model),
             entity_model: Some(entity_model),
@@ -88,7 +85,9 @@ impl MlNlpProcessor {
                     if ml_prediction.confidence >= self.confidence_threshold {
                         // Use ML prediction if confidence is high
                         // Merge ML results with rule-based results
-                        return self.merge_ml_and_rule_based(ml_prediction, rule_based_intent).await;
+                        return self
+                            .merge_ml_and_rule_based(ml_prediction, rule_based_intent)
+                            .await;
                     }
                 }
                 Err(_) => {
@@ -321,4 +320,3 @@ impl Default for MlModelManager {
         Self::new()
     }
 }
-

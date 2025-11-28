@@ -28,19 +28,19 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use orbit_server::OrbitServerBuilder;
-use orbit_server::protocols::{RespServer, PostgresServer, MySqlServer, CqlServer};
-use orbit_server::protocols::cql::CqlConfig;
-use orbit_server::protocols::mysql::MySqlConfig;
-use orbit_server::protocols::postgres_wire::{QueryEngine, RocksDbTableStorage};
-use orbit_server::protocols::common::storage::tiered::TieredTableStorage;
-use orbit_server::protocols::cypher::{CypherServer, CypherGraphStorage};
 use orbit_server::protocols::aql::{AqlServer, AqlStorage};
+use orbit_server::protocols::common::storage::tiered::TieredTableStorage;
 use orbit_server::protocols::common::storage::TableStorage;
+use orbit_server::protocols::cql::CqlConfig;
+use orbit_server::protocols::cypher::{CypherGraphStorage, CypherServer};
+use orbit_server::protocols::mysql::MySqlConfig;
 use orbit_server::protocols::postgres_wire::sql::execution::hybrid::HybridStorageConfig;
+use orbit_server::protocols::postgres_wire::{QueryEngine, RocksDbTableStorage};
+use orbit_server::protocols::{CqlServer, MySqlServer, PostgresServer, RespServer};
+use orbit_server::OrbitServerBuilder;
 
 /// Orbit Server - Distributed Actor System Runtime
 #[derive(Parser)]
@@ -186,9 +186,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Initialize logging
     let log_level = if args.dev_mode {
-        "debug,orbit_server=trace,orbit_shared=debug,orbit_proto=debug,orbit_protocols=debug".to_string()
+        "debug,orbit_server=trace,orbit_shared=debug,orbit_proto=debug,orbit_protocols=debug"
+            .to_string()
     } else {
-        format!("{},orbit_server=info,orbit_shared=info,orbit_protocols=info", args.log_level)
+        format!(
+            "{},orbit_server=info,orbit_shared=info,orbit_protocols=info",
+            args.log_level
+        )
     };
 
     tracing_subscriber::registry()
@@ -215,7 +219,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // Load configuration from TOML file
-    info!("[Configuration] Loading configuration from: {:?}", args.config);
+    info!(
+        "[Configuration] Loading configuration from: {:?}",
+        args.config
+    );
     let mut toml_config = load_toml_config(&args).await?;
 
     // Override with command line arguments
@@ -238,22 +245,33 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let tiered_config = configure_tiered_storage(&toml_config);
     info!(
         "[Tiered Storage] Hot→Warm: {:?}, Warm→Cold: {:?}",
-        tiered_config.hot_to_warm_threshold,
-        tiered_config.warm_to_cold_threshold
+        tiered_config.hot_to_warm_threshold, tiered_config.warm_to_cold_threshold
     );
 
     // Initialize MinIO cold storage if configured
     let cold_storage_config = initialize_minio_cold_storage(&toml_config)?;
     if let Some(ref config) = cold_storage_config {
-        info!("[Cold Storage] MinIO cold tier configured: {}", config.endpoint);
+        info!(
+            "[Cold Storage] MinIO cold tier configured: {}",
+            config.endpoint
+        );
     }
 
     // Start Prometheus metrics exporter
-    info!("[Metrics] Starting Prometheus metrics exporter on port {}...", args.metrics_port);
+    info!(
+        "[Metrics] Starting Prometheus metrics exporter on port {}...",
+        args.metrics_port
+    );
     if let Err(e) = start_prometheus_metrics_exporter(args.metrics_port).await {
-        warn!("[Metrics] Failed to start metrics server: {}. Continuing without metrics endpoint.", e);
+        warn!(
+            "[Metrics] Failed to start metrics server: {}. Continuing without metrics endpoint.",
+            e
+        );
     } else {
-        info!("[Metrics] Metrics endpoint available at http://{}:{}/metrics", args.bind, args.metrics_port);
+        info!(
+            "[Metrics] Metrics endpoint available at http://{}:{}/metrics",
+            args.bind, args.metrics_port
+        );
     }
 
     // Log all enabled protocol servers
@@ -261,7 +279,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Initialize cluster/Raft if seed nodes are provided
     if !args.seed_nodes.is_empty() {
-        info!("[Cluster] Initializing cluster with seed nodes: {:?}", args.seed_nodes);
+        info!(
+            "[Cluster] Initializing cluster with seed nodes: {:?}",
+            args.seed_nodes
+        );
         initialize_cluster(&args).await?;
     } else {
         info!("[Cluster] Starting as standalone node (no seed nodes configured)");
@@ -274,7 +295,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build()
         .await?;
 
-    info!("[gRPC] gRPC server initialized on {}:{}", args.bind, args.grpc_port);
+    info!(
+        "[gRPC] gRPC server initialized on {}:{}",
+        args.bind, args.grpc_port
+    );
 
     // Create independent tiered storage for each protocol with protocol-specific data directories
     let postgres_data_dir = args.data_dir.join("postgresql");
@@ -310,31 +334,48 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("[Protocol Storage] All storage instances initialized");
 
     // Start protocol adapters
-    let mut protocol_handles: Vec<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>> = Vec::new();
+    let mut protocol_handles: Vec<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>> =
+        Vec::new();
 
     // Start PostgreSQL Wire Protocol server (port 5432)
-    if toml_config.protocols.postgresql.as_ref().map_or(true, |c| c.enabled) {
-        let postgres_handle = start_postgresql_server(
-            &args,
-            postgres_storage.clone(),
-            rocksdb_storage.clone(),
-        ).await?;
+    if toml_config
+        .protocols
+        .postgresql
+        .as_ref()
+        .map_or(true, |c| c.enabled)
+    {
+        let postgres_handle =
+            start_postgresql_server(&args, postgres_storage.clone(), rocksdb_storage.clone())
+                .await?;
         protocol_handles.push(postgres_handle);
-        info!("[PostgreSQL] PostgreSQL wire protocol server started on port {}", args.postgres_port);
+        info!(
+            "[PostgreSQL] PostgreSQL wire protocol server started on port {}",
+            args.postgres_port
+        );
     }
 
     // Start Redis RESP Protocol server (port 6379)
-    if toml_config.protocols.redis.as_ref().map_or(true, |c| c.enabled) {
-        let redis_handle = start_redis_server(
-            &args,
-            redis_storage.clone(),
-        ).await?;
+    if toml_config
+        .protocols
+        .redis
+        .as_ref()
+        .map_or(true, |c| c.enabled)
+    {
+        let redis_handle = start_redis_server(&args, redis_storage.clone()).await?;
         protocol_handles.push(redis_handle);
-        info!("[Redis] Redis RESP protocol server started on port {}", args.redis_port);
+        info!(
+            "[Redis] Redis RESP protocol server started on port {}",
+            args.redis_port
+        );
     }
 
     // Start MySQL protocol adapter (port 3306)
-    if toml_config.protocols.mysql.as_ref().map_or(true, |c| c.enabled) {
+    if toml_config
+        .protocols
+        .mysql
+        .as_ref()
+        .map_or(true, |c| c.enabled)
+    {
         let mysql_config = MySqlConfig {
             listen_addr: format!("{}:{}", args.bind, args.mysql_port).parse()?,
             max_connections: 1000,
@@ -346,14 +387,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         let mysql_server = MySqlServer::new_with_storage(mysql_config, mysql_storage).await?;
         let mysql_handle = tokio::spawn(async move {
-            mysql_server.start().await.map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+            mysql_server
+                .start()
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
         });
         protocol_handles.push(mysql_handle);
-        info!("[MySQL] MySQL protocol adapter started on port {}", args.mysql_port);
+        info!(
+            "[MySQL] MySQL protocol adapter started on port {}",
+            args.mysql_port
+        );
     }
 
     // Start CQL protocol adapter (port 9042)
-    if toml_config.protocols.cql.as_ref().map_or(true, |c| c.enabled) {
+    if toml_config
+        .protocols
+        .cql
+        .as_ref()
+        .map_or(true, |c| c.enabled)
+    {
         let cql_config = CqlConfig {
             listen_addr: format!("{}:{}", args.bind, args.cql_port).parse()?,
             max_connections: 1000,
@@ -365,21 +417,30 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         let cql_server = CqlServer::new_with_storage(cql_config, cql_storage).await?;
         let cql_handle = tokio::spawn(async move {
-            cql_server.start().await.map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+            cql_server
+                .start()
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
         });
         protocol_handles.push(cql_handle);
-        info!("[CQL] CQL protocol adapter started on port {}", args.cql_port);
+        info!(
+            "[CQL] CQL protocol adapter started on port {}",
+            args.cql_port
+        );
     }
 
     // Start Cypher/Neo4j protocol adapter (port 7687)
     let cypher_data_dir = args.data_dir.join("cypher");
     let cypher_storage = Arc::new(CypherGraphStorage::new(cypher_data_dir));
     cypher_storage.initialize().await?;
-    
+
     let cypher_bind_addr = format!("{}:7687", args.bind);
     let cypher_server = CypherServer::new_with_storage(cypher_bind_addr, cypher_storage);
     let cypher_handle = tokio::spawn(async move {
-        cypher_server.run().await.map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+        cypher_server
+            .run()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
     });
     protocol_handles.push(cypher_handle);
     info!("[Cypher] Cypher/Neo4j protocol adapter started on port 7687");
@@ -388,11 +449,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let aql_data_dir = args.data_dir.join("aql");
     let aql_storage = Arc::new(AqlStorage::new(aql_data_dir));
     aql_storage.initialize().await?;
-    
+
     let aql_bind_addr = format!("{}:8529", args.bind);
     let aql_server = AqlServer::new_with_storage(aql_bind_addr, aql_storage);
     let aql_handle = tokio::spawn(async move {
-        aql_server.run().await.map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+        aql_server
+            .run()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
     });
     protocol_handles.push(aql_handle);
     info!("[AQL] AQL/ArangoDB protocol adapter started on port 8529");
@@ -408,23 +472,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("  Cypher:     {}:7687", args.bind);
     info!("  AQL:        {}:8529", args.bind);
     info!("  Metrics:    {}:{}/metrics", args.bind, args.metrics_port);
-    
+
     // Initialize MCP server if enabled
-    if toml_config.protocols.mcp.as_ref().map_or(false, |c| c.enabled) {
-        let mcp_handle = start_mcp_server(
-            &args,
-            postgres_storage.clone(),
-            rocksdb_storage.clone(),
-        ).await?;
+    if toml_config
+        .protocols
+        .mcp
+        .as_ref()
+        .map_or(false, |c| c.enabled)
+    {
+        let mcp_handle =
+            start_mcp_server(&args, postgres_storage.clone(), rocksdb_storage.clone()).await?;
         protocol_handles.push(mcp_handle);
         info!("[MCP] Model Context Protocol server initialized");
     }
-    
+
     info!("=========================================");
 
     // Start the gRPC server in a separate task
     let grpc_handle = tokio::spawn(async move {
-        server.start().await.map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+        server
+            .start()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
     });
 
     // Wait for any server to exit (all run indefinitely until interrupted)
@@ -457,7 +526,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 /// Load configuration from TOML file
-async fn load_toml_config(args: &Args) -> Result<orbit_server::config::OrbitServerConfig, Box<dyn Error>> {
+async fn load_toml_config(
+    args: &Args,
+) -> Result<orbit_server::config::OrbitServerConfig, Box<dyn Error>> {
     use orbit_server::config::OrbitServerConfig;
 
     if args.config.exists() {
@@ -466,7 +537,10 @@ async fn load_toml_config(args: &Args) -> Result<orbit_server::config::OrbitServ
         info!("[Config] Configuration loaded and validated");
         Ok(config)
     } else {
-        warn!("[Config] Config file not found: {:?}. Using defaults.", args.config);
+        warn!(
+            "[Config] Config file not found: {:?}. Using defaults.",
+            args.config
+        );
         Ok(OrbitServerConfig::default())
     }
 }
@@ -567,11 +641,17 @@ async fn initialize_rocksdb_storage(
         .map(|r| r.enable_wal)
         .unwrap_or(true);
 
-    info!("[RocksDB] Opening RocksDB at: {:?} (WAL: {})", rocksdb_path, enable_wal);
+    info!(
+        "[RocksDB] Opening RocksDB at: {:?} (WAL: {})",
+        rocksdb_path, enable_wal
+    );
 
     let storage = RocksDbTableStorage::new(rocksdb_path.to_str().unwrap())?;
 
-    info!("[RocksDB] Write-Ahead Logging: {}", if enable_wal { "ENABLED" } else { "DISABLED" });
+    info!(
+        "[RocksDB] Write-Ahead Logging: {}",
+        if enable_wal { "ENABLED" } else { "DISABLED" }
+    );
 
     Ok(Arc::new(storage))
 }
@@ -593,9 +673,7 @@ fn configure_tiered_storage(
         .map(|t| t.warm_to_cold_threshold_days)
         .unwrap_or(30);
 
-    let auto_tiering = tiered_config
-        .map(|t| t.auto_tiering)
-        .unwrap_or(true);
+    let auto_tiering = tiered_config.map(|t| t.auto_tiering).unwrap_or(true);
 
     let background_migration = tiered_config
         .map(|t| t.background_migration)
@@ -654,7 +732,8 @@ fn initialize_minio_cold_storage(
             bucket,
             access_key,
             secret_key,
-            use_ssl: std::env::var("MINIO_USE_SSL").unwrap_or_else(|_| "true".to_string()) == "true",
+            use_ssl: std::env::var("MINIO_USE_SSL").unwrap_or_else(|_| "true".to_string())
+                == "true",
         }))
     } else {
         Ok(None)
@@ -675,15 +754,19 @@ async fn start_prometheus_metrics_exporter(port: u16) -> Result<(), Box<dyn Erro
 
     // Bind the listener before spawning to catch port binding errors early
     use tokio::net::TcpListener;
-    let listener = TcpListener::bind(addr).await
-        .map_err(|e| format!("Failed to bind metrics server to {}: {}. Port may already be in use.", addr, e))?;
+    let listener = TcpListener::bind(addr).await.map_err(|e| {
+        format!(
+            "Failed to bind metrics server to {}: {}. Port may already be in use.",
+            addr, e
+        )
+    })?;
 
     tokio::spawn(async move {
+        use http_body_util::Full;
+        use hyper::body::Bytes;
         use hyper::server::conn::http1;
         use hyper::service::service_fn;
         use hyper::{Request, Response};
-        use http_body_util::Full;
-        use hyper::body::Bytes;
         use hyper_util::rt::TokioIo;
 
         loop {
@@ -704,14 +787,13 @@ async fn start_prometheus_metrics_exporter(port: u16) -> Result<(), Box<dyn Erro
                     let handle = handle_clone.clone();
                     async move {
                         let metrics = handle.render();
-                        Ok::<_, std::convert::Infallible>(Response::new(Full::new(Bytes::from(metrics))))
+                        Ok::<_, std::convert::Infallible>(Response::new(Full::new(Bytes::from(
+                            metrics,
+                        ))))
                     }
                 });
 
-                if let Err(e) = http1::Builder::new()
-                    .serve_connection(io, service)
-                    .await
-                {
+                if let Err(e) = http1::Builder::new().serve_connection(io, service).await {
                     error!("[Metrics] Connection error: {}", e);
                 }
             });
@@ -724,17 +806,29 @@ async fn start_prometheus_metrics_exporter(port: u16) -> Result<(), Box<dyn Erro
 /// Log protocol configuration
 fn log_protocol_configuration(args: &Args) {
     info!("[Protocols] Enabled protocol servers:");
-    info!("  - gRPC (Actor Management): {}:{}", args.bind, args.grpc_port);
-    info!("  - PostgreSQL (Wire Protocol): {}:{}", args.bind, args.postgres_port);
-    info!("  - Redis (RESP Protocol): {}:{}", args.bind, args.redis_port);
-    info!("  - MySQL (Wire Protocol): {}:{}", args.bind, args.mysql_port);
+    info!(
+        "  - gRPC (Actor Management): {}:{}",
+        args.bind, args.grpc_port
+    );
+    info!(
+        "  - PostgreSQL (Wire Protocol): {}:{}",
+        args.bind, args.postgres_port
+    );
+    info!(
+        "  - Redis (RESP Protocol): {}:{}",
+        args.bind, args.redis_port
+    );
+    info!(
+        "  - MySQL (Wire Protocol): {}:{}",
+        args.bind, args.mysql_port
+    );
     info!("  - CQL (Cassandra): {}:{}", args.bind, args.cql_port);
 }
 
 /// Initialize cluster with Raft consensus
 async fn initialize_cluster(args: &Args) -> Result<(), Box<dyn Error>> {
-    use orbit_shared::consensus::RaftConfig;
     use orbit_shared::cluster_manager::{EnhancedClusterManager, QuorumConfig};
+    use orbit_shared::consensus::RaftConfig;
     use orbit_shared::raft_transport::GrpcRaftTransport;
     use orbit_shared::NodeId;
     use std::collections::HashMap;
@@ -770,12 +864,15 @@ async fn initialize_cluster(args: &Args) -> Result<(), Box<dyn Error>> {
             let (seed_node_id_str, address) = seed.split_at(at_pos);
             let address = &address[1..]; // Remove '@'
             let seed_node_id = NodeId::from_string(seed_node_id_str);
-            
+
             node_addresses.insert(seed_node_id.clone(), address.to_string());
             cluster_nodes.push(seed_node_id);
         } else {
             // Just an address, generate a node ID from it
-            let seed_node_id = NodeId::from_string(&format!("node-{}", seed.replace("http://", "").replace(":", "-")));
+            let seed_node_id = NodeId::from_string(&format!(
+                "node-{}",
+                seed.replace("http://", "").replace(":", "-")
+            ));
             node_addresses.insert(seed_node_id.clone(), seed.clone());
             cluster_nodes.push(seed_node_id);
         }
@@ -795,7 +892,11 @@ async fn initialize_cluster(args: &Args) -> Result<(), Box<dyn Error>> {
 
     // Create Quorum configuration
     let quorum_config = QuorumConfig {
-        min_quorum_size: if cluster_nodes.len() >= 3 { 3 } else { cluster_nodes.len() },
+        min_quorum_size: if cluster_nodes.len() >= 3 {
+            3
+        } else {
+            cluster_nodes.len()
+        },
         max_failures: (cluster_nodes.len().saturating_sub(1)) / 2,
         quorum_timeout: Duration::from_secs(10),
         dynamic_quorum: false,
@@ -850,7 +951,8 @@ async fn start_postgresql_server(
     let postgres_server = PostgresServer::new_with_query_engine(bind_addr, query_engine);
 
     let handle = tokio::spawn(async move {
-        postgres_server.run()
+        postgres_server
+            .run()
             .await
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
     });
@@ -864,19 +966,19 @@ async fn start_mcp_server(
     storage: Arc<TieredTableStorage>,
     rocksdb: Arc<RocksDbTableStorage>,
 ) -> Result<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>, Box<dyn Error>> {
-    use orbit_server::protocols::mcp::{McpConfig, McpCapabilities, McpServer};
     use orbit_server::protocols::mcp::integration::OrbitMcpIntegration;
-    
+    use orbit_server::protocols::mcp::{McpCapabilities, McpConfig, McpServer};
+
     // Create QueryEngine with RocksDB persistence
     let query_engine = QueryEngine::new_with_persistent_storage(rocksdb.clone());
     let query_engine_arc = Arc::new(query_engine);
-    
+
     // Create MCP integration layer with RocksDB storage (implements PersistentTableStorage)
     let integration = Arc::new(OrbitMcpIntegration::with_storage(
         query_engine_arc.clone(),
         rocksdb.clone(),
     ));
-    
+
     // Create MCP server with storage-backed schema analyzer (uses TieredTableStorage for schema discovery)
     let mcp_config = McpConfig::default();
     let mcp_capabilities = McpCapabilities::default();
@@ -887,16 +989,16 @@ async fn start_mcp_server(
         integration.clone(),
         storage_for_schema,
     );
-    
+
     // MCP is integrated into REST API, so we just initialize it here
     // The REST server will use it if available
     let _mcp_server_arc = Arc::new(mcp_server);
-    
+
     // Start background schema discovery
     // This will periodically refresh the schema cache
-    use orbit_server::protocols::mcp::schema_discovery::SchemaDiscoveryManager;
     use orbit_server::protocols::mcp::schema::SchemaAnalyzer;
-    
+    use orbit_server::protocols::mcp::schema_discovery::SchemaDiscoveryManager;
+
     // Create schema analyzer with storage for discovery
     let schema_analyzer_for_discovery = Arc::new(SchemaAnalyzer::with_storage(storage.clone()));
     let schema_discovery = SchemaDiscoveryManager::new(
@@ -909,7 +1011,7 @@ async fn start_mcp_server(
     } else {
         info!("[MCP] Schema discovery started");
     }
-    
+
     // For now, MCP runs as part of REST API or can be accessed programmatically
     // Create a handle that keeps the server alive
     let handle = tokio::spawn(async move {
@@ -918,7 +1020,7 @@ async fn start_mcp_server(
         std::future::pending::<()>().await;
         Ok(())
     });
-    
+
     Ok(handle)
 }
 
@@ -931,7 +1033,7 @@ async fn start_redis_server(
 
     // Create RocksDB storage for Redis persistence
     let redis_data_path = args.data_dir.join("redis").join("rocksdb");
-    let redis_provider: Option<Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider>> = 
+    let redis_provider: Option<Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider>> =
         match orbit_server::protocols::persistence::rocksdb_redis_provider::RocksDbRedisDataProvider::new(
             redis_data_path.to_str().unwrap(),
             orbit_server::protocols::persistence::redis_data::RedisDataConfig::default(),
@@ -956,7 +1058,8 @@ async fn start_redis_server(
     let redis_server = RespServer::new_with_persistence(bind_addr, redis_provider);
 
     let handle = tokio::spawn(async move {
-        redis_server.run()
+        redis_server
+            .run()
             .await
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
     });

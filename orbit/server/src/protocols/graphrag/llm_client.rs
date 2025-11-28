@@ -38,7 +38,7 @@ pub struct LLMGenerationResponse {
 pub trait LLMClient: Send + Sync {
     /// Generate text from a prompt
     async fn generate(&self, request: LLMGenerationRequest) -> OrbitResult<LLMGenerationResponse>;
-    
+
     /// Get the model name
     fn model_name(&self) -> &str;
 }
@@ -68,10 +68,10 @@ impl OpenAIClient {
 impl LLMClient for OpenAIClient {
     async fn generate(&self, request: LLMGenerationRequest) -> OrbitResult<LLMGenerationResponse> {
         use reqwest::Client;
-        
+
         let client = Client::new();
         let url = format!("{}/chat/completions", self.base_url);
-        
+
         let mut messages = Vec::new();
         if let Some(system_msg) = request.system_message {
             messages.push(serde_json::json!({
@@ -83,14 +83,14 @@ impl LLMClient for OpenAIClient {
             "role": "user",
             "content": request.prompt
         }));
-        
+
         let body = serde_json::json!({
             "model": self.model,
             "messages": messages,
             "temperature": request.temperature.unwrap_or(self.default_temperature),
             "max_tokens": request.max_tokens.unwrap_or(self.default_max_tokens),
         });
-        
+
         let response = client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.api_key))
@@ -99,7 +99,7 @@ impl LLMClient for OpenAIClient {
             .send()
             .await
             .map_err(|e| OrbitError::internal(format!("OpenAI API request failed: {}", e)))?;
-        
+
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
@@ -108,19 +108,19 @@ impl LLMClient for OpenAIClient {
                 status, error_text
             )));
         }
-        
+
         let json: serde_json::Value = response
             .json()
             .await
             .map_err(|e| OrbitError::internal(format!("Failed to parse OpenAI response: {}", e)))?;
-        
+
         let text = json["choices"][0]["message"]["content"]
             .as_str()
             .ok_or_else(|| OrbitError::internal("Invalid OpenAI response format"))?
             .to_string();
-        
+
         let tokens_used = json["usage"]["total_tokens"].as_u64().map(|v| v as u32);
-        
+
         Ok(LLMGenerationResponse {
             text,
             tokens_used,
@@ -130,7 +130,7 @@ impl LLMClient for OpenAIClient {
             model: self.model.clone(),
         })
     }
-    
+
     fn model_name(&self) -> &str {
         &self.model
     }
@@ -151,7 +151,7 @@ impl OllamaClient {
             default_temperature: 0.7,
         }
     }
-    
+
     pub fn with_endpoint(model: String, endpoint: String) -> Self {
         Self {
             model,
@@ -165,15 +165,15 @@ impl OllamaClient {
 impl LLMClient for OllamaClient {
     async fn generate(&self, request: LLMGenerationRequest) -> OrbitResult<LLMGenerationResponse> {
         use reqwest::Client;
-        
+
         let client = Client::new();
         let url = format!("{}/api/generate", self.base_url);
-        
+
         let mut prompt = request.prompt;
         if let Some(system_msg) = request.system_message {
             prompt = format!("{}\n\n{}", system_msg, prompt);
         }
-        
+
         let body = serde_json::json!({
             "model": self.model,
             "prompt": prompt,
@@ -183,14 +183,14 @@ impl LLMClient for OllamaClient {
                 "num_predict": request.max_tokens.unwrap_or(2048),
             }
         });
-        
+
         let response = client
             .post(&url)
             .json(&body)
             .send()
             .await
             .map_err(|e| OrbitError::internal(format!("Ollama API request failed: {}", e)))?;
-        
+
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
@@ -199,17 +199,17 @@ impl LLMClient for OllamaClient {
                 status, error_text
             )));
         }
-        
+
         let json: serde_json::Value = response
             .json()
             .await
             .map_err(|e| OrbitError::internal(format!("Failed to parse Ollama response: {}", e)))?;
-        
+
         let text = json["response"]
             .as_str()
             .ok_or_else(|| OrbitError::internal("Invalid Ollama response format"))?
             .to_string();
-        
+
         Ok(LLMGenerationResponse {
             text,
             tokens_used: None,
@@ -217,7 +217,7 @@ impl LLMClient for OllamaClient {
             model: self.model.clone(),
         })
     }
-    
+
     fn model_name(&self) -> &str {
         &self.model
     }
@@ -246,14 +246,14 @@ impl LocalLLMClient {
 impl LLMClient for LocalLLMClient {
     async fn generate(&self, request: LLMGenerationRequest) -> OrbitResult<LLMGenerationResponse> {
         use reqwest::Client;
-        
+
         let client = Client::new();
-        
+
         let mut prompt = request.prompt;
         if let Some(system_msg) = request.system_message {
             prompt = format!("{}\n\n{}", system_msg, prompt);
         }
-        
+
         // Try OpenAI-compatible format first
         let body = serde_json::json!({
             "model": self.model,
@@ -266,14 +266,14 @@ impl LLMClient for LocalLLMClient {
             "temperature": request.temperature.unwrap_or(self.default_temperature),
             "max_tokens": request.max_tokens.unwrap_or(self.default_max_tokens),
         });
-        
+
         let response = client
             .post(&self.endpoint)
             .json(&body)
             .send()
             .await
             .map_err(|e| OrbitError::internal(format!("Local LLM API request failed: {}", e)))?;
-        
+
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
@@ -282,12 +282,11 @@ impl LLMClient for LocalLLMClient {
                 status, error_text
             )));
         }
-        
-        let json: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| OrbitError::internal(format!("Failed to parse local LLM response: {}", e)))?;
-        
+
+        let json: serde_json::Value = response.json().await.map_err(|e| {
+            OrbitError::internal(format!("Failed to parse local LLM response: {}", e))
+        })?;
+
         // Try OpenAI-compatible format
         let text = if let Some(text) = json["choices"][0]["message"]["content"].as_str() {
             text.to_string()
@@ -298,7 +297,7 @@ impl LLMClient for LocalLLMClient {
         } else {
             return Err(OrbitError::internal("Invalid local LLM response format"));
         };
-        
+
         Ok(LLMGenerationResponse {
             text,
             tokens_used: json["usage"]["total_tokens"].as_u64().map(|v| v as u32),
@@ -308,7 +307,7 @@ impl LLMClient for LocalLLMClient {
             model: self.model.clone(),
         })
     }
-    
+
     fn model_name(&self) -> &str {
         &self.model
     }
@@ -322,20 +321,20 @@ pub fn create_llm_client(provider: &LLMProvider) -> OrbitResult<Box<dyn LLMClien
             model,
             temperature: _,
             max_tokens: _,
-        } => {
-            Ok(Box::new(OpenAIClient::new(api_key.clone(), model.clone())))
-        }
-        LLMProvider::Ollama { model, temperature: _ } => {
-            Ok(Box::new(OllamaClient::new(model.clone())))
-        }
+        } => Ok(Box::new(OpenAIClient::new(api_key.clone(), model.clone()))),
+        LLMProvider::Ollama {
+            model,
+            temperature: _,
+        } => Ok(Box::new(OllamaClient::new(model.clone()))),
         LLMProvider::Local {
             endpoint,
             model,
             temperature: _,
             max_tokens: _,
-        } => {
-            Ok(Box::new(LocalLLMClient::new(endpoint.clone(), model.clone())))
-        }
+        } => Ok(Box::new(LocalLLMClient::new(
+            endpoint.clone(),
+            model.clone(),
+        ))),
         LLMProvider::Anthropic {
             api_key: _,
             model: _,
@@ -347,4 +346,3 @@ pub fn create_llm_client(provider: &LLMProvider) -> OrbitResult<Box<dyn LLMClien
         }
     }
 }
-

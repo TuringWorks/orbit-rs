@@ -1,5 +1,7 @@
 //! SQL query engine for actor operations
 
+#![cfg(feature = "storage-rocksdb")]
+
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -7,7 +9,9 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::graphrag_engine::GraphRAGQueryEngine;
-use crate::protocols::postgres_wire::persistent_storage::{PersistentTableStorage, QueryCondition, TableRow};
+use crate::protocols::postgres_wire::persistent_storage::{
+    PersistentTableStorage, QueryCondition, TableRow,
+};
 use crate::protocols::postgres_wire::sql::{ConfigurableSqlEngine, UnifiedExecutionResult};
 use crate::protocols::postgres_wire::vector_engine::VectorQueryEngine;
 use orbit_client::OrbitClient;
@@ -1335,7 +1339,9 @@ impl QueryEngine {
         columns: Vec<SimpleColumnDef>,
         if_not_exists: bool,
     ) -> ProtocolResult<QueryResult> {
-        use crate::protocols::postgres_wire::persistent_storage::{ColumnDefinition, ColumnType, TableSchema};
+        use crate::protocols::postgres_wire::persistent_storage::{
+            ColumnDefinition, ColumnType, TableSchema,
+        };
 
         // Check if table already exists
         if storage.table_exists(table).await? {

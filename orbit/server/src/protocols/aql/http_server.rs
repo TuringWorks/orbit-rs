@@ -3,6 +3,8 @@
 //! This module implements the ArangoDB HTTP API endpoints for AQL query execution
 //! and document operations, providing compatibility with ArangoDB clients.
 
+#![cfg(feature = "storage-rocksdb")]
+
 use crate::protocols::aql::query_engine::{AqlQueryEngine, AqlQueryResult};
 use crate::protocols::aql::storage::AqlStorage;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
@@ -29,7 +31,7 @@ struct AqlCursor {
     has_more: bool,
 }
 
-    /// AQL query request
+/// AQL query request
 #[derive(Debug, Deserialize)]
 struct AqlQueryRequest {
     query: String,
@@ -77,7 +79,10 @@ impl AqlHttpServer {
     /// Start the HTTP server
     pub async fn run(&self) -> ProtocolResult<()> {
         let listener = TcpListener::bind(&self.bind_addr).await.map_err(|e| {
-            error!("Failed to bind AQL HTTP server to {}: {}", self.bind_addr, e);
+            error!(
+                "Failed to bind AQL HTTP server to {}: {}",
+                self.bind_addr, e
+            );
             ProtocolError::Other(format!("Failed to bind AQL HTTP server: {}", e))
         })?;
 
@@ -91,7 +96,7 @@ impl AqlHttpServer {
             match listener.accept().await {
                 Ok((stream, addr)) => {
                     info!("New AQL HTTP connection from {}", addr);
-                    
+
                     let storage = storage.clone();
                     let query_engine = query_engine.clone();
                     let cursors = cursors.clone();
@@ -107,9 +112,7 @@ impl AqlHttpServer {
                             )
                         });
 
-                        if let Err(err) = http1::Builder::new()
-                            .serve_connection(io, service)
-                            .await
+                        if let Err(err) = http1::Builder::new().serve_connection(io, service).await
                         {
                             error!("Error serving connection: {}", err);
                         }
@@ -140,7 +143,10 @@ async fn handle_request(
         Ok(collected) => collected.to_bytes(),
         Err(e) => {
             error!("Error reading request body: {}", e);
-            return Ok(error_response(StatusCode::BAD_REQUEST, "Invalid request body"));
+            return Ok(error_response(
+                StatusCode::BAD_REQUEST,
+                "Invalid request body",
+            ));
         }
     };
 
@@ -175,52 +181,51 @@ async fn handle_cursor_request(
         &Method::POST => {
             // Create new cursor (execute query)
             match serde_json::from_slice::<AqlQueryRequest>(&body) {
-                Ok(query_req) => {
-                    match query_engine.execute_query(&query_req.query).await {
-                        Ok(result) => {
-                            let cursor_id = format!("cursor_{}", uuid::Uuid::new_v4());
-                            let cursor = AqlCursor {
-                                _id: cursor_id.clone(),
-                                _query: query_req.query.clone(),
-                                result: result.clone(),
-                                position: 0,
-                                has_more: result.data.len() > query_req.batch_size.unwrap_or(100),
-                            };
+                Ok(query_req) => match query_engine.execute_query(&query_req.query).await {
+                    Ok(result) => {
+                        let cursor_id = format!("cursor_{}", uuid::Uuid::new_v4());
+                        let cursor = AqlCursor {
+                            _id: cursor_id.clone(),
+                            _query: query_req.query.clone(),
+                            result: result.clone(),
+                            position: 0,
+                            has_more: result.data.len() > query_req.batch_size.unwrap_or(100),
+                        };
 
-                            cursors.write().await.insert(cursor_id.clone(), cursor);
+                        cursors.write().await.insert(cursor_id.clone(), cursor);
 
-                            let batch_size = query_req.batch_size.unwrap_or(100);
-                            let result_data: Vec<serde_json::Value> = result
-                                .data
+                        let batch_size = query_req.batch_size.unwrap_or(100);
+                        let result_data: Vec<serde_json::Value> = result
+                            .data
+                            .iter()
+                            .take(batch_size)
+                            .map(|v| aql_value_to_json(v))
+                            .collect();
+
+                        let response = AqlCursorResponse {
+                            result: result_data,
+                            has_more: result.data.len() > batch_size,
+                            id: Some(cursor_id),
+                            count: if query_req.count {
+                                Some(result.data.len())
+                            } else {
+                                None
+                            },
+                            cached: false,
+                            extra: result
+                                .metadata
                                 .iter()
-                                .take(batch_size)
-                                .map(|v| aql_value_to_json(v))
-                                .collect();
+                                .map(|(k, v)| (k.clone(), aql_value_to_json(v)))
+                                .collect(),
+                        };
 
-                            let response = AqlCursorResponse {
-                                result: result_data,
-                                has_more: result.data.len() > batch_size,
-                                id: Some(cursor_id),
-                                count: if query_req.count {
-                                    Some(result.data.len())
-                                } else {
-                                    None
-                                },
-                                cached: false,
-                                extra: result.metadata
-                                    .iter()
-                                    .map(|(k, v)| (k.clone(), aql_value_to_json(v)))
-                                    .collect(),
-                            };
-
-                            json_response(StatusCode::CREATED, &response)
-                        }
-                        Err(e) => {
-                            error!("AQL query execution error: {}", e);
-                            error_response(StatusCode::BAD_REQUEST, &format!("Query error: {}", e))
-                        }
+                        json_response(StatusCode::CREATED, &response)
                     }
-                }
+                    Err(e) => {
+                        error!("AQL query execution error: {}", e);
+                        error_response(StatusCode::BAD_REQUEST, &format!("Query error: {}", e))
+                    }
+                },
                 Err(e) => {
                     error!("Invalid AQL query request: {}", e);
                     error_response(StatusCode::BAD_REQUEST, "Invalid query request")
@@ -322,8 +327,12 @@ async fn handle_document_request(
     _storage: Arc<AqlStorage>,
 ) -> Response<Full<Bytes>> {
     // Parse collection and key from path: /_api/document/{collection}/{key}
-    let parts: Vec<&str> = path.strip_prefix("/_api/document/").unwrap_or("").split('/').collect();
-    
+    let parts: Vec<&str> = path
+        .strip_prefix("/_api/document/")
+        .unwrap_or("")
+        .split('/')
+        .collect();
+
     match method {
         &Method::GET => {
             // Get document
@@ -331,7 +340,10 @@ async fn handle_document_request(
                 let collection = parts[0];
                 let key = parts[1];
                 // Simplified: return empty document
-                json_response(StatusCode::OK, &serde_json::json!({"_key": key, "_id": format!("{}/{}", collection, key)}))
+                json_response(
+                    StatusCode::OK,
+                    &serde_json::json!({"_key": key, "_id": format!("{}/{}", collection, key)}),
+                )
             } else {
                 error_response(StatusCode::BAD_REQUEST, "Invalid document path")
             }
@@ -341,16 +353,14 @@ async fn handle_document_request(
             if parts.len() >= 1 {
                 let collection = parts[0];
                 match serde_json::from_slice::<serde_json::Value>(&body) {
-                    Ok(_doc) => {
-                        json_response(
-                            StatusCode::CREATED,
-                            &serde_json::json!({
-                                "_id": format!("{}/{}", collection, "new_doc"),
-                                "_key": "new_doc",
-                                "_rev": "1"
-                            }),
-                        )
-                    }
+                    Ok(_doc) => json_response(
+                        StatusCode::CREATED,
+                        &serde_json::json!({
+                            "_id": format!("{}/{}", collection, "new_doc"),
+                            "_key": "new_doc",
+                            "_rev": "1"
+                        }),
+                    ),
                     Err(e) => {
                         error!("Invalid document JSON: {}", e);
                         error_response(StatusCode::BAD_REQUEST, "Invalid JSON")
@@ -424,13 +434,11 @@ fn aql_value_to_json(value: &crate::protocols::aql::data_model::AqlValue) -> ser
         AqlValue::Array(arr) => {
             serde_json::Value::Array(arr.iter().map(aql_value_to_json).collect())
         }
-        AqlValue::Object(obj) => {
-            serde_json::Value::Object(
-                obj.iter()
-                    .map(|(k, v)| (k.clone(), aql_value_to_json(v)))
-                    .collect(),
-            )
-        }
+        AqlValue::Object(obj) => serde_json::Value::Object(
+            obj.iter()
+                .map(|(k, v)| (k.clone(), aql_value_to_json(v)))
+                .collect(),
+        ),
         AqlValue::DateTime(dt) => serde_json::Value::String(dt.to_rfc3339()),
     }
 }
@@ -466,4 +474,3 @@ fn error_response(status: StatusCode, message: &str) -> Response<Full<Bytes>> {
 
     json_response(status, &error_json)
 }
-

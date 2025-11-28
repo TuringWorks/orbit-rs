@@ -127,8 +127,7 @@ impl GPUVectorSimilarity {
             let _ = dimension; // Suppress unused variable warning
         }
 
-        vector_count >= self.config.gpu_min_vectors
-            && dimension >= self.config.gpu_min_dimension
+        vector_count >= self.config.gpu_min_vectors && dimension >= self.config.gpu_min_dimension
     }
 
     /// Calculate similarity between a query vector and multiple candidate vectors
@@ -244,7 +243,6 @@ impl GPUVectorSimilarity {
         candidate_vectors: &[Vec<f32>],
         metric: VectorSimilarityMetric,
     ) -> Result<Vec<VectorSimilarityResult>, ComputeError> {
-
         let kernel_name = match metric {
             VectorSimilarityMetric::Cosine => "vector_cosine_similarity",
             VectorSimilarityMetric::Euclidean => "vector_euclidean_distance",
@@ -530,8 +528,8 @@ mod tests {
 
         let query = vec![1.0, 0.0, 0.0];
         let candidates = vec![
-            vec![1.0, 0.0, 0.0], // Should be identical (score = 1.0)
-            vec![0.0, 1.0, 0.0], // Should be orthogonal (score = 0.0)
+            vec![1.0, 0.0, 0.0],     // Should be identical (score = 1.0)
+            vec![0.0, 1.0, 0.0],     // Should be orthogonal (score = 0.0)
             vec![0.707, 0.707, 0.0], // Should be ~0.707
         ];
 
@@ -546,4 +544,3 @@ mod tests {
         assert!((results[2].score - 0.707).abs() < 0.1); // 45 degrees
     }
 }
-

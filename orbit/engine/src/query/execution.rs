@@ -13,11 +13,11 @@
 use std::collections::HashSet;
 
 use crate::error::{EngineError, EngineResult};
-use crate::storage::{SqlValue, Column, ColumnBatch, NullBitmap, DEFAULT_BATCH_SIZE};
+use crate::storage::{Column, ColumnBatch, NullBitmap, SqlValue, DEFAULT_BATCH_SIZE};
+use orbit_compute::cpu::simd::aggregates::{SimdAggregateF64, SimdAggregateI32, SimdAggregateI64};
+use orbit_compute::cpu::simd::filters::{SimdFilterF64, SimdFilterI32, SimdFilterI64};
+use orbit_compute::cpu::simd::{simd_capability, SimdAggregate, SimdCapability, SimdFilter};
 use orbit_compute::cpu::{CPUEngine, SimdLevel};
-use orbit_compute::cpu::simd::{SimdFilter, SimdAggregate, SimdCapability, simd_capability};
-use orbit_compute::cpu::simd::filters::{SimdFilterI32, SimdFilterI64, SimdFilterF64};
-use orbit_compute::cpu::simd::aggregates::{SimdAggregateI32, SimdAggregateI64, SimdAggregateF64};
 
 /// Plan node types that break pipeline execution
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -204,13 +204,12 @@ impl VectorizedExecutor {
     }
 
     /// Get or initialize the GPU device manager (cached, only checked once)
-    /// 
+    ///
     /// This method uses OnceLock to ensure GPU detection only happens once
     /// per executor instance, avoiding repeated checks on every query.
     fn get_gpu_device_manager(&self) -> &orbit_compute::gpu_backend::GpuDeviceManager {
-        self.gpu_device_manager.get_or_init(|| {
-            orbit_compute::gpu_backend::GpuDeviceManager::new()
-        })
+        self.gpu_device_manager
+            .get_or_init(|| orbit_compute::gpu_backend::GpuDeviceManager::new())
     }
 
     /// Get executor configuration
@@ -256,10 +255,12 @@ impl VectorizedExecutor {
         // Verify all columns have same length
         for (idx, col) in columns.iter().enumerate() {
             if col.len() != row_count {
-                return Err(EngineError::storage(
-                    format!("Column {} has mismatched length: expected {}, got {}",
-                            idx, row_count, col.len()),
-                ));
+                return Err(EngineError::storage(format!(
+                    "Column {} has mismatched length: expected {}, got {}",
+                    idx,
+                    row_count,
+                    col.len()
+                )));
             }
         }
 
@@ -282,9 +283,10 @@ impl VectorizedExecutor {
         value: SqlValue,
     ) -> EngineResult<ColumnBatch> {
         if column_index >= batch.columns.len() {
-            return Err(EngineError::storage(
-                format!("Column index {} out of bounds", column_index),
-            ));
+            return Err(EngineError::storage(format!(
+                "Column index {} out of bounds",
+                column_index
+            )));
         }
 
         let column = &batch.columns[column_index];
@@ -328,9 +330,10 @@ impl VectorizedExecutor {
 
         for &idx in column_indices {
             if idx >= batch.columns.len() {
-                return Err(EngineError::storage(
-                    format!("Column index {} out of bounds", idx),
-                ));
+                return Err(EngineError::storage(format!(
+                    "Column index {} out of bounds",
+                    idx
+                )));
             }
 
             new_columns.push(batch.columns[idx].clone());
@@ -363,9 +366,10 @@ impl VectorizedExecutor {
         function: AggregateFunction,
     ) -> EngineResult<SqlValue> {
         if column_index >= batch.columns.len() {
-            return Err(EngineError::storage(
-                format!("Column index {} out of bounds", column_index),
-            ));
+            return Err(EngineError::storage(format!(
+                "Column index {} out of bounds",
+                column_index
+            )));
         }
 
         let column = &batch.columns[column_index];
@@ -426,18 +430,15 @@ impl VectorizedExecutor {
                     "AVG aggregation not yet implemented".to_string(),
                 ))
             }
-            _ => Err(EngineError::storage(
-                format!("Unsupported column type for {:?}", function),
-            )),
+            _ => Err(EngineError::storage(format!(
+                "Unsupported column type for {:?}",
+                function
+            ))),
         }
     }
 
     /// Execute LIMIT operation
-    pub fn execute_limit(
-        &self,
-        batch: &ColumnBatch,
-        limit: usize,
-    ) -> EngineResult<ColumnBatch> {
+    pub fn execute_limit(&self, batch: &ColumnBatch, limit: usize) -> EngineResult<ColumnBatch> {
         if limit == 0 || limit >= batch.row_count {
             return Ok(batch.clone());
         }
@@ -447,11 +448,7 @@ impl VectorizedExecutor {
     }
 
     /// Execute OFFSET operation
-    pub fn execute_offset(
-        &self,
-        batch: &ColumnBatch,
-        offset: usize,
-    ) -> EngineResult<ColumnBatch> {
+    pub fn execute_offset(&self, batch: &ColumnBatch, offset: usize) -> EngineResult<ColumnBatch> {
         if offset >= batch.row_count {
             // Return empty batch
             return self.select_rows(batch, &[]);
@@ -476,9 +473,13 @@ impl VectorizedExecutor {
                 ComparisonOp::Equal => self.simd_filter_i32.filter_eq(values, target, result),
                 ComparisonOp::NotEqual => self.simd_filter_i32.filter_ne(values, target, result),
                 ComparisonOp::LessThan => self.simd_filter_i32.filter_lt(values, target, result),
-                ComparisonOp::LessThanOrEqual => self.simd_filter_i32.filter_le(values, target, result),
+                ComparisonOp::LessThanOrEqual => {
+                    self.simd_filter_i32.filter_le(values, target, result)
+                }
                 ComparisonOp::GreaterThan => self.simd_filter_i32.filter_gt(values, target, result),
-                ComparisonOp::GreaterThanOrEqual => self.simd_filter_i32.filter_ge(values, target, result),
+                ComparisonOp::GreaterThanOrEqual => {
+                    self.simd_filter_i32.filter_ge(values, target, result)
+                }
             }
         } else {
             self.filter_scalar_generic(values, target, op, result);
@@ -500,7 +501,9 @@ impl VectorizedExecutor {
             ComparisonOp::LessThan => self.simd_filter_i64.filter_lt(values, target, result),
             ComparisonOp::LessThanOrEqual => self.simd_filter_i64.filter_le(values, target, result),
             ComparisonOp::GreaterThan => self.simd_filter_i64.filter_gt(values, target, result),
-            ComparisonOp::GreaterThanOrEqual => self.simd_filter_i64.filter_ge(values, target, result),
+            ComparisonOp::GreaterThanOrEqual => {
+                self.simd_filter_i64.filter_ge(values, target, result)
+            }
         }
         Ok(())
     }
@@ -519,7 +522,9 @@ impl VectorizedExecutor {
             ComparisonOp::LessThan => self.simd_filter_f64.filter_lt(values, target, result),
             ComparisonOp::LessThanOrEqual => self.simd_filter_f64.filter_le(values, target, result),
             ComparisonOp::GreaterThan => self.simd_filter_f64.filter_gt(values, target, result),
-            ComparisonOp::GreaterThanOrEqual => self.simd_filter_f64.filter_ge(values, target, result),
+            ComparisonOp::GreaterThanOrEqual => {
+                self.simd_filter_f64.filter_ge(values, target, result)
+            }
         }
         Ok(())
     }
@@ -597,20 +602,14 @@ impl VectorizedExecutor {
     }
 
     /// Extract specific rows from a batch by index
-    fn select_rows(
-        &self,
-        batch: &ColumnBatch,
-        indices: &[usize],
-    ) -> EngineResult<ColumnBatch> {
+    fn select_rows(&self, batch: &ColumnBatch, indices: &[usize]) -> EngineResult<ColumnBatch> {
         let mut new_columns = Vec::new();
         let mut new_null_bitmaps = Vec::new();
 
         for (col_idx, column) in batch.columns.iter().enumerate() {
             let new_column = self.select_column_rows(column, indices)?;
-            let new_null_bitmap = self.select_null_bitmap_rows(
-                &batch.null_bitmaps[col_idx],
-                indices,
-            );
+            let new_null_bitmap =
+                self.select_null_bitmap_rows(&batch.null_bitmaps[col_idx], indices);
 
             new_columns.push(new_column);
             new_null_bitmaps.push(new_null_bitmap);
@@ -625,11 +624,7 @@ impl VectorizedExecutor {
     }
 
     /// Extract specific rows from a single column by index
-    fn select_column_rows(
-        &self,
-        column: &Column,
-        indices: &[usize],
-    ) -> EngineResult<Column> {
+    fn select_column_rows(&self, column: &Column, indices: &[usize]) -> EngineResult<Column> {
         let result = match column {
             Column::Bool(values) => {
                 let selected: Vec<bool> = indices.iter().map(|&i| values[i]).collect();
@@ -669,11 +664,7 @@ impl VectorizedExecutor {
     }
 
     /// Extract specific rows from a null bitmap by index
-    fn select_null_bitmap_rows(
-        &self,
-        null_bitmap: &NullBitmap,
-        indices: &[usize],
-    ) -> NullBitmap {
+    fn select_null_bitmap_rows(&self, null_bitmap: &NullBitmap, indices: &[usize]) -> NullBitmap {
         let mut new_bitmap = NullBitmap::new_all_valid(indices.len());
 
         for (new_idx, &old_idx) in indices.iter().enumerate() {
@@ -738,7 +729,9 @@ impl VectorizedExecutor {
         use orbit_compute::AccelerationStrategy;
 
         // Get the recommended acceleration strategy from the plan
-        let strategy = plan.acceleration_strategy.unwrap_or(AccelerationStrategy::None);
+        let strategy = plan
+            .acceleration_strategy
+            .unwrap_or(AccelerationStrategy::None);
 
         tracing::debug!(
             "Executing query with strategy: {:?}, complexity: {:?}",
@@ -758,26 +751,33 @@ impl VectorizedExecutor {
                 // (GPU detection only happens once, cached for subsequent calls)
                 let device_manager = self.get_gpu_device_manager();
                 let backends = device_manager.available_backends();
-                
+
                 if backends.is_empty() {
                     tracing::info!("No GPU backends available, using CPU SIMD");
                     return self.execute_cpu_simd_with_query(plan, query, data).await;
                 }
-                
+
                 // Try each backend in order until one succeeds
                 for backend in backends {
-                    match self.execute_gpu_with_backend(plan, query, data, *backend).await {
+                    match self
+                        .execute_gpu_with_backend(plan, query, data, *backend)
+                        .await
+                    {
                         Ok(result) => {
                             tracing::info!("GPU execution succeeded with backend: {:?}", backend);
                             return Ok(result);
                         }
                         Err(e) => {
-                            tracing::warn!("GPU backend {:?} failed: {}, trying next backend", backend, e);
+                            tracing::warn!(
+                                "GPU backend {:?} failed: {}, trying next backend",
+                                backend,
+                                e
+                            );
                             continue;
                         }
                     }
                 }
-                
+
                 // All GPU backends failed, fall back to CPU
                 tracing::warn!("All GPU backends failed, falling back to CPU SIMD");
                 self.execute_cpu_simd_with_query(plan, query, data).await
@@ -861,10 +861,7 @@ impl VectorizedExecutor {
         // Apply projection LAST to ensure column names are available for earlier operations
         if let Some(ref projection) = query.projection {
             result = self.execute_projection_by_names(&result, projection)?;
-            tracing::debug!(
-                "After projection: {} columns",
-                projection.len()
-            );
+            tracing::debug!("After projection: {} columns", projection.len());
         }
 
         Ok(result)
@@ -881,7 +878,6 @@ impl VectorizedExecutor {
         query: &crate::query::Query,
         data: &ColumnBatch,
     ) -> EngineResult<ColumnBatch> {
-        
         use orbit_compute::gpu_metal::MetalDevice;
 
         tracing::info!(
@@ -986,45 +982,36 @@ impl VectorizedExecutor {
     }
 
     /// Execute query using GPU with a specific backend
-    /// 
+    ///
     /// This method routes to the appropriate GPU backend implementation.
     /// Falls back to CPU SIMD if the backend fails.
     async fn execute_gpu_with_backend(
         &self,
-        plan: &crate::query::ExecutionPlan,
-        query: &crate::query::Query,
-        data: &ColumnBatch,
+        _plan: &crate::query::ExecutionPlan,
+        _query: &crate::query::Query,
+        _data: &ColumnBatch,
         backend: orbit_compute::gpu_backend::GpuBackendType,
     ) -> EngineResult<ColumnBatch> {
+        #[allow(unused_imports)]
         use orbit_compute::gpu_backend::GpuBackendType;
-        
+
         match backend {
             #[cfg(target_os = "macos")]
-            GpuBackendType::Metal => {
-                self.execute_gpu_metal_with_query(plan, query, data).await
-            }
-            
+            GpuBackendType::Metal => self.execute_gpu_metal_with_query(plan, query, data).await,
+
             #[cfg(all(not(target_os = "macos"), feature = "gpu-cuda"))]
-            GpuBackendType::Cuda => {
-                self.execute_gpu_cuda_with_query(plan, query, data).await
-            }
-            
+            GpuBackendType::Cuda => self.execute_gpu_cuda_with_query(plan, query, data).await,
+
             #[cfg(all(unix, not(target_os = "macos"), feature = "gpu-rocm"))]
-            GpuBackendType::Rocm => {
-                self.execute_gpu_rocm_with_query(plan, query, data).await
-            }
-            
+            GpuBackendType::Rocm => self.execute_gpu_rocm_with_query(plan, query, data).await,
+
             #[cfg(feature = "gpu-vulkan")]
-            GpuBackendType::Vulkan => {
-                self.execute_gpu_vulkan_with_query(plan, query, data).await
-            }
-            
-            _ => {
-                Err(EngineError::Internal(format!(
-                    "GPU backend {:?} not supported or not compiled in",
-                    backend
-                )))
-            }
+            GpuBackendType::Vulkan => self.execute_gpu_vulkan_with_query(plan, query, data).await,
+
+            _ => Err(EngineError::Internal(format!(
+                "GPU backend {:?} not supported or not compiled in",
+                backend
+            ))),
         }
     }
 
@@ -1114,7 +1101,10 @@ impl VectorizedExecutor {
         // Apply filter if present (GPU accelerated)
         if let Some(ref filter) = query.filter {
             result = self.execute_filter_predicate_gpu_vulkan(&device, &result, filter)?;
-            tracing::info!("Vulkan filter complete: {} rows remaining", result.row_count);
+            tracing::info!(
+                "Vulkan filter complete: {} rows remaining",
+                result.row_count
+            );
         }
 
         // Apply offset BEFORE limit (standard SQL order)
@@ -1163,15 +1153,27 @@ impl VectorizedExecutor {
             FilterPredicate::Lt(column, value) => {
                 self.execute_filter_by_column_gpu(device, batch, column, FilterOp::LessThan, value)
             }
-            FilterPredicate::Le(column, value) => {
-                self.execute_filter_by_column_gpu(device, batch, column, FilterOp::LessOrEqual, value)
-            }
-            FilterPredicate::Gt(column, value) => {
-                self.execute_filter_by_column_gpu(device, batch, column, FilterOp::GreaterThan, value)
-            }
-            FilterPredicate::Ge(column, value) => {
-                self.execute_filter_by_column_gpu(device, batch, column, FilterOp::GreaterOrEqual, value)
-            }
+            FilterPredicate::Le(column, value) => self.execute_filter_by_column_gpu(
+                device,
+                batch,
+                column,
+                FilterOp::LessOrEqual,
+                value,
+            ),
+            FilterPredicate::Gt(column, value) => self.execute_filter_by_column_gpu(
+                device,
+                batch,
+                column,
+                FilterOp::GreaterThan,
+                value,
+            ),
+            FilterPredicate::Ge(column, value) => self.execute_filter_by_column_gpu(
+                device,
+                batch,
+                column,
+                FilterOp::GreaterOrEqual,
+                value,
+            ),
             FilterPredicate::And(predicates) => {
                 // Apply each predicate and combine with AND using GPU bitmap operations
                 if predicates.is_empty() {
@@ -1179,7 +1181,8 @@ impl VectorizedExecutor {
                 }
 
                 // Execute first predicate
-                let mut result = self.execute_filter_predicate_gpu(device, batch, &predicates[0])?;
+                let mut result =
+                    self.execute_filter_predicate_gpu(device, batch, &predicates[0])?;
 
                 // Apply remaining predicates sequentially (simplified approach)
                 // Full GPU AND would execute all predicates in parallel and combine masks
@@ -1235,21 +1238,15 @@ impl VectorizedExecutor {
 
         // Execute GPU filter based on column type
         let mask = match (&batch.columns[column_index], value) {
-            (Column::Int32(data), SqlValue::Int32(val)) => {
-                device.execute_filter_i32(data, *val, op).map_err(|e| {
-                    EngineError::Internal(format!("GPU filter i32 failed: {}", e))
-                })?
-            }
-            (Column::Int64(data), SqlValue::Int64(val)) => {
-                device.execute_filter_i64(data, *val, op).map_err(|e| {
-                    EngineError::Internal(format!("GPU filter i64 failed: {}", e))
-                })?
-            }
-            (Column::Float64(data), SqlValue::Float64(val)) => {
-                device.execute_filter_f64(data, *val, op).map_err(|e| {
-                    EngineError::Internal(format!("GPU filter f64 failed: {}", e))
-                })?
-            }
+            (Column::Int32(data), SqlValue::Int32(val)) => device
+                .execute_filter_i32(data, *val, op)
+                .map_err(|e| EngineError::Internal(format!("GPU filter i32 failed: {}", e)))?,
+            (Column::Int64(data), SqlValue::Int64(val)) => device
+                .execute_filter_i64(data, *val, op)
+                .map_err(|e| EngineError::Internal(format!("GPU filter i64 failed: {}", e)))?,
+            (Column::Float64(data), SqlValue::Float64(val)) => device
+                .execute_filter_f64(data, *val, op)
+                .map_err(|e| EngineError::Internal(format!("GPU filter f64 failed: {}", e)))?,
             _ => {
                 return Err(EngineError::storage(format!(
                     "Unsupported column type or value mismatch for GPU filtering"
@@ -1342,29 +1339,54 @@ impl VectorizedExecutor {
         use orbit_compute::gpu_backend::FilterOp;
 
         match predicate {
-            FilterPredicate::Eq(column, value) => {
-                self.execute_filter_by_column_gpu_cuda(device, batch, column, FilterOp::Equal, value)
-            }
-            FilterPredicate::Ne(column, value) => {
-                self.execute_filter_by_column_gpu_cuda(device, batch, column, FilterOp::NotEqual, value)
-            }
-            FilterPredicate::Lt(column, value) => {
-                self.execute_filter_by_column_gpu_cuda(device, batch, column, FilterOp::LessThan, value)
-            }
-            FilterPredicate::Le(column, value) => {
-                self.execute_filter_by_column_gpu_cuda(device, batch, column, FilterOp::LessOrEqual, value)
-            }
-            FilterPredicate::Gt(column, value) => {
-                self.execute_filter_by_column_gpu_cuda(device, batch, column, FilterOp::GreaterThan, value)
-            }
-            FilterPredicate::Ge(column, value) => {
-                self.execute_filter_by_column_gpu_cuda(device, batch, column, FilterOp::GreaterOrEqual, value)
-            }
+            FilterPredicate::Eq(column, value) => self.execute_filter_by_column_gpu_cuda(
+                device,
+                batch,
+                column,
+                FilterOp::Equal,
+                value,
+            ),
+            FilterPredicate::Ne(column, value) => self.execute_filter_by_column_gpu_cuda(
+                device,
+                batch,
+                column,
+                FilterOp::NotEqual,
+                value,
+            ),
+            FilterPredicate::Lt(column, value) => self.execute_filter_by_column_gpu_cuda(
+                device,
+                batch,
+                column,
+                FilterOp::LessThan,
+                value,
+            ),
+            FilterPredicate::Le(column, value) => self.execute_filter_by_column_gpu_cuda(
+                device,
+                batch,
+                column,
+                FilterOp::LessOrEqual,
+                value,
+            ),
+            FilterPredicate::Gt(column, value) => self.execute_filter_by_column_gpu_cuda(
+                device,
+                batch,
+                column,
+                FilterOp::GreaterThan,
+                value,
+            ),
+            FilterPredicate::Ge(column, value) => self.execute_filter_by_column_gpu_cuda(
+                device,
+                batch,
+                column,
+                FilterOp::GreaterOrEqual,
+                value,
+            ),
             FilterPredicate::And(predicates) => {
                 if predicates.is_empty() {
                     return Ok(batch.clone());
                 }
-                let mut result = self.execute_filter_predicate_gpu_cuda(device, batch, &predicates[0])?;
+                let mut result =
+                    self.execute_filter_predicate_gpu_cuda(device, batch, &predicates[0])?;
                 for pred in &predicates[1..] {
                     result = self.execute_filter_predicate_gpu_cuda(device, &result, pred)?;
                 }
@@ -1409,31 +1431,31 @@ impl VectorizedExecutor {
 
         // Execute CUDA filter based on column type
         let mask = match (&batch.columns[column_index], value) {
-            (Column::Int32(data), SqlValue::Int32(v)) => {
-                device.execute_filter_i32(data, *v, op).map_err(|e| {
-                    EngineError::Internal(format!("CUDA filter failed: {}", e))
-                })?
-            }
-            (Column::Int64(data), SqlValue::Int64(v)) => {
-                device.execute_filter_i64(data, *v, op).map_err(|e| {
-                    EngineError::Internal(format!("CUDA filter failed: {}", e))
-                })?
-            }
-            (Column::Float64(data), SqlValue::Float64(v)) => {
-                device.execute_filter_f64(data, *v, op).map_err(|e| {
-                    EngineError::Internal(format!("CUDA filter failed: {}", e))
-                })?
-            }
+            (Column::Int32(data), SqlValue::Int32(v)) => device
+                .execute_filter_i32(data, *v, op)
+                .map_err(|e| EngineError::Internal(format!("CUDA filter failed: {}", e)))?,
+            (Column::Int64(data), SqlValue::Int64(v)) => device
+                .execute_filter_i64(data, *v, op)
+                .map_err(|e| EngineError::Internal(format!("CUDA filter failed: {}", e)))?,
+            (Column::Float64(data), SqlValue::Float64(v)) => device
+                .execute_filter_f64(data, *v, op)
+                .map_err(|e| EngineError::Internal(format!("CUDA filter failed: {}", e)))?,
             _ => {
                 // Fall back to CPU for unsupported types
-                tracing::warn!("CUDA filter not supported for this column type, using CPU fallback");
+                tracing::warn!(
+                    "CUDA filter not supported for this column type, using CPU fallback"
+                );
                 let comparison_op = match op {
                     orbit_compute::gpu_backend::FilterOp::Equal => ComparisonOp::Equal,
                     orbit_compute::gpu_backend::FilterOp::NotEqual => ComparisonOp::NotEqual,
                     orbit_compute::gpu_backend::FilterOp::LessThan => ComparisonOp::LessThan,
-                    orbit_compute::gpu_backend::FilterOp::LessOrEqual => ComparisonOp::LessThanOrEqual,
+                    orbit_compute::gpu_backend::FilterOp::LessOrEqual => {
+                        ComparisonOp::LessThanOrEqual
+                    }
                     orbit_compute::gpu_backend::FilterOp::GreaterThan => ComparisonOp::GreaterThan,
-                    orbit_compute::gpu_backend::FilterOp::GreaterOrEqual => ComparisonOp::GreaterThanOrEqual,
+                    orbit_compute::gpu_backend::FilterOp::GreaterOrEqual => {
+                        ComparisonOp::GreaterThanOrEqual
+                    }
                 };
                 return self.execute_filter_by_column(batch, column_name, comparison_op, value);
             }
@@ -1455,29 +1477,54 @@ impl VectorizedExecutor {
         use orbit_compute::gpu_backend::FilterOp;
 
         match predicate {
-            FilterPredicate::Eq(column, value) => {
-                self.execute_filter_by_column_gpu_rocm(device, batch, column, FilterOp::Equal, value)
-            }
-            FilterPredicate::Ne(column, value) => {
-                self.execute_filter_by_column_gpu_rocm(device, batch, column, FilterOp::NotEqual, value)
-            }
-            FilterPredicate::Lt(column, value) => {
-                self.execute_filter_by_column_gpu_rocm(device, batch, column, FilterOp::LessThan, value)
-            }
-            FilterPredicate::Le(column, value) => {
-                self.execute_filter_by_column_gpu_rocm(device, batch, column, FilterOp::LessOrEqual, value)
-            }
-            FilterPredicate::Gt(column, value) => {
-                self.execute_filter_by_column_gpu_rocm(device, batch, column, FilterOp::GreaterThan, value)
-            }
-            FilterPredicate::Ge(column, value) => {
-                self.execute_filter_by_column_gpu_rocm(device, batch, column, FilterOp::GreaterOrEqual, value)
-            }
+            FilterPredicate::Eq(column, value) => self.execute_filter_by_column_gpu_rocm(
+                device,
+                batch,
+                column,
+                FilterOp::Equal,
+                value,
+            ),
+            FilterPredicate::Ne(column, value) => self.execute_filter_by_column_gpu_rocm(
+                device,
+                batch,
+                column,
+                FilterOp::NotEqual,
+                value,
+            ),
+            FilterPredicate::Lt(column, value) => self.execute_filter_by_column_gpu_rocm(
+                device,
+                batch,
+                column,
+                FilterOp::LessThan,
+                value,
+            ),
+            FilterPredicate::Le(column, value) => self.execute_filter_by_column_gpu_rocm(
+                device,
+                batch,
+                column,
+                FilterOp::LessOrEqual,
+                value,
+            ),
+            FilterPredicate::Gt(column, value) => self.execute_filter_by_column_gpu_rocm(
+                device,
+                batch,
+                column,
+                FilterOp::GreaterThan,
+                value,
+            ),
+            FilterPredicate::Ge(column, value) => self.execute_filter_by_column_gpu_rocm(
+                device,
+                batch,
+                column,
+                FilterOp::GreaterOrEqual,
+                value,
+            ),
             FilterPredicate::And(predicates) => {
                 if predicates.is_empty() {
                     return Ok(batch.clone());
                 }
-                let mut result = self.execute_filter_predicate_gpu_rocm(device, batch, &predicates[0])?;
+                let mut result =
+                    self.execute_filter_predicate_gpu_rocm(device, batch, &predicates[0])?;
                 for pred in &predicates[1..] {
                     result = self.execute_filter_predicate_gpu_rocm(device, &result, pred)?;
                 }
@@ -1522,31 +1569,31 @@ impl VectorizedExecutor {
 
         // Execute ROCm filter based on column type
         let mask = match (&batch.columns[column_index], value) {
-            (Column::Int32(data), SqlValue::Int32(v)) => {
-                device.execute_filter_i32(data, *v, op).map_err(|e| {
-                    EngineError::Internal(format!("ROCm filter failed: {}", e))
-                })?
-            }
-            (Column::Int64(data), SqlValue::Int64(v)) => {
-                device.execute_filter_i64(data, *v, op).map_err(|e| {
-                    EngineError::Internal(format!("ROCm filter failed: {}", e))
-                })?
-            }
-            (Column::Float64(data), SqlValue::Float64(v)) => {
-                device.execute_filter_f64(data, *v, op).map_err(|e| {
-                    EngineError::Internal(format!("ROCm filter failed: {}", e))
-                })?
-            }
+            (Column::Int32(data), SqlValue::Int32(v)) => device
+                .execute_filter_i32(data, *v, op)
+                .map_err(|e| EngineError::Internal(format!("ROCm filter failed: {}", e)))?,
+            (Column::Int64(data), SqlValue::Int64(v)) => device
+                .execute_filter_i64(data, *v, op)
+                .map_err(|e| EngineError::Internal(format!("ROCm filter failed: {}", e)))?,
+            (Column::Float64(data), SqlValue::Float64(v)) => device
+                .execute_filter_f64(data, *v, op)
+                .map_err(|e| EngineError::Internal(format!("ROCm filter failed: {}", e)))?,
             _ => {
                 // Fall back to CPU for unsupported types
-                tracing::warn!("ROCm filter not supported for this column type, using CPU fallback");
+                tracing::warn!(
+                    "ROCm filter not supported for this column type, using CPU fallback"
+                );
                 let comparison_op = match op {
                     orbit_compute::gpu_backend::FilterOp::Equal => ComparisonOp::Equal,
                     orbit_compute::gpu_backend::FilterOp::NotEqual => ComparisonOp::NotEqual,
                     orbit_compute::gpu_backend::FilterOp::LessThan => ComparisonOp::LessThan,
-                    orbit_compute::gpu_backend::FilterOp::LessOrEqual => ComparisonOp::LessThanOrEqual,
+                    orbit_compute::gpu_backend::FilterOp::LessOrEqual => {
+                        ComparisonOp::LessThanOrEqual
+                    }
                     orbit_compute::gpu_backend::FilterOp::GreaterThan => ComparisonOp::GreaterThan,
-                    orbit_compute::gpu_backend::FilterOp::GreaterOrEqual => ComparisonOp::GreaterThanOrEqual,
+                    orbit_compute::gpu_backend::FilterOp::GreaterOrEqual => {
+                        ComparisonOp::GreaterThanOrEqual
+                    }
                 };
                 return self.execute_filter_by_column(batch, column_name, comparison_op, value);
             }
@@ -1568,29 +1615,54 @@ impl VectorizedExecutor {
         use orbit_compute::gpu_backend::FilterOp;
 
         match predicate {
-            FilterPredicate::Eq(column, value) => {
-                self.execute_filter_by_column_gpu_vulkan(device, batch, column, FilterOp::Equal, value)
-            }
-            FilterPredicate::Ne(column, value) => {
-                self.execute_filter_by_column_gpu_vulkan(device, batch, column, FilterOp::NotEqual, value)
-            }
-            FilterPredicate::Lt(column, value) => {
-                self.execute_filter_by_column_gpu_vulkan(device, batch, column, FilterOp::LessThan, value)
-            }
-            FilterPredicate::Le(column, value) => {
-                self.execute_filter_by_column_gpu_vulkan(device, batch, column, FilterOp::LessOrEqual, value)
-            }
-            FilterPredicate::Gt(column, value) => {
-                self.execute_filter_by_column_gpu_vulkan(device, batch, column, FilterOp::GreaterThan, value)
-            }
-            FilterPredicate::Ge(column, value) => {
-                self.execute_filter_by_column_gpu_vulkan(device, batch, column, FilterOp::GreaterOrEqual, value)
-            }
+            FilterPredicate::Eq(column, value) => self.execute_filter_by_column_gpu_vulkan(
+                device,
+                batch,
+                column,
+                FilterOp::Equal,
+                value,
+            ),
+            FilterPredicate::Ne(column, value) => self.execute_filter_by_column_gpu_vulkan(
+                device,
+                batch,
+                column,
+                FilterOp::NotEqual,
+                value,
+            ),
+            FilterPredicate::Lt(column, value) => self.execute_filter_by_column_gpu_vulkan(
+                device,
+                batch,
+                column,
+                FilterOp::LessThan,
+                value,
+            ),
+            FilterPredicate::Le(column, value) => self.execute_filter_by_column_gpu_vulkan(
+                device,
+                batch,
+                column,
+                FilterOp::LessOrEqual,
+                value,
+            ),
+            FilterPredicate::Gt(column, value) => self.execute_filter_by_column_gpu_vulkan(
+                device,
+                batch,
+                column,
+                FilterOp::GreaterThan,
+                value,
+            ),
+            FilterPredicate::Ge(column, value) => self.execute_filter_by_column_gpu_vulkan(
+                device,
+                batch,
+                column,
+                FilterOp::GreaterOrEqual,
+                value,
+            ),
             FilterPredicate::And(predicates) => {
                 if predicates.is_empty() {
                     return Ok(batch.clone());
                 }
-                let mut result = self.execute_filter_predicate_gpu_vulkan(device, batch, &predicates[0])?;
+                let mut result =
+                    self.execute_filter_predicate_gpu_vulkan(device, batch, &predicates[0])?;
                 for pred in &predicates[1..] {
                     result = self.execute_filter_predicate_gpu_vulkan(device, &result, pred)?;
                 }
@@ -1635,31 +1707,31 @@ impl VectorizedExecutor {
 
         // Execute Vulkan filter based on column type
         let mask = match (&batch.columns[column_index], value) {
-            (Column::Int32(data), SqlValue::Int32(v)) => {
-                device.execute_filter_i32(data, *v, op).map_err(|e| {
-                    EngineError::Internal(format!("Vulkan filter failed: {}", e))
-                })?
-            }
-            (Column::Int64(data), SqlValue::Int64(v)) => {
-                device.execute_filter_i64(data, *v, op).map_err(|e| {
-                    EngineError::Internal(format!("Vulkan filter failed: {}", e))
-                })?
-            }
-            (Column::Float64(data), SqlValue::Float64(v)) => {
-                device.execute_filter_f64(data, *v, op).map_err(|e| {
-                    EngineError::Internal(format!("Vulkan filter failed: {}", e))
-                })?
-            }
+            (Column::Int32(data), SqlValue::Int32(v)) => device
+                .execute_filter_i32(data, *v, op)
+                .map_err(|e| EngineError::Internal(format!("Vulkan filter failed: {}", e)))?,
+            (Column::Int64(data), SqlValue::Int64(v)) => device
+                .execute_filter_i64(data, *v, op)
+                .map_err(|e| EngineError::Internal(format!("Vulkan filter failed: {}", e)))?,
+            (Column::Float64(data), SqlValue::Float64(v)) => device
+                .execute_filter_f64(data, *v, op)
+                .map_err(|e| EngineError::Internal(format!("Vulkan filter failed: {}", e)))?,
             _ => {
                 // Fall back to CPU for unsupported types
-                tracing::warn!("Vulkan filter not supported for this column type, using CPU fallback");
+                tracing::warn!(
+                    "Vulkan filter not supported for this column type, using CPU fallback"
+                );
                 let comparison_op = match op {
                     orbit_compute::gpu_backend::FilterOp::Equal => ComparisonOp::Equal,
                     orbit_compute::gpu_backend::FilterOp::NotEqual => ComparisonOp::NotEqual,
                     orbit_compute::gpu_backend::FilterOp::LessThan => ComparisonOp::LessThan,
-                    orbit_compute::gpu_backend::FilterOp::LessOrEqual => ComparisonOp::LessThanOrEqual,
+                    orbit_compute::gpu_backend::FilterOp::LessOrEqual => {
+                        ComparisonOp::LessThanOrEqual
+                    }
                     orbit_compute::gpu_backend::FilterOp::GreaterThan => ComparisonOp::GreaterThan,
-                    orbit_compute::gpu_backend::FilterOp::GreaterOrEqual => ComparisonOp::GreaterThanOrEqual,
+                    orbit_compute::gpu_backend::FilterOp::GreaterOrEqual => {
+                        ComparisonOp::GreaterThanOrEqual
+                    }
                 };
                 return self.execute_filter_by_column(batch, column_name, comparison_op, value);
             }
@@ -1693,9 +1765,12 @@ impl VectorizedExecutor {
             FilterPredicate::Gt(column, value) => {
                 self.execute_filter_by_column(batch, column, ComparisonOp::GreaterThan, value)
             }
-            FilterPredicate::Ge(column, value) => {
-                self.execute_filter_by_column(batch, column, ComparisonOp::GreaterThanOrEqual, value)
-            }
+            FilterPredicate::Ge(column, value) => self.execute_filter_by_column(
+                batch,
+                column,
+                ComparisonOp::GreaterThanOrEqual,
+                value,
+            ),
             FilterPredicate::And(predicates) => {
                 // Apply filters sequentially (AND logic)
                 let mut result = batch.clone();
@@ -1733,9 +1808,12 @@ impl VectorizedExecutor {
     ) -> EngineResult<ColumnBatch> {
         // Find column index by name
         let column_index = if let Some(ref names) = batch.column_names {
-            names.iter().position(|name| name == column_name).ok_or_else(|| {
-                EngineError::storage(format!("Column '{}' not found", column_name))
-            })?
+            names
+                .iter()
+                .position(|name| name == column_name)
+                .ok_or_else(|| {
+                    EngineError::storage(format!("Column '{}' not found", column_name))
+                })?
         } else {
             return Err(EngineError::storage(
                 "Cannot filter by name: batch has no column names".to_string(),
@@ -1756,9 +1834,12 @@ impl VectorizedExecutor {
             // Map column names to indices
             let mut indices = Vec::new();
             for col_name in column_names {
-                let idx = names.iter().position(|name| name == col_name).ok_or_else(|| {
-                    EngineError::storage(format!("Column '{}' not found", col_name))
-                })?;
+                let idx = names
+                    .iter()
+                    .position(|name| name == col_name)
+                    .ok_or_else(|| {
+                        EngineError::storage(format!("Column '{}' not found", col_name))
+                    })?;
                 indices.push(idx);
             }
 
@@ -1823,13 +1904,16 @@ mod tests {
 
         let columns = vec![
             Column::Int32(vec![1, 2, 3, 4, 5]),
-            Column::String(vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string(), "e".to_string()]),
+            Column::String(vec![
+                "a".to_string(),
+                "b".to_string(),
+                "c".to_string(),
+                "d".to_string(),
+                "e".to_string(),
+            ]),
         ];
 
-        let null_bitmaps = vec![
-            NullBitmap::new_all_valid(5),
-            NullBitmap::new_all_valid(5),
-        ];
+        let null_bitmaps = vec![NullBitmap::new_all_valid(5), NullBitmap::new_all_valid(5)];
 
         let result = executor.execute_table_scan(
             columns,
@@ -1878,7 +1962,8 @@ mod tests {
             column_names: Some(vec!["value".to_string()]),
         };
 
-        let result = executor.execute_filter(&batch, 0, ComparisonOp::GreaterThan, SqlValue::Int32(4));
+        let result =
+            executor.execute_filter(&batch, 0, ComparisonOp::GreaterThan, SqlValue::Int32(4));
 
         assert!(result.is_ok());
         let filtered = result.unwrap();
@@ -1907,7 +1992,11 @@ mod tests {
                 NullBitmap::new_all_valid(3),
             ],
             row_count: 3,
-            column_names: Some(vec!["id".to_string(), "name".to_string(), "score".to_string()]),
+            column_names: Some(vec![
+                "id".to_string(),
+                "name".to_string(),
+                "score".to_string(),
+            ]),
         };
 
         // Select columns 0 and 2 (id and score)

@@ -251,11 +251,7 @@ impl TableStorage for MemoryTableStorage {
 
     // Data Operations
 
-    async fn insert_row(
-        &self,
-        table_name: &str,
-        row: Row,
-    ) -> EngineResult<()> {
+    async fn insert_row(&self, table_name: &str, row: Row) -> EngineResult<()> {
         let start = std::time::Instant::now();
 
         let mut table_data = self.table_data.write().await;
@@ -268,11 +264,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(())
     }
 
-    async fn insert_rows(
-        &self,
-        table_name: &str,
-        rows: Vec<Row>,
-    ) -> EngineResult<()> {
+    async fn insert_rows(&self, table_name: &str, rows: Vec<Row>) -> EngineResult<()> {
         let start = std::time::Instant::now();
 
         let mut table_data = self.table_data.write().await;

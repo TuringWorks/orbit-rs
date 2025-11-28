@@ -5,8 +5,10 @@
 
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::sql::{
+    execution::hybrid::{
+        ColumnSchema as HybridColumnSchema, HybridStorageConfig, HybridStorageManager,
+    },
     executor::{ExtensionDefinition, IndexSchema, SchemaDefinition, TableSchema, ViewSchema},
-    execution::hybrid::{HybridStorageConfig, HybridStorageManager, ColumnSchema as HybridColumnSchema},
     types::SqlValue,
 };
 use crate::postgres_wire::storage::{StorageMetrics, StorageTransaction, TableStorage};
@@ -71,7 +73,10 @@ impl TieredTableStorage {
     }
 
     /// Get or create a HybridStorageManager for a table
-    async fn get_or_create_table(&self, table_name: &str) -> ProtocolResult<Arc<HybridStorageManager>> {
+    async fn get_or_create_table(
+        &self,
+        table_name: &str,
+    ) -> ProtocolResult<Arc<HybridStorageManager>> {
         let mut tables = self.tables.write().await;
 
         if let Some(table) = tables.get(table_name) {
@@ -151,7 +156,10 @@ impl TableStorage for TieredTableStorage {
             write_buffer: HashMap::new(),
         };
 
-        self.transactions.write().await.insert(tx.id.clone(), tx.clone());
+        self.transactions
+            .write()
+            .await
+            .insert(tx.id.clone(), tx.clone());
         Ok(tx)
     }
 
@@ -172,7 +180,10 @@ impl TableStorage for TieredTableStorage {
         schema: &TableSchema,
         _tx: Option<&StorageTransaction>,
     ) -> ProtocolResult<()> {
-        self.schemas.write().await.insert(schema.name.clone(), schema.clone());
+        self.schemas
+            .write()
+            .await
+            .insert(schema.name.clone(), schema.clone());
         Ok(())
     }
 
@@ -208,9 +219,9 @@ impl TableStorage for TieredTableStorage {
 
         // Convert row to vector of values
         let schema = self.schemas.read().await;
-        let table_schema = schema.get(table_name).ok_or_else(|| {
-            ProtocolError::Other(format!("Table not found: {}", table_name))
-        })?;
+        let table_schema = schema
+            .get(table_name)
+            .ok_or_else(|| ProtocolError::Other(format!("Table not found: {}", table_name)))?;
 
         let mut values = Vec::new();
         for col in &table_schema.columns {
@@ -248,9 +259,9 @@ impl TableStorage for TieredTableStorage {
 
         // Get schema
         let schema = self.schemas.read().await;
-        let table_schema = schema.get(table_name).ok_or_else(|| {
-            ProtocolError::Other(format!("Table not found: {}", table_name))
-        })?;
+        let table_schema = schema
+            .get(table_name)
+            .ok_or_else(|| ProtocolError::Other(format!("Table not found: {}", table_name)))?;
 
         // Scan all data from hot tier
         let row_values_list = manager.scan_all().await?;
@@ -318,7 +329,10 @@ impl TableStorage for TieredTableStorage {
         index: &IndexSchema,
         _tx: Option<&StorageTransaction>,
     ) -> ProtocolResult<()> {
-        self.indexes.write().await.insert(index.name.clone(), index.clone());
+        self.indexes
+            .write()
+            .await
+            .insert(index.name.clone(), index.clone());
         Ok(())
     }
 
@@ -352,7 +366,10 @@ impl TableStorage for TieredTableStorage {
         view: &ViewSchema,
         _tx: Option<&StorageTransaction>,
     ) -> ProtocolResult<()> {
-        self.views.write().await.insert(view.name.clone(), view.clone());
+        self.views
+            .write()
+            .await
+            .insert(view.name.clone(), view.clone());
         Ok(())
     }
 
@@ -379,7 +396,10 @@ impl TableStorage for TieredTableStorage {
         schema: &SchemaDefinition,
         _tx: Option<&StorageTransaction>,
     ) -> ProtocolResult<()> {
-        self.schema_defs.write().await.insert(schema.name.clone(), schema.clone());
+        self.schema_defs
+            .write()
+            .await
+            .insert(schema.name.clone(), schema.clone());
         Ok(())
     }
 
@@ -406,7 +426,10 @@ impl TableStorage for TieredTableStorage {
         extension: &ExtensionDefinition,
         _tx: Option<&StorageTransaction>,
     ) -> ProtocolResult<()> {
-        self.extensions.write().await.insert(extension.name.clone(), extension.clone());
+        self.extensions
+            .write()
+            .await
+            .insert(extension.name.clone(), extension.clone());
         Ok(())
     }
 
@@ -426,7 +449,12 @@ impl TableStorage for TieredTableStorage {
         extension_name: &str,
         _tx: Option<&StorageTransaction>,
     ) -> ProtocolResult<bool> {
-        Ok(self.extensions.write().await.remove(extension_name).is_some())
+        Ok(self
+            .extensions
+            .write()
+            .await
+            .remove(extension_name)
+            .is_some())
     }
 
     // Configuration Operations
@@ -437,7 +465,10 @@ impl TableStorage for TieredTableStorage {
         value: &str,
         _tx: Option<&StorageTransaction>,
     ) -> ProtocolResult<()> {
-        self.settings.write().await.insert(key.to_string(), value.to_string());
+        self.settings
+            .write()
+            .await
+            .insert(key.to_string(), value.to_string());
         Ok(())
     }
 

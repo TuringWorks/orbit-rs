@@ -1,7 +1,11 @@
-//! ArangoDB Protocol Adapter for Orbit-RS
+//! ArangoDB Protocol Server
 //!
-//! This module provides compatibility with ArangoDB's HTTP API and AQL query language,
-//! with enhanced spatial capabilities through Orbit's spatial engine.
+//! Handles ArangoDB HTTP protocol connections.
+
+#[cfg(feature = "protocol-arangodb")]
+pub mod http_server;
+#[cfg(feature = "protocol-arangodb")]
+pub use http_server::ArangoServer;
 
 pub mod aql_spatial;
 

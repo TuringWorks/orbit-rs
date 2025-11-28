@@ -10,6 +10,7 @@ pub mod knowledge_graph;
 pub mod llm_client;
 pub mod multi_hop_reasoning;
 pub mod rag_pipeline;
+#[cfg(feature = "storage-rocksdb")]
 pub mod storage;
 
 // Re-export main types and actors
@@ -21,7 +22,10 @@ pub use entity_extraction::{
 pub use graph_rag_actor::{GraphRAGActor, GraphRAGConfig, GraphRAGStats};
 
 pub use knowledge_graph::{KnowledgeGraphBuilder, KnowledgeGraphStats};
-pub use storage::{GraphRAGMetadata, GraphRAGNode, GraphRAGRelationship, GraphRAGStorage, RelationshipDirection};
+#[cfg(feature = "storage-rocksdb")]
+pub use storage::{
+    GraphRAGMetadata, GraphRAGNode, GraphRAGRelationship, GraphRAGStorage, RelationshipDirection,
+};
 
 pub use multi_hop_reasoning::{
     MultiHopReasoningEngine, PathScoringStrategy, PruningStrategy, ReasoningQuery,

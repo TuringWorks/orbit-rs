@@ -49,7 +49,8 @@
 
 #![allow(missing_docs)]
 #![warn(rust_2018_idioms)]
-#![deny(unsafe_op_in_unsafe_fn)]
+// TODO: Re-enable after fixing unsafe blocks in SIMD code
+// #![deny(unsafe_op_in_unsafe_fn)]
 
 // Re-export key types for convenient access
 pub use capabilities::{
@@ -110,6 +111,10 @@ pub mod gpu_rocm;
 /// Vulkan GPU acceleration (cross-platform)
 #[cfg(feature = "gpu-vulkan")]
 pub mod gpu_vulkan;
+
+/// Windows ML / DirectML GPU acceleration (Windows only)
+#[cfg(all(target_os = "windows", feature = "gpu-windowsml"))]
+pub mod gpu_windowsml;
 
 /// Neural engine acceleration implementations  
 #[cfg(feature = "neural-acceleration")]

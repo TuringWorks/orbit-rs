@@ -3,6 +3,8 @@
 //! Tests the integration of GPU-accelerated vector similarity with VectorActor
 //! and verifies correctness and performance routing.
 
+#![cfg(feature = "gpu-acceleration")]
+
 use orbit_server::protocols::vector_store::{
     SimilarityMetric, Vector, VectorActor, VectorSearchParams,
 };

@@ -3,6 +3,8 @@
 //! Comprehensive unit tests for RESP protocol commands, including all 15 previously failing tests
 //! and other important commands.
 
+#![cfg(feature = "resp")]
+
 use orbit_client::OrbitClient;
 use orbit_protocols::resp::commands::CommandHandler;
 use orbit_protocols::resp::RespValue;
@@ -138,7 +140,11 @@ async fn test_ttl_command() {
 
     // Should return a positive integer (remaining seconds)
     if let RespValue::Integer(ttl) = result {
-        assert!(ttl > 0 && ttl <= 60, "TTL should be positive and <= 60, got: {}", ttl);
+        assert!(
+            ttl > 0 && ttl <= 60,
+            "TTL should be positive and <= 60, got: {}",
+            ttl
+        );
     } else {
         panic!("TTL should return an integer, got: {:?}", result);
     }
@@ -162,7 +168,11 @@ async fn test_ttl_command_with_expire() {
 
     // Should return a positive integer (remaining seconds)
     if let RespValue::Integer(ttl) = result {
-        assert!(ttl > 0 && ttl <= 60, "TTL should be positive and <= 60, got: {}", ttl);
+        assert!(
+            ttl > 0 && ttl <= 60,
+            "TTL should be positive and <= 60, got: {}",
+            ttl
+        );
     } else {
         panic!("TTL should return an integer, got: {:?}", result);
     }
@@ -276,7 +286,7 @@ async fn test_lrange_with_bulk_string_indices() {
     let cmd_parts = vec![
         RespValue::bulk_string_from_str("LRANGE"),
         RespValue::bulk_string_from_str("range_list2"),
-        RespValue::bulk_string_from_str("0"),  // Bulk string, not integer
+        RespValue::bulk_string_from_str("0"), // Bulk string, not integer
         RespValue::bulk_string_from_str("-1"), // Bulk string, not integer
     ];
     let lrange_cmd = RespValue::array(cmd_parts);
@@ -508,7 +518,15 @@ async fn test_zadd_multiple_members() {
     // Test: ZADD with multiple score-member pairs
     let zadd_cmd = ctx.make_command(
         "ZADD",
-        vec!["multi_zset", "1.0", "member1", "2.0", "member2", "3.0", "member3"],
+        vec![
+            "multi_zset",
+            "1.0",
+            "member1",
+            "2.0",
+            "member2",
+            "3.0",
+            "member3",
+        ],
     );
     let result = ctx.execute_command(zadd_cmd).await.unwrap();
 
@@ -771,13 +789,20 @@ async fn test_set_with_ex_option() {
     // Test: SET with EX option should set expiration
     let set_cmd = ctx.make_command("SET", vec!["setex_key", "value", "EX", "60"]);
     let result = ctx.execute_command(set_cmd).await.unwrap();
-    assert!(matches!(result, RespValue::SimpleString(_) | RespValue::BulkString(_)));
+    assert!(matches!(
+        result,
+        RespValue::SimpleString(_) | RespValue::BulkString(_)
+    ));
 
     // Verify TTL is set
     let ttl_cmd = ctx.make_command("TTL", vec!["setex_key"]);
     let ttl_result = ctx.execute_command(ttl_cmd).await.unwrap();
     if let RespValue::Integer(ttl) = ttl_result {
-        assert!(ttl > 0 && ttl <= 60, "TTL should be positive and <= 60, got: {}", ttl);
+        assert!(
+            ttl > 0 && ttl <= 60,
+            "TTL should be positive and <= 60, got: {}",
+            ttl
+        );
     } else {
         panic!("TTL should return an integer");
     }
@@ -790,13 +815,20 @@ async fn test_set_with_px_option() {
     // Test: SET with PX option (milliseconds) should set expiration
     let set_cmd = ctx.make_command("SET", vec!["setpx_key", "value", "PX", "60000"]);
     let result = ctx.execute_command(set_cmd).await.unwrap();
-    assert!(matches!(result, RespValue::SimpleString(_) | RespValue::BulkString(_)));
+    assert!(matches!(
+        result,
+        RespValue::SimpleString(_) | RespValue::BulkString(_)
+    ));
 
     // Verify TTL is set (should be approximately 60 seconds)
     let ttl_cmd = ctx.make_command("TTL", vec!["setpx_key"]);
     let ttl_result = ctx.execute_command(ttl_cmd).await.unwrap();
     if let RespValue::Integer(ttl) = ttl_result {
-        assert!(ttl > 50 && ttl <= 60, "TTL should be around 60 seconds, got: {}", ttl);
+        assert!(
+            ttl > 50 && ttl <= 60,
+            "TTL should be around 60 seconds, got: {}",
+            ttl
+        );
     } else {
         panic!("TTL should return an integer");
     }
@@ -809,12 +841,18 @@ async fn test_set_with_nx_option() {
     // Test: SET with NX option should only set if key doesn't exist
     let set_cmd1 = ctx.make_command("SET", vec!["setnx_key", "value1", "NX"]);
     let result1 = ctx.execute_command(set_cmd1).await.unwrap();
-    assert!(matches!(result1, RespValue::SimpleString(_) | RespValue::BulkString(_)));
+    assert!(matches!(
+        result1,
+        RespValue::SimpleString(_) | RespValue::BulkString(_)
+    ));
 
     // Try to set again with NX - should return null
     let set_cmd2 = ctx.make_command("SET", vec!["setnx_key", "value2", "NX"]);
     let result2 = ctx.execute_command(set_cmd2).await.unwrap();
-    assert!(result2.is_null(), "SET NX on existing key should return null");
+    assert!(
+        result2.is_null(),
+        "SET NX on existing key should return null"
+    );
 
     // Verify original value is still there
     let get_cmd = ctx.make_command("GET", vec!["setnx_key"]);
@@ -835,12 +873,18 @@ async fn test_set_with_xx_option() {
     // Set with XX on existing key - should succeed
     let set_cmd2 = ctx.make_command("SET", vec!["setxx_key", "value2", "XX"]);
     let result2 = ctx.execute_command(set_cmd2).await.unwrap();
-    assert!(matches!(result2, RespValue::SimpleString(_) | RespValue::BulkString(_)));
+    assert!(matches!(
+        result2,
+        RespValue::SimpleString(_) | RespValue::BulkString(_)
+    ));
 
     // Try to set with XX on non-existent key - should return null
     let set_cmd3 = ctx.make_command("SET", vec!["nonexistent_xx", "value", "XX"]);
     let result3 = ctx.execute_command(set_cmd3).await.unwrap();
-    assert!(result3.is_null(), "SET XX on non-existent key should return null");
+    assert!(
+        result3.is_null(),
+        "SET XX on non-existent key should return null"
+    );
 
     // Verify value was updated
     let get_cmd = ctx.make_command("GET", vec!["setxx_key"]);
@@ -857,7 +901,10 @@ async fn test_set_with_ex_and_nx() {
     // Test: SET with both EX and NX options
     let set_cmd = ctx.make_command("SET", vec!["setexnx_key", "value", "EX", "60", "NX"]);
     let result = ctx.execute_command(set_cmd).await.unwrap();
-    assert!(matches!(result, RespValue::SimpleString(_) | RespValue::BulkString(_)));
+    assert!(matches!(
+        result,
+        RespValue::SimpleString(_) | RespValue::BulkString(_)
+    ));
 
     // Verify TTL is set
     let ttl_cmd = ctx.make_command("TTL", vec!["setexnx_key"]);
@@ -1097,11 +1144,20 @@ async fn test_mset_sets_multiple_keys() {
     // Test: MSET should set multiple key-value pairs
     let mset_cmd = ctx.make_command("MSET", vec!["mset_key1", "value1", "mset_key2", "value2"]);
     let result = ctx.execute_command(mset_cmd).await.unwrap();
-    assert!(matches!(result, RespValue::SimpleString(_) | RespValue::BulkString(_)));
+    assert!(matches!(
+        result,
+        RespValue::SimpleString(_) | RespValue::BulkString(_)
+    ));
 
     // Verify values were set
-    let get1 = ctx.execute_command(ctx.make_command("GET", vec!["mset_key1"])).await.unwrap();
-    let get2 = ctx.execute_command(ctx.make_command("GET", vec!["mset_key2"])).await.unwrap();
+    let get1 = ctx
+        .execute_command(ctx.make_command("GET", vec!["mset_key1"]))
+        .await
+        .unwrap();
+    let get2 = ctx
+        .execute_command(ctx.make_command("GET", vec!["mset_key2"]))
+        .await
+        .unwrap();
 
     if let (RespValue::BulkString(b1), RespValue::BulkString(b2)) = (get1, get2) {
         assert_eq!(String::from_utf8_lossy(&b1), "value1");
@@ -1116,7 +1172,10 @@ async fn test_setex_sets_with_expiration() {
     // Test: SETEX should set value with expiration
     let setex_cmd = ctx.make_command("SETEX", vec!["setex_key", "60", "value"]);
     let result = ctx.execute_command(setex_cmd).await.unwrap();
-    assert!(matches!(result, RespValue::SimpleString(_) | RespValue::BulkString(_)));
+    assert!(matches!(
+        result,
+        RespValue::SimpleString(_) | RespValue::BulkString(_)
+    ));
 
     // Verify key exists
     let exists = ctx
@@ -1141,7 +1200,10 @@ async fn test_setnx_only_sets_if_not_exists() {
     assert!(matches!(result2, RespValue::Integer(0)));
 
     // Verify original value is still there
-    let get = ctx.execute_command(ctx.make_command("GET", vec!["setnx_key"])).await.unwrap();
+    let get = ctx
+        .execute_command(ctx.make_command("GET", vec!["setnx_key"]))
+        .await
+        .unwrap();
     if let RespValue::BulkString(bytes) = get {
         assert_eq!(String::from_utf8_lossy(&bytes), "value1");
     }
@@ -1165,7 +1227,10 @@ async fn test_getset_returns_old_value() {
     }
 
     // Verify new value is set
-    let get = ctx.execute_command(ctx.make_command("GET", vec!["getset_key"])).await.unwrap();
+    let get = ctx
+        .execute_command(ctx.make_command("GET", vec!["getset_key"]))
+        .await
+        .unwrap();
     if let RespValue::BulkString(bytes) = get {
         assert_eq!(String::from_utf8_lossy(&bytes), "new_value");
     }
@@ -1180,4 +1245,3 @@ async fn test_getset_nonexistent_key() {
     let result = ctx.execute_command(getset_cmd).await.unwrap();
     assert!(result.is_null());
 }
-

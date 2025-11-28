@@ -14,10 +14,10 @@
 
 pub mod columnar;
 pub mod compression;
+pub mod hybrid;
 pub mod simd;
 pub mod statistics;
 pub mod vectorized;
-pub mod hybrid;
 
 #[cfg(feature = "storage-iceberg")]
 pub mod iceberg_cold;
@@ -29,21 +29,23 @@ pub mod storage_config;
 // pub mod parallel;
 
 pub use columnar::{Column, ColumnBatch, ColumnBatchBuilder, NullBitmap, DEFAULT_BATCH_SIZE};
-pub use compression::{CompressionCodec, ColumnCompression};
-pub use statistics::{ColumnStatistics, ColumnStatisticsBuilder, StatisticValue, Histogram};
-pub use simd::{SimdCapability, SimdFilter, SimdAggregate, simd_capability};
-pub use vectorized::{
-    VectorizedExecutor, VectorizedExecutorConfig, VectorizedExecutorConfigBuilder,
-    PlanNodeType, ComparisonOp, AggregateFunction,
-};
+pub use compression::{ColumnCompression, CompressionCodec};
 pub use hybrid::{
-    HybridStorageManager, HybridStorageConfig, StorageTier, WorkloadType,
-    AccessPattern, TimeRange, FilterPredicate, QueryResult, MigrationStats,
-    RowBasedStore, ColumnSchema, Row,
+    AccessPattern, ColumnSchema, FilterPredicate, HybridStorageConfig, HybridStorageManager,
+    MigrationStats, QueryResult, Row, RowBasedStore, StorageTier, TimeRange, WorkloadType,
+};
+pub use simd::{simd_capability, SimdAggregate, SimdCapability, SimdFilter};
+pub use statistics::{ColumnStatistics, ColumnStatisticsBuilder, Histogram, StatisticValue};
+pub use vectorized::{
+    AggregateFunction, ComparisonOp, PlanNodeType, VectorizedExecutor, VectorizedExecutorConfig,
+    VectorizedExecutorConfigBuilder,
 };
 
 #[cfg(feature = "storage-iceberg")]
-pub use iceberg_cold::{IcebergColdStore, column_batch_to_arrow, arrow_to_column_batch, create_file_io_for_storage, create_rest_catalog_with_storage};
+pub use iceberg_cold::{
+    arrow_to_column_batch, column_batch_to_arrow, create_file_io_for_storage,
+    create_rest_catalog_with_storage, IcebergColdStore,
+};
 
 #[cfg(feature = "storage-iceberg")]
-pub use storage_config::{StorageBackend, S3Config, AzureConfig};
+pub use storage_config::{AzureConfig, S3Config, StorageBackend};

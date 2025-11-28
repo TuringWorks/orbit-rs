@@ -33,7 +33,7 @@ impl ServerCommands {
 
         // Build basic INFO response
         let mut info_lines = Vec::new();
-        
+
         match section.as_deref() {
             Some("server") | None => {
                 info_lines.push("# Server");

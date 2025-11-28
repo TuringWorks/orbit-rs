@@ -25,7 +25,9 @@ pub mod graph_algorithms_procedures;
 pub mod graph_engine;
 pub mod graphrag_procedures;
 pub mod server;
+#[cfg(feature = "storage-rocksdb")]
 pub mod storage;
+pub mod types;
 
 // #[cfg(test)]
 // mod tests;
@@ -37,7 +39,9 @@ pub use graph_algorithms_procedures::GraphAlgorithmProcedures;
 pub use graph_engine::GraphEngine;
 pub use graphrag_procedures::BoltGraphRAGProcedures;
 pub use server::CypherServer;
+#[cfg(feature = "storage-rocksdb")]
 pub use storage::CypherGraphStorage;
+pub use types::{GraphNode, GraphRelationship};
 
 // TODO: Implement full Bolt protocol
 // - Bolt v4/v5 handshake

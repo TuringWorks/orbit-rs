@@ -99,15 +99,16 @@ impl SpatialStreamProcessor {
             let previous_location = previous_locations.get(&update.vehicle_id).cloned();
 
             // Get or create entity state
-            let entity_state = entity_states.entry(update.vehicle_id).or_insert_with(|| {
-                EntityState {
-                    entity_id: update.vehicle_id,
-                    current_location: update.location.clone(),
-                    previous_location: None,
-                    inside_geofences: Vec::new(),
-                    last_update: update.timestamp,
-                }
-            });
+            let entity_state =
+                entity_states
+                    .entry(update.vehicle_id)
+                    .or_insert_with(|| EntityState {
+                        entity_id: update.vehicle_id,
+                        current_location: update.location.clone(),
+                        previous_location: None,
+                        inside_geofences: Vec::new(),
+                        last_update: update.timestamp,
+                    });
 
             // Update entity state
             entity_state.previous_location = previous_location.clone();
@@ -129,7 +130,10 @@ impl SpatialStreamProcessor {
                                 entity_id: update.vehicle_id,
                                 location: update.location.clone(),
                                 timestamp: update.timestamp,
-                                message: format!("Entity {} entered geofence {}", update.vehicle_id, geofence.name),
+                                message: format!(
+                                    "Entity {} entered geofence {}",
+                                    update.vehicle_id, geofence.name
+                                ),
                                 geofence_id: Some(fence_id.clone()),
                             });
                         }
@@ -143,7 +147,10 @@ impl SpatialStreamProcessor {
                                 entity_id: update.vehicle_id,
                                 location: update.location.clone(),
                                 timestamp: update.timestamp,
-                                message: format!("Entity {} exited geofence {}", update.vehicle_id, geofence.name),
+                                message: format!(
+                                    "Entity {} exited geofence {}",
+                                    update.vehicle_id, geofence.name
+                                ),
                                 geofence_id: Some(fence_id.clone()),
                             });
                         }
@@ -382,7 +389,9 @@ mod tests {
         }];
 
         let alerts2 = processor.process_gps_batch(updates2).await.unwrap();
-        assert!(alerts2.iter().any(|a| matches!(a.alert_type, AlertType::GeofenceEntered)));
+        assert!(alerts2
+            .iter()
+            .any(|a| matches!(a.alert_type, AlertType::GeofenceEntered)));
 
         // Third update: entity exits geofence
         let updates3 = vec![GpsDataPoint {
@@ -394,7 +403,9 @@ mod tests {
         }];
 
         let alerts3 = processor.process_gps_batch(updates3).await.unwrap();
-        assert!(alerts3.iter().any(|a| matches!(a.alert_type, AlertType::GeofenceExited)));
+        assert!(alerts3
+            .iter()
+            .any(|a| matches!(a.alert_type, AlertType::GeofenceExited)));
     }
 
     #[tokio::test]
@@ -410,7 +421,9 @@ mod tests {
         }];
 
         let alerts = processor.process_gps_batch(updates).await.unwrap();
-        assert!(alerts.iter().any(|a| matches!(a.alert_type, AlertType::SpeedViolation)));
+        assert!(alerts
+            .iter()
+            .any(|a| matches!(a.alert_type, AlertType::SpeedViolation)));
     }
 
     #[tokio::test]

@@ -86,7 +86,10 @@ pub enum RlsExpression {
     /// Compare a column to a specific value
     Equals { column: String, value: RlsValue },
     /// Check if column value is in a list
-    In { column: String, values: Vec<RlsValue> },
+    In {
+        column: String,
+        values: Vec<RlsValue>,
+    },
     /// Check if column value is in current user's roles
     RoleMatch { column: String },
     /// Check if current user has any of the specified roles
@@ -269,9 +272,10 @@ impl RlsEngine {
 
         // At least one permissive policy must pass (OR)
         if !permissive.is_empty() {
-            let any_permissive_pass = permissive
-                .iter()
-                .any(|p| self.evaluate_expression(&p.using_expression, row, subject).unwrap_or(false));
+            let any_permissive_pass = permissive.iter().any(|p| {
+                self.evaluate_expression(&p.using_expression, row, subject)
+                    .unwrap_or(false)
+            });
 
             if !any_permissive_pass {
                 return Ok(false);
@@ -296,7 +300,10 @@ impl RlsEngine {
 
         let mut filtered = Vec::with_capacity(rows.len());
         for row in rows {
-            if self.check_row_access(table_name, &row, subject, action).await? {
+            if self
+                .check_row_access(table_name, &row, subject, action)
+                .await?
+            {
                 filtered.push(row);
             }
         }
@@ -335,7 +342,10 @@ impl RlsEngine {
             }
 
             if !policy.applicable_roles.is_empty()
-                && !policy.applicable_roles.iter().any(|r| subject.roles.contains(r))
+                && !policy
+                    .applicable_roles
+                    .iter()
+                    .any(|r| subject.roles.contains(r))
             {
                 continue;
             }
@@ -405,16 +415,14 @@ impl RlsEngine {
                 Ok(false)
             }
 
-            RlsExpression::HasRole { roles } => {
-                Ok(roles.iter().any(|r| subject.roles.contains(r)))
-            }
+            RlsExpression::HasRole { roles } => Ok(roles.iter().any(|r| subject.roles.contains(r))),
 
             RlsExpression::ContainsCurrentUser { column } => {
                 if let Some(value) = row.get(column) {
                     if let Some(arr) = value.as_array() {
-                        return Ok(arr.iter().any(|v| {
-                            v.as_str().map(|s| s == subject.id).unwrap_or(false)
-                        }));
+                        return Ok(arr
+                            .iter()
+                            .any(|v| v.as_str().map(|s| s == subject.id).unwrap_or(false)));
                     }
                 }
                 Ok(false)
@@ -438,9 +446,7 @@ impl RlsEngine {
                 Ok(false)
             }
 
-            RlsExpression::Not(inner) => {
-                Ok(!self.evaluate_expression(inner, row, subject)?)
-            }
+            RlsExpression::Not(inner) => Ok(!self.evaluate_expression(inner, row, subject)?),
 
             RlsExpression::Custom { expression: _ } => {
                 // Custom expressions would need a full expression parser
@@ -488,7 +494,8 @@ impl RowLevelSecurity for RlsEngine {
         subject: &SecuritySubject,
         action: &RlsAction,
     ) -> OrbitResult<bool> {
-        self.check_row_access(table_name, row, subject, action).await
+        self.check_row_access(table_name, row, subject, action)
+            .await
     }
 
     async fn apply_rls_filter(
@@ -507,13 +514,20 @@ mod tests {
     use super::*;
     use crate::security::authorization::SubjectType;
 
-    fn create_test_subject(id: &str, roles: Vec<&str>, attrs: Vec<(&str, &str)>) -> SecuritySubject {
+    fn create_test_subject(
+        id: &str,
+        roles: Vec<&str>,
+        attrs: Vec<(&str, &str)>,
+    ) -> SecuritySubject {
         SecuritySubject {
             id: id.to_string(),
             name: format!("User {}", id),
             subject_type: SubjectType::User,
             roles: roles.into_iter().map(String::from).collect(),
-            attributes: attrs.into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            attributes: attrs
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
         }
     }
 
@@ -709,9 +723,18 @@ mod tests {
         engine.add_policy(policy).await.unwrap();
 
         let rows = vec![
-            create_test_row(vec![("id", serde_json::json!(1)), ("author_id", serde_json::json!("user1"))]),
-            create_test_row(vec![("id", serde_json::json!(2)), ("author_id", serde_json::json!("user2"))]),
-            create_test_row(vec![("id", serde_json::json!(3)), ("author_id", serde_json::json!("user1"))]),
+            create_test_row(vec![
+                ("id", serde_json::json!(1)),
+                ("author_id", serde_json::json!("user1")),
+            ]),
+            create_test_row(vec![
+                ("id", serde_json::json!(2)),
+                ("author_id", serde_json::json!("user2")),
+            ]),
+            create_test_row(vec![
+                ("id", serde_json::json!(3)),
+                ("author_id", serde_json::json!("user1")),
+            ]),
         ];
 
         let subject = create_test_subject("user1", vec![], vec![]);
@@ -721,7 +744,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(filtered.len(), 2);
-        assert!(filtered.iter().all(|r| r.get("author_id").unwrap() == "user1"));
+        assert!(filtered
+            .iter()
+            .all(|r| r.get("author_id").unwrap() == "user1"));
     }
 
     #[tokio::test]

@@ -5,7 +5,7 @@
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use orbit_compute::spatial_operations::{
-    GPUSpatialOperations, GPUPoint, GPUPolygon, SpatialOperationsConfig,
+    GPUPoint, GPUPolygon, GPUSpatialOperations, SpatialOperationsConfig,
 };
 use rand::Rng;
 
@@ -53,9 +53,8 @@ fn bench_distance(c: &mut Criterion) {
         let engine = rt.block_on(GPUSpatialOperations::new(config)).unwrap();
 
         group.bench_function(format!("cpu_sequential_{}", size), |b| {
-            b.to_async(&rt).iter(|| {
-                engine.batch_distance(black_box(&query), black_box(&candidates))
-            });
+            b.to_async(&rt)
+                .iter(|| engine.batch_distance(black_box(&query), black_box(&candidates)));
         });
 
         // CPU parallel
@@ -67,9 +66,8 @@ fn bench_distance(c: &mut Criterion) {
         let engine = rt.block_on(GPUSpatialOperations::new(config)).unwrap();
 
         group.bench_function(format!("cpu_parallel_{}", size), |b| {
-            b.to_async(&rt).iter(|| {
-                engine.batch_distance(black_box(&query), black_box(&candidates))
-            });
+            b.to_async(&rt)
+                .iter(|| engine.batch_distance(black_box(&query), black_box(&candidates)));
         });
 
         // GPU (if available)
@@ -81,9 +79,8 @@ fn bench_distance(c: &mut Criterion) {
         let engine = rt.block_on(GPUSpatialOperations::new(config)).unwrap();
 
         group.bench_function(format!("gpu_{}", size), |b| {
-            b.to_async(&rt).iter(|| {
-                engine.batch_distance(black_box(&query), black_box(&candidates))
-            });
+            b.to_async(&rt)
+                .iter(|| engine.batch_distance(black_box(&query), black_box(&candidates)));
         });
     }
 
@@ -97,7 +94,10 @@ fn bench_distance_sphere(c: &mut Criterion) {
     let sizes = vec![100, 1000, 10000];
 
     for size in sizes {
-        let query = GPUPoint { x: -122.4194, y: 37.7749 }; // San Francisco
+        let query = GPUPoint {
+            x: -122.4194,
+            y: 37.7749,
+        }; // San Francisco
         let candidates = generate_random_points(size);
 
         // CPU parallel
@@ -110,9 +110,8 @@ fn bench_distance_sphere(c: &mut Criterion) {
         let engine = rt.block_on(GPUSpatialOperations::new(config)).unwrap();
 
         group.bench_function(format!("cpu_parallel_{}", size), |b| {
-            b.to_async(&rt).iter(|| {
-                engine.batch_distance_sphere(black_box(&query), black_box(&candidates))
-            });
+            b.to_async(&rt)
+                .iter(|| engine.batch_distance_sphere(black_box(&query), black_box(&candidates)));
         });
     }
 
@@ -139,9 +138,8 @@ fn bench_point_in_polygon(c: &mut Criterion) {
         let engine = rt.block_on(GPUSpatialOperations::new(config)).unwrap();
 
         group.bench_function(format!("cpu_parallel_{}", size), |b| {
-            b.to_async(&rt).iter(|| {
-                engine.batch_point_in_polygon(black_box(&points), black_box(&polygon))
-            });
+            b.to_async(&rt)
+                .iter(|| engine.batch_point_in_polygon(black_box(&points), black_box(&polygon)));
         });
     }
 
@@ -155,4 +153,3 @@ criterion_group!(
     bench_point_in_polygon
 );
 criterion_main!(benches);
-

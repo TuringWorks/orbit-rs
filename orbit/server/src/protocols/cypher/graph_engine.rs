@@ -547,7 +547,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         let mut filtered = Vec::new();
 
         for node in nodes {
-            if self.evaluate_condition_for_node(condition, node, context).await? {
+            if self
+                .evaluate_condition_for_node(condition, node, context)
+                .await?
+            {
                 filtered.push(node.clone());
             }
         }
@@ -601,9 +604,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                         ComparisonOperator::GreaterThan => {
                             self.compare_values(prop_value, value) > 0
                         }
-                        ComparisonOperator::LessThan => {
-                            self.compare_values(prop_value, value) < 0
-                        }
+                        ComparisonOperator::LessThan => self.compare_values(prop_value, value) < 0,
                         ComparisonOperator::GreaterThanOrEqual => {
                             self.compare_values(prop_value, value) >= 0
                         }
@@ -617,17 +618,22 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             }
             Condition::PropertyExists { property } => Ok(node.properties.contains_key(property)),
             Condition::And { left, right } => {
-                let left_result = Box::pin(self.evaluate_condition_for_node(left, node, _context)).await?;
-                let right_result = Box::pin(self.evaluate_condition_for_node(right, node, _context)).await?;
+                let left_result =
+                    Box::pin(self.evaluate_condition_for_node(left, node, _context)).await?;
+                let right_result =
+                    Box::pin(self.evaluate_condition_for_node(right, node, _context)).await?;
                 Ok(left_result && right_result)
             }
             Condition::Or { left, right } => {
-                let left_result = Box::pin(self.evaluate_condition_for_node(left, node, _context)).await?;
-                let right_result = Box::pin(self.evaluate_condition_for_node(right, node, _context)).await?;
+                let left_result =
+                    Box::pin(self.evaluate_condition_for_node(left, node, _context)).await?;
+                let right_result =
+                    Box::pin(self.evaluate_condition_for_node(right, node, _context)).await?;
                 Ok(left_result || right_result)
             }
             Condition::Not { condition } => {
-                let result = Box::pin(self.evaluate_condition_for_node(condition, node, _context)).await?;
+                let result =
+                    Box::pin(self.evaluate_condition_for_node(condition, node, _context)).await?;
                 Ok(!result)
             }
             Condition::HasLabel { variable: _, label } => Ok(node.labels.contains(label)),
@@ -663,9 +669,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                         ComparisonOperator::GreaterThan => {
                             self.compare_values(prop_value, value) > 0
                         }
-                        ComparisonOperator::LessThan => {
-                            self.compare_values(prop_value, value) < 0
-                        }
+                        ComparisonOperator::LessThan => self.compare_values(prop_value, value) < 0,
                         ComparisonOperator::GreaterThanOrEqual => {
                             self.compare_values(prop_value, value) >= 0
                         }
@@ -679,26 +683,35 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             }
             Condition::PropertyExists { property } => Ok(rel.properties.contains_key(property)),
             Condition::And { left, right } => {
-                let left_result = Box::pin(self.evaluate_condition_for_relationship(left, rel, _context)).await?;
-                let right_result = Box::pin(self.evaluate_condition_for_relationship(right, rel, _context)).await?;
+                let left_result =
+                    Box::pin(self.evaluate_condition_for_relationship(left, rel, _context)).await?;
+                let right_result =
+                    Box::pin(self.evaluate_condition_for_relationship(right, rel, _context))
+                        .await?;
                 Ok(left_result && right_result)
             }
             Condition::Or { left, right } => {
-                let left_result = Box::pin(self.evaluate_condition_for_relationship(left, rel, _context)).await?;
-                let right_result = Box::pin(self.evaluate_condition_for_relationship(right, rel, _context)).await?;
+                let left_result =
+                    Box::pin(self.evaluate_condition_for_relationship(left, rel, _context)).await?;
+                let right_result =
+                    Box::pin(self.evaluate_condition_for_relationship(right, rel, _context))
+                        .await?;
                 Ok(left_result || right_result)
             }
             Condition::Not { condition } => {
-                let result = Box::pin(self.evaluate_condition_for_relationship(condition, rel, _context)).await?;
+                let result =
+                    Box::pin(self.evaluate_condition_for_relationship(condition, rel, _context))
+                        .await?;
                 Ok(!result)
             }
             Condition::HasLabel { .. } => {
                 // Not applicable to relationships
                 Ok(false)
             }
-            Condition::HasRelationshipType { variable: _, rel_type } => {
-                Ok(rel.rel_type == *rel_type)
-            }
+            Condition::HasRelationshipType {
+                variable: _,
+                rel_type,
+            } => Ok(rel.rel_type == *rel_type),
         }
     }
 
@@ -712,9 +725,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     0
                 }
             }
-            (serde_json::Value::String(sa), serde_json::Value::String(sb)) => {
-                sa.cmp(sb) as i32
-            }
+            (serde_json::Value::String(sa), serde_json::Value::String(sb)) => sa.cmp(sb) as i32,
             _ => 0,
         }
     }

@@ -24,9 +24,9 @@ pub struct AccessPattern {
 /// Storage tier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StorageTier {
-    Hot,   // Fast, expensive storage
-    Warm,  // Medium speed, medium cost
-    Cold,  // Slow, cheap storage
+    Hot,     // Fast, expensive storage
+    Warm,    // Medium speed, medium cost
+    Cold,    // Slow, cheap storage
     Archive, // Very slow, very cheap storage
 }
 
@@ -45,9 +45,9 @@ pub struct TieringDecision {
 /// Access pattern classification
 #[derive(Debug, Clone)]
 pub enum AccessClassification {
-    Hot,      // Very frequent access
-    Warm,     // Moderate access
-    Cold,     // Infrequent access
+    Hot,     // Very frequent access
+    Warm,    // Moderate access
+    Cold,    // Infrequent access
     Archive, // Rarely accessed
 }
 
@@ -70,9 +70,9 @@ pub struct TieringCostAnalyzer {
 impl TieringCostAnalyzer {
     pub fn new() -> Self {
         let mut tier_costs = HashMap::new();
-        tier_costs.insert(StorageTier::Hot, 0.10);      // $0.10/GB/month
-        tier_costs.insert(StorageTier::Warm, 0.05);     // $0.05/GB/month
-        tier_costs.insert(StorageTier::Cold, 0.01);     // $0.01/GB/month
+        tier_costs.insert(StorageTier::Hot, 0.10); // $0.10/GB/month
+        tier_costs.insert(StorageTier::Warm, 0.05); // $0.05/GB/month
+        tier_costs.insert(StorageTier::Cold, 0.01); // $0.01/GB/month
         tier_costs.insert(StorageTier::Archive, 0.001); // $0.001/GB/month
 
         let mut migration_costs = HashMap::new();
@@ -98,16 +98,19 @@ impl TieringCostAnalyzer {
     ) -> MigrationAnalysis {
         let current_cost = self.tier_costs.get(&pattern.current_tier).unwrap_or(&0.0);
         let target_cost = self.tier_costs.get(&target_tier).unwrap_or(&0.0);
-        
-        let monthly_cost_savings = (current_cost - target_cost) * (pattern.data_size as f64 / 1_000_000_000.0);
-        
-        let migration_cost = self.migration_costs
+
+        let monthly_cost_savings =
+            (current_cost - target_cost) * (pattern.data_size as f64 / 1_000_000_000.0);
+
+        let migration_cost = self
+            .migration_costs
             .get(&(pattern.current_tier, target_tier))
             .copied()
-            .unwrap_or(0.0) * (pattern.data_size as f64 / 1_000_000_000.0);
+            .unwrap_or(0.0)
+            * (pattern.data_size as f64 / 1_000_000_000.0);
 
         let net_benefit = monthly_cost_savings - migration_cost;
-        
+
         // Payback period in months
         let payback_period = if monthly_cost_savings > 0.0 {
             migration_cost / monthly_cost_savings
@@ -120,7 +123,13 @@ impl TieringCostAnalyzer {
             monthly_savings: monthly_cost_savings,
             migration_cost,
             payback_period,
-            confidence: if payback_period < 3.0 { 0.9 } else if payback_period < 6.0 { 0.7 } else { 0.5 },
+            confidence: if payback_period < 3.0 {
+                0.9
+            } else if payback_period < 6.0 {
+                0.7
+            } else {
+                0.5
+            },
         }
     }
 }
@@ -153,7 +162,7 @@ impl AutoTieringEngine {
         data_size: u64,
     ) -> OrbitResult<()> {
         let mut patterns = self.access_patterns.write().await;
-        
+
         let pattern = patterns.entry(data_id.clone()).or_insert_with(|| {
             AccessPattern {
                 data_id: data_id.clone(),
@@ -173,7 +182,7 @@ impl AutoTieringEngine {
             pattern.read_count += 1;
         }
         pattern.last_access = std::time::SystemTime::now();
-        
+
         // Update access frequency
         self.update_access_frequency(pattern).await?;
 
@@ -185,7 +194,7 @@ impl AutoTieringEngine {
         let now = std::time::SystemTime::now();
         let elapsed = now.duration_since(pattern.last_access).unwrap_or_default();
         let hours_elapsed = elapsed.as_secs() as f64 / 3600.0;
-        
+
         if hours_elapsed > 0.0 {
             let total_accesses = pattern.read_count + pattern.write_count;
             pattern.access_frequency = total_accesses as f64 / hours_elapsed.max(1.0);
@@ -195,9 +204,7 @@ impl AutoTieringEngine {
     }
 
     /// Generate tiering decisions based on access patterns
-    pub async fn generate_tiering_decisions(
-        &self,
-    ) -> OrbitResult<Vec<TieringDecision>> {
+    pub async fn generate_tiering_decisions(&self) -> OrbitResult<Vec<TieringDecision>> {
         let patterns = self.access_patterns.read().await;
         let mut decisions = Vec::new();
 
@@ -267,16 +274,12 @@ impl AutoTieringEngine {
     }
 
     /// Calculate migration priority
-    fn calculate_priority(
-        &self,
-        analysis: &MigrationAnalysis,
-        pattern: &AccessPattern,
-    ) -> u32 {
+    fn calculate_priority(&self, analysis: &MigrationAnalysis, pattern: &AccessPattern) -> u32 {
         // Higher priority for:
         // - Higher net benefit
         // - Larger data size
         // - Shorter payback period
-        
+
         let benefit_score = (analysis.net_benefit * 1000.0) as u32;
         let size_score = (pattern.data_size / 1_000_000) as u32; // MB
         let payback_score = if analysis.payback_period < 1.0 {
@@ -296,4 +299,3 @@ impl Default for AutoTieringEngine {
         Self::new()
     }
 }
-

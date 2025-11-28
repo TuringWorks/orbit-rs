@@ -35,10 +35,7 @@ impl ValidationContext {
 }
 
 /// Validate that a string is not empty
-pub fn validate_non_empty_string(
-    value: &str,
-    ctx: &ValidationContext,
-) -> OrbitResult<()> {
+pub fn validate_non_empty_string(value: &str, ctx: &ValidationContext) -> OrbitResult<()> {
     if value.trim().is_empty() {
         Err(OrbitError::configuration(ctx.error_msg("cannot be empty")))
     } else {
@@ -58,57 +55,47 @@ pub fn validate_optional_non_empty_string(
 }
 
 /// Validate that a path is not empty (alias for validate_non_empty_string for clarity)
-pub fn validate_non_empty_path(
-    path: &str,
-    ctx: &ValidationContext,
-) -> OrbitResult<()> {
+pub fn validate_non_empty_path(path: &str, ctx: &ValidationContext) -> OrbitResult<()> {
     validate_non_empty_string(path, ctx)
 }
 
 /// Validate that a numeric value is positive
-pub fn validate_positive<T>(
-    value: T,
-    ctx: &ValidationContext,
-) -> OrbitResult<()>
+pub fn validate_positive<T>(value: T, ctx: &ValidationContext) -> OrbitResult<()>
 where
     T: PartialOrd + From<u8> + std::fmt::Display,
 {
     if value <= T::from(0) {
-        Err(OrbitError::configuration(ctx.error_msg("must be greater than 0")))
+        Err(OrbitError::configuration(
+            ctx.error_msg("must be greater than 0"),
+        ))
     } else {
         Ok(())
     }
 }
 
 /// Validate that a numeric value is non-negative
-pub fn validate_non_negative<T>(
-    value: T,
-    ctx: &ValidationContext,
-) -> OrbitResult<()>
+pub fn validate_non_negative<T>(value: T, ctx: &ValidationContext) -> OrbitResult<()>
 where
     T: PartialOrd + From<u8> + std::fmt::Display,
 {
     if value < T::from(0) {
-        Err(OrbitError::configuration(ctx.error_msg("cannot be negative")))
+        Err(OrbitError::configuration(
+            ctx.error_msg("cannot be negative"),
+        ))
     } else {
         Ok(())
     }
 }
 
 /// Validate that a value is within a range
-pub fn validate_range<T>(
-    value: T,
-    min: T,
-    max: T,
-    ctx: &ValidationContext,
-) -> OrbitResult<()>
+pub fn validate_range<T>(value: T, min: T, max: T, ctx: &ValidationContext) -> OrbitResult<()>
 where
     T: PartialOrd + std::fmt::Display,
 {
     if value < min || value > max {
-        Err(OrbitError::configuration(ctx.error_msg(
-            &format!("must be between {} and {}", min, max)
-        )))
+        Err(OrbitError::configuration(
+            ctx.error_msg(&format!("must be between {} and {}", min, max)),
+        ))
     } else {
         Ok(())
     }
@@ -138,17 +125,14 @@ pub fn validate_s3_credentials(
 }
 
 /// Validate URL format
-pub fn validate_url(
-    url: &str,
-    ctx: &ValidationContext,
-) -> OrbitResult<()> {
+pub fn validate_url(url: &str, ctx: &ValidationContext) -> OrbitResult<()> {
     validate_non_empty_string(url, ctx)?;
 
     // Basic URL validation
     if !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("tcp://") {
-        return Err(OrbitError::configuration(ctx.error_msg(
-            "must start with http://, https://, or tcp://"
-        )));
+        return Err(OrbitError::configuration(
+            ctx.error_msg("must start with http://, https://, or tcp://"),
+        ));
     }
 
     Ok(())
@@ -162,7 +146,7 @@ pub fn validate_tls_config(
 ) -> OrbitResult<()> {
     if enable_tls && ca_cert_path.is_none() {
         Err(OrbitError::configuration(ctx.error_msg(
-            "CA certificate path required when TLS is enabled"
+            "CA certificate path required when TLS is enabled",
         )))
     } else {
         Ok(())
@@ -170,10 +154,7 @@ pub fn validate_tls_config(
 }
 
 /// Validate port number
-pub fn validate_port(
-    port: u16,
-    ctx: &ValidationContext,
-) -> OrbitResult<()> {
+pub fn validate_port(port: u16, ctx: &ValidationContext) -> OrbitResult<()> {
     if port == 0 {
         Err(OrbitError::configuration(ctx.error_msg("port cannot be 0")))
     } else {
@@ -182,38 +163,31 @@ pub fn validate_port(
 }
 
 /// Validate timeout duration (in milliseconds)
-pub fn validate_timeout_ms(
-    timeout_ms: u64,
-    ctx: &ValidationContext,
-) -> OrbitResult<()> {
+pub fn validate_timeout_ms(timeout_ms: u64, ctx: &ValidationContext) -> OrbitResult<()> {
     if timeout_ms == 0 {
-        Err(OrbitError::configuration(ctx.error_msg("timeout cannot be 0")))
+        Err(OrbitError::configuration(
+            ctx.error_msg("timeout cannot be 0"),
+        ))
     } else {
         Ok(())
     }
 }
 
 /// Validate percentage value (0.0 to 1.0)
-pub fn validate_percentage(
-    value: f64,
-    ctx: &ValidationContext,
-) -> OrbitResult<()> {
+pub fn validate_percentage(value: f64, ctx: &ValidationContext) -> OrbitResult<()> {
     validate_range(value, 0.0, 1.0, ctx)
 }
 
 /// Validate that min < max for ordered values
-pub fn validate_min_max<T>(
-    min: T,
-    max: T,
-    ctx: &ValidationContext,
-) -> OrbitResult<()>
+pub fn validate_min_max<T>(min: T, max: T, ctx: &ValidationContext) -> OrbitResult<()>
 where
     T: PartialOrd + std::fmt::Display,
 {
     if min >= max {
-        Err(OrbitError::configuration(ctx.error_msg(
-            &format!("min ({}) must be less than max ({})", min, max)
-        )))
+        Err(OrbitError::configuration(ctx.error_msg(&format!(
+            "min ({}) must be less than max ({})",
+            min, max
+        ))))
     } else {
         Ok(())
     }

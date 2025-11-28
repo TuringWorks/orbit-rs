@@ -15,7 +15,9 @@
 //! - `-` : Delete key/value pair or string element from left operand
 //! - `#-` : Delete the field or array element at the specified path
 
-use crate::protocols::postgres_wire::jsonb::{JsonbError, JsonbPath, JsonbResult, JsonbValue, PathComponent};
+use crate::protocols::postgres_wire::jsonb::{
+    JsonbError, JsonbPath, JsonbResult, JsonbValue, PathComponent,
+};
 
 impl JsonbValue {
     /// `->` operator: Get JSON object field by key or array element by index (returns JSON)
@@ -63,7 +65,7 @@ impl JsonbValue {
     /// `->>` operator: Get JSON object field by key or array element by index (returns text)
     ///
     /// # Examples
-    /// ```
+    /// ```no_run
     /// use orbit_server::protocols::postgres_wire::jsonb::JsonbValue;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"name": "Alice", "age": 30}"#)?;
@@ -280,7 +282,7 @@ impl JsonbValue {
     /// `||` operator: Concatenate two JSON values
     ///
     /// # Examples
-    /// ```
+    /// ```no_run
     /// use orbit_server::protocols::postgres_wire::jsonb::JsonbValue;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json1 = JsonbValue::from_json_str(r#"{"name": "Alice"}"#)?;

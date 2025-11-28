@@ -1,6 +1,8 @@
 use crate::addressable::AddressableReference;
 use crate::exception::{OrbitError, OrbitResult};
-use crate::security::encryption::{EncryptionManager, KeyManagementSystem, KeyRotationPolicy, KeyStoreType};
+use crate::security::encryption::{
+    EncryptionManager, KeyManagementSystem, KeyRotationPolicy, KeyStoreType,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -434,7 +436,10 @@ pub struct EncryptedPersistenceBackend {
 
 impl EncryptedPersistenceBackend {
     /// Create a new encrypted persistence backend
-    pub fn new(inner: Arc<dyn PersistenceBackend>, encryption_manager: Arc<EncryptionManager>) -> Self {
+    pub fn new(
+        inner: Arc<dyn PersistenceBackend>,
+        encryption_manager: Arc<EncryptionManager>,
+    ) -> Self {
         Self {
             inner,
             encryption_manager,
@@ -466,7 +471,10 @@ impl EncryptedPersistenceBackend {
             .map_err(|e| OrbitError::internal(format!("Failed to serialize state: {}", e)))?;
 
         // Encrypt with key ID tracking
-        let (encrypted_data, key_id) = self.encryption_manager.encrypt_with_key_id(&state_bytes).await?;
+        let (encrypted_data, key_id) = self
+            .encryption_manager
+            .encrypt_with_key_id(&state_bytes)
+            .await?;
 
         Ok(EncryptedSnapshot {
             actor_reference: snapshot.actor_reference.clone(),
@@ -485,13 +493,16 @@ impl EncryptedPersistenceBackend {
     /// Decrypt an encrypted snapshot back to original
     async fn decrypt_snapshot(&self, encrypted: &EncryptedSnapshot) -> OrbitResult<ActorSnapshot> {
         // Decrypt the data
-        let decrypted_bytes = self.encryption_manager
+        let decrypted_bytes = self
+            .encryption_manager
             .decrypt(&encrypted.encrypted_data, &encrypted.key_id)
             .await?;
 
         // Deserialize state data
-        let state_data: serde_json::Value = serde_json::from_slice(&decrypted_bytes)
-            .map_err(|e| OrbitError::internal(format!("Failed to deserialize decrypted state: {}", e)))?;
+        let state_data: serde_json::Value =
+            serde_json::from_slice(&decrypted_bytes).map_err(|e| {
+                OrbitError::internal(format!("Failed to deserialize decrypted state: {}", e))
+            })?;
 
         Ok(ActorSnapshot {
             actor_reference: encrypted.actor_reference.clone(),
@@ -515,8 +526,9 @@ impl PersistenceBackend for EncryptedPersistenceBackend {
 
         // Store encrypted data as the state_data in a wrapper ActorSnapshot
         // This allows us to use the existing backend without changes
-        let wrapper_state = serde_json::to_value(&encrypted)
-            .map_err(|e| OrbitError::internal(format!("Failed to serialize encrypted snapshot: {}", e)))?;
+        let wrapper_state = serde_json::to_value(&encrypted).map_err(|e| {
+            OrbitError::internal(format!("Failed to serialize encrypted snapshot: {}", e))
+        })?;
 
         let wrapper_snapshot = ActorSnapshot {
             actor_reference: snapshot.actor_reference.clone(),
@@ -531,15 +543,23 @@ impl PersistenceBackend for EncryptedPersistenceBackend {
         };
 
         self.inner.save_snapshot(&wrapper_snapshot).await?;
-        debug!("Saved encrypted snapshot for actor: {}", snapshot.actor_reference);
+        debug!(
+            "Saved encrypted snapshot for actor: {}",
+            snapshot.actor_reference
+        );
         Ok(())
     }
 
-    async fn load_snapshot(&self, actor_ref: &AddressableReference) -> OrbitResult<Option<ActorSnapshot>> {
+    async fn load_snapshot(
+        &self,
+        actor_ref: &AddressableReference,
+    ) -> OrbitResult<Option<ActorSnapshot>> {
         if let Some(wrapper_snapshot) = self.inner.load_snapshot(actor_ref).await? {
             // Deserialize the encrypted snapshot from the wrapper
             let encrypted: EncryptedSnapshot = serde_json::from_value(wrapper_snapshot.state_data)
-                .map_err(|e| OrbitError::internal(format!("Failed to deserialize encrypted snapshot: {}", e)))?;
+                .map_err(|e| {
+                    OrbitError::internal(format!("Failed to deserialize encrypted snapshot: {}", e))
+                })?;
 
             // Decrypt and return
             let decrypted = self.decrypt_snapshot(&encrypted).await?;
@@ -555,9 +575,12 @@ impl PersistenceBackend for EncryptedPersistenceBackend {
         actor_ref: &AddressableReference,
         version: u64,
     ) -> OrbitResult<Option<ActorSnapshot>> {
-        if let Some(wrapper_snapshot) = self.inner.load_snapshot_version(actor_ref, version).await? {
+        if let Some(wrapper_snapshot) = self.inner.load_snapshot_version(actor_ref, version).await?
+        {
             let encrypted: EncryptedSnapshot = serde_json::from_value(wrapper_snapshot.state_data)
-                .map_err(|e| OrbitError::internal(format!("Failed to deserialize encrypted snapshot: {}", e)))?;
+                .map_err(|e| {
+                    OrbitError::internal(format!("Failed to deserialize encrypted snapshot: {}", e))
+                })?;
 
             let decrypted = self.decrypt_snapshot(&encrypted).await?;
             Ok(Some(decrypted))
@@ -566,7 +589,10 @@ impl PersistenceBackend for EncryptedPersistenceBackend {
         }
     }
 
-    async fn list_snapshots(&self, actor_ref: &AddressableReference) -> OrbitResult<Vec<ActorSnapshot>> {
+    async fn list_snapshots(
+        &self,
+        actor_ref: &AddressableReference,
+    ) -> OrbitResult<Vec<ActorSnapshot>> {
         let wrapper_snapshots = self.inner.list_snapshots(actor_ref).await?;
         let mut decrypted_snapshots = Vec::with_capacity(wrapper_snapshots.len());
 
@@ -579,7 +605,10 @@ impl PersistenceBackend for EncryptedPersistenceBackend {
                     }
                 },
                 Err(e) => {
-                    warn!("Failed to deserialize encrypted snapshot {}: {}", wrapper.snapshot_id, e);
+                    warn!(
+                        "Failed to deserialize encrypted snapshot {}: {}",
+                        wrapper.snapshot_id, e
+                    );
                 }
             }
         }
@@ -587,7 +616,11 @@ impl PersistenceBackend for EncryptedPersistenceBackend {
         Ok(decrypted_snapshots)
     }
 
-    async fn delete_snapshot(&self, actor_ref: &AddressableReference, snapshot_id: &str) -> OrbitResult<()> {
+    async fn delete_snapshot(
+        &self,
+        actor_ref: &AddressableReference,
+        snapshot_id: &str,
+    ) -> OrbitResult<()> {
         self.inner.delete_snapshot(actor_ref, snapshot_id).await
     }
 
@@ -963,7 +996,10 @@ mod tests {
         assert!(snapshots.len() >= 1); // At least the latest version
 
         // Load specific version
-        let version_3 = encrypted_backend.load_snapshot_version(&actor_ref, 3).await.unwrap();
+        let version_3 = encrypted_backend
+            .load_snapshot_version(&actor_ref, 3)
+            .await
+            .unwrap();
         assert!(version_3.is_some());
         let v3 = version_3.unwrap();
         assert_eq!(v3.version, 3);
@@ -976,7 +1012,7 @@ mod tests {
         let encrypted_backend = Arc::new(
             EncryptedPersistenceBackend::with_auto_key_management(inner)
                 .await
-                .unwrap()
+                .unwrap(),
         );
 
         let config = PersistenceConfig {
@@ -1005,7 +1041,10 @@ mod tests {
         };
 
         // Save encrypted state
-        manager.save_state(&actor_ref, &secret_state, 1).await.unwrap();
+        manager
+            .save_state(&actor_ref, &secret_state, 1)
+            .await
+            .unwrap();
 
         // Load and verify
         let loaded: Option<(SecretState, u64)> = manager.load_state(&actor_ref).await.unwrap();

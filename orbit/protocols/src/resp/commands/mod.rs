@@ -123,9 +123,12 @@ mod handler {
 
         /// Load data from persistent storage on startup
         pub async fn load_from_persistence(&self) {
-            self.local_registry.load_from_persistence().await.unwrap_or_else(|e| {
-                tracing::error!("Failed to load data from persistent storage: {}", e);
-            });
+            self.local_registry
+                .load_from_persistence()
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::error!("Failed to load data from persistent storage: {}", e);
+                });
         }
 
         /// Handle a RESP command by delegating to the appropriate module

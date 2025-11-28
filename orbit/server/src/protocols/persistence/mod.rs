@@ -6,9 +6,7 @@ pub mod redis_data;
 pub mod rocksdb_redis_provider;
 
 // Re-export types for convenience
-pub use redis_data::{
-    RedisDataConfig, RedisDataProvider, RedisDataMetrics, RedisValue,
-};
+pub use redis_data::{RedisDataConfig, RedisDataMetrics, RedisDataProvider, RedisValue};
 pub use rocksdb_redis_provider::RocksDbRedisDataProvider;
 // Disabled tikv_redis_provider due to security vulnerabilities in tikv-client dependencies
 // See: https://github.com/advisories (protobuf < 3.7.2 - CVE for uncontrolled recursion)

@@ -3,6 +3,8 @@
 //! This module provides AQL-compatible function calls for GraphRAG operations,
 //! allowing users to call GraphRAG functionality through AQL function syntax.
 
+#![cfg(feature = "storage-rocksdb")]
+
 use crate::protocols::aql::data_model::AqlValue;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::graphrag::{
@@ -605,7 +607,9 @@ impl AqlGraphRAGEngine {
                     );
                     node_obj.insert(
                         "confidence".to_string(),
-                        AqlValue::Number(serde_json::Number::from_f64(n.confidence as f64).unwrap()),
+                        AqlValue::Number(
+                            serde_json::Number::from_f64(n.confidence as f64).unwrap(),
+                        ),
                     );
                     AqlValue::Object(node_obj)
                 })
@@ -625,36 +629,38 @@ impl AqlGraphRAGEngine {
         }
 
         // Calculate cosine similarity for entities with embeddings
-        let mut similarities: Vec<(f32, &crate::protocols::graphrag::storage::GraphRAGNode)> = nodes
-            .iter()
-            .filter(|n| n.id != target.id)
-            .filter_map(|n| {
-                let node_embedding = n.embeddings.values().next()?;
-                if node_embedding.len() != target_embedding.len() {
-                    return None;
-                }
+        let mut similarities: Vec<(f32, &crate::protocols::graphrag::storage::GraphRAGNode)> =
+            nodes
+                .iter()
+                .filter(|n| n.id != target.id)
+                .filter_map(|n| {
+                    let node_embedding = n.embeddings.values().next()?;
+                    if node_embedding.len() != target_embedding.len() {
+                        return None;
+                    }
 
-                // Cosine similarity
-                let dot_product: f32 = target_embedding
-                    .iter()
-                    .zip(node_embedding.iter())
-                    .map(|(a, b)| a * b)
-                    .sum();
-                let target_norm: f32 = target_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-                let node_norm: f32 = node_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+                    // Cosine similarity
+                    let dot_product: f32 = target_embedding
+                        .iter()
+                        .zip(node_embedding.iter())
+                        .map(|(a, b)| a * b)
+                        .sum();
+                    let target_norm: f32 =
+                        target_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+                    let node_norm: f32 = node_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
 
-                if target_norm == 0.0 || node_norm == 0.0 {
-                    return None;
-                }
+                    if target_norm == 0.0 || node_norm == 0.0 {
+                        return None;
+                    }
 
-                let similarity = dot_product / (target_norm * node_norm);
-                if similarity >= similarity_threshold {
-                    Some((similarity, n))
-                } else {
-                    None
-                }
-            })
-            .collect();
+                    let similarity = dot_product / (target_norm * node_norm);
+                    if similarity >= similarity_threshold {
+                        Some((similarity, n))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
 
         // Sort by similarity (descending)
         similarities.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -718,16 +724,20 @@ impl AqlGraphRAGEngine {
         // Use RAG query to find relevant entities and context
         let rag_query = GraphRAGQuery {
             query_text: query_text.clone(),
-            max_hops: Some(options
-                .get("max_hops")
-                .and_then(|v| v.as_u64())
-                .map(|n| n as u32)
-                .unwrap_or(2)),
-            context_size: Some(options
-                .get("context_size")
-                .and_then(|v| v.as_u64())
-                .map(|n| n as usize)
-                .unwrap_or(1024)),
+            max_hops: Some(
+                options
+                    .get("max_hops")
+                    .and_then(|v| v.as_u64())
+                    .map(|n| n as u32)
+                    .unwrap_or(2),
+            ),
+            context_size: Some(
+                options
+                    .get("context_size")
+                    .and_then(|v| v.as_u64())
+                    .map(|n| n as usize)
+                    .unwrap_or(1024),
+            ),
             llm_provider: options
                 .get("llm_provider")
                 .and_then(|v| v.as_str())
@@ -934,12 +944,7 @@ impl AqlGraphRAGEngine {
                 );
                 entity_obj.insert(
                     "labels".to_string(),
-                    AqlValue::Array(
-                        n.labels
-                            .into_iter()
-                            .map(|l| AqlValue::String(l))
-                            .collect(),
-                    ),
+                    AqlValue::Array(n.labels.into_iter().map(|l| AqlValue::String(l)).collect()),
                 );
                 entity_obj.insert(
                     "source_documents".to_string(),
@@ -999,12 +1004,15 @@ impl AqlGraphRAGEngine {
             .iter()
             .filter(|n| {
                 n.text.to_lowercase().contains(&concept.to_lowercase())
-                    || n.labels.iter().any(|l| l.to_lowercase().contains(&concept.to_lowercase()))
+                    || n.labels
+                        .iter()
+                        .any(|l| l.to_lowercase().contains(&concept.to_lowercase()))
             })
             .collect();
 
         // Analyze relationship trends over time
-        let mut time_buckets: std::collections::BTreeMap<i64, usize> = std::collections::BTreeMap::new();
+        let mut time_buckets: std::collections::BTreeMap<i64, usize> =
+            std::collections::BTreeMap::new();
         let bucket_size_ms = 24 * 60 * 60 * 1000; // 1 day buckets
 
         for rel in &relationships {
@@ -1073,7 +1081,8 @@ impl AqlGraphRAGEngine {
         let relationships = storage.list_relationships().await?;
 
         // Build adjacency list for graph traversal
-        let mut adjacency: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        let mut adjacency: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
         for rel in &relationships {
             adjacency
                 .entry(rel.from_entity_id.clone())
@@ -1149,7 +1158,10 @@ impl AqlGraphRAGEngine {
         let mut result_obj = HashMap::new();
         result_obj.insert("success".to_string(), AqlValue::Bool(true));
         result_obj.insert("knowledge_graph".to_string(), AqlValue::String(kg_name));
-        result_obj.insert("communities".to_string(), AqlValue::Array(communities_result));
+        result_obj.insert(
+            "communities".to_string(),
+            AqlValue::Array(communities_result),
+        );
         result_obj.insert(
             "total_communities".to_string(),
             AqlValue::Number(serde_json::Number::from(total_communities)),

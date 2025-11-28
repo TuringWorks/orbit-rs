@@ -219,7 +219,6 @@ pub fn parse_create_index(parser: &mut SqlParser) -> ParseResult<Statement> {
 
 /// Internal function to parse CREATE INDEX (without consuming INDEX token)
 pub(crate) fn parse_create_index_internal(parser: &mut SqlParser) -> ParseResult<Statement> {
-
     // Check for IF NOT EXISTS
     let if_not_exists = if parser.matches(&[Token::If]) {
         parser.advance()?;
@@ -905,7 +904,11 @@ pub fn parse_drop_extension(parser: &mut SqlParser) -> ParseResult<Statement> {
 /// Parse column definition
 fn parse_column_definition(parser: &mut SqlParser) -> ParseResult<ColumnDefinition> {
     // Parse column name (can be identifier or keyword used as identifier)
-    let name = if let Some(col_name) = parser.current_token.as_ref().and_then(utilities::token_to_identifier_name) {
+    let name = if let Some(col_name) = parser
+        .current_token
+        .as_ref()
+        .and_then(utilities::token_to_identifier_name)
+    {
         parser.advance()?;
         col_name
     } else {

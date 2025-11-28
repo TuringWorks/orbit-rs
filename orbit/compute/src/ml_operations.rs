@@ -63,8 +63,8 @@ impl Default for MLOperationsConfig {
     fn default() -> Self {
         Self {
             enable_gpu: true,
-            gpu_min_samples: 1000,  // Use GPU for 1000+ samples
-            gpu_min_features: 64,   // Use GPU for 64+ features
+            gpu_min_samples: 1000, // Use GPU for 1000+ samples
+            gpu_min_features: 64,  // Use GPU for 64+ features
             use_cpu_parallel: true,
         }
     }
@@ -214,16 +214,19 @@ impl GPUMLOperations {
                             Ok(result) => {
                                 tracing::debug!(
                                     "GPU matrix multiply completed: {}x{} @ {}x{} = {}x{}",
-                                    matrix_a.len(), matrix_a[0].len(),
+                                    matrix_a.len(),
+                                    matrix_a[0].len(),
                                     matrix_b.map(|b| b.len()).unwrap_or(0),
                                     matrix_b.map(|b| b[0].len()).unwrap_or(0),
-                                    result.rows, result.cols
+                                    result.rows,
+                                    result.cols
                                 );
                                 return Ok(result);
                             }
                             Err(e) => {
                                 tracing::warn!("GPU execution failed, falling back to CPU: {}", e);
-                                return self.matrix_operation_cpu_parallel(matrix_a, matrix_b, operation);
+                                return self
+                                    .matrix_operation_cpu_parallel(matrix_a, matrix_b, operation);
                             }
                         }
                     } else {
@@ -259,14 +262,12 @@ impl GPUMLOperations {
     ) -> Result<MatrixOperationResult, ComputeError> {
         match operation {
             MatrixOp::MatMul => {
-                let matrix_b = matrix_b.ok_or_else(|| {
-                    ComputeError::Execution {
-                        source: crate::errors::ExecutionError::InvalidKernelParameters {
-                            parameter: "matrix_b".to_string(),
-                            value: "required for multiplication".to_string(),
-                        },
-                        compute_unit: None,
-                    }
+                let matrix_b = matrix_b.ok_or_else(|| ComputeError::Execution {
+                    source: crate::errors::ExecutionError::InvalidKernelParameters {
+                        parameter: "matrix_b".to_string(),
+                        value: "required for multiplication".to_string(),
+                    },
+                    compute_unit: None,
                 })?;
 
                 // Validate dimensions
@@ -276,17 +277,19 @@ impl GPUMLOperations {
                             parameter: "matrix_dimensions".to_string(),
                             value: format!(
                                 "incompatible: A is {}x{}, B is {}x{}",
-                                matrix_a.len(), matrix_a[0].len(),
-                                matrix_b.len(), matrix_b[0].len()
+                                matrix_a.len(),
+                                matrix_a[0].len(),
+                                matrix_b.len(),
+                                matrix_b[0].len()
                             ),
                         },
                         compute_unit: None,
                     });
                 }
 
-                let m = matrix_a.len();      // rows in A and C
-                let k = matrix_a[0].len();   // cols in A, rows in B
-                let n = matrix_b[0].len();   // cols in B and C
+                let m = matrix_a.len(); // rows in A and C
+                let k = matrix_a[0].len(); // cols in A, rows in B
+                let n = matrix_b[0].len(); // cols in B and C
 
                 // Flatten matrices to f32 row-major format
                 let matrix_a_flat: Vec<f32> = matrix_a
@@ -302,7 +305,9 @@ impl GPUMLOperations {
                 // Use GPU manager (avoids 50-60ms device initialization overhead)
                 let result_flat = tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(async {
-                        manager.execute_matrix_multiply(&matrix_a_flat, &matrix_b_flat, m, n, k).await
+                        manager
+                            .execute_matrix_multiply(&matrix_a_flat, &matrix_b_flat, m, n, k)
+                            .await
                     })
                 })?;
 
@@ -499,14 +504,12 @@ impl GPUMLOperations {
                 })
             }
             MatrixOp::MatMul => {
-                let matrix_b = matrix_b.ok_or_else(|| {
-                    ComputeError::Execution {
-                        source: crate::errors::ExecutionError::InvalidKernelParameters {
-                            parameter: "matrix_b".to_string(),
-                            value: "required for multiplication".to_string(),
-                        },
-                        compute_unit: None,
-                    }
+                let matrix_b = matrix_b.ok_or_else(|| ComputeError::Execution {
+                    source: crate::errors::ExecutionError::InvalidKernelParameters {
+                        parameter: "matrix_b".to_string(),
+                        value: "required for multiplication".to_string(),
+                    },
+                    compute_unit: None,
                 })?;
 
                 if matrix_a[0].len() != matrix_b.len() {
@@ -527,9 +530,7 @@ impl GPUMLOperations {
                     .into_par_iter()
                     .flat_map(|i| {
                         (0..cols_b).into_par_iter().map(move |j| {
-                            (0..cols_a)
-                                .map(|k| matrix_a[i][k] * matrix_b[k][j])
-                                .sum()
+                            (0..cols_a).map(|k| matrix_a[i][k] * matrix_b[k][j]).sum()
                         })
                     })
                     .collect();
@@ -541,21 +542,20 @@ impl GPUMLOperations {
                 })
             }
             MatrixOp::Add | MatrixOp::Multiply | MatrixOp::Divide => {
-                let matrix_b = matrix_b.ok_or_else(|| {
-                    ComputeError::Execution {
-                        source: crate::errors::ExecutionError::InvalidKernelParameters {
-                            parameter: "matrix_b".to_string(),
-                            value: "required for element-wise operations".to_string(),
-                        },
-                        compute_unit: None,
-                    }
+                let matrix_b = matrix_b.ok_or_else(|| ComputeError::Execution {
+                    source: crate::errors::ExecutionError::InvalidKernelParameters {
+                        parameter: "matrix_b".to_string(),
+                        value: "required for element-wise operations".to_string(),
+                    },
+                    compute_unit: None,
                 })?;
 
                 if matrix_a.len() != matrix_b.len() || matrix_a[0].len() != matrix_b[0].len() {
                     return Err(ComputeError::Execution {
                         source: crate::errors::ExecutionError::InvalidKernelParameters {
                             parameter: "matrix_dimensions".to_string(),
-                            value: "must have same dimensions for element-wise operations".to_string(),
+                            value: "must have same dimensions for element-wise operations"
+                                .to_string(),
                         },
                         compute_unit: None,
                     });
@@ -671,7 +671,7 @@ mod tests {
     async fn test_matrix_multiplication_gpu_large() {
         // Test with large matrices to trigger GPU acceleration
         let mut config = MLOperationsConfig::default();
-        config.gpu_min_samples = 100;  // Lower threshold for testing
+        config.gpu_min_samples = 100; // Lower threshold for testing
         config.gpu_min_features = 100;
 
         let ops = GPUMLOperations::new(config).await.unwrap();
@@ -695,10 +695,7 @@ mod tests {
         // Verify first element is correct
         // First row of A: [0, 1, 2, ..., 199]
         // First col of B: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, ...]
-        let expected_00: f64 = (0..200)
-            .map(|k| (k as f64) * ((k % 10) as f64))
-            .sum();
+        let expected_00: f64 = (0..200).map(|k| (k as f64) * ((k % 10) as f64)).sum();
         assert!((result.data[0] - expected_00).abs() < 1.0);
     }
 }
-

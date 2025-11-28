@@ -15,8 +15,8 @@ pub mod error;
 // Legacy modules - use error module instead for new code
 pub mod error_handling;
 pub mod error_utils;
-pub mod exception;
 pub mod event_sourcing;
+pub mod exception;
 pub mod execution_utils;
 pub mod extensions;
 pub mod graph;
@@ -143,8 +143,8 @@ pub use security::{
     MaskingPolicy, MaskingStrategy, OAuth2AuthProvider, PolicyEngine, QueryValidator, RbacEngine,
     ResourceQuota, ResourceUsage, RoleBasedAccessControl, SamlAuthProvider, SecurityAction,
     SecurityContext, SecurityFramework, SecurityResource, SecuritySubject, SensitivityLevel,
-    SqlInjectionDetector, TenantAccessResult, TenantConfig, TenantContext, TenantId,
-    TenantManager, TenantStatus, ThreatDetectionEngine, TlsConfig, TlsVersion, TokenStore,
+    SqlInjectionDetector, TenantAccessResult, TenantConfig, TenantContext, TenantId, TenantManager,
+    TenantStatus, ThreatDetectionEngine, TlsConfig, TlsVersion, TokenStore,
 };
 
 // Re-export trigger functionality

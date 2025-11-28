@@ -6,7 +6,7 @@
 //! - MD5 password
 //! - SCRAM-SHA-256 (RFC 5802, RFC 7677)
 
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use md5;
 use rand::Rng;
 use sha2::{Digest, Sha256};
@@ -14,8 +14,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::error::{ProtocolError, ProtocolResult};
 use super::messages::AuthenticationResponse;
+use crate::error::{ProtocolError, ProtocolResult};
 
 /// Authentication method configuration
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,7 +82,8 @@ impl UserStore {
             },
             AuthMethod::ScramSha256 => {
                 // Generate SCRAM credentials
-                let (stored_key, server_key, salt) = Self::generate_scram_credentials(&password, 4096);
+                let (stored_key, server_key, salt) =
+                    Self::generate_scram_credentials(&password, 4096);
                 UserCredentials {
                     username: username.clone(),
                     password_hash: String::new(), // Not used for SCRAM
@@ -187,9 +188,11 @@ impl AuthManager {
             }
             AuthMethod::MD5 => {
                 let user = self.user_store.get_user(username).await;
-                let salt = salt.ok_or_else(|| ProtocolError::AuthenticationError(
-                    "Salt required for MD5 authentication".to_string()
-                ))?;
+                let salt = salt.ok_or_else(|| {
+                    ProtocolError::AuthenticationError(
+                        "Salt required for MD5 authentication".to_string(),
+                    )
+                })?;
 
                 if let Some(user) = user {
                     let expected = compute_md5_hash(&user.password_hash, username, salt);
@@ -334,10 +337,10 @@ impl ScramAuth {
         let channel_binding = channel_binding.ok_or_else(|| {
             ProtocolError::AuthenticationError("Missing channel binding".to_string())
         })?;
-        let nonce = nonce
-            .ok_or_else(|| ProtocolError::AuthenticationError("Missing nonce".to_string()))?;
-        let proof = proof
-            .ok_or_else(|| ProtocolError::AuthenticationError("Missing proof".to_string()))?;
+        let nonce =
+            nonce.ok_or_else(|| ProtocolError::AuthenticationError("Missing nonce".to_string()))?;
+        let proof =
+            proof.ok_or_else(|| ProtocolError::AuthenticationError("Missing proof".to_string()))?;
 
         // Verify nonce matches
         if nonce != self.server_nonce {
@@ -422,11 +425,13 @@ mod tests {
         let store = UserStore::new();
 
         // Add user with password auth
-        store.add_user(
-            "testuser".to_string(),
-            "testpass".to_string(),
-            &AuthMethod::Password
-        ).await;
+        store
+            .add_user(
+                "testuser".to_string(),
+                "testpass".to_string(),
+                &AuthMethod::Password,
+            )
+            .await;
 
         // Retrieve user
         let user = store.get_user("testuser").await;
@@ -447,16 +452,20 @@ mod tests {
     #[tokio::test]
     async fn test_auth_manager_password() {
         let store = UserStore::new();
-        store.add_user(
-            "testuser".to_string(),
-            "correctpass".to_string(),
-            &AuthMethod::Password
-        ).await;
+        store
+            .add_user(
+                "testuser".to_string(),
+                "correctpass".to_string(),
+                &AuthMethod::Password,
+            )
+            .await;
 
         let manager = AuthManager::new(AuthMethod::Password, store);
 
         // Correct password
-        let result = manager.verify_password("testuser", "correctpass", None).await;
+        let result = manager
+            .verify_password("testuser", "correctpass", None)
+            .await;
         assert!(result.unwrap());
 
         // Wrong password
@@ -474,11 +483,9 @@ mod tests {
         let password = "mypassword";
         let username = "myuser";
 
-        store.add_user(
-            username.to_string(),
-            password.to_string(),
-            &AuthMethod::MD5
-        ).await;
+        store
+            .add_user(username.to_string(), password.to_string(), &AuthMethod::MD5)
+            .await;
 
         let manager = AuthManager::new(AuthMethod::MD5, store);
 
@@ -487,11 +494,15 @@ mod tests {
         let expected_hash = compute_md5_hash(password, username, &salt);
 
         // Verify with correct hash
-        let result = manager.verify_password(username, &expected_hash, Some(&salt)).await;
+        let result = manager
+            .verify_password(username, &expected_hash, Some(&salt))
+            .await;
         assert!(result.unwrap());
 
         // Verify with wrong hash
-        let result = manager.verify_password(username, "md5wronghash", Some(&salt)).await;
+        let result = manager
+            .verify_password(username, "md5wronghash", Some(&salt))
+            .await;
         assert!(!result.unwrap());
     }
 }

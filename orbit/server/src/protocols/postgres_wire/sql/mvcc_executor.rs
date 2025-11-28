@@ -520,7 +520,7 @@ impl MvccSqlExecutor {
             if snapshot.active_xids.contains(&xmax) {
                 return true; // Row still visible, deletion not yet committed
             }
-            
+
             // Deleting transaction is not in active_xids, so it must be committed
             // Therefore, the deletion is visible and the row should not be shown
             return false; // Deleted by a committed transaction
@@ -650,12 +650,15 @@ impl MvccSqlExecutor {
             )));
         }
 
-        let table_schema = schema.unwrap_or_else(|| crate::protocols::postgres_wire::sql::executor::TableSchema {
-            name: name.to_string(),
-            columns: Vec::new(),
-            constraints: Vec::new(),
-            indexes: Vec::new(),
-        });
+        let table_schema =
+            schema.unwrap_or_else(
+                || crate::protocols::postgres_wire::sql::executor::TableSchema {
+                    name: name.to_string(),
+                    columns: Vec::new(),
+                    constraints: Vec::new(),
+                    indexes: Vec::new(),
+                },
+            );
 
         let table = MvccTable {
             name: name.to_string(),

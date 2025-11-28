@@ -42,7 +42,7 @@ pub enum OrbitError {
     #[error("Timeout: {details}")]
     Timeout {
         /// Timeout details
-        details: String
+        details: String,
     },
     /// Internal error
     #[error("Internal error: {0}")]
@@ -57,7 +57,9 @@ impl OrbitError {
 
     /// Create a timeout error
     pub fn timeout(msg: impl Into<String>) -> Self {
-        Self::Timeout { details: msg.into() }
+        Self::Timeout {
+            details: msg.into(),
+        }
     }
 
     /// Create an internal error

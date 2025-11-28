@@ -145,7 +145,8 @@ impl GPUColumnarAnalytics {
             );
             #[cfg(feature = "gpu-acceleration")]
             {
-                self.aggregate_i32_gpu(values, null_bitmap, function).await?
+                self.aggregate_i32_gpu(values, null_bitmap, function)
+                    .await?
             }
             #[cfg(not(feature = "gpu-acceleration"))]
             {
@@ -195,7 +196,8 @@ impl GPUColumnarAnalytics {
             );
             #[cfg(feature = "gpu-acceleration")]
             {
-                self.aggregate_i64_gpu(values, null_bitmap, function).await?
+                self.aggregate_i64_gpu(values, null_bitmap, function)
+                    .await?
             }
             #[cfg(not(feature = "gpu-acceleration"))]
             {
@@ -245,7 +247,8 @@ impl GPUColumnarAnalytics {
             );
             #[cfg(feature = "gpu-acceleration")]
             {
-                self.aggregate_f64_gpu(values, null_bitmap, function).await?
+                self.aggregate_f64_gpu(values, null_bitmap, function)
+                    .await?
             }
             #[cfg(not(feature = "gpu-acceleration"))]
             {
@@ -764,7 +767,11 @@ impl GPUColumnarAnalytics {
                     .reduce(|| (0.0, 0), |(s1, c1), (s2, c2)| (s1 + s2, c1 + c2));
                 AggregationResult {
                     function,
-                    value: if count > 0 { Some(sum / count as f64) } else { None },
+                    value: if count > 0 {
+                        Some(sum / count as f64)
+                    } else {
+                        None
+                    },
                     count,
                 }
             }
@@ -862,7 +869,11 @@ impl GPUColumnarAnalytics {
                 }
                 AggregationResult {
                     function,
-                    value: if count > 0 { Some(sum / count as f64) } else { None },
+                    value: if count > 0 {
+                        Some(sum / count as f64)
+                    } else {
+                        None
+                    },
                     count,
                 }
             }
@@ -940,4 +951,3 @@ mod tests {
         assert_eq!(max_result.value, Some(9.0));
     }
 }
-

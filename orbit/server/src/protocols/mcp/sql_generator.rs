@@ -3,7 +3,9 @@
 //! This module converts natural language query intents into SQL queries
 //! with schema awareness and optimization hints.
 
-use crate::protocols::mcp::nlp::{QueryIntent, SqlOperation, AggregationType, ComparisonOperator, ConditionValue};
+use crate::protocols::mcp::nlp::{
+    AggregationType, ComparisonOperator, ConditionValue, QueryIntent, SqlOperation,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -31,7 +33,9 @@ impl SqlGenerator {
                 aggregation,
                 limit,
                 ordering,
-            } => self.query_builder.build_select(intent, aggregation, limit, ordering),
+            } => self
+                .query_builder
+                .build_select(intent, aggregation, limit, ordering),
             SqlOperation::Insert { mode } => self.query_builder.build_insert(intent, mode),
             SqlOperation::Update { conditional } => {
                 self.query_builder.build_update(intent, *conditional)
@@ -129,11 +133,7 @@ impl QueryBuilder {
             }
         } else {
             // Regular SELECT
-            let columns: Vec<String> = intent
-                .projections
-                .iter()
-                .map(|p| p.name.clone())
-                .collect();
+            let columns: Vec<String> = intent.projections.iter().map(|p| p.name.clone()).collect();
             sql.push_str(&columns.join(", "));
         }
 
@@ -210,9 +210,15 @@ impl QueryBuilder {
         let mut parameters = Vec::new();
 
         for entity in &intent.entities {
-            if matches!(entity.entity_type, crate::protocols::mcp::nlp::EntityType::Column) {
+            if matches!(
+                entity.entity_type,
+                crate::protocols::mcp::nlp::EntityType::Column
+            ) {
                 columns.push(entity.value.clone());
-            } else if matches!(entity.entity_type, crate::protocols::mcp::nlp::EntityType::Value) {
+            } else if matches!(
+                entity.entity_type,
+                crate::protocols::mcp::nlp::EntityType::Value
+            ) {
                 let param_idx = parameters.len() + 1;
                 values.push(format!("${}", param_idx));
                 parameters.push(serde_json::Value::String(entity.value.clone()));
@@ -272,9 +278,9 @@ impl QueryBuilder {
                     ConditionValue::Number(n) => serde_json::Value::Number(
                         serde_json::Number::from_f64(*n).unwrap_or(serde_json::Number::from(0)),
                     ),
-                    ConditionValue::Integer(i) => serde_json::Value::Number(
-                        serde_json::Number::from(*i),
-                    ),
+                    ConditionValue::Integer(i) => {
+                        serde_json::Value::Number(serde_json::Number::from(*i))
+                    }
                     ConditionValue::Boolean(b) => serde_json::Value::Bool(*b),
                     _ => serde_json::Value::String("".to_string()),
                 };
@@ -363,9 +369,21 @@ impl QueryBuilder {
         // Generate a comprehensive analytical query
         let sql = format!(
             "SELECT COUNT(*) as count, AVG({}) as avg, MIN({}) as min, MAX({}) as max FROM {}",
-            intent.projections.first().map(|p| p.name.as_str()).unwrap_or("*"),
-            intent.projections.first().map(|p| p.name.as_str()).unwrap_or("*"),
-            intent.projections.first().map(|p| p.name.as_str()).unwrap_or("*"),
+            intent
+                .projections
+                .first()
+                .map(|p| p.name.as_str())
+                .unwrap_or("*"),
+            intent
+                .projections
+                .first()
+                .map(|p| p.name.as_str())
+                .unwrap_or("*"),
+            intent
+                .projections
+                .first()
+                .map(|p| p.name.as_str())
+                .unwrap_or("*"),
             table_name
         );
 
@@ -374,7 +392,10 @@ impl QueryBuilder {
             parameters: vec![],
             query_type: QueryType::Analysis,
             estimated_complexity: QueryComplexity::High,
-            optimization_hints: vec![OptimizationHint::UseIndex, OptimizationHint::ConsiderPartitioning],
+            optimization_hints: vec![
+                OptimizationHint::UseIndex,
+                OptimizationHint::ConsiderPartitioning,
+            ],
         })
     }
 
@@ -405,20 +426,29 @@ impl QueryBuilder {
             ConditionValue::Integer(i) => serde_json::Value::Number(serde_json::Number::from(*i)),
             ConditionValue::Boolean(b) => serde_json::Value::Bool(*b),
             ConditionValue::Vector(v) => serde_json::Value::Array(
-                v.iter().map(|f| serde_json::Value::Number(
-                    serde_json::Number::from_f64(*f as f64).unwrap_or(serde_json::Number::from(0))
-                )).collect()
+                v.iter()
+                    .map(|f| {
+                        serde_json::Value::Number(
+                            serde_json::Number::from_f64(*f as f64)
+                                .unwrap_or(serde_json::Number::from(0)),
+                        )
+                    })
+                    .collect(),
             ),
             ConditionValue::List(l) => serde_json::Value::Array(
-                l.iter().map(|v| match v {
-                    ConditionValue::String(s) => serde_json::Value::String(s.clone()),
-                    ConditionValue::Number(n) => serde_json::Value::Number(
-                        serde_json::Number::from_f64(*n).unwrap_or(serde_json::Number::from(0)),
-                    ),
-                    ConditionValue::Integer(i) => serde_json::Value::Number(serde_json::Number::from(*i)),
-                    ConditionValue::Boolean(b) => serde_json::Value::Bool(*b),
-                    _ => serde_json::Value::Null,
-                }).collect()
+                l.iter()
+                    .map(|v| match v {
+                        ConditionValue::String(s) => serde_json::Value::String(s.clone()),
+                        ConditionValue::Number(n) => serde_json::Value::Number(
+                            serde_json::Number::from_f64(*n).unwrap_or(serde_json::Number::from(0)),
+                        ),
+                        ConditionValue::Integer(i) => {
+                            serde_json::Value::Number(serde_json::Number::from(*i))
+                        }
+                        ConditionValue::Boolean(b) => serde_json::Value::Bool(*b),
+                        _ => serde_json::Value::Null,
+                    })
+                    .collect(),
             ),
         };
 
@@ -575,4 +605,3 @@ impl std::fmt::Display for SqlGenerationError {
 }
 
 impl std::error::Error for SqlGenerationError {}
-

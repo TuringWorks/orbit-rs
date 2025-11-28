@@ -24,21 +24,23 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use arrow::array::{Array, ArrayRef, Int32Array, Int64Array};
 #[cfg(test)]
 use arrow::array::StringArray;
+use arrow::array::{Array, ArrayRef, Int32Array, Int64Array};
 use arrow::datatypes::{DataType, Field, Schema as ArrowSchema};
 use arrow::record_batch::RecordBatch;
-use iceberg::{Catalog, CatalogBuilder, NamespaceIdent, TableIdent};
-use iceberg::table::Table;
 use iceberg::spec::Schema as IcebergSchema;
-use iceberg_catalog_rest::{RestCatalog, RestCatalogBuilder, REST_CATALOG_PROP_URI, REST_CATALOG_PROP_WAREHOUSE};
+use iceberg::table::Table;
+use iceberg::{Catalog, CatalogBuilder, NamespaceIdent, TableIdent};
+use iceberg_catalog_rest::{
+    RestCatalog, RestCatalogBuilder, REST_CATALOG_PROP_URI, REST_CATALOG_PROP_WAREHOUSE,
+};
 
-use crate::error::{EngineError, EngineResult};
-use crate::storage::{SqlValue, Column, ColumnBatch, NullBitmap};
-use crate::storage::iceberg_ext::{TableMetadataExt, system_time_to_millis};
-use crate::query::{VectorizedExecutor, VectorizedExecutorConfig, AggregateFunction};
 use super::config::StorageBackend;
+use crate::error::{EngineError, EngineResult};
+use crate::query::{AggregateFunction, VectorizedExecutor, VectorizedExecutorConfig};
+use crate::storage::iceberg_ext::{system_time_to_millis, TableMetadataExt};
+use crate::storage::{Column, ColumnBatch, NullBitmap, SqlValue};
 
 /// Iceberg cold tier storage
 ///
@@ -73,14 +75,14 @@ impl IcebergColdStore {
         let table = catalog
             .load_table(&table_ident)
             .await
-            .map_err(|e| EngineError::storage(
-                format!("Failed to load Iceberg table: {}", e)
-            ))?;
+            .map_err(|e| EngineError::storage(format!("Failed to load Iceberg table: {}", e)))?;
 
         Ok(Self {
             table: Arc::new(table),
             table_name: table_name.to_string(),
-            vectorized_executor: VectorizedExecutor::with_config(VectorizedExecutorConfig::default()),
+            vectorized_executor: VectorizedExecutor::with_config(
+                VectorizedExecutorConfig::default(),
+            ),
             created_at: SystemTime::now(),
         })
     }
@@ -88,30 +90,24 @@ impl IcebergColdStore {
     /// Scan table with optional filter
     ///
     /// Uses Iceberg metadata pruning for efficient file selection.
-    pub async fn scan(
-        &self,
-        _filter: Option<&FilterPredicate>,
-    ) -> EngineResult<Vec<RecordBatch>> {
+    pub async fn scan(&self, _filter: Option<&FilterPredicate>) -> EngineResult<Vec<RecordBatch>> {
         // Build Iceberg table scan
-        let scan = self.table.scan()
-            .build()
-            .map_err(|e| EngineError::storage(
-                format!("Failed to build Iceberg scan: {}", e)
-            ))?;
+        let scan =
+            self.table.scan().build().map_err(|e| {
+                EngineError::storage(format!("Failed to build Iceberg scan: {}", e))
+            })?;
 
         // Execute scan and collect Arrow batches
         let mut batches = Vec::new();
-        let mut stream = scan.to_arrow().await
-            .map_err(|e| EngineError::storage(
-                format!("Failed to create Arrow stream: {}", e)
-            ))?;
+        let mut stream = scan
+            .to_arrow()
+            .await
+            .map_err(|e| EngineError::storage(format!("Failed to create Arrow stream: {}", e)))?;
 
         use futures::StreamExt;
         while let Some(batch_result) = stream.next().await {
             let batch = batch_result
-                .map_err(|e| EngineError::storage(
-                    format!("Failed to read Arrow batch: {}", e)
-                ))?;
+                .map_err(|e| EngineError::storage(format!("Failed to read Arrow batch: {}", e)))?;
             batches.push(batch);
         }
 
@@ -144,11 +140,9 @@ impl IcebergColdStore {
 
         // 3. Use vectorized executor for SIMD aggregation (14.8x speedup)
         let column_index = 0; // We converted specific column above
-        let result = self.vectorized_executor.execute_aggregation(
-            &column_batch,
-            column_index,
-            function,
-        )?;
+        let result =
+            self.vectorized_executor
+                .execute_aggregation(&column_batch, column_index, function)?;
 
         Ok(result)
     }
@@ -192,35 +186,45 @@ impl IcebergColdStore {
         let timestamp_ms = system_time_to_millis(timestamp)?;
 
         // 2. Find snapshot at or before timestamp using extension trait
-        let snapshot = self.table
+        let snapshot = self
+            .table
             .metadata()
             .snapshot_by_timestamp_ext(timestamp_ms)?
-            .ok_or_else(|| EngineError::not_found(
-                format!("No snapshot found at or before timestamp: {}", timestamp_ms)
-            ))?;
+            .ok_or_else(|| {
+                EngineError::not_found(format!(
+                    "No snapshot found at or before timestamp: {}",
+                    timestamp_ms
+                ))
+            })?;
 
         // 3. Build scan from historical snapshot
-        let scan = self.table
+        let scan = self
+            .table
             .scan()
             .snapshot_id(snapshot.snapshot_id())
             .build()
-            .map_err(|e| EngineError::storage(
-                format!("Failed to build scan from snapshot {}: {}", snapshot.snapshot_id(), e)
-            ))?;
+            .map_err(|e| {
+                EngineError::storage(format!(
+                    "Failed to build scan from snapshot {}: {}",
+                    snapshot.snapshot_id(),
+                    e
+                ))
+            })?;
 
         // 4. Execute scan and collect Arrow batches
         let mut batches = Vec::new();
-        let mut stream = scan.to_arrow().await
-            .map_err(|e| EngineError::storage(
-                format!("Failed to create Arrow stream from snapshot: {}", e)
-            ))?;
+        let mut stream = scan.to_arrow().await.map_err(|e| {
+            EngineError::storage(format!(
+                "Failed to create Arrow stream from snapshot: {}",
+                e
+            ))
+        })?;
 
         use futures::StreamExt;
         while let Some(batch_result) = stream.next().await {
-            let batch = batch_result
-                .map_err(|e| EngineError::storage(
-                    format!("Failed to read Arrow batch from snapshot: {}", e)
-                ))?;
+            let batch = batch_result.map_err(|e| {
+                EngineError::storage(format!("Failed to read Arrow batch from snapshot: {}", e))
+            })?;
             batches.push(batch);
         }
 
@@ -247,35 +251,41 @@ impl IcebergColdStore {
         _filter: Option<&FilterPredicate>,
     ) -> EngineResult<Vec<RecordBatch>> {
         // Find snapshot by ID using extension trait
-        let snapshot = self.table
+        let snapshot = self
+            .table
             .metadata()
             .snapshot_by_id_ext(snapshot_id)?
-            .ok_or_else(|| EngineError::not_found(
-                format!("Snapshot with ID {} not found", snapshot_id)
-            ))?;
+            .ok_or_else(|| {
+                EngineError::not_found(format!("Snapshot with ID {} not found", snapshot_id))
+            })?;
 
         // Build scan from specified snapshot
-        let scan = self.table
+        let scan = self
+            .table
             .scan()
             .snapshot_id(snapshot.snapshot_id())
             .build()
-            .map_err(|e| EngineError::storage(
-                format!("Failed to build scan from snapshot {}: {}", snapshot_id, e)
-            ))?;
+            .map_err(|e| {
+                EngineError::storage(format!(
+                    "Failed to build scan from snapshot {}: {}",
+                    snapshot_id, e
+                ))
+            })?;
 
         // Execute scan and collect Arrow batches
         let mut batches = Vec::new();
-        let mut stream = scan.to_arrow().await
-            .map_err(|e| EngineError::storage(
-                format!("Failed to create Arrow stream from snapshot: {}", e)
-            ))?;
+        let mut stream = scan.to_arrow().await.map_err(|e| {
+            EngineError::storage(format!(
+                "Failed to create Arrow stream from snapshot: {}",
+                e
+            ))
+        })?;
 
         use futures::StreamExt;
         while let Some(batch_result) = stream.next().await {
-            let batch = batch_result
-                .map_err(|e| EngineError::storage(
-                    format!("Failed to read Arrow batch from snapshot: {}", e)
-                ))?;
+            let batch = batch_result.map_err(|e| {
+                EngineError::storage(format!("Failed to read Arrow batch from snapshot: {}", e))
+            })?;
             batches.push(batch);
         }
 
@@ -301,7 +311,8 @@ impl IcebergColdStore {
     /// # }
     /// ```
     pub fn list_snapshots(&self) -> EngineResult<Vec<(i64, i64)>> {
-        let snapshots = self.table
+        let snapshots = self
+            .table
             .metadata()
             .snapshots_ext()
             .iter()
@@ -315,7 +326,8 @@ impl IcebergColdStore {
     ///
     /// Returns the latest snapshot (most recent commit).
     pub fn current_snapshot(&self) -> EngineResult<Option<(i64, i64)>> {
-        let snapshot = self.table
+        let snapshot = self
+            .table
             .metadata()
             .current_snapshot_ext()?
             .map(|s| (s.snapshot_id(), s.timestamp_ms()));
@@ -407,7 +419,7 @@ impl IcebergColdStore {
         // See HYBRID_ICEBERG_INTEGRATION.md for detailed implementation plan.
 
         Err(EngineError::storage(
-            "Write path not yet implemented - see Phase 3 roadmap".to_string()
+            "Write path not yet implemented - see Phase 3 roadmap".to_string(),
         ))
     }
 
@@ -433,9 +445,7 @@ impl IcebergColdStore {
             .fields()
             .iter()
             .position(|f| f.name() == column_name)
-            .ok_or_else(|| EngineError::storage(
-                format!("Column {} not found", column_name)
-            ))?;
+            .ok_or_else(|| EngineError::storage(format!("Column {} not found", column_name)))?;
 
         // Extract column from all batches
         let mut values = Vec::with_capacity(total_rows);
@@ -447,7 +457,9 @@ impl IcebergColdStore {
 
             match array.data_type() {
                 DataType::Int32 => {
-                    let int_array = array.as_any().downcast_ref::<Int32Array>()
+                    let int_array = array
+                        .as_any()
+                        .downcast_ref::<Int32Array>()
                         .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
                     for i in 0..int_array.len() {
@@ -460,7 +472,9 @@ impl IcebergColdStore {
                     }
                 }
                 DataType::Int64 => {
-                    let int_array = array.as_any().downcast_ref::<Int64Array>()
+                    let int_array = array
+                        .as_any()
+                        .downcast_ref::<Int64Array>()
                         .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
                     for i in 0..int_array.len() {
@@ -473,9 +487,10 @@ impl IcebergColdStore {
                     }
                 }
                 _ => {
-                    return Err(EngineError::storage(
-                        format!("Unsupported data type: {:?}", array.data_type())
-                    ));
+                    return Err(EngineError::storage(format!(
+                        "Unsupported data type: {:?}",
+                        array.data_type()
+                    )));
                 }
             }
 
@@ -502,14 +517,17 @@ pub fn column_batch_to_arrow(batch: &ColumnBatch) -> EngineResult<RecordBatch> {
         return Err(EngineError::storage("No columns to convert"));
     }
 
-    let column_names = batch.column_names.as_ref()
+    let column_names = batch
+        .column_names
+        .as_ref()
         .ok_or_else(|| EngineError::storage("No column names"))?;
 
     let mut fields = Vec::new();
     let mut arrays: Vec<ArrayRef> = Vec::new();
 
     for (col_idx, column) in batch.columns.iter().enumerate() {
-        let column_name = column_names.get(col_idx)
+        let column_name = column_names
+            .get(col_idx)
             .ok_or_else(|| EngineError::storage("Missing column name"))?;
 
         let null_bitmap = &batch.null_bitmaps[col_idx];
@@ -709,10 +727,7 @@ mod tests {
                 Column::Int32(int_values),
                 Column::String(str_values.clone()),
             ],
-            null_bitmaps: vec![
-                NullBitmap::new_all_valid(3),
-                NullBitmap::new_all_valid(3),
-            ],
+            null_bitmaps: vec![NullBitmap::new_all_valid(3), NullBitmap::new_all_valid(3)],
             row_count: 3,
             column_names: Some(vec!["id".to_string(), "name".to_string()]),
         };
@@ -723,13 +738,19 @@ mod tests {
         assert_eq!(arrow_batch.num_columns(), 2);
 
         // Check int column
-        let int_array = arrow_batch.column(0).as_any()
-            .downcast_ref::<Int32Array>().unwrap();
+        let int_array = arrow_batch
+            .column(0)
+            .as_any()
+            .downcast_ref::<Int32Array>()
+            .unwrap();
         assert_eq!(int_array.value(0), 1);
 
         // Check string column
-        let str_array = arrow_batch.column(1).as_any()
-            .downcast_ref::<StringArray>().unwrap();
+        let str_array = arrow_batch
+            .column(1)
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap();
         assert_eq!(str_array.value(0), "a");
     }
 
@@ -746,10 +767,7 @@ mod tests {
 
         let id_array = Arc::new(Int32Array::from(vec![1, 2, 3]));
         let name_array = Arc::new(StringArray::from(vec![Some("a"), None, Some("c")]));
-        let arrow_batch = RecordBatch::try_new(
-            schema,
-            vec![id_array, name_array],
-        ).unwrap();
+        let arrow_batch = RecordBatch::try_new(schema, vec![id_array, name_array]).unwrap();
 
         // Convert to ColumnBatch
         let column_batch = arrow_to_column_batch(&arrow_batch).unwrap();
@@ -784,7 +802,10 @@ mod tests {
 ///
 /// Enables reading from Iceberg back to our columnar format.
 pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
-    use arrow::array::{Array, BooleanArray, Int16Array, Int32Array, Int64Array, Float32Array, Float64Array, StringArray, BinaryArray};
+    use arrow::array::{
+        Array, BinaryArray, BooleanArray, Float32Array, Float64Array, Int16Array, Int32Array,
+        Int64Array, StringArray,
+    };
 
     let num_rows = batch.num_rows();
     let mut columns = Vec::new();
@@ -797,7 +818,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
 
         match array.data_type() {
             DataType::Boolean => {
-                let bool_array = array.as_any()
+                let bool_array = array
+                    .as_any()
                     .downcast_ref::<BooleanArray>()
                     .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
@@ -813,7 +835,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
                 columns.push(Column::Bool(values));
             }
             DataType::Int16 => {
-                let int_array = array.as_any()
+                let int_array = array
+                    .as_any()
                     .downcast_ref::<Int16Array>()
                     .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
@@ -829,7 +852,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
                 columns.push(Column::Int16(values));
             }
             DataType::Int32 => {
-                let int_array = array.as_any()
+                let int_array = array
+                    .as_any()
                     .downcast_ref::<Int32Array>()
                     .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
@@ -845,7 +869,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
                 columns.push(Column::Int32(values));
             }
             DataType::Int64 => {
-                let int_array = array.as_any()
+                let int_array = array
+                    .as_any()
                     .downcast_ref::<Int64Array>()
                     .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
@@ -861,7 +886,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
                 columns.push(Column::Int64(values));
             }
             DataType::Float32 => {
-                let float_array = array.as_any()
+                let float_array = array
+                    .as_any()
                     .downcast_ref::<Float32Array>()
                     .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
@@ -877,7 +903,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
                 columns.push(Column::Float32(values));
             }
             DataType::Float64 => {
-                let float_array = array.as_any()
+                let float_array = array
+                    .as_any()
                     .downcast_ref::<Float64Array>()
                     .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
@@ -893,7 +920,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
                 columns.push(Column::Float64(values));
             }
             DataType::Utf8 => {
-                let str_array = array.as_any()
+                let str_array = array
+                    .as_any()
                     .downcast_ref::<StringArray>()
                     .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
@@ -909,7 +937,8 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
                 columns.push(Column::String(values));
             }
             DataType::Binary => {
-                let bin_array = array.as_any()
+                let bin_array = array
+                    .as_any()
                     .downcast_ref::<BinaryArray>()
                     .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
@@ -925,9 +954,10 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
                 columns.push(Column::Binary(values));
             }
             _ => {
-                return Err(EngineError::storage(
-                    format!("Unsupported Arrow data type: {:?}", array.data_type())
-                ));
+                return Err(EngineError::storage(format!(
+                    "Unsupported Arrow data type: {:?}",
+                    array.data_type()
+                )));
             }
         }
 
@@ -1031,9 +1061,7 @@ pub async fn create_rest_catalog_with_storage(
     let catalog = RestCatalogBuilder::default()
         .load("rest", config)
         .await
-        .map_err(|e| EngineError::storage(
-            format!("Failed to create REST catalog: {}", e)
-        ))?;
+        .map_err(|e| EngineError::storage(format!("Failed to create REST catalog: {}", e)))?;
 
     // Create FileIO and configure it (if the catalog supports it)
     // Note: The FileIO might need to be set separately depending on the catalog implementation

@@ -49,7 +49,7 @@ impl SchemaAnalyzer {
         let mut cache = self.schema_cache.write().unwrap();
         let old_schema = cache.tables.insert(schema.name.clone(), schema.clone());
         cache.last_updated = SystemTime::now();
-        
+
         // Log schema update
         if old_schema.is_some() {
             tracing::debug!("Updated schema for table: {}", schema.name);
@@ -71,9 +71,16 @@ impl SchemaAnalyzer {
     }
 
     /// Get column statistics for a table/column
-    pub fn get_column_statistics(&self, table_name: &str, column_name: &str) -> Option<ColumnStatistics> {
+    pub fn get_column_statistics(
+        &self,
+        table_name: &str,
+        column_name: &str,
+    ) -> Option<ColumnStatistics> {
         let cache = self.schema_cache.read().unwrap();
-        cache.statistics.get(&format!("{}.{}", table_name, column_name)).cloned()
+        cache
+            .statistics
+            .get(&format!("{}.{}", table_name, column_name))
+            .cloned()
     }
 
     /// Discover schema for a table (placeholder - would query Orbit-RS)
@@ -129,7 +136,7 @@ impl SchemaCache {
     pub fn is_valid(&self) -> bool {
         // Cache is valid for 5 minutes
         const CACHE_TTL_SECONDS: u64 = 300;
-        
+
         self.last_updated
             .duration_since(UNIX_EPOCH)
             .ok()
@@ -192,9 +199,14 @@ pub struct ConstraintInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConstraintType {
     PrimaryKey,
-    ForeignKey { referenced_table: String, referenced_column: String },
+    ForeignKey {
+        referenced_table: String,
+        referenced_column: String,
+    },
     Unique,
-    Check { expression: String },
+    Check {
+        expression: String,
+    },
     NotNull,
 }
 
@@ -336,4 +348,3 @@ impl std::fmt::Display for SchemaError {
 }
 
 impl std::error::Error for SchemaError {}
-

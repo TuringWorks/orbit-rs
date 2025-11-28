@@ -229,9 +229,9 @@ impl ExecutionPlanner {
         // Add LIMIT/OFFSET
         if let Some(limit) = select.limit {
             let count = match limit.count {
-                Some(Expression::Literal(crate::protocols::postgres_wire::sql::types::SqlValue::Integer(
-                    n,
-                ))) => Some(n as usize),
+                Some(Expression::Literal(
+                    crate::protocols::postgres_wire::sql::types::SqlValue::Integer(n),
+                )) => Some(n as usize),
                 _ => None,
             };
             let offset = select.offset.map(|n| n as usize);
@@ -288,13 +288,21 @@ impl ExecutionPlanner {
                         _ => None, // Natural and Using joins not fully implemented
                     },
                     join_type: match join_type {
-                        crate::protocols::postgres_wire::sql::ast::JoinType::Inner => JoinType::Inner,
-                        crate::protocols::postgres_wire::sql::ast::JoinType::LeftOuter => JoinType::LeftOuter,
+                        crate::protocols::postgres_wire::sql::ast::JoinType::Inner => {
+                            JoinType::Inner
+                        }
+                        crate::protocols::postgres_wire::sql::ast::JoinType::LeftOuter => {
+                            JoinType::LeftOuter
+                        }
                         crate::protocols::postgres_wire::sql::ast::JoinType::RightOuter => {
                             JoinType::RightOuter
                         }
-                        crate::protocols::postgres_wire::sql::ast::JoinType::FullOuter => JoinType::FullOuter,
-                        crate::protocols::postgres_wire::sql::ast::JoinType::Cross => JoinType::Cross,
+                        crate::protocols::postgres_wire::sql::ast::JoinType::FullOuter => {
+                            JoinType::FullOuter
+                        }
+                        crate::protocols::postgres_wire::sql::ast::JoinType::Cross => {
+                            JoinType::Cross
+                        }
                         _ => JoinType::Inner, // Default for unsupported join types
                     },
                 })

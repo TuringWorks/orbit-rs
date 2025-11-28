@@ -78,10 +78,9 @@ impl MySqlType {
                 scale: None,
             },
             MySqlType::VarChar | MySqlType::VarString | MySqlType::String => SqlType::Text,
-            MySqlType::Blob
-            | MySqlType::TinyBlob
-            | MySqlType::MediumBlob
-            | MySqlType::LongBlob => SqlType::Bytea,
+            MySqlType::Blob | MySqlType::TinyBlob | MySqlType::MediumBlob | MySqlType::LongBlob => {
+                SqlType::Bytea
+            }
             MySqlType::Date => SqlType::Date,
             MySqlType::Time => SqlType::Time {
                 with_timezone: false,

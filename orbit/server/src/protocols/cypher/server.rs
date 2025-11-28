@@ -1,5 +1,7 @@
 //! Cypher/Bolt server with RocksDB persistence
 
+#![cfg(feature = "storage-rocksdb")]
+
 use crate::protocols::cypher::bolt_protocol::BoltProtocolHandler;
 use crate::protocols::cypher::storage::CypherGraphStorage;
 use crate::protocols::error::ProtocolResult;
@@ -15,7 +17,10 @@ pub struct CypherServer {
 
 impl CypherServer {
     /// Create a new Cypher server with storage
-    pub fn new_with_storage(bind_addr: impl Into<String>, storage: Arc<CypherGraphStorage>) -> Self {
+    pub fn new_with_storage(
+        bind_addr: impl Into<String>,
+        storage: Arc<CypherGraphStorage>,
+    ) -> Self {
         Self {
             bind_addr: bind_addr.into(),
             storage,
@@ -38,9 +43,9 @@ impl CypherServer {
             match listener.accept().await {
                 Ok((stream, addr)) => {
                     info!("New Cypher/Bolt connection from {}", addr);
-                    
+
                     let storage = self.storage.clone();
-                    
+
                     // Spawn a task to handle the connection
                     tokio::spawn(async move {
                         let mut handler = BoltProtocolHandler::new(storage);

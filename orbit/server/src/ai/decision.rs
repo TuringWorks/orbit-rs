@@ -2,9 +2,9 @@
 //!
 //! Policy and rule-based decision making for the AI system.
 
-use crate::ai::{SystemState};
 use crate::ai::controller::AIConfig;
 use crate::ai::knowledge::AIKnowledgeBase;
+use crate::ai::SystemState;
 use anyhow::Result as OrbitResult;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -91,10 +91,19 @@ pub struct DecisionPolicy {
 
 #[derive(Debug, Clone)]
 pub enum PolicyCondition {
-    QuerySlow { threshold_ms: u64 },
-    StorageFull { threshold_percent: f64 },
-    ResourceHigh { resource: ResourceType, threshold_percent: f64 },
-    PatternDetected { pattern_type: String },
+    QuerySlow {
+        threshold_ms: u64,
+    },
+    StorageFull {
+        threshold_percent: f64,
+    },
+    ResourceHigh {
+        resource: ResourceType,
+        threshold_percent: f64,
+    },
+    PatternDetected {
+        pattern_type: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -139,10 +148,7 @@ impl DecisionEngine {
             priority_b.cmp(&priority_a)
         });
 
-        debug!(
-            decision_count = decisions.len(),
-            "Generated AI decisions"
-        );
+        debug!(decision_count = decisions.len(), "Generated AI decisions");
 
         Ok(decisions)
     }
@@ -181,7 +187,10 @@ impl DecisionEngine {
                 };
                 Ok(utilization > *threshold_percent)
             }
-            PolicyCondition::ResourceHigh { resource, threshold_percent } => {
+            PolicyCondition::ResourceHigh {
+                resource,
+                threshold_percent,
+            } => {
                 let utilization = match resource {
                     ResourceType::Cpu => state.resource_metrics.cpu_utilization,
                     ResourceType::Memory => state.resource_metrics.memory_utilization,
@@ -266,11 +275,12 @@ impl DecisionEngine {
             },
             DecisionPolicy {
                 name: "Reorganize storage when hot tier full".to_string(),
-                conditions: vec![PolicyCondition::StorageFull { threshold_percent: 85.0 }],
+                conditions: vec![PolicyCondition::StorageFull {
+                    threshold_percent: 85.0,
+                }],
                 action: PolicyAction::ReorganizeStorage,
                 priority: 30,
             },
         ]
     }
 }
-

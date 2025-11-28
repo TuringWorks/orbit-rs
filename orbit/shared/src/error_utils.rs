@@ -29,10 +29,7 @@ mod tests {
     #[test]
     fn test_error_macros() {
         let config_err = config_error!("Missing configuration");
-        assert!(matches!(
-            config_err,
-            OrbitError::ConfigurationError { .. }
-        ));
+        assert!(matches!(config_err, OrbitError::ConfigurationError { .. }));
 
         let io_err = io_error!("File not found", "test.txt");
         assert!(matches!(io_err, OrbitError::IoError { .. }));

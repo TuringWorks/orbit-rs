@@ -1,5 +1,7 @@
 //! AQL/ArangoDB server with RocksDB persistence
 
+#![cfg(feature = "storage-rocksdb")]
+
 use crate::protocols::aql::http_server::AqlHttpServer;
 use crate::protocols::aql::storage::AqlStorage;
 use crate::protocols::error::ProtocolResult;
@@ -28,4 +30,3 @@ impl AqlServer {
         http_server.run().await
     }
 }
-

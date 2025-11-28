@@ -16,7 +16,9 @@ pub struct HashCommands {
 }
 
 impl HashCommands {
-    pub fn new(local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>) -> Self {
+    pub fn new(
+        local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>,
+    ) -> Self {
         // Use provided local_registry
         Self {
             base: BaseCommandHandler::new(local_registry),
@@ -42,7 +44,10 @@ impl HashCommands {
             })?;
 
         let value: Option<String> = serde_json::from_value(result).map_err(|e| {
-            crate::protocols::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR serialization error: {}",
+                e
+            ))
         })?;
 
         debug!("HGET {} {} -> {:?}", key, field, value);
@@ -91,7 +96,10 @@ impl HashCommands {
                 })?;
 
             let was_new: bool = serde_json::from_value(result).map_err(|e| {
-                crate::protocols::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+                crate::protocols::error::ProtocolError::RespError(format!(
+                    "ERR serialization error: {}",
+                    e
+                ))
             })?;
 
             debug!("HSET {} {} {} -> new: {}", key, field, value, was_new);
@@ -121,7 +129,10 @@ impl HashCommands {
             })?;
 
         let pairs: Vec<(String, String)> = serde_json::from_value(result).map_err(|e| {
-            crate::protocols::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR serialization error: {}",
+                e
+            ))
         })?;
 
         let mut resp_result = Vec::new();
@@ -248,7 +259,10 @@ impl HashCommands {
                 })?;
 
             let was_deleted: bool = serde_json::from_value(result).map_err(|e| {
-                crate::protocols::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+                crate::protocols::error::ProtocolError::RespError(format!(
+                    "ERR serialization error: {}",
+                    e
+                ))
             })?;
 
             if was_deleted {
@@ -279,7 +293,10 @@ impl HashCommands {
             })?;
 
         let exists: bool = serde_json::from_value(result).map_err(|e| {
-            crate::protocols::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR serialization error: {}",
+                e
+            ))
         })?;
 
         debug!("HEXISTS {} {} -> {}", key, field, exists);
@@ -304,7 +321,10 @@ impl HashCommands {
             })?;
 
         let keys: Vec<String> = serde_json::from_value(result).map_err(|e| {
-            crate::protocols::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR serialization error: {}",
+                e
+            ))
         })?;
 
         let resp_keys: Vec<RespValue> = keys
@@ -334,7 +354,10 @@ impl HashCommands {
             })?;
 
         let values: Vec<String> = serde_json::from_value(result).map_err(|e| {
-            crate::protocols::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR serialization error: {}",
+                e
+            ))
         })?;
 
         let resp_values: Vec<RespValue> = values
@@ -364,7 +387,10 @@ impl HashCommands {
             })?;
 
         let len: i64 = serde_json::from_value(result).map_err(|e| {
-            crate::protocols::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR serialization error: {}",
+                e
+            ))
         })?;
 
         debug!("HLEN {} -> {}", key, len);
@@ -398,7 +424,10 @@ impl HashCommands {
             })?;
 
         let new_value: i64 = serde_json::from_value(result).map_err(|e| {
-            crate::protocols::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR serialization error: {}",
+                e
+            ))
         })?;
 
         debug!("HINCRBY {} {} {} -> {}", key, field, increment, new_value);

@@ -1,8 +1,8 @@
 use super::consensus::{
     AppendEntriesRequest, AppendEntriesResponse, RaftTransport, VoteRequest, VoteResponse,
 };
-use crate::error::{EngineError, EngineResult};
 use super::NodeId;
+use crate::error::{EngineError, EngineResult};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -399,10 +399,7 @@ mod tests {
     async fn test_grpc_transport_creation() {
         let node_id = "test-node".to_string();
         let mut node_addresses = HashMap::new();
-        node_addresses.insert(
-            "peer-1".to_string(),
-            "http://localhost:50051".to_string(),
-        );
+        node_addresses.insert("peer-1".to_string(), "http://localhost:50051".to_string());
 
         let transport = GrpcRaftTransport::new(
             node_id,
@@ -413,10 +410,7 @@ mod tests {
 
         // Test address update
         transport
-            .update_node_address(
-                "peer-2".to_string(),
-                "http://localhost:50052".to_string(),
-            )
+            .update_node_address("peer-2".to_string(), "http://localhost:50052".to_string())
             .await;
 
         let addresses = transport.node_addresses.read().await;
