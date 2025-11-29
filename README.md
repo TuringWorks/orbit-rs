@@ -400,7 +400,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | **Distributed Transactions** | Complete | 85% | Yes | 270 tests | 2PC, Saga patterns, distributed locks |
 | **Model Context Protocol (MCP)** | Experimental | 15% | No | 44 tests | Basic AI agent integration framework |
 | **Neo4j Cypher Parser** | Active | 15% | No | 18 tests | Basic parser and graph engine structure |
-| **ArangoDB AQL Parser** | Planned | 5% | No | 44 tests | Basic parser structure, not functional |
+| **ArangoDB AQL Parser** | Active | 15% | No | 44 tests | Basic parser and GraphRAG engine structure |
 | **OrbitQL Engine** | Active | 40% | No | 256 tests | Query planning works, optimizer incomplete |
 | **Persistence Layer** | Complete | 85% | Yes | 47+ tests | RocksDB, COW B+Tree, LSM-Tree, Memory, TiKV, Cloud storage |
 | **Kubernetes Integration** | Active | 70% | No | 16 tests | Operator basics, needs production hardening |

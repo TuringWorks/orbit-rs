@@ -39,14 +39,14 @@
 
 - [ ] **Create honest feature matrix**
 
-  ```markdown
+
   | Protocol | Status | Completeness | Production Ready |
   |----------|--------|--------------|------------------|
   | RESP     | Complete | 95%        | Yes             |
   | PostgreSQL| Complete | 85%       | Yes             |
   | Neo4j    | Active   | 15%        | No              |
-  | ArangoDB | Planned  | 5%         | No              |
-  ```
+  | ArangoDB | Active   | 15%        | No              |
+
 
 ---
 

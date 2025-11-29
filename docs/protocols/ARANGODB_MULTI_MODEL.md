@@ -8,6 +8,17 @@ category: protocols
 
 ArangoDB is a multi-model NoSQL database that combines graph, document, and key-value data models in a single system. Orbit-RS will provide full ArangoDB compatibility, allowing applications to leverage the power of multiple data models through a unified query language (AQL) while gaining enhanced scalability, fault tolerance, and performance through Orbit's distributed actor system.
 
+## Current Status
+
+**Status**: ⚠️ **ACTIVE DEVELOPMENT - PARTIAL IMPLEMENTATION**
+**Completion**: ~15%
+
+The ArangoDB compatibility layer is currently under active development. Key components that have been implemented include:
+- **AQL Parser**: Basic parsing support for ArangoDB Query Language.
+- **GraphRAG Engine**: Initial implementation of Graph Retrieval-Augmented Generation features.
+- **Spatial Operations**: Basic geospatial query support.
+- **Data Model**: Core data structures for multi-model support.
+
 ## Planned Features
 
 ###  **Phase 18: ArangoDB Foundation**
