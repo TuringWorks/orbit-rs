@@ -226,7 +226,7 @@ some-crate = { version = "1", default-features = false, features = ["x"] }
 ## 11) Documentation & Examples (MUST)
 - Crate-level `//!` explains purpose, invariants, and a minimal example.
 - Public items have `///` docs; include `# Examples` that compile (`doctest`).
-- Place runnable examples in `examples/`. Keep them building in CI.
+
 - Maintain a `CHANGELOG.md` (Keep a Changelog format).
 
 ---

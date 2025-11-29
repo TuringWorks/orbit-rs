@@ -45,7 +45,7 @@ Natural Language Query endpoints have been successfully integrated into the Orbi
 
 ### Files Created
 
-1. **`examples/rest-api-nl-query.rs`**
+
    - Complete example showing REST API with MCP integration
 
 2. **`docs/development/REST_API_NL_QUERY.md`**

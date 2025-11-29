@@ -320,5 +320,5 @@ The natural language query endpoints are fully integrated with the existing REST
 
 ## Examples
 
-See `examples/rest-api-nl-query.rs` for a complete working example.
+
 

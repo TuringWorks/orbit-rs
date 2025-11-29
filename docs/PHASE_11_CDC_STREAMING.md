@@ -412,7 +412,7 @@ cargo test --package orbit-shared replication
 
 ## Examples
 
-See `examples/cdc-streaming-example.rs` for a comprehensive demonstration of all features:
+
 
 ```bash
 # Note: Example requires proper workspace setup

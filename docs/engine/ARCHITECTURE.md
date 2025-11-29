@@ -534,7 +534,7 @@ let result = adapter.execute_query(
 **See Also:**
 
 - [OrbitQL Integration Guide](ORBITQL.md) - Complete syntax and examples
-- [orbitql_example.rs](../examples/orbitql_example.rs) - Working examples
+
 
 ### Adapter Pattern
 

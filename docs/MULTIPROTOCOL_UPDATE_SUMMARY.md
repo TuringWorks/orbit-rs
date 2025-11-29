@@ -21,9 +21,7 @@ This document summarizes the comprehensive updates made to Orbit-RS to support *
 
 ### **Examples & Demos**
 
-- `examples/multiprotocol-demo/src/main.rs` - **NEW** - Comprehensive demonstration
-- `examples/multiprotocol-demo/Cargo.toml` - **NEW** - Demo dependencies  
-- `examples/multiprotocol-demo/README.md` - **NEW** - Detailed demo documentation
+
 
 ### **Documentation**
 
@@ -112,7 +110,7 @@ curl http://localhost:8080/health
 ### **Run the Interactive Demo**
 
 ```bash
-cd examples/multiprotocol-demo
+
 cargo run
 ```
 
@@ -177,7 +175,7 @@ docs/
 ├── NATIVE_MULTIPROTOCOL.md       # Complete multi-protocol guide
 └── [existing docs remain...]
 
-examples/
+
 ├── multiprotocol-demo/           # NEW - Interactive demonstration
 │   ├── src/main.rs              # Demo implementation
 │   ├── Cargo.toml               # Dependencies
@@ -221,7 +219,7 @@ config/
 3. **Try the demo**:
 
    ```bash
-   cd examples/multiprotocol-demo && cargo run
+
    ```
 
 4. **Read the guides**:

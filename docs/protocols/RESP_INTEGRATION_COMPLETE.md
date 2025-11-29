@@ -65,7 +65,7 @@ let result = actor_ref.invoke("method_name", vec![args...]).await?;
    - Fixed compilation issues with borrowing and cloning
 
 2. **Example Server**:
-   - `examples/resp-server/` continues to work with the new actor integration
+
    - Clients can now perform Redis operations that interact with real Orbit actors
 
 ## Current Status

@@ -89,7 +89,7 @@ Use `OrbitResult<T>` (alias for `Result<T, OrbitError>`) consistently across all
 - **Unit tests**: In `src/` modules using standard `#[cfg(test)]`
 - **Integration tests**: In `tests/tests/integration.rs` with full actor lifecycle
 - **BDD scenarios**: Cucumber tests in `tests/features/` with step definitions
-- **Examples**: Working demos in `examples/` that serve as integration tests
+
 
 ### Observability Integration
 - Structured logging: `tracing` crate with `info!`, `warn!`, `error!` macros

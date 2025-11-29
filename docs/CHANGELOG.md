@@ -215,8 +215,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Systemd service management for Orbit-RS components
 
 - **Configuration Examples and Templates**
-  - Digital Ocean Spaces TOML configuration (`deploy/examples/digitalocean-spaces.toml`)
-  - GPU droplet deployment YAML (`deploy/examples/digitalocean-gpu-deployment.yaml`)
+
   - Environment variable templates for different deployment scenarios
   - Docker Compose configurations for multi-service deployments
 
@@ -242,8 +241,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.github/workflows/digitalocean-deploy.yml` - Complete CI/CD pipeline for Digital Ocean
 - `deploy/scripts/standard-droplet-init.sh` - Standard droplet initialization
 - `deploy/scripts/gpu-droplet-init.sh` - GPU droplet setup with CUDA and drivers
-- `deploy/examples/digitalocean-spaces.toml` - Spaces configuration example
-- `deploy/examples/digitalocean-gpu-deployment.yaml` - GPU deployment configuration
+
 - `docs/deployment/DIGITAL_OCEAN.md` - Comprehensive deployment documentation (4000+ lines)
 
 **Files Modified:**
@@ -429,7 +427,7 @@ This implementation establishes Orbit-RS as a comprehensive machine learning pla
 - `orbit-protocols/src/postgres_wire/sql/` - Complete SQL parser module (12 files, 4000+ lines)
 - `docs/protocols/SQL_PARSER_ARCHITECTURE.md` - Comprehensive architecture documentation  
 - `docs/protocols/DDL_IMPLEMENTATION_SUMMARY.md` - Detailed implementation summary
-- `examples/pgvector-store/` - PostgreSQL+vector compatibility example
+
 
 **Integration Points:**
 

@@ -212,7 +212,7 @@ Orbit-RS is structured as a Rust workspace with the following main crates:
 
 #### Examples and Testing
 
-- **examples/**: Demonstration applications
+
   - Hello World actor example
   - OrbitQL usage examples
   - Time series analytics demo

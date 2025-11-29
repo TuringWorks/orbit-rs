@@ -33,7 +33,7 @@ orbit-rs/
 ├── orbit-benchmarks/             # Performance benchmarks
 ├── orbit-operator/               # Kubernetes operator with custom CRDs
 │
-├── examples/                     # Example applications and demos
+
 │   ├── hello-world/              # Basic actor greeting example
 │   ├── distributed-counter/      # Shared counter with coordination
 │   ├── distributed-transactions/ # Banking transaction example
@@ -380,7 +380,7 @@ orbit-benchmarks/                 # Performance benchmarks (excluded from worksp
 │   ├── run_benchmarks.sh       # Master benchmark runner
 │   ├── analyze_results.py      # Result analysis and reporting
 │   └── README.md               # Script documentation
-├── examples/                    # Example benchmark usage
+
 │   ├── cow_btree_demo.rs
 │   ├── cow_btree_persistence_demo.rs
 │   ├── rocksdb_demo.rs
@@ -411,17 +411,6 @@ orbit-benchmarks/                 # Performance benchmarks (excluded from worksp
 
 ## Supporting Infrastructure
 
-### examples/
-
-**Purpose**: Example applications and integration tests
-
-```text
-examples/
-├── hello-world/               # Basic actor example
-│   ├── Cargo.toml
-│   └── src/
-│       └── main.rs           # Simple greeting actor
-├── distributed-counter/       # Multi-actor coordination
 │   ├── Cargo.toml
 │   └── src/
 │       └── main.rs           # Counter with coordination
@@ -556,7 +545,7 @@ members = [
     "orbit-server",
     "orbit-protocols",
     "orbit-operator",
-    "examples/*"
+
 ]
 
 [workspace.dependencies]

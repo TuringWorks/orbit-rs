@@ -265,7 +265,7 @@ As documented in ADVANCED_FEATURES_IMPLEMENTATION.md:
 4. **Load Balancing** - Client-side load balancing strategies
 5. **Circuit Breaker** - Automatic failure detection and endpoint isolation
 6. **Distributed Tracing** - OpenTelemetry integration
-7. **Examples** - Create `examples/network-layer/` with working demos
+
 
 ## Conclusion
 

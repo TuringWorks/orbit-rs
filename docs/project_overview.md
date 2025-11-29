@@ -74,7 +74,7 @@ orbit-rs/
  orbit-application/        # Application framework
  orbit-server-etcd/        # etcd integration
  orbit-server-prometheus/  # Metrics integration
- examples/                 # 13+ working examples
+
 ```
 
 ### **Protocol Support Matrix**

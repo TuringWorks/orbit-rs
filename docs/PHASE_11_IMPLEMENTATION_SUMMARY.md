@@ -38,7 +38,7 @@ let report = suite.generate_report().await;
 println!("{}", report);
 ```
 
-**Demo**: Complete example available in `examples/benchmarks-demo/`
+
 
 ### 2.  Real-time Data Streaming
 

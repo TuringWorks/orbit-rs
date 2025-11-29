@@ -473,7 +473,7 @@ Comprehensive network layer documentation created:
 
 ## Next Steps
 
-1. **Add Examples:** Create `examples/advanced-transactions/` with working demos
+
 2. **Integration Testing:** Write comprehensive network layer integration tests
 3. **Benchmarking:** Add performance benchmarks for network layer in `benches/`
 4. **TLS/mTLS Support:** Add certificate-based authentication

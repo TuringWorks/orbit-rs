@@ -208,7 +208,7 @@ orbit-rs/
 │       ├── controller.rs
 │       └── resources/
 │
-├── examples/               # Example applications
+
 │   ├── hello-world/       # Basic actor example
 │   ├── distributed-counter/  # Multi-actor coordination
 │   └── tests/

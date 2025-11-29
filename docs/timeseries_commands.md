@@ -571,4 +571,4 @@ Orbit's time series implementation is designed to be a drop-in replacement for R
 
 ---
 
-For more information about Orbit's time series capabilities, see the [Orbit documentation](./README.md) or explore the [examples](./examples/) directory.
+For more information about Orbit's time series capabilities, see the [Orbit documentation](./README.md).

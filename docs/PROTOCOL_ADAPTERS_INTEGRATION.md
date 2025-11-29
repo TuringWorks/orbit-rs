@@ -347,9 +347,6 @@ TLS support is planned for both adapters:
 
 ## Examples
 
-- `examples/cql_server_example.rs` - CQL adapter example
-- `examples/mysql_server_example.rs` - MySQL adapter example
-- `examples/multi_protocol_server.rs` - Multi-protocol server
 
 ## Contributing
 

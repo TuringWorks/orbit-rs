@@ -131,7 +131,7 @@ orbit/engine/
 │   ├── metrics.rs            # Performance metrics
 │   └── lib.rs                # Public API
 │
-├── examples/
+
 │   ├── complete_example.rs       # Full feature showcase
 │   └── protocol_adapters.rs      # Adapter examples
 │

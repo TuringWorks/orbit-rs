@@ -52,7 +52,7 @@ orbit-rs/
 │   ├── application/     # Application framework
 │   ├── server-etcd/     # etcd integration
 │   └── server-prometheus/ # Metrics integration
-├── examples/            # 13+ working examples
+
 ├── scripts/             # Build and startup scripts
 ├── config/              # Configuration files
 └── docs/                # Documentation

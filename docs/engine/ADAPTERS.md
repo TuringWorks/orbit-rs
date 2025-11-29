@@ -576,11 +576,11 @@ mod integration_tests {
 
 ### Complete MongoDB Adapter
 
-See [examples/mongodb_adapter.rs](../examples/mongodb_adapter.rs) for a complete implementation.
+
 
 ### Complete Cassandra Adapter
 
-See [examples/cassandra_adapter.rs](../examples/cassandra_adapter.rs) for a complete implementation.
+
 
 ### GraphQL Adapter
 
@@ -697,8 +697,7 @@ When creating a new adapter:
 
 ## Next Steps
 
-- See [complete_example.rs](../examples/complete_example.rs) for working examples
-- See [protocol_adapters.rs](../examples/protocol_adapters.rs) for PostgreSQL, Redis, and REST adapters
+
 - See [ARCHITECTURE.md](ARCHITECTURE.md) for engine internals
 - See [DEPLOYMENT.md](DEPLOYMENT.md) for production deployment
 

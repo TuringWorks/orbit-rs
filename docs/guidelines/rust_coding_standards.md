@@ -188,7 +188,7 @@ fn main() -> anyhow::Result<()> {
 ## 13) Documentation
 - Crate-level `//!` docs with purpose and examples.
 - Public items must have `///` comments.
-- Runnable examples in `examples/`.
+
 
 ---
 

@@ -656,4 +656,4 @@ GRAPH.EXPLAIN social "MATCH (p:Person) WHERE p.age > 30 RETURN count(p)"
 
 ---
 
-For more information about Orbit's graph database capabilities, see the [Orbit documentation](./README.md) or explore the [examples](./examples/) directory.
+For more information about Orbit's graph database capabilities, see the [Orbit documentation](./README.md).

@@ -130,7 +130,7 @@ WS     /api/v1/ws/events                   # System events
 
 - **Status**: ⏳ Partial
 - **Created**:
-  -  `examples/rest-api-server.rs` - Full REST API example
+
 - **Pending**:
   - ⏳ RESP server example
   - ⏳ Integration tests with real clients
@@ -181,7 +181,7 @@ src/rest/server.rs (200 lines)
 src/rest/websocket.rs (200 lines)
 ```
 
-**examples/** (1 file):
+
 
 ```text
 rest-api-server.rs

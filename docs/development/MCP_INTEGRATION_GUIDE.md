@@ -186,5 +186,5 @@ match server.execute_natural_language_query(query).await {
 
 ## Examples
 
-See `examples/mcp-nlp-example.rs` for a complete working example.
+
 

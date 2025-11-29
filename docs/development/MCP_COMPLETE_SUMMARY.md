@@ -82,7 +82,7 @@ The Orbit-RS MCP Server is **production-ready** with all core features implement
 - Result processing tests
 - Error handling tests
 
-### 10. Production Deployment (`deploy/examples/mcp-server-deployment.yaml` - 250+ lines)
+### 10. Production Deployment
 - Kubernetes deployment configuration
 - Horizontal Pod Autoscaling
 - Health checks and probes
@@ -140,7 +140,7 @@ The Orbit-RS MCP Server is **production-ready** with all core features implement
 
 1. **Deploy to Kubernetes:**
    ```bash
-   kubectl apply -f deploy/examples/mcp-server-deployment.yaml
+
    ```
 
 2. **Configure MCP client:**

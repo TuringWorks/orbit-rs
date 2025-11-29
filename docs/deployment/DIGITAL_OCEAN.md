@@ -170,7 +170,7 @@ Or deploy manually using configuration files:
 
 ```bash
 # Deploy using example configuration
-cp deploy/examples/digitalocean-droplets-config.yaml deploy/config/production.yaml
+
 
 # Edit the configuration
 vim deploy/config/production.yaml

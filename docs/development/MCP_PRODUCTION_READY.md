@@ -83,7 +83,7 @@ cargo test --package orbit-protocols --test mcp_integration_test test_natural_la
 
 ### Kubernetes Deployment
 
-Deployment configuration available at `deploy/examples/mcp-server-deployment.yaml`:
+Deployment configuration available:
 
 **Features:**
 - 3 replicas with rolling updates
@@ -112,7 +112,7 @@ Deployment configuration available at `deploy/examples/mcp-server-deployment.yam
 
 3. **Apply configuration:**
    ```bash
-   kubectl apply -f deploy/examples/mcp-server-deployment.yaml
+
    ```
 
 4. **Verify deployment:**

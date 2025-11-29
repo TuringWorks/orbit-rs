@@ -154,7 +154,7 @@ curl -X POST http://localhost:8080/api/v1/actors \
 **Created**:
 
 - `orbit-protocols/README.md` - Comprehensive documentation
-- `examples/rest-api-server.rs` - Full REST API example with curl commands
+
 
 **README Includes**:
 
@@ -290,7 +290,7 @@ src/rest/server.rs
 src/rest/websocket.rs
 ```
 
-**examples/** (1 file):
+
 
 ```text
 rest-api-server.rs

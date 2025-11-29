@@ -10,7 +10,7 @@
 - ✅ **OpenAPI Documentation**: Endpoints registered in OpenAPI spec
 - ✅ **Error Handling**: Comprehensive error responses
 - ✅ **Performance Metrics**: Processing time tracking
-- ✅ **Example Code**: Working example in `examples/rest-api-nl-query.rs`
+
 - ✅ **Documentation**: Complete API documentation
 
 ### Endpoints
@@ -29,8 +29,7 @@
 ## 🔧 Minor Improvements (Optional)
 
 ### 1. Example File Location
-**Current**: `examples/rest-api-nl-query.rs` (root examples directory)
-**Option**: Could be moved to `examples/standalone/rest-api-nl-query.rs` for consistency
+
 
 **Status**: Works as-is, but could be reorganized for consistency with other examples.
 

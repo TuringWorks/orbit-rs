@@ -426,7 +426,7 @@ WHERE profile->>'active' = 'true';
 |-----------|----------|----------|---------|
 | **Unit Tests** | `/orbit/shared/src/orbitql/mod.rs` | 85% | ✅ Complete |
 | **Integration Tests** | `/orbit/shared/src/orbitql/tests/integration_tests.rs` | 90% | ✅ Complete |
-| **Example Validation** | `/examples/orbitql-example/src/main.rs` | 100% | ✅ Complete |
+
 | **LSP Tests** | `/orbit/shared/src/orbitql/lsp.rs` | 80% | ✅ Complete |
 
 ---

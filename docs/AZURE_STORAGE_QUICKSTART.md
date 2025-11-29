@@ -52,7 +52,7 @@ let batches = cold_store.scan(None).await?;
 1. **Documentation**: `protocols/docs/AZURE_ICEBERG_SETUP.md`
 2. **Implementation Summary**: `protocols/docs/AZURE_IMPLEMENTATION_SUMMARY.md`
 3. **Integration Tests**: `protocols/tests/iceberg_azurite_integration.rs`
-4. **Example Application**: `protocols/examples/azure_iceberg_example.rs`
+
 5. **Storage Config API**: `protocols/src/postgres_wire/sql/execution/storage_config.rs`
 
 ## Running Tests

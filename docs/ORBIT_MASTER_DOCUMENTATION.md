@@ -650,7 +650,7 @@ orbit-rs/
 ├── orbit-protocols/       # Protocol implementations
 ├── orbit-operator/        # Kubernetes operator
 ├── tests/                 # Comprehensive test suite
-├── examples/              # Usage examples and demos
+
 └── docs/                  # Complete documentation
 ```
 
@@ -810,7 +810,7 @@ log_level = "info"
 - **Discord**: Join our development Discord server
 - **GitHub Issues**: Use issue templates for bug reports
 - **Documentation**: Check docs/ directory for detailed guides
-- **Examples**: Review examples/ directory for usage patterns
+
 
 ---
 

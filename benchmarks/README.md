@@ -52,22 +52,6 @@ cargo check --lib  # Validates OrbitQL benchmarks compile correctly
 - **Custom Workloads**: Specialized query patterns and optimization tests
 - **Features**: Query optimization validation, vectorized execution testing, parallel processing benchmarks
 
-## Examples
-
-The crate also includes several examples demonstrating different persistence backends and OrbitQL benchmarks:
-
-```bash
-# Run persistence examples
-cargo run --example cow_btree_demo
-cargo run --example cow_btree_persistence_demo
-cargo run --example rocksdb_demo
-cargo run --example configurable_backends_demo
-
-# Access OrbitQL benchmarks in Rust code
-# use orbit_benchmarks::orbitql::{
-#     BenchmarkFramework, BenchmarkConfig, ComprehensiveBenchmark
-# };
-```
 
 ## Known Issues
 

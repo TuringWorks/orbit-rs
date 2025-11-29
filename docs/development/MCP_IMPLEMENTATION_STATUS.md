@@ -243,7 +243,7 @@ Formatted Response for LLM
 
 **Note**: Framework is ready; actual model loading/inference to be implemented when models are available.
 
-### Production Deployment (`deploy/examples/mcp-server-deployment.yaml`)
+### Production Deployment
 
 **Status**: ✅ Configuration Created
 
@@ -299,7 +299,7 @@ Formatted Response for LLM
 - `orbit/protocols/src/mcp/result_processor.rs` - Result processing and formatting
 - `orbit/protocols/src/mcp/schema.rs` - Schema analysis and caching
 - `orbit/protocols/src/mcp/integration.rs` - Orbit-RS integration layer
-- `examples/mcp-nlp-example.rs` - Example demonstrating NLP to SQL pipeline
+
 - `docs/development/MCP_IMPLEMENTATION_STATUS.md` - This file
 
 ### Modified Files

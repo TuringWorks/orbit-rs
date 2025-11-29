@@ -213,7 +213,7 @@ Main client class for accessing Orbit-RS.
 
 ## Examples
 
-See `orbit-python-client/examples/` for complete examples:
+See `../orbit-python-client/examples/` for complete examples:
 
 - `postgres_example.py` - PostgreSQL usage
 - `redis_example.py` - Redis usage

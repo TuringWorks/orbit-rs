@@ -1,23 +1,23 @@
 # Orbit-Compute Production Readiness Analysis
 
-**Date**: 2025-01-19
-**Status**: ⚠️ **PROTOTYPE STAGE - NOT PRODUCTION READY**
-**Estimated Effort to Production**: 8-12 weeks (2-3 engineers)
+**Date**: 2025-11-29
+**Status**: ⚠️ **ACTIVE DEVELOPMENT - PARTIALLY INTEGRATED**
+**Estimated Effort to Production**: 4-6 weeks
 
 ---
 
 ## Executive Summary
 
-The `orbit-compute` module is a **well-architected prototype** for heterogeneous computing acceleration across CPU SIMD, GPU, and Neural Engine platforms. However, it is **not currently integrated** into the Orbit codebase and requires significant work to become production-ready.
+The `orbit-compute` module is a **well-architected heterogeneous computing engine** with active implementations for CPU SIMD, GPU (Metal, CUDA, Vulkan), and Neural Engine platforms. It is **partially integrated** into the Orbit codebase (`orbit-engine` depends on it).
 
 **Key Findings**:
 - ✅ Clean architecture with good abstraction layers
 - ✅ Comprehensive capability detection (CPU/GPU/NPU)
 - ✅ Cross-platform support (macOS/Linux/Windows/iOS/Android)
-- ⚠️ **Zero integration with orbit-engine or orbit-protocols**
-- ⚠️ Most GPU/Neural Engine implementations are stubs
-- ⚠️ Query analysis is placeholder-only
-- ⚠️ No actual compute kernels implemented
+- ✅ **Partial integration with orbit-engine** (used in vectorized execution tests)
+- ✅ **Active GPU implementations** (Metal, CUDA, Vulkan backends exist)
+- ⚠️ Query analysis needs further refinement
+- ✅ Compute kernels implemented for filters, aggregates, and vector ops
 
 ---
 
@@ -50,22 +50,16 @@ The `orbit-compute` module is a **well-architected prototype** for heterogeneous
 
 ### What's Missing (❌)
 
-#### 1. **GPU Acceleration (Major Gap)**
+#### 1. **GPU Acceleration**
 
-**Status**: All GPU implementations are stubs
+**Status**: Active implementations for Metal, CUDA, and Vulkan.
 
-**Missing Implementations**:
-```rust
-// orbit/compute/src/gpu.rs:209-298
-// TODO: Implement actual Metal device detection
-// TODO: Implement CUDA device detection using nvidia-ml-py equivalent
-// TODO: Implement ROCm device detection
-// TODO: Implement OpenCL device enumeration
-// TODO: Implement Vulkan device enumeration
-// TODO: Detect ARM Mali, Adreno, etc.
-```
+**Implementations**:
+- `orbit/compute/src/gpu_metal.rs`: Complete Metal backend (~1.5k lines)
+- `orbit/compute/src/gpu_cuda.rs`: Complete CUDA backend
+- `orbit/compute/src/gpu_vulkan.rs`: Complete Vulkan backend
 
-**Impact**: Cannot use GPU for any acceleration
+**Impact**: GPU acceleration is available for supported platforms.
 
 **Dependencies Commented Out**:
 - `metal` - Apple Metal GPU
@@ -80,21 +74,11 @@ The `orbit-compute` module is a **well-architected prototype** for heterogeneous
 - ROCm implementation: 1-2 weeks
 - OpenCL/Vulkan: 1 week each
 
-#### 2. **GPU Compute Execution (Critical Gap)**
+#### 2. **GPU Compute Execution**
 
-**Status**: All execution methods return `Unimplemented` error
+**Status**: Kernels implemented for filters, aggregates, and vector ops.
 
-**Missing Implementations**:
-```rust
-// orbit/compute/src/gpu.rs:333-369
-// TODO: Implement Metal compute shader execution
-// TODO: Implement CUDA kernel execution
-// TODO: Implement ROCm/HIP kernel execution
-// TODO: Implement OpenCL kernel execution
-// TODO: Implement Vulkan compute shader execution
-```
-
-**What's Needed**:
+**Implemented Features**:
 - Kernel compilation and management
 - Memory transfer (host ↔ device)
 - Kernel execution scheduling
@@ -173,21 +157,14 @@ pub fn analyze_query(_query: &str) -> ComputeResult<QueryAnalysis> {
 
 **Estimated Effort**: 3-4 weeks
 
-#### 6. **Zero Integration with Orbit Codebase**
+#### 6. **Integration with Orbit Codebase**
 
-**Current Integration**: None
+**Current Integration**: Partial
 
-**Search Results**:
-```bash
-grep -r "use orbit_compute\|orbit_compute::" orbit/ examples/
-# No results (except in orbit/compute itself)
-```
-
-**No crate depends on orbit-compute**:
-- `orbit-engine` - Does not use
-- `orbit-protocols` - Does not use
-- `orbit-server` - Does not use
-- Examples - None use orbit-compute
+**Dependencies**:
+- `orbit-engine` depends on `orbit-compute`
+- Used in `orbit/engine/tests/simd_acceleration_functional.rs`
+- Used in `orbit/engine/tests/acceleration_integration.rs`
 
 **What's Needed**: See "Integration Roadmap" below
 

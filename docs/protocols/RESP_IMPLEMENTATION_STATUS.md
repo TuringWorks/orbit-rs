@@ -218,7 +218,7 @@ cargo test --package orbit-protocols --test resp_integration_tests
 ### 3. Create Example Server
 
 ```rust
-// examples/resp-server.rs
+
 use orbit_server::protocols::RespServer;
 use orbit_client::OrbitClient;
 

@@ -247,7 +247,7 @@ GROUP BY u.id;
 - **Live Queries** - Real-time subscriptions with change notifications
 - **ACID Transactions** - Multi-model transaction support
 
-**[Complete OrbitQL Documentation](orbit/engine/docs/ORBITQL.md)** | **[OrbitQL Examples](orbit/engine/examples/orbitql_example.rs)**
+**[Complete OrbitQL Documentation](orbit/engine/docs/ORBITQL.md)**
 
 ### Manual Installation
 
@@ -379,7 +379,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   - **Statistical Metrics**: Mean, median, std deviation, operations per second
   - **Regression Detection**: Track performance changes over time
   - **Production Ready**: Memory-safe async operations with zero-cost abstractions
-- **Examples Available**: [`examples/benchmarks-demo`](examples/benchmarks-demo/) - Complete demo of benchmarking capabilities
 - **OrbitQL Benchmarks**: TPC-H, TPC-C, TPC-DS, and comprehensive query performance testing available in [`orbit-benchmarks`](orbit-benchmarks/)
 - **Streaming Benchmarks**: CDC event processing, stream windowing, and real-time analytics performance
 
@@ -394,13 +393,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | **Advanced Connection Pooling** | Complete | 90% | Yes | 12 tests | Circuit breakers, health monitoring, load balancing |
 | **Security Patterns** | Complete | 90% | Yes | 5 tests | Rate limiting, attack detection, audit logging |
 | **RESP (Redis) Protocol** | Complete | 95% | Yes | 292 tests | 50+ commands, all data types, redis-cli compatibility |
-| **PostgreSQL Wire Protocol** | Complete | 85% | Yes | 104+ tests | Full SQL DDL/DML with pgvector and RocksDB persistence |
+| **PostgreSQL Wire Protocol** | Complete | 85% | Yes | 104+ tests | Extensive wire protocol support, JSONB, Spatial, Vector ops |
 | **MySQL Wire Protocol** | Complete | 75% | Yes | 15+ tests | MySQL-compatible SQL interface with RocksDB persistence |
 | **CQL (Cassandra) Protocol** | Complete | 70% | Yes | 12+ tests | Cassandra Query Language for wide-column access |
 | **HTTP REST API** | Complete | 90% | Yes | 25+ tests | Web-friendly JSON interface with OpenAPI documentation |
 | **Distributed Transactions** | Complete | 85% | Yes | 270 tests | 2PC, Saga patterns, distributed locks |
 | **Model Context Protocol (MCP)** | Experimental | 15% | No | 44 tests | Basic AI agent integration framework |
-| **Neo4j Cypher Parser** | Planned | 5% | No | 18 tests | Basic parser structure, not functional |
+| **Neo4j Cypher Parser** | Active | 15% | No | 18 tests | Basic parser and graph engine structure |
 | **ArangoDB AQL Parser** | Planned | 5% | No | 44 tests | Basic parser structure, not functional |
 | **OrbitQL Engine** | Active | 40% | No | 256 tests | Query planning works, optimizer incomplete |
 | **Persistence Layer** | Complete | 85% | Yes | 47+ tests | RocksDB, COW B+Tree, LSM-Tree, Memory, TiKV, Cloud storage |
@@ -433,14 +432,6 @@ We welcome contributions! See our **[Development Guide](DEVELOPMENT.md)** for se
 - Performance benchmarking and optimization
 - Kubernetes operator enhancements
 
-**Available Examples:**
-
-- [`examples/server/integrated-server.rs`](examples/server/integrated-server.rs) - Multi-protocol server with all protocols enabled
-- [`examples/server/persistent-redis-server.rs`](examples/server/persistent-redis-server.rs) - Redis server with RocksDB persistence
-- [`examples/pgvector-store/`](examples/pgvector-store/) - PostgreSQL-compatible vector database with pgvector
-- [`examples/multi-protocol-server/`](examples/multi-protocol-server/) - Comprehensive multi-protocol demonstration
-- [`examples/resp-server/`](examples/resp-server/) - Redis RESP protocol server with comprehensive tests
-- [`examples/vector-store/`](examples/vector-store/) - Vector similarity search example
 
 ## License
 

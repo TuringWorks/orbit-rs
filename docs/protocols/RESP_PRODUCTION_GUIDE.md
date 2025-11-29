@@ -202,7 +202,7 @@ export ORBIT_SERVER_URL=http://localhost:50056  # Orbit server URL
 
 ### Custom Configuration
 
-Edit `examples/resp-server/src/main.rs`:
+Edit `orbit-server/src/main.rs`:
 
 ```rust
 // Custom bind address

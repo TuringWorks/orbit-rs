@@ -77,7 +77,7 @@ test result: ok. 9 passed; 0 failed
 
 ### 3. Example (60 lines)
 
-**`examples/postgres-server.rs`**
+
 
 - Standalone PostgreSQL server
 - Usage instructions for psql

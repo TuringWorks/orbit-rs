@@ -146,7 +146,7 @@ The CI/CD pipeline runs the following checks:
 - `orbit-client/` - Client library
 - `orbit-server/` - Main server implementation
 - `orbit-protocols/` - Protocol implementations (RESP, PostgreSQL, etc.)
-- `examples/` - Example applications
+
 - `scripts/` - Development scripts
 - `docs/` - Documentation
 

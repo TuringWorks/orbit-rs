@@ -82,7 +82,7 @@ orbit-benchmarks/
 ├── scripts/                    # Benchmark utilities
 │   ├── run_benchmarks.sh       # Benchmark runner
 │   └── analyze_results.py      # Result analysis
-└── examples/                   # Benchmark usage examples
+
 ```
 
 **Examples**:

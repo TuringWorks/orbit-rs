@@ -706,7 +706,7 @@ Common issues and solutions:
 ## Support and Resources
 
 - Migration tools: `orbit/tools/migrate/`
-- Example scripts: `orbit/examples/migration/`
+
 - Issue tracker: https://github.com/your-org/orbit-rs/issues
 - Community forum: https://community.orbit-rs.dev
 
