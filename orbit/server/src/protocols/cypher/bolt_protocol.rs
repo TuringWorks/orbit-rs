@@ -564,8 +564,14 @@ impl BoltProtocolHandler {
                     // For simplicity, we handle WHERE during MATCH
                     debug!("WHERE clause processing - filtering applied during MATCH");
                 }
-                crate::protocols::cypher::cypher_parser::CypherClause::Delete { variables, detach } => {
-                    debug!("DELETE clause processing: variables={:?}, detach={}", variables, detach);
+                crate::protocols::cypher::cypher_parser::CypherClause::Delete {
+                    variables,
+                    detach,
+                } => {
+                    debug!(
+                        "DELETE clause processing: variables={:?}, detach={}",
+                        variables, detach
+                    );
                 }
                 crate::protocols::cypher::cypher_parser::CypherClause::Set { assignments } => {
                     debug!("SET clause processing: {:?} assignments", assignments.len());
@@ -585,13 +591,31 @@ impl BoltProtocolHandler {
                 crate::protocols::cypher::cypher_parser::CypherClause::Skip { count } => {
                     debug!("SKIP clause processing: {}", count);
                 }
-                crate::protocols::cypher::cypher_parser::CypherClause::Call { procedure, arguments, yield_items } => {
-                    debug!("CALL clause processing: {} with {} args, yield={:?}", procedure, arguments.len(), yield_items);
+                crate::protocols::cypher::cypher_parser::CypherClause::Call {
+                    procedure,
+                    arguments,
+                    yield_items,
+                } => {
+                    debug!(
+                        "CALL clause processing: {} with {} args, yield={:?}",
+                        procedure,
+                        arguments.len(),
+                        yield_items
+                    );
                 }
-                crate::protocols::cypher::cypher_parser::CypherClause::With { items, where_condition } => {
-                    debug!("WITH clause processing: {} items, where={}", items.len(), where_condition.is_some());
+                crate::protocols::cypher::cypher_parser::CypherClause::With {
+                    items,
+                    where_condition,
+                } => {
+                    debug!(
+                        "WITH clause processing: {} items, where={}",
+                        items.len(),
+                        where_condition.is_some()
+                    );
                 }
-                crate::protocols::cypher::cypher_parser::CypherClause::OptionalMatch { pattern: _ } => {
+                crate::protocols::cypher::cypher_parser::CypherClause::OptionalMatch {
+                    pattern: _,
+                } => {
                     debug!("OPTIONAL MATCH clause processing");
                 }
             }

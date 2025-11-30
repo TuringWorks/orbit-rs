@@ -5,12 +5,14 @@
 //! into graph operations.
 
 use crate::protocols::cypher::cypher_parser::{
-    AggregationFunction, Condition, CypherClause, CypherQuery, Expression, NodePattern, OrderByItem,
-    Pattern, PatternElement, PropertyAssignment, RelationshipDirection, RelationshipPattern,
-    RemoveItem, ReturnItem, VariableLengthSpec, WithItem,
+    AggregationFunction, Condition, CypherClause, CypherQuery, Expression, NodePattern,
+    OrderByItem, Pattern, PatternElement, PropertyAssignment, RelationshipDirection,
+    RelationshipPattern, RemoveItem, ReturnItem, VariableLengthSpec, WithItem,
 };
 use crate::protocols::error::{ProtocolError, ProtocolResult};
-use orbit_shared::graph::{Direction, GraphNode, GraphRelationship, GraphStorage, NodeId, RelationshipId};
+use orbit_shared::graph::{
+    Direction, GraphNode, GraphRelationship, GraphStorage, NodeId, RelationshipId,
+};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tracing::{debug, info, instrument, warn};
@@ -93,14 +95,26 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                         .apply_where_filter_nodes(condition, &result_nodes, &context)
                         .await?;
                     result_relationships = self
-                        .apply_where_filter_relationships(condition, &result_relationships, &context)
+                        .apply_where_filter_relationships(
+                            condition,
+                            &result_relationships,
+                            &context,
+                        )
                         .await?;
                 }
                 CypherClause::Delete { variables, detach } => {
-                    self.execute_delete_clause(variables, *detach, &mut context, &mut result_nodes, &mut result_relationships).await?;
+                    self.execute_delete_clause(
+                        variables,
+                        *detach,
+                        &mut context,
+                        &mut result_nodes,
+                        &mut result_relationships,
+                    )
+                    .await?;
                 }
                 CypherClause::Set { assignments } => {
-                    self.execute_set_clause(assignments, &mut context, &mut result_nodes).await?;
+                    self.execute_set_clause(assignments, &mut context, &mut result_nodes)
+                        .await?;
                 }
                 CypherClause::Merge { pattern } => {
                     let (nodes, rels) = self.execute_merge_clause(pattern, &mut context).await?;
@@ -108,7 +122,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     result_relationships.extend(rels);
                 }
                 CypherClause::Remove { items } => {
-                    self.execute_remove_clause(items, &mut context, &mut result_nodes).await?;
+                    self.execute_remove_clause(items, &mut context, &mut result_nodes)
+                        .await?;
                 }
                 CypherClause::Call {
                     procedure,
@@ -117,7 +132,11 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 } => {
                     // Execute procedure call and return result directly
                     let result = self
-                        .execute_call_clause(procedure.clone(), arguments.clone(), yield_items.clone())
+                        .execute_call_clause(
+                            procedure.clone(),
+                            arguments.clone(),
+                            yield_items.clone(),
+                        )
                         .await?;
                     // For CALL statements, return the result immediately
                     // unless there are more clauses that process the data
@@ -129,17 +148,28 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     result_relationships.extend(result.relationships);
                 }
                 // ORDER BY, LIMIT, SKIP already collected in first pass
-                CypherClause::OrderBy { .. } | CypherClause::Limit { .. } | CypherClause::Skip { .. } => {}
+                CypherClause::OrderBy { .. }
+                | CypherClause::Limit { .. }
+                | CypherClause::Skip { .. } => {}
                 CypherClause::With {
                     items,
                     where_condition,
                 } => {
                     // WITH clause: filter and rename variables for next clause
-                    self.execute_with_clause(items, where_condition.as_ref(), &mut context, &mut result_nodes, &mut result_relationships).await?;
+                    self.execute_with_clause(
+                        items,
+                        where_condition.as_ref(),
+                        &mut context,
+                        &mut result_nodes,
+                        &mut result_relationships,
+                    )
+                    .await?;
                 }
                 CypherClause::OptionalMatch { pattern } => {
                     // OPTIONAL MATCH: like MATCH but doesn't filter out non-matches
-                    let (nodes, rels) = self.execute_optional_match_clause(pattern, &mut context).await?;
+                    let (nodes, rels) = self
+                        .execute_optional_match_clause(pattern, &mut context)
+                        .await?;
                     result_nodes.extend(nodes);
                     result_relationships.extend(rels);
                 }
@@ -275,10 +305,12 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
 
             // Check if the variable matches nodes already in our result set
             // This is important for LIMIT/SKIP/ORDER BY which modify the result set
-            let nodes_in_result: Vec<_> = nodes.iter()
+            let nodes_in_result: Vec<_> = nodes
+                .iter()
                 .filter(|n| {
                     // Check if any node matches this variable binding
-                    context.get_nodes(&item.expression)
+                    context
+                        .get_nodes(&item.expression)
                         .map(|bound| bound.iter().any(|b| b.id == n.id))
                         .unwrap_or(false)
                 })
@@ -429,11 +461,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             // Get relationships from current node
             let relationships = self
                 .storage
-                .get_relationships(
-                    &current_node_id,
-                    direction,
-                    rel_types.map(|t| t.to_vec()),
-                )
+                .get_relationships(&current_node_id, direction, rel_types.map(|t| t.to_vec()))
                 .await
                 .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
 
@@ -844,7 +872,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
 
                     // Update in result_nodes
                     if let Some(result_node) = result_nodes.iter_mut().find(|n| n.id == node.id) {
-                        result_node.properties.insert(prop.to_string(), assignment.value.clone());
+                        result_node
+                            .properties
+                            .insert(prop.to_string(), assignment.value.clone());
                     }
                 }
                 // Update context with modified nodes
@@ -852,10 +882,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             }
         }
 
-        info!(
-            assignments_count = assignments.len(),
-            "Executed SET clause"
-        );
+        info!(assignments_count = assignments.len(), "Executed SET clause");
 
         Ok(())
     }
@@ -935,7 +962,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                                 .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
 
                             // Update in result_nodes
-                            if let Some(result_node) = result_nodes.iter_mut().find(|n| n.id == node.id) {
+                            if let Some(result_node) =
+                                result_nodes.iter_mut().find(|n| n.id == node.id)
+                            {
                                 result_node.properties.remove(property);
                             }
                         }
@@ -951,7 +980,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                                 .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
 
                             // Update in result_nodes
-                            if let Some(result_node) = result_nodes.iter_mut().find(|n| n.id == node.id) {
+                            if let Some(result_node) =
+                                result_nodes.iter_mut().find(|n| n.id == node.id)
+                            {
                                 result_node.labels.retain(|l| l != label);
                             }
                         }
@@ -960,10 +991,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             }
         }
 
-        info!(
-            items_count = items.len(),
-            "Executed REMOVE clause"
-        );
+        info!(items_count = items.len(), "Executed REMOVE clause");
 
         Ok(())
     }
@@ -1029,7 +1057,11 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         nodes.sort_by(|a, b| {
             for item in order_items {
                 // Parse expression: might be "property" or "var.property"
-                let prop_name = item.expression.split('.').last().unwrap_or(&item.expression);
+                let prop_name = item
+                    .expression
+                    .split('.')
+                    .last()
+                    .unwrap_or(&item.expression);
 
                 let val_a = a.properties.get(prop_name);
                 let val_b = b.properties.get(prop_name);
@@ -1071,13 +1103,14 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         let mut new_context = ExecutionContext::new();
 
         for item in items {
-            let alias = item.alias.clone().unwrap_or_else(|| {
-                match &item.expression {
+            let alias = item
+                .alias
+                .clone()
+                .unwrap_or_else(|| match &item.expression {
                     Expression::Variable(v) => v.clone(),
                     Expression::PropertyAccess { variable, .. } => variable.clone(),
                     _ => "result".to_string(),
-                }
-            });
+                });
 
             match &item.expression {
                 Expression::Variable(var) => {
@@ -1094,9 +1127,14 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                         new_context.bind_nodes(alias, nodes.clone());
                     }
                 }
-                Expression::Aggregation { function, argument, distinct } => {
+                Expression::Aggregation {
+                    function,
+                    argument,
+                    distinct,
+                } => {
                     // Aggregation - compute and store result
-                    let agg_result = self.evaluate_aggregation(function, argument, *distinct, context)?;
+                    let agg_result =
+                        self.evaluate_aggregation(function, argument, *distinct, context)?;
                     // Store aggregation result in context (as a special marker node)
                     new_context.bind_nodes(alias, vec![agg_result]);
                 }
@@ -1104,7 +1142,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     // COUNT(*) - count all nodes
                     let count = result_nodes.len();
                     let mut count_node = GraphNode::new(Vec::new(), HashMap::new());
-                    count_node.properties.insert("value".to_string(), serde_json::Value::Number(count.into()));
+                    count_node
+                        .properties
+                        .insert("value".to_string(), serde_json::Value::Number(count.into()));
                     new_context.bind_nodes(alias, vec![count_node]);
                 }
                 _ => {}
@@ -1113,8 +1153,12 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
 
         // Apply WHERE condition if present
         if let Some(condition) = where_condition {
-            *result_nodes = self.apply_where_filter_nodes(condition, result_nodes, &new_context).await?;
-            *result_relationships = self.apply_where_filter_relationships(condition, result_relationships, &new_context).await?;
+            *result_nodes = self
+                .apply_where_filter_nodes(condition, result_nodes, &new_context)
+                .await?;
+            *result_relationships = self
+                .apply_where_filter_relationships(condition, result_relationships, &new_context)
+                .await?;
         }
 
         // Replace context with new context
@@ -1153,14 +1197,20 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         let values: Vec<serde_json::Value> = match argument {
             Expression::Variable(var) => {
                 if let Some(nodes) = context.get_nodes(var) {
-                    nodes.iter().map(|n| serde_json::to_value(n).unwrap_or(serde_json::Value::Null)).collect()
+                    nodes
+                        .iter()
+                        .map(|n| serde_json::to_value(n).unwrap_or(serde_json::Value::Null))
+                        .collect()
                 } else {
                     Vec::new()
                 }
             }
             Expression::PropertyAccess { variable, property } => {
                 if let Some(nodes) = context.get_nodes(variable) {
-                    nodes.iter().filter_map(|n| n.properties.get(property).cloned()).collect()
+                    nodes
+                        .iter()
+                        .filter_map(|n| n.properties.get(property).cloned())
+                        .collect()
                 } else {
                     Vec::new()
                 }
@@ -1169,14 +1219,12 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         };
 
         let result = match function {
-            AggregationFunction::Count => {
-                serde_json::Value::Number(values.len().into())
-            }
+            AggregationFunction::Count => serde_json::Value::Number(values.len().into()),
             AggregationFunction::Sum => {
-                let sum: f64 = values.iter()
-                    .filter_map(|v| v.as_f64())
-                    .sum();
-                serde_json::Value::Number(serde_json::Number::from_f64(sum).unwrap_or(serde_json::Number::from(0)))
+                let sum: f64 = values.iter().filter_map(|v| v.as_f64()).sum();
+                serde_json::Value::Number(
+                    serde_json::Number::from_f64(sum).unwrap_or(serde_json::Number::from(0)),
+                )
             }
             AggregationFunction::Avg => {
                 let nums: Vec<f64> = values.iter().filter_map(|v| v.as_f64()).collect();
@@ -1184,26 +1232,32 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     serde_json::Value::Null
                 } else {
                     let avg = nums.iter().sum::<f64>() / nums.len() as f64;
-                    serde_json::Value::Number(serde_json::Number::from_f64(avg).unwrap_or(serde_json::Number::from(0)))
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(avg).unwrap_or(serde_json::Number::from(0)),
+                    )
                 }
             }
-            AggregationFunction::Min => {
-                values.iter()
-                    .filter_map(|v| v.as_f64())
-                    .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                    .map(|n| serde_json::Value::Number(serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0))))
-                    .unwrap_or(serde_json::Value::Null)
-            }
-            AggregationFunction::Max => {
-                values.iter()
-                    .filter_map(|v| v.as_f64())
-                    .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                    .map(|n| serde_json::Value::Number(serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0))))
-                    .unwrap_or(serde_json::Value::Null)
-            }
-            AggregationFunction::Collect => {
-                serde_json::Value::Array(values)
-            }
+            AggregationFunction::Min => values
+                .iter()
+                .filter_map(|v| v.as_f64())
+                .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|n| {
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0)),
+                    )
+                })
+                .unwrap_or(serde_json::Value::Null),
+            AggregationFunction::Max => values
+                .iter()
+                .filter_map(|v| v.as_f64())
+                .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|n| {
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0)),
+                    )
+                })
+                .unwrap_or(serde_json::Value::Null),
+            AggregationFunction::Collect => serde_json::Value::Array(values),
         };
 
         result_node.properties.insert("value".to_string(), result);
@@ -1433,9 +1487,18 @@ mod tests {
         let engine = create_test_engine().await;
 
         // Create nodes with different values
-        engine.execute_query("CREATE (n:Person {name: 'Charlie', age: 30})").await.unwrap();
-        engine.execute_query("CREATE (n:Person {name: 'Alice', age: 25})").await.unwrap();
-        engine.execute_query("CREATE (n:Person {name: 'Bob', age: 35})").await.unwrap();
+        engine
+            .execute_query("CREATE (n:Person {name: 'Charlie', age: 30})")
+            .await
+            .unwrap();
+        engine
+            .execute_query("CREATE (n:Person {name: 'Alice', age: 25})")
+            .await
+            .unwrap();
+        engine
+            .execute_query("CREATE (n:Person {name: 'Bob', age: 35})")
+            .await
+            .unwrap();
 
         // Query with ORDER BY name ASC
         let asc_result = engine
@@ -1457,10 +1520,22 @@ mod tests {
         let engine = create_test_engine().await;
 
         // Create a chain of nodes: A -> B -> C -> D
-        engine.execute_query("CREATE (a:Person {name: 'A'})").await.unwrap();
-        engine.execute_query("CREATE (b:Person {name: 'B'})").await.unwrap();
-        engine.execute_query("CREATE (c:Person {name: 'C'})").await.unwrap();
-        engine.execute_query("CREATE (d:Person {name: 'D'})").await.unwrap();
+        engine
+            .execute_query("CREATE (a:Person {name: 'A'})")
+            .await
+            .unwrap();
+        engine
+            .execute_query("CREATE (b:Person {name: 'B'})")
+            .await
+            .unwrap();
+        engine
+            .execute_query("CREATE (c:Person {name: 'C'})")
+            .await
+            .unwrap();
+        engine
+            .execute_query("CREATE (d:Person {name: 'D'})")
+            .await
+            .unwrap();
 
         // Parse a query with variable-length path (just test parsing)
         let parser = crate::protocols::cypher::cypher_parser::CypherParser::new();
@@ -1480,8 +1555,14 @@ mod tests {
         let engine = create_test_engine().await;
 
         // Create nodes
-        engine.execute_query("CREATE (a:Person {name: 'A'})").await.unwrap();
-        engine.execute_query("CREATE (b:Person {name: 'B'})").await.unwrap();
+        engine
+            .execute_query("CREATE (a:Person {name: 'A'})")
+            .await
+            .unwrap();
+        engine
+            .execute_query("CREATE (b:Person {name: 'B'})")
+            .await
+            .unwrap();
 
         // Parse a query with variable-length path with bounds
         let parser = crate::protocols::cypher::cypher_parser::CypherParser::new();

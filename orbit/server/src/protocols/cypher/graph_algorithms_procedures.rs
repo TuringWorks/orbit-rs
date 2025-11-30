@@ -12,7 +12,9 @@ use std::sync::Arc;
 use tracing::info;
 
 #[cfg(feature = "gpu-graph-traversal")]
-use orbit_compute::graph_traversal::{GPUGraphTraversal, GraphData, NodeProperties, TraversalConfig};
+use orbit_compute::graph_traversal::{
+    GPUGraphTraversal, GraphData, NodeProperties, TraversalConfig,
+};
 #[cfg(feature = "gpu-graph-traversal")]
 use tokio::sync::RwLock;
 
@@ -63,7 +65,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 Ok(())
             }
             Err(e) => {
-                tracing::warn!("Failed to initialize GPU graph traversal: {}, using CPU fallback", e);
+                tracing::warn!(
+                    "Failed to initialize GPU graph traversal: {}, using CPU fallback",
+                    e
+                );
                 Ok(()) // Non-fatal, will use CPU fallback
             }
         }
@@ -194,7 +199,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         }
 
         // CPU fallback implementation
-        self.execute_pagerank_cpu(damping, max_iterations, tolerance).await
+        self.execute_pagerank_cpu(damping, max_iterations, tolerance)
+            .await
     }
 
     /// CPU-based PageRank implementation (fallback)
@@ -355,7 +361,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                         Ok(result) => {
                             info!(
                                 "GPU shortest path completed: {} nodes explored in {}ms (GPU: {})",
-                                result.stats.nodes_explored, result.execution_time_ms, result.used_gpu
+                                result.stats.nodes_explored,
+                                result.execution_time_ms,
+                                result.used_gpu
                             );
 
                             // Get all nodes for ID reverse lookup
@@ -366,11 +374,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                                 .map(|(i, n)| (i as u64, n.id.to_string()))
                                 .collect();
 
-                            let columns = vec![
-                                "path".to_string(),
-                                "length".to_string(),
-                                "cost".to_string(),
-                            ];
+                            let columns =
+                                vec!["path".to_string(), "length".to_string(), "cost".to_string()];
 
                             if result.paths.is_empty() {
                                 return Ok(QueryResult {
@@ -416,7 +421,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         }
 
         // CPU fallback implementation
-        self.execute_shortest_path_cpu(&from_id, &to_id, weighted).await
+        self.execute_shortest_path_cpu(&from_id, &to_id, weighted)
+            .await
     }
 
     /// CPU-based shortest path implementation (fallback)
@@ -431,8 +437,11 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         let relationships = self.get_all_relationships().await?;
 
         // Build node index
-        let node_index: HashMap<&str, usize> =
-            nodes.iter().enumerate().map(|(i, n)| (n.id.as_str(), i)).collect();
+        let node_index: HashMap<&str, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.as_str(), i))
+            .collect();
         let n = nodes.len();
 
         let source = node_index.get(from_id).copied();
@@ -508,11 +517,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         }
 
         // Reconstruct path
-        let columns = vec![
-            "path".to_string(),
-            "length".to_string(),
-            "cost".to_string(),
-        ];
+        let columns = vec!["path".to_string(), "length".to_string(), "cost".to_string()];
 
         if dist[target].is_infinite() {
             return Ok(QueryResult {
@@ -642,14 +647,16 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         start_id: &str,
         max_depth: usize,
     ) -> ProtocolResult<QueryResult> {
-
         // Get all nodes and relationships
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
 
         // Build node index and adjacency
-        let node_index: HashMap<&str, usize> =
-            nodes.iter().enumerate().map(|(i, n)| (n.id.as_str(), i)).collect();
+        let node_index: HashMap<&str, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.as_str(), i))
+            .collect();
         let n = nodes.len();
 
         let start = node_index.get(start_id).copied();
@@ -741,7 +748,11 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         let relationships = self.get_all_relationships().await?;
 
         // Build node index and adjacency
-        let node_index: HashMap<&str, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id.as_str(), i)).collect();
+        let node_index: HashMap<&str, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.as_str(), i))
+            .collect();
         let n = nodes.len();
 
         let start = node_index.get(start_id.as_str()).copied();
@@ -964,12 +975,18 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
     }
 
     /// Execute orbit.graph.connectedComponents procedure
-    async fn execute_connected_components(&self, _args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+    async fn execute_connected_components(
+        &self,
+        _args: &[JsonValue],
+    ) -> ProtocolResult<QueryResult> {
         self.execute_community_detection(&[]).await
     }
 
     /// Execute orbit.graph.betweennessCentrality procedure
-    async fn execute_betweenness_centrality(&self, _args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+    async fn execute_betweenness_centrality(
+        &self,
+        _args: &[JsonValue],
+    ) -> ProtocolResult<QueryResult> {
         // Get all nodes and relationships
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
@@ -984,7 +1001,11 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         }
 
         // Build node index and adjacency
-        let node_index: HashMap<&str, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id.as_str(), i)).collect();
+        let node_index: HashMap<&str, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.as_str(), i))
+            .collect();
         let n = nodes.len();
 
         let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
@@ -1064,7 +1085,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
     }
 
     /// Execute orbit.graph.closenessCentrality procedure
-    async fn execute_closeness_centrality(&self, _args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+    async fn execute_closeness_centrality(
+        &self,
+        _args: &[JsonValue],
+    ) -> ProtocolResult<QueryResult> {
         // Get all nodes and relationships
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
@@ -1078,7 +1102,11 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             });
         }
 
-        let node_index: HashMap<&str, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id.as_str(), i)).collect();
+        let node_index: HashMap<&str, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.as_str(), i))
+            .collect();
         let n = nodes.len();
 
         let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
@@ -1161,8 +1189,12 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         let mut out_degree: HashMap<String, usize> = HashMap::new();
 
         for rel in &relationships {
-            *out_degree.entry(rel.start_node.to_string().clone()).or_insert(0) += 1;
-            *in_degree.entry(rel.end_node.to_string().clone()).or_insert(0) += 1;
+            *out_degree
+                .entry(rel.start_node.to_string().clone())
+                .or_insert(0) += 1;
+            *in_degree
+                .entry(rel.end_node.to_string().clone())
+                .or_insert(0) += 1;
         }
 
         let columns = vec![
@@ -1220,7 +1252,11 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             });
         }
 
-        let node_index: HashMap<&str, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id.as_str(), i)).collect();
+        let node_index: HashMap<&str, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.as_str(), i))
+            .collect();
         let n = nodes.len();
 
         // Build adjacency set for O(1) lookup
@@ -1373,7 +1409,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
     /// Build weighted graph data for algorithms like Dijkstra
     #[cfg(feature = "gpu-graph-traversal")]
-    async fn build_weighted_graph_data(&self) -> ProtocolResult<(GraphData, HashMap<String, usize>)> {
+    async fn build_weighted_graph_data(
+        &self,
+    ) -> ProtocolResult<(GraphData, HashMap<String, usize>)> {
         let (mut graph_data, node_index) = self.build_graph_data().await?;
 
         // Ensure edge weights are present (default to 1.0 if not)
@@ -1389,7 +1427,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         // Scan all known labels
         for label in &self.known_labels {
-            let nodes = self.storage.find_nodes_by_label(label, None, None).await
+            let nodes = self
+                .storage
+                .find_nodes_by_label(label, None, None)
+                .await
                 .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
             all_nodes.extend(nodes);
         }
@@ -1408,7 +1449,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         let mut seen = HashSet::new();
 
         for node in &nodes {
-            let rels = self.storage
+            let rels = self
+                .storage
                 .get_relationships(&node.id, Direction::Both, None)
                 .await
                 .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
@@ -1454,17 +1496,41 @@ mod tests {
 
         // Create nodes using the trait method signature: create_node(labels, properties) -> GraphNode
         let props: HashMap<String, serde_json::Value> = HashMap::new();
-        let n1 = storage.create_node(vec!["Person".to_string()], props.clone()).await.unwrap();
-        let n2 = storage.create_node(vec!["Person".to_string()], props.clone()).await.unwrap();
-        let n3 = storage.create_node(vec!["Person".to_string()], props.clone()).await.unwrap();
-        let n4 = storage.create_node(vec!["Person".to_string()], props.clone()).await.unwrap();
+        let n1 = storage
+            .create_node(vec!["Person".to_string()], props.clone())
+            .await
+            .unwrap();
+        let n2 = storage
+            .create_node(vec!["Person".to_string()], props.clone())
+            .await
+            .unwrap();
+        let n3 = storage
+            .create_node(vec!["Person".to_string()], props.clone())
+            .await
+            .unwrap();
+        let n4 = storage
+            .create_node(vec!["Person".to_string()], props.clone())
+            .await
+            .unwrap();
 
         // Create relationships: n1-n2, n1-n3, n2-n3, n3-n4
         // Signature: create_relationship(&start_node, &end_node, rel_type, properties)
-        storage.create_relationship(&n1.id, &n2.id, "KNOWS".to_string(), props.clone()).await.unwrap();
-        storage.create_relationship(&n1.id, &n3.id, "KNOWS".to_string(), props.clone()).await.unwrap();
-        storage.create_relationship(&n2.id, &n3.id, "KNOWS".to_string(), props.clone()).await.unwrap();
-        storage.create_relationship(&n3.id, &n4.id, "KNOWS".to_string(), props).await.unwrap();
+        storage
+            .create_relationship(&n1.id, &n2.id, "KNOWS".to_string(), props.clone())
+            .await
+            .unwrap();
+        storage
+            .create_relationship(&n1.id, &n3.id, "KNOWS".to_string(), props.clone())
+            .await
+            .unwrap();
+        storage
+            .create_relationship(&n2.id, &n3.id, "KNOWS".to_string(), props.clone())
+            .await
+            .unwrap();
+        storage
+            .create_relationship(&n3.id, &n4.id, "KNOWS".to_string(), props)
+            .await
+            .unwrap();
 
         storage
     }

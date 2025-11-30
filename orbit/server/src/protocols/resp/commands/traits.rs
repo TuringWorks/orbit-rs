@@ -3,8 +3,8 @@
 use crate::protocols::resp::simple_local::SimpleLocalRegistry;
 use crate::protocols::{error::ProtocolResult, resp::RespValue};
 use async_trait::async_trait;
-use std::sync::Arc;
 use orbit_client::OrbitClient;
+use std::sync::Arc;
 
 /// Common trait for all command handlers
 #[async_trait]

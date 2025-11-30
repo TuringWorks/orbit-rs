@@ -1,9 +1,9 @@
 //! GRU Neural Network implementation.
 
-use async_trait::async_trait;
-use ndarray::{Array1, Array2, Axis};
 use crate::error::{MLError, Result};
 use crate::neural_networks::{NetworkArchitecture, NeuralNetwork, Optimizer};
+use async_trait::async_trait;
+use ndarray::{Array1, Array2, Axis};
 use rand::distributions::Uniform;
 use rand::Rng;
 use serde::{Deserialize, Serialize};

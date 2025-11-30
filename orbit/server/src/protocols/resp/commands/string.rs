@@ -88,7 +88,10 @@ impl StringCommands {
                 .actor_reference::<crate::protocols::resp::actors::KeyValueActor>(orbit_key)
                 .await
             {
-                match actor_ref.invoke::<Option<String>>("get_value", vec![]).await {
+                match actor_ref
+                    .invoke::<Option<String>>("get_value", vec![])
+                    .await
+                {
                     Ok(remote_value) => {
                         value = remote_value;
                         if value.is_some() {

@@ -373,9 +373,16 @@ impl GraphActor {
                     estimated_cost += step.estimated_cost;
                     steps.push(step);
                 }
-                crate::protocols::cypher::cypher_parser::CypherClause::Delete { variables, detach } => {
+                crate::protocols::cypher::cypher_parser::CypherClause::Delete {
+                    variables,
+                    detach,
+                } => {
                     let step = PlanStep {
-                        operation: if *detach { "DetachDelete".to_string() } else { "Delete".to_string() },
+                        operation: if *detach {
+                            "DetachDelete".to_string()
+                        } else {
+                            "Delete".to_string()
+                        },
                         description: format!("Delete {} variables", variables.len()),
                         estimated_rows: variables.len() as u64,
                         estimated_cost: 8.0,
@@ -478,7 +485,11 @@ impl GraphActor {
                     items,
                     where_condition,
                 } => {
-                    let where_desc = if where_condition.is_some() { " with filter" } else { "" };
+                    let where_desc = if where_condition.is_some() {
+                        " with filter"
+                    } else {
+                        ""
+                    };
                     let step = PlanStep {
                         operation: "With".to_string(),
                         description: format!("Pass through {} items{}", items.len(), where_desc),
@@ -489,7 +500,9 @@ impl GraphActor {
                     estimated_cost += step.estimated_cost;
                     steps.push(step);
                 }
-                crate::protocols::cypher::cypher_parser::CypherClause::OptionalMatch { pattern } => {
+                crate::protocols::cypher::cypher_parser::CypherClause::OptionalMatch {
+                    pattern,
+                } => {
                     let step = PlanStep {
                         operation: "OptionalMatch".to_string(),
                         description: format!("Optional scan nodes matching pattern: {pattern:?}"),

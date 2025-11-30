@@ -147,184 +147,186 @@ impl ProcedureInterpreter {
         &'a self,
         stmt: &'a Statement,
         scope: &'a mut SymbolTable,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = EngineResult<Option<Value>>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = EngineResult<Option<Value>>> + Send + 'a>>
+    {
         Box::pin(async move {
-        match stmt {
-            Statement::Declaration {
-                name,
-                type_name: _,
-                default_value,
-            } => {
-                let value = if let Some(expr) = default_value {
-                    self.evaluate_expression(expr, scope).await?
-                } else {
-                    Value::Null
-                };
-                scope.define(name.clone(), value);
-                Ok(None)
-            }
-            Statement::Assignment { name, value } => {
-                let val = self.evaluate_expression(value, scope).await?;
-                scope.set(name.clone(), val);
-                Ok(None)
-            }
-            Statement::If {
-                condition,
-                then_block,
-                else_block,
-            } => {
-                let cond_val = self.evaluate_expression(condition, scope).await?;
-                let is_true = match cond_val {
-                    Value::Boolean(b) => b,
-                    _ => {
-                        return Err(EngineError::ExecutionError(
-                            "Condition must be boolean".to_string(),
-                        ))
-                    }
-                };
-
-                if is_true {
-                    self.execute_block(then_block, scope).await.map(Some)
-                } else if let Some(else_blk) = else_block {
-                    self.execute_block(else_blk, scope).await.map(Some)
-                } else {
+            match stmt {
+                Statement::Declaration {
+                    name,
+                    type_name: _,
+                    default_value,
+                } => {
+                    let value = if let Some(expr) = default_value {
+                        self.evaluate_expression(expr, scope).await?
+                    } else {
+                        Value::Null
+                    };
+                    scope.define(name.clone(), value);
                     Ok(None)
                 }
-            }
-            Statement::Return { value } => {
-                let ret_val = if let Some(expr) = value {
-                    self.evaluate_expression(expr, scope).await?
-                } else {
-                    Value::Null
-                };
-                Ok(Some(ret_val))
-            }
-            Statement::Loop { body } => {
-                // Infinite loop - must be terminated by a RETURN statement
-                // In PL/pgSQL, loops can also be terminated by EXIT, but we don't support that yet
-                const MAX_ITERATIONS: usize = 100_000;
-                let mut iteration = 0;
-                loop {
-                    iteration += 1;
-                    if iteration > MAX_ITERATIONS {
-                        return Err(EngineError::ExecutionError(
-                            "Loop exceeded maximum iterations (possible infinite loop)".to_string(),
-                        ));
-                    }
-
-                    let result = self.execute_block(body, scope).await?;
-                    // If block returns a value (via RETURN), propagate it
-                    if result != Value::Null {
-                        return Ok(Some(result));
-                    }
+                Statement::Assignment { name, value } => {
+                    let val = self.evaluate_expression(value, scope).await?;
+                    scope.set(name.clone(), val);
+                    Ok(None)
                 }
-            }
-            Statement::While { condition, body } => {
-                const MAX_ITERATIONS: usize = 100_000;
-                let mut iteration = 0;
-                loop {
-                    iteration += 1;
-                    if iteration > MAX_ITERATIONS {
-                        return Err(EngineError::ExecutionError(
-                            "While loop exceeded maximum iterations (possible infinite loop)"
-                                .to_string(),
-                        ));
-                    }
-
-                    // Evaluate condition
+                Statement::If {
+                    condition,
+                    then_block,
+                    else_block,
+                } => {
                     let cond_val = self.evaluate_expression(condition, scope).await?;
                     let is_true = match cond_val {
                         Value::Boolean(b) => b,
-                        Value::Null => false, // NULL is falsy in loop conditions
                         _ => {
                             return Err(EngineError::ExecutionError(
-                                "While condition must be boolean".to_string(),
+                                "Condition must be boolean".to_string(),
                             ))
                         }
                     };
 
-                    if !is_true {
-                        break;
-                    }
-
-                    // Execute body
-                    let result = self.execute_block(body, scope).await?;
-                    // If block returns a value (via RETURN), propagate it
-                    if result != Value::Null {
-                        return Ok(Some(result));
-                    }
-                }
-                Ok(None)
-            }
-            Statement::Raise { level, message } => {
-                // Handle RAISE statements
-                match level.to_uppercase().as_str() {
-                    "NOTICE" | "INFO" | "DEBUG" | "LOG" | "WARNING" => {
-                        // In a real implementation, we'd log this appropriately
-                        // For now, we just continue execution
-                        tracing::info!("RAISE {}: {}", level, message);
-                        Ok(None)
-                    }
-                    "EXCEPTION" | "ERROR" => {
-                        // RAISE EXCEPTION terminates execution with an error
-                        Err(EngineError::ExecutionError(format!(
-                            "RAISE {}: {}",
-                            level, message
-                        )))
-                    }
-                    _ => {
-                        tracing::warn!("Unknown RAISE level {}: {}", level, message);
+                    if is_true {
+                        self.execute_block(then_block, scope).await.map(Some)
+                    } else if let Some(else_blk) = else_block {
+                        self.execute_block(else_blk, scope).await.map(Some)
+                    } else {
                         Ok(None)
                     }
                 }
-            }
-            Statement::Sql { query, params: _ } => {
-                // Execute SQL via query engine
-                // Note: We currently ignore params in this MVP integration
-                // In a real implementation, we'd bind params to the query
+                Statement::Return { value } => {
+                    let ret_val = if let Some(expr) = value {
+                        self.evaluate_expression(expr, scope).await?
+                    } else {
+                        Value::Null
+                    };
+                    Ok(Some(ret_val))
+                }
+                Statement::Loop { body } => {
+                    // Infinite loop - must be terminated by a RETURN statement
+                    // In PL/pgSQL, loops can also be terminated by EXIT, but we don't support that yet
+                    const MAX_ITERATIONS: usize = 100_000;
+                    let mut iteration = 0;
+                    loop {
+                        iteration += 1;
+                        if iteration > MAX_ITERATIONS {
+                            return Err(EngineError::ExecutionError(
+                                "Loop exceeded maximum iterations (possible infinite loop)"
+                                    .to_string(),
+                            ));
+                        }
 
-                // Parse query string into Query struct (simplified)
-                // For MVP, we assume the query string IS the table name for a simple scan
-                // or we need a proper SQL parser here.
-                // Since we don't have a SQL parser exposed here, we'll assume the query string
-                // is a simple "SELECT * FROM table" and extract the table name.
+                        let result = self.execute_block(body, scope).await?;
+                        // If block returns a value (via RETURN), propagate it
+                        if result != Value::Null {
+                            return Ok(Some(result));
+                        }
+                    }
+                }
+                Statement::While { condition, body } => {
+                    const MAX_ITERATIONS: usize = 100_000;
+                    let mut iteration = 0;
+                    loop {
+                        iteration += 1;
+                        if iteration > MAX_ITERATIONS {
+                            return Err(EngineError::ExecutionError(
+                                "While loop exceeded maximum iterations (possible infinite loop)"
+                                    .to_string(),
+                            ));
+                        }
 
-                let table_name = if query.to_uppercase().starts_with("SELECT * FROM ") {
-                    query[14..].trim().to_string()
-                } else {
-                    query.clone()
-                };
+                        // Evaluate condition
+                        let cond_val = self.evaluate_expression(condition, scope).await?;
+                        let is_true = match cond_val {
+                            Value::Boolean(b) => b,
+                            Value::Null => false, // NULL is falsy in loop conditions
+                            _ => {
+                                return Err(EngineError::ExecutionError(
+                                    "While condition must be boolean".to_string(),
+                                ))
+                            }
+                        };
 
-                let query_obj = Query {
-                    table: table_name,
-                    projection: None,
-                    filter: None,
-                    limit: None,
-                    offset: None,
-                };
+                        if !is_true {
+                            break;
+                        }
 
-                let result = self.query_executor.execute(query_obj).await?;
+                        // Execute body
+                        let result = self.execute_block(body, scope).await?;
+                        // If block returns a value (via RETURN), propagate it
+                        if result != Value::Null {
+                            return Ok(Some(result));
+                        }
+                    }
+                    Ok(None)
+                }
+                Statement::Raise { level, message } => {
+                    // Handle RAISE statements
+                    match level.to_uppercase().as_str() {
+                        "NOTICE" | "INFO" | "DEBUG" | "LOG" | "WARNING" => {
+                            // In a real implementation, we'd log this appropriately
+                            // For now, we just continue execution
+                            tracing::info!("RAISE {}: {}", level, message);
+                            Ok(None)
+                        }
+                        "EXCEPTION" | "ERROR" => {
+                            // RAISE EXCEPTION terminates execution with an error
+                            Err(EngineError::ExecutionError(format!(
+                                "RAISE {}: {}",
+                                level, message
+                            )))
+                        }
+                        _ => {
+                            tracing::warn!("Unknown RAISE level {}: {}", level, message);
+                            Ok(None)
+                        }
+                    }
+                }
+                Statement::Sql { query, params: _ } => {
+                    // Execute SQL via query engine
+                    // Note: We currently ignore params in this MVP integration
+                    // In a real implementation, we'd bind params to the query
 
-                // Convert QueryResult to Value
-                match result {
-                    QueryResult::Aggregate(value) => Ok(Some(Self::sql_value_to_value(value))),
-                    QueryResult::Rows(rows) => {
-                        // Return first value of first row for now (scalar context)
-                        if let Some(first_row) = rows.first() {
-                            if let Some((_, first_val)) = first_row.iter().next() {
-                                Ok(Some(Self::sql_value_to_value(first_val.clone())))
+                    // Parse query string into Query struct (simplified)
+                    // For MVP, we assume the query string IS the table name for a simple scan
+                    // or we need a proper SQL parser here.
+                    // Since we don't have a SQL parser exposed here, we'll assume the query string
+                    // is a simple "SELECT * FROM table" and extract the table name.
+
+                    let table_name = if query.to_uppercase().starts_with("SELECT * FROM ") {
+                        query[14..].trim().to_string()
+                    } else {
+                        query.clone()
+                    };
+
+                    let query_obj = Query {
+                        table: table_name,
+                        projection: None,
+                        filter: None,
+                        limit: None,
+                        offset: None,
+                    };
+
+                    let result = self.query_executor.execute(query_obj).await?;
+
+                    // Convert QueryResult to Value
+                    match result {
+                        QueryResult::Aggregate(value) => Ok(Some(Self::sql_value_to_value(value))),
+                        QueryResult::Rows(rows) => {
+                            // Return first value of first row for now (scalar context)
+                            if let Some(first_row) = rows.first() {
+                                if let Some((_, first_val)) = first_row.iter().next() {
+                                    Ok(Some(Self::sql_value_to_value(first_val.clone())))
+                                } else {
+                                    Ok(Some(Value::Null))
+                                }
                             } else {
                                 Ok(Some(Value::Null))
                             }
-                        } else {
-                            Ok(Some(Value::Null))
                         }
+                        QueryResult::ColumnBatch(_) => Ok(Some(Value::Null)), // TODO: Handle column batch
+                        QueryResult::Empty => Ok(Some(Value::Null)),
                     }
-                    QueryResult::ColumnBatch(_) => Ok(Some(Value::Null)), // TODO: Handle column batch
-                    QueryResult::Empty => Ok(Some(Value::Null)),
                 }
             }
-        }
         })
     }
 

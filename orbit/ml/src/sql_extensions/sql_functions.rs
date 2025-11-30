@@ -191,9 +191,8 @@ impl SqlFunctionHandler {
 
         // Convert to Array2 (batch size 1)
         let input_len = features.len();
-        let input = Array2::from_shape_vec((1, input_len), features).map_err(|e| {
-            MLError::invalid_input(format!("Failed to create input tensor: {}", e))
-        })?;
+        let input = Array2::from_shape_vec((1, input_len), features)
+            .map_err(|e| MLError::invalid_input(format!("Failed to create input tensor: {}", e)))?;
 
         // Run inference
         let output = self.registry.predict(&name, &input).await?;
@@ -258,9 +257,8 @@ impl SqlFunctionHandler {
         let rows = input_vec.len();
         let cols = input_vec[0].len();
         let input_flat: Vec<f64> = input_vec.into_iter().flatten().collect();
-        let input = Array2::from_shape_vec((rows, cols), input_flat).map_err(|e| {
-            MLError::invalid_input(format!("Failed to create input tensor: {}", e))
-        })?;
+        let input = Array2::from_shape_vec((rows, cols), input_flat)
+            .map_err(|e| MLError::invalid_input(format!("Failed to create input tensor: {}", e)))?;
 
         let t_rows = target_vec.len();
         let t_cols = target_vec[0].len();

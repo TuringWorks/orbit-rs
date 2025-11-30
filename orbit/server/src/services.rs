@@ -1,12 +1,12 @@
 use orbit_client::ActorRegistry;
 use orbit_proto::{
     connection_service_server, ConnectionInfoRequestProto, ConnectionInfoResponseProto,
-    MessageProto, NodeIdProto, MessageContentProto,
+    MessageContentProto, MessageProto, NodeIdProto,
 };
+use orbit_shared::OrbitError;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tonic::{Request, Response, Status, Streaming};
-use orbit_shared::OrbitError;
 
 /// Server-side connection service implementation
 #[derive(Clone)]
@@ -25,7 +25,10 @@ impl std::fmt::Debug for ServerConnectionService {
 
 impl ServerConnectionService {
     pub fn new(registry: Arc<ActorRegistry>, local_node_id: NodeIdProto) -> Self {
-        Self { registry, local_node_id }
+        Self {
+            registry,
+            local_node_id,
+        }
     }
 
     pub fn handle_local_stream(
@@ -41,7 +44,7 @@ impl ServerConnectionService {
                 // Bridge: Unbounded -> Bounded
                 let (bridge_tx, mut bridge_rx) = mpsc::unbounded_channel();
                 let tx_clone = tx.clone();
-                
+
                 tokio::spawn(async move {
                     while let Some(msg) = bridge_rx.recv().await {
                         if let Err(_) = tx_clone.send(msg).await {
@@ -50,7 +53,8 @@ impl ServerConnectionService {
                     }
                 });
 
-                Self::process_message(registry.clone(), local_node_id.clone(), message, bridge_tx).await;
+                Self::process_message(registry.clone(), local_node_id.clone(), message, bridge_tx)
+                    .await;
             }
         });
     }
@@ -111,11 +115,13 @@ impl ServerConnectionService {
                                 message_id,
                                 source: Some(local_node_id),
                                 target: Some(orbit_proto::MessageTargetProto {
-                                    target: Some(orbit_proto::message_target_proto::Target::UnicastTarget(
-                                        orbit_proto::message_target_proto::Unicast {
-                                            target: source,
-                                        }
-                                    )),
+                                    target: Some(
+                                        orbit_proto::message_target_proto::Target::UnicastTarget(
+                                            orbit_proto::message_target_proto::Unicast {
+                                                target: source,
+                                            },
+                                        ),
+                                    ),
                                 }),
                                 content: Some(MessageContentProto {
                                     content: Some(response_content),
@@ -138,7 +144,8 @@ impl ServerConnectionService {
 
 #[tonic::async_trait]
 impl connection_service_server::ConnectionService for ServerConnectionService {
-    type OpenStreamStream = tokio_stream::wrappers::UnboundedReceiverStream<Result<MessageProto, Status>>;
+    type OpenStreamStream =
+        tokio_stream::wrappers::UnboundedReceiverStream<Result<MessageProto, Status>>;
 
     async fn open_stream(
         &self,
@@ -151,11 +158,14 @@ impl connection_service_server::ConnectionService for ServerConnectionService {
 
         tokio::spawn(async move {
             while let Ok(Some(message)) = stream.message().await {
-                Self::process_message(registry.clone(), local_node_id.clone(), message, tx.clone()).await;
+                Self::process_message(registry.clone(), local_node_id.clone(), message, tx.clone())
+                    .await;
             }
         });
 
-        Ok(Response::new(tokio_stream::wrappers::UnboundedReceiverStream::new(rx)))
+        Ok(Response::new(
+            tokio_stream::wrappers::UnboundedReceiverStream::new(rx),
+        ))
     }
 
     async fn get_connection_info(

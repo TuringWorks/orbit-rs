@@ -28,10 +28,7 @@ pub struct GraphRAGCommands {
 
 impl GraphRAGCommands {
     /// Create a new GraphRAG commands handler
-    pub fn new(
-        orbit_client: Arc<OrbitClient>,
-        local_registry: Arc<SimpleLocalRegistry>,
-    ) -> Self {
+    pub fn new(orbit_client: Arc<OrbitClient>, local_registry: Arc<SimpleLocalRegistry>) -> Self {
         Self {
             local_registry,
             orbit_client,

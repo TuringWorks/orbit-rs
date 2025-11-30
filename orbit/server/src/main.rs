@@ -361,7 +361,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .as_ref()
         .map_or(true, |c| c.enabled)
     {
-        
         // Actually, let's just create a new client for Redis specifically.
         // It's cleaner than sharing one if Clone is hard.
         let redis_client_config = orbit_client::OrbitClientConfig {
@@ -369,10 +368,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
             namespace: "default".to_string(),
             ..Default::default()
         };
-        
+
         // We need to create it inside the spawn or before?
         // start_redis_server is async.
-        let redis_handle = start_redis_server(&args, redis_storage.clone(), redis_client_config).await?;
+        let redis_handle =
+            start_redis_server(&args, redis_storage.clone(), redis_client_config).await?;
         protocol_handles.push(redis_handle);
         info!(
             "[Redis] Redis RESP protocol server started on port {}",

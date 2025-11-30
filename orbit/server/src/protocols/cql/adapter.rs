@@ -1106,7 +1106,10 @@ mod tests {
             keyspace: "test_ks".to_string(),
         };
 
-        let result = adapter.execute_statement(&statement, 0, None, None).await.unwrap();
+        let result = adapter
+            .execute_statement(&statement, 0, None, None)
+            .await
+            .unwrap();
         assert_eq!(result.opcode, CqlOpcode::Result);
 
         // Verify keyspace was set

@@ -105,7 +105,7 @@ impl OrbitClient {
     pub async fn new(config: OrbitClientConfig) -> OrbitResult<Self> {
         let registry = ActorRegistry::new();
         let connections = Arc::new(RwLock::new(HashMap::new()));
-        
+
         // Create channel for outbound messages
         let (tx, rx) = tokio::sync::mpsc::channel(100);
         let invocation_system = Arc::new(InvocationSystem::new(Some(tx)));
@@ -157,11 +157,13 @@ impl OrbitClient {
         config: OrbitClientConfig,
         local_node_id: NodeId,
         server_tx: tokio::sync::mpsc::Sender<orbit_proto::MessageProto>,
-        mut server_rx: tokio::sync::mpsc::Receiver<Result<orbit_proto::MessageProto, tonic::Status>>,
+        mut server_rx: tokio::sync::mpsc::Receiver<
+            Result<orbit_proto::MessageProto, tonic::Status>,
+        >,
     ) -> OrbitResult<Self> {
         let registry = ActorRegistry::new();
         let connections = Arc::new(RwLock::new(HashMap::new()));
-        
+
         // Create channel for outbound messages
         let (tx, rx) = tokio::sync::mpsc::channel(100);
         let invocation_system = Arc::new(InvocationSystem::new(Some(tx)));
@@ -195,7 +197,7 @@ impl OrbitClient {
                 while let Some(result) = server_rx.recv().await {
                     match result {
                         Ok(message) => {
-                             if let Some(content) = message.content {
+                            if let Some(content) = message.content {
                                 if let Some(inner_content) = content.content {
                                     match inner_content {
                                         orbit_proto::message_content_proto::Content::InvocationResponse(resp) => {
@@ -231,7 +233,7 @@ impl OrbitClient {
                     break;
                 }
             }
-            
+
             // If outbound stream ends, abort inbound task
             inbound_task.abort();
         });
@@ -383,7 +385,7 @@ impl OrbitClient {
         if let Some(rx) = outbound_receiver {
             tokio::spawn(async move {
                 let mut stream_rx = tokio_stream::wrappers::ReceiverStream::new(rx);
-                
+
                 // Retry loop for connection
                 loop {
                     let channel = {
@@ -392,25 +394,32 @@ impl OrbitClient {
                     };
 
                     if let Some(channel) = channel {
-                        let mut client = orbit_proto::connection_service_client::ConnectionServiceClient::new(channel);
-                        
+                        let mut client =
+                            orbit_proto::connection_service_client::ConnectionServiceClient::new(
+                                channel,
+                            );
+
                         // We need to create a new stream for each connection attempt
                         // Since ReceiverStream consumes the receiver, we can't easily reuse it if the connection fails
                         // and we want to resume sending from the same receiver.
                         // For a robust implementation, we would need a way to peek/buffer or use a different channel structure.
                         // However, for this implementation, we will assume the connection is stable or we accept losing the receiver on failure.
-                        // To properly handle this, we would need an internal loop that reads from 'rx' and forwards to a 
+                        // To properly handle this, we would need an internal loop that reads from 'rx' and forwards to a
                         // short-lived sender that feeds the gRPC stream.
-                        
+
                         // Implementing the forwarding approach for robustness:
                         let (tx_internal, rx_internal) = tokio::sync::mpsc::channel(100);
-                        let outbound_stream = tokio_stream::wrappers::ReceiverStream::new(rx_internal);
-                        
-                        match client.open_stream(tonic::Request::new(outbound_stream)).await {
+                        let outbound_stream =
+                            tokio_stream::wrappers::ReceiverStream::new(rx_internal);
+
+                        match client
+                            .open_stream(tonic::Request::new(outbound_stream))
+                            .await
+                        {
                             Ok(response) => {
                                 let mut inbound_stream = response.into_inner();
                                 let invocation_system_clone = invocation_system.clone();
-                                
+
                                 // Spawn response handler
                                 tokio::spawn(async move {
                                     while let Ok(Some(message)) = inbound_stream.message().await {
@@ -448,12 +457,15 @@ impl OrbitClient {
                                 // So we have to commit to this stream.
                                 while let Some(msg) = stream_rx.next().await {
                                     if let Err(e) = tx_internal.send(msg).await {
-                                        tracing::error!("Failed to forward message to gRPC stream: {}", e);
+                                        tracing::error!(
+                                            "Failed to forward message to gRPC stream: {}",
+                                            e
+                                        );
                                         break;
                                     }
                                 }
                                 // If we exit the loop, the receiver is closed or we failed to send
-                                break; 
+                                break;
                             }
                             Err(e) => {
                                 tracing::error!("Failed to open stream: {}", e);

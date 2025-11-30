@@ -183,15 +183,15 @@ enum Token {
     Comma,
     Colon,
     Dot,
-    DoubleDot,      // .. for range
+    DoubleDot, // .. for range
     Equals,
-    NotEquals,      // !=
-    GreaterThan,    // >
-    LessThan,       // <
+    NotEquals,          // !=
+    GreaterThan,        // >
+    LessThan,           // <
     GreaterThanOrEqual, // >=
     LessThanOrEqual,    // <=
-    Star,           // * for variable-length paths and COUNT(*)
-    Pipe,           // | for relationship type alternatives
+    Star,               // * for variable-length paths and COUNT(*)
+    Pipe,               // | for relationship type alternatives
 }
 
 /// Specialized tokenizer for Cypher queries with reduced complexity
@@ -626,7 +626,8 @@ impl TokenParser {
             };
 
             // Check for COUNT(*)
-            if func == AggregationFunction::Count && matches!(self.current_token(), Some(Token::Star))
+            if func == AggregationFunction::Count
+                && matches!(self.current_token(), Some(Token::Star))
             {
                 self.advance();
                 self.expect_token(Token::RightParen)?;
@@ -1000,9 +1001,8 @@ impl TokenParser {
             Some(Token::Number(n)) => {
                 let n = n.clone();
                 self.advance();
-                n.parse::<usize>().map_err(|_| {
-                    ProtocolError::CypherError(format!("Invalid SKIP value: {}", n))
-                })?
+                n.parse::<usize>()
+                    .map_err(|_| ProtocolError::CypherError(format!("Invalid SKIP value: {}", n)))?
             }
             _ => {
                 return Err(ProtocolError::CypherError(
@@ -1114,10 +1114,7 @@ impl TokenParser {
                 } else if let Ok(f) = n.parse::<f64>() {
                     Ok(serde_json::json!(f))
                 } else {
-                    Err(ProtocolError::CypherError(format!(
-                        "Invalid number: {}",
-                        n
-                    )))
+                    Err(ProtocolError::CypherError(format!("Invalid number: {}", n)))
                 }
             }
             Some(Token::String(s)) => {
@@ -1524,7 +1521,10 @@ impl TokenParser {
     }
 
     /// Parse relationship pattern from a single string (legacy format)
-    fn parse_relationship_pattern_from_string(&self, rel_str: &str) -> ProtocolResult<RelationshipPattern> {
+    fn parse_relationship_pattern_from_string(
+        &self,
+        rel_str: &str,
+    ) -> ProtocolResult<RelationshipPattern> {
         let mut rel_type = None;
         let mut rel_types = Vec::new();
         let mut variable_length = None;
@@ -1696,7 +1696,10 @@ impl TokenParser {
                 if let Some(Token::Identifier(label)) = self.current_token() {
                     let label = label.clone();
                     self.advance();
-                    return Ok(Condition::HasLabel { variable: var, label });
+                    return Ok(Condition::HasLabel {
+                        variable: var,
+                        label,
+                    });
                 }
             }
 
@@ -1709,7 +1712,7 @@ impl TokenParser {
 
     fn parse_property_condition(&mut self, property: &str) -> ProtocolResult<Condition> {
         let prop = property.to_string();
-        
+
         // Check for comparison operator
         let operator = match self.current_token() {
             Some(Token::Equals) => {
@@ -1755,7 +1758,9 @@ impl TokenParser {
                 if let Ok(num) = n.parse::<i64>() {
                     serde_json::Value::Number(num.into())
                 } else if let Ok(num) = n.parse::<f64>() {
-                    serde_json::Value::Number(serde_json::Number::from_f64(num).unwrap_or(serde_json::Number::from(0)))
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(num).unwrap_or(serde_json::Number::from(0)),
+                    )
                 } else {
                     serde_json::Value::String(n)
                 }
@@ -1844,9 +1849,7 @@ pub enum CypherClause {
         where_condition: Option<Condition>,
     },
     /// OPTIONAL MATCH clause (matches patterns that may not exist)
-    OptionalMatch {
-        pattern: Pattern,
-    },
+    OptionalMatch { pattern: Pattern },
 }
 
 /// Property assignment for SET clause
@@ -1957,9 +1960,7 @@ pub enum Condition {
         value: serde_json::Value,
     },
     /// Property exists check
-    PropertyExists {
-        property: String,
-    },
+    PropertyExists { property: String },
     /// Logical AND
     And {
         left: Box<Condition>,
@@ -1971,19 +1972,11 @@ pub enum Condition {
         right: Box<Condition>,
     },
     /// Logical NOT
-    Not {
-        condition: Box<Condition>,
-    },
+    Not { condition: Box<Condition> },
     /// Node label check
-    HasLabel {
-        variable: String,
-        label: String,
-    },
+    HasLabel { variable: String, label: String },
     /// Relationship type check
-    HasRelationshipType {
-        variable: String,
-        rel_type: String,
-    },
+    HasRelationshipType { variable: String, rel_type: String },
 }
 
 /// Comparison operators for WHERE clauses
@@ -2009,10 +2002,7 @@ pub enum Expression {
     /// Simple variable reference: n
     Variable(String),
     /// Property access: n.name
-    PropertyAccess {
-        variable: String,
-        property: String,
-    },
+    PropertyAccess { variable: String, property: String },
     /// Aggregation function: COUNT(n), SUM(n.age)
     Aggregation {
         function: AggregationFunction,
@@ -2183,7 +2173,10 @@ mod tests {
             CypherClause::Set { assignments } => {
                 assert_eq!(assignments.len(), 1);
                 assert_eq!(assignments[0].target, "n.name");
-                assert_eq!(assignments[0].value, serde_json::Value::String("Bob".to_string()));
+                assert_eq!(
+                    assignments[0].value,
+                    serde_json::Value::String("Bob".to_string())
+                );
             }
             _ => panic!("Expected SET clause"),
         }
@@ -2492,7 +2485,9 @@ mod tests {
             CypherClause::Return { items } => {
                 assert_eq!(items.len(), 1);
                 match &items[0].expr {
-                    Expression::Aggregation { function, distinct, .. } => {
+                    Expression::Aggregation {
+                        function, distinct, ..
+                    } => {
                         assert_eq!(*function, AggregationFunction::Count);
                         assert!(!distinct);
                     }
@@ -2534,21 +2529,21 @@ mod tests {
         let parsed = result.unwrap();
 
         match &parsed.clauses[1] {
-            CypherClause::Return { items } => {
-                match &items[0].expr {
-                    Expression::Aggregation { function, argument, .. } => {
-                        assert_eq!(*function, AggregationFunction::Sum);
-                        match argument.as_ref() {
-                            Expression::PropertyAccess { variable, property } => {
-                                assert_eq!(variable, "n");
-                                assert_eq!(property, "age");
-                            }
-                            _ => panic!("Expected PropertyAccess in aggregation"),
+            CypherClause::Return { items } => match &items[0].expr {
+                Expression::Aggregation {
+                    function, argument, ..
+                } => {
+                    assert_eq!(*function, AggregationFunction::Sum);
+                    match argument.as_ref() {
+                        Expression::PropertyAccess { variable, property } => {
+                            assert_eq!(variable, "n");
+                            assert_eq!(property, "age");
                         }
+                        _ => panic!("Expected PropertyAccess in aggregation"),
                     }
-                    _ => panic!("Expected Aggregation expression"),
                 }
-            }
+                _ => panic!("Expected Aggregation expression"),
+            },
             _ => panic!("Expected RETURN clause"),
         }
     }
@@ -2563,14 +2558,12 @@ mod tests {
         let parsed = result.unwrap();
 
         match &parsed.clauses[1] {
-            CypherClause::Return { items } => {
-                match &items[0].expr {
-                    Expression::Aggregation { function, .. } => {
-                        assert_eq!(*function, AggregationFunction::Avg);
-                    }
-                    _ => panic!("Expected Aggregation expression"),
+            CypherClause::Return { items } => match &items[0].expr {
+                Expression::Aggregation { function, .. } => {
+                    assert_eq!(*function, AggregationFunction::Avg);
                 }
-            }
+                _ => panic!("Expected Aggregation expression"),
+            },
             _ => panic!("Expected RETURN clause"),
         }
     }
@@ -2585,14 +2578,12 @@ mod tests {
         let parsed = result.unwrap();
 
         match &parsed.clauses[1] {
-            CypherClause::Return { items } => {
-                match &items[0].expr {
-                    Expression::Aggregation { function, .. } => {
-                        assert_eq!(*function, AggregationFunction::Collect);
-                    }
-                    _ => panic!("Expected Aggregation expression"),
+            CypherClause::Return { items } => match &items[0].expr {
+                Expression::Aggregation { function, .. } => {
+                    assert_eq!(*function, AggregationFunction::Collect);
                 }
-            }
+                _ => panic!("Expected Aggregation expression"),
+            },
             _ => panic!("Expected RETURN clause"),
         }
     }
@@ -2607,15 +2598,15 @@ mod tests {
         let parsed = result.unwrap();
 
         match &parsed.clauses[1] {
-            CypherClause::Return { items } => {
-                match &items[0].expr {
-                    Expression::Aggregation { function, distinct, .. } => {
-                        assert_eq!(*function, AggregationFunction::Count);
-                        assert!(*distinct);
-                    }
-                    _ => panic!("Expected Aggregation expression"),
+            CypherClause::Return { items } => match &items[0].expr {
+                Expression::Aggregation {
+                    function, distinct, ..
+                } => {
+                    assert_eq!(*function, AggregationFunction::Count);
+                    assert!(*distinct);
                 }
-            }
+                _ => panic!("Expected Aggregation expression"),
+            },
             _ => panic!("Expected RETURN clause"),
         }
     }
@@ -2631,7 +2622,10 @@ mod tests {
         assert_eq!(parsed.clauses.len(), 3); // MATCH, WITH, RETURN
 
         match &parsed.clauses[1] {
-            CypherClause::With { items, where_condition } => {
+            CypherClause::With {
+                items,
+                where_condition,
+            } => {
                 assert_eq!(items.len(), 1);
                 assert_eq!(items[0].alias, Some("name".to_string()));
                 assert!(where_condition.is_none());
@@ -2651,7 +2645,10 @@ mod tests {
         assert_eq!(parsed.clauses.len(), 3); // MATCH, WITH, RETURN
 
         match &parsed.clauses[1] {
-            CypherClause::With { items, where_condition } => {
+            CypherClause::With {
+                items,
+                where_condition,
+            } => {
                 assert_eq!(items.len(), 1);
                 assert!(where_condition.is_some());
             }

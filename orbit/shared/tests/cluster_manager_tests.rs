@@ -141,7 +141,10 @@ fn test_split_brain_detector_different_configs() {
     let detector1 = SplitBrainDetector::new(1, Duration::from_millis(100));
     let detector2 = SplitBrainDetector::new(5, Duration::from_secs(30));
 
-    assert_eq!(detector1.get_detection_interval(), Duration::from_millis(100));
+    assert_eq!(
+        detector1.get_detection_interval(),
+        Duration::from_millis(100)
+    );
     assert_eq!(detector2.get_detection_interval(), Duration::from_secs(30));
 }
 
@@ -159,9 +162,14 @@ async fn test_split_brain_no_risk_majority_reachable() {
     ];
     let unreachable: Vec<NodeId> = vec![];
 
-    let has_risk = detector.check_split_brain_risk(&cluster_nodes, &unreachable).await;
+    let has_risk = detector
+        .check_split_brain_risk(&cluster_nodes, &unreachable)
+        .await;
 
-    assert!(!has_risk, "No split-brain risk when all nodes are reachable");
+    assert!(
+        !has_risk,
+        "No split-brain risk when all nodes are reachable"
+    );
 }
 
 #[tokio::test]
@@ -176,14 +184,16 @@ async fn test_split_brain_no_risk_exactly_majority() {
         test_node_id("node-4"),
         test_node_id("node-5"),
     ];
-    let unreachable: Vec<NodeId> = vec![
-        test_node_id("node-4"),
-        test_node_id("node-5"),
-    ];
+    let unreachable: Vec<NodeId> = vec![test_node_id("node-4"), test_node_id("node-5")];
 
-    let has_risk = detector.check_split_brain_risk(&cluster_nodes, &unreachable).await;
+    let has_risk = detector
+        .check_split_brain_risk(&cluster_nodes, &unreachable)
+        .await;
 
-    assert!(!has_risk, "No split-brain risk when exactly majority is reachable");
+    assert!(
+        !has_risk,
+        "No split-brain risk when exactly majority is reachable"
+    );
 }
 
 #[tokio::test]
@@ -204,7 +214,9 @@ async fn test_split_brain_risk_below_majority() {
         test_node_id("node-5"),
     ];
 
-    let has_risk = detector.check_split_brain_risk(&cluster_nodes, &unreachable).await;
+    let has_risk = detector
+        .check_split_brain_risk(&cluster_nodes, &unreachable)
+        .await;
 
     assert!(has_risk, "Split-brain risk when below majority");
 }
@@ -221,12 +233,11 @@ async fn test_split_brain_risk_below_min_cluster_size() {
         test_node_id("node-4"),
         test_node_id("node-5"),
     ];
-    let unreachable: Vec<NodeId> = vec![
-        test_node_id("node-4"),
-        test_node_id("node-5"),
-    ];
+    let unreachable: Vec<NodeId> = vec![test_node_id("node-4"), test_node_id("node-5")];
 
-    let has_risk = detector.check_split_brain_risk(&cluster_nodes, &unreachable).await;
+    let has_risk = detector
+        .check_split_brain_risk(&cluster_nodes, &unreachable)
+        .await;
 
     assert!(has_risk, "Split-brain risk when below min cluster size");
 }
@@ -247,14 +258,18 @@ async fn test_split_brain_three_node_cluster() {
     assert!(!no_risk, "No risk with all 3 nodes reachable");
 
     // 1 unreachable = 2 reachable (>=2 majority)
-    let no_risk = detector.check_split_brain_risk(&cluster_nodes, &[test_node_id("node-3")]).await;
+    let no_risk = detector
+        .check_split_brain_risk(&cluster_nodes, &[test_node_id("node-3")])
+        .await;
     assert!(!no_risk, "No risk with 2 of 3 nodes reachable");
 
     // 2 unreachable = 1 reachable (<2 majority)
-    let has_risk = detector.check_split_brain_risk(
-        &cluster_nodes,
-        &[test_node_id("node-2"), test_node_id("node-3")],
-    ).await;
+    let has_risk = detector
+        .check_split_brain_risk(
+            &cluster_nodes,
+            &[test_node_id("node-2"), test_node_id("node-3")],
+        )
+        .await;
     assert!(has_risk, "Risk with only 1 of 3 nodes reachable");
 }
 
@@ -283,17 +298,18 @@ async fn test_split_brain_even_cluster_strict_majority() {
     ];
 
     // 2 reachable is NOT majority (need 3)
-    let has_risk = detector.check_split_brain_risk(
-        &cluster_nodes,
-        &[test_node_id("node-3"), test_node_id("node-4")],
-    ).await;
+    let has_risk = detector
+        .check_split_brain_risk(
+            &cluster_nodes,
+            &[test_node_id("node-3"), test_node_id("node-4")],
+        )
+        .await;
     assert!(has_risk, "Even cluster needs strict majority");
 
     // 3 reachable IS majority
-    let no_risk = detector.check_split_brain_risk(
-        &cluster_nodes,
-        &[test_node_id("node-4")],
-    ).await;
+    let no_risk = detector
+        .check_split_brain_risk(&cluster_nodes, &[test_node_id("node-4")])
+        .await;
     assert!(!no_risk, "3 of 4 nodes is majority");
 }
 
@@ -302,30 +318,39 @@ async fn test_detect_partitions_all_reachable() {
     let detector = SplitBrainDetector::new(2, Duration::from_secs(5));
 
     let mut node_health = HashMap::new();
-    node_health.insert(test_node_id("node-1"), NodeHealthStatus {
-        node_id: test_node_id("node-1"),
-        last_seen: Instant::now(),
-        consecutive_failures: 0,
-        network_latency: Some(Duration::from_millis(5)),
-        is_reachable: true,
-        partition_group: None,
-    });
-    node_health.insert(test_node_id("node-2"), NodeHealthStatus {
-        node_id: test_node_id("node-2"),
-        last_seen: Instant::now(),
-        consecutive_failures: 0,
-        network_latency: Some(Duration::from_millis(3)),
-        is_reachable: true,
-        partition_group: None,
-    });
-    node_health.insert(test_node_id("node-3"), NodeHealthStatus {
-        node_id: test_node_id("node-3"),
-        last_seen: Instant::now(),
-        consecutive_failures: 0,
-        network_latency: Some(Duration::from_millis(7)),
-        is_reachable: true,
-        partition_group: None,
-    });
+    node_health.insert(
+        test_node_id("node-1"),
+        NodeHealthStatus {
+            node_id: test_node_id("node-1"),
+            last_seen: Instant::now(),
+            consecutive_failures: 0,
+            network_latency: Some(Duration::from_millis(5)),
+            is_reachable: true,
+            partition_group: None,
+        },
+    );
+    node_health.insert(
+        test_node_id("node-2"),
+        NodeHealthStatus {
+            node_id: test_node_id("node-2"),
+            last_seen: Instant::now(),
+            consecutive_failures: 0,
+            network_latency: Some(Duration::from_millis(3)),
+            is_reachable: true,
+            partition_group: None,
+        },
+    );
+    node_health.insert(
+        test_node_id("node-3"),
+        NodeHealthStatus {
+            node_id: test_node_id("node-3"),
+            last_seen: Instant::now(),
+            consecutive_failures: 0,
+            network_latency: Some(Duration::from_millis(7)),
+            is_reachable: true,
+            partition_group: None,
+        },
+    );
 
     let partitions = detector.detect_partitions(&node_health).await;
 
@@ -339,30 +364,39 @@ async fn test_detect_partitions_some_unreachable() {
     let detector = SplitBrainDetector::new(2, Duration::from_secs(5));
 
     let mut node_health = HashMap::new();
-    node_health.insert(test_node_id("node-1"), NodeHealthStatus {
-        node_id: test_node_id("node-1"),
-        last_seen: Instant::now(),
-        consecutive_failures: 0,
-        network_latency: Some(Duration::from_millis(5)),
-        is_reachable: true,
-        partition_group: None,
-    });
-    node_health.insert(test_node_id("node-2"), NodeHealthStatus {
-        node_id: test_node_id("node-2"),
-        last_seen: Instant::now(),
-        consecutive_failures: 5,
-        network_latency: None,
-        is_reachable: false,
-        partition_group: None,
-    });
-    node_health.insert(test_node_id("node-3"), NodeHealthStatus {
-        node_id: test_node_id("node-3"),
-        last_seen: Instant::now(),
-        consecutive_failures: 3,
-        network_latency: None,
-        is_reachable: false,
-        partition_group: None,
-    });
+    node_health.insert(
+        test_node_id("node-1"),
+        NodeHealthStatus {
+            node_id: test_node_id("node-1"),
+            last_seen: Instant::now(),
+            consecutive_failures: 0,
+            network_latency: Some(Duration::from_millis(5)),
+            is_reachable: true,
+            partition_group: None,
+        },
+    );
+    node_health.insert(
+        test_node_id("node-2"),
+        NodeHealthStatus {
+            node_id: test_node_id("node-2"),
+            last_seen: Instant::now(),
+            consecutive_failures: 5,
+            network_latency: None,
+            is_reachable: false,
+            partition_group: None,
+        },
+    );
+    node_health.insert(
+        test_node_id("node-3"),
+        NodeHealthStatus {
+            node_id: test_node_id("node-3"),
+            last_seen: Instant::now(),
+            consecutive_failures: 3,
+            network_latency: None,
+            is_reachable: false,
+            partition_group: None,
+        },
+    );
 
     let partitions = detector.detect_partitions(&node_health).await;
 
@@ -377,22 +411,28 @@ async fn test_detect_partitions_all_unreachable() {
     let detector = SplitBrainDetector::new(2, Duration::from_secs(5));
 
     let mut node_health = HashMap::new();
-    node_health.insert(test_node_id("node-1"), NodeHealthStatus {
-        node_id: test_node_id("node-1"),
-        last_seen: Instant::now(),
-        consecutive_failures: 10,
-        network_latency: None,
-        is_reachable: false,
-        partition_group: None,
-    });
-    node_health.insert(test_node_id("node-2"), NodeHealthStatus {
-        node_id: test_node_id("node-2"),
-        last_seen: Instant::now(),
-        consecutive_failures: 10,
-        network_latency: None,
-        is_reachable: false,
-        partition_group: None,
-    });
+    node_health.insert(
+        test_node_id("node-1"),
+        NodeHealthStatus {
+            node_id: test_node_id("node-1"),
+            last_seen: Instant::now(),
+            consecutive_failures: 10,
+            network_latency: None,
+            is_reachable: false,
+            partition_group: None,
+        },
+    );
+    node_health.insert(
+        test_node_id("node-2"),
+        NodeHealthStatus {
+            node_id: test_node_id("node-2"),
+            last_seen: Instant::now(),
+            consecutive_failures: 10,
+            network_latency: None,
+            is_reachable: false,
+            partition_group: None,
+        },
+    );
 
     let partitions = detector.detect_partitions(&node_health).await;
 
@@ -435,7 +475,10 @@ async fn test_partition_detector_check_connectivity() {
 
     // The simulated implementation has 90% success rate
     // We just verify the method runs without error
-    assert!(is_connected || !is_connected, "Connectivity check completed");
+    assert!(
+        is_connected || !is_connected,
+        "Connectivity check completed"
+    );
 }
 
 #[tokio::test]
@@ -451,7 +494,9 @@ async fn test_partition_detector_check_cluster_connectivity() {
     let from_node = test_node_id("node-1");
 
     // Check connectivity from node-1 to all other nodes
-    let connectivity = detector.check_cluster_connectivity(&cluster_nodes, &from_node).await;
+    let connectivity = detector
+        .check_cluster_connectivity(&cluster_nodes, &from_node)
+        .await;
 
     // Should not include the from_node in results
     assert!(!connectivity.contains_key(&from_node));
@@ -470,7 +515,10 @@ async fn test_partition_detector_multiple_attempts() {
     let is_connected = detector.check_connectivity(&target_node).await;
 
     // The test verifies the method handles multiple attempts correctly
-    assert!(is_connected || !is_connected, "Multiple attempt check completed");
+    assert!(
+        is_connected || !is_connected,
+        "Multiple attempt check completed"
+    );
 }
 
 // ============================================================================
@@ -499,17 +547,24 @@ async fn test_split_brain_scenario_network_partition() {
         test_node_id("node-5"),
     ];
 
-    let risk_from_a = detector.check_split_brain_risk(&cluster_nodes, &unreachable_from_a).await;
-    assert!(risk_from_a, "Group A (minority) should detect split-brain risk");
+    let risk_from_a = detector
+        .check_split_brain_risk(&cluster_nodes, &unreachable_from_a)
+        .await;
+    assert!(
+        risk_from_a,
+        "Group A (minority) should detect split-brain risk"
+    );
 
     // From Group B's perspective: 3 reachable, 2 unreachable
-    let unreachable_from_b: Vec<NodeId> = vec![
-        test_node_id("node-1"),
-        test_node_id("node-2"),
-    ];
+    let unreachable_from_b: Vec<NodeId> = vec![test_node_id("node-1"), test_node_id("node-2")];
 
-    let risk_from_b = detector.check_split_brain_risk(&cluster_nodes, &unreachable_from_b).await;
-    assert!(!risk_from_b, "Group B (majority) should NOT detect split-brain risk");
+    let risk_from_b = detector
+        .check_split_brain_risk(&cluster_nodes, &unreachable_from_b)
+        .await;
+    assert!(
+        !risk_from_b,
+        "Group B (majority) should NOT detect split-brain risk"
+    );
 }
 
 #[tokio::test]
@@ -535,16 +590,32 @@ async fn test_split_brain_scenario_cascading_failures() {
     ];
 
     // 5 reachable: no risk
-    assert!(!detector.check_split_brain_risk(&cluster_nodes, &unreachable_0).await);
+    assert!(
+        !detector
+            .check_split_brain_risk(&cluster_nodes, &unreachable_0)
+            .await
+    );
 
     // 4 reachable: no risk (majority is 3)
-    assert!(!detector.check_split_brain_risk(&cluster_nodes, &unreachable_1).await);
+    assert!(
+        !detector
+            .check_split_brain_risk(&cluster_nodes, &unreachable_1)
+            .await
+    );
 
     // 3 reachable: no risk (exactly majority)
-    assert!(!detector.check_split_brain_risk(&cluster_nodes, &unreachable_2).await);
+    assert!(
+        !detector
+            .check_split_brain_risk(&cluster_nodes, &unreachable_2)
+            .await
+    );
 
     // 2 reachable: RISK (below majority)
-    assert!(detector.check_split_brain_risk(&cluster_nodes, &unreachable_3).await);
+    assert!(
+        detector
+            .check_split_brain_risk(&cluster_nodes, &unreachable_3)
+            .await
+    );
 }
 
 #[tokio::test]
@@ -559,13 +630,25 @@ async fn test_split_brain_recovery_detection() {
 
     // Start in split-brain state
     let unreachable_all: Vec<NodeId> = vec![test_node_id("node-2"), test_node_id("node-3")];
-    assert!(detector.check_split_brain_risk(&cluster_nodes, &unreachable_all).await);
+    assert!(
+        detector
+            .check_split_brain_risk(&cluster_nodes, &unreachable_all)
+            .await
+    );
 
     // Recover: one node comes back
     let unreachable_one: Vec<NodeId> = vec![test_node_id("node-3")];
-    assert!(!detector.check_split_brain_risk(&cluster_nodes, &unreachable_one).await);
+    assert!(
+        !detector
+            .check_split_brain_risk(&cluster_nodes, &unreachable_one)
+            .await
+    );
 
     // Full recovery
     let unreachable_none: Vec<NodeId> = vec![];
-    assert!(!detector.check_split_brain_risk(&cluster_nodes, &unreachable_none).await);
+    assert!(
+        !detector
+            .check_split_brain_risk(&cluster_nodes, &unreachable_none)
+            .await
+    );
 }

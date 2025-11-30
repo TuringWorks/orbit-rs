@@ -1,9 +1,11 @@
-use tokio::time::sleep;
-use redis::Commands;
 use orbit_server::OrbitServer;
+use redis::Commands;
+use tokio::time::sleep;
 
 async fn cleanup_lingering_instances() {
-    let _ = std::process::Command::new("killall").arg("orbit-server").output();
+    let _ = std::process::Command::new("killall")
+        .arg("orbit-server")
+        .output();
     sleep(std::time::Duration::from_millis(500)).await;
 }
 
@@ -42,7 +44,10 @@ async fn test_list_commands() {
     });
 
     // Wait for Redis protocol
-    assert!(wait_for_port(6379, 15).await, "Redis port 6379 not listening");
+    assert!(
+        wait_for_port(6379, 15).await,
+        "Redis port 6379 not listening"
+    );
 
     // Connect with redis client
     let client = redis::Client::open("redis://127.0.0.1:6379/").unwrap();

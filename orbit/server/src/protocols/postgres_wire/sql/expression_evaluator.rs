@@ -2419,7 +2419,13 @@ impl ExpressionEvaluator {
         let pos = current_pos.min(partition_size.saturating_sub(1));
         let empty_context = EvaluationContext::empty();
 
-        let start = self.frame_bound_to_pos(&frame.start_bound, pos, partition_size, &empty_context, true);
+        let start = self.frame_bound_to_pos(
+            &frame.start_bound,
+            pos,
+            partition_size,
+            &empty_context,
+            true,
+        );
         let end = frame
             .end_bound
             .as_ref()
@@ -2445,7 +2451,11 @@ impl ExpressionEvaluator {
                 if let Ok(SqlValue::Integer(n)) = self.evaluate(expr, context) {
                     pos.saturating_sub(n as usize)
                 } else {
-                    if is_start { 0 } else { pos }
+                    if is_start {
+                        0
+                    } else {
+                        pos
+                    }
                 }
             }
             FrameBound::CurrentRow => pos,

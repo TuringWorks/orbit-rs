@@ -475,12 +475,13 @@ impl TimeSeriesCommands {
                 "AGGREGATION" => {
                     i += 1;
                     let agg_type_str = self.get_string_arg(args, i, "TS.RANGE")?;
-                    aggregation = Some(AggregationType::from_str(&agg_type_str).ok_or_else(|| {
-                        crate::protocols::error::ProtocolError::RespError(format!(
-                            "ERR unknown aggregation type '{}'",
-                            agg_type_str
-                        ))
-                    })?);
+                    aggregation =
+                        Some(AggregationType::from_str(&agg_type_str).ok_or_else(|| {
+                            crate::protocols::error::ProtocolError::RespError(format!(
+                                "ERR unknown aggregation type '{}'",
+                                agg_type_str
+                            ))
+                        })?);
                     i += 1;
                     bucket_duration = Some(self.get_int_arg(args, i, "TS.RANGE")?);
                 }
@@ -502,46 +503,47 @@ impl TimeSeriesCommands {
         let samples = ts.range(from, to);
 
         // Apply aggregation if specified
-        let result: Vec<RespValue> = if let (Some(agg), Some(bucket_ms)) = (aggregation, bucket_duration) {
-            // Group samples into buckets and aggregate
-            let mut buckets: BTreeMap<i64, Vec<f64>> = BTreeMap::new();
-            for dp in &samples {
-                let bucket_start = (dp.timestamp / bucket_ms) * bucket_ms;
-                buckets.entry(bucket_start).or_default().push(dp.value);
-            }
+        let result: Vec<RespValue> =
+            if let (Some(agg), Some(bucket_ms)) = (aggregation, bucket_duration) {
+                // Group samples into buckets and aggregate
+                let mut buckets: BTreeMap<i64, Vec<f64>> = BTreeMap::new();
+                for dp in &samples {
+                    let bucket_start = (dp.timestamp / bucket_ms) * bucket_ms;
+                    buckets.entry(bucket_start).or_default().push(dp.value);
+                }
 
-            let mut aggregated: Vec<RespValue> = buckets
-                .iter()
-                .map(|(&bucket_ts, values)| {
-                    let agg_value = agg.aggregate(values);
-                    RespValue::Array(vec![
-                        RespValue::Integer(bucket_ts),
-                        RespValue::bulk_string_from_str(&agg_value.to_string()),
-                    ])
-                })
-                .collect();
+                let mut aggregated: Vec<RespValue> = buckets
+                    .iter()
+                    .map(|(&bucket_ts, values)| {
+                        let agg_value = agg.aggregate(values);
+                        RespValue::Array(vec![
+                            RespValue::Integer(bucket_ts),
+                            RespValue::bulk_string_from_str(&agg_value.to_string()),
+                        ])
+                    })
+                    .collect();
 
-            if let Some(limit) = count {
-                aggregated.truncate(limit);
-            }
-            aggregated
-        } else {
-            // No aggregation - return raw samples
-            let mut raw: Vec<RespValue> = samples
-                .iter()
-                .map(|dp| {
-                    RespValue::Array(vec![
-                        RespValue::Integer(dp.timestamp),
-                        RespValue::bulk_string_from_str(&dp.value.to_string()),
-                    ])
-                })
-                .collect();
+                if let Some(limit) = count {
+                    aggregated.truncate(limit);
+                }
+                aggregated
+            } else {
+                // No aggregation - return raw samples
+                let mut raw: Vec<RespValue> = samples
+                    .iter()
+                    .map(|dp| {
+                        RespValue::Array(vec![
+                            RespValue::Integer(dp.timestamp),
+                            RespValue::bulk_string_from_str(&dp.value.to_string()),
+                        ])
+                    })
+                    .collect();
 
-            if let Some(limit) = count {
-                raw.truncate(limit);
-            }
-            raw
-        };
+                if let Some(limit) = count {
+                    raw.truncate(limit);
+                }
+                raw
+            };
 
         debug!(
             "TS.RANGE {} {} {} -> {} samples",
@@ -777,7 +779,9 @@ impl TimeSeriesCommands {
         let dest_key = self.get_string_arg(args, 1, "TS.CREATERULE")?;
 
         // Parse AGGREGATION keyword
-        let agg_keyword = self.get_string_arg(args, 2, "TS.CREATERULE")?.to_uppercase();
+        let agg_keyword = self
+            .get_string_arg(args, 2, "TS.CREATERULE")?
+            .to_uppercase();
         if agg_keyword != "AGGREGATION" {
             return Err(crate::protocols::error::ProtocolError::RespError(
                 "ERR syntax error, expected AGGREGATION".to_string(),
@@ -815,9 +819,9 @@ impl TimeSeriesCommands {
         let rules_storage = get_compaction_rules();
         let mut rules_guard = rules_storage.write().await;
 
-        let rule_exists = rules_guard.iter().any(|r| {
-            r.source_key == source_key && r.dest_key == dest_key
-        });
+        let rule_exists = rules_guard
+            .iter()
+            .any(|r| r.source_key == source_key && r.dest_key == dest_key);
 
         if rule_exists {
             return Err(crate::protocols::error::ProtocolError::RespError(format!(
@@ -1083,12 +1087,30 @@ mod tests {
         assert_eq!(AggregationType::from_str("SUM"), Some(AggregationType::Sum));
         assert_eq!(AggregationType::from_str("MIN"), Some(AggregationType::Min));
         assert_eq!(AggregationType::from_str("MAX"), Some(AggregationType::Max));
-        assert_eq!(AggregationType::from_str("COUNT"), Some(AggregationType::Count));
-        assert_eq!(AggregationType::from_str("FIRST"), Some(AggregationType::First));
-        assert_eq!(AggregationType::from_str("LAST"), Some(AggregationType::Last));
-        assert_eq!(AggregationType::from_str("RANGE"), Some(AggregationType::Range));
-        assert_eq!(AggregationType::from_str("STD.P"), Some(AggregationType::StdP));
-        assert_eq!(AggregationType::from_str("VAR.P"), Some(AggregationType::VarP));
+        assert_eq!(
+            AggregationType::from_str("COUNT"),
+            Some(AggregationType::Count)
+        );
+        assert_eq!(
+            AggregationType::from_str("FIRST"),
+            Some(AggregationType::First)
+        );
+        assert_eq!(
+            AggregationType::from_str("LAST"),
+            Some(AggregationType::Last)
+        );
+        assert_eq!(
+            AggregationType::from_str("RANGE"),
+            Some(AggregationType::Range)
+        );
+        assert_eq!(
+            AggregationType::from_str("STD.P"),
+            Some(AggregationType::StdP)
+        );
+        assert_eq!(
+            AggregationType::from_str("VAR.P"),
+            Some(AggregationType::VarP)
+        );
         assert_eq!(AggregationType::from_str("INVALID"), None);
     }
 
@@ -1165,10 +1187,10 @@ mod tests {
         // Hour 0: 0-3599999
         ts.add_sample(0, 10.0).unwrap();
         ts.add_sample(1800000, 20.0).unwrap(); // 30 min
-        // Hour 1: 3600000-7199999
+                                               // Hour 1: 3600000-7199999
         ts.add_sample(3600000, 30.0).unwrap();
         ts.add_sample(5400000, 40.0).unwrap(); // 1.5 hours
-        // Hour 2: 7200000-10799999
+                                               // Hour 2: 7200000-10799999
         ts.add_sample(7200000, 50.0).unwrap();
 
         let samples = ts.range(0, 10000000);
@@ -1203,10 +1225,13 @@ mod tests {
         let ts_storage = get_time_series();
         let mut ts_guard = ts_storage.write().await;
 
-        let key = format!("test_ts_{}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos());
+        let key = format!(
+            "test_ts_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
 
         let config = TimeSeriesConfig {
             name: key.clone(),
@@ -1257,9 +1282,9 @@ mod tests {
         assert_eq!(rules_guard.len(), initial_count + 1);
 
         // Find the rule
-        let found = rules_guard.iter().find(|r| {
-            r.source_key == "test_source_unique" && r.dest_key == "test_dest_unique"
-        });
+        let found = rules_guard
+            .iter()
+            .find(|r| r.source_key == "test_source_unique" && r.dest_key == "test_dest_unique");
         assert!(found.is_some());
         assert_eq!(found.unwrap().aggregation, AggregationType::Avg);
 
@@ -1312,7 +1337,10 @@ mod tests {
         };
         let ts = TimeSeries::new(config);
 
-        assert_eq!(ts.config.labels.get("location"), Some(&"office".to_string()));
+        assert_eq!(
+            ts.config.labels.get("location"),
+            Some(&"office".to_string())
+        );
         assert_eq!(ts.config.labels.get("floor"), Some(&"3".to_string()));
         assert_eq!(ts.config.labels.len(), 2);
     }

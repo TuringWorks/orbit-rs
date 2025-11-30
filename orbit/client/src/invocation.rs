@@ -1,15 +1,15 @@
 //! Actor invocation system for routing and executing actor method calls
 
+use orbit_proto::{
+    InvocationReasonProto, InvocationRequestProto, MessageContentProto, MessageProto,
+    MessageTargetProto, NodeIdProto,
+};
 use orbit_shared::{
     AddressableInvocation, AddressableInvocationArgument, AddressableInvocationArguments,
     AddressableReference, InvocationReason, OrbitError, OrbitResult,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
-use orbit_proto::{
-    InvocationReasonProto, InvocationRequestProto, MessageContentProto, MessageProto,
-    MessageTargetProto, NodeIdProto,
-};
 use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::time::{timeout, Duration};
 
@@ -95,9 +95,11 @@ impl InvocationSystem {
 
             // Create invocation request
             let request = InvocationRequestProto {
-                reference: Some(orbit_proto::converters::AddressableReferenceConverter::to_proto(
-                    &invocation.reference,
-                )),
+                reference: Some(
+                    orbit_proto::converters::AddressableReferenceConverter::to_proto(
+                        &invocation.reference,
+                    ),
+                ),
                 method: invocation.method,
                 arguments: args_json,
                 reason: InvocationReasonProto::Invocation as i32,
@@ -118,9 +120,9 @@ impl InvocationSystem {
                     )),
                 }),
                 content: Some(MessageContentProto {
-                    content: Some(orbit_proto::message_content_proto::Content::InvocationRequest(
-                        request,
-                    )),
+                    content: Some(
+                        orbit_proto::message_content_proto::Content::InvocationRequest(request),
+                    ),
                 }),
                 attempts: 0,
             };
@@ -218,7 +220,8 @@ impl InvocationSystem {
         };
 
         // Complete the pending invocation
-        self.complete_invocation_result(invocation_id, Ok(result_value)).await;
+        self.complete_invocation_result(invocation_id, Ok(result_value))
+            .await;
 
         Ok(())
     }
@@ -248,7 +251,7 @@ impl InvocationSystem {
     /// Complete a pending invocation with a full result
     #[allow(dead_code)]
     async fn complete_invocation(&self, invocation_id: u64, result: InvocationResult) {
-         let mut pending = self.pending_invocations.write().await;
+        let mut pending = self.pending_invocations.write().await;
         if let Some(pending_inv) = pending.remove(&invocation_id) {
             let _ = pending_inv.sender.send(result);
         }
