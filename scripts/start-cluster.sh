@@ -24,25 +24,32 @@ NC='\033[0m' # No Color
 CLUSTER_SIZE=${1:-3}
 USE_LB_PORTS=${USE_LB_PORTS:-false}  # Set to true when using load balancer
 
-# When using load balancer, nodes use offset ports (LB uses default ports)
-# Without LB, nodes use default ports directly
-if [ "$USE_LB_PORTS" = "true" ]; then
-    BASE_GRPC_PORT=60051
-    BASE_HTTP_PORT=18080
-    BASE_POSTGRES_PORT=15432
-    BASE_REDIS_PORT=16379
-    BASE_MYSQL_PORT=13306
-    BASE_CQL_PORT=19042
-    BASE_METRICS_PORT=19090
-else
-    BASE_GRPC_PORT=50051
-    BASE_HTTP_PORT=8080
-    BASE_POSTGRES_PORT=5432
-    BASE_REDIS_PORT=6379
-    BASE_MYSQL_PORT=3306
-    BASE_CQL_PORT=9042
-    BASE_METRICS_PORT=9090
-fi
+# Configure ports based on USE_LB_PORTS setting
+# This is called as a function so it can be re-evaluated after USE_LB_PORTS is set
+configure_ports() {
+    # When using load balancer, nodes use offset ports (LB uses default ports)
+    # Without LB, nodes use default ports directly
+    if [ "$USE_LB_PORTS" = "true" ]; then
+        BASE_GRPC_PORT=60051
+        BASE_HTTP_PORT=18080
+        BASE_POSTGRES_PORT=15432
+        BASE_REDIS_PORT=16379
+        BASE_MYSQL_PORT=13306
+        BASE_CQL_PORT=19042
+        BASE_METRICS_PORT=19090
+    else
+        BASE_GRPC_PORT=50051
+        BASE_HTTP_PORT=8080
+        BASE_POSTGRES_PORT=5432
+        BASE_REDIS_PORT=6379
+        BASE_MYSQL_PORT=3306
+        BASE_CQL_PORT=9042
+        BASE_METRICS_PORT=9090
+    fi
+}
+
+# Initialize ports with default values
+configure_ports
 
 BASE_DATA_DIR="./cluster-data"
 PID_DIR="./cluster-data/pids"
@@ -389,6 +396,7 @@ main() {
         --with-lb)
             # Start cluster with load balancer (nodes use offset ports)
             export USE_LB_PORTS=true
+            configure_ports  # Re-configure with offset ports
             shift
             CLUSTER_SIZE=${1:-3}
             start_cluster

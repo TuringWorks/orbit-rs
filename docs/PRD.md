@@ -572,19 +572,343 @@ TS.DELETERULE sourceKey destKey
 
 ```
 ┌─────────────────────────────────────────────┐
-│                Hot Tier                      │
+│                Hot Tier                     │
 │           (In-Memory / Redis)               │
 │         < 100ms access latency              │
 ├─────────────────────────────────────────────┤
-│               Warm Tier                      │
+│               Warm Tier                     │
 │          (RocksDB / LSM Tree)               │
 │         < 10ms access latency               │
 ├─────────────────────────────────────────────┤
-│               Cold Tier                      │
+│               Cold Tier                     │
 │        (Apache Iceberg / Parquet)           │
 │         < 1s access latency                 │
 └─────────────────────────────────────────────┘
 ```
+
+### Current Tiered Storage Implementation
+
+The tiered storage system operates at the storage layer, providing automatic data lifecycle management based on access patterns and age thresholds.
+
+#### Storage Tier Definitions
+
+| Tier | Storage Type | Age Threshold | Format | Workload |
+|------|--------------|---------------|--------|----------|
+| **Hot** | Row-based HashMap | < 48 hours | In-memory rows | OLTP |
+| **Warm** | RocksDB/LSM | 48h - 30 days | Key-value | Mixed |
+| **Cold** | Columnar (Iceberg) | > 30 days | Parquet | OLAP |
+
+#### Key Implementation Files
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| TieredTableStorage | `protocols/common/storage/tiered.rs` | Protocol-agnostic tiered storage |
+| HybridStorageManager | `postgres_wire/sql/execution/hybrid.rs` | PostgreSQL hybrid execution |
+| SimpleLocalRegistry | `resp/commands/mod.rs` | Redis local storage (single-tier) |
+| StorageTier enum | `execution/hybrid.rs:14-18` | Tier type definitions |
+
+#### Architecture Diagram
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                     Protocol Layer                           │
+│   ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
+│   │  Redis   │  │ Postgres │  │  MySQL   │  │   CQL    │     │
+│   └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘     │
+│        │             │             │             │           │
+│        ▼             ▼             ▼             ▼           │
+│   ┌──────────────────────────────────────────────────────┐   │
+│   │              TieredTableStorage                      │   │
+│   │  ┌────────────────────────────────────────────────┐  │   │
+│   │  │              HybridStorageManager              │  │   │
+│   │  │  ┌──────-──┐  ┌──────-──┐  ┌────────────────┐  │  │   │
+│   │  │  │  Hot    │  │  Warm   │  │     Cold       │  │  │   │
+│   │  │  │HashMap  │  │RocksDB  │  │ Columnar/Parq. │  │  │   │
+│   │  │  │(<48h)   │  │(48h-30d)│  │    (>30d)      |  │  │   │
+│   │  │  └───────-─┘  └────────-┘  └────────────────┘  │  │   │
+│   │  └────────────────────────────────────────────────┘  │   │
+│   └──────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────┘
+
+           ╔═════════════════════════════════════╗
+           ║    Actor System (SEPARATE)          ║
+           ║  ┌───────────────────────────────┐  ║
+           ║  │       OrbitClient             │  ║
+           ║  │  (Distributed Computing)      │  ║
+           ║  │   - Virtual Actors            │  ║
+           ║  │   - Message Routing           │  ║
+           ║  │   - Service Discovery         │  ║
+           ║  └───────────────────────────────┘  ║
+           ╚═════════════════════════════════════╝
+```
+
+#### Current Limitations
+
+1. **Single-Node Storage**: Each tier operates independently per node; no cross-node data movement
+2. **Actor/Storage Gap**: Actor system handles distributed compute but doesn't participate in storage tiering
+3. **No Cluster-Aware Tiering**: Cold data doesn't migrate to specialized archive nodes
+4. **Manual Configuration**: Tier thresholds are static, not workload-adaptive
+
+### Cluster-Aware Tiered Storage (Proposed Architecture)
+
+The following enhancements would integrate the actor system with tiered storage for true cluster-aware data lifecycle management. The key innovation is **multi-granularity actors** that manage data at different structural levels, enabling fine-grained control over tier placement and seamless cross-tier queries.
+
+#### Multi-Granularity Actor Model
+
+Actors exist at multiple levels of the data hierarchy, each responsible for managing lifecycle and tier placement at their scope:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Actor Granularity Hierarchy                          │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                      TableActor                                     │   │
+│   │  - Manages entire table lifecycle                                   │   │
+│   │  - Coordinates child actors (extent, column)                        │   │
+│   │  - Table-level statistics and tier recommendations                  │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                        │
+│         ┌──────────────────────────┼──────────────────────────┐             │
+│         ▼                          ▼                          ▼             │
+│   ┌─────────────┐          ┌─────────────┐          ┌─────────────┐         │
+│   │ ExtentActor │          │ ColumnActor │          │ IndexActor  │         │
+│   │             │          │             │          │             │         │
+│   │ • Page      │          │ • Columnar  │          │ • B-tree    │         │
+│   │   groups    │          │   segments  │          │   segments  │         │
+│   │ • 64KB-1MB  │          │ • Analytics │          │ • Lookup    │         │
+│   │   blocks    │          │   workloads │          │   paths     │         │
+│   └──────┬──────┘          └──────┬──────┘          └─────────────┘         │
+│          │                        │                                         │
+│          ▼                        ▼                                         │
+│   ┌─────────────┐          ┌─────────────┐                                  │
+│   │  RowActor   │          │ FieldActor  │                                  │
+│   │             │          │             │                                  │
+│   │ • Single    │          │ • Field     │                                  │
+│   │   record    │          │   values    │                                  │
+│   │ • Point     │          │ • BLOB/CLOB │                                  │
+│   │   lookups   │          │ • Large     │                                  │
+│   │             │          │   objects   │                                  │
+│   └─────────────┘          └─────────────┘                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Actor Granularity Definitions
+
+| Level | Actor | Scope | Use Case | Typical Size |
+|-------|-------|-------|----------|--------------|
+| **Table** | TableActor | Entire table | DDL, schema, global stats | 1 per table |
+| **Extent** | ExtentActor | Page groups | Bulk I/O, range scans | 64KB - 1MB |
+| **Column** | ColumnActor | Column segments | Columnar analytics, aggregations | Variable |
+| **Row** | RowActor | Single record | Point lookups, OLTP updates | ~1KB avg |
+| **Field** | FieldActor | Field values | Large objects, BLOBs, versioning | Variable |
+| **Index** | IndexActor | Index segments | Lookup acceleration | Variable |
+
+#### Tier-Aware Actor Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Orbit Cluster - Tiered Actor System                  │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                   StorageCoordinator Actor                          │   │
+│   │  - Monitors data age and access patterns across all nodes           │   │
+│   │  - Coordinates tier transitions (hot→warm→cold)                     │   │
+│   │  - Manages actor placement and migration                            │   │
+│   │  - Enforces replication and consistency policies                    │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                        │
+│         ┌──────────────────────────┼───────────────────────────┐            │
+│         ▼                          ▼                           ▼            │
+│   ┌───────────────┐        ┌───────────────┐        ┌───────────────┐       │
+│   │   Hot Nodes   │        │  Warm Nodes   │        │  Cold Nodes   │       │
+│   │               │        │               │        │               │       │
+│   │ ┌───────────┐ │        │ ┌───────────┐ │        │ ┌───────────┐ │       │
+│   │ │ HotTier   │ │   ──►  │ │ WarmTier  │ │   ──►  │ │ ColdTier  │ │       │
+│   │ │ Actor     │ │ migrate│ │ Actor     │ │ archive│ │ Actor     │ │       │
+│   │ └───────────┘ │        │ └───────────┘ │        │ └───────────┘ │       │
+│   │               │        │               │        │               │       │
+│   │ Child Actors: │        │ Child Actors: │        │ Child Actors: │       │
+│   │ • RowActor    │        │ • ExtentActor │        │ • ColumnActor │       │
+│   │ • FieldActor  │        │ • RowActor    │        │ • ExtentActor │       │
+│   │               │        │               │        │               │       │
+│   │ • In-memory   │        │ • RocksDB     │        │ • Iceberg     │       │
+│   │ • < 48 hours  │        │ • 48h - 30d   │        │ • > 30 days   │       │
+│   │ • OLTP focus  │        │ • Mixed       │        │ • OLAP focus  │       │
+│   │ • SSD/NVMe    │        │ • SSD         │        │ • HDD/Object  │       │
+│   └───────────────┘        └───────────────┘        └───────────────┘       │
+│         ▲                          ▲                           ▲            │
+│         └──────────────────────────┼───────────────────────────┘            │
+│                                    │                                        │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                     TierRouter Actor                                │   │
+│   │  - Smart query routing based on data age and actor location         │   │
+│   │  - Parallel query across tiers for range queries                    │   │
+│   │  - Result merging from multiple tiers with minimal latency          │   │
+│   │  - Actor reference caching for fast lookups                         │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Cross-Tier Query Execution
+
+Queries transparently span all tiers with minimal performance impact:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     Cross-Tier Query Flow                                   │
+│                                                                             │
+│   SELECT * FROM orders WHERE created_at > '2024-01-01'                      │
+│                                    │                                        │
+│                                    ▼                                        │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                      QueryPlanner                                   │   │
+│   │  1. Parse time range predicate                                      │   │
+│   │  2. Identify tier coverage: Hot (last 48h), Warm (48h-30d), Cold    │   │
+│   │  3. Generate parallel sub-queries for each tier                     │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                        │
+│         ┌──────────────────────────┼──────────────────────────┐             │
+│         ▼                          ▼                          ▼             │
+│   ┌─────────────┐          ┌─────────────┐          ┌─────────────┐         │
+│   │ Hot Query   │          │ Warm Query  │          │ Cold Query  │         │
+│   │ (parallel)  │          │ (parallel)  │          │ (parallel)  │         │
+│   │             │          │             │          │             │         │
+│   │ RowActor    │          │ ExtentActor │          │ ColumnActor │         │
+│   │ scan        │          │ range scan  │          │ columnar    │         │
+│   │ < 1ms       │          │ < 10ms      │          │ scan        │         │
+│   │             │          │             │          │ < 100ms     │         │
+│   └──────┬──────┘          └──────┬──────┘          └──────┬──────┘         │
+│          │                        │                        │                │
+│          └────────────────────────┼────────────────────────┘                │
+│                                   ▼                                         │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                      ResultMerger                                   │   │
+│   │  - Streaming merge as results arrive                                │   │
+│   │  - Timestamp-ordered output                                         │   │
+│   │  - Deduplication across tier boundaries                             │   │
+│   │  - Total latency: max(tier latencies) + merge overhead              │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Actor Migration Between Tiers
+
+Actors move between tiers based on age and access patterns:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     Actor Tier Migration                                    │
+│                                                                             │
+│   RowActor (order_123)                                                      │
+│   ├── Created: Hot tier (in-memory, row format)                             │
+│   │   └── Age: 0-48 hours, Access: High frequency                           │
+│   │                                                                         │
+│   ├── Migrated: Hot → Warm                                                  │
+│   │   └── Trigger: Age > 48 hours OR access frequency < threshold           │
+│   │   └── Transform: Row → RocksDB key-value                                │
+│   │   └── Actor type: RowActor → ExtentActor (grouped with similar rows)    │
+│   │                                                                         │
+│   └── Archived: Warm → Cold                                                 │
+│       └── Trigger: Age > 30 days                                            │
+│       └── Transform: Row → Columnar (Parquet segment)                       │
+│       └── Actor type: ExtentActor → ColumnActor (analytical format)         │
+│                                                                             │
+│   Migration is transparent to queries - TierRouter maintains actor registry │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Proposed Implementation Phases
+
+| Phase | Component | Description |
+|-------|-----------|-------------|
+| 1 | StorageCoordinatorActor | Central actor tracking data age and tier assignments |
+| 2 | Multi-granularity actors | TableActor, ExtentActor, ColumnActor, RowActor, FieldActor, IndexActor |
+| 3 | TierRouter | Query routing based on timestamps and actor location registry |
+| 4 | DataMigrationWorker | Background actor for tier-to-tier data and actor movement |
+| 5 | CrossTierQueryExecutor | Parallel query execution across tiers with result merging |
+| 6 | ClusterAwareHybridStorage | Updated HybridStorageManager with actor integration |
+
+#### Key Actor Messages
+
+```rust
+// Multi-granularity storage actor message types
+enum StorageMessage {
+    // Actor Lifecycle
+    CreateActor { granularity: Granularity, id: ActorId, tier: StorageTier },
+    MigrateActor { actor_id: ActorId, from_tier: StorageTier, to_tier: StorageTier },
+    DeactivateActor { actor_id: ActorId },
+
+    // Tier Coordination
+    RegisterTierNode { node_id: NodeId, tier: StorageTier, capacity: u64 },
+    ReportActorStats { actor_id: ActorId, access_count: u64, last_access: DateTime },
+
+    // Cross-Tier Query
+    RouteQuery { query: Query, time_range: TimeRange },
+    QueryTier { tier: StorageTier, sub_query: Query },
+    MergeResults { results: Vec<TierResult> },
+
+    // Data Operations (granularity-aware)
+    ReadRow { table: String, key: RowKey },
+    ReadExtent { table: String, extent_id: ExtentId },
+    ReadColumn { table: String, column: String, range: RowRange },
+    ReadField { table: String, row: RowKey, field: String },
+}
+
+enum Granularity {
+    Table,
+    Extent,
+    Column,
+    Row,
+    Field,
+    Index,
+}
+```
+
+#### Configuration (Proposed)
+
+```toml
+[storage.tiering]
+enabled = true
+hot_threshold_hours = 48
+warm_threshold_days = 30
+
+[storage.tiering.actors]
+# Granularity-specific settings
+row_actor_hot_threshold = 1000      # Access count before considering migration
+extent_size_bytes = 65536           # 64KB extent grouping
+column_segment_rows = 100000        # Rows per column segment
+field_actor_min_size = 4096         # Min bytes to warrant separate FieldActor
+
+[storage.tiering.cluster]
+enabled = true
+hot_nodes = ["node-1", "node-2"]      # Fast OLTP nodes
+warm_nodes = ["node-3", "node-4"]      # General-purpose nodes
+cold_nodes = ["node-5"]                 # Archive/OLAP node
+replication_factor = 2                  # Copies per tier
+migration_batch_size = 10000            # Rows per migration batch
+
+[storage.tiering.routing]
+prefer_hot_for_recent = true           # Route recent queries to hot tier
+parallel_tier_query = true              # Query multiple tiers in parallel
+merge_strategy = "streaming"            # "streaming" or "batch"
+actor_cache_ttl_seconds = 300          # Cache actor locations for routing
+
+[storage.tiering.query]
+cross_tier_timeout_ms = 5000           # Max time for cross-tier query
+hot_tier_priority = true               # Return hot results first (streaming)
+cold_tier_pushdown = true              # Push predicates to columnar engine
+```
+
+#### Benefits of Multi-Granularity Actor Tiering
+
+1. **Fine-Grained Control**: Move individual rows, columns, or extents between tiers based on actual access patterns
+2. **Optimal Storage Format**: Row format in hot (OLTP), extent format in warm (mixed), columnar in cold (OLAP)
+3. **Transparent Queries**: Applications query as if data is in one place; TierRouter handles distribution
+4. **Minimal Query Latency**: Parallel tier queries with streaming merge; total time ≈ slowest tier
+5. **Actor Locality**: Actors migrate with their data; no remote calls for local data
+6. **Adaptive Placement**: AI subsystem can recommend actor migrations based on workload patterns
+7. **Specialized Hardware**: Hot nodes with NVMe for row actors, cold nodes with HDD for column actors
+8. **Cost Optimization**: Granular tiering moves only cold data to cheaper storage
 
 ---
 
@@ -594,12 +918,12 @@ TS.DELETERULE sourceKey destKey
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                   AI Master Controller                       │
+│                   AI Master Controller                      │
 │              (10-second control loop)                       │
-├──────────────┬──────────────┬──────────────┬───────────────┤
-│   Query      │   Resource   │   Storage    │  Transaction  │
-│  Optimizer   │   Manager    │   Manager    │   Manager     │
-├──────────────┼──────────────┼──────────────┼───────────────┤
+├──────────────┬──────────────┬──────────────┬────────────-───┤
+│   Query      │   Resource   │   Storage    │  Transaction   │
+│  Optimizer   │   Manager    │   Manager    │   Manager      │
+├──────────────┼──────────────┼──────────────┼──────────────-─┤
 │   Learning Engine    │    Decision Engine    │  Knowledge   │
 │                      │                       │    Base      │
 └──────────────────────┴───────────────────────┴──────────────┘

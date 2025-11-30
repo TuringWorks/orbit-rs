@@ -1067,8 +1067,9 @@ async fn start_redis_server(
             }
         };
 
-    // Create OrbitClient
-    let orbit_client = orbit_client::OrbitClient::new(client_config).await?;
+    // Create OrbitClient in offline mode - no network connection needed
+    // The orbit_client is reserved for future use in CommandHandler but not currently used
+    let orbit_client = orbit_client::OrbitClient::new_offline(client_config).await?;
 
     let redis_server = RespServer::new_with_persistence(bind_addr, orbit_client, redis_provider);
 
