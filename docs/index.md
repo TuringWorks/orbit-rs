@@ -67,12 +67,12 @@ For developers building applications with Orbit-RS.
 
 For system administrators and DevOps engineers.
 
-- [**Kubernetes Deployment**](content/deployment/KUBERNETES_COMPLETE_DOCUMENTATION.md) - Production Kubernetes setup
+- [**Kubernetes Deployment**](content/server/KUBERNETES_COMPLETE_DOCUMENTATION.md) - Production Kubernetes setup
 - [**Configuration Reference**](content/deployment/CONFIGURATION.md) - Complete configuration guide
 - [**Storage Architecture**](PRD.md#storage-architecture) - Storage backends and tiering
-- [**Security**](content/security/SECURITY_COMPLETE_DOCUMENTATION.md) - Security policies and practices
+- [**Security**](content/server/SECURITY_COMPLETE_DOCUMENTATION.md) - Security policies and practices
 - [**Operations Runbook**](content/operations/OPERATIONS_RUNBOOK.md) - Monitoring and troubleshooting
-- [**Performance Tuning**](content/performance/PETABYTE_SCALE_PERFORMANCE.md) - Optimization guide
+- [**Performance Tuning**](content/server/PETABYTE_SCALE_PERFORMANCE.md) - Optimization guide
 
 ### **Feature Guides**
 
@@ -81,13 +81,13 @@ Deep dives into Orbit-RS capabilities.
 - [**SQL Engine**](content/protocols/POSTGRES_WIRE_IMPLEMENTATION.md) - PostgreSQL wire protocol and SQL
 - [**Time Series**](content/server/TIMESERIES_IMPLEMENTATION_SUMMARY.md) - RedisTimeSeries compatibility
 - [**Graph Database**](content/graph/GRAPH_DATABASE.md) - Graph data models and queries
-- [**Vector Operations**](content/protocols/vector_commands.md) - AI/ML vector database
+- [**Vector Operations**](content/server/vector_commands.md) - AI/ML vector database
 - [**Redis Commands**](content/protocols/REDIS_COMMANDS_REFERENCE.md) - 124+ RESP commands
 - [**MySQL Protocol**](content/protocols/MYSQL_COMPLETE_DOCUMENTATION.md) - MySQL wire protocol
 - [**CQL Protocol**](content/protocols/CQL_COMPLETE_DOCUMENTATION.md) - Cassandra Query Language
 - [**Hardware Acceleration**](content/gpu-compute/COMPUTE_ACCELERATION_GUIDE.md) - GPU/Neural compute
-- [**AQL Reference**](content/protocols/AQL_REFERENCE.md) - ArangoDB Query Language support
-- [**GraphRAG Integration**](content/graphrag/GRAPHRAG_COMPLETE_DOCUMENTATION.md) - AI and graph analytics
+- [**AQL Reference**](content/aql/AQL_REFERENCE.md) - ArangoDB Query Language support
+- [**GraphRAG Integration**](content/graph-rag/GRAPHRAG_COMPLETE_DOCUMENTATION.md) - AI and graph analytics
 
 ### **Project Information**
 
@@ -96,7 +96,7 @@ Project status, roadmap, and community information.
 - [**Features**](features.md) - Complete feature list
 - [**Project Status**](status.md) - Current implementation status  
 - [**Changelog**](content/development/CHANGELOG.md) - Version history and changes
-- [**Migration Guide**](content/migration/MIGRATION_GUIDE.md) - Migrating from other databases
+- [**Migration Guide**](content/engine/MIGRATION.md) - Migrating from other databases
 - [**Contributing**](contributing.md) - Community guidelines and support
 
 ---
@@ -194,21 +194,21 @@ Powerful heterogeneous compute engine for maximum performance.
 - [**Getting Started Tutorial**](quick_start.md) - Your first Orbit-RS application
 - [**SQL Tutorial**](content/protocols/POSTGRES_WIRE_IMPLEMENTATION.md) - SQL features and vector operations
 - [**Time Series Tutorial**](content/server/TIMESERIES_IMPLEMENTATION_SUMMARY.md) - Time series data management
-- [**Transaction Programming**](content/features/advanced_transaction_features.md) - Building with distributed transactions
-- [**Kubernetes Deployment**](content/deployment/KUBERNETES_COMPLETE_DOCUMENTATION.md) - Production deployment guide
+- [**Transaction Programming**](planning/features/transaction_features.md) - Building with distributed transactions
+- [**Kubernetes Deployment**](content/server/KUBERNETES_COMPLETE_DOCUMENTATION.md) - Production deployment guide
 
 ### **Documentation**
 
 - [**Architecture Overview**](project_overview.md) - Understanding Orbit-RS design principles
 - [**Product Requirements Document**](PRD.md) - Complete architecture and module reference
-- [**Performance Guide**](content/performance/PETABYTE_SCALE_PERFORMANCE.md) - Optimization and tuning  
+- [**Performance Guide**](content/server/PETABYTE_SCALE_PERFORMANCE.md) - Optimization and tuning  
 - [**Storage Architecture**](PRD.md#storage-architecture) - Storage backends and tiering
 
 ### **Development Resources**
 
 - [**Development Guide**](content/DEVELOPMENT.md) - Understanding the codebase
-- [**Migration Guide**](content/migration/MIGRATION_GUIDE.md) - Moving from other databases
-- [**Security Guide**](content/security/SECURITY_COMPLETE_DOCUMENTATION.md) - Security best practices
+- [**Migration Guide**](content/engine/MIGRATION.md) - Moving from other databases
+- [**Security Guide**](content/server/SECURITY_COMPLETE_DOCUMENTATION.md) - Security best practices
 - [**Operations Runbook**](content/operations/OPERATIONS_RUNBOOK.md) - Monitoring and troubleshooting
 
 ## Community & Support
@@ -254,9 +254,9 @@ Orbit-RS is released under **dual license: MIT or BSD-3-Clause**.
 
 **For Operators:**  
 
-- [Kubernetes Guide](content/deployment/KUBERNETES_COMPLETE_DOCUMENTATION.md)
+- [Kubernetes Guide](content/server/KUBERNETES_COMPLETE_DOCUMENTATION.md)
 - [Configuration Reference](content/deployment/CONFIGURATION.md)
-- [Security Configuration](content/security/SECURITY_COMPLETE_DOCUMENTATION.md)
+- [Security Configuration](content/server/SECURITY_COMPLETE_DOCUMENTATION.md)
 - [Operations Runbook](content/operations/OPERATIONS_RUNBOOK.md)
 
 **For Decision Makers:**
