@@ -96,7 +96,7 @@ Project status, roadmap, and community information.
 - [**Features**](features.md) - Complete feature list
 - [**Project Status**](status.md) - Current implementation status  
 - [**Changelog**](content/development/CHANGELOG.md) - Version history and changes
-- [**Migration Guide**](content/engine/MIGRATION.md) - Migrating from other databases
+- [**Migration Guide**](content/migration/MIGRATION_GUIDE.md) - Migrating from other databases
 - [**Contributing**](contributing.md) - Community guidelines and support
 
 ---

@@ -595,21 +595,21 @@ Now that you have Orbit-RS multi-protocol server running, explore these guides:
 - 🐘 **[PostgreSQL Compatibility](content/protocols/POSTGRES_WIRE_IMPLEMENTATION.md)** - SQL features and pgvector
 - 🔴 **[Redis Compatibility](content/protocols/REDIS_COMMANDS_REFERENCE.md)** - Key-value, time series, and vector operations
 - 🌐 **[REST API Reference](content/protocols/protocol_adapters.md)** - HTTP endpoints and usage
-- 🔢 **[Vector Operations Guide](content/protocols/vector_commands.md)** - Cross-protocol vector search
+- 🔢 **[Vector Operations Guide](content/server/vector_commands.md)** - Cross-protocol vector search
 
 ### **Advanced Features**
 
-- 💾 **[Transaction Features](content/features/transaction_features.md)** - Distributed ACID transactions
+- 💾 **[Transaction Features](planning/features/transaction_features.md)** - Distributed ACID transactions
 - 📊 **[Time Series Guide](content/server/TIMESERIES_IMPLEMENTATION_SUMMARY.md)** - Redis TimeSeries compatibility
-- ☸️ **[Kubernetes Documentation](content/deployment/KUBERNETES_COMPLETE_DOCUMENTATION.md)** - Production deployment
-- 🎭 **[Actor System Guide](content/architecture/virtual_actor_persistence.md)** - Virtual actors and distribution
+- ☸️ **[Kubernetes Documentation](content/server/KUBERNETES_COMPLETE_DOCUMENTATION.md)** - Production deployment
+- 🎭 **[Actor System Guide](content/storage/virtual_actor_persistence.md)** - Virtual actors and distribution
 
 ### **Development & Operations**
 
 - 👨‍💻 **[Development Guide](contributing.md)** - Contributing to Orbit-RS
-- 🔒 **[Security Guide](content/security/SECURITY_COMPLETE_DOCUMENTATION.md)** - Authentication and authorization
+- 🔒 **[Security Guide](content/server/SECURITY_COMPLETE_DOCUMENTATION.md)** - Authentication and authorization
 - 📈 **[Monitoring Guide](content/operations/OPERATIONS_RUNBOOK.md)** - Metrics and observability
-- 🚀 **[Performance Tuning](content/performance/PETABYTE_SCALE_PERFORMANCE.md)** - Optimize for your workload
+- 🚀 **[Performance Tuning](content/server/PETABYTE_SCALE_PERFORMANCE.md)** - Optimize for your workload
 
 ### **Migration Guides**
 
