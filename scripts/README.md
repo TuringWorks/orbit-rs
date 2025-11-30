@@ -106,6 +106,53 @@ cd tests && behave
 ./scripts/start-cluster.sh --stop
 ```
 
+#### start-cluster-lb.sh
+
+Lightweight load balancer for cluster testing. Listens on default ports and distributes to cluster nodes.
+
+```bash
+./scripts/start-cluster-lb.sh              # Start LB for 3-node cluster
+./scripts/start-cluster-lb.sh --stop       # Stop load balancer
+./scripts/start-cluster-lb.sh --status     # Show LB status
+```
+
+**Requires:** HAProxy (recommended) or socat
+
+```bash
+# macOS
+brew install haproxy
+
+# Ubuntu
+apt install haproxy
+```
+
+**Usage with Load Balancer:**
+
+```bash
+# 1. Start cluster with LB-compatible ports
+./scripts/start-cluster.sh --with-lb
+
+# 2. Start load balancer
+./scripts/start-cluster-lb.sh
+
+# 3. Connect using default ports (LB handles routing)
+redis-cli -p 6379                    # Connects via LB
+psql -h 127.0.0.1 -p 5432 -U orbit   # Connects via LB
+
+# 4. HAProxy stats available at http://127.0.0.1:9999
+
+# 5. Stop everything
+./scripts/start-cluster-lb.sh --stop
+./scripts/start-cluster.sh --stop
+```
+
+**Architecture:**
+```
+Client (redis-cli :6379) --> Load Balancer --> Node 1 (:16379)
+                                           --> Node 2 (:16380)
+                                           --> Node 3 (:16381)
+```
+
 ### CI/CD
 
 #### run-ci.sh

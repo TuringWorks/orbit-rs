@@ -22,13 +22,28 @@ NC='\033[0m' # No Color
 
 # Configuration
 CLUSTER_SIZE=${1:-3}
-BASE_GRPC_PORT=50051
-BASE_HTTP_PORT=8080
-BASE_POSTGRES_PORT=5432
-BASE_REDIS_PORT=6379
-BASE_MYSQL_PORT=3306
-BASE_CQL_PORT=9042
-BASE_METRICS_PORT=9090
+USE_LB_PORTS=${USE_LB_PORTS:-false}  # Set to true when using load balancer
+
+# When using load balancer, nodes use offset ports (LB uses default ports)
+# Without LB, nodes use default ports directly
+if [ "$USE_LB_PORTS" = "true" ]; then
+    BASE_GRPC_PORT=60051
+    BASE_HTTP_PORT=18080
+    BASE_POSTGRES_PORT=15432
+    BASE_REDIS_PORT=16379
+    BASE_MYSQL_PORT=13306
+    BASE_CQL_PORT=19042
+    BASE_METRICS_PORT=19090
+else
+    BASE_GRPC_PORT=50051
+    BASE_HTTP_PORT=8080
+    BASE_POSTGRES_PORT=5432
+    BASE_REDIS_PORT=6379
+    BASE_MYSQL_PORT=3306
+    BASE_CQL_PORT=9042
+    BASE_METRICS_PORT=9090
+fi
+
 BASE_DATA_DIR="./cluster-data"
 PID_DIR="./cluster-data/pids"
 LOG_DIR="./cluster-data/logs"
@@ -371,11 +386,22 @@ main() {
         --clean|-c)
             clean_cluster
             ;;
+        --with-lb)
+            # Start cluster with load balancer (nodes use offset ports)
+            export USE_LB_PORTS=true
+            shift
+            CLUSTER_SIZE=${1:-3}
+            start_cluster
+            print_status ""
+            print_status "Now start the load balancer:"
+            print_status "  ./scripts/start-cluster-lb.sh $CLUSTER_SIZE"
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTION] [CLUSTER_SIZE]"
             echo ""
             echo "Options:"
             echo "  <number>      Start cluster with specified number of nodes (default: 3)"
+            echo "  --with-lb [N] Start cluster configured for load balancer"
             echo "  --stop, -s    Stop running cluster"
             echo "  --status, -S  Show cluster status"
             echo "  --logs, -l N  Tail logs for node N"
@@ -383,15 +409,20 @@ main() {
             echo "  --help, -h    Show this help message"
             echo ""
             echo "Examples:"
-            echo "  $0              # Start 3-node cluster"
+            echo "  $0              # Start 3-node cluster (direct access)"
             echo "  $0 5            # Start 5-node cluster"
+            echo "  $0 --with-lb    # Start cluster + use with load balancer"
             echo "  $0 --stop       # Stop cluster"
             echo "  $0 --logs 1     # Tail node 1 logs"
             echo ""
-            echo "Port allocation (per node):"
-            echo "  Node 1: Redis=6379, PostgreSQL=5432, MySQL=3306, CQL=9042, HTTP=8080, gRPC=50051"
-            echo "  Node 2: Redis=6380, PostgreSQL=5433, MySQL=3307, CQL=9043, HTTP=8081, gRPC=50052"
-            echo "  Node N: Ports increment by 1 for each node"
+            echo "Direct access (no load balancer):"
+            echo "  Node 1: Redis=6379, PostgreSQL=5432, MySQL=3306, CQL=9042"
+            echo "  Node 2: Redis=6380, PostgreSQL=5433, MySQL=3307, CQL=9043"
+            echo ""
+            echo "With load balancer (--with-lb):"
+            echo "  LB:     Redis=6379, PostgreSQL=5432 (default ports)"
+            echo "  Node 1: Redis=16379, PostgreSQL=15432 (offset ports)"
+            echo "  Node 2: Redis=16380, PostgreSQL=15433"
             ;;
         [0-9]*)
             CLUSTER_SIZE=$1
