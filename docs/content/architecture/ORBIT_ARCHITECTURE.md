@@ -741,7 +741,7 @@ Saga States: NotStarted → Running → Completed | Compensating → Compensated
      - ✅ In-memory caching for fast access
    - **Persistence**: Full RocksDB persistence with column families
    - **Use Cases**: Graph database queries, Neo4j client compatibility, persistent graph storage
-   - **Documentation**: See [Protocol Persistence Status](../../archive/PROTOCOL_PERSISTENCE_STATUS.md)
+   - **Documentation**: See [Protocol Persistence Status](../protocols/PROTOCOL_PERSISTENCE_GUIDE.md)
 
 9. **AQL (ArangoDB Query Language)** - Port 8529
    - **Status**: ✅ **Production-Ready** (RocksDB Persistence)
@@ -754,7 +754,7 @@ Saga States: NotStarted → Running → Completed | Compensating → Compensated
      - ✅ In-memory caching for fast access
    - **Persistence**: Full RocksDB persistence with column families
    - **Use Cases**: Multi-model database queries, ArangoDB client compatibility, persistent document/graph storage
-   - **Documentation**: See [Protocol Persistence Status](../../archive/PROTOCOL_PERSISTENCE_STATUS.md)
+   - **Documentation**: See [Protocol Persistence Status](../protocols/PROTOCOL_PERSISTENCE_GUIDE.md)
 
 ### Experimental Protocols
 
