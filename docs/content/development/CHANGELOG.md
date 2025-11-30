@@ -229,6 +229,223 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/content/api/API_REFERENCE.md` - Comprehensive API documentation
 - `docs/content/migration/MIGRATION_GUIDE.md` - Database migration guides
 
+#### **Infrastructure: Lightweight TCP Load Balancer** (2025-11-28)
+
+- **New `orbit-lb` Binary**: Rust-based TCP load balancer for cluster testing
+  - Multiple load balancing strategies (round-robin, least connections)
+  - Health check integration with automatic failover
+  - Multi-protocol support (Redis, PostgreSQL, MySQL, CQL, gRPC)
+  - Configurable backend pools and connection limits
+
+- **Cluster Testing Scripts**
+  - `scripts/start-cluster.sh` - Local multi-node cluster startup
+  - `scripts/start-cluster-lb.sh` - Cluster with load balancer integration
+  - Automated node discovery and registration
+
+#### **Feature: OrbitClient In-Process Communication** (2025-11-27)
+
+- **In-Process Actor Communication**
+  - Direct actor invocation without network overhead
+  - Shared memory communication for co-located actors
+  - Transparent fallback to gRPC for distributed calls
+  - Improved latency for local actor interactions
+
+#### **Feature: Enhanced Cypher Query Language** (2025-11-25)
+
+##### Complete Cypher Parser and Graph Algorithm Support
+
+- **Extended Cypher Operations**
+  - `DELETE` and `DETACH DELETE` for node/relationship removal
+  - `SET` for property updates with multiple assignment patterns
+  - `MERGE` for upsert operations with ON CREATE/ON MATCH clauses
+  - `REMOVE` for property and label removal
+  - `ORDER BY` with ASC/DESC and multi-field sorting
+  - `LIMIT` and `SKIP` for result pagination
+
+- **CALL Procedure Support**
+  - Graph algorithm procedures: PageRank, BFS, DFS, Dijkstra shortest path
+  - Centrality metrics: Betweenness, Closeness, Degree centrality
+  - Community detection: Connected components, Triangle counting
+  - Pattern matching: Variable-length paths, relationship patterns
+
+- **Query Enhancements**
+  - Aggregation functions (COUNT, SUM, AVG, MIN, MAX, COLLECT)
+  - `WITH` clause for query pipelining
+  - Variable-length path patterns `[*1..5]`
+  - 38+ tests passing (100% pass rate)
+
+#### **Feature: Time Series Compression and Aggregation** (2025-11-24)
+
+##### Production-Ready Time Series Engine
+
+- **Compression Algorithms**
+  - Delta encoding for timestamps
+  - Double-Delta (Facebook Gorilla) for high compression
+  - XOR-based floating-point compression
+  - Configurable compression thresholds
+
+- **Aggregation Functions**
+  - Moving Average (SMA, EMA, WMA)
+  - EWMA (Exponentially Weighted Moving Average)
+  - Rate and Derivative calculations
+  - Anomaly detection with configurable thresholds
+
+- **Partitioning Strategies**
+  - Series count-based partitioning
+  - Data size-based partitioning
+  - Composite partitioning with multiple criteria
+  - Automatic partition management
+
+- **New Commands**
+  - `TS.CREATERULE` for downsampling rules
+  - `TS.RANGE` with AGGREGATION support
+  - Enhanced retention policies
+  - 44+ tests passing
+
+#### **Feature: Security Framework (RFC-014)** (2025-11-22)
+
+##### Enterprise Security with Multi-Tenant Isolation
+
+- **Row-Level Security (RLS)**
+  - Policy-based row filtering
+  - User context propagation
+  - Automatic query rewriting
+  - Multi-tenant data isolation
+
+- **Field-Level Encryption (FLE)**
+  - AES-256-GCM encryption
+  - Key rotation support
+  - Searchable encryption for indexed fields
+  - Transparent encryption/decryption
+
+- **Dynamic Data Masking**
+  - Configurable masking patterns
+  - Role-based mask application
+  - Partial masking (first/last N characters)
+  - Custom masking functions
+
+- **Multi-Tenant Security Framework**
+  - Tenant isolation at storage level
+  - Cross-tenant access prevention
+  - Audit logging per tenant
+  - Resource quotas and limits
+
+#### **Feature: GPU Acceleration Backends** (2025-11-20)
+
+##### Cross-Platform Heterogeneous Compute Engine
+
+- **CUDA Backend** (`gpu-cuda` feature)
+  - NVIDIA GPU support with cudarc integration
+  - NVRTC runtime compilation
+  - Filter, bitmap, and aggregation operations
+  - Vector similarity (cosine, euclidean, dot product)
+  - Spatial distance calculations (Haversine)
+  - Graph traversal (BFS, Dijkstra)
+  - Tiled matrix multiplication (GEMM)
+  - Time-series window aggregation
+  - Hash join operations (build & probe)
+
+- **WindowsML Backend** (`gpu-windowsml` feature)
+  - DirectX 12 device initialization
+  - DirectML availability detection
+  - CPU fallback with rayon parallel processing
+  - Windows 10 1903+ support
+
+- **Metal Backend** (macOS/iOS)
+  - Apple Silicon optimization
+  - Unified memory architecture
+  - Complete test coverage
+  - 5-50x speedups for parallelizable workloads
+
+- **Vulkan Backend** (Cross-platform)
+  - SPIR-V shader compilation
+  - GLSL compute shaders
+  - Cross-platform GPU abstraction
+  - Device pooling for reduced initialization overhead
+
+- **Auto-Detection System**
+  - Intelligent hardware discovery
+  - Automatic workload routing
+  - Graceful fallback to CPU SIMD
+  - Performance-based device selection
+
+#### **Feature: Apache Iceberg Cold Tier Integration** (2025-11-15)
+
+##### Three-Tier Hybrid Storage Architecture
+
+- **Iceberg Integration**
+  - Apache Iceberg format for cold tier storage
+  - Parquet files with Zstd compression
+  - Metadata-based pruning (100-1000x faster queries)
+  - Time travel queries via snapshots
+  - Schema evolution without data rewrites
+
+- **HybridStorageManager**
+  - Hot tier: RocksDB for OLTP workloads
+  - Warm tier: Columnar batches for analytics
+  - Cold tier: Iceberg on S3/Azure Blob
+  - Automatic tier migration based on access patterns
+
+- **Cloud Storage Support**
+  - AWS S3 integration
+  - Azure Blob Storage support
+  - MinIO for on-premises deployments
+  - Configurable retention policies
+
+- **Time Travel Support**
+  - `AS OF TIMESTAMP` queries
+  - `AS OF VERSION` queries
+  - Cross-protocol time travel (PostgreSQL, Redis, MySQL, CQL)
+  - Snapshot management and cleanup
+
+#### **Feature: PostgreSQL SCRAM-SHA-256 Authentication** (2025-11-12)
+
+- **Enhanced Authentication**
+  - MD5 password authentication
+  - SCRAM-SHA-256 (RFC 7677) support
+  - Channel binding for TLS connections
+  - Proper salting and iteration counts
+
+#### **Feature: Vectorized Query Execution** (2025-11-10)
+
+- **Columnar Execution Engine**
+  - Batch-oriented processing
+  - SIMD-optimized operators
+  - Late materialization
+  - Predicate pushdown
+
+- **Performance Benchmarks**
+  - Comprehensive Phase 9 benchmarks
+  - TPC-H style queries
+  - Comparison metrics vs row-based execution
+
+#### **Infrastructure: Code Reorganization** (2025-11-08)
+
+- **Project Structure**
+  - All crates moved under `orbit/` parent directory
+  - Consistent naming conventions
+  - Improved module organization
+  - Updated documentation links
+
+- **Dependency Updates**
+  - tonic 0.14, prost 0.14
+  - kube 0.99, k8s-openapi 0.23
+  - Security fix for protobuf vulnerability (removed tikv-client)
+
+#### **Feature: Streaming ML Inference Pipeline** (2025-11-05)
+
+- **Real-Time ML Processing**
+  - Streaming inference with batching
+  - Model caching for hot paths
+  - Asynchronous prediction pipelines
+  - Integration with actor system
+
+- **Actor Memory Behavior Traits**
+  - RFC_ACTOR_MEMORY_INTEGRATION implementation
+  - Memory-aware actor scheduling
+  - Garbage collection integration
+  - Resource limit enforcement
+
 ####  **Major Feature: Digital Ocean Cloud Deployment Support** (2025-01-09)
 
 ##### Complete Digital Ocean Integration with GPU Support and Object Storage
