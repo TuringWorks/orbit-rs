@@ -690,7 +690,7 @@ Saga States: NotStarted → Running → Completed | Compensating → Compensated
      - Syntax Tests: 36/36 passing (100% pass rate)
      - **Total**: 68+ tests passing
    - **Production Readiness**: 100% - Fully production ready, all commands implemented
-   - **Documentation**: See [MySQL Complete Documentation](../MYSQL_COMPLETE_DOCUMENTATION.md)
+   - **Documentation**: See [MySQL Complete Documentation](../protocols/MYSQL_COMPLETE_DOCUMENTATION.md)
 
 7. **CQL (Cassandra Query Language)** - Port 9042
    - **Status**: **Production Ready** (100% Complete)
@@ -728,7 +728,7 @@ Saga States: NotStarted → Running → Completed | Compensating → Compensated
      - Integration Tests: 7/7 (100%)
      - Query Execution Tests: 23/23 (100%)
    - **Production Readiness**: 100% ✅ - Fully production ready, all tests passing (38/38), complete feature set including collection types, authentication, and deployment guide
-   - **Documentation**: See [CQL Complete Documentation](../CQL_COMPLETE_DOCUMENTATION.md) for comprehensive details
+   - **Documentation**: See [CQL Complete Documentation](../protocols/CQL_COMPLETE_DOCUMENTATION.md) for comprehensive details
 
 8. **Cypher/Bolt Protocol (Neo4j)** - Port 7687
    - **Status**: ✅ **Production-Ready** (RocksDB Persistence)
@@ -741,7 +741,7 @@ Saga States: NotStarted → Running → Completed | Compensating → Compensated
      - ✅ In-memory caching for fast access
    - **Persistence**: Full RocksDB persistence with column families
    - **Use Cases**: Graph database queries, Neo4j client compatibility, persistent graph storage
-   - **Documentation**: See [Protocol Persistence Status](../PROTOCOL_PERSISTENCE_STATUS.md)
+   - **Documentation**: See [Protocol Persistence Status](../../archive/PROTOCOL_PERSISTENCE_STATUS.md)
 
 9. **AQL (ArangoDB Query Language)** - Port 8529
    - **Status**: ✅ **Production-Ready** (RocksDB Persistence)
@@ -754,7 +754,7 @@ Saga States: NotStarted → Running → Completed | Compensating → Compensated
      - ✅ In-memory caching for fast access
    - **Persistence**: Full RocksDB persistence with column families
    - **Use Cases**: Multi-model database queries, ArangoDB client compatibility, persistent document/graph storage
-   - **Documentation**: See [Protocol Persistence Status](../PROTOCOL_PERSISTENCE_STATUS.md)
+   - **Documentation**: See [Protocol Persistence Status](../../archive/PROTOCOL_PERSISTENCE_STATUS.md)
 
 ### Experimental Protocols
 
@@ -788,8 +788,8 @@ Saga States: NotStarted → Running → Completed | Compensating → Compensated
 | OrbitQL | High | ✅ Production-Ready | 20+ tests, 90% core features complete |
 | REST API | High | ✅ Production-Ready | OpenAPI documentation, WebSocket support |
 | gRPC | High | ✅ Production-Ready | Core protocol, fully integrated |
-| MySQL | High | ✅ Production-Ready | 100% complete, 68+ tests passing (100%), all MySQL commands implemented, comprehensive test coverage. See [MySQL Complete Documentation](../MYSQL_COMPLETE_DOCUMENTATION.md) |
-| CQL | High | ✅ Production-Ready | 100% complete, 38/38 tests passing (100%), collection types, authentication, metrics, and deployment guide. See [CQL Complete Documentation](../CQL_COMPLETE_DOCUMENTATION.md) |
+| MySQL | High | ✅ Production-Ready | 100% complete, 68+ tests passing (100%), all MySQL commands implemented, comprehensive test coverage. See [MySQL Complete Documentation](../protocols/MYSQL_COMPLETE_DOCUMENTATION.md) |
+| CQL | High | ✅ Production-Ready | 100% complete, 38/38 tests passing (100%), collection types, authentication, metrics, and deployment guide. See [CQL Complete Documentation](../protocols/CQL_COMPLETE_DOCUMENTATION.md) |
 | Cypher/Bolt | High | ✅ Production-Ready | 100% complete: Bolt protocol server, WHERE clause, 10+ tests, RocksDB persistence |
 | AQL | High | ✅ Production-Ready | 100% complete: HTTP server, query engine, 30+ tests, RocksDB persistence |
 | MCP | High | ✅ Production-Ready | 100% complete: All handlers, dynamic resources, 25+ tests |
