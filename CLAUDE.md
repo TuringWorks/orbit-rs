@@ -2,6 +2,8 @@
 
 This document provides essential context for AI assistants working with the Orbit-RS codebase.
 
+> **Architecture Reference**: For detailed module structures, implementation patterns, and feature status, see [`docs/PRD.md`](docs/PRD.md) - the single source of truth for Orbit-RS architecture.
+
 ## Project Overview
 
 **Orbit-RS** is a high-performance, distributed multi-protocol database server written in Rust. It natively implements PostgreSQL, MySQL, CQL (Cassandra), Redis, HTTP REST, gRPC, and OrbitQL protocols from a single process, sharing a unified storage layer.
@@ -10,6 +12,7 @@ This document provides essential context for AI assistants working with the Orbi
 - **License**: BSD-3-Clause OR MIT
 - **Rust Edition**: 2021
 - **Minimum Rust Version**: 1.70+
+- **Architecture**: See [`docs/PRD.md`](docs/PRD.md) for complete module reference
 
 ## Quick Reference Commands
 
@@ -123,6 +126,8 @@ orbit-rs/
 
 ## Architecture Patterns
 
+> **Detailed Reference**: See [`docs/PRD.md`](docs/PRD.md) for complete module structures, directory layouts, and implementation details.
+
 ### Virtual Actor System
 The core abstraction is virtual actors that:
 - Activate on-demand
@@ -151,8 +156,8 @@ cargo run --bin orbit-server
 # Start with custom config
 cargo run --bin orbit-server -- --config ./config/orbit-server.toml
 
-# Run integrated example server (all protocols)
-cargo run --package orbit-server --example integrated-server
+# Development mode with debug logging
+RUST_LOG=debug cargo run --bin orbit-server
 ```
 
 ## Testing
@@ -210,9 +215,11 @@ Never commit database files (RocksDB manifests, WAL files, etc.) to the reposito
 
 ## Documentation
 
+- **Architecture Reference**: [`docs/PRD.md`](docs/PRD.md) - Single source of truth for modules and architecture
 - **Main docs**: `docs/` directory (258 files)
 - **API docs**: `cargo doc --workspace --open`
 - **Key documents**:
+  - `docs/PRD.md` - **Complete architecture, modules, and feature status**
   - `docs/ORBITQL_COMPLETE_DOCUMENTATION.md` - SQL engine
   - `docs/GPU_ACCELERATION_COMPLETE.md` - Hardware acceleration
   - `docs/PERSISTENCE_COMPLETE_DOCUMENTATION.md` - Storage backends
