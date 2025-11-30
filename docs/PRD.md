@@ -1,7 +1,23 @@
-# Orbit-RS Product Requirements Document
+# Orbit-RS Product Requirements & Architecture Document
 
 > **Last Updated**: November 29, 2025
 > **Status**: Production-Ready Multi-Protocol Database Platform
+> **Purpose**: Single source of truth for architecture, modules, and implementation
+
+---
+
+## Table of Contents
+
+1. [Executive Summary](#executive-summary)
+2. [Workspace Architecture](#workspace-architecture)
+3. [Module Reference](#module-reference)
+4. [Protocol Implementations](#protocol-implementations)
+5. [Storage Architecture](#storage-architecture)
+6. [AI-Native Subsystems](#ai-native-subsystems)
+7. [Feature Status Matrix](#feature-status-matrix)
+8. [Development Guidelines](#development-guidelines)
+9. [Document Maintenance](#document-maintenance)
+10. [Roadmap](#roadmap)
 
 ---
 
@@ -17,314 +33,688 @@
 - **High Performance**: 500k+ ops/sec with memory safety and zero-cost Rust abstractions
 - **AI-Native Database**: 8 intelligent subsystems for autonomous optimization and predictive scaling
 
----
+### Build Metrics
 
-## Product Vision
-
-Enable developers and enterprises to operate a single, unified database platform that speaks every major protocol while providing:
-
-1. **Operational Simplicity**: Single deployment replaces multiple database servers
-2. **Developer Flexibility**: Use the best protocol for each use case without data silos
-3. **Enterprise Scale**: Distributed architecture with automatic failover and horizontal scaling
-4. **AI-Powered Operations**: Self-optimizing database with predictive resource management
-
----
-
-## Current Implementation Status
-
-### Build & Quality Metrics
-
-| Metric | Current Status |
-|--------|----------------|
-| **Lines of Code** | 148,780+ lines of Rust |
-| **Source Files** | 517+ Rust source files |
-| **Test Coverage** | 1,078+ tests (100% pass rate) |
-| **Compiler Warnings** | 0 (zero warnings policy) |
-| **Workspace Modules** | 27 Cargo.toml projects |
-
-### Protocol Implementation Status
-
-| Protocol | Port | Status | Persistence | Notes |
-|----------|------|--------|-------------|-------|
-| **PostgreSQL** | 5432 | Complete | RocksDB | Full pgvector support |
-| **MySQL** | 3306 | Complete | RocksDB | MySQL-compatible SQL |
-| **CQL (Cassandra)** | 9042 | Complete | RocksDB | Wide-column queries |
-| **Redis RESP** | 6379 | Complete | RocksDB | 124+ commands |
-| **HTTP REST** | 8080 | Complete | - | JSON API with OpenAPI |
-| **gRPC** | 50051 | Complete | - | Actor management |
-| **Neo4j Bolt** | 7687 | Production Ready | RocksDB | Cypher queries |
-| **ArangoDB AQL** | 8529 | Implemented | RocksDB | Multi-model queries |
-
-### Feature Completion Matrix
-
-| Feature Category | Status | Completion | Test Coverage |
-|-----------------|--------|------------|---------------|
-| **Core Actor System** | Production Ready | 95% | 731 tests |
-| **Distributed Transactions** | Production Ready | 85% | 270 tests |
-| **AI-Native Features** | Production Ready | 100% | 14 tests |
-| **Vector Database (pgvector)** | Production Ready | 90% | 25+ tests |
-| **Time Series Engine** | Active | 60% | 44 tests |
-| **Graph Database** | Active | 40% | 38 tests |
-| **Kubernetes Operator** | Active | 70% | 16 tests |
-| **Heterogeneous Compute** | Production Ready | 75% | 81 tests |
-| **Machine Learning (orbit-ml)** | Active | 50% | 52 tests |
+| Metric | Value |
+|--------|-------|
+| Lines of Code | 148,780+ |
+| Source Files | 517+ |
+| Test Coverage | 1,078+ tests |
+| Compiler Warnings | 0 (zero warnings policy) |
+| Workspace Crates | 15 |
 
 ---
 
-## Core Features
+## Workspace Architecture
 
-### 1. Multi-Protocol Database Server
-
-**Native protocol implementations sharing unified storage:**
-
-- **PostgreSQL Wire Protocol**: Complete DDL/DML, complex SQL parsing, pgvector support
-- **MySQL Wire Protocol**: MySQL-compatible interface for existing applications
-- **CQL Protocol**: Cassandra Query Language for wide-column workloads
-- **Redis RESP Protocol**: Full redis-cli compatibility with vector operations
-- **HTTP REST API**: Web-friendly JSON interface with WebSocket support
-- **gRPC Services**: High-performance inter-node communication
-
-### 2. Virtual Actor System
-
-**Distributed actors with automatic lifecycle management:**
-
-- Location-transparent addressing across cluster nodes
-- On-demand activation and automatic deactivation
-- State persistence with multiple backend options
-- Async message passing with fault tolerance
-- Lease-based lifecycle management
-
-### 3. AI-Native Database (8 Subsystems)
-
-| Subsystem | Purpose |
-|-----------|---------|
-| **AI Master Controller** | Central orchestration with 10-second control loop |
-| **Intelligent Query Optimizer** | Cost-based optimization with learning |
-| **Predictive Resource Manager** | Workload forecasting and predictive scaling |
-| **Smart Storage Manager** | Automated hot/warm/cold tiering |
-| **Adaptive Transaction Manager** | Deadlock prediction and prevention |
-| **Learning Engine** | Continuous model improvement |
-| **Decision Engine** | Policy-based autonomous decisions |
-| **Knowledge Base** | Pattern storage and retrieval |
-
-### 4. Vector Database (pgvector Compatible)
-
-- **Vector Types**: vector(n), halfvec(n), sparsevec(n)
-- **Distance Operators**: L2 (<->), Cosine (<=>), Inner Product (<#>)
-- **Index Types**: HNSW, IVFFlat with configurable parameters
-- **Similarity Search**: ORDER BY with vector distance
-
-### 5. Storage Architecture
-
-**Multiple persistence backends:**
-
-| Backend | Use Case |
-|---------|----------|
-| **RocksDB** | Production persistence (default) |
-| **In-Memory** | Development and testing |
-| **COW B+Tree** | High-read workloads |
-| **LSM Tree** | Write-optimized storage |
-| **TiKV** | Distributed key-value |
-| **Cloud Storage** | S3-compatible archival |
-
-### 6. Distributed Transactions
-
-- ACID compliance across all protocols
-- 2-Phase Commit protocol
-- Saga pattern for long-running workflows
-- Distributed lock management with deadlock detection
-- Transaction coordinator with automatic failover
-
-### 7. Heterogeneous Compute Acceleration
-
-| Platform | Technology | Speedup |
-|----------|------------|---------|
-| **CPU SIMD** | AVX-512, NEON, SVE | 3-8x |
-| **GPU** | Metal, CUDA, OpenCL, ROCm | 5-50x |
-| **Neural Engines** | Apple ANE, Intel OpenVINO | 10-50x |
-
-### 8. Enterprise Features
-
-- **Security**: Authentication, RBAC, audit logging
-- **Observability**: Prometheus metrics, Grafana dashboards
-- **Kubernetes**: Native operator with CRDs
-- **Connection Pooling**: Circuit breakers, health monitoring
+```
+orbit-rs/
+├── orbit/                           # Main source code
+│   ├── server/                      # Main server binary (orbit-server)
+│   ├── client/                      # Client library (OrbitClient)
+│   ├── shared/                      # Shared types, traits, clustering
+│   ├── engine/                      # Storage engine (OrbitQL, adapters)
+│   ├── compute/                     # Hardware acceleration (SIMD, GPU)
+│   ├── ml/                          # Machine learning inference
+│   ├── proto/                       # Protocol Buffer definitions
+│   ├── cli/                         # Interactive CLI client
+│   ├── operator/                    # Kubernetes operator
+│   ├── application/                 # Application configuration
+│   ├── util/                        # Core utilities
+│   ├── client-spring/               # Spring framework integration
+│   ├── server-etcd/                 # etcd integration
+│   └── server-prometheus/           # Prometheus metrics
+├── config/                          # Configuration files
+├── scripts/                         # Development scripts
+├── docs/                            # Documentation (258 files)
+├── tests/                           # Integration tests
+├── helm/                            # Kubernetes Helm charts
+└── k8s/                             # Kubernetes manifests
+```
 
 ---
 
-## Protocol-Specific Features
+## Module Reference
 
-### Redis RESP (124+ Commands)
+### orbit-server (Main Binary)
 
-- Core data types: String, Hash, List, Set, Sorted Set
-- Pub/Sub messaging
-- Vector operations (VECTOR.*, FT.*)
-- Time series (TS.*)
-- Graph database (GRAPH.*)
-- Machine learning (ML_*)
-- Search engine (FT.*)
+**Path**: `orbit/server/`
+**Binary**: `orbit-server`
+**Purpose**: Multi-protocol database server
 
-### PostgreSQL Wire Protocol
+#### Directory Structure
 
-- Complete DDL/DML support
-- Advanced SQL: CTEs, window functions, subqueries
-- Full pgvector extension compatibility
-- JSON/JSONB with path expressions
-- Spatial operations
+```
+orbit/server/src/
+├── main.rs                          # Entry point, CLI parsing
+├── server.rs                        # OrbitServer struct, protocol orchestration
+├── lib.rs                           # Library exports
+├── features.rs                      # Feature flag definitions
+│
+├── protocols/                       # Protocol implementations
+│   ├── mod.rs                       # Protocol registry
+│   ├── error.rs                     # Protocol error types
+│   │
+│   ├── resp/                        # Redis RESP protocol
+│   │   ├── mod.rs                   # RESP server, connection handling
+│   │   ├── codec.rs                 # RESP3 wire protocol codec
+│   │   ├── types.rs                 # RespValue enum
+│   │   ├── actors.rs                # Redis actor implementations
+│   │   ├── commands/                # Command handlers
+│   │   │   ├── mod.rs               # Command dispatcher
+│   │   │   ├── traits.rs            # CommandHandler trait
+│   │   │   ├── string_persistent.rs # String commands with RocksDB
+│   │   │   ├── hash_commands.rs     # Hash commands
+│   │   │   ├── list_commands.rs     # List commands
+│   │   │   ├── set_commands.rs      # Set commands
+│   │   │   ├── sorted_set.rs        # Sorted set commands
+│   │   │   ├── time_series.rs       # TS.* commands (21 tests)
+│   │   │   ├── vector.rs            # VECTOR.* commands
+│   │   │   ├── graph.rs             # GRAPH.* commands
+│   │   │   └── graphrag.rs          # GraphRAG commands
+│   │   └── simple_local/            # Local registry implementation
+│   │
+│   ├── postgres_wire/               # PostgreSQL wire protocol
+│   │   ├── mod.rs                   # PostgreSQL server
+│   │   ├── messages.rs              # Wire protocol messages
+│   │   ├── sql/                     # SQL processing
+│   │   │   ├── mod.rs               # SQL engine
+│   │   │   ├── parser/              # SQL parser (DDL, DML, DCL, TCL)
+│   │   │   ├── lexer.rs             # SQL tokenizer
+│   │   │   ├── ast.rs               # Abstract syntax tree
+│   │   │   ├── executor.rs          # Query execution
+│   │   │   ├── analyzer/            # Semantic analysis
+│   │   │   ├── optimizer/           # Query optimization
+│   │   │   └── types.rs             # SQL type system
+│   │   ├── jsonb/                   # JSONB support
+│   │   │   ├── mod.rs               # JSONB types
+│   │   │   ├── storage.rs           # Binary storage
+│   │   │   ├── path.rs              # JSON path expressions
+│   │   │   ├── aggregation.rs       # JSON aggregation
+│   │   │   ├── indexing.rs          # GIN/B-Tree indexes
+│   │   │   └── schema.rs            # JSON Schema validation
+│   │   ├── spatial_functions.rs     # PostGIS-compatible spatial
+│   │   └── graphrag_engine.rs       # GraphRAG SQL integration
+│   │
+│   ├── mysql/                       # MySQL wire protocol
+│   │   └── mod.rs                   # MySQL server implementation
+│   │
+│   ├── cql/                         # CQL (Cassandra) protocol
+│   │   └── mod.rs                   # CQL server implementation
+│   │
+│   ├── rest/                        # HTTP REST API
+│   │   ├── server.rs                # Axum HTTP server
+│   │   ├── handlers*.rs             # Route handlers
+│   │   ├── models.rs                # Request/response models
+│   │   └── sse.rs                   # Server-sent events
+│   │
+│   ├── cypher/                      # Neo4j Cypher
+│   │   ├── cypher_parser.rs         # Cypher query parser
+│   │   ├── bolt.rs                  # Bolt protocol
+│   │   └── graph_algorithms_procedures.rs
+│   │
+│   ├── aql/                         # ArangoDB AQL
+│   │   ├── mod.rs                   # AQL module
+│   │   ├── aql_parser.rs            # AQL parser
+│   │   └── data_model.rs            # Multi-model data
+│   │
+│   ├── orbitql/                     # OrbitQL multi-model
+│   │   ├── mod.rs                   # OrbitQL module
+│   │   └── executor.rs              # Query executor
+│   │
+│   ├── ml/                          # ML SQL integration
+│   │   ├── mod.rs                   # ML module
+│   │   ├── models/                  # Model management
+│   │   ├── functions/               # ML SQL functions
+│   │   ├── engines/                 # Inference engines
+│   │   └── sql_integration/         # SQL function registry
+│   │
+│   ├── mcp/                         # Model Context Protocol
+│   │   └── types.rs                 # MCP types
+│   │
+│   ├── graphrag/                    # GraphRAG
+│   │   ├── knowledge_graph.rs       # Knowledge graph
+│   │   └── rag_pipeline.rs          # RAG pipeline
+│   │
+│   └── persistence/                 # Protocol persistence
+│       ├── redis_data.rs            # Redis data structures
+│       └── tikv_redis_provider.rs   # TiKV integration
+│
+├── persistence/                     # Storage backends
+│   ├── mod.rs                       # Persistence trait
+│   ├── factory.rs                   # Backend factory
+│   ├── rocksdb.rs                   # RocksDB backend (production)
+│   ├── memory.rs                    # In-memory backend (testing)
+│   ├── cow_btree.rs                 # Copy-on-write B+Tree
+│   ├── lsm_tree.rs                  # LSM-tree implementation
+│   └── dynamic.rs                   # Dynamic backend switching
+│
+├── memory/                          # Memory management
+│   ├── mod.rs                       # Memory module
+│   ├── actor_memory_manager.rs      # Actor memory allocation
+│   ├── extent_index.rs              # Memory extent tracking
+│   ├── lifetime_manager.rs          # Lifetime management
+│   └── pin_manager.rs               # Memory pinning
+│
+├── ai/                              # AI-native subsystems
+│   ├── mod.rs                       # AI module exports
+│   ├── controller.rs                # AI Master Controller
+│   ├── decision.rs                  # Decision Engine
+│   ├── knowledge.rs                 # Knowledge Base
+│   ├── learning.rs                  # Learning Engine
+│   ├── integration.rs               # System integration
+│   ├── optimizer/                   # Intelligent Query Optimizer
+│   │   ├── mod.rs
+│   │   ├── cost_model.rs            # Query cost estimation
+│   │   ├── index_advisor.rs         # Index recommendations
+│   │   └── pattern_classifier.rs    # Query pattern ML
+│   ├── resource/                    # Predictive Resource Manager
+│   │   ├── mod.rs
+│   │   └── workload_predictor.rs    # Workload forecasting
+│   └── storage/                     # Smart Storage Manager
+│       ├── mod.rs
+│       └── tiering_engine.rs        # Hot/warm/cold tiering
+│
+├── directory.rs                     # Actor directory service
+├── load_balancer.rs                 # Load balancing
+└── mesh.rs                          # Service mesh
+```
 
-### Graph Database (Cypher/AQL)
+### orbit-client
 
-- MATCH, CREATE, RETURN, WHERE patterns
-- Graph mutations: DELETE, SET, MERGE
-- Graph algorithms: PageRank, BFS, DFS, Dijkstra
-- Centrality metrics: Betweenness, Closeness, Degree
-- Community detection
+**Path**: `orbit/client/`
+**Purpose**: Client library for connecting to Orbit servers
+
+```
+orbit/client/src/
+├── lib.rs                           # OrbitClient, actor references
+├── invocation.rs                    # Remote invocation system
+├── mesh.rs                          # Client mesh networking
+└── service_discovery.rs             # Service discovery
+```
+
+**Key Types**:
+- `OrbitClient` - Main client interface
+- `ActorReference<T>` - Typed actor proxy
+- `InvocationSystem` - Async invocation handling
+
+### orbit-shared
+
+**Path**: `orbit/shared/`
+**Purpose**: Shared types, traits, and distributed systems primitives
+
+```
+orbit/shared/src/
+├── lib.rs                           # Core exports (Actor, Key, etc.)
+├── actor_communication.rs           # Actor messaging
+├── addressable.rs                   # Addressable trait
+├── benchmarks.rs                    # Performance benchmarking
+├── cdc.rs                           # Change data capture
+├── cluster_manager.rs               # Cluster coordination
+├── consensus.rs                     # Raft consensus
+├── election_state.rs                # Leader election
+├── event_sourcing.rs                # Event sourcing patterns
+├── graph.rs                         # Graph data structures
+├── graphrag.rs                      # GraphRAG types
+├── mesh.rs                          # Service mesh types
+├── net.rs                           # Network utilities
+├── pooling/                         # Connection pooling
+│   ├── mod.rs                       # Pool management
+│   ├── circuit_breaker.rs           # Circuit breaker pattern
+│   └── health_monitor.rs            # Health checking
+├── recovery.rs                      # Failure recovery
+├── replication.rs                   # Data replication
+├── router.rs                        # Request routing
+├── saga.rs                          # Saga pattern
+├── security_patterns.rs             # Security utilities
+├── serialization.rs                 # Serde utilities
+├── stream_processing.rs             # Stream processing
+├── transaction_log.rs               # Transaction logging
+├── transactions/                    # Transaction management
+│   ├── mod.rs                       # Transaction coordinator
+│   ├── two_phase.rs                 # 2PC implementation
+│   └── distributed_lock.rs          # Distributed locking
+└── triggers.rs                      # Database triggers
+```
+
+**Key Traits**:
+- `Actor` - Base actor trait
+- `ActorWithStringKey` - Actor with string identity
+- `Addressable` - Location-transparent addressing
+- `PersistenceProvider` - Storage abstraction
+
+### orbit-engine
+
+**Path**: `orbit/engine/`
+**Purpose**: Storage engine with OrbitQL support
+
+```
+orbit/engine/src/
+├── lib.rs                           # Engine exports
+├── adapters/                        # Storage adapters
+│   ├── mod.rs                       # Adapter trait
+│   ├── orbitql_adapter.rs           # OrbitQL execution
+│   └── memory_adapter.rs            # Memory storage
+├── storage/                         # Storage implementations
+│   ├── mod.rs                       # Storage traits
+│   ├── hybrid_storage.rs            # Hot/warm/cold tiering
+│   └── table_storage.rs             # Table abstraction
+└── query/                           # Query processing
+    ├── mod.rs                       # Query types
+    ├── planner.rs                   # Query planning
+    └── optimizer.rs                 # Query optimization
+```
+
+### orbit-compute
+
+**Path**: `orbit/compute/`
+**Purpose**: Hardware acceleration (SIMD, GPU, Neural)
+
+```
+orbit/compute/src/
+├── lib.rs                           # Compute exports
+├── engine.rs                        # Compute engine abstraction
+├── scheduler.rs                     # Task scheduling
+├── errors.rs                        # Error types
+│
+├── x86_64.rs                        # x86-64 SIMD (AVX-512)
+├── aarch64.rs                       # ARM64 SIMD (NEON, SVE)
+│
+├── gpu/                             # GPU backends
+│   ├── mod.rs                       # GPU trait
+│   ├── gpu_metal.rs                 # Apple Metal
+│   ├── gpu_cuda.rs                  # NVIDIA CUDA
+│   ├── gpu_vulkan.rs                # Vulkan (cross-platform)
+│   └── gpu_rocm.rs                  # AMD ROCm
+│
+├── neural.rs                        # Neural engine abstraction
+├── apple.rs                         # Apple Neural Engine
+├── linux.rs                         # Linux-specific
+├── windows.rs                       # Windows-specific
+│
+├── filter_operations.rs             # Vectorized filtering
+├── bitmap_operations.rs             # Bitmap operations
+├── aggregation_operations.rs        # SIMD aggregations
+├── vector_similarity.rs             # Vector similarity
+├── spatial_distance.rs              # Spatial operations
+├── graph_traversal.rs               # Graph algorithms
+├── matrix_operations.rs             # Matrix math
+└── timeseries_operations.rs         # Time series ops
+```
+
+### orbit-ml
+
+**Path**: `orbit/ml/`
+**Purpose**: Machine learning inference
+
+```
+orbit/ml/src/
+├── lib.rs                           # ML exports
+├── config.rs                        # Model configuration
+├── data.rs                          # Data types (tensors)
+├── error.rs                         # Error types
+├── inference.rs                     # Inference engine
+├── training.rs                      # Training utilities
+├── metrics.rs                       # ML metrics
+├── utils.rs                         # Utilities
+├── models.rs                        # Model definitions
+├── models/                          # Model implementations
+│   ├── mod.rs
+│   ├── neural_network.rs            # Neural networks
+│   └── transformer.rs               # Transformer models
+└── streaming/                       # Streaming inference
+    └── mod.rs
+```
+
+### orbit-operator
+
+**Path**: `orbit/operator/`
+**Purpose**: Kubernetes operator for Orbit clusters
+
+```
+orbit/operator/src/
+├── main.rs                          # Operator entry point
+├── crd.rs                           # Custom Resource Definitions
+├── actor_crd.rs                     # Actor CRD
+├── actor_controller.rs              # Actor reconciliation
+├── cluster_controller.rs            # Cluster reconciliation
+├── transaction_crd.rs               # Transaction CRD
+└── transaction_controller.rs        # Transaction reconciliation
+```
+
+### orbit-proto
+
+**Path**: `orbit/proto/`
+**Purpose**: Protocol Buffer definitions
+
+```
+orbit/proto/
+├── src/
+│   ├── lib.rs                       # Generated code exports
+│   └── services.rs                  # Service implementations
+└── proto/                           # .proto files
+    ├── orbit.proto                  # Core messages
+    └── services.proto               # gRPC services
+```
+
+---
+
+## Protocol Implementations
+
+### Port Assignments
+
+| Protocol | Port | Module | Status |
+|----------|------|--------|--------|
+| PostgreSQL | 5432 | `protocols/postgres_wire/` | Complete |
+| MySQL | 3306 | `protocols/mysql/` | Complete |
+| CQL (Cassandra) | 9042 | `protocols/cql/` | Complete |
+| Redis RESP | 6379 | `protocols/resp/` | Complete |
+| HTTP REST | 8080 | `protocols/rest/` | Complete |
+| gRPC | 50051 | `orbit-proto` | Complete |
+| Neo4j Bolt | 7687 | `protocols/cypher/` | Active |
+| ArangoDB | 8529 | `protocols/aql/` | Active |
+
+### Redis RESP Commands (124+)
+
+| Category | Commands | Implementation |
+|----------|----------|----------------|
+| Strings | GET, SET, MGET, MSET, INCR, etc. | `string_persistent.rs` |
+| Hashes | HGET, HSET, HGETALL, etc. | `hash_commands.rs` |
+| Lists | LPUSH, RPUSH, LPOP, LRANGE | `list_commands.rs` |
+| Sets | SADD, SMEMBERS, SINTER, etc. | `set_commands.rs` |
+| Sorted Sets | ZADD, ZRANGE, ZSCORE, etc. | `sorted_set.rs` |
+| Time Series | TS.CREATE, TS.ADD, TS.RANGE, TS.CREATERULE | `time_series.rs` |
+| Vectors | VECTOR.ADD, VECTOR.SEARCH | `vector.rs` |
+| Graph | GRAPH.QUERY | `graph.rs` |
+
+### Time Series Commands
+
+```
+TS.CREATE key [RETENTION ms] [LABELS label value ...]
+TS.ADD key timestamp value
+TS.GET key
+TS.RANGE key from to [AGGREGATION type bucket]
+TS.MRANGE from to FILTER label=value
+TS.INFO key
+TS.DEL key from to
+TS.MADD key timestamp value [key timestamp value ...]
+TS.CREATERULE sourceKey destKey AGGREGATION type bucket
+TS.DELETERULE sourceKey destKey
+```
+
+**Aggregation Types**: AVG, SUM, MIN, MAX, RANGE, COUNT, FIRST, LAST, STD.P, VAR.P, TWA
+
+---
+
+## Storage Architecture
+
+### Persistence Backends
+
+| Backend | File | Use Case | Status |
+|---------|------|----------|--------|
+| RocksDB | `rocksdb.rs` | Production (default) | Complete |
+| Memory | `memory.rs` | Testing | Complete |
+| COW B+Tree | `cow_btree.rs` | High-read workloads | Complete |
+| LSM Tree | `lsm_tree.rs` | Write-optimized | Complete |
+| TiKV | `tikv_redis_provider.rs` | Distributed KV | Active |
+
+### Storage Tiering
+
+```
+┌─────────────────────────────────────────────┐
+│                Hot Tier                      │
+│           (In-Memory / Redis)               │
+│         < 100ms access latency              │
+├─────────────────────────────────────────────┤
+│               Warm Tier                      │
+│          (RocksDB / LSM Tree)               │
+│         < 10ms access latency               │
+├─────────────────────────────────────────────┤
+│               Cold Tier                      │
+│        (Apache Iceberg / Parquet)           │
+│         < 1s access latency                 │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+## AI-Native Subsystems
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   AI Master Controller                       │
+│              (10-second control loop)                       │
+├──────────────┬──────────────┬──────────────┬───────────────┤
+│   Query      │   Resource   │   Storage    │  Transaction  │
+│  Optimizer   │   Manager    │   Manager    │   Manager     │
+├──────────────┼──────────────┼──────────────┼───────────────┤
+│   Learning Engine    │    Decision Engine    │  Knowledge   │
+│                      │                       │    Base      │
+└──────────────────────┴───────────────────────┴──────────────┘
+```
+
+### Subsystem Details
+
+| Subsystem | Path | Purpose |
+|-----------|------|---------|
+| AI Master Controller | `ai/controller.rs` | Central orchestration |
+| Intelligent Query Optimizer | `ai/optimizer/` | Cost-based optimization |
+| Predictive Resource Manager | `ai/resource/` | Workload forecasting |
+| Smart Storage Manager | `ai/storage/` | Hot/warm/cold tiering |
+| Learning Engine | `ai/learning.rs` | Model improvement |
+| Decision Engine | `ai/decision.rs` | Policy-based decisions |
+| Knowledge Base | `ai/knowledge.rs` | Pattern storage |
+
+---
+
+## Feature Status Matrix
+
+| Feature | Status | Tests | Key Files |
+|---------|--------|-------|-----------|
+| Core Actor System | Complete | 731 | `orbit-shared/src/lib.rs` |
+| RESP Protocol | Complete | 292 | `protocols/resp/` |
+| PostgreSQL Protocol | Complete | 104 | `protocols/postgres_wire/` |
+| MySQL Protocol | Complete | 15 | `protocols/mysql/` |
+| CQL Protocol | Complete | 12 | `protocols/cql/` |
+| REST API | Complete | 25 | `protocols/rest/` |
+| Distributed Transactions | Complete | 270 | `shared/src/transactions/` |
+| AI-Native Features | Complete | 14 | `server/src/ai/` |
+| Vector Database | Complete | 25 | `postgres_wire/sql/pgvector*` |
+| Time Series | Active | 36 | `resp/commands/time_series.rs` |
+| Graph Database | Active | 38 | `protocols/cypher/` |
+| Kubernetes Operator | Active | 16 | `orbit-operator/` |
+| Heterogeneous Compute | Active | 81 | `orbit-compute/` |
+| Machine Learning | Active | 52 | `orbit-ml/` |
+
+---
+
+## Development Guidelines
+
+### Code Organization
+
+1. **Protocol implementations** go in `orbit/server/src/protocols/`
+2. **Shared types and traits** go in `orbit/shared/src/`
+3. **Storage backends** go in `orbit/server/src/persistence/`
+4. **Hardware acceleration** goes in `orbit/compute/src/`
+5. **AI features** go in `orbit/server/src/ai/`
+
+### Adding a New Protocol
+
+1. Create directory under `protocols/`
+2. Implement `mod.rs` with server struct
+3. Add to protocol registry in `protocols/mod.rs`
+4. Add CLI flags in `main.rs`
+5. Add configuration in `config/orbit-server.toml`
+
+### Adding Storage Backend
+
+1. Implement `PersistenceProvider` trait
+2. Add file in `persistence/`
+3. Register in `persistence/factory.rs`
+4. Add feature flag if optional
+
+### Testing
+
+```bash
+# All tests
+cargo test --workspace
+
+# Specific package
+cargo test -p orbit-server
+
+# Time series tests
+cargo test -p orbit-server time_series::
+
+# Slow integration tests
+cargo test --workspace -- --ignored
+```
 
 ---
 
 ## Roadmap
 
-### Completed Phases (1-8)
+### Completed (Phases 1-8)
 
-1. **Foundation**: Workspace, testing, CI/CD
-2. **Core Actor System**: Distributed actors, lifecycle management
-3. **Network Layer**: gRPC, Protocol Buffers, connection pooling
-4. **Cluster Management**: Node discovery, load balancing, Raft
-5. **Transaction System**: ACID, 2PC, Saga patterns
-6. **Protocol Adapters**: Redis, PostgreSQL, MySQL, CQL
-7. **Kubernetes Integration**: Operator, Helm charts
-7.5. **AI Integration**: MCP server, AI-native features
-8. **SQL Query Engine**: Full SQL, vector database
+1. Foundation & workspace setup
+2. Core actor system
+3. Network layer (gRPC, Protocol Buffers)
+4. Cluster management (Raft, leader election)
+5. Transaction system (2PC, Saga)
+6. Protocol adapters (Redis, PostgreSQL, MySQL, CQL)
+7. Kubernetes integration
+8. SQL query engine & vector database
 
-### Current Focus
+### Current Focus (Phase 9-10)
 
-#### Performance & Optimization
-- Vectorized execution engine with SIMD optimization
-- Cost-based query planning
-- Multi-level caching (result, plan, metadata)
-- Target: 10x performance improvement
-
-#### Enterprise Production Readiness
-- 99.99% uptime target
+- Query optimization & vectorized execution
+- Production readiness & high availability
 - Advanced backup & recovery
-- Cross-region replication
-- LDAP/SAML/OAuth2 integration
 
-### Future Phases
+### Future (Phases 11+)
 
-| Phase | Focus Area | Key Deliverables |
-|-------|------------|------------------|
-| **9** | Query Optimization | Cost-based planner, parallel execution |
-| **10** | Production Readiness | HA, monitoring, backup/recovery |
-| **11** | Advanced Features | Stored procedures, triggers, full-text search |
-| **12** | Time Series | Redis TimeSeries, TimescaleDB compatibility |
-| **13** | Neo4j Bolt | Complete Cypher, graph algorithms |
-| **14** | Distributed Queries | Cross-node optimization |
-| **15** | ArangoDB | Multi-model, full AQL |
-| **16** | GraphML/GraphRAG | AI-powered graph analytics |
-| **17** | Additional Protocols | GraphQL, MongoDB compatibility |
-| **18** | Cloud-Native | Multi-cloud, edge computing |
-| **19** | Enterprise | Compliance, migration tools |
+| Phase | Focus |
+|-------|-------|
+| 11 | Stored procedures, triggers, full-text search |
+| 12 | TimescaleDB compatibility |
+| 13 | Complete Neo4j Bolt protocol |
+| 14 | Distributed query optimization |
+| 15 | Full ArangoDB compatibility |
+| 16 | GraphML/GraphRAG enhancement |
+| 17 | GraphQL, MongoDB protocols |
+| 18 | Multi-cloud, edge computing |
+| 19 | Enterprise compliance |
 
 ---
 
-## Performance Targets
+## Quick Reference
 
-### Current Performance
-
-| Metric | Current | Target |
-|--------|---------|--------|
-| **Message Throughput** | 500k+ msg/sec/core | 1M+ msg/sec/core |
-| **Graph Queries** | 10k+ qps | 100k+ qps |
-| **Time Series Ingestion** | 3k points/7ms | 10k points/7ms |
-| **Multi-Model Latency** | <100ms | <10ms |
-| **P99 Latency** | 10-50ms | 1-5ms |
-| **Binary Size** | ~10MB | ~10MB |
-| **Memory Footprint** | ~50MB | ~50MB |
-
-### Scalability
-
-- **Single Node**: Development & testing
-- **Small Cluster (3-5 nodes)**: Production workloads
-- **Medium Cluster (10-20 nodes)**: Enterprise deployment
-- **Large Cluster (50+ nodes)**: Hyperscale (planned)
-
----
-
-## Success Metrics
-
-### Technical KPIs
-
-- **Performance**: 10x query improvement
-- **Reliability**: 99.99% uptime
-- **Scalability**: 100+ node clusters
-- **Compatibility**: 100% protocol feature parity
-
-### Business KPIs
-
-- **Adoption**: 1000+ GitHub stars
-- **Community**: 100+ contributors
-- **Enterprise**: 50+ production deployments
-- **Ecosystem**: 10+ partner integrations
-
----
-
-## Target Use Cases
-
-1. **Unified Database Platform**: Replace multiple databases with single deployment
-2. **AI/ML Applications**: Vector similarity search, embeddings storage
-3. **IoT & Time Series**: Real-time sensor data processing
-4. **Social Networks**: Graph-based platforms
-5. **Financial Analytics**: Real-time fraud detection
-6. **Knowledge Management**: Enterprise knowledge graphs
-
----
-
-## Competitive Advantages
-
-1. **True Multi-Protocol**: Native support, not translation layers
-2. **Actor-Based Distribution**: Unique architecture with location transparency
-3. **AI-Native**: Self-optimizing with 8 intelligent subsystems
-4. **Rust Performance**: Memory safety without garbage collection overhead
-5. **Single Binary**: Simple deployment and operations
-
----
-
-## Getting Started
+### Starting the Server
 
 ```bash
-# Clone and build
-git clone https://github.com/TuringWorks/orbit-rs.git
-cd orbit-rs
-cargo build --release
+cargo run --bin orbit-server                    # Default
+cargo run --bin orbit-server -- --dev-mode      # Development
+cargo run --bin orbit-server -- --config path   # Custom config
+./scripts/start-multiprotocol-server.sh         # Script
+```
 
-# Start multi-protocol server (default config)
-cargo run --bin orbit-server
+### Client Connections
 
-# Or with custom configuration
-cargo run --bin orbit-server -- --config ./config/orbit-server.toml
+```bash
+psql -h localhost -p 5432 -U orbit -d actors    # PostgreSQL
+redis-cli -h localhost -p 6379                   # Redis
+curl http://localhost:8080/health                # REST API
+```
 
-# Connect with standard clients
-psql -h localhost -p 5432 -U orbit -d actors
-redis-cli -h localhost -p 6379
+### Key Configuration
+
+```toml
+# config/orbit-server.toml
+[server]
+bind = "0.0.0.0"
+grpc_port = 50051
+http_port = 8080
+postgres_port = 5432
+redis_port = 6379
+
+[persistence]
+backend = "rocksdb"
+data_dir = "./data"
+
+[ai]
+enabled = true
+control_loop_interval_ms = 10000
 ```
 
 ---
 
-## Documentation
+## Document Maintenance
 
-- **[Quick Start](quick_start.md)** - Get running in minutes
-- **[Architecture Overview](overview.md)** - System design
-- **[Feature Index](features.md)** - Complete feature list
-- **[Protocol Adapters](protocols/protocol_adapters.md)** - Protocol details
-- **[Kubernetes Deployment](KUBERNETES_COMPLETE_DOCUMENTATION.md)** - Cloud deployment
-- **[Security](SECURITY_COMPLETE_DOCUMENTATION.md)** - Enterprise security
+> **This document is the single source of truth for Orbit-RS architecture.**
+> All AI agents and developers MUST keep it synchronized with the codebase.
 
----
+### AI Agent Instructions
 
-## License
+This document must be read and maintained by all AI coding assistants:
+- **Claude Code / Anthropic Claude** - See `CLAUDE.md`
+- **Cursor AI** - See `.cursorrules`
+- **Gemini, Copilot, Warp, Antigravity, others** - See `AGENTS.md`
 
-Dual licensed under [MIT](../LICENSE-MIT) or [BSD-3-Clause](../LICENSE-BSD).
+### When to Update This Document
+
+Update this PRD.md when you:
+
+| Change Type | What to Update |
+|-------------|----------------|
+| Add new module/crate | Module Reference section, directory trees |
+| Add source files | Module Reference, file descriptions |
+| Change directory structure | Module Reference, affected trees |
+| Add protocol commands | Protocol Implementations section |
+| Update feature flags | Feature Status Matrix |
+| Change API interfaces | Protocol Implementations |
+| Modify storage/compute | Storage Architecture section |
+| Add AI subsystems | AI-Native Subsystems section |
+| Change test coverage | Feature Status Matrix, test counts |
+
+### Update Checklist
+
+```
+[ ] Read current PRD.md before making changes
+[ ] Make code changes
+[ ] Update relevant PRD.md sections
+[ ] Update "Last Updated" date at top
+[ ] Update test counts if changed
+[ ] Run: cargo fmt --all
+[ ] Run: cargo clippy --workspace -- -D warnings
+[ ] Run: cargo test --workspace
+[ ] Commit code AND PRD.md together
+```
+
+### Commit Message Format
+
+When updating this document along with code changes:
+```
+type(scope): description
+
+- code changes summary
+- docs: update PRD.md with [what changed]
+
+🤖 Generated with [AI Assistant Name]
+```
+
+### Section Ownership
+
+| Section | Updated When |
+|---------|--------------|
+| Executive Summary | Major releases, metric changes |
+| Workspace Architecture | Crate additions/removals |
+| Module Reference | Any structural changes |
+| Protocol Implementations | Command additions, port changes |
+| Storage Architecture | Backend changes |
+| AI-Native Subsystems | AI feature changes |
+| Feature Status Matrix | Implementation progress |
+| Development Guidelines | Process changes |
 
 ---
 

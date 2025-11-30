@@ -225,14 +225,44 @@ Never commit database files (RocksDB manifests, WAL files, etc.) to the reposito
   - `docs/PERSISTENCE_COMPLETE_DOCUMENTATION.md` - Storage backends
   - `docs/PROTOCOL_ADAPTERS_INTEGRATION.md` - Protocol architecture
 
+## PRD.md Maintenance (REQUIRED)
+
+**IMPORTANT**: When making architectural changes, you MUST update `docs/PRD.md` to keep it synchronized with the codebase.
+
+### When to Update PRD.md
+Update PRD.md when you:
+- Add new modules, crates, or significant files
+- Change directory structures
+- Add or modify protocol implementations
+- Update feature flags or capabilities
+- Change API interfaces or command support
+- Modify storage or compute backends
+- Add new AI subsystems or features
+
+### What to Update
+1. **Module Reference**: Update directory trees and file descriptions
+2. **Feature Status Matrix**: Update implementation status and test counts
+3. **Protocol Commands**: Add new commands or update existing ones
+4. **Architecture Sections**: Reflect structural changes
+
+### Update Workflow
+```bash
+# After making code changes:
+1. Update relevant sections in docs/PRD.md
+2. Run tests: cargo test --workspace
+3. Commit both code and PRD.md changes together
+4. Include "docs: update PRD.md" in commit message if PRD changes are significant
+```
+
 ## Common Tasks
 
 ### Adding a New Feature
 1. Create feature branch
 2. Implement in appropriate crate
 3. Add tests
-4. Run `make commit-ready`
-5. Submit PR
+4. **Update `docs/PRD.md`** if architecture changed
+5. Run `make commit-ready`
+6. Submit PR
 
 ### Debugging Protocol Issues
 - PostgreSQL: `orbit/protocols/src/postgres_wire/`
