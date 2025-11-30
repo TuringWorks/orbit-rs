@@ -180,6 +180,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (Unreleased)
 
+#### **Documentation Improvements and Link Fixes** (2025-11-30)
+
+##### Comprehensive Documentation Site Maintenance
+
+- **Fixed 50+ Broken Documentation Links**
+  - Updated `features.md` with 30+ corrected documentation paths
+  - Fixed `ORBIT_ARCHITECTURE.md` relative links for MySQL, CQL, and persistence documentation
+  - Corrected `index.md`, `quick_start.md`, and `project_overview.md` navigation links
+  - Replaced archived documentation references with current content paths
+
+- **New Documentation**
+  - Added comprehensive API Reference (`docs/content/api/API_REFERENCE.md`)
+    - Orbit Client API documentation
+    - Actor System API with lifecycle management
+    - Transaction API (2PC and Saga patterns)
+    - Protocol APIs (PostgreSQL, Redis, MySQL, CQL, REST, gRPC)
+    - Model Context Protocol (MCP) integration guide
+  - Added Migration Guides (`docs/content/migration/MIGRATION_GUIDE.md`)
+    - PostgreSQL migration with schema export and data transfer
+    - Redis migration with RDB snapshots and SCAN-based approaches
+    - Multi-database consolidation strategies
+
+- **Jekyll Site Configuration Fixes**
+  - Fixed `_config.yml` header_pages to reference existing files only
+  - Added proper Jekyll front matter to PRD.md and virtual_actor_persistence.md
+  - Resolved header duplication issues on rendered pages
+
+- **Documentation Path Corrections**
+  - `content/protocols/` for protocol documentation (MySQL, CQL, PostgreSQL)
+  - `content/server/` for server-related documentation
+  - `content/storage/` for persistence documentation
+  - `content/ai/` for AI/ML documentation
+  - `content/gpu-compute/` for compute acceleration guides
+  - `content/rfcs/completed/` for completed RFC documents
+  - `content/graph-rag/` for GraphRAG documentation
+
+**Files Modified:**
+- `docs/features.md` - 35 link corrections
+- `docs/index.md` - 8+ link corrections
+- `docs/quick_start.md` - 6 link corrections
+- `docs/PRD.md` - Added Jekyll front matter
+- `docs/content/storage/virtual_actor_persistence.md` - Fixed header duplication
+- `docs/content/architecture/ORBIT_ARCHITECTURE.md` - 6 link corrections
+- `docs/_config.yml` - Header pages configuration
+
+**Files Added:**
+- `docs/content/api/API_REFERENCE.md` - Comprehensive API documentation
+- `docs/content/migration/MIGRATION_GUIDE.md` - Database migration guides
+
 ####  **Major Feature: Digital Ocean Cloud Deployment Support** (2025-01-09)
 
 ##### Complete Digital Ocean Integration with GPU Support and Object Storage
