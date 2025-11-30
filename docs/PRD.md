@@ -1,8 +1,13 @@
-# Orbit-RS Product Requirements & Architecture Document
+---
+layout: default
+title: "Product Requirements & Architecture Document"
+subtitle: "Single source of truth for architecture, modules, and implementation"
+category: "architecture"
+permalink: /PRD.html
+---
 
 > **Last Updated**: November 29, 2025
 > **Status**: Production-Ready Multi-Protocol Database Platform
-> **Purpose**: Single source of truth for architecture, modules, and implementation
 
 ---
 

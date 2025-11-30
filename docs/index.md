@@ -57,7 +57,7 @@ Perfect for developers new to Orbit-RS or distributed databases.
 
 For developers building applications with Orbit-RS.
 
-- [**API Reference**](https://turingworks.github.io/orbit-rs/api/) - Complete API documentation
+- [**API Reference**](content/api/API_REFERENCE.md) - Complete API documentation
 - [**Protocol Support**](content/server/NETWORK_LAYER.md) - Network layer and protocol details
 - [**Testing Guide**](contributing.md) - Writing and running tests
 - [**Contributing**](contributing.md) - How to contribute to Orbit-RS
