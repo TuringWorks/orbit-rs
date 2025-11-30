@@ -16,7 +16,7 @@ This document provides a comprehensive overview of all implemented features in O
 - **Status**: **Production Ready**
 - **Performance**: 500k+ messages/second per core
 - **Features**: Automatic lifecycle management, on-demand activation, transparent location management
-- **Documentation**: [Virtual Actor Persistence](virtual_actor_persistence.md)
+- **Documentation**: [Virtual Actor Persistence](content/storage/virtual_actor_persistence.md)
 
 ### Heterogeneous Compute Acceleration
 
@@ -30,14 +30,14 @@ This document provides a comprehensive overview of all implemented features in O
   - **Cross-Platform**: macOS, Windows, Linux, Android, iOS support
   - **Graceful Fallback**: Seamless degradation when preferred hardware unavailable
 - **Documentation**:
-  - [**Acceleration Guide**](COMPUTE_ACCELERATION_GUIDE.md) - Usage and configuration
-  - [**Technical RFC**](rfcs/rfc_heterogeneous_compute.md) - Architecture deep-dive
+  - [**Acceleration Guide**](content/gpu-compute/COMPUTE_ACCELERATION_GUIDE.md) - Usage and configuration
+  - [**Technical RFC**](content/rfcs/completed/rfc_heterogeneous_compute.md) - Architecture deep-dive
 
 ### Distributed Transactions
 
 - **Status**: **Production Ready**
 - **Features**: ACID compliance, 2-phase commit, saga patterns, distributed locks, deadlock detection
-- **Documentation**: [Advanced Transaction Features](advanced_transaction_features.md)
+- **Documentation**: [Advanced Transaction Features](content/server/advanced_transaction_features.md)
 
 ## Protocol Support
 
@@ -65,21 +65,21 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
   - Graph database (GRAPH.*) - Cypher-like queries
   - Machine learning (ML_*) - Statistical functions
   - Search engine (FT.*) - RedisSearch compatibility
-- **Documentation**: [Protocol Adapters](protocols/protocol_adapters.md)
+- **Documentation**: [Protocol Adapters](content/protocols/protocol_adapters.md)
 
 ### PostgreSQL Wire Protocol
 
 - **Status**: **Complete**
 - **Persistence**: ✅ RocksDB at `data/postgresql/rocksdb/`
 - **Features**: Complete wire protocol, complex SQL parsing, pgvector support, ACID transactions
-- **Documentation**: [PostgreSQL Implementation](protocols/POSTGRES_WIRE_IMPLEMENTATION.md)
+- **Documentation**: [PostgreSQL Implementation](content/protocols/POSTGRES_WIRE_IMPLEMENTATION.md)
 
 ### MySQL Wire Protocol
 
 - **Status**: **Complete**
 - **Persistence**: ✅ RocksDB at `data/mysql/rocksdb/`
 - **Features**: MySQL-compatible wire protocol, SQL DDL/DML operations
-- **Documentation**: [MySQL Complete Documentation](MYSQL_COMPLETE_DOCUMENTATION.md)
+- **Documentation**: [MySQL Complete Documentation](content/protocols/MYSQL_COMPLETE_DOCUMENTATION.md)
 
 ### CQL/Cassandra Protocol
 
@@ -109,7 +109,7 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
 - **Persistence**: ✅ RocksDB at `data/aql/rocksdb/`
 - **Features**: Multi-model database operations, document and graph storage, AQL query language
 - **Port**: 8529
-- **Documentation**: [AQL Reference](AQL_REFERENCE.md)
+- **Documentation**: [AQL Reference](content/aql/AQL_REFERENCE.md)
 
 ### GraphRAG Protocol
 
@@ -126,13 +126,13 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
     2. GraphRAGStorage (dedicated storage optimized for GraphRAG)
     3. Enhanced GraphActor (configurable persistent storage)
 - **Access**: Via RESP (GRAPHRAG.* commands), PostgreSQL, Cypher, AQL
-- **Documentation**: [GraphRAG Complete Documentation](GRAPHRAG_COMPLETE_DOCUMENTATION.md), [GraphRAG Persistence Implementation](GRAPHRAG_PERSISTENCE_IMPLEMENTATION.md)
+- **Documentation**: [GraphRAG Complete Documentation](content/graph-rag/GRAPHRAG_COMPLETE_DOCUMENTATION.md), [GraphRAG Persistence Implementation](content/graph-rag/GRAPHRAG_PERSISTENCE_IMPLEMENTATION.md)
 
 ### Model Context Protocol (MCP)
 
 - **Status**: **Complete**
 - **Features**: AI agent integration, comprehensive tool support
-- **Documentation**: [Protocol Adapters](protocols/protocol_adapters.md)
+- **Documentation**: [Protocol Adapters](content/protocols/protocol_adapters.md)
 
 ## AI/ML Capabilities
 
@@ -149,7 +149,7 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
   - **Decision Engine**: Policy-based autonomous decision making
   - **Knowledge Base**: Pattern storage and retrieval
 - **Code**: 17 files, 3,925+ lines, 14 tests (100% passing)
-- **Documentation**: [AI Features Summary](AI_FEATURES_SUMMARY.md), [AI Implementation Complete](AI_IMPLEMENTATION_COMPLETE.md)
+- **Documentation**: [AI Features Summary](content/ai/AI_FEATURES_SUMMARY.md), [AI Implementation Complete](content/ai/AI_IMPLEMENTATION_COMPLETE.md)
 
 ### Vector Database
 
@@ -159,7 +159,7 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
   - Embeddings storage and semantic search
   - Integration with AI/ML workflows
 - **Commands**: 18+ vector operations (VECTOR.*, FT.*)
-- **Documentation**: [Vector Commands](vector_commands.md)
+- **Documentation**: [Vector Commands](content/server/vector_commands.md)
 
 ### Neural Engine Integration
 
@@ -169,7 +169,7 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
   - Snapdragon Hexagon DSP
   - Intel Neural Compute (OpenVINO)
 - **Performance**: 10-50x speedups for AI inference workloads
-- **Documentation**: [RFC: Heterogeneous Compute](rfcs/rfc_heterogeneous_compute.md)
+- **Documentation**: [RFC: Heterogeneous Compute](content/rfcs/completed/rfc_heterogeneous_compute.md)
 
 ### Machine Learning Engine (orbit-ml)
 
@@ -182,7 +182,7 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
   - SQL Functions: ML_* functions for in-database machine learning
   - Industry Models: Healthcare, Fintech, Defense templates
 - **Tests**: 52 passing tests
-- **Documentation**: [ML SQL Functions Design](ML_SQL_FUNCTIONS_DESIGN.md)
+- **Documentation**: [ML SQL Functions Design](content/ml/ML_SQL_FUNCTIONS_DESIGN.md)
 
 ## Data Management
 
@@ -195,7 +195,7 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
   - Partitioning strategies (Series Count, Data Size, Composite)
   - PostgreSQL/Redis compatibility structures
   - 44 passing tests
-- **Documentation**: [Time Series Commands](timeseries_commands.md)
+- **Documentation**: [Time Series Commands](content/server/timeseries_commands.md)
 
 ### Graph Database
 
@@ -208,7 +208,7 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
 
 - **Status**: **Complete**
 - **Features**: PostgreSQL compatibility, advanced SQL features, pgvector support
-- **Documentation**: [SQL Parser Architecture](protocols/SQL_PARSER_ARCHITECTURE.md)
+- **Documentation**: [SQL Parser Architecture](content/protocols/SQL_PARSER_ARCHITECTURE.md)
 
 ## Infrastructure
 
@@ -225,7 +225,7 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
   - Each protocol has isolated storage at `data/{protocol}/rocksdb/`
   - Automatic data loading on startup
   - ACID guarantees with crash recovery
-- **Documentation**: [Storage Backend Independence](content/storage/STORAGE_BACKEND_INDEPENDENCE.md), [Persistence Complete Documentation](PERSISTENCE_COMPLETE_DOCUMENTATION.md)
+- **Documentation**: [Storage Backend Independence](content/storage/STORAGE_BACKEND_INDEPENDENCE.md), [Persistence Complete Documentation](content/storage/PERSISTENCE_COMPLETE_DOCUMENTATION.md)
 
 ### Kubernetes Integration
 
@@ -235,7 +235,7 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
   - Helm charts for deployment
   - StatefulSets and PVC management
   - Production-ready configuration
-- **Documentation**: [Kubernetes Complete Documentation](KUBERNETES_COMPLETE_DOCUMENTATION.md)
+- **Documentation**: [Kubernetes Complete Documentation](content/server/KUBERNETES_COMPLETE_DOCUMENTATION.md)
 
 ### Observability
 
@@ -245,7 +245,7 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
   - Grafana dashboards
   - Comprehensive health checks
   - Performance monitoring
-- **Documentation**: [Advanced Transaction Features](advanced_transaction_features.md) (includes observability section)
+- **Documentation**: [Advanced Transaction Features](content/server/advanced_transaction_features.md) (includes observability section)
 
 ## Networking & Communication
 
@@ -253,14 +253,14 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
 
 - **Status**: **Complete**
 - **Features**: Protocol Buffers, type-safe communication, connection pooling
-- **Documentation**: [Network Layer](NETWORK_LAYER.md)
+- **Documentation**: [Network Layer](content/server/NETWORK_LAYER.md)
 
 ### Load Balancing
 
 - **Status**: **Complete**
 - **Strategies**: Round-robin, least connections, resource-aware, hash-based
 - **Features**: Automatic failover, health checks
-- **Documentation**: [Network Layer](NETWORK_LAYER.md)
+- **Documentation**: [Network Layer](content/server/NETWORK_LAYER.md)
 
 ## Security & Enterprise
 
@@ -268,13 +268,13 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
 
 - **Status**:  **Implemented**
 - **Features**: Enterprise-grade security, audit logging, compliance features
-- **Documentation**: [Security Complete Documentation](SECURITY_COMPLETE_DOCUMENTATION.md), [Advanced Transaction Features](advanced_transaction_features.md)
+- **Documentation**: [Security Complete Documentation](content/server/SECURITY_COMPLETE_DOCUMENTATION.md), [Advanced Transaction Features](content/server/advanced_transaction_features.md)
 
 ### Secrets Management
 
 - **Status**: **Complete**
 - **Features**: Secure configuration management, multiple secret backends
-- **Documentation**: [Secrets Configuration Guide](SECRETS_CONFIGURATION_GUIDE.md)
+- **Documentation**: [Secrets Configuration Guide](content/server/SECRETS_CONFIGURATION_GUIDE.md)
 
 ## Development Status Summary
 
@@ -328,36 +328,36 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
 
 - [Project Overview](project_overview.md)
 - [Quick Start Guide](quick_start.md)
-- [Development Guide](development/development.md)
+- [Development Guide](content/development/development.md)
 
 ### Architecture & Core
 
 - [Architecture Overview](overview.md)
-- [Virtual Actor Persistence](virtual_actor_persistence.md)
-- [Heterogeneous Compute RFC](rfcs/rfc_heterogeneous_compute.md)
+- [Virtual Actor Persistence](content/storage/virtual_actor_persistence.md)
+- [Heterogeneous Compute RFC](content/rfcs/completed/rfc_heterogeneous_compute.md)
 
 ### Protocols & APIs
 
-- [Protocol Adapters](protocols/protocol_adapters.md)
-- [Vector Commands](vector_commands.md)
-- [Time Series Commands](timeseries_commands.md)
+- [Protocol Adapters](content/protocols/protocol_adapters.md)
+- [Vector Commands](content/server/vector_commands.md)
+- [Time Series Commands](content/server/timeseries_commands.md)
 - [Graph Commands](content/graph/graph_commands.md)
 
 ### Deployment & Operations
 
-- [Kubernetes Complete Documentation](KUBERNETES_COMPLETE_DOCUMENTATION.md)
+- [Kubernetes Complete Documentation](content/server/KUBERNETES_COMPLETE_DOCUMENTATION.md)
 - [CI/CD Pipeline](content/development/CICD.md)
-- [Security Complete Documentation](SECURITY_COMPLETE_DOCUMENTATION.md)
+- [Security Complete Documentation](content/server/SECURITY_COMPLETE_DOCUMENTATION.md)
 
 ### Advanced Topics
 
-- [Advanced Transaction Features](advanced_transaction_features.md)
-- [OrbitQL Complete Documentation](ORBITQL_COMPLETE_DOCUMENTATION.md)
-- [GraphRAG Complete Documentation](GRAPHRAG_COMPLETE_DOCUMENTATION.md)
+- [Advanced Transaction Features](content/server/advanced_transaction_features.md)
+- [OrbitQL Complete Documentation](content/server/ORBITQL_COMPLETE_DOCUMENTATION.md)
+- [GraphRAG Complete Documentation](content/graph-rag/GRAPHRAG_COMPLETE_DOCUMENTATION.md)
 
 ---
 
-**Last Updated**: November 25, 2025
+**Last Updated**: November 30, 2025
 **Total Features**: 50+ production-ready features
 **Documentation**: 25,000+ lines of technical documentation
 **Test Coverage**: Comprehensive with 700+ tests passing across all modules
