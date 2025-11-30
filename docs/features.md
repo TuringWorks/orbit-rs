@@ -101,7 +101,7 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
   - **Community Detection**: Connected components, Triangle counting
   - **Pattern Matching**: Variable-length paths, relationship patterns
 - **Port**: 7687
-- **Documentation**: [Graph Database](GRAPH_DATABASE.md)
+- **Documentation**: [Graph Database](content/graph/GRAPH_DATABASE.md)
 
 ### AQL/ArangoDB Protocol
 
@@ -202,7 +202,7 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
 - **Status**: **Planned** (10% complete)
 - **Features**: Basic graph storage (InMemoryGraphStorage), node/relationship CRUD, label operations
 - **Tests**: 15 passing tests
-- **Documentation**: [Graph Database](GRAPH_DATABASE.md), [Graph Commands](graph_commands.md)
+- **Documentation**: [Graph Database](content/graph/GRAPH_DATABASE.md), [Graph Commands](content/graph/graph_commands.md)
 
 ### SQL Database
 
@@ -225,7 +225,7 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
   - Each protocol has isolated storage at `data/{protocol}/rocksdb/`
   - Automatic data loading on startup
   - ACID guarantees with crash recovery
-- **Documentation**: [Storage Backend Independence](STORAGE_BACKEND_INDEPENDENCE.md), [Persistence Complete Documentation](PERSISTENCE_COMPLETE_DOCUMENTATION.md)
+- **Documentation**: [Storage Backend Independence](content/storage/STORAGE_BACKEND_INDEPENDENCE.md), [Persistence Complete Documentation](PERSISTENCE_COMPLETE_DOCUMENTATION.md)
 
 ### Kubernetes Integration
 
@@ -341,12 +341,12 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
 - [Protocol Adapters](protocols/protocol_adapters.md)
 - [Vector Commands](vector_commands.md)
 - [Time Series Commands](timeseries_commands.md)
-- [Graph Commands](graph_commands.md)
+- [Graph Commands](content/graph/graph_commands.md)
 
 ### Deployment & Operations
 
 - [Kubernetes Complete Documentation](KUBERNETES_COMPLETE_DOCUMENTATION.md)
-- [CI/CD Pipeline](CICD.md)
+- [CI/CD Pipeline](content/development/CICD.md)
 - [Security Complete Documentation](SECURITY_COMPLETE_DOCUMENTATION.md)
 
 ### Advanced Topics

@@ -537,7 +537,7 @@ Contributions to GraphRAG are welcome! Areas needing help:
 - [GraphRAG Complete Documentation](./GRAPHRAG_COMPLETE_DOCUMENTATION.md)
 - [Orbit-RS Architecture](./architecture/ORBIT_ARCHITECTURE.md)
 - [Vector Store Documentation](./VECTOR_STORE.md)
-- [Graph Database Documentation](./GRAPH_DATABASE.md)
+- [Graph Database Documentation](../graph/GRAPH_DATABASE.md)
 
 ---
 

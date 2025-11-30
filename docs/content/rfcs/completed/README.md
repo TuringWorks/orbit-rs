@@ -25,5 +25,5 @@ RFCs are moved to this directory when:
 
 - [Protocol 100% Completion Report](../PROTOCOL_100_PERCENT_COMPLETE.md)
 - [Persistence Complete Documentation](../PERSISTENCE_COMPLETE_DOCUMENTATION.md)
-- [MCP and GraphRAG Complete Documentation](../MCP_GRAPHRAG_COMPLETE.md)
+- [MCP and GraphRAG Complete Documentation](../../graph-rag/MCP_GRAPHRAG_COMPLETE.md)
 

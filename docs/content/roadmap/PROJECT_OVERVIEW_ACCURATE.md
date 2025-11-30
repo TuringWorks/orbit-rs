@@ -347,7 +347,7 @@ orbit-rs/
 - [Redis Commands Reference](protocols/REDIS_COMMANDS_REFERENCE.md)
 - [AQL Reference](AQL_REFERENCE.md)
 - [OrbitQL Complete Documentation](ORBITQL_COMPLETE_DOCUMENTATION.md)
-- [Graph Commands](graph_commands.md)
+- [Graph Commands](../graph/graph_commands.md)
 - [GraphRAG Complete Documentation](GRAPHRAG_COMPLETE_DOCUMENTATION.md)
 - [ML Functions Design](ML_SQL_FUNCTIONS_DESIGN.md)
 
@@ -356,8 +356,8 @@ orbit-rs/
 - [Kubernetes Deployment](README-K8S-DEPLOYMENT.md)
 - [Kubernetes Complete Documentation](KUBERNETES_COMPLETE_DOCUMENTATION.md)
 - [Deployment Guide](deployment/DEPLOYMENT.md)
-- [CI/CD Guide](CICD.md)
-- [Cluster Management](CLUSTER_MANAGEMENT.md)
+- [CI/CD Guide](../development/CICD.md)
+- [Cluster Management](../server/CLUSTER_MANAGEMENT.md)
 
 ### **Strategic Planning**
 
@@ -370,7 +370,7 @@ orbit-rs/
 
 - [GraphRAG Complete Documentation](GRAPHRAG_COMPLETE_DOCUMENTATION.md)
 - [Time Series Engine](TIME_SERIES_ENGINE.md)
-- [LSM Tree Implementation](LSM_TREE_IMPLEMENTATION.md)
+- [LSM Tree Implementation](../storage/LSM_TREE_IMPLEMENTATION.md)
 - [Migration Guide](MIGRATION_GUIDE.md)
 - [TiKV Complete Documentation](TIKV_COMPLETE_DOCUMENTATION.md)
 

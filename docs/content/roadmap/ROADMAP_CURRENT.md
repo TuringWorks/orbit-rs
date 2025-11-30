@@ -271,7 +271,7 @@ Storage Scaling:
 ### **For Developers**
 
 - **[Installation Guide](quick_start.md)**: Quick setup and configuration
-- **[Graph Database Tutorial](GRAPH_DATABASE.md)**: Complete graph operations guide
+- **[Graph Database Tutorial](../graph/GRAPH_DATABASE.md)**: Complete graph operations guide
 - **[Time Series Guide](TIME_SERIES_ENGINE.md)**: Real-time analytics walkthrough
 - **[Query Language Reference](QUERY_LANGUAGES_COMPARISON.md)**: Complete language documentation
 
