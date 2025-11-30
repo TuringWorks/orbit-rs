@@ -199,6 +199,7 @@ data/redis/
 data/rocksdb/
 data/wal/
 data/warm/
+orbit/server/data/
 demo_cow_data/
 orbit_integrated_data/
 orbit_integrated_data_cluster/
