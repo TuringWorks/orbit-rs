@@ -6,21 +6,35 @@ use orbit_shared::{
 };
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{oneshot, RwLock};
+use orbit_proto::{
+    InvocationReasonProto, InvocationRequestProto, MessageContentProto, MessageProto,
+    MessageTargetProto, NodeIdProto,
+};
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::time::{timeout, Duration};
+
+/// Pending invocation context
+#[derive(Debug)]
+struct PendingInvocation {
+    sender: oneshot::Sender<InvocationResult>,
+    reference: AddressableReference,
+    method: String,
+}
 
 /// System for managing actor invocations
 #[derive(Debug)]
 pub struct InvocationSystem {
-    pending_invocations: Arc<RwLock<HashMap<u64, oneshot::Sender<InvocationResult>>>>,
+    pending_invocations: Arc<RwLock<HashMap<u64, PendingInvocation>>>,
     invocation_counter: Arc<std::sync::atomic::AtomicU64>,
+    outbound_sender: Option<mpsc::Sender<MessageProto>>,
 }
 
 impl InvocationSystem {
-    pub fn new() -> Self {
+    pub fn new(outbound_sender: Option<mpsc::Sender<MessageProto>>) -> Self {
         Self {
             pending_invocations: Arc::new(RwLock::new(HashMap::new())),
             invocation_counter: Arc::new(std::sync::atomic::AtomicU64::new(1)),
+            outbound_sender,
         }
     }
 
@@ -38,11 +52,22 @@ impl InvocationSystem {
         // Store the pending invocation
         {
             let mut pending = self.pending_invocations.write().await;
-            pending.insert(invocation_id, tx);
+            pending.insert(
+                invocation_id,
+                PendingInvocation {
+                    sender: tx,
+                    reference: invocation.reference.clone(),
+                    method: invocation.method.clone(),
+                },
+            );
         }
 
-        // Route the invocation (for now, simulate local execution)
-        let result = self.route_invocation(invocation_id, invocation).await;
+        // Route the invocation
+        if let Err(e) = self.route_invocation(invocation_id, invocation).await {
+            let mut pending = self.pending_invocations.write().await;
+            pending.remove(&invocation_id);
+            return Err(e);
+        }
 
         // Wait for the result with timeout
         match timeout(Duration::from_secs(30), rx).await {
@@ -54,9 +79,7 @@ impl InvocationSystem {
                 pending.remove(&invocation_id);
                 Err(OrbitError::timeout("Actor invocation"))
             }
-        }?;
-
-        result
+        }
     }
 
     /// Route an invocation to the appropriate handler
@@ -64,13 +87,62 @@ impl InvocationSystem {
         &self,
         invocation_id: u64,
         invocation: AddressableInvocation,
-    ) -> OrbitResult<InvocationResult> {
-        // For now, simulate successful execution
-        // In a real implementation, this would:
-        // 1. Determine which node hosts the actor
-        // 2. Send the invocation over the network if remote
-        // 3. Execute locally if the actor is on this node
+    ) -> OrbitResult<()> {
+        if let Some(sender) = &self.outbound_sender {
+            // Convert arguments to JSON string
+            let args_json = serde_json::to_string(&invocation.args)
+                .map_err(|e| OrbitError::SerializationError(e))?;
 
+            // Create invocation request
+            let request = InvocationRequestProto {
+                reference: Some(orbit_proto::converters::AddressableReferenceConverter::to_proto(
+                    &invocation.reference,
+                )),
+                method: invocation.method,
+                arguments: args_json,
+                reason: InvocationReasonProto::Invocation as i32,
+            };
+
+            // Create message
+            let message = MessageProto {
+                message_id: invocation_id as i64,
+                source: None, // Will be filled by client
+                target: Some(MessageTargetProto {
+                    target: Some(orbit_proto::message_target_proto::Target::UnicastTarget(
+                        orbit_proto::message_target_proto::Unicast {
+                            target: Some(NodeIdProto {
+                                key: "server".to_string(), // Target server
+                                namespace: "default".to_string(),
+                            }),
+                        },
+                    )),
+                }),
+                content: Some(MessageContentProto {
+                    content: Some(orbit_proto::message_content_proto::Content::InvocationRequest(
+                        request,
+                    )),
+                }),
+                attempts: 0,
+            };
+
+            // Send message
+            sender
+                .send(message)
+                .await
+                .map_err(|_| OrbitError::internal("Failed to send invocation message"))?;
+
+            Ok(())
+        } else {
+            // Fallback to mock implementation for offline mode
+            self.mock_invocation(invocation_id, invocation).await
+        }
+    }
+
+    async fn mock_invocation(
+        &self,
+        invocation_id: u64,
+        invocation: AddressableInvocation,
+    ) -> OrbitResult<()> {
         tokio::time::sleep(Duration::from_millis(1)).await;
 
         // Mock different return types based on method name
@@ -145,32 +217,46 @@ impl InvocationSystem {
             _ => serde_json::Value::String("Hello from actor!".to_string()),
         };
 
-        let result = InvocationResult {
-            invocation_id,
-            reference: invocation.reference,
-            method: invocation.method,
-            result: Ok(result_value),
-        };
-
         // Complete the pending invocation
-        self.complete_invocation(invocation_id, result.clone())
-            .await;
+        self.complete_invocation_result(invocation_id, Ok(result_value)).await;
 
-        Ok(result)
+        Ok(())
     }
 
-    /// Complete a pending invocation with a result
-    async fn complete_invocation(&self, invocation_id: u64, result: InvocationResult) {
+    /// Complete a pending invocation with a result value
+    pub async fn complete_invocation_result(
+        &self,
+        invocation_id: u64,
+        result_value: Result<serde_json::Value, String>,
+    ) {
         let mut pending = self.pending_invocations.write().await;
-        if let Some(sender) = pending.remove(&invocation_id) {
-            let _ = sender.send(result);
+        if let Some(pending_inv) = pending.remove(&invocation_id) {
+            let result = InvocationResult {
+                invocation_id,
+                reference: pending_inv.reference,
+                method: pending_inv.method,
+                result: result_value,
+            };
+            let _ = pending_inv.sender.send(result);
+        }
+    }
+
+    // Keep old complete_invocation for backward compatibility if needed, or remove it
+    // But route_invocation calls it. I should update route_invocation to use complete_invocation_result
+    // or update complete_invocation to take InvocationResult and just extract what it needs.
+
+    /// Complete a pending invocation with a full result
+    async fn complete_invocation(&self, invocation_id: u64, result: InvocationResult) {
+         let mut pending = self.pending_invocations.write().await;
+        if let Some(pending_inv) = pending.remove(&invocation_id) {
+            let _ = pending_inv.sender.send(result);
         }
     }
 }
 
 impl Default for InvocationSystem {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 
@@ -262,7 +348,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_invocation_system() {
-        let system = InvocationSystem::new();
+        let system = InvocationSystem::new(None);
 
         let invocation = AddressableInvocation {
             reference: AddressableReference {
@@ -290,7 +376,7 @@ mod tests {
             },
         };
 
-        let system = Arc::new(InvocationSystem::new());
+        let system = Arc::new(InvocationSystem::new(None));
         let actor_ref: ActorReference<dyn Addressable> = ActorReference::new(reference, system);
 
         let result: String = actor_ref

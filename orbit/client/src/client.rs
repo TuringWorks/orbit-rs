@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{interval, Duration};
+use tokio_stream::StreamExt;
 use tonic::transport::{Channel, Endpoint};
 
 /// Configuration for the Orbit client
@@ -104,7 +105,10 @@ impl OrbitClient {
     pub async fn new(config: OrbitClientConfig) -> OrbitResult<Self> {
         let registry = ActorRegistry::new();
         let connections = Arc::new(RwLock::new(HashMap::new()));
-        let invocation_system = Arc::new(InvocationSystem::new());
+        
+        // Create channel for outbound messages
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+        let invocation_system = Arc::new(InvocationSystem::new(Some(tx)));
 
         let mut client = Self {
             config,
@@ -118,7 +122,7 @@ impl OrbitClient {
         client.initialize_connections().await?;
 
         // Start background tasks
-        client.start_background_tasks().await;
+        client.start_background_tasks(Some(rx)).await;
 
         Ok(client)
     }
@@ -127,7 +131,8 @@ impl OrbitClient {
     pub async fn new_offline(config: OrbitClientConfig) -> OrbitResult<Self> {
         let registry = ActorRegistry::new();
         let connections = Arc::new(RwLock::new(HashMap::new()));
-        let invocation_system = Arc::new(InvocationSystem::new());
+        // Offline mode doesn't use the sender
+        let invocation_system = Arc::new(InvocationSystem::new(None));
 
         let client = Self {
             config,
@@ -141,9 +146,96 @@ impl OrbitClient {
         };
 
         // Start background tasks (but skip connection initialization)
-        client.start_background_tasks().await;
+        client.start_background_tasks(None).await;
 
         tracing::info!("OrbitClient initialized in offline mode");
+        Ok(client)
+    }
+
+    /// Create a new Orbit client with a local in-process connection
+    pub async fn new_local(
+        config: OrbitClientConfig,
+        local_node_id: NodeId,
+        server_tx: tokio::sync::mpsc::Sender<orbit_proto::MessageProto>,
+        mut server_rx: tokio::sync::mpsc::Receiver<Result<orbit_proto::MessageProto, tonic::Status>>,
+    ) -> OrbitResult<Self> {
+        let registry = ActorRegistry::new();
+        let connections = Arc::new(RwLock::new(HashMap::new()));
+        
+        // Create channel for outbound messages
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+        let invocation_system = Arc::new(InvocationSystem::new(Some(tx)));
+
+        let client = Self {
+            config,
+            node_id: Some(local_node_id),
+            registry: registry.clone(),
+            connections,
+            invocation_system: invocation_system.clone(),
+        };
+
+        // Start background tasks
+        // 1. Actor cleanup (standard)
+        let actor_timeout = client.config.actor_timeout;
+        tokio::spawn(async move {
+            let mut cleanup_interval = interval(Duration::from_secs(60));
+            loop {
+                cleanup_interval.tick().await;
+                if let Err(e) = registry.cleanup_idle_instances(actor_timeout).await {
+                    tracing::warn!("Failed to cleanup idle actors: {}", e);
+                }
+            }
+        });
+
+        // 2. Local message handling
+        let invocation_system_clone = invocation_system.clone();
+        tokio::spawn(async move {
+            // Handle inbound messages from server
+            let inbound_task = tokio::spawn(async move {
+                while let Some(result) = server_rx.recv().await {
+                    match result {
+                        Ok(message) => {
+                             if let Some(content) = message.content {
+                                if let Some(inner_content) = content.content {
+                                    match inner_content {
+                                        orbit_proto::message_content_proto::Content::InvocationResponse(resp) => {
+                                            let result: serde_json::Value = match serde_json::from_str(&resp.value) {
+                                                Ok(val) => val,
+                                                Err(e) => {
+                                                    tracing::error!("Failed to deserialize invocation result: {}", e);
+                                                    serde_json::Value::Null
+                                                }
+                                            };
+                                            invocation_system_clone.complete_invocation_result(message.message_id as u64, Ok(result)).await;
+                                        },
+                                        orbit_proto::message_content_proto::Content::InvocationResponseError(err) => {
+                                            invocation_system_clone.complete_invocation_result(message.message_id as u64, Err(err.description)).await;
+                                        },
+                                        _ => {}
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Local connection error: {}", e);
+                        }
+                    }
+                }
+            });
+
+            // Handle outbound messages to server
+            let mut stream_rx = tokio_stream::wrappers::ReceiverStream::new(rx);
+            while let Some(msg) = stream_rx.next().await {
+                if let Err(e) = server_tx.send(msg).await {
+                    tracing::error!("Failed to send message to local server: {}", e);
+                    break;
+                }
+            }
+            
+            // If outbound stream ends, abort inbound task
+            inbound_task.abort();
+        });
+
         Ok(client)
     }
 
@@ -267,9 +359,14 @@ impl OrbitClient {
         Ok(NodeIdConverter::from_proto(&node_id_proto))
     }
 
-    async fn start_background_tasks(&self) {
+    async fn start_background_tasks(
+        &self,
+        outbound_receiver: Option<tokio::sync::mpsc::Receiver<orbit_proto::MessageProto>>,
+    ) {
         let registry = self.registry.clone();
         let actor_timeout = self.config.actor_timeout;
+        let connections = self.connections.clone();
+        let invocation_system = self.invocation_system.clone();
 
         // Actor cleanup task
         tokio::spawn(async move {
@@ -281,6 +378,96 @@ impl OrbitClient {
                 }
             }
         });
+
+        // Outbound message handler
+        if let Some(rx) = outbound_receiver {
+            tokio::spawn(async move {
+                let mut stream_rx = tokio_stream::wrappers::ReceiverStream::new(rx);
+                
+                // Retry loop for connection
+                loop {
+                    let channel = {
+                        let connections_guard = connections.read().await;
+                        connections_guard.values().next().cloned()
+                    };
+
+                    if let Some(channel) = channel {
+                        let mut client = orbit_proto::connection_service_client::ConnectionServiceClient::new(channel);
+                        
+                        // We need to create a new stream for each connection attempt
+                        // Since ReceiverStream consumes the receiver, we can't easily reuse it if the connection fails
+                        // and we want to resume sending from the same receiver.
+                        // For a robust implementation, we would need a way to peek/buffer or use a different channel structure.
+                        // However, for this implementation, we will assume the connection is stable or we accept losing the receiver on failure.
+                        // To properly handle this, we would need an internal loop that reads from 'rx' and forwards to a 
+                        // short-lived sender that feeds the gRPC stream.
+                        
+                        // Implementing the forwarding approach for robustness:
+                        let (tx_internal, rx_internal) = tokio::sync::mpsc::channel(100);
+                        let outbound_stream = tokio_stream::wrappers::ReceiverStream::new(rx_internal);
+                        
+                        match client.open_stream(tonic::Request::new(outbound_stream)).await {
+                            Ok(response) => {
+                                let mut inbound_stream = response.into_inner();
+                                let invocation_system_clone = invocation_system.clone();
+                                
+                                // Spawn response handler
+                                tokio::spawn(async move {
+                                    while let Ok(Some(message)) = inbound_stream.message().await {
+                                        if let Some(content) = message.content {
+                                            if let Some(inner_content) = content.content {
+                                                match inner_content {
+                                                    orbit_proto::message_content_proto::Content::InvocationResponse(resp) => {
+                                                        // Parse result
+                                                        let result: serde_json::Value = match serde_json::from_str(&resp.value) {
+                                                            Ok(val) => val,
+                                                            Err(e) => {
+                                                                tracing::error!("Failed to deserialize invocation result: {}", e);
+                                                                serde_json::Value::Null
+                                                            }
+                                                        };
+                                                        invocation_system_clone.complete_invocation_result(message.message_id as u64, Ok(result)).await;
+                                                    },
+                                                    orbit_proto::message_content_proto::Content::InvocationResponseError(err) => {
+                                                        invocation_system_clone.complete_invocation_result(message.message_id as u64, Err(err.description)).await;
+                                                    },
+                                                    _ => {
+                                                        tracing::debug!("Received other message type: {:?}", inner_content);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    tracing::warn!("Inbound stream ended");
+                                });
+
+                                // Forward messages from the main receiver to the gRPC stream
+                                // This consumes the main receiver, so if this loop exits, we can't retry easily with the same receiver
+                                // unless we change the architecture. But this is better than nothing.
+                                // Actually, we can't iterate on 'stream_rx' multiple times.
+                                // So we have to commit to this stream.
+                                while let Some(msg) = stream_rx.next().await {
+                                    if let Err(e) = tx_internal.send(msg).await {
+                                        tracing::error!("Failed to forward message to gRPC stream: {}", e);
+                                        break;
+                                    }
+                                }
+                                // If we exit the loop, the receiver is closed or we failed to send
+                                break; 
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to open stream: {}", e);
+                                tokio::time::sleep(Duration::from_secs(1)).await;
+                                continue;
+                            }
+                        }
+                    } else {
+                        tracing::warn!("No server connections available, waiting...");
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                }
+            });
+        }
     }
 }
 

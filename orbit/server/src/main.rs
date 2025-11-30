@@ -361,7 +361,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .as_ref()
         .map_or(true, |c| c.enabled)
     {
-        let redis_handle = start_redis_server(&args, redis_storage.clone()).await?;
+        
+        // Actually, let's just create a new client for Redis specifically.
+        // It's cleaner than sharing one if Clone is hard.
+        let redis_client_config = orbit_client::OrbitClientConfig {
+            server_urls: vec![format!("http://{}:{}", args.bind, args.grpc_port)],
+            namespace: "default".to_string(),
+            ..Default::default()
+        };
+        
+        // We need to create it inside the spawn or before?
+        // start_redis_server is async.
+        let redis_handle = start_redis_server(&args, redis_storage.clone(), redis_client_config).await?;
         protocol_handles.push(redis_handle);
         info!(
             "[Redis] Redis RESP protocol server started on port {}",
@@ -1028,6 +1039,7 @@ async fn start_mcp_server(
 async fn start_redis_server(
     args: &Args,
     _storage: Arc<TieredTableStorage>,
+    client_config: orbit_client::OrbitClientConfig,
 ) -> Result<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>, Box<dyn Error>> {
     let bind_addr = format!("{}:{}", args.bind, args.redis_port);
 
@@ -1055,7 +1067,10 @@ async fn start_redis_server(
             }
         };
 
-    let redis_server = RespServer::new_with_persistence(bind_addr, redis_provider);
+    // Create OrbitClient
+    let orbit_client = orbit_client::OrbitClient::new(client_config).await?;
+
+    let redis_server = RespServer::new_with_persistence(bind_addr, orbit_client, redis_provider);
 
     let handle = tokio::spawn(async move {
         redis_server

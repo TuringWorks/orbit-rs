@@ -36,6 +36,8 @@ mod handler {
     use crate::protocols::resp::simple_local::SimpleLocalRegistry;
     use crate::protocols::{error::ProtocolError, resp::RespValue};
 
+    use orbit_client::OrbitClient;
+
     /// Command categories for organizing command dispatch
     #[derive(Debug, Clone)]
     pub enum CommandCategory {
@@ -56,6 +58,9 @@ mod handler {
 
     /// Main command handler that delegates to specialized command modules
     pub struct CommandHandler {
+        #[allow(dead_code)] // Reserved for future use
+        orbit_client: Arc<OrbitClient>,
+        #[allow(dead_code)] // Reserved for future use
         local_registry: Arc<SimpleLocalRegistry>,
 
         // Specialized command handlers
@@ -75,16 +80,18 @@ mod handler {
 
     impl CommandHandler {
         /// Create a new command handler with all specialized modules
-        pub fn new() -> Self {
-            Self::new_with_persistence(None)
+        pub fn new(orbit_client: OrbitClient) -> Self {
+            Self::new_with_persistence(orbit_client, None)
         }
 
         /// Create a new command handler with optional persistent storage
         pub fn new_with_persistence(
+            orbit_client: OrbitClient,
             persistent_storage: Option<
                 Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>,
             >,
         ) -> Self {
+            let orbit_client = Arc::new(orbit_client);
             let local_registry = if let Some(provider) = persistent_storage {
                 Arc::new(SimpleLocalRegistry::with_persistence(provider))
             } else {
@@ -92,18 +99,19 @@ mod handler {
             };
 
             Self {
-                connection: ConnectionCommands::new(local_registry.clone()),
-                string: StringCommands::new(local_registry.clone()),
-                hash: HashCommands::new(local_registry.clone()),
-                list: ListCommands::new(local_registry.clone()),
-                pubsub: PubSubCommands::new(local_registry.clone()),
-                set: SetCommands::new(local_registry.clone()),
-                sorted_set: SortedSetCommands::new(local_registry.clone()),
-                vector: VectorCommands::new(local_registry.clone()),
-                time_series: TimeSeriesCommands::new(local_registry.clone()),
-                graph: GraphCommands::new(local_registry.clone()),
-                graphrag: GraphRAGCommands::new(local_registry.clone()),
-                server: ServerCommands::new(local_registry.clone()),
+                connection: ConnectionCommands::new(orbit_client.clone(), local_registry.clone()),
+                string: StringCommands::new(orbit_client.clone(), local_registry.clone()),
+                hash: HashCommands::new(orbit_client.clone(), local_registry.clone()),
+                list: ListCommands::new(orbit_client.clone(), local_registry.clone()),
+                pubsub: PubSubCommands::new(orbit_client.clone(), local_registry.clone()),
+                set: SetCommands::new(orbit_client.clone(), local_registry.clone()),
+                sorted_set: SortedSetCommands::new(orbit_client.clone(), local_registry.clone()),
+                vector: VectorCommands::new(orbit_client.clone(), local_registry.clone()),
+                time_series: TimeSeriesCommands::new(orbit_client.clone(), local_registry.clone()),
+                graph: GraphCommands::new(orbit_client.clone(), local_registry.clone()),
+                graphrag: GraphRAGCommands::new(orbit_client.clone(), local_registry.clone()),
+                server: ServerCommands::new(orbit_client.clone(), local_registry.clone()),
+                orbit_client,
                 local_registry,
             }
         }

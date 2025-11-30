@@ -6,7 +6,6 @@ members = [
     "orbit/util",
     "orbit/shared",
     "orbit/proto",
-    "orbit/protocols",
     "orbit/client",
     "orbit/client-spring",
     "orbit/server",

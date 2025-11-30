@@ -70,6 +70,57 @@ pub struct ModelMetadata {
     pub metrics: HashMap<String, f64>,
     /// Categorical labels for model organization and search
     pub tags: Vec<String>,
+    /// Input feature schema
+    pub input_schema: Vec<FeatureSpec>,
+    /// Output schema
+    pub output_schema: OutputSpec,
+}
+
+/// Feature specification for ML models
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeatureSpec {
+    /// Feature name
+    pub name: String,
+    /// Feature data type
+    pub dtype: FeatureType,
+    /// Whether feature is required
+    pub required: bool,
+    /// Feature constraints (min, max, etc.)
+    pub constraints: HashMap<String, String>,
+}
+
+/// Supported feature data types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FeatureType {
+    Float32,
+    Float64,
+    Int32,
+    Int64,
+    String,
+    Vector(usize),            // Vector with dimension
+    Categorical(Vec<String>), // Categorical with possible values
+}
+
+/// Model output specification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutputSpec {
+    /// Output type
+    pub output_type: OutputType,
+    /// Output schema for structured outputs
+    pub schema: HashMap<String, String>,
+}
+
+/// Types of model outputs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum OutputType {
+    /// Single numeric value (regression)
+    Numeric,
+    /// Class probability (classification)
+    Probability { classes: Vec<String> },
+    /// Multiple values (multi-output)
+    Vector(usize),
+    /// Structured output (JSON-like)
+    Structured,
 }
 
 /// Central registry for managing model metadata and lifecycle
@@ -163,6 +214,11 @@ mod tests {
             parameters: HashMap::new(),
             metrics: HashMap::new(),
             tags: vec!["test".to_string()],
+            input_schema: vec![],
+            output_schema: OutputSpec {
+                output_type: OutputType::Numeric,
+                schema: HashMap::new(),
+            },
         };
 
         registry.register_model(metadata.clone()).await.unwrap();

@@ -14,44 +14,44 @@ Orbit-RS now supports multiple database wire protocols, allowing clients from di
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                    Client Applications                        │
+│                    Client Applications                       │
 ├──────────────────────────────────────────────────────────────┤
 │  cqlsh    │  MySQL Client  │  psql  │  Python/Node/Java/...  │
-└─────┬──────────┬──────────────┬────────────────┬──────────────┘
+└─────┬──────────┬──────────────┬────────────────┬─────────────┘
       │          │              │                │
       │ CQL      │ MySQL        │ PostgreSQL     │ Any Driver
       │ Port     │ Port         │ Port           │
       │ 9042     │ 3306         │ 5432           │
       ▼          ▼              ▼                ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                   Protocol Adapters Layer                     │
+│                   Protocol Adapters Layer                    │
 ├──────────────────────────────────────────────────────────────┤
-│   CQL Adapter  │  MySQL Adapter  │  PostgreSQL Adapter        │
-│  • Frame Codec │  • Packet Codec │  • Message Codec           │
-│  • CQL Parser  │  • Auth Handler │  • Extended Protocol       │
-│  • Type System │  • Type System  │  • Type System             │
-└────────────┬──────────────┬────────────────┬──────────────────┘
+│   CQL Adapter  │  MySQL Adapter  │  PostgreSQL Adapter       │
+│  • Frame Codec │  • Packet Codec │  • Message Codec          │
+│  • CQL Parser  │  • Auth Handler │  • Extended Protocol      │
+│  • Type System │  • Type System  │  • Type System            │
+└────────────┬──────────────┬────────────────┬─────────────────┘
              │              │                │
              ▼              ▼                ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                    Unified SQL Engine                         │
-│                   (orbit-protocols/sql)                       │
+│                    Unified SQL Engine                        │
+│                   (orbit-protocols/sql)                      │
 ├──────────────────────────────────────────────────────────────┤
-│  • Query Parsing & Planning                                   │
-│  • MVCC Transaction Management                                │
-│  • Execution Strategies (Traditional/MVCC/Hybrid)             │
-│  • Type Conversion & Validation                               │
-└────────────┬─────────────────────────────────────────────────┘
-             │
-             ▼
+│  • Query Parsing & Planning                                  │
+│  • MVCC Transaction Management                               │
+│  • Execution Strategies (Traditional/MVCC/Hybrid)            │
+│  • Type Conversion & Validation                              │
+└───────────---------------─┬──────────────────────────────────┘
+                            │
+                            ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                   Orbit Storage Engine                        │
-│                    (orbit-engine)                             │
+│                   Orbit Storage Engine                       │
+│                    (orbit-engine)                            │
 ├──────────────────────────────────────────────────────────────┤
-│  • Tiered Storage (Hot/Warm/Cold)                             │
-│  • Columnar Format & Compression                              │
-│  • Iceberg Integration                                        │
-│  • Distributed Clustering (Raft)                              │
+│  • Tiered Storage (Hot/Warm/Cold)                            │
+│  • Columnar Format & Compression                             │
+│  • Iceberg Integration                                       │
+│  • Distributed Clustering (Raft)                             │
 └──────────────────────────────────────────────────────────────┘
 ```
 

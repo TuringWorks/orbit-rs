@@ -191,7 +191,7 @@ Created comprehensive test suite in `tests/resp_integration_tests.rs` (650+ line
 - [ ] Transaction support (MULTI/EXEC/DISCARD)
 - [ ] Example Redis server
 - [ ] Comprehensive documentation
-- [ ] Full OrbitClient integration (currently uses in-memory storage)
+- [ ] Support in-memory HashMap, Actors, RocksDB and other Orbit storage backends
 - [ ] Pattern matching for KEYS command
 - [ ] Blocking operations (BLPOP, BRPOP)
 - [ ] Sorted sets (ZADD, ZRANGE, etc.)

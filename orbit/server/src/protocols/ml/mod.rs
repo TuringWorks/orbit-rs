@@ -19,77 +19,10 @@ pub type MLResult<T> = OrbitResult<T>;
 /// ML function execution error
 pub type MLError = OrbitError;
 
-/// ML model metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModelMetadata {
-    /// Model name/identifier
-    pub name: String,
-    /// Model algorithm type
-    pub algorithm: String,
-    /// Model version
-    pub version: u32,
-    /// Creation timestamp
-    pub created_at: u64,
-    /// Last updated timestamp
-    pub updated_at: u64,
-    /// Model parameters
-    pub parameters: HashMap<String, String>,
-    /// Input feature schema
-    pub input_schema: Vec<FeatureSpec>,
-    /// Output schema
-    pub output_schema: OutputSpec,
-    /// Model performance metrics
-    pub metrics: HashMap<String, f64>,
-    /// Storage location
-    pub storage_path: String,
-}
+use orbit_ml::models::{FeatureSpec, FeatureType, ModelMetadata, OutputSpec, OutputType};
 
-/// Feature specification for ML models
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FeatureSpec {
-    /// Feature name
-    pub name: String,
-    /// Feature data type
-    pub dtype: FeatureType,
-    /// Whether feature is required
-    pub required: bool,
-    /// Feature constraints (min, max, etc.)
-    pub constraints: HashMap<String, String>,
-}
-
-/// Supported feature data types
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum FeatureType {
-    Float32,
-    Float64,
-    Int32,
-    Int64,
-    String,
-    Vector(usize),            // Vector with dimension
-    Categorical(Vec<String>), // Categorical with possible values
-}
-
-/// Model output specification
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OutputSpec {
-    /// Output type
-    pub output_type: OutputType,
-    /// Output schema for structured outputs
-    pub schema: HashMap<String, String>,
-}
-
-/// Types of model outputs
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum OutputType {
-    /// Single numeric value (regression)
-    Numeric,
-    /// Class probability (classification)
-    Probability { classes: Vec<String> },
-    /// Multiple values (multi-output)
-    Vector(usize),
-    /// Structured output (JSON-like)
-    Structured,
-}
+// Local re-exports or type aliases if needed
+// For now we use orbit_ml types directly
 
 /// Training request for ML models
 #[derive(Debug, Clone, Serialize, Deserialize)]

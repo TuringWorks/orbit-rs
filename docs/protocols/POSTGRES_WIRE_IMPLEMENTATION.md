@@ -86,7 +86,7 @@ This implementation provides a **complete PostgreSQL wire protocol adapter** for
 ```text
 ┌─────────────────────────────────────────────────────────┐
 │                    PostgreSQL Client                    │
-│              (psql, pgAdmin, DataGrip, etc.)            │
+│           (psql, pgAdmin, DataGrip, pgAdmin etc.)       │
 └──────────────────────┬──────────────────────────────────┘
                        │ PostgreSQL Wire Protocol (TCP)
                        │
@@ -116,8 +116,8 @@ This implementation provides a **complete PostgreSQL wire protocol adapter** for
 └─────────────────────┼───────────────────────────────────┘
                       │
 ┌─────────────────────▼───────────────────────────────────┐
-│           In-Memory Actor Storage (HashMap)             │
-│              (TODO: Replace with OrbitClient)           │
+│      In-Memory Actor Storage (HashMap), RocksDB         │
+│                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -336,10 +336,11 @@ cargo test --package orbit-protocols --test postgres_integration_tests test_inse
 
 ### 1. Actor Integration (High Priority)
 
-- [ ] Replace in-memory HashMap with OrbitClient
+- [ ] Support in-memory HashMap, Actors, RocksDB and other Orbit storage backends
 - [ ] Map SQL queries to actor invocations
 - [ ] Support actor namespaces
 - [ ] Add actor lifecycle operations
+- [ ] Provide rowstore and columnstore data integration
 
 ### 2. Advanced Authentication
 

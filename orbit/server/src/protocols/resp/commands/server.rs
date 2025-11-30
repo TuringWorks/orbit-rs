@@ -15,11 +15,12 @@ pub struct ServerCommands {
 
 impl ServerCommands {
     pub fn new(
+        orbit_client: Arc<orbit_client::OrbitClient>,
         local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>,
     ) -> Self {
         // Use provided local_registry
         Self {
-            base: BaseCommandHandler::new(local_registry),
+            base: BaseCommandHandler::new(orbit_client, local_registry),
         }
     }
 

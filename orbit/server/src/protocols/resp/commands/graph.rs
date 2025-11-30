@@ -249,10 +249,11 @@ pub struct GraphCommands {
 
 impl GraphCommands {
     pub fn new(
+        orbit_client: Arc<orbit_client::OrbitClient>,
         local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>,
     ) -> Self {
         Self {
-            base: BaseCommandHandler::new(local_registry),
+            base: BaseCommandHandler::new(orbit_client, local_registry),
         }
     }
 
@@ -741,9 +742,12 @@ mod tests {
     #[test]
     fn test_parse_node_pattern() {
         let handler = GraphCommands {
-            base: BaseCommandHandler::new(Arc::new(
-                crate::protocols::resp::simple_local::SimpleLocalRegistry::new(),
-            )),
+            base: BaseCommandHandler::new(
+                Arc::new(orbit_client::OrbitClient::new(
+                    "http://127.0.0.1:50051".to_string(),
+                )),
+                Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new()),
+            ),
         };
 
         let (labels, props) = handler.parse_node_pattern("(n:Person {name: 'Alice', age: 30})");
