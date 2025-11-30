@@ -65,25 +65,25 @@ docs/
 
 ### Architecture & Core Features
 
-- **[Virtual Actor Persistence](content/virtual_actor_persistence.md)** - Actor state persistence, activation, and lifecycle management
+- **[Virtual Actor Persistence](content/storage/virtual_actor_persistence.md)** - Actor state persistence, activation, and lifecycle management
 - **[Storage Backend Independence](content/storage/STORAGE_BACKEND_INDEPENDENCE.md)** - Cloud vs local storage architecture
-- **[Transaction Features](content/advanced_transaction_features.md)** - Distributed transactions, locks, saga patterns, and security
+- **[Transaction Features](content/server/advanced_transaction_features.md)** - Distributed transactions, locks, saga patterns, and security
 - **[Protocol Adapters](content/protocols/)** - Redis, PostgreSQL, and MCP protocol support
-- **[Network Layer](content/NETWORK_LAYER.md)** - gRPC services, Protocol Buffers, and communication
+- **[Network Layer](content/server/NETWORK_LAYER.md)** - gRPC services, Protocol Buffers, and communication
 - **[Cluster Management](content/server/CLUSTER_MANAGEMENT.md)** - Node discovery, load balancing, and fault tolerance
 
 ### Protocol Support
 
 - **[Graph Database](content/graph/GRAPH_DATABASE.md)** - Complete graph operations and Cypher-like queries
 - **[Graph Commands](content/graph/graph_commands.md)** - Graph database command reference
-- **[Vector Operations](content/vector_commands.md)** - AI/ML vector database capabilities
-- **[Time Series Commands](content/timeseries_commands.md)** - Time-series data management and analytics
-- **[OrbitQL Documentation](content/ORBITQL_COMPLETE_DOCUMENTATION.md)** - Unified multi-model query language
+- **[Vector Operations](content/server/vector_commands.md)** - AI/ML vector database capabilities
+- **[Time Series Commands](content/server/timeseries_commands.md)** - Time-series data management and analytics
+- **[OrbitQL Documentation](content/server/ORBITQL_COMPLETE_DOCUMENTATION.md)** - Unified multi-model query language
 - **[AQL Reference](content/aql/)** - ArangoDB Query Language compatibility
 
 ### Operations & Deployment
 
-- **[Kubernetes Deployment](content/KUBERNETES_COMPLETE_DOCUMENTATION.md)** - Production Kubernetes deployment and persistence
+- **[Kubernetes Deployment](content/server/KUBERNETES_COMPLETE_DOCUMENTATION.md)** - Production Kubernetes deployment and persistence
 - **[CI/CD Pipeline](content/development/CICD.md)** - Continuous integration and deployment
 - **[Deployment Guide](content/deployment/)** - Deployment configurations and guides
 
@@ -99,14 +99,14 @@ docs/
 
 - **[GPU Acceleration](content/gpu-compute/)** - CUDA, Metal, Vulkan GPU compute
 - **[GraphRAG](content/graph-rag/)** - Graph-based retrieval augmented generation
-- **[Query Languages Comparison](content/QUERY_LANGUAGES_COMPARISON.md)** - SQL, Cypher, AQL, and OrbitQL comparison
+- **[Query Languages Comparison](content/server/QUERY_LANGUAGES_COMPARISON.md)** - SQL, Cypher, AQL, and OrbitQL comparison
 - **[LSM Tree Implementation](content/storage/LSM_TREE_IMPLEMENTATION.md)** - Custom storage engine implementation
 - **[AI/ML Features](content/ai/)** - Machine learning and AI capabilities
 
 ### Security & Compliance
 
-- **[Security Documentation](content/SECURITY_COMPLETE_DOCUMENTATION.md)** - Security policies and vulnerability reporting
-- **[Secrets Configuration](content/SECRETS_CONFIGURATION_GUIDE.md)** - Secure configuration management
+- **[Security Documentation](content/server/SECURITY_COMPLETE_DOCUMENTATION.md)** - Security policies and vulnerability reporting
+- **[Secrets Configuration](content/server/SECRETS_CONFIGURATION_GUIDE.md)** - Secure configuration management
 
 ### Reference Documentation
 
