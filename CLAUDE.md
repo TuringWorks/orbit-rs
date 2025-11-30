@@ -158,7 +158,7 @@ cargo run --package orbit-server --example integrated-server
 ## Testing
 
 ```bash
-# All workspace tests
+# All workspace tests (excludes slow tests)
 cargo test --workspace
 
 # Specific package tests
@@ -168,9 +168,18 @@ cargo test -p orbit-engine
 # Run with output
 cargo test --workspace -- --nocapture
 
+# Run slow/ignored integration tests only
+cargo test --workspace -- --ignored
+
+# Run all tests including slow ones
+cargo test --workspace -- --include-ignored
+
 # Python integration tests
 cd tests && python run_integration_tests.py
 ```
+
+### Slow Tests
+Some integration tests that start full server instances are marked with `#[ignore]` to keep regular test runs fast. These tests can be run explicitly using `--ignored` or `--include-ignored` flags.
 
 ## Important Notes
 
@@ -190,6 +199,14 @@ Install hooks for automatic quality checks:
 make pre-commit-full   # Full checks including tests
 make pre-commit-light  # Format + clippy only
 ```
+
+### Runtime Data Directories
+The following directories contain runtime data and are ignored by git:
+- `orbit/server/data/` - Server runtime data (RocksDB, WAL, etc.)
+- `/data/`, `data/*/` - Various data storage directories
+- `demo_cow_data/`, `orbit_integrated_data*/` - Example/test data
+
+Never commit database files (RocksDB manifests, WAL files, etc.) to the repository.
 
 ## Documentation
 
