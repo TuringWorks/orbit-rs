@@ -777,6 +777,43 @@ Update this PRD.md when you:
 | Add AI subsystems | AI-Native Subsystems section |
 | Change test coverage | Feature Status Matrix, test counts |
 
+### Client SDK & Extension Updates (REQUIRED for Breaking Changes)
+
+**When making breaking changes to protocols or APIs, you MUST also update:**
+
+| Change Type | Update Required |
+|-------------|-----------------|
+| New Redis/RESP commands | `orbit-python-client/orbit_client/client.py` |
+| New PostgreSQL features | `orbit-python-client/orbit_client/protocols.py` |
+| Protocol wire format changes | Both Python client and VS Code extension |
+| New query languages | `orbit-vscode-extension/syntaxes/` (syntax highlighting) |
+| New connection types | `orbit-vscode-extension/src/connections/` |
+| API response format changes | `orbit-python-client/` response handling |
+
+#### Breaking Change Checklist
+
+```
+[ ] Identify if change affects external clients
+[ ] Update orbit-python-client if protocol/API changed
+[ ] Update orbit-vscode-extension if syntax/connections affected
+[ ] Update examples in orbit-python-client/examples/
+[ ] Test Python client against new server
+[ ] Update VS Code extension README if features added
+```
+
+#### Files to Check for Breaking Changes
+
+**Python Client (`orbit-python-client/`):**
+- `orbit_client/client.py` - Main client class, command methods
+- `orbit_client/protocols.py` - Protocol adapters
+- `examples/*.py` - Usage examples
+
+**VS Code Extension (`orbit-vscode-extension/`):**
+- `src/connections/*.ts` - Protocol connections
+- `src/queryExecutor.ts` - Query execution logic
+- `syntaxes/*.tmLanguage.json` - Syntax highlighting
+- `snippets/*.json` - Code snippets
+
 ### Update Checklist
 
 ```

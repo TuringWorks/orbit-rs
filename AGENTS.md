@@ -40,6 +40,24 @@ Update PRD.md when you:
 3. **Protocol Commands** - New commands, updated syntax
 4. **Architecture Sections** - Structural changes
 
+### Client SDK & Extension Updates (Breaking Changes)
+
+**When making breaking changes, also update external clients:**
+
+| Change Type | Update Required |
+|-------------|-----------------|
+| New Redis/RESP commands | `orbit-python-client/orbit_client/client.py` |
+| New PostgreSQL features | `orbit-python-client/orbit_client/protocols.py` |
+| Protocol wire format | Both Python client and VS Code extension |
+| New query languages | `orbit-vscode-extension/syntaxes/` |
+| New connection types | `orbit-vscode-extension/src/connections/` |
+
+**Files to check:**
+- `orbit-python-client/orbit_client/client.py` - Client methods
+- `orbit-python-client/examples/*.py` - Usage examples
+- `orbit-vscode-extension/src/connections/*.ts` - Connections
+- `orbit-vscode-extension/syntaxes/*.tmLanguage.json` - Syntax
+
 ### Change Management Workflow
 ```
 1. Read docs/PRD.md to understand current architecture

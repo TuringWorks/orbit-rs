@@ -28,6 +28,17 @@ When making architectural changes, you MUST update `docs/PRD.md`:
 3. Protocol Commands - add new commands or update existing
 4. Architecture Sections - reflect structural changes
 
+## Client SDK & Extension Updates (Breaking Changes)
+When making breaking changes to protocols/APIs, also update:
+- `orbit-python-client/` - Python SDK (new commands, API changes)
+- `orbit-vscode-extension/` - VS Code extension (syntax, connections)
+
+| Change Type | Files to Update |
+|-------------|-----------------|
+| New Redis commands | `orbit-python-client/orbit_client/client.py` |
+| New query syntax | `orbit-vscode-extension/syntaxes/*.tmLanguage.json` |
+| Protocol changes | Both Python client and VS Code extension |
+
 ## Code Standards
 - Zero warnings policy: `cargo clippy -- -D warnings`
 - Always run `cargo fmt --all` before commits

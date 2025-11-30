@@ -244,6 +244,19 @@ Update PRD.md when you:
 3. **Protocol Commands**: Add new commands or update existing ones
 4. **Architecture Sections**: Reflect structural changes
 
+### Client SDK & Extension Updates (Breaking Changes)
+
+**When making breaking changes to protocols or APIs, also update:**
+- `orbit-python-client/` - Python SDK (new commands, API changes)
+- `orbit-vscode-extension/` - VS Code extension (syntax, connections)
+
+| Change Type | Files to Update |
+|-------------|-----------------|
+| New Redis commands | `orbit-python-client/orbit_client/client.py` |
+| New query syntax | `orbit-vscode-extension/syntaxes/*.tmLanguage.json` |
+| Protocol changes | Both Python client and VS Code extension |
+| New connection types | `orbit-vscode-extension/src/connections/` |
+
 ### Update Workflow
 ```bash
 # After making code changes:
