@@ -49,7 +49,7 @@ regex.workspace = true
 crc32fast = "1.4"
 # Encryption at rest (AES-256-GCM)
 aes-gcm = "0.10"
-rand = "0.8"
+rand = "0.9"
 base64 = "0.22"
 hex = "0.4"
 
