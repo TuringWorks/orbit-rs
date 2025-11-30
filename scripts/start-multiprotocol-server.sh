@@ -26,7 +26,7 @@ echo "• gRPC (50051) - Actor management"
 echo -e "${NC}"
 
 # Check if we're in the right directory
-if [ ! -f "Cargo.toml" ] || [ ! -d "orbit-server" ]; then
+if [ ! -f "Cargo.toml" ] || [ ! -d "orbit/server" ]; then
     echo -e "${RED}❌ Error: Please run this script from the orbit-rs root directory${NC}"
     exit 1
 fi

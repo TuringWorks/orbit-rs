@@ -6,4 +6,4 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Default to running the full CI/CD pipeline
-exec "${SCRIPT_DIR}/scripts/manual-ci-cd.sh" "$@"
+exec "${SCRIPT_DIR}/manual-ci-cd.sh" "$@"

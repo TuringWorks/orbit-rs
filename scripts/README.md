@@ -1,67 +1,134 @@
 # Orbit-RS Scripts
 
-Utility scripts for development, deployment, and maintenance.
+Utility scripts for development, testing, and deployment.
 
 ## Available Scripts
 
-### prepare-secrets.sh
+### Development
 
-Automated script for preparing Kubernetes secrets for GitHub Actions CI/CD pipeline.
+#### run-tests.sh
 
-**Purpose:** Generate base64-encoded kubeconfig files for staging and production deployments.
-
-**Features:**
-- Interactive kubectl context selection
-- Service account creation with minimal RBAC permissions (recommended)
-- Support for existing kubeconfig usage
-- Automatic namespace creation
-- Connection testing and validation
-- Secure credential handling
-
-**Usage:**
+Run tests for the workspace with various options.
 
 ```bash
-
-# For staging environment
-./scripts/prepare-secrets.sh staging
-
-# For production environment
-./scripts/prepare-secrets.sh production
+./scripts/run-tests.sh              # Run all workspace tests
+./scripts/run-tests.sh server       # Run orbit-server tests only
+./scripts/run-tests.sh time-series  # Run time series tests
+./scripts/run-tests.sh ignored      # Run slow/ignored tests
+./scripts/run-tests.sh help         # Show all options
 ```
 
-**Requirements:**
-- `kubectl` installed and configured
-- Access to target Kubernetes cluster
-- `base64` command available (standard on macOS/Linux)
+#### pre-commit.sh
 
-**Output:**
-- Creates `{environment}-kubeconfig-base64.txt` file
-- Base64-encoded kubeconfig ready for GitHub Secrets
-- Provides step-by-step instructions for adding to GitHub
+Run before committing to ensure code quality.
 
-**Documentation:** See [docs/SECRETS_CONFIGURATION_GUIDE.md](../docs/SECRETS_CONFIGURATION_GUIDE.md) for complete guide.
+```bash
+./scripts/pre-commit.sh
+```
+
+This runs:
+1. `cargo fmt --all` - Format code
+2. `cargo clippy --all-targets -- -D warnings` - Lint checks
+3. `cargo test --workspace --verbose` - Run tests
+4. `cargo build --workspace` - Build project
+
+### Server Startup
+
+#### start-multiprotocol-server.sh
+
+Start the full multi-protocol database server (PostgreSQL + Redis + REST + gRPC).
+
+```bash
+./scripts/start-multiprotocol-server.sh           # Development mode
+./scripts/start-multiprotocol-server.sh --prod    # Production mode
+./scripts/start-multiprotocol-server.sh --config path/to/config.toml
+```
+
+**Ports:**
+- PostgreSQL: 5432
+- Redis: 6379
+- REST API: 8080
+- gRPC: 50051
+
+#### start-orbit-redis.sh
+
+Quick start for Redis-compatible server only.
+
+```bash
+./scripts/start-orbit-redis.sh
+```
+
+Starts orbit-server with development mode, focusing on Redis (port 6379).
+
+### CI/CD
+
+#### run-ci.sh
+
+Launcher for the manual CI/CD pipeline.
+
+```bash
+./scripts/run-ci.sh
+```
+
+#### manual-ci-cd.sh
+
+Full manual CI/CD operations.
+
+```bash
+./scripts/manual-ci-cd.sh
+```
+
+### Deployment
+
+#### prepare-secrets.sh
+
+Prepare Kubernetes secrets for GitHub Actions CI/CD.
+
+```bash
+./scripts/prepare-secrets.sh staging     # For staging environment
+./scripts/prepare-secrets.sh production  # For production environment
+```
+
+#### validate-k8s-deployments.sh
+
+Validate Kubernetes deployment configurations.
+
+```bash
+./scripts/validate-k8s-deployments.sh
+```
+
+### Utilities
+
+#### check-file-organization.sh
+
+Check codebase file organization.
+
+```bash
+./scripts/check-file-organization.sh
+```
+
+#### add-jekyll-frontmatter.sh
+
+Add Jekyll frontmatter to documentation files.
+
+```bash
+./scripts/add-jekyll-frontmatter.sh
+```
 
 ## Adding New Scripts
 
-When adding new scripts to this directory:
+When adding new scripts:
 
 1. **Make executable:** `chmod +x scripts/your-script.sh`
-2. **Add shebang:** Start with `#!/bin/bash` or appropriate interpreter
+2. **Add shebang:** Start with `#!/bin/bash`
 3. **Add error handling:** Use `set -e` for bash scripts
 4. **Document:** Add entry to this README
-5. **Test:** Verify script works in clean environment
-6. **Version control:** Commit script with descriptive message
+5. **Test:** Verify script works from project root
 
 ## Best Practices
 
 - Use descriptive names: `verb-noun.sh` format
-- Include usage examples in comments
-- Validate prerequisites before execution
+- Check for correct directory at start
 - Provide helpful error messages
-- Clean up temporary files
 - Use colors for output clarity (but gracefully degrade)
 - Test on both macOS and Linux when possible
-
-## Contributing
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidelines.
