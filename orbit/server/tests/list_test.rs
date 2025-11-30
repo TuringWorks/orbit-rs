@@ -21,6 +21,7 @@ async fn wait_for_port(port: u16, max_wait_secs: u64) -> bool {
 }
 
 #[tokio::test]
+#[ignore = "slow integration test - starts full server"]
 async fn test_list_commands() {
     cleanup_lingering_instances().await;
 

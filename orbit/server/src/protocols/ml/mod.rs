@@ -19,7 +19,7 @@ pub type MLResult<T> = OrbitResult<T>;
 /// ML function execution error
 pub type MLError = OrbitError;
 
-use orbit_ml::models::{FeatureSpec, FeatureType, ModelMetadata, OutputSpec, OutputType};
+use orbit_ml::models::{FeatureType, ModelMetadata};
 
 // Local re-exports or type aliases if needed
 // For now we use orbit_ml types directly
@@ -250,7 +250,8 @@ pub mod utils {
 
 #[cfg(test)]
 mod tests {
-    use super::{utils, FeatureSpec, FeatureType, MLValue};
+    use super::{utils, FeatureType, MLValue};
+    use orbit_ml::models::FeatureSpec;
     use std::collections::HashMap;
 
     #[test]

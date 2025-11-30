@@ -246,6 +246,7 @@ impl InvocationSystem {
     // or update complete_invocation to take InvocationResult and just extract what it needs.
 
     /// Complete a pending invocation with a full result
+    #[allow(dead_code)]
     async fn complete_invocation(&self, invocation_id: u64, result: InvocationResult) {
          let mut pending = self.pending_invocations.write().await;
         if let Some(pending_inv) = pending.remove(&invocation_id) {

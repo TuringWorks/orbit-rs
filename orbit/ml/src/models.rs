@@ -92,13 +92,20 @@ pub struct FeatureSpec {
 /// Supported feature data types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FeatureType {
+    /// 32-bit floating point value
     Float32,
+    /// 64-bit floating point value
     Float64,
+    /// 32-bit signed integer
     Int32,
+    /// 64-bit signed integer
     Int64,
+    /// UTF-8 string value
     String,
-    Vector(usize),            // Vector with dimension
-    Categorical(Vec<String>), // Categorical with possible values
+    /// Fixed-dimension vector (e.g., embeddings)
+    Vector(usize),
+    /// Categorical value with defined possible values
+    Categorical(Vec<String>),
 }
 
 /// Model output specification
@@ -116,7 +123,10 @@ pub enum OutputType {
     /// Single numeric value (regression)
     Numeric,
     /// Class probability (classification)
-    Probability { classes: Vec<String> },
+    Probability {
+        /// List of class labels for classification output
+        classes: Vec<String>,
+    },
     /// Multiple values (multi-output)
     Vector(usize),
     /// Structured output (JSON-like)

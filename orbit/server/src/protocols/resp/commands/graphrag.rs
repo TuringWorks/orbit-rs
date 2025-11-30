@@ -15,7 +15,7 @@ use crate::protocols::graphrag::graph_rag_actor::{
 };
 use crate::protocols::resp::simple_local::SimpleLocalRegistry;
 use crate::protocols::resp::types::RespValue;
-use orbit_client::{OrbitClient, OrbitClientConfig};
+use orbit_client::OrbitClient;
 use orbit_shared::graphrag::LLMProvider;
 use std::sync::Arc;
 

@@ -212,6 +212,7 @@ pub struct OrbitServer {
     load_balancer: LoadBalancer,
     connection_service: ServerConnectionService,
     health_service: OrbitHealthService,
+    #[allow(dead_code)]
     actor_registry: Arc<ActorRegistry>,
     #[allow(dead_code)]
     persistence_registry: Arc<PersistenceProviderRegistry>,
