@@ -730,6 +730,7 @@ pub struct WindowedInferenceAggregator {
     /// Window duration
     window_duration: Duration,
     /// Slide interval (for sliding windows)
+    #[allow(dead_code)]
     slide_interval: Option<Duration>,
     /// Aggregation function
     aggregation: WindowAggregation,

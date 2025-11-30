@@ -15,6 +15,7 @@ orbit-util = { path = "../util" }
 orbit-shared = { path = "../shared" }
 orbit-proto = { path = "../proto" }
 orbit-client = { path = "../client" }
+orbit-ml = { path = "../ml" }
 orbit-compute = { path = "../compute", optional = true }
 tokio.workspace = true
 tokio-stream.workspace = true
@@ -43,7 +44,7 @@ ordered-float = { version = "4.2", features = ["serde"] }
 comfy-table = "7.1"
 owo-colors = "4.1"
 tonic.workspace = true
-tonic-reflection = "0.12"
+tonic-reflection = "0.14"
 futures.workspace = true
 dashmap.workspace = true
 serde.workspace = true
@@ -222,3 +223,4 @@ debug-tools = []
 mockall.workspace = true
 tokio-test = "0.4"
 tempfile = "3.10"
+redis = "0.24"

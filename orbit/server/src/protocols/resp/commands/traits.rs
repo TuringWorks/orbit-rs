@@ -4,6 +4,7 @@ use crate::protocols::resp::simple_local::SimpleLocalRegistry;
 use crate::protocols::{error::ProtocolResult, resp::RespValue};
 use async_trait::async_trait;
 use std::sync::Arc;
+use orbit_client::OrbitClient;
 
 /// Common trait for all command handlers
 #[async_trait]
@@ -107,15 +108,19 @@ pub trait CommandHandler: Send + Sync {
     }
 }
 
-/// Base structure for command handlers that use local registry
+/// Base structure for command handlers that need OrbitClient access
 pub struct BaseCommandHandler {
+    pub orbit_client: Arc<OrbitClient>,
     pub local_registry: Arc<SimpleLocalRegistry>,
 }
 
 impl BaseCommandHandler {
     /// Create new base handler
-    pub fn new(local_registry: Arc<SimpleLocalRegistry>) -> Self {
-        Self { local_registry }
+    pub fn new(orbit_client: Arc<OrbitClient>, local_registry: Arc<SimpleLocalRegistry>) -> Self {
+        Self {
+            orbit_client,
+            local_registry,
+        }
     }
 
     /// Get a key for Orbit actor addressing

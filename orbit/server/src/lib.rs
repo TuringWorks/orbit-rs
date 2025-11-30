@@ -7,6 +7,7 @@ pub mod mesh;
 pub mod persistence;
 pub mod protocols;
 pub mod server;
+pub mod services;
 #[cfg(test)]
 mod test_pooling_integration;
 

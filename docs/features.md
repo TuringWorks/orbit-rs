@@ -90,11 +90,18 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
 
 ### Cypher/Neo4j (Bolt Protocol)
 
-- **Status**: **Implemented**
+- **Status**: **Production Ready** (38 tests)
 - **Persistence**: ✅ RocksDB at `data/cypher/rocksdb/`
-- **Features**: Graph database operations, Cypher query language, node and relationship storage
+- **Features**:
+  - **Core Cypher**: MATCH, CREATE, RETURN, WHERE with property filters
+  - **Graph Mutations**: DELETE, DETACH DELETE, SET, MERGE, REMOVE
+  - **Query Modifiers**: ORDER BY (ASC/DESC), LIMIT, SKIP
+  - **Graph Algorithms**: CALL procedures for PageRank, BFS, DFS, Dijkstra shortest path
+  - **Centrality Metrics**: Betweenness, Closeness, Degree centrality
+  - **Community Detection**: Connected components, Triangle counting
+  - **Pattern Matching**: Variable-length paths, relationship patterns
 - **Port**: 7687
-- **Documentation**: [Graph Database](GRAPH_DATABASE.md)
+- **Documentation**: [Graph Database](content/graph/GRAPH_DATABASE.md)
 
 ### AQL/ArangoDB Protocol
 
@@ -164,19 +171,38 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
 - **Performance**: 10-50x speedups for AI inference workloads
 - **Documentation**: [RFC: Heterogeneous Compute](rfcs/rfc_heterogeneous_compute.md)
 
+### Machine Learning Engine (orbit-ml)
+
+- **Status**: **Active Development** (50% complete)
+- **Features**:
+  - Neural Networks: Feedforward, CNN, LSTM, GRU, Recurrent
+  - Transformers: Multi-head attention, positional encoding
+  - Graph Neural Networks: GCN foundations
+  - Streaming Inference: Real-time ML pipelines with batching and caching
+  - SQL Functions: ML_* functions for in-database machine learning
+  - Industry Models: Healthcare, Fintech, Defense templates
+- **Tests**: 52 passing tests
+- **Documentation**: [ML SQL Functions Design](ML_SQL_FUNCTIONS_DESIGN.md)
+
 ## Data Management
 
 ### Time Series Database
 
-- **Status**: **Complete** - Full RedisTimeSeries compatibility
-- **Features**: 18+ time series commands, aggregation, retention policies, real-time analytics
+- **Status**: **Active Development** (60% complete)
+- **Features**:
+  - Compression algorithms (Delta, Double-Delta, Gorilla)
+  - Aggregation functions (Moving Average, EWMA, Rate, Derivative, Anomaly Detection)
+  - Partitioning strategies (Series Count, Data Size, Composite)
+  - PostgreSQL/Redis compatibility structures
+  - 44 passing tests
 - **Documentation**: [Time Series Commands](timeseries_commands.md)
 
 ### Graph Database
 
-- **Status**: **Complete**
-- **Features**: Cypher-like queries, execution planning, profiling, distributed graph operations
-- **Documentation**: [Graph Database](GRAPH_DATABASE.md), [Graph Commands](graph_commands.md)
+- **Status**: **Planned** (10% complete)
+- **Features**: Basic graph storage (InMemoryGraphStorage), node/relationship CRUD, label operations
+- **Tests**: 15 passing tests
+- **Documentation**: [Graph Database](content/graph/GRAPH_DATABASE.md), [Graph Commands](content/graph/graph_commands.md)
 
 ### SQL Database
 
@@ -199,7 +225,7 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
   - Each protocol has isolated storage at `data/{protocol}/rocksdb/`
   - Automatic data loading on startup
   - ACID guarantees with crash recovery
-- **Documentation**: [Storage Backend Independence](STORAGE_BACKEND_INDEPENDENCE.md), [Persistence Complete Documentation](PERSISTENCE_COMPLETE_DOCUMENTATION.md)
+- **Documentation**: [Storage Backend Independence](content/storage/STORAGE_BACKEND_INDEPENDENCE.md), [Persistence Complete Documentation](PERSISTENCE_COMPLETE_DOCUMENTATION.md)
 
 ### Kubernetes Integration
 
@@ -315,12 +341,12 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
 - [Protocol Adapters](protocols/protocol_adapters.md)
 - [Vector Commands](vector_commands.md)
 - [Time Series Commands](timeseries_commands.md)
-- [Graph Commands](graph_commands.md)
+- [Graph Commands](content/graph/graph_commands.md)
 
 ### Deployment & Operations
 
 - [Kubernetes Complete Documentation](KUBERNETES_COMPLETE_DOCUMENTATION.md)
-- [CI/CD Pipeline](CICD.md)
+- [CI/CD Pipeline](content/development/CICD.md)
 - [Security Complete Documentation](SECURITY_COMPLETE_DOCUMENTATION.md)
 
 ### Advanced Topics
@@ -331,9 +357,9 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
 
 ---
 
-**Last Updated**: October 8, 2025  
-**Total Features**: 50+ production-ready features  
-**Documentation**: 25,000+ lines of technical documentation  
-**Test Coverage**: Comprehensive with 79+ tests passing
+**Last Updated**: November 25, 2025
+**Total Features**: 50+ production-ready features
+**Documentation**: 25,000+ lines of technical documentation
+**Test Coverage**: Comprehensive with 700+ tests passing across all modules
 
 **Orbit-RS: Production-ready multi-model distributed database platform with heterogeneous compute acceleration**

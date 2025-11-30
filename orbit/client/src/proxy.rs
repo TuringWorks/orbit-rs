@@ -98,7 +98,7 @@ mod tests {
             },
         };
 
-        let system = Arc::new(InvocationSystem::new());
+        let system = Arc::new(InvocationSystem::new(None));
         let actor_ref: ActorReference<dyn TestActor> = ActorReference::new(reference, system);
 
         // Test method invocation through proxy
@@ -114,7 +114,7 @@ mod tests {
                 key: "test".to_string(),
             },
         };
-        let system = Arc::new(InvocationSystem::new());
+        let system = Arc::new(InvocationSystem::new(None));
 
         // Test create_proxy method
         let actor_ref: ActorReference<dyn TestActor> =
@@ -138,7 +138,7 @@ mod tests {
                 key: "test".to_string(),
             },
         };
-        let system = Arc::new(InvocationSystem::new());
+        let system = Arc::new(InvocationSystem::new(None));
 
         // Create untyped reference
         let untyped_ref: ActorReference<dyn Addressable> =
@@ -154,7 +154,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_proxy_with_different_key_types() {
-        let system = Arc::new(InvocationSystem::new());
+        let system = Arc::new(InvocationSystem::new(None));
 
         // Test with StringKey
         let string_ref = AddressableReference {
@@ -190,7 +190,7 @@ mod tests {
             },
         };
 
-        let system = Arc::new(InvocationSystem::new());
+        let system = Arc::new(InvocationSystem::new(None));
         let actor_ref: ActorReference<dyn TestActor> = ActorReference::new(reference, system);
 
         // Test method with no arguments
@@ -215,7 +215,7 @@ mod tests {
             },
         };
 
-        let system = Arc::new(InvocationSystem::new());
+        let system = Arc::new(InvocationSystem::new(None));
         let actor_ref: ActorReference<dyn TestActor> = ActorReference::new(reference, system);
 
         // Test with valid serializable input

@@ -6,7 +6,7 @@ use crate::{
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 /// Spring-like application context that manages the application lifecycle
 /// and provides dependency injection capabilities

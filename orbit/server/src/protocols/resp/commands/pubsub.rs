@@ -354,10 +354,11 @@ pub struct PubSubCommands {
 
 impl PubSubCommands {
     pub fn new(
+        orbit_client: Arc<orbit_client::OrbitClient>,
         local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>,
     ) -> Self {
         Self {
-            base: BaseCommandHandler::new(local_registry),
+            base: BaseCommandHandler::new(orbit_client, local_registry),
             subscriber_id: uuid::Uuid::new_v4().to_string(),
         }
     }

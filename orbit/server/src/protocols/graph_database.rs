@@ -373,6 +373,133 @@ impl GraphActor {
                     estimated_cost += step.estimated_cost;
                     steps.push(step);
                 }
+                crate::protocols::cypher::cypher_parser::CypherClause::Delete { variables, detach } => {
+                    let step = PlanStep {
+                        operation: if *detach { "DetachDelete".to_string() } else { "Delete".to_string() },
+                        description: format!("Delete {} variables", variables.len()),
+                        estimated_rows: variables.len() as u64,
+                        estimated_cost: 8.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::Set { assignments } => {
+                    let step = PlanStep {
+                        operation: "SetProperty".to_string(),
+                        description: format!("Set {} properties", assignments.len()),
+                        estimated_rows: assignments.len() as u64,
+                        estimated_cost: 4.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::Merge { pattern } => {
+                    let step = PlanStep {
+                        operation: "Merge".to_string(),
+                        description: format!("Merge pattern: {pattern:?}"),
+                        estimated_rows: 1,
+                        estimated_cost: 12.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::Remove { items } => {
+                    let step = PlanStep {
+                        operation: "Remove".to_string(),
+                        description: format!("Remove {} items", items.len()),
+                        estimated_rows: items.len() as u64,
+                        estimated_cost: 4.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::OrderBy { items } => {
+                    let step = PlanStep {
+                        operation: "Sort".to_string(),
+                        description: format!("Order by {} expressions", items.len()),
+                        estimated_rows: 100,
+                        estimated_cost: 6.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::Limit { count } => {
+                    let step = PlanStep {
+                        operation: "Limit".to_string(),
+                        description: format!("Limit to {count} results"),
+                        estimated_rows: *count as u64,
+                        estimated_cost: 1.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::Skip { count } => {
+                    let step = PlanStep {
+                        operation: "Skip".to_string(),
+                        description: format!("Skip {count} results"),
+                        estimated_rows: 100,
+                        estimated_cost: 1.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::Call {
+                    procedure,
+                    arguments,
+                    yield_items,
+                } => {
+                    let yield_desc = yield_items
+                        .as_ref()
+                        .map(|items| format!(" YIELD {}", items.join(", ")))
+                        .unwrap_or_default();
+                    let step = PlanStep {
+                        operation: "ProcedureCall".to_string(),
+                        description: format!(
+                            "CALL {}({}){}",
+                            procedure,
+                            arguments.len(),
+                            yield_desc
+                        ),
+                        estimated_rows: 100,
+                        estimated_cost: 20.0, // Procedures can be expensive
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::With {
+                    items,
+                    where_condition,
+                } => {
+                    let where_desc = if where_condition.is_some() { " with filter" } else { "" };
+                    let step = PlanStep {
+                        operation: "With".to_string(),
+                        description: format!("Pass through {} items{}", items.len(), where_desc),
+                        estimated_rows: 100,
+                        estimated_cost: 2.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::OptionalMatch { pattern } => {
+                    let step = PlanStep {
+                        operation: "OptionalMatch".to_string(),
+                        description: format!("Optional scan nodes matching pattern: {pattern:?}"),
+                        estimated_rows: 1000,
+                        estimated_cost: 12.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
             }
         }
 

@@ -6,16 +6,63 @@ This directory contains all test scripts and utilities for the Orbit-RS project.
 
 ```text
 tests/
-├── README.md                    # This file
-├── requirements.txt             # Python test dependencies
-├── run_integration_tests.py     # Main test runner script
-├── integration/                 # Integration test scripts
-│   ├── test_graph_commands.py   # Graph database (Cypher) tests
+├── README.md                       # This file
+├── Cargo.toml                      # Integration test crate configuration
+├── requirements.txt                # Python test dependencies
+├── run_integration_tests.py        # Main test runner script
+│
+├── integration/                    # Python integration tests
+│   ├── test_graph_commands.py      # Graph database (Cypher) tests
 │   ├── test_timeseries_commands.py # Time series tests
-│   └── test_vector_commands.py  # Vector store tests
-└── scripts/                     # Utility scripts
-    ├── fix_handlers.py          # REST handler code generator helper
-    └── fix_handlers2.py         # REST handler code generator helper
+│   ├── test_vector_commands.py     # Vector store tests
+│   ├── leader_election_tests.rs    # Leader election integration tests
+│   └── leader_election_recovery_tests.rs
+│
+├── orbit-protocols/                # Protocol-specific tests
+│   ├── resp_*.rs                   # Redis RESP protocol tests
+│   ├── postgres_*.rs               # PostgreSQL wire protocol tests
+│   ├── iceberg_*.rs                # Iceberg storage tests
+│   └── protocol_integration_tests.rs
+│
+├── orbit-engine/                   # Storage engine tests
+│   ├── gpu_acceleration_integration.rs
+│   ├── simd_acceleration_functional.rs
+│   └── icelake_evaluation.rs
+│
+├── orbit-server/                   # Server integration tests
+│   └── integration_test.rs
+│
+├── neo4j/                          # Neo4j/Cypher compatibility tests
+│   ├── cypher_parser_tests.rs
+│   └── graph_actors_tests.rs
+│
+├── graphml/                        # GraphML/embedding tests
+│   └── node_embeddings_tests.rs
+│
+├── bdd/                            # BDD feature tests
+│   ├── features/                   # Cucumber feature files
+│   └── mod.rs
+│
+├── features/                       # BDD scenario definitions
+│   ├── actor_lifecycle.feature
+│   ├── messaging.feature
+│   └── neo4j_cypher.feature
+│
+├── mocks/                          # Mock implementations
+│   └── mock_simple.rs
+│
+├── scripts/                        # Utility scripts
+│   ├── fix_handlers.py
+│   └── fix_handlers2.py
+│
+├── verification/                   # Verification scripts
+│   ├── verify_all.sh
+│   └── quick_check.sh
+│
+└── *.sh                            # SQL test scripts
+    ├── test_comprehensive_sql_keywords.sh
+    ├── test_postgres_queries.sh
+    └── test_sql_keyword_examples.sh
 ```
 
 ## Integration Tests
@@ -141,7 +188,8 @@ When adding new tests:
 
 ## Related Documentation
 
-- [Protocol Implementation Status](../docs/protocols/RESP_IMPLEMENTATION_STATUS.md)
-- [Graph Commands Documentation](../docs/GRAPH_COMMANDS.md)
-- [Time Series Commands Documentation](../docs/TIMESERIES_COMMANDS.md)
-- [Vector Commands Documentation](../docs/VECTOR_COMMANDS.md)
+- [Protocol Implementation Status](../docs/content/protocols/RESP_IMPLEMENTATION_STATUS.md)
+- [Graph Commands Documentation](../docs/content/graph_commands.md)
+- [Time Series Commands Documentation](../docs/content/timeseries_commands.md)
+- [Vector Commands Documentation](../docs/content/vector_commands.md)
+- [PRD (Product Requirements Document)](../docs/PRD.md)

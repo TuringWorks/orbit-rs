@@ -68,7 +68,7 @@ For system administrators and DevOps engineers.
 - [ **Storage Architecture**](PERSISTENCE_COMPLETE_DOCUMENTATION.md) - Storage backends and persistence
 - [ **Security**](SECURITY_COMPLETE_DOCUMENTATION.md) - Security policies and practices
 - [ **Storage Guide**](KUBERNETES_STORAGE_GUIDE.md) - Kubernetes persistence
-- [ **Performance**](LSM_TREE_IMPLEMENTATION.md) - Storage performance optimization
+- [ **Performance**](content/storage/LSM_TREE_IMPLEMENTATION.md) - Storage performance optimization
 
 ###  **Feature Guides**
 
@@ -76,7 +76,7 @@ Deep dives into Orbit-RS capabilities.
 
 - [ **SQL Engine**](ORBITQL_COMPLETE_DOCUMENTATION.md) - OrbitQL and SQL capabilities
 - [ **Time Series**](TIME_SERIES_ENGINE.md) - Time-series data management
-- [ **Graph Database**](GRAPH_DATABASE.md) - Graph data models and queries
+- [ **Graph Database**](content/graph/GRAPH_DATABASE.md) - Graph data models and queries
 - [ **Vector Operations**](vector_commands.md) - Vector database operations
 - [ **Hardware Acceleration**](COMPUTE_ACCELERATION_GUIDE.md) - GPU/Neural compute acceleration 
 - [ **Compute Architecture**](rfcs/rfc_heterogeneous_compute.md) - Technical deep-dive on acceleration
@@ -89,7 +89,7 @@ Project status, roadmap, and community information.
 
 - [ **Roadmap**](roadmap.md) - Development roadmap and upcoming features
 - [ **Project Status**](PROJECT_STATUS.md) - Current implementation status  
-- [ **Changelog**](CHANGELOG.md) - Version history and changes
+- [ **Changelog**](content/development/CHANGELOG.md) - Version history and changes
 - [ **Migration Guide**](MIGRATION_GUIDE.md) - Kotlin/JVM to Rust migration
 - [ **Contributing**](contributing.md) - Community guidelines and support
 
@@ -210,7 +210,7 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 ###  **Documentation**
 
 - [ **Architecture Overview**](project_overview.md) - Understanding Orbit-RS design principles
-- [ **Performance Guide**](LSM_TREE_IMPLEMENTATION.md) - Storage optimization and tuning  
+- [ **Performance Guide**](content/storage/LSM_TREE_IMPLEMENTATION.md) - Storage optimization and tuning  
 - [ **Implementation Tracking**](ORBITQL_COMPLETE_DOCUMENTATION.md) - Development progress
 
 ###  **Development Resources**

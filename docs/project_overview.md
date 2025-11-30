@@ -74,7 +74,7 @@ orbit-rs/
  orbit-application/        # Application framework
  orbit-server-etcd/        # etcd integration
  orbit-server-prometheus/  # Metrics integration
- examples/                 # 13+ working examples
+
 ```
 
 ### **Protocol Support Matrix**
@@ -342,7 +342,7 @@ orbit-rs/
 - [PostgreSQL Integration](protocols/POSTGRES_WIRE_IMPLEMENTATION.md) - PostgreSQL wire protocol compatibility
 - [Vector Operations](vector_commands.md) - AI/ML vector database capabilities
 - [Time Series](timeseries_commands.md) - Time-series data management
-- [Graph Database](graph_commands.md) - Graph queries and operations
+- [Graph Database](content/graph/graph_commands.md) - Graph queries and operations
 - [ML Functions](ML_SQL_FUNCTIONS_DESIGN.md) - Machine learning in SQL
 
 ### **Operations**

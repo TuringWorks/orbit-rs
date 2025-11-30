@@ -9,9 +9,10 @@ use crate::protocols::postgres_wire::RocksDbTableStorage;
 use crate::protocols::{PostgresServer, RespServer};
 use crate::LoadBalancer;
 use orbit_proto::{
-    connection_service_server, health_check_response, health_service_server,
-    OrbitConnectionService, OrbitHealthService,
+    connection_service_server, health_check_response, health_service_server, OrbitHealthService,
 };
+use crate::services::ServerConnectionService;
+use orbit_client::ActorRegistry;
 use orbit_shared::{NodeCapabilities, NodeId, NodeInfo, NodeStatus, OrbitError, OrbitResult};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -209,8 +210,10 @@ pub struct OrbitServer {
     addressable_directory: AddressableDirectory,
     #[allow(dead_code)]
     load_balancer: LoadBalancer,
-    connection_service: OrbitConnectionService,
+    connection_service: ServerConnectionService,
     health_service: OrbitHealthService,
+    #[allow(dead_code)]
+    actor_registry: Arc<ActorRegistry>,
     #[allow(dead_code)]
     persistence_registry: Arc<PersistenceProviderRegistry>,
     /// PostgreSQL wire protocol server (initialized at startup)
@@ -243,7 +246,9 @@ impl OrbitServer {
         let cluster_manager = ClusterManager::new(config.lease_duration);
         let addressable_directory = AddressableDirectory::new();
         let load_balancer = LoadBalancer::new();
-        let connection_service = OrbitConnectionService::new();
+        let actor_registry = Arc::new(ActorRegistry::new());
+        let local_node_id_proto = orbit_proto::NodeIdConverter::to_proto(&node_info.id);
+        let connection_service = ServerConnectionService::new(actor_registry.clone(), local_node_id_proto);
         let health_service = OrbitHealthService::new();
 
         // PostgreSQL server can be initialized with persistent storage if available
@@ -313,6 +318,7 @@ impl OrbitServer {
             load_balancer,
             connection_service,
             health_service,
+            actor_registry,
             persistence_registry,
             postgres_server,
         };
@@ -417,12 +423,46 @@ impl OrbitServer {
                     None
                 };
 
-                let resp_server = RespServer::new_with_persistence(redis_addr, redis_provider);
-                server_tasks.push(tokio::spawn(async move {
-                    if let Err(e) = resp_server.run().await {
-                        tracing::error!("RESP server failed: {}", e);
+
+
+                // Create OrbitClient for local access using in-process communication
+                let client_config = orbit_client::OrbitClientConfig {
+                    namespace: self.config.namespace.clone(),
+                    // Server URLs are not used for local connection but kept for config validity
+                    server_urls: vec![format!("http://{}:{}", self.config.bind_address, self.config.port)],
+                    ..Default::default()
+                };
+
+                // Create channels for in-process communication
+                // client_tx -> server_rx (Client sends requests to Server)
+                // server_tx -> client_rx (Server sends responses to Client)
+                let (client_tx, server_rx) = tokio::sync::mpsc::channel(100);
+                let (server_tx, client_rx) = tokio::sync::mpsc::channel(100);
+
+                // Initialize server-side handling
+                self.connection_service.handle_local_stream(server_rx, server_tx);
+
+                // Initialize client-side
+                let client_result = orbit_client::OrbitClient::new_local(
+                    client_config,
+                    self.node_info.id.clone(),
+                    client_tx,
+                    client_rx
+                ).await;
+                
+                match client_result {
+                    Ok(client) => {
+                         let resp_server = RespServer::new_with_persistence(redis_addr, client, redis_provider);
+                         server_tasks.push(tokio::spawn(async move {
+                            if let Err(e) = resp_server.run().await {
+                                tracing::error!("RESP server failed: {}", e);
+                            }
+                        }));
                     }
-                }));
+                    Err(e) => {
+                        tracing::error!("Failed to create OrbitClient for RESP server: {}", e);
+                    }
+                }
             }
         }
 

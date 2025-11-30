@@ -18,11 +18,12 @@ pub struct ListCommands {
 
 impl ListCommands {
     pub fn new(
+        orbit_client: Arc<orbit_client::OrbitClient>,
         local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>,
     ) -> Self {
         // Use provided local_registry
         Self {
-            base: BaseCommandHandler::new(local_registry),
+            base: BaseCommandHandler::new(orbit_client, local_registry),
         }
     }
 
@@ -102,6 +103,22 @@ impl ListCommands {
         let new_length: i64 = serde_json::from_value(result)
             .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
 
+        // Persist to OrbitClient
+        let orbit_key = self.base.make_key(&key);
+        if let Ok(actor_ref) = self
+            .base
+            .orbit_client
+            .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
+            .await
+        {
+            if let Err(e) = actor_ref
+                .invoke::<usize>("lpush", vec![serde_json::to_value(&values).unwrap()])
+                .await
+            {
+                tracing::error!("Failed to persist LPUSH to OrbitClient: {}", e);
+            }
+        }
+
         debug!("LPUSH {} {:?} -> length: {}", key, values, new_length);
         Ok(RespValue::Integer(new_length))
     }
@@ -130,6 +147,22 @@ impl ListCommands {
 
         let new_length: i64 = serde_json::from_value(result)
             .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+
+        // Persist to OrbitClient
+        let orbit_key = self.base.make_key(&key);
+        if let Ok(actor_ref) = self
+            .base
+            .orbit_client
+            .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
+            .await
+        {
+            if let Err(e) = actor_ref
+                .invoke::<usize>("rpush", vec![serde_json::to_value(&values).unwrap()])
+                .await
+            {
+                tracing::error!("Failed to persist RPUSH to OrbitClient: {}", e);
+            }
+        }
 
         debug!("RPUSH {} {:?} -> length: {}", key, values, new_length);
         Ok(RespValue::Integer(new_length))
@@ -162,6 +195,22 @@ impl ListCommands {
             .and_then(|v| {
                 serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
             });
+
+        // Persist to OrbitClient
+        let orbit_key = self.base.make_key(&key);
+        if let Ok(actor_ref) = self
+            .base
+            .orbit_client
+            .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
+            .await
+        {
+            if let Err(e) = actor_ref
+                .invoke::<Vec<String>>("lpop", vec![serde_json::to_value(count).unwrap()])
+                .await
+            {
+                tracing::error!("Failed to persist LPOP to OrbitClient: {}", e);
+            }
+        }
 
         match popped_items {
             Ok(items) if !items.is_empty() => {
@@ -213,6 +262,22 @@ impl ListCommands {
                 serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
             });
 
+        // Persist to OrbitClient
+        let orbit_key = self.base.make_key(&key);
+        if let Ok(actor_ref) = self
+            .base
+            .orbit_client
+            .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
+            .await
+        {
+            if let Err(e) = actor_ref
+                .invoke::<Vec<String>>("rpop", vec![serde_json::to_value(count).unwrap()])
+                .await
+            {
+                tracing::error!("Failed to persist RPOP to OrbitClient: {}", e);
+            }
+        }
+
         match popped_items {
             Ok(items) => {
                 debug!("RPOP {} {} -> {:?}", key, count, items);
@@ -263,6 +328,45 @@ impl ListCommands {
 
         match range_result {
             Ok(items) => {
+                if items.is_empty() {
+                    // Try OrbitClient
+                    let orbit_key = self.base.make_key(&key);
+                    if let Ok(actor_ref) = self
+                        .base
+                        .orbit_client
+                        .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
+                        .await
+                    {
+                        if let Ok(remote_items) = actor_ref
+                            .invoke::<Vec<String>>(
+                                "lrange",
+                                vec![
+                                    serde_json::to_value(start).unwrap(),
+                                    serde_json::to_value(stop).unwrap(),
+                                ],
+                            )
+                            .await
+                        {
+                            if !remote_items.is_empty() {
+                                let result: Vec<RespValue> = remote_items
+                                    .into_iter()
+                                    .map(|item| {
+                                        RespValue::BulkString(Bytes::from(item.as_bytes().to_vec()))
+                                    })
+                                    .collect();
+                                debug!(
+                                    "LRANGE {} {} {} -> {} items (OrbitClient)",
+                                    key,
+                                    start,
+                                    stop,
+                                    result.len()
+                                );
+                                return Ok(RespValue::Array(result));
+                            }
+                        }
+                    }
+                }
+
                 let result: Vec<RespValue> = items
                     .into_iter()
                     .map(|item| RespValue::BulkString(Bytes::from(item.as_bytes().to_vec())))
@@ -276,7 +380,43 @@ impl ListCommands {
                 );
                 Ok(RespValue::Array(result))
             }
-            Err(_) => Ok(RespValue::Array(vec![])),
+            Err(_) => {
+                // Try OrbitClient
+                let orbit_key = self.base.make_key(&key);
+                if let Ok(actor_ref) = self
+                    .base
+                    .orbit_client
+                    .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
+                    .await
+                {
+                    if let Ok(remote_items) = actor_ref
+                        .invoke::<Vec<String>>(
+                            "lrange",
+                            vec![
+                                serde_json::to_value(start).unwrap(),
+                                serde_json::to_value(stop).unwrap(),
+                            ],
+                        )
+                        .await
+                    {
+                        let result: Vec<RespValue> = remote_items
+                            .into_iter()
+                            .map(|item| {
+                                RespValue::BulkString(Bytes::from(item.as_bytes().to_vec()))
+                            })
+                            .collect();
+                        debug!(
+                            "LRANGE {} {} {} -> {} items (OrbitClient fallback)",
+                            key,
+                            start,
+                            stop,
+                            result.len()
+                        );
+                        return Ok(RespValue::Array(result));
+                    }
+                }
+                Ok(RespValue::Array(vec![]))
+            }
         }
     }
 
@@ -294,9 +434,26 @@ impl ListCommands {
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
-        let length: i64 = serde_json::from_value(result)
+        let mut length: i64 = serde_json::from_value(result)
             .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
             .unwrap_or(0);
+
+        if length == 0 {
+            let orbit_key = self.base.make_key(&key);
+            if let Ok(actor_ref) = self
+                .base
+                .orbit_client
+                .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
+                .await
+            {
+                if let Ok(remote_len) = actor_ref.invoke::<usize>("llen", vec![]).await {
+                    if remote_len > 0 {
+                        length = remote_len as i64;
+                        debug!("LLEN {} -> {} (OrbitClient)", key, length);
+                    }
+                }
+            }
+        }
 
         debug!("LLEN {} -> {}", key, length);
         Ok(RespValue::Integer(length))
@@ -329,6 +486,28 @@ impl ListCommands {
                 )))
             }
             None => {
+                // Try OrbitClient
+                let orbit_key = self.base.make_key(&key);
+                if let Ok(actor_ref) = self
+                    .base
+                    .orbit_client
+                    .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
+                    .await
+                {
+                    if let Ok(Some(remote_value)) = actor_ref
+                        .invoke::<Option<String>>(
+                            "lindex",
+                            vec![serde_json::to_value(index).unwrap()],
+                        )
+                        .await
+                    {
+                        debug!("LINDEX {} {} -> {} (OrbitClient)", key, index, remote_value);
+                        return Ok(RespValue::BulkString(Bytes::from(
+                            remote_value.as_bytes().to_vec(),
+                        )));
+                    }
+                }
+
                 debug!("LINDEX {} {} -> null", key, index);
                 Ok(RespValue::null())
             }
@@ -360,6 +539,28 @@ impl ListCommands {
 
         let success: bool = serde_json::from_value(result)
             .map_err(|_| ProtocolError::RespError("ERR invalid response".to_string()))?;
+
+        // Persist to OrbitClient
+        let orbit_key = self.base.make_key(&key);
+        if let Ok(actor_ref) = self
+            .base
+            .orbit_client
+            .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
+            .await
+        {
+            if let Err(e) = actor_ref
+                .invoke::<bool>(
+                    "lset",
+                    vec![
+                        serde_json::to_value(index).unwrap(),
+                        serde_json::to_value(value.clone()).unwrap(),
+                    ],
+                )
+                .await
+            {
+                tracing::error!("Failed to persist LSET to OrbitClient: {}", e);
+            }
+        }
 
         if success {
             debug!("LSET {} {} {} -> OK", key, index, value);
@@ -396,6 +597,28 @@ impl ListCommands {
 
         let num_removed: usize = serde_json::from_value(result).unwrap_or(0);
 
+        // Persist to OrbitClient
+        let orbit_key = self.base.make_key(&key);
+        if let Ok(actor_ref) = self
+            .base
+            .orbit_client
+            .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
+            .await
+        {
+            if let Err(e) = actor_ref
+                .invoke::<usize>(
+                    "lrem",
+                    vec![
+                        serde_json::to_value(count).unwrap(),
+                        serde_json::to_value(element.clone()).unwrap(),
+                    ],
+                )
+                .await
+            {
+                tracing::error!("Failed to persist LREM to OrbitClient: {}", e);
+            }
+        }
+
         debug!("LREM {} {} {} -> {}", key, count, element, num_removed);
         Ok(RespValue::Integer(num_removed as i64))
     }
@@ -419,6 +642,28 @@ impl ListCommands {
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
+
+        // Persist to OrbitClient
+        let orbit_key = self.base.make_key(&key);
+        if let Ok(actor_ref) = self
+            .base
+            .orbit_client
+            .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
+            .await
+        {
+            if let Err(e) = actor_ref
+                .invoke::<()>(
+                    "ltrim",
+                    vec![
+                        serde_json::to_value(start).unwrap(),
+                        serde_json::to_value(stop).unwrap(),
+                    ],
+                )
+                .await
+            {
+                tracing::error!("Failed to persist LTRIM to OrbitClient: {}", e);
+            }
+        }
 
         debug!("LTRIM {} {} {} -> OK", key, start, stop);
         Ok(RespValue::SimpleString("OK".to_string()))

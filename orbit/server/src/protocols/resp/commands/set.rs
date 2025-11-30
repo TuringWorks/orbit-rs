@@ -18,11 +18,12 @@ pub struct SetCommands {
 
 impl SetCommands {
     pub fn new(
+        orbit_client: Arc<orbit_client::OrbitClient>,
         local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>,
     ) -> Self {
         // Use provided local_registry
         Self {
-            base: BaseCommandHandler::new(local_registry),
+            base: BaseCommandHandler::new(orbit_client, local_registry),
         }
     }
 
@@ -84,6 +85,22 @@ impl SetCommands {
 
         match added_count {
             Ok(count) => {
+                // Persist to OrbitClient
+                let orbit_key = self.base.make_key(&key);
+                if let Ok(actor_ref) = self
+                    .base
+                    .orbit_client
+                    .actor_reference::<crate::protocols::resp::actors::SetActor>(orbit_key)
+                    .await
+                {
+                    if let Err(e) = actor_ref
+                        .invoke::<usize>("sadd", vec![serde_json::to_value(&members).unwrap()])
+                        .await
+                    {
+                        tracing::error!("Failed to persist SADD to OrbitClient: {}", e);
+                    }
+                }
+
                 debug!("SADD {} {:?} -> {} added", key, members, count);
                 Ok(RespValue::Integer(count as i64))
             }
@@ -119,6 +136,22 @@ impl SetCommands {
 
         match removed_count {
             Ok(count) => {
+                // Persist to OrbitClient
+                let orbit_key = self.base.make_key(&key);
+                if let Ok(actor_ref) = self
+                    .base
+                    .orbit_client
+                    .actor_reference::<crate::protocols::resp::actors::SetActor>(orbit_key)
+                    .await
+                {
+                    if let Err(e) = actor_ref
+                        .invoke::<usize>("srem", vec![serde_json::to_value(&members).unwrap()])
+                        .await
+                    {
+                        tracing::error!("Failed to persist SREM to OrbitClient: {}", e);
+                    }
+                }
+
                 debug!("SREM {} {:?} -> {} removed", key, members, count);
                 Ok(RespValue::Integer(count as i64))
             }
@@ -126,16 +159,13 @@ impl SetCommands {
         }
     }
 
-    /// SMEMBERS key - Get all members of a set
-    async fn cmd_smembers(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
-        self.validate_arg_count("SMEMBERS", args, 1)?;
-
-        let key = self.get_string_arg(args, 0, "SMEMBERS")?;
-
+    /// Helper to get members with fallback to OrbitClient
+    async fn get_members(&self, key: &str) -> ProtocolResult<Vec<String>> {
+        // Try local
         let result = self
             .base
             .local_registry
-            .execute_set(&key, "smembers", &[])
+            .execute_set(key, "smembers", &[])
             .await;
 
         let members_result: Result<Vec<String>, _> = result
@@ -146,15 +176,70 @@ impl SetCommands {
 
         match members_result {
             Ok(members) => {
-                let result: Vec<RespValue> = members
-                    .into_iter()
-                    .map(|member| RespValue::BulkString(Bytes::from(member.into_bytes())))
-                    .collect();
-                debug!("SMEMBERS {} -> {} members", key, result.len());
-                Ok(RespValue::Array(result))
+                if members.is_empty() {
+                    // Try OrbitClient
+                    let orbit_key = self.base.make_key(key);
+                    if let Ok(actor_ref) = self
+                        .base
+                        .orbit_client
+                        .actor_reference::<crate::protocols::resp::actors::SetActor>(orbit_key)
+                        .await
+                    {
+                        if let Ok(remote_members) =
+                            actor_ref.invoke::<Vec<String>>("smembers", vec![]).await
+                        {
+                            if !remote_members.is_empty() {
+                                debug!(
+                                    "get_members {} -> {} members (OrbitClient)",
+                                    key,
+                                    remote_members.len()
+                                );
+                                return Ok(remote_members);
+                            }
+                        }
+                    }
+                }
+                Ok(members)
             }
-            Err(_) => Ok(RespValue::Array(vec![])),
+            Err(_) => {
+                // Try OrbitClient
+                let orbit_key = self.base.make_key(key);
+                if let Ok(actor_ref) = self
+                    .base
+                    .orbit_client
+                    .actor_reference::<crate::protocols::resp::actors::SetActor>(orbit_key)
+                    .await
+                {
+                    if let Ok(remote_members) =
+                        actor_ref.invoke::<Vec<String>>("smembers", vec![]).await
+                    {
+                        debug!(
+                            "get_members {} -> {} members (OrbitClient fallback)",
+                            key,
+                            remote_members.len()
+                        );
+                        return Ok(remote_members);
+                    }
+                }
+                Ok(Vec::new())
+            }
         }
+    }
+
+    /// SMEMBERS key - Get all members of a set
+    async fn cmd_smembers(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("SMEMBERS", args, 1)?;
+
+        let key = self.get_string_arg(args, 0, "SMEMBERS")?;
+
+        let members = self.get_members(&key).await?;
+
+        let result: Vec<RespValue> = members
+            .into_iter()
+            .map(|member| RespValue::BulkString(Bytes::from(member.into_bytes())))
+            .collect();
+        debug!("SMEMBERS {} -> {} members", key, result.len());
+        Ok(RespValue::Array(result))
     }
 
     /// SCARD key - Get the cardinality (size) of a set
@@ -219,20 +304,12 @@ impl SetCommands {
         for i in 0..args.len() {
             let key = self.get_string_arg(args, i, "SUNION")?;
 
-            // Use local registry
-            let members_result = self
-                .base
-                .local_registry
-                .execute_set(&key, "smembers", &[])
-                .await;
-
-            if let Ok(members_value) = members_result {
-                if let Ok(members) = serde_json::from_value::<Vec<String>>(members_value) {
-                    for member in members {
-                        result_set.insert(member);
-                    }
-                    debug!("SUNION: Added members from key {}", key);
+            // Use get_members helper
+            if let Ok(members) = self.get_members(&key).await {
+                for member in members {
+                    result_set.insert(member);
                 }
+                debug!("SUNION: Added members from key {}", key);
             }
         }
 
@@ -258,15 +335,9 @@ impl SetCommands {
         for i in 0..args.len() {
             let key = self.get_string_arg(args, i, "SINTER")?;
 
-            // Use local registry
-            let members_result = self
-                .base
-                .local_registry
-                .execute_set(&key, "smembers", &[])
-                .await;
-
-            if let Ok(members_value) = members_result {
-                if let Ok(members) = serde_json::from_value::<Vec<String>>(members_value) {
+            // Use get_members helper
+            match self.get_members(&key).await {
+                Ok(members) => {
                     let current_set: HashSet<String> = members.into_iter().collect();
 
                     match result_set {
@@ -281,15 +352,12 @@ impl SetCommands {
                             debug!("SINTER: After intersection with key {}", key);
                         }
                     }
-                } else {
-                    // If parsing failed, intersection is empty
+                }
+                Err(_) => {
+                    // If any set is missing or error, intersection is empty
                     result_set = Some(HashSet::new());
                     break;
                 }
-            } else {
-                // If any set is empty or missing, intersection is empty
-                result_set = Some(HashSet::new());
-                break;
             }
         }
 
@@ -331,30 +399,16 @@ impl SetCommands {
 
     /// Get the initial set for SDIFF operation
     async fn get_initial_set(&self, first_key: &str) -> ProtocolResult<HashSet<String>> {
-        // Use local registry - get members from first set
-        let members_result = self
-            .base
-            .local_registry
-            .execute_set(first_key, "smembers", &[])
-            .await;
-
-        match members_result {
-            Ok(members_value) => {
-                if let Ok(members) = serde_json::from_value::<Vec<String>>(members_value) {
-                    let result_set: HashSet<String> = members.into_iter().collect();
-                    debug!(
-                        "SDIFF: Started with {} members from key {}",
-                        result_set.len(),
-                        first_key
-                    );
-                    Ok(result_set)
-                } else {
-                    debug!(
-                        "SDIFF: Failed to parse members from first key {}",
-                        first_key
-                    );
-                    Ok(HashSet::new())
-                }
+        // Use get_members helper
+        match self.get_members(first_key).await {
+            Ok(members) => {
+                let result_set: HashSet<String> = members.into_iter().collect();
+                debug!(
+                    "SDIFF: Started with {} members from key {}",
+                    result_set.len(),
+                    first_key
+                );
+                Ok(result_set)
             }
             Err(_) => {
                 debug!("SDIFF: Failed to get members from first key {}", first_key);
@@ -365,23 +419,15 @@ impl SetCommands {
 
     /// Remove members from a specific key
     async fn remove_members_from_key(&self, result_set: &mut HashSet<String>, key: &str) {
-        let members_result = self
-            .base
-            .local_registry
-            .execute_set(key, "smembers", &[])
-            .await;
-
-        if let Ok(members_value) = members_result {
-            if let Ok(members) = serde_json::from_value::<Vec<String>>(members_value) {
-                for member in members {
-                    result_set.remove(&member);
-                }
-                debug!(
-                    "SDIFF: After removing members from key {}, {} members remain",
-                    key,
-                    result_set.len()
-                );
+        if let Ok(members) = self.get_members(key).await {
+            for member in members {
+                result_set.remove(&member);
             }
+            debug!(
+                "SDIFF: After removing members from key {}, {} members remain",
+                key,
+                result_set.len()
+            );
         }
     }
 }

@@ -15,7 +15,7 @@ use crate::protocols::graphrag::graph_rag_actor::{
 };
 use crate::protocols::resp::simple_local::SimpleLocalRegistry;
 use crate::protocols::resp::types::RespValue;
-use orbit_client::{OrbitClient, OrbitClientConfig};
+use orbit_client::OrbitClient;
 use orbit_shared::graphrag::LLMProvider;
 use std::sync::Arc;
 
@@ -23,26 +23,18 @@ use std::sync::Arc;
 pub struct GraphRAGCommands {
     #[allow(dead_code)]
     local_registry: Arc<SimpleLocalRegistry>,
-    orbit_client: Option<Arc<OrbitClient>>,
+    orbit_client: Arc<OrbitClient>,
 }
 
 impl GraphRAGCommands {
     /// Create a new GraphRAG commands handler
-    pub fn new(local_registry: Arc<SimpleLocalRegistry>) -> Self {
-        Self {
-            local_registry,
-            orbit_client: None,
-        }
-    }
-
-    /// Create with Orbit client
-    pub fn with_orbit_client(
-        local_registry: Arc<SimpleLocalRegistry>,
+    pub fn new(
         orbit_client: Arc<OrbitClient>,
+        local_registry: Arc<SimpleLocalRegistry>,
     ) -> Self {
         Self {
             local_registry,
-            orbit_client: Some(orbit_client),
+            orbit_client,
         }
     }
 
@@ -105,17 +97,8 @@ impl GraphRAGCommands {
 
         let _actor = self.get_or_create_graphrag_actor(&kg_name).await?;
 
-        // Create Orbit client if needed
-        let orbit_client = if let Some(ref client) = self.orbit_client {
-            client.clone()
-        } else {
-            // Create client for local operations
-            // Note: GraphRAG operations require an OrbitClient, so we'll need to handle this
-            // For now, return an error if no client is available
-            return Err(ProtocolError::RespError(
-                "ERR Orbit client not available for GraphRAG operations".to_string(),
-            ));
-        };
+        // Use Orbit client
+        let orbit_client = self.orbit_client.clone();
 
         let request = GraphRAGDocumentRequest {
             document_id: doc_id.clone(),
@@ -201,16 +184,7 @@ impl GraphRAGCommands {
 
         let _actor = self.get_or_create_graphrag_actor(&kg_name).await?;
 
-        let orbit_client = if let Some(ref client) = self.orbit_client {
-            client.clone()
-        } else {
-            // Create offline client for local operations
-            let config = OrbitClientConfig::default();
-            let client = OrbitClient::new_offline(config).await.map_err(|e| {
-                ProtocolError::RespError(format!("ERR failed to create client: {}", e))
-            })?;
-            Arc::new(client)
-        };
+        let orbit_client = self.orbit_client.clone();
 
         let query = GraphRAGQuery {
             query_text,

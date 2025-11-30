@@ -70,6 +70,67 @@ pub struct ModelMetadata {
     pub metrics: HashMap<String, f64>,
     /// Categorical labels for model organization and search
     pub tags: Vec<String>,
+    /// Input feature schema
+    pub input_schema: Vec<FeatureSpec>,
+    /// Output schema
+    pub output_schema: OutputSpec,
+}
+
+/// Feature specification for ML models
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeatureSpec {
+    /// Feature name
+    pub name: String,
+    /// Feature data type
+    pub dtype: FeatureType,
+    /// Whether feature is required
+    pub required: bool,
+    /// Feature constraints (min, max, etc.)
+    pub constraints: HashMap<String, String>,
+}
+
+/// Supported feature data types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FeatureType {
+    /// 32-bit floating point value
+    Float32,
+    /// 64-bit floating point value
+    Float64,
+    /// 32-bit signed integer
+    Int32,
+    /// 64-bit signed integer
+    Int64,
+    /// UTF-8 string value
+    String,
+    /// Fixed-dimension vector (e.g., embeddings)
+    Vector(usize),
+    /// Categorical value with defined possible values
+    Categorical(Vec<String>),
+}
+
+/// Model output specification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutputSpec {
+    /// Output type
+    pub output_type: OutputType,
+    /// Output schema for structured outputs
+    pub schema: HashMap<String, String>,
+}
+
+/// Types of model outputs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum OutputType {
+    /// Single numeric value (regression)
+    Numeric,
+    /// Class probability (classification)
+    Probability {
+        /// List of class labels for classification output
+        classes: Vec<String>,
+    },
+    /// Multiple values (multi-output)
+    Vector(usize),
+    /// Structured output (JSON-like)
+    Structured,
 }
 
 /// Central registry for managing model metadata and lifecycle
@@ -163,6 +224,11 @@ mod tests {
             parameters: HashMap::new(),
             metrics: HashMap::new(),
             tags: vec!["test".to_string()],
+            input_schema: vec![],
+            output_schema: OutputSpec {
+                output_type: OutputType::Numeric,
+                schema: HashMap::new(),
+            },
         };
 
         registry.register_model(metadata.clone()).await.unwrap();

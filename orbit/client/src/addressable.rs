@@ -75,6 +75,11 @@ pub trait ActorImplementation: ActorLifecycle + Any + Send + Sync {
     fn type_id(&self) -> TypeId {
         std::any::TypeId::of::<Self>()
     }
+
+    /// Handle a dynamic invocation
+    async fn handle_invocation(&self, method: &str, _args: Vec<serde_json::Value>) -> OrbitResult<serde_json::Value> {
+        Err(OrbitError::internal(format!("Method {} not implemented", method)))
+    }
 }
 
 /// Actor instance with metadata

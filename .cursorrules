@@ -1,0 +1,75 @@
+# Cursor AI Rules for Orbit-RS
+
+## Project Context
+Orbit-RS is a high-performance, distributed multi-protocol database server in Rust.
+Read `CLAUDE.md` for quick reference and `docs/PRD.md` for detailed architecture.
+
+## Architecture Reference (REQUIRED)
+**Always read `docs/PRD.md` first** - it is the single source of truth for:
+- Module structures and directory layouts
+- Protocol implementations and commands
+- Feature status and test coverage
+- Storage and compute architecture
+
+## PRD.md Maintenance (REQUIRED)
+When making architectural changes, you MUST update `docs/PRD.md`:
+
+### Update PRD.md when you:
+- Add new modules, crates, or significant files
+- Change directory structures
+- Add or modify protocol implementations
+- Update feature flags or capabilities
+- Change API interfaces or command support
+- Modify storage or compute backends
+
+### What to update:
+1. Module Reference - directory trees and file descriptions
+2. Feature Status Matrix - implementation status and test counts
+3. Protocol Commands - add new commands or update existing
+4. Architecture Sections - reflect structural changes
+
+## Client SDK & Extension Updates (Breaking Changes)
+When making breaking changes to protocols/APIs, also update:
+- `orbit-python-client/` - Python SDK (new commands, API changes)
+- `orbit-vscode-extension/` - VS Code extension (syntax, connections)
+
+| Change Type | Files to Update |
+|-------------|-----------------|
+| New Redis commands | `orbit-python-client/orbit_client/client.py` |
+| New query syntax | `orbit-vscode-extension/syntaxes/*.tmLanguage.json` |
+| Protocol changes | Both Python client and VS Code extension |
+
+## Code Standards
+- Zero warnings policy: `cargo clippy -- -D warnings`
+- Always run `cargo fmt --all` before commits
+- Use `anyhow::Result` for application errors
+- Use `thiserror` for library error types
+- Tokio async runtime with `#[tokio::main]` and `#[tokio::test]`
+
+## Naming Conventions
+- Crates: `orbit-{name}` (e.g., orbit-server, orbit-engine)
+- Modules: snake_case
+- Types: PascalCase
+- Functions: snake_case
+- Constants: SCREAMING_SNAKE_CASE
+
+## Testing
+```bash
+cargo test --workspace               # All tests
+cargo test --workspace -- --ignored  # Slow integration tests
+cargo test -p orbit-server           # Specific package
+```
+
+## Commit Workflow
+1. Make code changes
+2. Update `docs/PRD.md` if architecture changed
+3. Run `cargo fmt --all`
+4. Run `cargo clippy --workspace -- -D warnings`
+5. Run `cargo test --workspace`
+6. Commit with descriptive message
+
+## Key Files
+- `CLAUDE.md` - Quick development reference
+- `docs/PRD.md` - Complete architecture reference (KEEP UPDATED)
+- `config/orbit-server.toml` - Server configuration
+- `Cargo.toml` - Workspace definition

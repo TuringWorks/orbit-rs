@@ -597,7 +597,7 @@ Now that you have Orbit-RS multi-protocol server running, explore these guides:
 ### **Multi-Protocol Features**
 
 -  **[Native Multi-Protocol Guide](NATIVE_MULTIPROTOCOL.md)** - Complete multi-protocol documentation
--  **[Multi-Protocol Demo](../examples/multiprotocol-demo/)** - Interactive demonstration
+
 -  **[Configuration Reference](deployment/CONFIGURATION.md)** - Complete configuration guide
 -  **[Performance Tuning](PETABYTE_SCALE_PERFORMANCE.md)** - Optimize for your workload
 

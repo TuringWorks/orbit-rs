@@ -66,8 +66,14 @@ git clone https://github.com/TuringWorks/orbit-rs.git
 cd orbit-rs
 cargo build --release
 
-# Start multi-protocol server with RocksDB persistence
-cargo run --package orbit-server --example integrated-server
+# Start multi-protocol server
+cargo run --bin orbit-server
+
+# Or with custom configuration
+cargo run --bin orbit-server -- --config ./config/orbit-server.toml
+
+# Or use the startup script
+./scripts/start-multiprotocol-server.sh
 
 # All protocols now active with persistent storage:
 # PostgreSQL: localhost:5432 (persisted with RocksDB)
@@ -76,17 +82,6 @@ cargo run --package orbit-server --example integrated-server
 # Redis: localhost:6379 (persisted with RocksDB)
 # REST API: localhost:8080
 # gRPC: localhost:50051
-# Data Directory: ./orbit_integrated_data (RocksDB LSM-tree files)
-```
-
-**Or use the main server binary:**
-
-```bash
-# Start all protocols with default configuration
-cargo run --bin orbit-server
-
-# Or with custom configuration
-cargo run --bin orbit-server -- --config ./config/orbit-server.toml
 ```
 
 ### **Connect with Standard Clients - Data Persists Across Restarts!**
@@ -247,7 +242,7 @@ GROUP BY u.id;
 - **Live Queries** - Real-time subscriptions with change notifications
 - **ACID Transactions** - Multi-model transaction support
 
-**[Complete OrbitQL Documentation](orbit/engine/docs/ORBITQL.md)** | **[OrbitQL Examples](orbit/engine/examples/orbitql_example.rs)**
+**[Complete OrbitQL Documentation](orbit/engine/docs/ORBITQL.md)**
 
 ### Manual Installation
 
@@ -379,7 +374,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   - **Statistical Metrics**: Mean, median, std deviation, operations per second
   - **Regression Detection**: Track performance changes over time
   - **Production Ready**: Memory-safe async operations with zero-cost abstractions
-- **Examples Available**: [`examples/benchmarks-demo`](examples/benchmarks-demo/) - Complete demo of benchmarking capabilities
 - **OrbitQL Benchmarks**: TPC-H, TPC-C, TPC-DS, and comprehensive query performance testing available in [`orbit-benchmarks`](orbit-benchmarks/)
 - **Streaming Benchmarks**: CDC event processing, stream windowing, and real-time analytics performance
 
@@ -394,25 +388,52 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | **Advanced Connection Pooling** | Complete | 90% | Yes | 12 tests | Circuit breakers, health monitoring, load balancing |
 | **Security Patterns** | Complete | 90% | Yes | 5 tests | Rate limiting, attack detection, audit logging |
 | **RESP (Redis) Protocol** | Complete | 95% | Yes | 292 tests | 50+ commands, all data types, redis-cli compatibility |
-| **PostgreSQL Wire Protocol** | Complete | 85% | Yes | 104+ tests | Full SQL DDL/DML with pgvector and RocksDB persistence |
+| **PostgreSQL Wire Protocol** | Complete | 85% | Yes | 104+ tests | Extensive wire protocol support, JSONB, Spatial, Vector ops |
 | **MySQL Wire Protocol** | Complete | 75% | Yes | 15+ tests | MySQL-compatible SQL interface with RocksDB persistence |
 | **CQL (Cassandra) Protocol** | Complete | 70% | Yes | 12+ tests | Cassandra Query Language for wide-column access |
 | **HTTP REST API** | Complete | 90% | Yes | 25+ tests | Web-friendly JSON interface with OpenAPI documentation |
 | **Distributed Transactions** | Complete | 85% | Yes | 270 tests | 2PC, Saga patterns, distributed locks |
 | **Model Context Protocol (MCP)** | Experimental | 15% | No | 44 tests | Basic AI agent integration framework |
-| **Neo4j Cypher Parser** | Planned | 5% | No | 18 tests | Basic parser structure, not functional |
-| **ArangoDB AQL Parser** | Planned | 5% | No | 44 tests | Basic parser structure, not functional |
+| **Neo4j Cypher Parser** | Active | 15% | No | 18 tests | Basic parser and graph engine structure |
+| **ArangoDB AQL Parser** | Active | 15% | No | 44 tests | Basic parser and GraphRAG engine structure |
 | **OrbitQL Engine** | Active | 40% | No | 256 tests | Query planning works, optimizer incomplete |
 | **Persistence Layer** | Complete | 85% | Yes | 47+ tests | RocksDB, COW B+Tree, LSM-Tree, Memory, TiKV, Cloud storage |
 | **Kubernetes Integration** | Active | 70% | No | 16 tests | Operator basics, needs production hardening |
-| **Heterogeneous Compute** | Active | 65% | No | 26 tests | CPU/GPU detection works, optimization partial |
+| **Heterogeneous Compute** | Active | 75% | Yes | 81 tests | GPU backends (Metal, Vulkan, CUDA, ROCm), CPU SIMD, vector/spatial/timeseries ops |
 | **Vector Operations (pgvector)** | Complete | 90% | Yes | 25+ tests | Full pgvector compatibility with HNSW/IVFFlat indexes |
-| **Time Series** | Planned | 10% | No | 15 tests | Core structures only, no RedisTimeSeries compat |
-| **Graph Database** | Planned | 5% | No | 22 tests | Basic graph structures, no query execution |
+| **Machine Learning (orbit-ml)** | Active | 50% | No | 52 tests | Neural networks, transformers, streaming inference, SQL functions |
+| **Time Series** | Active | 70% | Yes | 36 tests | TS.* commands with AGGREGATION, CREATERULE support, compression, PostgreSQL/Redis compat |
+| **Graph Database** | Active | 40% | No | 38 tests | Cypher queries, CALL procedures, graph algorithms (PageRank, BFS, DFS, centrality) |
 
 **Legend:** Complete | Active Development | Experimental | Planned
 
 **[View Full Roadmap](docs/roadmap.md)** | **[GitHub Project](https://github.com/orgs/TuringWorks/projects/1)**
+
+## Development Scripts
+
+Utility scripts for development are available in the `scripts/` directory:
+
+```bash
+# Run tests
+./scripts/run-tests.sh              # All workspace tests
+./scripts/run-tests.sh server       # orbit-server tests only
+./scripts/run-tests.sh time-series  # Time series tests (21 tests)
+./scripts/run-tests.sh ignored      # Slow integration tests
+./scripts/run-tests.sh help         # Show all options
+
+# Start server
+./scripts/start-multiprotocol-server.sh           # Full multi-protocol server
+./scripts/start-multiprotocol-server.sh --prod    # Production mode
+./scripts/start-orbit-redis.sh                    # Redis-focused startup
+
+# Pre-commit checks
+./scripts/pre-commit.sh             # Format, lint, test, build
+
+# CI/CD
+./scripts/run-ci.sh                 # Manual CI pipeline
+```
+
+**[Full scripts documentation](scripts/README.md)**
 
 ## Contributing
 
@@ -421,7 +442,7 @@ We welcome contributions! See our **[Development Guide](DEVELOPMENT.md)** for se
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-new-feature`)
 3. Make your changes and add tests
-4. Run tests (`cargo test --workspace`)
+4. Run pre-commit checks (`./scripts/pre-commit.sh`)
 5. Submit a pull request
 
 **Priority areas for contributors:**
@@ -432,14 +453,6 @@ We welcome contributions! See our **[Development Guide](DEVELOPMENT.md)** for se
 - Performance benchmarking and optimization
 - Kubernetes operator enhancements
 
-**Available Examples:**
-
-- [`examples/server/integrated-server.rs`](examples/server/integrated-server.rs) - Multi-protocol server with all protocols enabled
-- [`examples/server/persistent-redis-server.rs`](examples/server/persistent-redis-server.rs) - Redis server with RocksDB persistence
-- [`examples/pgvector-store/`](examples/pgvector-store/) - PostgreSQL-compatible vector database with pgvector
-- [`examples/multi-protocol-server/`](examples/multi-protocol-server/) - Comprehensive multi-protocol demonstration
-- [`examples/resp-server/`](examples/resp-server/) - Redis RESP protocol server with comprehensive tests
-- [`examples/vector-store/`](examples/vector-store/) - Vector similarity search example
 
 ## License
 

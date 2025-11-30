@@ -19,7 +19,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILD_TYPE="${BUILD_TYPE:-both}"  # debug, release, or both
 JOBS="${JOBS:-2}"                 # Parallel jobs for compilation
 SKIP_TESTS="${SKIP_TESTS:-false}" # Skip running tests if set to true
-SKIP_EXAMPLES="${SKIP_EXAMPLES:-false}" # Skip building examples if set to true
+
 
 # Print colored output
 print_step() {
@@ -50,7 +50,7 @@ print_banner() {
     echo "Build Type: ${BUILD_TYPE}"
     echo "Jobs: ${JOBS}"
     echo "Skip Tests: ${SKIP_TESTS}"
-    echo "Skip Examples: ${SKIP_EXAMPLES}"
+
     echo ""
 }
 
@@ -211,33 +211,6 @@ run_tests() {
         print_error "Tests failed (${build_mode})"
         return 1
     fi
-}
-
-# Build examples
-build_examples() {
-    if [[ "${SKIP_EXAMPLES}" == "true" ]]; then
-        print_warning "Skipping examples build"
-        return 0
-    fi
-    
-    print_step "Building examples..."
-    cd "${PROJECT_ROOT}"
-    
-    local examples=(
-        "hello-world"
-        "distributed-transactions-example"
-        "distributed-counter"
-        "saga-example"
-    )
-    
-    for example in "${examples[@]}"; do
-        print_step "Building example: ${example}"
-        if cargo build --example "${example}" --jobs "${JOBS}"; then
-            print_success "Built example: ${example}"
-        else
-            print_warning "Failed to build example: ${example} (continuing...)"
-        fi
-    done
 }
 
 # Generate documentation
@@ -429,7 +402,7 @@ main() {
     esac
     
     # Phase 4: Additional Tasks
-    build_examples
+
     generate_docs || ((errors++))
     
     # Optional: Generate code coverage (comment out if not needed)
@@ -468,7 +441,7 @@ case "${1:-}" in
         echo "  BUILD_TYPE    Build type: debug, release, both (default: both)"
         echo "  JOBS          Number of parallel jobs (default: 2)"
         echo "  SKIP_TESTS    Skip running tests (default: false)"
-        echo "  SKIP_EXAMPLES Skip building examples (default: false)"
+
         echo ""
         echo "Examples:"
         echo "  $0                          # Run full CI/CD"

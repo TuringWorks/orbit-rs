@@ -3,7 +3,7 @@ use crate::{
     PrometheusResult,
 };
 use std::sync::Arc;
-use tracing::{error, info};
+use tracing::info;
 
 /// Main Prometheus exporter that coordinates all components
 pub struct PrometheusExporter {

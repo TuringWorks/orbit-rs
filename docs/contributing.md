@@ -109,7 +109,7 @@ cargo run --example distributed-transactions
 
 - Check the [Issues](https://github.com/yourusername/orbit-rs/issues) page for open issues
 - Look for issues labeled `good first issue` for newcomers
-- Check the [CHANGELOG.md](CHANGELOG.md) for planned features
+- Check the [CHANGELOG.md](content/development/CHANGELOG.md) for planned features
 - Discuss new features in issues before starting work
 
 ### 2. Create a Branch

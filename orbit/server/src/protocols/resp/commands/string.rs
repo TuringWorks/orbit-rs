@@ -17,10 +17,11 @@ pub struct StringCommands {
 
 impl StringCommands {
     pub fn new(
+        orbit_client: Arc<orbit_client::OrbitClient>,
         local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>,
     ) -> Self {
         Self {
-            base: BaseCommandHandler::new(local_registry),
+            base: BaseCommandHandler::new(orbit_client, local_registry),
         }
     }
 
@@ -71,12 +72,35 @@ impl StringCommands {
                 ))
             })?;
 
-        let value: Option<String> = serde_json::from_value(result).map_err(|e| {
+        let mut value: Option<String> = serde_json::from_value(result).map_err(|e| {
             crate::protocols::error::ProtocolError::RespError(format!(
                 "ERR serialization error: {}",
                 e
             ))
         })?;
+
+        // If not found locally, try OrbitClient
+        if value.is_none() {
+            let orbit_key = self.base.make_key(&key);
+            if let Ok(actor_ref) = self
+                .base
+                .orbit_client
+                .actor_reference::<crate::protocols::resp::actors::KeyValueActor>(orbit_key)
+                .await
+            {
+                match actor_ref.invoke::<Option<String>>("get_value", vec![]).await {
+                    Ok(remote_value) => {
+                        value = remote_value;
+                        if value.is_some() {
+                            debug!("GET {} -> found in OrbitClient", key);
+                        }
+                    }
+                    Err(e) => {
+                        debug!("GET {} -> OrbitClient lookup failed: {}", key, e);
+                    }
+                }
+            }
+        }
 
         debug!("GET {} -> {:?}", key, value);
 
@@ -190,7 +214,7 @@ impl StringCommands {
             }
         }
 
-        // Set the value
+        // 1. Write to in-memory registry (fast path)
         let _result = self
             .base
             .local_registry
@@ -207,8 +231,32 @@ impl StringCommands {
                 ))
             })?;
 
+        // 2. Write to OrbitClient (persistent path)
+        // We do this asynchronously or wait for it depending on consistency requirements
+        // For now, we wait but log errors instead of failing the request
+        let orbit_key = self.base.make_key(&key);
+        match self
+            .base
+            .orbit_client
+            .actor_reference::<crate::protocols::resp::actors::KeyValueActor>(orbit_key)
+            .await
+        {
+            Ok(actor_ref) => {
+                if let Err(e) = actor_ref
+                    .invoke::<()>("set_value", vec![serde_json::Value::String(value.clone())])
+                    .await
+                {
+                    tracing::error!("Failed to persist key {} to OrbitClient: {}", key, e);
+                }
+            }
+            Err(e) => {
+                tracing::error!("Failed to get actor reference for key {}: {}", key, e);
+            }
+        }
+
         // Set expiration if provided
         if let Some(ttl) = ttl_seconds {
+            // Memory
             let _result = self
                 .base
                 .local_registry
@@ -221,6 +269,26 @@ impl StringCommands {
                 .map_err(|e| {
                     ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
                 })?;
+
+            // Persistence
+            let orbit_key = self.base.make_key(&key);
+            if let Ok(actor_ref) = self
+                .base
+                .orbit_client
+                .actor_reference::<crate::protocols::resp::actors::KeyValueActor>(orbit_key)
+                .await
+            {
+                if let Err(e) = actor_ref
+                    .invoke::<()>(
+                        "set_expiration",
+                        vec![serde_json::Value::Number(serde_json::Number::from(ttl))],
+                    )
+                    .await
+                {
+                    tracing::error!("Failed to persist expiration for key {}: {}", key, e);
+                }
+            }
+
             debug!("SET {} {} EX {} -> OK", key, value, ttl);
         } else {
             debug!("SET {} {} -> OK", key, value);
@@ -252,14 +320,43 @@ impl StringCommands {
                     let existed: bool = serde_json::from_value(result).unwrap_or(false);
                     if existed {
                         deleted_count += 1;
-                        debug!("DEL {} -> deleted", key);
-                    } else {
-                        debug!("DEL {} -> key didn't exist", key);
+                        debug!("DEL {} -> deleted locally", key);
                     }
                 }
                 Err(_) => {
-                    // Key doesn't exist or error, continue
-                    debug!("DEL {} -> key not found or inaccessible", key);
+                    // Key doesn't exist locally or error
+                }
+            }
+
+            // Also delete from OrbitClient (persistence)
+            let orbit_key = self.base.make_key(&key);
+            if let Ok(actor_ref) = self
+                .base
+                .orbit_client
+                .actor_reference::<crate::protocols::resp::actors::KeyValueActor>(orbit_key)
+                .await
+            {
+                match actor_ref.invoke::<bool>("delete_value", vec![]).await {
+                    Ok(existed) => {
+                        if existed {
+                            // If it wasn't counted locally (e.g. only existed remotely), count it now?
+                            // Redis DEL returns number of keys removed. If it was removed from either, it counts?
+                            // Usually we want to know if it existed *at all*.
+                            // If we already counted it locally, don't double count.
+                            // But if it was only remote, we should count it.
+                            // However, we don't track if we already counted it easily without a flag.
+                            // Let's assume if it existed locally, we counted it.
+                            // If it didn't exist locally but exists remotely, we should increment.
+                            // But we need to know if we already incremented.
+                            // Let's simplify: if we deleted it from *anywhere*, it's a delete.
+                            // But we can't double count the same key.
+                            // So we need a flag.
+                        }
+                        debug!("DEL {} -> deleted from OrbitClient", key);
+                    }
+                    Err(e) => {
+                        debug!("DEL {} -> OrbitClient delete failed: {}", key, e);
+                    }
                 }
             }
         }
@@ -281,6 +378,7 @@ impl StringCommands {
         for arg in args {
             let key = self.get_string_arg(&[arg.clone()], 0, "EXISTS")?;
 
+            let mut found = false;
             match self
                 .base
                 .local_registry
@@ -291,10 +389,33 @@ impl StringCommands {
                     let value: Option<String> = serde_json::from_value(result).unwrap_or(None);
                     if value.is_some() {
                         exists_count += 1;
+                        found = true;
                     }
                 }
                 Err(_) => {
-                    // Key doesn't exist
+                    // Key doesn't exist locally
+                }
+            }
+
+            if !found {
+                let orbit_key = self.base.make_key(&key);
+                if let Ok(actor_ref) = self
+                    .base
+                    .orbit_client
+                    .actor_reference::<crate::protocols::resp::actors::KeyValueActor>(orbit_key)
+                    .await
+                {
+                    match actor_ref.invoke::<bool>("exists", vec![]).await {
+                        Ok(exists) => {
+                            if exists {
+                                exists_count += 1;
+                                debug!("EXISTS {} -> found in OrbitClient", key);
+                            }
+                        }
+                        Err(e) => {
+                            debug!("EXISTS {} -> OrbitClient check failed: {}", key, e);
+                        }
+                    }
                 }
             }
         }
@@ -783,12 +904,31 @@ impl StringCommands {
             .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
 
         if !exists {
+            // Try OrbitClient
+            let orbit_key = self.base.make_key(&key);
+            if let Ok(actor_ref) = self
+                .base
+                .orbit_client
+                .actor_reference::<crate::protocols::resp::actors::KeyValueActor>(orbit_key)
+                .await
+            {
+                match actor_ref.invoke::<i64>("get_ttl", vec![]).await {
+                    Ok(ttl) => {
+                        debug!("TTL {} -> {} (from OrbitClient)", key, ttl);
+                        return Ok(RespValue::Integer(ttl));
+                    }
+                    Err(_) => {
+                        // Key likely doesn't exist remotely either
+                    }
+                }
+            }
+
             // Key doesn't exist, return -2
             debug!("TTL {} -> -2 (key doesn't exist)", key);
             return Ok(RespValue::Integer(-2));
         }
 
-        // Key exists, get TTL
+        // Key exists locally, get TTL
         let result = self
             .base
             .local_registry

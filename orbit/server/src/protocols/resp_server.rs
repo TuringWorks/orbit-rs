@@ -17,20 +17,24 @@ pub struct RespServer {
 
 impl RespServer {
     /// Create a new RESP server
-    pub fn new(bind_addr: impl Into<String>) -> Self {
-        Self::new_with_persistence(bind_addr, None)
+    pub fn new(bind_addr: impl Into<String>, orbit_client: orbit_client::OrbitClient) -> Self {
+        Self::new_with_persistence(bind_addr, orbit_client, None)
     }
 
     /// Create a new RESP server with optional persistent storage
     pub fn new_with_persistence(
         bind_addr: impl Into<String>,
+        orbit_client: orbit_client::OrbitClient,
         persistent_storage: Option<
             Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>,
         >,
     ) -> Self {
         Self {
             bind_addr: bind_addr.into(),
-            command_handler: Arc::new(CommandHandler::new_with_persistence(persistent_storage)),
+            command_handler: Arc::new(CommandHandler::new_with_persistence(
+                orbit_client,
+                persistent_storage,
+            )),
         }
     }
 
