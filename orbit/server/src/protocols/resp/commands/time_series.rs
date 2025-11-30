@@ -62,6 +62,100 @@ impl DuplicatePolicy {
     }
 }
 
+/// Aggregation type for time series queries and compaction rules
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AggregationType {
+    /// Average of values
+    Avg,
+    /// Sum of values
+    Sum,
+    /// Minimum value
+    Min,
+    /// Maximum value
+    Max,
+    /// Range (max - min)
+    Range,
+    /// Count of values
+    Count,
+    /// First value in bucket
+    First,
+    /// Last value in bucket
+    Last,
+    /// Standard deviation (population)
+    StdP,
+    /// Variance (population)
+    VarP,
+    /// Time-weighted average
+    Twa,
+}
+
+impl AggregationType {
+    fn from_str(s: &str) -> Option<Self> {
+        match s.to_uppercase().as_str() {
+            "AVG" => Some(Self::Avg),
+            "SUM" => Some(Self::Sum),
+            "MIN" => Some(Self::Min),
+            "MAX" => Some(Self::Max),
+            "RANGE" => Some(Self::Range),
+            "COUNT" => Some(Self::Count),
+            "FIRST" => Some(Self::First),
+            "LAST" => Some(Self::Last),
+            "STD.P" => Some(Self::StdP),
+            "VAR.P" => Some(Self::VarP),
+            "TWA" => Some(Self::Twa),
+            _ => None,
+        }
+    }
+
+    /// Apply aggregation to a list of values
+    fn aggregate(&self, values: &[f64]) -> f64 {
+        if values.is_empty() {
+            return 0.0;
+        }
+        match self {
+            AggregationType::Avg => values.iter().sum::<f64>() / values.len() as f64,
+            AggregationType::Sum => values.iter().sum(),
+            AggregationType::Min => values.iter().cloned().fold(f64::INFINITY, f64::min),
+            AggregationType::Max => values.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+            AggregationType::Range => {
+                let min = values.iter().cloned().fold(f64::INFINITY, f64::min);
+                let max = values.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+                max - min
+            }
+            AggregationType::Count => values.len() as f64,
+            AggregationType::First => values[0],
+            AggregationType::Last => values[values.len() - 1],
+            AggregationType::StdP => {
+                let mean = values.iter().sum::<f64>() / values.len() as f64;
+                let variance =
+                    values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / values.len() as f64;
+                variance.sqrt()
+            }
+            AggregationType::VarP => {
+                let mean = values.iter().sum::<f64>() / values.len() as f64;
+                values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / values.len() as f64
+            }
+            AggregationType::Twa => {
+                // Simplified TWA - just return average for now
+                values.iter().sum::<f64>() / values.len() as f64
+            }
+        }
+    }
+}
+
+/// Compaction rule for automatic downsampling
+#[derive(Debug, Clone)]
+pub struct CompactionRule {
+    /// Source time series key
+    pub source_key: String,
+    /// Destination time series key
+    pub dest_key: String,
+    /// Aggregation type
+    pub aggregation: AggregationType,
+    /// Bucket duration in milliseconds
+    pub bucket_duration_ms: i64,
+}
+
 /// A single data point in the time series
 #[derive(Debug, Clone, Copy)]
 struct DataPoint {
@@ -168,8 +262,16 @@ impl TimeSeries {
 static TIME_SERIES: std::sync::OnceLock<Arc<RwLock<HashMap<String, TimeSeries>>>> =
     std::sync::OnceLock::new();
 
+/// Global compaction rules storage
+static COMPACTION_RULES: std::sync::OnceLock<Arc<RwLock<Vec<CompactionRule>>>> =
+    std::sync::OnceLock::new();
+
 fn get_time_series() -> &'static Arc<RwLock<HashMap<String, TimeSeries>>> {
     TIME_SERIES.get_or_init(|| Arc::new(RwLock::new(HashMap::new())))
+}
+
+fn get_compaction_rules() -> &'static Arc<RwLock<Vec<CompactionRule>>> {
+    COMPACTION_RULES.get_or_init(|| Arc::new(RwLock::new(Vec::new())))
 }
 
 /// Handler for time series commands
@@ -345,7 +447,7 @@ impl TimeSeriesCommands {
         }
     }
 
-    /// TS.RANGE key fromTimestamp toTimestamp [COUNT count]
+    /// TS.RANGE key fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType bucketDuration]
     async fn cmd_ts_range(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() < 3 {
             return Err(crate::protocols::error::ProtocolError::RespError(
@@ -358,14 +460,31 @@ impl TimeSeriesCommands {
         let to = self.parse_timestamp_arg(args, 2, "TS.RANGE")?;
 
         let mut count: Option<usize> = None;
+        let mut aggregation: Option<AggregationType> = None;
+        let mut bucket_duration: Option<i64> = None;
 
         // Parse optional arguments
         let mut i = 3;
         while i < args.len() {
             let arg = self.get_string_arg(args, i, "TS.RANGE")?.to_uppercase();
-            if arg == "COUNT" {
-                i += 1;
-                count = Some(self.get_int_arg(args, i, "TS.RANGE")? as usize);
+            match arg.as_str() {
+                "COUNT" => {
+                    i += 1;
+                    count = Some(self.get_int_arg(args, i, "TS.RANGE")? as usize);
+                }
+                "AGGREGATION" => {
+                    i += 1;
+                    let agg_type_str = self.get_string_arg(args, i, "TS.RANGE")?;
+                    aggregation = Some(AggregationType::from_str(&agg_type_str).ok_or_else(|| {
+                        crate::protocols::error::ProtocolError::RespError(format!(
+                            "ERR unknown aggregation type '{}'",
+                            agg_type_str
+                        ))
+                    })?);
+                    i += 1;
+                    bucket_duration = Some(self.get_int_arg(args, i, "TS.RANGE")?);
+                }
+                _ => {}
             }
             i += 1;
         }
@@ -380,20 +499,49 @@ impl TimeSeriesCommands {
             ))
         })?;
 
-        let mut samples = ts.range(from, to);
-        if let Some(limit) = count {
-            samples.truncate(limit);
-        }
+        let samples = ts.range(from, to);
 
-        let result: Vec<RespValue> = samples
-            .iter()
-            .map(|dp| {
-                RespValue::Array(vec![
-                    RespValue::Integer(dp.timestamp),
-                    RespValue::bulk_string_from_str(&dp.value.to_string()),
-                ])
-            })
-            .collect();
+        // Apply aggregation if specified
+        let result: Vec<RespValue> = if let (Some(agg), Some(bucket_ms)) = (aggregation, bucket_duration) {
+            // Group samples into buckets and aggregate
+            let mut buckets: BTreeMap<i64, Vec<f64>> = BTreeMap::new();
+            for dp in &samples {
+                let bucket_start = (dp.timestamp / bucket_ms) * bucket_ms;
+                buckets.entry(bucket_start).or_default().push(dp.value);
+            }
+
+            let mut aggregated: Vec<RespValue> = buckets
+                .iter()
+                .map(|(&bucket_ts, values)| {
+                    let agg_value = agg.aggregate(values);
+                    RespValue::Array(vec![
+                        RespValue::Integer(bucket_ts),
+                        RespValue::bulk_string_from_str(&agg_value.to_string()),
+                    ])
+                })
+                .collect();
+
+            if let Some(limit) = count {
+                aggregated.truncate(limit);
+            }
+            aggregated
+        } else {
+            // No aggregation - return raw samples
+            let mut raw: Vec<RespValue> = samples
+                .iter()
+                .map(|dp| {
+                    RespValue::Array(vec![
+                        RespValue::Integer(dp.timestamp),
+                        RespValue::bulk_string_from_str(&dp.value.to_string()),
+                    ])
+                })
+                .collect();
+
+            if let Some(limit) = count {
+                raw.truncate(limit);
+            }
+            raw
+        };
 
         debug!(
             "TS.RANGE {} {} {} -> {} samples",
@@ -617,6 +765,111 @@ impl TimeSeriesCommands {
         Ok(RespValue::Array(results))
     }
 
+    /// TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketDuration
+    async fn cmd_ts_createrule(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 5 {
+            return Err(crate::protocols::error::ProtocolError::RespError(
+                "ERR wrong number of arguments for 'ts.createrule' command".to_string(),
+            ));
+        }
+
+        let source_key = self.get_string_arg(args, 0, "TS.CREATERULE")?;
+        let dest_key = self.get_string_arg(args, 1, "TS.CREATERULE")?;
+
+        // Parse AGGREGATION keyword
+        let agg_keyword = self.get_string_arg(args, 2, "TS.CREATERULE")?.to_uppercase();
+        if agg_keyword != "AGGREGATION" {
+            return Err(crate::protocols::error::ProtocolError::RespError(
+                "ERR syntax error, expected AGGREGATION".to_string(),
+            ));
+        }
+
+        let agg_type_str = self.get_string_arg(args, 3, "TS.CREATERULE")?;
+        let aggregation = AggregationType::from_str(&agg_type_str).ok_or_else(|| {
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR unknown aggregation type '{}'",
+                agg_type_str
+            ))
+        })?;
+
+        let bucket_duration_ms = self.get_int_arg(args, 4, "TS.CREATERULE")?;
+
+        // Verify source time series exists
+        let ts_storage = get_time_series();
+        let ts_guard = ts_storage.read().await;
+        if !ts_guard.contains_key(&source_key) {
+            return Err(crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR TSDB: source key '{}' does not exist",
+                source_key
+            )));
+        }
+        if !ts_guard.contains_key(&dest_key) {
+            return Err(crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR TSDB: destination key '{}' does not exist",
+                dest_key
+            )));
+        }
+        drop(ts_guard);
+
+        // Check for duplicate rule
+        let rules_storage = get_compaction_rules();
+        let mut rules_guard = rules_storage.write().await;
+
+        let rule_exists = rules_guard.iter().any(|r| {
+            r.source_key == source_key && r.dest_key == dest_key
+        });
+
+        if rule_exists {
+            return Err(crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR TSDB: rule already exists from '{}' to '{}'",
+                source_key, dest_key
+            )));
+        }
+
+        let rule = CompactionRule {
+            source_key: source_key.clone(),
+            dest_key: dest_key.clone(),
+            aggregation,
+            bucket_duration_ms,
+        };
+
+        rules_guard.push(rule);
+
+        info!(
+            "Created compaction rule: {} -> {} (AGGREGATION {:?} {}ms)",
+            source_key, dest_key, aggregation, bucket_duration_ms
+        );
+        Ok(RespValue::ok())
+    }
+
+    /// TS.DELETERULE sourceKey destKey
+    async fn cmd_ts_deleterule(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 2 {
+            return Err(crate::protocols::error::ProtocolError::RespError(
+                "ERR wrong number of arguments for 'ts.deleterule' command".to_string(),
+            ));
+        }
+
+        let source_key = self.get_string_arg(args, 0, "TS.DELETERULE")?;
+        let dest_key = self.get_string_arg(args, 1, "TS.DELETERULE")?;
+
+        let rules_storage = get_compaction_rules();
+        let mut rules_guard = rules_storage.write().await;
+
+        let initial_len = rules_guard.len();
+        rules_guard.retain(|r| !(r.source_key == source_key && r.dest_key == dest_key));
+
+        if rules_guard.len() == initial_len {
+            return Err(crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR TSDB: rule from '{}' to '{}' does not exist",
+                source_key, dest_key
+            )));
+        }
+
+        info!("Deleted compaction rule: {} -> {}", source_key, dest_key);
+        Ok(RespValue::ok())
+    }
+
     /// Parse a timestamp argument (handles "-" for min, "+" for max)
     fn parse_timestamp_arg(
         &self,
@@ -650,6 +903,8 @@ impl CommandHandler for TimeSeriesCommands {
             "TS.INFO" => self.cmd_ts_info(args).await,
             "TS.DEL" => self.cmd_ts_del(args).await,
             "TS.MADD" => self.cmd_ts_madd(args).await,
+            "TS.CREATERULE" => self.cmd_ts_createrule(args).await,
+            "TS.DELETERULE" => self.cmd_ts_deleterule(args).await,
             _ => Err(crate::protocols::error::ProtocolError::RespError(format!(
                 "ERR unknown time series command '{command_name}'"
             ))),
@@ -666,6 +921,8 @@ impl CommandHandler for TimeSeriesCommands {
             "TS.INFO",
             "TS.DEL",
             "TS.MADD",
+            "TS.CREATERULE",
+            "TS.DELETERULE",
         ]
     }
 }
@@ -765,5 +1022,82 @@ mod tests {
         // Sample at 1000 should be removed (4000 - 2000 = 2000 cutoff)
         assert_eq!(ts.samples.len(), 2);
         assert!(!ts.samples.contains_key(&1000));
+    }
+
+    #[test]
+    fn test_aggregation_avg() {
+        let values = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let result = AggregationType::Avg.aggregate(&values);
+        assert!((result - 3.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_aggregation_sum() {
+        let values = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let result = AggregationType::Sum.aggregate(&values);
+        assert!((result - 15.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_aggregation_min_max() {
+        let values = vec![3.0, 1.0, 4.0, 1.5, 9.0, 2.6];
+        assert!((AggregationType::Min.aggregate(&values) - 1.0).abs() < 0.001);
+        assert!((AggregationType::Max.aggregate(&values) - 9.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_aggregation_range() {
+        let values = vec![3.0, 1.0, 4.0, 1.5, 9.0, 2.6];
+        let result = AggregationType::Range.aggregate(&values);
+        assert!((result - 8.0).abs() < 0.001); // 9.0 - 1.0
+    }
+
+    #[test]
+    fn test_aggregation_count() {
+        let values = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let result = AggregationType::Count.aggregate(&values);
+        assert!((result - 5.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_aggregation_first_last() {
+        let values = vec![10.0, 20.0, 30.0, 40.0];
+        assert!((AggregationType::First.aggregate(&values) - 10.0).abs() < 0.001);
+        assert!((AggregationType::Last.aggregate(&values) - 40.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_aggregation_std_var() {
+        // For values [2, 4, 4, 4, 5, 5, 7, 9], mean=5, variance=4, std=2
+        let values = vec![2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0];
+        let var = AggregationType::VarP.aggregate(&values);
+        let std = AggregationType::StdP.aggregate(&values);
+        assert!((var - 4.0).abs() < 0.001);
+        assert!((std - 2.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_aggregation_type_parsing() {
+        assert_eq!(AggregationType::from_str("AVG"), Some(AggregationType::Avg));
+        assert_eq!(AggregationType::from_str("avg"), Some(AggregationType::Avg));
+        assert_eq!(AggregationType::from_str("SUM"), Some(AggregationType::Sum));
+        assert_eq!(AggregationType::from_str("MIN"), Some(AggregationType::Min));
+        assert_eq!(AggregationType::from_str("MAX"), Some(AggregationType::Max));
+        assert_eq!(AggregationType::from_str("COUNT"), Some(AggregationType::Count));
+        assert_eq!(AggregationType::from_str("FIRST"), Some(AggregationType::First));
+        assert_eq!(AggregationType::from_str("LAST"), Some(AggregationType::Last));
+        assert_eq!(AggregationType::from_str("RANGE"), Some(AggregationType::Range));
+        assert_eq!(AggregationType::from_str("STD.P"), Some(AggregationType::StdP));
+        assert_eq!(AggregationType::from_str("VAR.P"), Some(AggregationType::VarP));
+        assert_eq!(AggregationType::from_str("INVALID"), None);
+    }
+
+    #[test]
+    fn test_aggregation_empty_values() {
+        let values: Vec<f64> = vec![];
+        // All aggregations should return 0 for empty input
+        assert!((AggregationType::Avg.aggregate(&values) - 0.0).abs() < 0.001);
+        assert!((AggregationType::Sum.aggregate(&values) - 0.0).abs() < 0.001);
+        assert!((AggregationType::Count.aggregate(&values) - 0.0).abs() < 0.001);
     }
 }
