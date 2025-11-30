@@ -73,7 +73,7 @@ tonic-prost-build = "0.14"
 
 [dev-dependencies]
 tokio-test = "0.4"
-criterion = "0.5"
+criterion = "0.7"
 tempfile = "3.8"
 
 [features]
