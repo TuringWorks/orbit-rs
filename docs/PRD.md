@@ -11,13 +11,14 @@
 1. [Executive Summary](#executive-summary)
 2. [Workspace Architecture](#workspace-architecture)
 3. [Module Reference](#module-reference)
-4. [Protocol Implementations](#protocol-implementations)
-5. [Storage Architecture](#storage-architecture)
-6. [AI-Native Subsystems](#ai-native-subsystems)
-7. [Feature Status Matrix](#feature-status-matrix)
-8. [Development Guidelines](#development-guidelines)
-9. [Document Maintenance](#document-maintenance)
-10. [Roadmap](#roadmap)
+4. [Client SDKs & Developer Tools](#client-sdks--developer-tools)
+5. [Protocol Implementations](#protocol-implementations)
+6. [Storage Architecture](#storage-architecture)
+7. [AI-Native Subsystems](#ai-native-subsystems)
+8. [Feature Status Matrix](#feature-status-matrix)
+9. [Development Guidelines](#development-guidelines)
+10. [Document Maintenance](#document-maintenance)
+11. [Roadmap](#roadmap)
 
 ---
 
@@ -49,7 +50,7 @@
 
 ```
 orbit-rs/
-├── orbit/                           # Main source code
+├── orbit/                           # Main source code (Rust workspace)
 │   ├── server/                      # Main server binary (orbit-server)
 │   ├── client/                      # Client library (OrbitClient)
 │   ├── shared/                      # Shared types, traits, clustering
@@ -64,6 +65,8 @@ orbit-rs/
 │   ├── client-spring/               # Spring framework integration
 │   ├── server-etcd/                 # etcd integration
 │   └── server-prometheus/           # Prometheus metrics
+├── orbit-python-client/             # Python SDK (non-Rust)
+├── orbit-vscode-extension/          # VS Code extension (TypeScript)
 ├── config/                          # Configuration files
 ├── scripts/                         # Development scripts
 ├── docs/                            # Documentation (258 files)
@@ -395,6 +398,103 @@ orbit/proto/
 └── proto/                           # .proto files
     ├── orbit.proto                  # Core messages
     └── services.proto               # gRPC services
+```
+
+---
+
+## Client SDKs & Developer Tools
+
+### orbit-python-client (Python SDK)
+
+**Path**: `orbit-python-client/`
+**Language**: Python
+**Purpose**: Python client library for Orbit-RS
+
+#### Directory Structure
+
+```
+orbit-python-client/
+├── orbit_client/
+│   ├── __init__.py              # Package exports
+│   ├── client.py                # Main OrbitClient class
+│   └── protocols.py             # Protocol adapters
+├── examples/
+│   ├── postgres_example.py      # PostgreSQL usage
+│   ├── redis_example.py         # Redis usage
+│   ├── cypher_example.py        # Graph query usage
+│   └── multi_protocol_example.py # Multi-protocol demo
+├── pyproject.toml               # Package configuration
+└── README.md                    # Usage documentation
+```
+
+#### Features
+
+- PostgreSQL, MySQL, Redis, CQL protocol support
+- Async and sync APIs
+- Connection pooling
+- Multi-protocol transactions
+
+#### Installation
+
+```bash
+cd orbit-python-client
+pip install -e .
+```
+
+### orbit-vscode-extension (VS Code Extension)
+
+**Path**: `orbit-vscode-extension/`
+**Language**: TypeScript
+**Purpose**: VS Code extension for Orbit-RS development
+
+#### Directory Structure
+
+```
+orbit-vscode-extension/
+├── src/
+│   ├── extension.ts             # Extension entry point
+│   ├── connectionManager.ts     # Connection management
+│   ├── queryExecutor.ts         # Query execution
+│   ├── connectionsView.ts       # Connections panel
+│   ├── resultsView.ts           # Query results view
+│   ├── schemaBrowser.ts         # Schema browser
+│   └── connections/             # Protocol-specific connections
+│       ├── postgres.ts          # PostgreSQL connection
+│       ├── mysql.ts             # MySQL connection
+│       ├── redis.ts             # Redis connection
+│       ├── cql.ts               # CQL connection
+│       ├── cypher.ts            # Cypher connection
+│       ├── aql.ts               # AQL connection
+│       └── mcp.ts               # MCP connection
+├── syntaxes/
+│   ├── orbitql.tmLanguage.json  # OrbitQL syntax highlighting
+│   ├── cypher.tmLanguage.json   # Cypher syntax highlighting
+│   └── aql.tmLanguage.json      # AQL syntax highlighting
+├── snippets/
+│   ├── orbitql.json             # OrbitQL code snippets
+│   ├── cypher.json              # Cypher code snippets
+│   ├── aql.json                 # AQL code snippets
+│   └── sql.json                 # SQL code snippets
+├── package.json                 # Extension manifest
+└── tsconfig.json                # TypeScript configuration
+```
+
+#### Features
+
+- Syntax highlighting for OrbitQL, Cypher, AQL
+- Code snippets for all query languages
+- Multi-protocol connection management
+- Query execution and result viewing
+- Schema browser
+- Language configuration for all supported protocols
+
+#### Development
+
+```bash
+cd orbit-vscode-extension
+npm install
+npm run compile
+# Press F5 in VS Code to launch extension
 ```
 
 ---

@@ -56,10 +56,9 @@ orbit-rs/
 │   ├── client-spring/       # Spring framework integration
 │   ├── server-etcd/         # etcd integration
 │   └── server-prometheus/   # Prometheus metrics
+├── orbit-python-client/      # Python SDK (non-Rust)
+├── orbit-vscode-extension/   # VS Code extension (TypeScript)
 ├── config/                   # Configuration files
-│   ├── orbit-server.toml    # Production config
-│   ├── orbit-server-example.toml  # Example with all options
-│   └── deny.toml            # Dependency auditing
 ├── docs/                     # Documentation (258 markdown files)
 ├── tests/                    # Integration tests (Python + BDD)
 ├── benchmarks/               # Performance benchmarks (excluded from workspace)
