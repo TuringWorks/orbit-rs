@@ -1,10 +1,10 @@
 ---
 layout: default
-title: Virtual Actor State Persistence and Activation in Orbit-RS
-category: documentation
+title: "Virtual Actor Persistence"
+subtitle: "State Persistence and Activation in Orbit-RS"
+category: "architecture"
+permalink: /virtual-actor-persistence/
 ---
-
-# Virtual Actor State Persistence and Activation in Orbit-RS
 
 ## Overview
 
