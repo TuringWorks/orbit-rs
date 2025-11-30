@@ -60,6 +60,52 @@ Quick start for Redis-compatible server only.
 
 Starts orbit-server with development mode, focusing on Redis (port 6379).
 
+### Cluster Testing
+
+#### start-cluster.sh
+
+Start a multi-node local cluster for integration and BDD testing.
+
+```bash
+./scripts/start-cluster.sh              # Start 3-node cluster (default)
+./scripts/start-cluster.sh 5            # Start 5-node cluster
+./scripts/start-cluster.sh --stop       # Stop running cluster
+./scripts/start-cluster.sh --status     # Show cluster status
+./scripts/start-cluster.sh --logs 1     # Tail logs for node 1
+./scripts/start-cluster.sh --clean      # Stop and clean all data
+./scripts/start-cluster.sh --help       # Show all options
+```
+
+**Port Allocation (per node):**
+
+| Node | Redis | PostgreSQL | MySQL | CQL  | HTTP | gRPC  | Metrics |
+|------|-------|------------|-------|------|------|-------|---------|
+| 1    | 6379  | 5432       | 3306  | 9042 | 8080 | 50051 | 9090    |
+| 2    | 6380  | 5433       | 3307  | 9043 | 8081 | 50052 | 9091    |
+| 3    | 6381  | 5434       | 3308  | 9044 | 8082 | 50053 | 9092    |
+| N    | +N-1  | +N-1       | +N-1  | +N-1 | +N-1 | +N-1  | +N-1    |
+
+**Cluster Data:**
+- Data directory: `./cluster-data/`
+- Logs: `./cluster-data/logs/`
+- PIDs: `./cluster-data/pids/`
+
+**Usage with Integration Tests:**
+
+```bash
+# 1. Start the cluster
+./scripts/start-cluster.sh
+
+# 2. Run integration tests against the cluster
+python3 tests/run_integration_tests.py --host localhost --resp-port 6379
+
+# 3. Run BDD tests
+cd tests && behave
+
+# 4. Stop the cluster when done
+./scripts/start-cluster.sh --stop
+```
+
 ### CI/CD
 
 #### run-ci.sh

@@ -235,3 +235,6 @@ perf.data
 # Coverage files
 *.profraw
 target/coverage/
+
+# Cluster testing data
+cluster-data/
