@@ -306,7 +306,252 @@ class OrbitClient:
         if self._protocol != Protocol.REDIS:
             raise ValueError("keys() is only available for Redis protocol")
         return self._protocol_client.keys(pattern)
-    
+
+    # Time Series convenience methods (Redis TimeSeries compatible)
+
+    def ts_create(
+        self,
+        key: str,
+        retention_ms: Optional[int] = None,
+        labels: Optional[Dict[str, str]] = None,
+        duplicate_policy: Optional[str] = None,
+    ) -> bool:
+        """
+        Create a time series key (Redis only).
+
+        Args:
+            key: Time series key name
+            retention_ms: Data retention in milliseconds (0 = no expiration)
+            labels: Key-value labels for filtering
+            duplicate_policy: Policy for duplicate timestamps (BLOCK, FIRST, LAST, MIN, MAX, SUM)
+
+        Example:
+            >>> client.ts_create("sensor:temp", retention_ms=86400000, labels={"location": "room1"})
+        """
+        if self._protocol != Protocol.REDIS:
+            raise ValueError("ts_create() is only available for Redis protocol")
+
+        args = [key]
+        if retention_ms is not None:
+            args.extend(["RETENTION", str(retention_ms)])
+        if duplicate_policy:
+            args.extend(["DUPLICATE_POLICY", duplicate_policy])
+        if labels:
+            args.append("LABELS")
+            for k, v in labels.items():
+                args.extend([k, v])
+
+        return self._protocol_client.execute("TS.CREATE", *args)
+
+    def ts_add(
+        self,
+        key: str,
+        timestamp: Union[int, str],
+        value: float,
+        retention_ms: Optional[int] = None,
+        labels: Optional[Dict[str, str]] = None,
+    ) -> int:
+        """
+        Add a sample to a time series (Redis only).
+
+        Args:
+            key: Time series key name
+            timestamp: Unix timestamp in ms, or "*" for auto-timestamp
+            value: Sample value
+            retention_ms: Optional retention override
+            labels: Optional labels (creates key if not exists)
+
+        Returns:
+            Timestamp of the added sample
+
+        Example:
+            >>> client.ts_add("sensor:temp", "*", 23.5)
+            >>> client.ts_add("sensor:temp", 1609459200000, 22.1)
+        """
+        if self._protocol != Protocol.REDIS:
+            raise ValueError("ts_add() is only available for Redis protocol")
+
+        args = [key, str(timestamp), str(value)]
+        if retention_ms is not None:
+            args.extend(["RETENTION", str(retention_ms)])
+        if labels:
+            args.append("LABELS")
+            for k, v in labels.items():
+                args.extend([k, v])
+
+        return self._protocol_client.execute("TS.ADD", *args)
+
+    def ts_get(self, key: str) -> Optional[tuple]:
+        """
+        Get the last sample from a time series (Redis only).
+
+        Args:
+            key: Time series key name
+
+        Returns:
+            Tuple of (timestamp, value) or None if empty
+
+        Example:
+            >>> ts, value = client.ts_get("sensor:temp")
+        """
+        if self._protocol != Protocol.REDIS:
+            raise ValueError("ts_get() is only available for Redis protocol")
+        return self._protocol_client.execute("TS.GET", key)
+
+    def ts_range(
+        self,
+        key: str,
+        from_ts: Union[int, str],
+        to_ts: Union[int, str],
+        count: Optional[int] = None,
+        aggregation: Optional[str] = None,
+        bucket_duration_ms: Optional[int] = None,
+    ) -> List[tuple]:
+        """
+        Query a range of samples from a time series (Redis only).
+
+        Args:
+            key: Time series key name
+            from_ts: Start timestamp (or "-" for minimum)
+            to_ts: End timestamp (or "+" for maximum)
+            count: Maximum number of samples to return
+            aggregation: Aggregation type (AVG, SUM, MIN, MAX, RANGE, COUNT, FIRST, LAST, STD.P, VAR.P)
+            bucket_duration_ms: Aggregation bucket size in milliseconds
+
+        Returns:
+            List of (timestamp, value) tuples
+
+        Example:
+            >>> samples = client.ts_range("sensor:temp", "-", "+")
+            >>> samples = client.ts_range("sensor:temp", 0, 1000000, aggregation="AVG", bucket_duration_ms=60000)
+        """
+        if self._protocol != Protocol.REDIS:
+            raise ValueError("ts_range() is only available for Redis protocol")
+
+        args = [key, str(from_ts), str(to_ts)]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+        if aggregation and bucket_duration_ms:
+            args.extend(["AGGREGATION", aggregation, str(bucket_duration_ms)])
+
+        return self._protocol_client.execute("TS.RANGE", *args)
+
+    def ts_mrange(
+        self,
+        from_ts: Union[int, str],
+        to_ts: Union[int, str],
+        filters: List[str],
+        count: Optional[int] = None,
+        aggregation: Optional[str] = None,
+        bucket_duration_ms: Optional[int] = None,
+    ) -> List[Dict]:
+        """
+        Query a range from multiple time series by filter (Redis only).
+
+        Args:
+            from_ts: Start timestamp (or "-" for minimum)
+            to_ts: End timestamp (or "+" for maximum)
+            filters: List of label filters (e.g., ["location=room1", "sensor=temp"])
+            count: Maximum number of samples per series
+            aggregation: Aggregation type
+            bucket_duration_ms: Aggregation bucket size
+
+        Returns:
+            List of series with their samples
+
+        Example:
+            >>> results = client.ts_mrange("-", "+", ["location=room1"])
+        """
+        if self._protocol != Protocol.REDIS:
+            raise ValueError("ts_mrange() is only available for Redis protocol")
+
+        args = [str(from_ts), str(to_ts)]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+        if aggregation and bucket_duration_ms:
+            args.extend(["AGGREGATION", aggregation, str(bucket_duration_ms)])
+        args.append("FILTER")
+        args.extend(filters)
+
+        return self._protocol_client.execute("TS.MRANGE", *args)
+
+    def ts_info(self, key: str) -> Dict[str, Any]:
+        """
+        Get metadata about a time series (Redis only).
+
+        Args:
+            key: Time series key name
+
+        Returns:
+            Dictionary with time series metadata
+
+        Example:
+            >>> info = client.ts_info("sensor:temp")
+            >>> print(info["totalSamples"])
+        """
+        if self._protocol != Protocol.REDIS:
+            raise ValueError("ts_info() is only available for Redis protocol")
+        return self._protocol_client.execute("TS.INFO", key)
+
+    def ts_del(self, key: str, from_ts: Union[int, str], to_ts: Union[int, str]) -> int:
+        """
+        Delete samples from a time series in a range (Redis only).
+
+        Args:
+            key: Time series key name
+            from_ts: Start timestamp
+            to_ts: End timestamp
+
+        Returns:
+            Number of samples deleted
+
+        Example:
+            >>> deleted = client.ts_del("sensor:temp", 0, 1000000)
+        """
+        if self._protocol != Protocol.REDIS:
+            raise ValueError("ts_del() is only available for Redis protocol")
+        return self._protocol_client.execute("TS.DEL", key, str(from_ts), str(to_ts))
+
+    def ts_createrule(
+        self,
+        source_key: str,
+        dest_key: str,
+        aggregation: str,
+        bucket_duration_ms: int,
+    ) -> bool:
+        """
+        Create a compaction rule (Redis only).
+
+        Args:
+            source_key: Source time series key
+            dest_key: Destination time series key
+            aggregation: Aggregation type (AVG, SUM, MIN, MAX, etc.)
+            bucket_duration_ms: Aggregation bucket size
+
+        Example:
+            >>> client.ts_createrule("sensor:temp", "sensor:temp:hourly", "AVG", 3600000)
+        """
+        if self._protocol != Protocol.REDIS:
+            raise ValueError("ts_createrule() is only available for Redis protocol")
+        return self._protocol_client.execute(
+            "TS.CREATERULE", source_key, dest_key, "AGGREGATION", aggregation, str(bucket_duration_ms)
+        )
+
+    def ts_deleterule(self, source_key: str, dest_key: str) -> bool:
+        """
+        Delete a compaction rule (Redis only).
+
+        Args:
+            source_key: Source time series key
+            dest_key: Destination time series key
+
+        Example:
+            >>> client.ts_deleterule("sensor:temp", "sensor:temp:hourly")
+        """
+        if self._protocol != Protocol.REDIS:
+            raise ValueError("ts_deleterule() is only available for Redis protocol")
+        return self._protocol_client.execute("TS.DELETERULE", source_key, dest_key)
+
     @property
     def protocol(self) -> Protocol:
         """Get current protocol."""

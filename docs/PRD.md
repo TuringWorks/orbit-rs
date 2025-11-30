@@ -422,7 +422,8 @@ orbit-python-client/
 │   ├── postgres_example.py      # PostgreSQL usage
 │   ├── redis_example.py         # Redis usage
 │   ├── cypher_example.py        # Graph query usage
-│   └── multi_protocol_example.py # Multi-protocol demo
+│   ├── multi_protocol_example.py # Multi-protocol demo
+│   └── timeseries_example.py    # Time series usage
 ├── pyproject.toml               # Package configuration
 └── README.md                    # Usage documentation
 ```
@@ -433,6 +434,15 @@ orbit-python-client/
 - Async and sync APIs
 - Connection pooling
 - Multi-protocol transactions
+- **Time Series Methods** (Redis TimeSeries compatible):
+  - `ts_create()` - Create time series with retention and labels
+  - `ts_add()` - Add samples with auto-timestamp support
+  - `ts_get()` - Get latest sample
+  - `ts_range()` - Query range with aggregation
+  - `ts_mrange()` - Multi-key range query with filters
+  - `ts_info()` - Get time series metadata
+  - `ts_del()` - Delete samples in range
+  - `ts_createrule()` / `ts_deleterule()` - Compaction rules
 
 #### Installation
 
