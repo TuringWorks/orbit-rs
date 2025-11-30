@@ -108,23 +108,19 @@ cd tests && behave
 
 #### start-cluster-lb.sh
 
-Lightweight load balancer for cluster testing. Listens on default ports and distributes to cluster nodes.
+Lightweight load balancer for cluster testing using the built-in `orbit-lb` Rust binary.
+**No external dependencies required!**
 
 ```bash
 ./scripts/start-cluster-lb.sh              # Start LB for 3-node cluster
+./scripts/start-cluster-lb.sh 5            # Start LB for 5-node cluster
 ./scripts/start-cluster-lb.sh --stop       # Stop load balancer
 ./scripts/start-cluster-lb.sh --status     # Show LB status
+./scripts/start-cluster-lb.sh --logs       # Tail LB logs
 ```
 
-**Requires:** HAProxy (recommended) or socat
-
-```bash
-# macOS
-brew install haproxy
-
-# Ubuntu
-apt install haproxy
-```
+The load balancer is built from `orbit/server/src/bin/orbit-lb.rs` - a simple ~200 line
+round-robin TCP proxy. It's automatically built when you run the script.
 
 **Usage with Load Balancer:**
 
