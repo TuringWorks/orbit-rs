@@ -739,13 +739,19 @@ mod tests {
         assert_eq!(stats["label_count"], 2);
     }
 
-    #[test]
-    fn test_parse_node_pattern() {
+    #[tokio::test]
+    async fn test_parse_node_pattern() {
+        let client_config = orbit_client::OrbitClientConfig {
+            namespace: "test".to_string(),
+            ..Default::default()
+        };
+        let orbit_client = orbit_client::OrbitClient::new_offline(client_config)
+            .await
+            .unwrap();
+
         let handler = GraphCommands {
             base: BaseCommandHandler::new(
-                Arc::new(orbit_client::OrbitClient::new(
-                    "http://127.0.0.1:50051".to_string(),
-                )),
+                Arc::new(orbit_client),
                 Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new()),
             ),
         };
