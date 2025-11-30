@@ -1100,4 +1100,220 @@ mod tests {
         assert!((AggregationType::Sum.aggregate(&values) - 0.0).abs() < 0.001);
         assert!((AggregationType::Count.aggregate(&values) - 0.0).abs() < 0.001);
     }
+
+    #[test]
+    fn test_compaction_rule_creation() {
+        let rule = CompactionRule {
+            source_key: "temperature:raw".to_string(),
+            dest_key: "temperature:hourly".to_string(),
+            aggregation: AggregationType::Avg,
+            bucket_duration_ms: 3600000,
+        };
+
+        assert_eq!(rule.source_key, "temperature:raw");
+        assert_eq!(rule.dest_key, "temperature:hourly");
+        assert_eq!(rule.aggregation, AggregationType::Avg);
+        assert_eq!(rule.bucket_duration_ms, 3600000);
+    }
+
+    #[test]
+    fn test_aggregation_bucketing() {
+        // Test the bucketing logic used in TS.RANGE with AGGREGATION
+        let bucket_ms: i64 = 1000; // 1 second buckets
+
+        // Samples at various timestamps
+        let samples = vec![
+            (100, 10.0),  // bucket 0
+            (500, 20.0),  // bucket 0
+            (1100, 30.0), // bucket 1000
+            (1500, 40.0), // bucket 1000
+            (2100, 50.0), // bucket 2000
+        ];
+
+        // Group into buckets
+        let mut buckets: BTreeMap<i64, Vec<f64>> = BTreeMap::new();
+        for (ts, val) in &samples {
+            let bucket_start = (ts / bucket_ms) * bucket_ms;
+            buckets.entry(bucket_start).or_default().push(*val);
+        }
+
+        assert_eq!(buckets.len(), 3);
+        assert_eq!(buckets.get(&0).unwrap(), &vec![10.0, 20.0]);
+        assert_eq!(buckets.get(&1000).unwrap(), &vec![30.0, 40.0]);
+        assert_eq!(buckets.get(&2000).unwrap(), &vec![50.0]);
+
+        // Test aggregation on buckets
+        let bucket_0_avg = AggregationType::Avg.aggregate(buckets.get(&0).unwrap());
+        assert!((bucket_0_avg - 15.0).abs() < 0.001);
+
+        let bucket_1000_avg = AggregationType::Avg.aggregate(buckets.get(&1000).unwrap());
+        assert!((bucket_1000_avg - 35.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_time_series_range_with_aggregation_logic() {
+        // Test the full range + aggregation flow
+        let config = TimeSeriesConfig {
+            name: "test".to_string(),
+            retention_ms: 0,
+            labels: HashMap::new(),
+            duplicate_policy: DuplicatePolicy::Last,
+        };
+        let mut ts = TimeSeries::new(config);
+
+        // Add samples across multiple hour buckets (3600000ms = 1 hour)
+        // Hour 0: 0-3599999
+        ts.add_sample(0, 10.0).unwrap();
+        ts.add_sample(1800000, 20.0).unwrap(); // 30 min
+        // Hour 1: 3600000-7199999
+        ts.add_sample(3600000, 30.0).unwrap();
+        ts.add_sample(5400000, 40.0).unwrap(); // 1.5 hours
+        // Hour 2: 7200000-10799999
+        ts.add_sample(7200000, 50.0).unwrap();
+
+        let samples = ts.range(0, 10000000);
+        assert_eq!(samples.len(), 5);
+
+        // Aggregate with 1-hour buckets
+        let bucket_ms: i64 = 3600000;
+        let mut buckets: BTreeMap<i64, Vec<f64>> = BTreeMap::new();
+        for dp in &samples {
+            let bucket_start = (dp.timestamp / bucket_ms) * bucket_ms;
+            buckets.entry(bucket_start).or_default().push(dp.value);
+        }
+
+        assert_eq!(buckets.len(), 3);
+
+        // Hour 0 avg: (10 + 20) / 2 = 15
+        let hour0_avg = AggregationType::Avg.aggregate(buckets.get(&0).unwrap());
+        assert!((hour0_avg - 15.0).abs() < 0.001);
+
+        // Hour 1 avg: (30 + 40) / 2 = 35
+        let hour1_avg = AggregationType::Avg.aggregate(buckets.get(&3600000).unwrap());
+        assert!((hour1_avg - 35.0).abs() < 0.001);
+
+        // Hour 2 avg: 50
+        let hour2_avg = AggregationType::Avg.aggregate(buckets.get(&7200000).unwrap());
+        assert!((hour2_avg - 50.0).abs() < 0.001);
+    }
+
+    #[tokio::test]
+    async fn test_ts_create_and_add_via_storage() {
+        // Test time series storage directly
+        let ts_storage = get_time_series();
+        let mut ts_guard = ts_storage.write().await;
+
+        let key = format!("test_ts_{}", std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos());
+
+        let config = TimeSeriesConfig {
+            name: key.clone(),
+            retention_ms: 86400000, // 1 day
+            labels: {
+                let mut labels = HashMap::new();
+                labels.insert("location".to_string(), "office".to_string());
+                labels.insert("sensor".to_string(), "temperature".to_string());
+                labels
+            },
+            duplicate_policy: DuplicatePolicy::Last,
+        };
+
+        ts_guard.insert(key.clone(), TimeSeries::new(config));
+        assert!(ts_guard.contains_key(&key));
+
+        let ts = ts_guard.get_mut(&key).unwrap();
+        ts.add_sample(1000, 23.5).unwrap();
+        ts.add_sample(2000, 24.0).unwrap();
+        ts.add_sample(3000, 23.8).unwrap();
+
+        assert_eq!(ts.samples.len(), 3);
+
+        let last = ts.last().unwrap();
+        assert_eq!(last.timestamp, 3000);
+        assert!((last.value - 23.8).abs() < 0.001);
+
+        // Cleanup
+        ts_guard.remove(&key);
+    }
+
+    #[tokio::test]
+    async fn test_compaction_rules_storage() {
+        let rules_storage = get_compaction_rules();
+        let mut rules_guard = rules_storage.write().await;
+
+        let initial_count = rules_guard.len();
+
+        // Add a test rule
+        let test_rule = CompactionRule {
+            source_key: "test_source_unique".to_string(),
+            dest_key: "test_dest_unique".to_string(),
+            aggregation: AggregationType::Avg,
+            bucket_duration_ms: 3600000,
+        };
+
+        rules_guard.push(test_rule);
+        assert_eq!(rules_guard.len(), initial_count + 1);
+
+        // Find the rule
+        let found = rules_guard.iter().find(|r| {
+            r.source_key == "test_source_unique" && r.dest_key == "test_dest_unique"
+        });
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().aggregation, AggregationType::Avg);
+
+        // Remove the rule
+        rules_guard.retain(|r| {
+            !(r.source_key == "test_source_unique" && r.dest_key == "test_dest_unique")
+        });
+        assert_eq!(rules_guard.len(), initial_count);
+    }
+
+    #[test]
+    fn test_time_series_delete_range() {
+        let config = TimeSeriesConfig {
+            name: "test".to_string(),
+            retention_ms: 0,
+            labels: HashMap::new(),
+            duplicate_policy: DuplicatePolicy::Last,
+        };
+        let mut ts = TimeSeries::new(config);
+
+        ts.add_sample(1000, 1.0).unwrap();
+        ts.add_sample(2000, 2.0).unwrap();
+        ts.add_sample(3000, 3.0).unwrap();
+        ts.add_sample(4000, 4.0).unwrap();
+        ts.add_sample(5000, 5.0).unwrap();
+
+        assert_eq!(ts.samples.len(), 5);
+
+        // Delete samples between 2000 and 4000 (inclusive)
+        let deleted = ts.delete_range(2000, 4000);
+        assert_eq!(deleted, 3); // 2000, 3000, 4000
+
+        assert_eq!(ts.samples.len(), 2);
+        assert!(ts.samples.contains_key(&1000));
+        assert!(ts.samples.contains_key(&5000));
+        assert!(!ts.samples.contains_key(&3000));
+    }
+
+    #[test]
+    fn test_time_series_with_labels() {
+        let mut labels = HashMap::new();
+        labels.insert("location".to_string(), "office".to_string());
+        labels.insert("floor".to_string(), "3".to_string());
+
+        let config = TimeSeriesConfig {
+            name: "temp:office:3".to_string(),
+            retention_ms: 0,
+            labels: labels.clone(),
+            duplicate_policy: DuplicatePolicy::Last,
+        };
+        let ts = TimeSeries::new(config);
+
+        assert_eq!(ts.config.labels.get("location"), Some(&"office".to_string()));
+        assert_eq!(ts.config.labels.get("floor"), Some(&"3".to_string()));
+        assert_eq!(ts.config.labels.len(), 2);
+    }
 }
