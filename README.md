@@ -66,8 +66,14 @@ git clone https://github.com/TuringWorks/orbit-rs.git
 cd orbit-rs
 cargo build --release
 
-# Start multi-protocol server with RocksDB persistence
-cargo run --package orbit-server --example integrated-server
+# Start multi-protocol server
+cargo run --bin orbit-server
+
+# Or with custom configuration
+cargo run --bin orbit-server -- --config ./config/orbit-server.toml
+
+# Or use the startup script
+./scripts/start-multiprotocol-server.sh
 
 # All protocols now active with persistent storage:
 # PostgreSQL: localhost:5432 (persisted with RocksDB)
@@ -76,17 +82,6 @@ cargo run --package orbit-server --example integrated-server
 # Redis: localhost:6379 (persisted with RocksDB)
 # REST API: localhost:8080
 # gRPC: localhost:50051
-# Data Directory: ./orbit_integrated_data (RocksDB LSM-tree files)
-```
-
-**Or use the main server binary:**
-
-```bash
-# Start all protocols with default configuration
-cargo run --bin orbit-server
-
-# Or with custom configuration
-cargo run --bin orbit-server -- --config ./config/orbit-server.toml
 ```
 
 ### **Connect with Standard Clients - Data Persists Across Restarts!**
@@ -407,12 +402,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | **Heterogeneous Compute** | Active | 75% | Yes | 81 tests | GPU backends (Metal, Vulkan, CUDA, ROCm), CPU SIMD, vector/spatial/timeseries ops |
 | **Vector Operations (pgvector)** | Complete | 90% | Yes | 25+ tests | Full pgvector compatibility with HNSW/IVFFlat indexes |
 | **Machine Learning (orbit-ml)** | Active | 50% | No | 52 tests | Neural networks, transformers, streaming inference, SQL functions |
-| **Time Series** | Active | 60% | Yes | 44 tests | Compression (Delta, Gorilla), aggregation (EWMA, rate), partitioning, PostgreSQL/Redis compat |
+| **Time Series** | Active | 70% | Yes | 36 tests | TS.* commands with AGGREGATION, CREATERULE support, compression, PostgreSQL/Redis compat |
 | **Graph Database** | Active | 40% | No | 38 tests | Cypher queries, CALL procedures, graph algorithms (PageRank, BFS, DFS, centrality) |
 
 **Legend:** Complete | Active Development | Experimental | Planned
 
 **[View Full Roadmap](docs/roadmap.md)** | **[GitHub Project](https://github.com/orgs/TuringWorks/projects/1)**
+
+## Development Scripts
+
+Utility scripts for development are available in the `scripts/` directory:
+
+```bash
+# Run tests
+./scripts/run-tests.sh              # All workspace tests
+./scripts/run-tests.sh server       # orbit-server tests only
+./scripts/run-tests.sh time-series  # Time series tests (21 tests)
+./scripts/run-tests.sh ignored      # Slow integration tests
+./scripts/run-tests.sh help         # Show all options
+
+# Start server
+./scripts/start-multiprotocol-server.sh           # Full multi-protocol server
+./scripts/start-multiprotocol-server.sh --prod    # Production mode
+./scripts/start-orbit-redis.sh                    # Redis-focused startup
+
+# Pre-commit checks
+./scripts/pre-commit.sh             # Format, lint, test, build
+
+# CI/CD
+./scripts/run-ci.sh                 # Manual CI pipeline
+```
+
+**[Full scripts documentation](scripts/README.md)**
 
 ## Contributing
 
@@ -421,7 +442,7 @@ We welcome contributions! See our **[Development Guide](DEVELOPMENT.md)** for se
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-new-feature`)
 3. Make your changes and add tests
-4. Run tests (`cargo test --workspace`)
+4. Run pre-commit checks (`./scripts/pre-commit.sh`)
 5. Submit a pull request
 
 **Priority areas for contributors:**
