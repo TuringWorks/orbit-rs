@@ -3,7 +3,8 @@
 //! Provides GPU compute acceleration for database operations using Apple's Metal framework.
 //! This module is only available on macOS and iOS platforms.
 
-#![cfg(target_os = "macos")]
+// Allow too many arguments for GPU compute functions that need many buffers/parameters
+#![allow(clippy::too_many_arguments)]
 
 use crate::errors::ComputeError;
 use crate::gpu_backend::{FilterOp, GpuBackendType, GpuDevice};

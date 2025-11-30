@@ -265,7 +265,7 @@ impl RlsEngine {
 
         // All restrictive policies must pass (AND)
         for policy in &restrictive {
-            if !self.evaluate_expression(&policy.using_expression, row, subject)? {
+            if !Self::evaluate_expression(&policy.using_expression, row, subject)? {
                 return Ok(false);
             }
         }
@@ -273,8 +273,7 @@ impl RlsEngine {
         // At least one permissive policy must pass (OR)
         if !permissive.is_empty() {
             let any_permissive_pass = permissive.iter().any(|p| {
-                self.evaluate_expression(&p.using_expression, row, subject)
-                    .unwrap_or(false)
+                Self::evaluate_expression(&p.using_expression, row, subject).unwrap_or(false)
             });
 
             if !any_permissive_pass {
@@ -352,7 +351,7 @@ impl RlsEngine {
 
             // Check the CHECK expression if present
             if let Some(ref check_expr) = policy.check_expression {
-                if !self.evaluate_expression(check_expr, row, subject)? {
+                if !Self::evaluate_expression(check_expr, row, subject)? {
                     return Ok(false);
                 }
             }
@@ -363,7 +362,6 @@ impl RlsEngine {
 
     /// Evaluate an RLS expression against a row
     fn evaluate_expression(
-        &self,
         expr: &RlsExpression,
         row: &HashMap<String, serde_json::Value>,
         subject: &SecuritySubject,
@@ -430,7 +428,7 @@ impl RlsEngine {
 
             RlsExpression::And(expressions) => {
                 for e in expressions {
-                    if !self.evaluate_expression(e, row, subject)? {
+                    if !Self::evaluate_expression(e, row, subject)? {
                         return Ok(false);
                     }
                 }
@@ -439,14 +437,14 @@ impl RlsEngine {
 
             RlsExpression::Or(expressions) => {
                 for e in expressions {
-                    if self.evaluate_expression(e, row, subject)? {
+                    if Self::evaluate_expression(e, row, subject)? {
                         return Ok(true);
                     }
                 }
                 Ok(false)
             }
 
-            RlsExpression::Not(inner) => Ok(!self.evaluate_expression(inner, row, subject)?),
+            RlsExpression::Not(inner) => Ok(!Self::evaluate_expression(inner, row, subject)?),
 
             RlsExpression::Custom { expression: _ } => {
                 // Custom expressions would need a full expression parser

@@ -727,13 +727,13 @@ impl QueryExecutor {
     ) -> Option<serde_json::Value> {
         match expr {
             Expression::Identifier(name) => row.get(name).cloned(),
-            Expression::Literal(lit) => Some(self.query_value_to_json(lit)),
+            Expression::Literal(lit) => Some(Self::query_value_to_json(lit)),
             _ => None, // Complex expressions not yet supported
         }
     }
 
     /// Convert a QueryValue to JSON value
-    fn query_value_to_json(&self, val: &QueryValue) -> serde_json::Value {
+    fn query_value_to_json(val: &QueryValue) -> serde_json::Value {
         use serde_json::json;
         match val {
             QueryValue::Integer(i) => json!(i),
@@ -743,13 +743,13 @@ impl QueryExecutor {
             QueryValue::Null => json!(null),
             QueryValue::Array(arr) => {
                 let values: Vec<serde_json::Value> =
-                    arr.iter().map(|v| self.query_value_to_json(v)).collect();
+                    arr.iter().map(Self::query_value_to_json).collect();
                 json!(values)
             }
             QueryValue::Object(map) => {
                 let obj: serde_json::Map<String, serde_json::Value> = map
                     .iter()
-                    .map(|(k, v)| (k.clone(), self.query_value_to_json(v)))
+                    .map(|(k, v)| (k.clone(), Self::query_value_to_json(v)))
                     .collect();
                 serde_json::Value::Object(obj)
             }

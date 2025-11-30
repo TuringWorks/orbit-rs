@@ -459,9 +459,7 @@ async fn test_detect_partitions_empty() {
 #[test]
 fn test_partition_detector_creation() {
     let _detector = PartitionDetector::new(Duration::from_millis(500), 3);
-
-    // Detector should be created successfully
-    assert!(true, "PartitionDetector created successfully");
+    // Test passes if creation doesn't panic
 }
 
 #[tokio::test]
@@ -475,10 +473,8 @@ async fn test_partition_detector_check_connectivity() {
 
     // The simulated implementation has 90% success rate
     // We just verify the method runs without error
-    assert!(
-        is_connected || !is_connected,
-        "Connectivity check completed"
-    );
+    // Use _ to explicitly ignore the result; the test passes if no panic occurred
+    let _ = is_connected;
 }
 
 #[tokio::test]
@@ -515,10 +511,8 @@ async fn test_partition_detector_multiple_attempts() {
     let is_connected = detector.check_connectivity(&target_node).await;
 
     // The test verifies the method handles multiple attempts correctly
-    assert!(
-        is_connected || !is_connected,
-        "Multiple attempt check completed"
-    );
+    // Use _ to explicitly ignore the result; the test passes if no panic occurred
+    let _ = is_connected;
 }
 
 // ============================================================================

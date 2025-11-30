@@ -4,6 +4,11 @@
 //! including BFS, DFS, shortest paths, and community detection. These operations
 //! are compute-bound and benefit significantly from parallel execution on GPUs.
 
+// Allow while_let_loop - the graph traversal loops have complex break conditions
+#![allow(clippy::while_let_loop)]
+// Allow needless_range_loop - index-based iteration is clearer for matrix operations
+#![allow(clippy::needless_range_loop)]
+
 use crate::errors::ComputeError;
 #[cfg(feature = "gpu-acceleration")]
 use crate::gpu::GPUAccelerationManager;

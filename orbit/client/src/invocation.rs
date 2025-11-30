@@ -90,8 +90,8 @@ impl InvocationSystem {
     ) -> OrbitResult<()> {
         if let Some(sender) = &self.outbound_sender {
             // Convert arguments to JSON string
-            let args_json = serde_json::to_string(&invocation.args)
-                .map_err(|e| OrbitError::SerializationError(e))?;
+            let args_json =
+                serde_json::to_string(&invocation.args).map_err(OrbitError::SerializationError)?;
 
             // Create invocation request
             let request = InvocationRequestProto {

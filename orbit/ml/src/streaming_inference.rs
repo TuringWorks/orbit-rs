@@ -343,6 +343,7 @@ impl StreamingInferencePipeline {
     }
 
     /// Process a batch of inference events
+    #[allow(clippy::too_many_arguments)]
     async fn process_batch(
         batch: &mut Vec<InferenceEvent>,
         config: &StreamingInferenceConfig,
@@ -735,6 +736,7 @@ pub struct WindowedInferenceAggregator {
     /// Aggregation function
     aggregation: WindowAggregation,
     /// Current window data
+    #[allow(clippy::type_complexity)]
     window_data: Arc<RwLock<VecDeque<(chrono::DateTime<chrono::Utc>, InferenceOutput)>>>,
 }
 

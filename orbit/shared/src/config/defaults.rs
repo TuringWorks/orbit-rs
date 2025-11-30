@@ -153,6 +153,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn test_default_sizes() {
         assert!(DEFAULT_MIN_CONNECTIONS < DEFAULT_MAX_CONNECTIONS);
         assert!(DEFAULT_MIN_BATCH_SIZE < DEFAULT_MAX_BATCH_SIZE);
@@ -160,6 +161,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn test_default_thresholds() {
         assert!(DEFAULT_CONFIDENCE_THRESHOLD > 0.0 && DEFAULT_CONFIDENCE_THRESHOLD <= 1.0);
         assert!(DEFAULT_SIMILARITY_THRESHOLD > 0.0 && DEFAULT_SIMILARITY_THRESHOLD <= 1.0);

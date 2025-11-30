@@ -302,7 +302,7 @@ impl TimeSeriesCompressor for DoubleDeltaCompressor {
             // Use smaller encoding for small delta-of-deltas
             if delta_of_delta == 0 {
                 output.push(0); // Single byte for zero delta-of-delta
-            } else if delta_of_delta >= -63 && delta_of_delta <= 64 {
+            } else if (-63..=64).contains(&delta_of_delta) {
                 // 1 byte: marker + 7-bit value
                 output.push(0x80 | ((delta_of_delta + 63) as u8 & 0x7F));
             } else {
@@ -455,9 +455,9 @@ impl TimeSeriesCompressor for GorillaCompressor {
                                 // Fits in previous block: marker + meaningful bits
                                 output.push(1);
                                 let meaningful_bits = 64 - prev_leading_zeros - prev_trailing_zeros;
-                                let meaningful = (xor >> prev_trailing_zeros) as u64;
+                                let meaningful = xor >> prev_trailing_zeros;
                                 // Write meaningful bits (up to 8 bytes)
-                                let bytes_needed = ((meaningful_bits + 7) / 8) as usize;
+                                let bytes_needed = meaningful_bits.div_ceil(8) as usize;
                                 output.extend_from_slice(&meaningful.to_le_bytes()[..bytes_needed]);
                             } else {
                                 // New block: marker + leading zeros + meaningful bits length + bits
@@ -465,8 +465,8 @@ impl TimeSeriesCompressor for GorillaCompressor {
                                 output.push(leading as u8);
                                 let meaningful_bits = 64 - leading - trailing;
                                 output.push(meaningful_bits as u8);
-                                let meaningful = (xor >> trailing) as u64;
-                                let bytes_needed = ((meaningful_bits + 7) / 8) as usize;
+                                let meaningful = xor >> trailing;
+                                let bytes_needed = meaningful_bits.div_ceil(8) as usize;
                                 output.extend_from_slice(&meaningful.to_le_bytes()[..bytes_needed]);
                                 prev_leading_zeros = leading;
                                 prev_trailing_zeros = trailing;
@@ -549,7 +549,7 @@ impl TimeSeriesCompressor for GorillaCompressor {
                             0 => prev_value_bits, // Same value
                             1 => {
                                 // Same block
-                                let bytes_needed = ((prev_meaningful_bits + 7) / 8) as usize;
+                                let bytes_needed = prev_meaningful_bits.div_ceil(8) as usize;
                                 if pos + bytes_needed > compressed_data.len() {
                                     return Err(anyhow::anyhow!("Unexpected end of data"));
                                 }
@@ -570,7 +570,7 @@ impl TimeSeriesCompressor for GorillaCompressor {
                                 let leading = compressed_data[pos] as u32;
                                 let meaningful_bits = compressed_data[pos + 1] as u32;
                                 pos += 2;
-                                let bytes_needed = ((meaningful_bits + 7) / 8) as usize;
+                                let bytes_needed = meaningful_bits.div_ceil(8) as usize;
                                 if pos + bytes_needed > compressed_data.len() {
                                     return Err(anyhow::anyhow!("Unexpected end of data"));
                                 }

@@ -333,8 +333,7 @@ mod tests {
         let orbit_result = ok_result.or_internal_error("test context");
         assert!(orbit_result.is_ok());
 
-        let err_result: Result<i32, std::io::Error> =
-            Err(std::io::Error::new(std::io::ErrorKind::Other, "test"));
+        let err_result: Result<i32, std::io::Error> = Err(std::io::Error::other("test"));
         let orbit_result = err_result.or_internal_error("test context");
         assert!(orbit_result.is_err());
     }
