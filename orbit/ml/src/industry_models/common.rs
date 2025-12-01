@@ -198,8 +198,8 @@ impl ModelRegistry {
     }
 
     /// Get a mutable reference to a model by name
-    pub fn get_mut(&mut self, name: &str) -> Option<&mut dyn IndustryModel> {
-        self.models.get_mut(name).map(|m| m.as_mut())
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut (dyn IndustryModel + '_)> {
+        self.models.get_mut(name).map(move |m| m.as_mut())
     }
 
     /// List all registered models
