@@ -7,33 +7,33 @@
 //!
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────────────────┐
-//! │                        TieredStorageBackend                              │
+//! │                        TieredStorageBackend                             │
 //! ├─────────────────────────────────────────────────────────────────────────┤
-//! │                                                                          │
+//! │                                                                         │
 //! │  ┌──────────────────────────────────────────────────────────────────┐   │
-//! │  │                        HOT TIER (Memory)                          │   │
-//! │  │  • LRU/LFU eviction policies                                      │   │
-//! │  │  • Write-through / Write-back cache                               │   │
-//! │  │  • Sub-millisecond latency                                        │   │
+//! │  │                        HOT TIER (Memory)                         │   │
+//! │  │  • LRU/LFU eviction policies                                     │   │
+//! │  │  • Write-through / Write-back cache                              │   │
+//! │  │  • Sub-millisecond latency                                       │   │
 //! │  └──────────────────────────────────────────────────────────────────┘   │
-//! │                              │                                           │
-//! │                              ▼ (promotion/demotion)                      │
+//! │                              │                                          │
+//! │                              ▼ (promotion/demotion)                     │
 //! │  ┌──────────────────────────────────────────────────────────────────┐   │
-//! │  │                       WARM TIER (RocksDB)                         │   │
-//! │  │  • LSM-tree with compaction                                       │   │
-//! │  │  • Compression (LZ4/Snappy/Zstd)                                  │   │
-//! │  │  • WAL for durability                                             │   │
-//! │  │  • Bloom filters for efficient lookups                            │   │
+//! │  │                       WARM TIER (RocksDB)                        │   │
+//! │  │  • LSM-tree with compaction                                      │   │
+//! │  │  • Compression (LZ4/Snappy/Zstd)                                 │   │
+//! │  │  • WAL for durability                                            │   │
+//! │  │  • Bloom filters for efficient lookups                           │   │
 //! │  └──────────────────────────────────────────────────────────────────┘   │
-//! │                              │                                           │
-//! │                              ▼ (archival)                                │
+//! │                              │                                          │
+//! │                              ▼ (archival)                               │
 //! │  ┌──────────────────────────────────────────────────────────────────┐   │
-//! │  │                       COLD TIER (Cloud)                           │   │
-//! │  │  • S3/Azure/GCS/MinIO backends                                    │   │
-//! │  │  • Parquet/Iceberg format support                                 │   │
-//! │  │  • Cost-optimized archival                                        │   │
+//! │  │                       COLD TIER (Cloud)                          │   │
+//! │  │  • S3/Azure/GCS/MinIO backends                                   │   │
+//! │  │  • Parquet/Iceberg format support                                │   │
+//! │  │  • Cost-optimized archival                                       │   │
 //! │  └──────────────────────────────────────────────────────────────────┘   │
-//! │                                                                          │
+//! │                                                                         │
 //! └─────────────────────────────────────────────────────────────────────────┘
 //! ```
 //!

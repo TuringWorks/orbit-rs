@@ -518,7 +518,11 @@ async fn test_mysql_to_postgres_cross_protocol() {
         .await
         .unwrap();
 
-    assert_eq!(rows.len(), 1, "Expected 1 row from PostgreSQL after MySQL write");
+    assert_eq!(
+        rows.len(),
+        1,
+        "Expected 1 row from PostgreSQL after MySQL write"
+    );
     let row = &rows[0];
     assert_eq!(
         row.get("name"),
@@ -553,7 +557,10 @@ async fn test_mysql_to_redis_cross_protocol() {
     let redis = AdapterFactory::redis(Arc::clone(&storage), Arc::clone(&registry));
     let fields = redis.hgetall("orders:order123").await.unwrap();
 
-    assert!(fields.is_some(), "Expected hash data from Redis after MySQL insert");
+    assert!(
+        fields.is_some(),
+        "Expected hash data from Redis after MySQL insert"
+    );
     let fields = fields.unwrap();
     assert_eq!(
         fields.get("product"),
@@ -667,7 +674,11 @@ async fn test_mysql_to_aql_cross_protocol() {
     let rest = AdapterFactory::rest(Arc::clone(&storage), Arc::clone(&registry));
     let items = rest.list("documents", None, None, None).await.unwrap();
 
-    assert_eq!(items.len(), 1, "Expected 1 document accessible after MySQL write");
+    assert_eq!(
+        items.len(),
+        1,
+        "Expected 1 document accessible after MySQL write"
+    );
 }
 
 // =============================================================================
@@ -828,7 +839,11 @@ async fn test_postgres_to_mysql_cross_protocol() {
         .await
         .unwrap();
 
-    assert_eq!(rows.len(), 1, "Expected 1 row from MySQL after PostgreSQL write");
+    assert_eq!(
+        rows.len(),
+        1,
+        "Expected 1 row from MySQL after PostgreSQL write"
+    );
     assert_eq!(
         rows[0].get("username"),
         Some(&UniversalValue::String("alice_pg".to_string()))
@@ -909,7 +924,10 @@ async fn test_sequential_multi_protocol_writes() {
 
     // Step 1: Create via MySQL
     let mut row1 = BTreeMap::new();
-    row1.insert("id".to_string(), UniversalValue::String("seq001".to_string()));
+    row1.insert(
+        "id".to_string(),
+        UniversalValue::String("seq001".to_string()),
+    );
     row1.insert(
         "status".to_string(),
         UniversalValue::String("created".to_string()),
@@ -928,7 +946,10 @@ async fn test_sequential_multi_protocol_writes() {
         "id".to_string(),
         UniversalValue::String("seq001".to_string()),
     );
-    postgres.update("workflow", updates, Some(filter)).await.unwrap();
+    postgres
+        .update("workflow", updates, Some(filter))
+        .await
+        .unwrap();
 
     // Step 3: Verify via Redis
     let redis_data = redis.hgetall("workflow:seq001").await.unwrap().unwrap();
@@ -972,7 +993,10 @@ async fn test_concurrent_multi_protocol_writes() {
 
     // Insert records from different protocols
     let mut row1 = BTreeMap::new();
-    row1.insert("id".to_string(), UniversalValue::String("rec_mysql".to_string()));
+    row1.insert(
+        "id".to_string(),
+        UniversalValue::String("rec_mysql".to_string()),
+    );
     row1.insert(
         "source".to_string(),
         UniversalValue::String("mysql".to_string()),
@@ -988,7 +1012,10 @@ async fn test_concurrent_multi_protocol_writes() {
         "source".to_string(),
         UniversalValue::String("postgres".to_string()),
     );
-    postgres.insert("concurrent_test", row2, "id").await.unwrap();
+    postgres
+        .insert("concurrent_test", row2, "id")
+        .await
+        .unwrap();
 
     redis
         .hset(
@@ -1042,7 +1069,10 @@ async fn test_list_type_cross_protocol() {
     // Write via MySQL with list data
     let mysql = AdapterFactory::mysql(Arc::clone(&storage), Arc::clone(&registry));
     let mut row = BTreeMap::new();
-    row.insert("id".to_string(), UniversalValue::String("list001".to_string()));
+    row.insert(
+        "id".to_string(),
+        UniversalValue::String("list001".to_string()),
+    );
     row.insert(
         "tags".to_string(),
         UniversalValue::List(vec![
@@ -1092,7 +1122,10 @@ async fn test_nested_map_cross_protocol() {
     );
 
     let mut row = BTreeMap::new();
-    row.insert("id".to_string(), UniversalValue::String("nested001".to_string()));
+    row.insert(
+        "id".to_string(),
+        UniversalValue::String("nested001".to_string()),
+    );
     row.insert(
         "name".to_string(),
         UniversalValue::String("Test User".to_string()),
@@ -1128,8 +1161,14 @@ async fn test_timestamp_precision_cross_protocol() {
     // Write via CQL (Cassandra - known for time-series)
     let cql = AdapterFactory::cql(Arc::clone(&storage), Arc::clone(&registry));
     let mut row = BTreeMap::new();
-    row.insert("id".to_string(), UniversalValue::String("ts001".to_string()));
-    row.insert("event_time".to_string(), UniversalValue::Timestamp(timestamp));
+    row.insert(
+        "id".to_string(),
+        UniversalValue::String("ts001".to_string()),
+    );
+    row.insert(
+        "event_time".to_string(),
+        UniversalValue::Timestamp(timestamp),
+    );
     cql.insert("time_events", row, "id").await.unwrap();
 
     // Read via MySQL
