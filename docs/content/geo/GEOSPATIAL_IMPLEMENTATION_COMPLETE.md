@@ -114,12 +114,12 @@ Comprehensive geospatial data support has been successfully implemented across a
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│              Multi-Protocol Clients                      │
+│              Multi-Protocol Clients                     │
 │  PostgreSQL │ Redis │ AQL │ Cypher │ OrbitQL            │
 └─────────────────────────────────────────────────────────┘
                         │
 ┌─────────────────────────────────────────────────────────┐
-│         Unified Geospatial Engine                        │
+│         Unified Geospatial Engine                       │
 │  ┌───────────────────────────────────────────────────┐  │
 │  │     Shared Spatial Operations & Functions         │  │
 │  │  • SpatialOperations (8 relationship functions)   │  │
@@ -127,7 +127,7 @@ Comprehensive geospatial data support has been successfully implemented across a
 │  │  • WKT/GeoJSON parsing                            │  │
 │  └───────────────────────────────────────────────────┘  │
 │  ┌───────────────────────────────────────────────────┐  │
-│  │     Spatial Indexing (R-tree, QuadTree)          │  │
+│  │     Spatial Indexing (R-tree, QuadTree)           │  │
 │  └───────────────────────────────────────────────────┘  │
 │  ┌───────────────────────────────────────────────────┐  │
 │  │     Spatial Streaming (Geofencing, Analytics)     │  │
@@ -138,8 +138,8 @@ Comprehensive geospatial data support has been successfully implemented across a
 └─────────────────────────────────────────────────────────┘
                         │
 ┌─────────────────────────────────────────────────────────┐
-│         Orbit-RS Storage Engine                          │
-│  • RocksDB persistence for all protocols                 │
+│         Orbit-RS Storage Engine                         │
+│  • RocksDB persistence for all protocols                │
 │  • Spatial data types (Point, LineString, Polygon)      │
 └─────────────────────────────────────────────────────────┘
 ```
