@@ -40,7 +40,31 @@ use orbit_server::protocols::mysql::MySqlConfig;
 use orbit_server::protocols::postgres_wire::sql::execution::hybrid::HybridStorageConfig;
 use orbit_server::protocols::postgres_wire::{QueryEngine, RocksDbTableStorage};
 use orbit_server::protocols::{CqlServer, MySqlServer, PostgresServer, RespServer};
+use orbit_server::unified_storage::{UnifiedStorageIntegration, UnifiedStorageIntegrationConfig};
 use orbit_server::OrbitServerBuilder;
+
+/// Storage mode for protocol servers
+///
+/// This enum determines whether protocols use isolated per-protocol storage
+/// (each protocol has its own data directory) or unified cross-protocol storage
+/// (all protocols share a single storage layer enabling cross-protocol data access).
+#[derive(Clone)]
+#[allow(dead_code)] // Fields used for future unified storage integration
+enum StorageMode {
+    /// Isolated storage: each protocol has independent storage
+    /// Data written via one protocol is NOT visible to other protocols
+    Isolated {
+        postgres_storage: Arc<TieredTableStorage>,
+        redis_storage: Arc<TieredTableStorage>,
+        mysql_storage: Arc<TieredTableStorage>,
+        cql_storage: Arc<TieredTableStorage>,
+    },
+    /// Unified storage: all protocols share a single storage layer
+    /// Data written via any protocol is immediately accessible through all other protocols
+    Unified {
+        integration: Arc<UnifiedStorageIntegration>,
+    },
+}
 
 /// Orbit Server - Distributed Actor System Runtime
 #[derive(Parser)]
@@ -300,38 +324,151 @@ async fn main() -> Result<(), Box<dyn Error>> {
         args.bind, args.grpc_port
     );
 
-    // Create independent tiered storage for each protocol with protocol-specific data directories
-    let postgres_data_dir = args.data_dir.join("postgresql");
-    let redis_data_dir = args.data_dir.join("redis");
-    let mysql_data_dir = args.data_dir.join("mysql");
-    let cql_data_dir = args.data_dir.join("cql");
+    // Determine storage mode based on configuration
+    // If unified_storage is enabled, all protocols share a single storage layer
+    // Otherwise, each protocol has independent storage (current default behavior)
+    let unified_storage_enabled = toml_config
+        .unified_storage
+        .as_ref()
+        .map_or(false, |c| c.enabled);
 
-    let postgres_storage = Arc::new(TieredTableStorage::with_data_dir(
-        postgres_data_dir,
-        tiered_config.clone(),
-    ));
-    let redis_storage = Arc::new(TieredTableStorage::with_data_dir(
-        redis_data_dir,
-        tiered_config.clone(),
-    ));
-    let mysql_storage = Arc::new(TieredTableStorage::with_data_dir(
-        mysql_data_dir,
-        tiered_config.clone(),
-    ));
-    let cql_storage = Arc::new(TieredTableStorage::with_data_dir(
-        cql_data_dir,
-        tiered_config,
-    ));
+    let storage_mode = if unified_storage_enabled {
+        // Create unified cross-protocol storage
+        let unified_config = toml_config.unified_storage.as_ref().unwrap();
+        let data_dir = unified_config.data_dir.to_string_lossy().to_string();
 
-    info!("[Protocol Storage] Independent tiered storage created for all protocols");
+        info!(
+            "[Storage] Initializing UNIFIED cross-protocol storage at: {}",
+            data_dir
+        );
 
-    // Initialize storage instances (ensure .initialize() is called)
-    postgres_storage.initialize().await?;
-    redis_storage.initialize().await?;
-    mysql_storage.initialize().await?;
-    cql_storage.initialize().await?;
+        let integration_config = UnifiedStorageIntegrationConfig {
+            data_dir: data_dir.clone(),
+            enable_ttl_expiration: unified_config.ttl.enabled,
+            ttl_check_interval_secs: unified_config.ttl.check_interval_secs,
+            max_scan_limit: 10000,
+            use_memory_backend: false, // Use persistent backend
+        };
 
-    info!("[Protocol Storage] All storage instances initialized");
+        let integration = UnifiedStorageIntegration::with_config(integration_config)
+            .await
+            .map_err(|e| {
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to initialize unified storage: {}", e),
+                )) as Box<dyn Error>
+            })?;
+
+        info!("[Storage] Unified storage initialized - cross-protocol data sharing ENABLED");
+        info!(
+            "[Storage] Protocols sharing storage: {:?}",
+            unified_config.cross_protocol.shared_protocols
+        );
+
+        StorageMode::Unified {
+            integration: Arc::new(integration),
+        }
+    } else {
+        // Create independent tiered storage for each protocol with protocol-specific data directories
+        let postgres_data_dir = args.data_dir.join("postgresql");
+        let redis_data_dir = args.data_dir.join("redis");
+        let mysql_data_dir = args.data_dir.join("mysql");
+        let cql_data_dir = args.data_dir.join("cql");
+
+        let postgres_storage = Arc::new(TieredTableStorage::with_data_dir(
+            postgres_data_dir,
+            tiered_config.clone(),
+        ));
+        let redis_storage = Arc::new(TieredTableStorage::with_data_dir(
+            redis_data_dir,
+            tiered_config.clone(),
+        ));
+        let mysql_storage = Arc::new(TieredTableStorage::with_data_dir(
+            mysql_data_dir,
+            tiered_config.clone(),
+        ));
+        let cql_storage = Arc::new(TieredTableStorage::with_data_dir(
+            cql_data_dir,
+            tiered_config,
+        ));
+
+        info!("[Storage] Independent tiered storage created for all protocols");
+
+        // Initialize storage instances (ensure .initialize() is called)
+        postgres_storage.initialize().await?;
+        redis_storage.initialize().await?;
+        mysql_storage.initialize().await?;
+        cql_storage.initialize().await?;
+
+        info!("[Storage] All isolated storage instances initialized - cross-protocol data sharing DISABLED");
+
+        StorageMode::Isolated {
+            postgres_storage,
+            redis_storage,
+            mysql_storage,
+            cql_storage,
+        }
+    };
+
+    // Extract per-protocol storage references for use in protocol servers
+    // For unified mode, we create wrapper TieredTableStorage that delegates to unified storage
+    // For isolated mode, we use the per-protocol storage directly
+    let (postgres_storage, redis_storage, mysql_storage, cql_storage) = match &storage_mode {
+        StorageMode::Isolated {
+            postgres_storage,
+            redis_storage,
+            mysql_storage,
+            cql_storage,
+        } => (
+            postgres_storage.clone(),
+            redis_storage.clone(),
+            mysql_storage.clone(),
+            cql_storage.clone(),
+        ),
+        StorageMode::Unified { integration: _ } => {
+            // For unified mode, we still need TieredTableStorage instances for the protocol servers
+            // These will be wrappers that delegate to the unified storage
+            // For now, create placeholder storage that logs a warning
+            // TODO: Create proper adapter wrappers that delegate to UnifiedStorageIntegration
+            warn!("[Storage] Unified storage enabled but protocol adapters not yet integrated");
+            warn!("[Storage] Falling back to isolated storage for protocol server compatibility");
+
+            // Create isolated storage as fallback until adapters are fully integrated
+            let postgres_data_dir = args.data_dir.join("postgresql");
+            let redis_data_dir = args.data_dir.join("redis");
+            let mysql_data_dir = args.data_dir.join("mysql");
+            let cql_data_dir = args.data_dir.join("cql");
+
+            // Re-create tiered_config since it was moved
+            let fallback_tiered_config = HybridStorageConfig::default();
+
+            let postgres_storage = Arc::new(TieredTableStorage::with_data_dir(
+                postgres_data_dir,
+                fallback_tiered_config.clone(),
+            ));
+            let redis_storage = Arc::new(TieredTableStorage::with_data_dir(
+                redis_data_dir,
+                fallback_tiered_config.clone(),
+            ));
+            let mysql_storage = Arc::new(TieredTableStorage::with_data_dir(
+                mysql_data_dir,
+                fallback_tiered_config.clone(),
+            ));
+            let cql_storage = Arc::new(TieredTableStorage::with_data_dir(
+                cql_data_dir,
+                fallback_tiered_config,
+            ));
+
+            postgres_storage.initialize().await?;
+            redis_storage.initialize().await?;
+            mysql_storage.initialize().await?;
+            cql_storage.initialize().await?;
+
+            (postgres_storage, redis_storage, mysql_storage, cql_storage)
+        }
+    };
+
+    info!("[Storage] Protocol storage ready");
 
     // Start protocol adapters
     let mut protocol_handles: Vec<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>> =

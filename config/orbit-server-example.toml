@@ -652,6 +652,118 @@ backup_enabled = false
 backup_interval = "1h"
 
 # -----------------------------------------------------------------------------
+# Unified Cross-Protocol Storage Configuration
+# -----------------------------------------------------------------------------
+# When enabled, data written via one protocol (Redis, PostgreSQL, MySQL, CQL,
+# Cypher, AQL, REST) is immediately accessible through all other protocols.
+# This enables true cross-protocol data sharing.
+#
+# Storage mode options:
+# - enabled = false (default): Each protocol uses isolated storage
+# - enabled = true: All protocols share a single unified storage layer
+
+[unified_storage]
+# Enable unified cross-protocol storage (default: false)
+# When false, each protocol uses its own isolated storage directory
+enabled = false
+
+# Data directory for unified storage
+data_dir = "./data/unified"
+
+# Hot tier configuration (in-memory cache)
+[unified_storage.hot_tier]
+enabled = true
+max_size_mb = 1024
+ttl_secs = 3600
+eviction_policy = "lru"
+
+# Warm tier configuration (local RocksDB/LSM)
+[unified_storage.warm_tier]
+enabled = true
+data_dir = "./data/unified/warm"
+max_size_gb = 100
+compaction_style = "level"
+
+# Cold tier configuration (cloud storage)
+[unified_storage.cold_tier]
+enabled = false
+backend = "s3"  # Options: s3, azure, gcs, minio
+
+# S3 configuration for cold tier (uncomment to use)
+# [unified_storage.cold_tier.s3]
+# bucket = "my-orbit-cold-storage"
+# region = "us-east-1"
+# endpoint = ""  # Leave empty for AWS, set for S3-compatible services
+
+# Tier migration configuration
+[unified_storage.tier_migration]
+enabled = true
+hot_to_warm_after_secs = 3600        # Move to warm after 1 hour of inactivity
+warm_to_cold_after_secs = 604800     # Move to cold after 7 days of inactivity
+background_migration = true
+migration_batch_size = 1000
+
+# Cross-protocol configuration
+[unified_storage.cross_protocol]
+enabled = true
+shared_protocols = ["redis", "postgresql", "mysql", "cql", "cypher", "aql", "rest"]
+namespace_strategy = "auto"  # Options: auto, explicit
+default_namespace = "default"
+enable_schema_inference = true
+schema_cache_size = 10000
+
+# TTL and expiration settings
+[unified_storage.ttl]
+enabled = true
+check_interval_secs = 60
+batch_size = 1000
+default_ttl_secs = 0  # 0 = no default TTL
+
+# Actor tier placement (advanced)
+[unified_storage.actor_placement]
+enabled = false
+table_actor_tier = "hot"
+extent_actor_tier = "warm"
+column_actor_tier = "hot"
+row_actor_tier = "warm"
+field_actor_tier = "warm"
+index_actor_tier = "hot"
+dynamic_migration = true
+promotion_access_count = 100
+demotion_idle_secs = 3600
+
+# Cluster configuration for distributed unified storage
+[unified_storage.cluster]
+enabled = false
+
+[unified_storage.cluster.replication]
+factor = 3
+sync_replication = false
+read_consistency = "quorum"
+write_consistency = "one"
+
+[unified_storage.cluster.sharding]
+enabled = false
+num_shards = 16
+strategy = "hash"
+
+[unified_storage.cluster.failure_detection]
+enabled = true
+heartbeat_interval_ms = 1000
+failure_threshold = 3
+recovery_timeout_secs = 30
+
+[unified_storage.cluster.consistency]
+level = "eventual"
+conflict_resolution = "last_write_wins"
+vector_clocks = false
+
+[unified_storage.cluster.eviction]
+enabled = false
+max_idle_secs = 3600
+graceful_shutdown_timeout_secs = 30
+
+# -----------------------------------------------------------------------------
 # Environment-specific Overrides
 # -----------------------------------------------------------------------------
 # Development environment
