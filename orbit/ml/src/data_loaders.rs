@@ -144,9 +144,9 @@ impl DataLoader for TimeSeriesDataLoader {
             }
             
             let x = Array2::from_shape_vec((self.sequence_length, ncols), x_data)
-                .map_err(|e| crate::error::MLError::data_processing(e.to_string()))?;
+                .map_err(|e| crate::error::MLError::InvalidInput(e.to_string()))?;
             let y = Array2::from_shape_vec((self.sequence_length, ncols), y_data)
-                .map_err(|e| crate::error::MLError::data_processing(e.to_string()))?;
+                .map_err(|e| crate::error::MLError::InvalidInput(e.to_string()))?;
             
             batch.push((x, y));
         }
