@@ -1,0 +1,55 @@
+    Checking orbit-ml v0.1.0 (/Users/ravindraboddipalli/sources/git/orbit-rs/orbit/ml)
+error: cannot find macro `s` in this scope
+   --> orbit/ml/src/data_loaders.rs:137:37
+    |
+137 |             let y = self.data.slice(s![i + 1..i + self.sequence_length + 1, ..]).to_owned();
+    |                                     ^
+    |
+help: consider importing this macro
+    |
+  3 + use ndarray::s;
+    |
+
+error: cannot find macro `s` in this scope
+   --> orbit/ml/src/data_loaders.rs:136:37
+    |
+136 |             let x = self.data.slice(s![i..i + self.sequence_length, ..]).to_owned();
+    |                                     ^
+    |
+help: consider importing this macro
+    |
+  3 + use ndarray::s;
+    |
+
+warning: unused import: `std::path::Path`
+ --> orbit/ml/src/data_loaders.rs:3:5
+  |
+3 | use std::path::Path;
+  |     ^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Deserialize` and `Serialize`
+ --> orbit/ml/src/data_loaders.rs:5:13
+  |
+5 | use serde::{Deserialize, Serialize};
+  |             ^^^^^^^^^^^  ^^^^^^^^^
+
+error: lifetime may not live long enough
+   --> orbit/ml/src/industry_models/common.rs:202:48
+    |
+201 |     pub fn get_mut(&mut self, name: &str) -> Option<&mut (dyn IndustryModel + '_)> {
+    |                    - let's call the lifetime of this reference `'1`
+202 |         self.models.get_mut(name).map(move |m| m.as_mut())
+    |                                                ^^^^^^^^^^ returning this value requires that `'1` must outlive `'static`
+
+warning: unused variable: `path`
+  --> orbit/ml/src/data_loaders.rs:56:26
+   |
+56 |     fn load_image(&self, path: &str) -> Result<Array4<f32>> {
+   |                          ^^^^ help: if this is intentional, prefix it with an underscore: `_path`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `orbit-ml` (lib) generated 3 warnings
+error: could not compile `orbit-ml` (lib) due to 3 previous errors; 3 warnings emitted

@@ -80,6 +80,8 @@ pub mod sql_extensions;
 // Utilities and common functionality
 /// Data processing and manipulation utilities
 pub mod data;
+/// Data loading infrastructure for training
+pub mod data_loaders;
 pub mod inference;
 pub mod models;
 /// Streaming ML inference for real-time data processing

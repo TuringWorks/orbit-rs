@@ -15,6 +15,8 @@ use std::collections::HashMap;
 use crate::error::{MLError, Result};
 
 pub mod activations;
+#[cfg(feature = "gpu")]
+pub mod candle_layers;
 pub mod convolutional;
 pub mod feedforward;
 pub mod gru;
