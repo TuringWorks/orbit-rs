@@ -45,10 +45,10 @@ pub use server::CypherServer;
 pub use storage::CypherGraphStorage;
 pub use types::{GraphNode, GraphRelationship};
 
-// TODO: Implement full Bolt protocol
-// - Bolt v4/v5 handshake
-// - HELLO, LOGON messages
-// - RUN, PULL, DISCARD messages
-// - Cypher query parsing
-// - Graph result encoding
-// - Transaction support
+// Bolt Protocol v4.4 Implementation Status (see bolt_protocol.rs):
+// - [x] Bolt v4/v5 handshake
+// - [x] HELLO, LOGON messages
+// - [x] RUN, PULL, DISCARD messages
+// - [x] Cypher query parsing
+// - [x] Graph result encoding
+// - [x] Transaction support (BEGIN/COMMIT/ROLLBACK)
