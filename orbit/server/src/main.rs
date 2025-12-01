@@ -38,6 +38,7 @@ use orbit_server::protocols::common::storage::TableStorage;
 use orbit_server::protocols::cql::CqlConfig;
 use orbit_server::protocols::cypher::{CypherGraphStorage, CypherServer};
 use orbit_server::protocols::mysql::MySqlConfig;
+use orbit_server::protocols::persistence::redis_data::RedisDataProvider;
 use orbit_server::protocols::postgres_wire::sql::execution::hybrid::HybridStorageConfig;
 use orbit_server::protocols::postgres_wire::{QueryEngine, RocksDbTableStorage};
 use orbit_server::protocols::{CqlServer, MySqlServer, PostgresServer, RespServer};
@@ -68,6 +69,9 @@ enum StorageMode {
         postgres_unified: Arc<UnifiedTableStorage>,
         mysql_unified: Arc<UnifiedTableStorage>,
         cql_unified: Arc<UnifiedTableStorage>,
+        /// UnifiedRedisDataProvider for Redis protocol to share storage with other protocols
+        redis_unified:
+            Arc<orbit_server::protocols::common::storage::unified::UnifiedRedisDataProvider>,
     },
 }
 
@@ -371,10 +375,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let mysql_unified = Arc::new(UnifiedTableStorage::mysql(integration.clone()));
         let cql_unified = Arc::new(UnifiedTableStorage::cql(integration.clone()));
 
+        // Create UnifiedRedisDataProvider for Redis protocol
+        let redis_unified_storage = UnifiedTableStorage::redis(integration.clone());
+        let redis_unified = Arc::new(
+            orbit_server::protocols::common::storage::unified::UnifiedRedisDataProvider::new(
+                Arc::new(redis_unified_storage),
+            ),
+        );
+
         // Initialize the unified storage adapters
         postgres_unified.initialize().await?;
         mysql_unified.initialize().await?;
         cql_unified.initialize().await?;
+        redis_unified.initialize().await?;
 
         info!("[Storage] Unified storage initialized - cross-protocol data sharing ENABLED");
         info!(
@@ -387,6 +400,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             postgres_unified,
             mysql_unified,
             cql_unified,
+            redis_unified,
         }
     } else {
         // Create independent tiered storage for each protocol with protocol-specific data directories
@@ -450,6 +464,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             postgres_unified,
             mysql_unified,
             cql_unified,
+            redis_unified: _,
         } => {
             // UnifiedTableStorage adapters are available for protocol servers
             info!("[Storage] Unified storage mode ENABLED - cross-protocol data sharing active:");
@@ -465,7 +480,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 "[Storage]   - CQL: using UnifiedTableStorage ({})",
                 cql_unified.dialect()
             );
-            info!("[Storage]   - Redis: using TieredTableStorage (key-value model)");
+            info!("[Storage]   - Redis: using UnifiedRedisDataProvider (cross-protocol)");
 
             // PostgreSQL, MySQL, and CQL use UnifiedTableStorage directly
             // Redis still uses TieredTableStorage due to different data model (key-value with TTL)
@@ -555,10 +570,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
             ..Default::default()
         };
 
+        // Use unified storage if available for cross-protocol data sharing
+        let unified_redis = match &storage_mode {
+            StorageMode::Unified { redis_unified, .. } => Some(redis_unified.clone()),
+            StorageMode::Isolated { .. } => None,
+        };
+
         // We need to create it inside the spawn or before?
         // start_redis_server is async.
-        let redis_handle =
-            start_redis_server(&args, redis_storage.clone(), redis_client_config).await?;
+        let redis_handle = start_redis_server(
+            &args,
+            redis_storage.clone(),
+            redis_client_config,
+            unified_redis,
+        )
+        .await?;
         protocol_handles.push(redis_handle);
         info!(
             "[Redis] Redis RESP protocol server started on port {}",
@@ -1258,19 +1284,35 @@ async fn start_redis_server(
     args: &Args,
     _storage: Arc<TieredTableStorage>,
     client_config: orbit_client::OrbitClientConfig,
+    unified_provider: Option<
+        Arc<orbit_server::protocols::common::storage::unified::UnifiedRedisDataProvider>,
+    >,
 ) -> Result<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>, Box<dyn Error>> {
     let bind_addr = format!("{}:{}", args.bind, args.redis_port);
 
-    // Create RocksDB storage for Redis persistence
-    let redis_data_path = args.data_dir.join("redis").join("rocksdb");
-    let redis_provider: Option<Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider>> =
+    // Use unified storage if available, otherwise fall back to RocksDB
+    let redis_provider: Option<
+        Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider>,
+    > = if let Some(unified) = unified_provider {
+        info!("[Redis] Using unified storage for cross-protocol data sharing");
+        Some(
+            unified as Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider>,
+        )
+    } else {
+        // Create RocksDB storage for Redis persistence
+        let redis_data_path = args.data_dir.join("redis").join("rocksdb");
         match orbit_server::protocols::persistence::rocksdb_redis_provider::RocksDbRedisDataProvider::new(
             redis_data_path.to_str().unwrap(),
             orbit_server::protocols::persistence::redis_data::RedisDataConfig::default(),
         ) {
             Ok(provider) => {
-                info!("[Redis] Using persistent RocksDB storage at: {}", redis_data_path.display());
-                let provider_arc: Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider> = Arc::new(provider);
+                info!(
+                    "[Redis] Using persistent RocksDB storage at: {}",
+                    redis_data_path.display()
+                );
+                let provider_arc: Arc<
+                    dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider,
+                > = Arc::new(provider);
                 // Initialize the provider
                 if let Err(e) = orbit_server::protocols::persistence::redis_data::RedisDataProvider::initialize(&*provider_arc).await {
                     warn!("[Redis] Failed to initialize Redis persistent storage: {}. Using in-memory storage.", e);
@@ -1280,10 +1322,14 @@ async fn start_redis_server(
                 }
             }
             Err(e) => {
-                warn!("[Redis] Failed to create Redis persistent storage: {}. Using in-memory storage.", e);
+                warn!(
+                    "[Redis] Failed to create Redis persistent storage: {}. Using in-memory storage.",
+                    e
+                );
                 None
             }
-        };
+        }
+    };
 
     // Create OrbitClient in offline mode - no network connection needed
     // The orbit_client is reserved for future use in CommandHandler but not currently used

@@ -101,6 +101,63 @@ impl UnifiedTableStorage {
         }
     }
 
+    /// Create a new unified table storage for Redis key-value operations
+    pub fn redis(integration: Arc<UnifiedStorageIntegration>) -> Self {
+        let sql_adapter = integration.sql_adapter("redis");
+        Self {
+            integration,
+            sql_adapter,
+            dialect: "redis".to_string(),
+            table_schemas: RwLock::new(HashMap::new()),
+            index_schemas: RwLock::new(HashMap::new()),
+            view_schemas: RwLock::new(HashMap::new()),
+            schema_definitions: RwLock::new(HashMap::new()),
+            extensions: RwLock::new(HashMap::new()),
+            settings: RwLock::new(HashMap::new()),
+            read_ops: AtomicU64::new(0),
+            write_ops: AtomicU64::new(0),
+            delete_ops: AtomicU64::new(0),
+        }
+    }
+
+    /// Create a new unified table storage for AQL (ArangoDB Query Language)
+    pub fn aql(integration: Arc<UnifiedStorageIntegration>) -> Self {
+        let sql_adapter = integration.sql_adapter("aql");
+        Self {
+            integration,
+            sql_adapter,
+            dialect: "aql".to_string(),
+            table_schemas: RwLock::new(HashMap::new()),
+            index_schemas: RwLock::new(HashMap::new()),
+            view_schemas: RwLock::new(HashMap::new()),
+            schema_definitions: RwLock::new(HashMap::new()),
+            extensions: RwLock::new(HashMap::new()),
+            settings: RwLock::new(HashMap::new()),
+            read_ops: AtomicU64::new(0),
+            write_ops: AtomicU64::new(0),
+            delete_ops: AtomicU64::new(0),
+        }
+    }
+
+    /// Create a new unified table storage for Cypher (Neo4j graph queries)
+    pub fn cypher(integration: Arc<UnifiedStorageIntegration>) -> Self {
+        let sql_adapter = integration.sql_adapter("cypher");
+        Self {
+            integration,
+            sql_adapter,
+            dialect: "cypher".to_string(),
+            table_schemas: RwLock::new(HashMap::new()),
+            index_schemas: RwLock::new(HashMap::new()),
+            view_schemas: RwLock::new(HashMap::new()),
+            schema_definitions: RwLock::new(HashMap::new()),
+            extensions: RwLock::new(HashMap::new()),
+            settings: RwLock::new(HashMap::new()),
+            read_ops: AtomicU64::new(0),
+            write_ops: AtomicU64::new(0),
+            delete_ops: AtomicU64::new(0),
+        }
+    }
+
     /// Get the underlying integration
     pub fn integration(&self) -> &Arc<UnifiedStorageIntegration> {
         &self.integration
@@ -1305,3 +1362,996 @@ mod persistent_storage_impl {
         }
     }
 }
+
+// =============================================================================
+// REDIS DATA PROVIDER IMPLEMENTATION
+// =============================================================================
+// This implementation allows UnifiedTableStorage to be used as a Redis data provider
+// for key-value operations with TTL support.
+
+#[cfg(feature = "storage-rocksdb")]
+mod redis_provider_impl {
+    use super::*;
+    use crate::protocols::persistence::redis_data::{
+        RedisDataMetrics, RedisDataProvider, RedisValue,
+    };
+    use orbit_shared::OrbitResult;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    /// Internal table name for Redis key-value storage
+    const REDIS_KV_TABLE: &str = "__redis_kv";
+
+    /// Unified Redis data provider that implements RedisDataProvider trait
+    /// using UnifiedTableStorage as the backing store.
+    pub struct UnifiedRedisDataProvider {
+        storage: Arc<UnifiedTableStorage>,
+        metrics: tokio::sync::RwLock<RedisDataMetrics>,
+    }
+
+    impl UnifiedRedisDataProvider {
+        /// Create a new unified Redis data provider
+        pub fn new(storage: Arc<UnifiedTableStorage>) -> Self {
+            Self {
+                storage,
+                metrics: tokio::sync::RwLock::new(RedisDataMetrics::default()),
+            }
+        }
+
+        /// Ensure the internal Redis KV table exists
+        async fn ensure_table_exists(&self) -> OrbitResult<()> {
+            use crate::protocols::postgres_wire::sql::executor::ColumnSchema;
+            use crate::protocols::postgres_wire::sql::types::SqlType;
+
+            // Check if table exists
+            let schemas = self.storage.table_schemas.read().await;
+            if schemas.contains_key(REDIS_KV_TABLE) {
+                return Ok(());
+            }
+            drop(schemas);
+
+            // Create the table schema
+            let schema = TableSchema {
+                name: REDIS_KV_TABLE.to_string(),
+                columns: vec![
+                    ColumnSchema {
+                        name: "key".to_string(),
+                        data_type: SqlType::Text,
+                        nullable: false,
+                        default: None,
+                        constraints: vec!["PRIMARY KEY".to_string()],
+                    },
+                    ColumnSchema {
+                        name: "value".to_string(),
+                        data_type: SqlType::Text,
+                        nullable: false,
+                        default: None,
+                        constraints: vec![],
+                    },
+                    ColumnSchema {
+                        name: "expiration".to_string(),
+                        data_type: SqlType::BigInt,
+                        nullable: true,
+                        default: None,
+                        constraints: vec![],
+                    },
+                ],
+                indexes: vec![],
+                constraints: vec![],
+            };
+
+            self.storage
+                .store_table_schema(&schema, None)
+                .await
+                .map_err(|e| orbit_shared::OrbitError::storage(e.to_string()))?;
+
+            Ok(())
+        }
+
+        fn current_timestamp() -> u64 {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        }
+    }
+
+    #[async_trait]
+    impl RedisDataProvider for UnifiedRedisDataProvider {
+        async fn initialize(&self) -> OrbitResult<()> {
+            self.ensure_table_exists().await
+        }
+
+        async fn shutdown(&self) -> OrbitResult<()> {
+            Ok(())
+        }
+
+        async fn get(&self, key: &str) -> OrbitResult<Option<RedisValue>> {
+            self.ensure_table_exists().await?;
+
+            let mut metrics = self.metrics.write().await;
+            metrics.get_operations += 1;
+            drop(metrics);
+
+            // Query the KV table
+            let rows = self
+                .storage
+                .get_table_data(REDIS_KV_TABLE)
+                .await
+                .map_err(|e| orbit_shared::OrbitError::storage(e.to_string()))?;
+
+            for row in rows {
+                if let Some(SqlValue::Text(k)) = row.get("key") {
+                    if k == key {
+                        let value = match row.get("value") {
+                            Some(SqlValue::Text(v)) => v.clone(),
+                            _ => continue,
+                        };
+
+                        let expiration = match row.get("expiration") {
+                            Some(SqlValue::BigInt(exp)) => Some(*exp as u64),
+                            Some(SqlValue::Integer(exp)) => Some(*exp as u64),
+                            Some(SqlValue::Null) | None => None,
+                            _ => None,
+                        };
+
+                        let redis_value = RedisValue {
+                            data: value,
+                            expiration,
+                        };
+
+                        // Check if expired
+                        if redis_value.is_expired() {
+                            // Delete expired key
+                            let _ = self.delete(key).await;
+                            return Ok(None);
+                        }
+
+                        return Ok(Some(redis_value));
+                    }
+                }
+            }
+
+            Ok(None)
+        }
+
+        async fn set(&self, key: &str, value: RedisValue) -> OrbitResult<()> {
+            self.ensure_table_exists().await?;
+
+            let mut metrics = self.metrics.write().await;
+            metrics.set_operations += 1;
+            drop(metrics);
+
+            // First delete existing key if present
+            let _ = self.delete(key).await;
+
+            // Insert new row
+            let mut row = HashMap::new();
+            row.insert("key".to_string(), SqlValue::Text(key.to_string()));
+            row.insert("value".to_string(), SqlValue::Text(value.data));
+            row.insert(
+                "expiration".to_string(),
+                match value.expiration {
+                    Some(exp) => SqlValue::BigInt(exp as i64),
+                    None => SqlValue::Null,
+                },
+            );
+
+            self.storage
+                .insert_row(REDIS_KV_TABLE, &row, None)
+                .await
+                .map_err(|e| orbit_shared::OrbitError::storage(e.to_string()))?;
+
+            Ok(())
+        }
+
+        async fn delete(&self, key: &str) -> OrbitResult<bool> {
+            self.ensure_table_exists().await?;
+
+            let mut metrics = self.metrics.write().await;
+            metrics.delete_operations += 1;
+            drop(metrics);
+
+            let key_owned = key.to_string();
+            let count = self
+                .storage
+                .delete_rows(
+                    REDIS_KV_TABLE,
+                    Some(Box::new(move |row| {
+                        if let Some(SqlValue::Text(k)) = row.get("key") {
+                            k == &key_owned
+                        } else {
+                            false
+                        }
+                    })),
+                    None,
+                )
+                .await
+                .map_err(|e| orbit_shared::OrbitError::storage(e.to_string()))?;
+
+            Ok(count > 0)
+        }
+
+        async fn exists(&self, key: &str) -> OrbitResult<bool> {
+            Ok(self.get(key).await?.is_some())
+        }
+
+        async fn mget(&self, keys: &[String]) -> OrbitResult<Vec<Option<RedisValue>>> {
+            let mut results = Vec::with_capacity(keys.len());
+            for key in keys {
+                results.push(self.get(key).await?);
+            }
+            Ok(results)
+        }
+
+        async fn mset(&self, values: HashMap<String, RedisValue>) -> OrbitResult<()> {
+            for (key, value) in values {
+                self.set(&key, value).await?;
+            }
+            Ok(())
+        }
+
+        async fn keys(&self, pattern: &str) -> OrbitResult<Vec<String>> {
+            self.ensure_table_exists().await?;
+
+            let rows = self
+                .storage
+                .get_table_data(REDIS_KV_TABLE)
+                .await
+                .map_err(|e| orbit_shared::OrbitError::storage(e.to_string()))?;
+
+            let mut result = Vec::new();
+            let now = Self::current_timestamp();
+
+            for row in rows {
+                if let Some(SqlValue::Text(key)) = row.get("key") {
+                    // Check expiration
+                    let expired = match row.get("expiration") {
+                        Some(SqlValue::BigInt(exp)) => now >= *exp as u64,
+                        _ => false,
+                    };
+
+                    if !expired {
+                        // Simple glob pattern matching
+                        if pattern == "*" || key.contains(&pattern.replace('*', "")) {
+                            result.push(key.clone());
+                        }
+                    }
+                }
+            }
+
+            Ok(result)
+        }
+
+        async fn cleanup_expired(&self) -> OrbitResult<u64> {
+            self.ensure_table_exists().await?;
+
+            let now = Self::current_timestamp();
+
+            let count = self
+                .storage
+                .delete_rows(
+                    REDIS_KV_TABLE,
+                    Some(Box::new(move |row| {
+                        if let Some(SqlValue::BigInt(exp)) = row.get("expiration") {
+                            now >= *exp as u64
+                        } else {
+                            false
+                        }
+                    })),
+                    None,
+                )
+                .await
+                .map_err(|e| orbit_shared::OrbitError::storage(e.to_string()))?;
+
+            let mut metrics = self.metrics.write().await;
+            metrics.expired_keys_cleaned += count as u64;
+
+            Ok(count as u64)
+        }
+
+        async fn metrics(&self) -> OrbitResult<RedisDataMetrics> {
+            let metrics = self.metrics.read().await;
+            let keys = self.keys("*").await?;
+
+            Ok(RedisDataMetrics {
+                get_operations: metrics.get_operations,
+                set_operations: metrics.set_operations,
+                delete_operations: metrics.delete_operations,
+                expired_keys_cleaned: metrics.expired_keys_cleaned,
+                total_keys: keys.len(),
+                keys_with_ttl: 0, // Would need to count separately
+            })
+        }
+
+        async fn incr(&self, key: &str, delta: i64) -> OrbitResult<i64> {
+            let current = self.get(key).await?;
+            let new_value = match current {
+                Some(v) => {
+                    let num: i64 = v.data.parse().unwrap_or(0);
+                    num + delta
+                }
+                None => delta,
+            };
+
+            self.set(key, RedisValue::new(new_value.to_string()))
+                .await?;
+            Ok(new_value)
+        }
+
+        async fn append(&self, key: &str, value: &str) -> OrbitResult<usize> {
+            let current = self.get(key).await?;
+            let new_value = match current {
+                Some(v) => format!("{}{}", v.data, value),
+                None => value.to_string(),
+            };
+            let len = new_value.len();
+            self.set(key, RedisValue::new(new_value)).await?;
+            Ok(len)
+        }
+
+        async fn strlen(&self, key: &str) -> OrbitResult<usize> {
+            match self.get(key).await? {
+                Some(v) => Ok(v.data.len()),
+                None => Ok(0),
+            }
+        }
+
+        async fn setnx(&self, key: &str, value: RedisValue) -> OrbitResult<bool> {
+            if self.exists(key).await? {
+                Ok(false)
+            } else {
+                self.set(key, value).await?;
+                Ok(true)
+            }
+        }
+
+        async fn getset(&self, key: &str, value: RedisValue) -> OrbitResult<Option<String>> {
+            let old = self.get(key).await?.map(|v| v.data);
+            self.set(key, value).await?;
+            Ok(old)
+        }
+    }
+}
+
+#[cfg(feature = "storage-rocksdb")]
+pub use redis_provider_impl::UnifiedRedisDataProvider;
+
+// =============================================================================
+// AQL STORAGE IMPLEMENTATION
+// =============================================================================
+// This provides a unified AQL storage wrapper that mimics AqlStorage API.
+
+#[cfg(feature = "storage-rocksdb")]
+mod aql_storage_impl {
+    use super::*;
+    use crate::protocols::aql::data_model::{AqlCollection, AqlDocument};
+
+    /// Internal table names for AQL storage
+    const AQL_COLLECTIONS_TABLE: &str = "__aql_collections";
+    const AQL_DOCUMENTS_TABLE: &str = "__aql_documents";
+
+    /// Unified AQL storage that provides AqlStorage-compatible API
+    /// using UnifiedTableStorage as the backing store.
+    pub struct UnifiedAqlStorage {
+        storage: Arc<UnifiedTableStorage>,
+    }
+
+    impl UnifiedAqlStorage {
+        /// Create a new unified AQL storage
+        pub fn new(storage: Arc<UnifiedTableStorage>) -> Self {
+            Self { storage }
+        }
+
+        /// Ensure the internal AQL tables exist
+        async fn ensure_tables_exist(&self) -> ProtocolResult<()> {
+            use crate::protocols::postgres_wire::sql::executor::ColumnSchema;
+            use crate::protocols::postgres_wire::sql::types::SqlType;
+
+            // Check and create collections table
+            let schemas = self.storage.table_schemas.read().await;
+            let has_collections = schemas.contains_key(AQL_COLLECTIONS_TABLE);
+            let has_documents = schemas.contains_key(AQL_DOCUMENTS_TABLE);
+            drop(schemas);
+
+            if !has_collections {
+                let schema = TableSchema {
+                    name: AQL_COLLECTIONS_TABLE.to_string(),
+                    columns: vec![
+                        ColumnSchema {
+                            name: "name".to_string(),
+                            data_type: SqlType::Text,
+                            nullable: false,
+                            default: None,
+                            constraints: vec!["PRIMARY KEY".to_string()],
+                        },
+                        ColumnSchema {
+                            name: "data".to_string(),
+                            data_type: SqlType::Json,
+                            nullable: false,
+                            default: None,
+                            constraints: vec![],
+                        },
+                    ],
+                    indexes: vec![],
+                    constraints: vec![],
+                };
+                self.storage.store_table_schema(&schema, None).await?;
+            }
+
+            if !has_documents {
+                let schema = TableSchema {
+                    name: AQL_DOCUMENTS_TABLE.to_string(),
+                    columns: vec![
+                        ColumnSchema {
+                            name: "id".to_string(),
+                            data_type: SqlType::Text,
+                            nullable: false,
+                            default: None,
+                            constraints: vec!["PRIMARY KEY".to_string()],
+                        },
+                        ColumnSchema {
+                            name: "collection".to_string(),
+                            data_type: SqlType::Text,
+                            nullable: false,
+                            default: None,
+                            constraints: vec![],
+                        },
+                        ColumnSchema {
+                            name: "key".to_string(),
+                            data_type: SqlType::Text,
+                            nullable: false,
+                            default: None,
+                            constraints: vec![],
+                        },
+                        ColumnSchema {
+                            name: "data".to_string(),
+                            data_type: SqlType::Json,
+                            nullable: false,
+                            default: None,
+                            constraints: vec![],
+                        },
+                    ],
+                    indexes: vec![],
+                    constraints: vec![],
+                };
+                self.storage.store_table_schema(&schema, None).await?;
+            }
+
+            Ok(())
+        }
+
+        /// Initialize the AQL storage
+        pub async fn initialize(&self) -> ProtocolResult<()> {
+            self.ensure_tables_exist().await
+        }
+
+        /// Store a collection
+        pub async fn store_collection(&self, collection: AqlCollection) -> ProtocolResult<()> {
+            self.ensure_tables_exist().await?;
+
+            let data = serde_json::to_value(&collection).map_err(|e| {
+                ProtocolError::SerializationError(format!("Failed to serialize collection: {}", e))
+            })?;
+
+            let mut row = HashMap::new();
+            row.insert("name".to_string(), SqlValue::Text(collection.name.clone()));
+            row.insert("data".to_string(), SqlValue::Json(data));
+
+            // Delete existing if present
+            let name = collection.name.clone();
+            let _ = self
+                .storage
+                .delete_rows(
+                    AQL_COLLECTIONS_TABLE,
+                    Some(Box::new(
+                        move |r| matches!(r.get("name"), Some(SqlValue::Text(n)) if n == &name),
+                    )),
+                    None,
+                )
+                .await;
+
+            self.storage
+                .insert_row(AQL_COLLECTIONS_TABLE, &row, None)
+                .await
+        }
+
+        /// Get a collection by name
+        pub async fn get_collection(&self, name: &str) -> ProtocolResult<Option<AqlCollection>> {
+            self.ensure_tables_exist().await?;
+
+            let rows = self.storage.get_table_data(AQL_COLLECTIONS_TABLE).await?;
+
+            for row in rows {
+                if let Some(SqlValue::Text(n)) = row.get("name") {
+                    if n == name {
+                        if let Some(SqlValue::Json(data)) = row.get("data") {
+                            let collection: AqlCollection = serde_json::from_value(data.clone())
+                                .map_err(|e| {
+                                    ProtocolError::SerializationError(format!(
+                                        "Failed to deserialize collection: {}",
+                                        e
+                                    ))
+                                })?;
+                            return Ok(Some(collection));
+                        }
+                    }
+                }
+            }
+
+            Ok(None)
+        }
+
+        /// Store a document
+        pub async fn store_document(&self, doc: AqlDocument) -> ProtocolResult<()> {
+            self.ensure_tables_exist().await?;
+
+            let collection_name = doc.id.split('/').next().unwrap_or("default").to_string();
+
+            let data = serde_json::to_value(&doc).map_err(|e| {
+                ProtocolError::SerializationError(format!("Failed to serialize document: {}", e))
+            })?;
+
+            let mut row = HashMap::new();
+            row.insert("id".to_string(), SqlValue::Text(doc.id.clone()));
+            row.insert("collection".to_string(), SqlValue::Text(collection_name));
+            row.insert("key".to_string(), SqlValue::Text(doc.key.clone()));
+            row.insert("data".to_string(), SqlValue::Json(data));
+
+            // Delete existing if present
+            let doc_id = doc.id.clone();
+            let _ = self
+                .storage
+                .delete_rows(
+                    AQL_DOCUMENTS_TABLE,
+                    Some(Box::new(
+                        move |r| matches!(r.get("id"), Some(SqlValue::Text(id)) if id == &doc_id),
+                    )),
+                    None,
+                )
+                .await;
+
+            self.storage
+                .insert_row(AQL_DOCUMENTS_TABLE, &row, None)
+                .await
+        }
+
+        /// Get a document by collection and key
+        pub async fn get_document(
+            &self,
+            collection: &str,
+            key: &str,
+        ) -> ProtocolResult<Option<AqlDocument>> {
+            self.ensure_tables_exist().await?;
+
+            let rows = self.storage.get_table_data(AQL_DOCUMENTS_TABLE).await?;
+
+            for row in rows {
+                let matches_collection =
+                    matches!(row.get("collection"), Some(SqlValue::Text(c)) if c == collection);
+                let matches_key = matches!(row.get("key"), Some(SqlValue::Text(k)) if k == key);
+
+                if matches_collection && matches_key {
+                    if let Some(SqlValue::Json(data)) = row.get("data") {
+                        let doc: AqlDocument =
+                            serde_json::from_value(data.clone()).map_err(|e| {
+                                ProtocolError::SerializationError(format!(
+                                    "Failed to deserialize document: {}",
+                                    e
+                                ))
+                            })?;
+                        return Ok(Some(doc));
+                    }
+                }
+            }
+
+            Ok(None)
+        }
+
+        /// Get all documents in a collection
+        pub async fn get_collection_documents(
+            &self,
+            collection: &str,
+        ) -> ProtocolResult<Vec<AqlDocument>> {
+            self.ensure_tables_exist().await?;
+
+            let rows = self.storage.get_table_data(AQL_DOCUMENTS_TABLE).await?;
+            let mut result = Vec::new();
+
+            for row in rows {
+                if let Some(SqlValue::Text(c)) = row.get("collection") {
+                    if c == collection {
+                        if let Some(SqlValue::Json(data)) = row.get("data") {
+                            if let Ok(doc) = serde_json::from_value::<AqlDocument>(data.clone()) {
+                                result.push(doc);
+                            }
+                        }
+                    }
+                }
+            }
+
+            Ok(result)
+        }
+
+        /// Shutdown the storage
+        pub async fn shutdown(&self) -> ProtocolResult<()> {
+            Ok(())
+        }
+    }
+}
+
+#[cfg(feature = "storage-rocksdb")]
+pub use aql_storage_impl::UnifiedAqlStorage;
+
+// =============================================================================
+// CYPHER GRAPH STORAGE IMPLEMENTATION
+// =============================================================================
+// This provides a unified Cypher storage wrapper that mimics CypherGraphStorage API.
+
+#[cfg(feature = "storage-rocksdb")]
+mod cypher_storage_impl {
+    use super::*;
+    use crate::protocols::cypher::types::{GraphNode, GraphRelationship};
+
+    /// Internal table names for Cypher storage
+    const CYPHER_NODES_TABLE: &str = "__cypher_nodes";
+    const CYPHER_RELATIONSHIPS_TABLE: &str = "__cypher_relationships";
+
+    /// Unified Cypher storage that provides CypherGraphStorage-compatible API
+    /// using UnifiedTableStorage as the backing store.
+    pub struct UnifiedCypherStorage {
+        storage: Arc<UnifiedTableStorage>,
+    }
+
+    impl UnifiedCypherStorage {
+        /// Create a new unified Cypher storage
+        pub fn new(storage: Arc<UnifiedTableStorage>) -> Self {
+            Self { storage }
+        }
+
+        /// Ensure the internal Cypher tables exist
+        async fn ensure_tables_exist(&self) -> ProtocolResult<()> {
+            use crate::protocols::postgres_wire::sql::executor::ColumnSchema;
+            use crate::protocols::postgres_wire::sql::types::SqlType;
+
+            let schemas = self.storage.table_schemas.read().await;
+            let has_nodes = schemas.contains_key(CYPHER_NODES_TABLE);
+            let has_relationships = schemas.contains_key(CYPHER_RELATIONSHIPS_TABLE);
+            drop(schemas);
+
+            if !has_nodes {
+                let schema = TableSchema {
+                    name: CYPHER_NODES_TABLE.to_string(),
+                    columns: vec![
+                        ColumnSchema {
+                            name: "id".to_string(),
+                            data_type: SqlType::Text,
+                            nullable: false,
+                            default: None,
+                            constraints: vec!["PRIMARY KEY".to_string()],
+                        },
+                        ColumnSchema {
+                            name: "labels".to_string(),
+                            data_type: SqlType::Json,
+                            nullable: false,
+                            default: None,
+                            constraints: vec![],
+                        },
+                        ColumnSchema {
+                            name: "properties".to_string(),
+                            data_type: SqlType::Json,
+                            nullable: false,
+                            default: None,
+                            constraints: vec![],
+                        },
+                    ],
+                    indexes: vec![],
+                    constraints: vec![],
+                };
+                self.storage.store_table_schema(&schema, None).await?;
+            }
+
+            if !has_relationships {
+                let schema = TableSchema {
+                    name: CYPHER_RELATIONSHIPS_TABLE.to_string(),
+                    columns: vec![
+                        ColumnSchema {
+                            name: "id".to_string(),
+                            data_type: SqlType::Text,
+                            nullable: false,
+                            default: None,
+                            constraints: vec!["PRIMARY KEY".to_string()],
+                        },
+                        ColumnSchema {
+                            name: "start_node".to_string(),
+                            data_type: SqlType::Text,
+                            nullable: false,
+                            default: None,
+                            constraints: vec![],
+                        },
+                        ColumnSchema {
+                            name: "end_node".to_string(),
+                            data_type: SqlType::Text,
+                            nullable: false,
+                            default: None,
+                            constraints: vec![],
+                        },
+                        ColumnSchema {
+                            name: "rel_type".to_string(),
+                            data_type: SqlType::Text,
+                            nullable: false,
+                            default: None,
+                            constraints: vec![],
+                        },
+                        ColumnSchema {
+                            name: "properties".to_string(),
+                            data_type: SqlType::Json,
+                            nullable: false,
+                            default: None,
+                            constraints: vec![],
+                        },
+                    ],
+                    indexes: vec![],
+                    constraints: vec![],
+                };
+                self.storage.store_table_schema(&schema, None).await?;
+            }
+
+            Ok(())
+        }
+
+        /// Initialize the Cypher storage
+        pub async fn initialize(&self) -> ProtocolResult<()> {
+            self.ensure_tables_exist().await
+        }
+
+        /// Store a node
+        pub async fn store_node(&self, node: GraphNode) -> ProtocolResult<()> {
+            self.ensure_tables_exist().await?;
+
+            let labels = serde_json::to_value(&node.labels).map_err(|e| {
+                ProtocolError::SerializationError(format!("Failed to serialize labels: {}", e))
+            })?;
+
+            let properties = serde_json::to_value(&node.properties).map_err(|e| {
+                ProtocolError::SerializationError(format!("Failed to serialize properties: {}", e))
+            })?;
+
+            let mut row = HashMap::new();
+            row.insert("id".to_string(), SqlValue::Text(node.id.clone()));
+            row.insert("labels".to_string(), SqlValue::Json(labels));
+            row.insert("properties".to_string(), SqlValue::Json(properties));
+
+            // Delete existing if present
+            let node_id = node.id.clone();
+            let _ = self
+                .storage
+                .delete_rows(
+                    CYPHER_NODES_TABLE,
+                    Some(Box::new(
+                        move |r| matches!(r.get("id"), Some(SqlValue::Text(id)) if id == &node_id),
+                    )),
+                    None,
+                )
+                .await;
+
+            self.storage
+                .insert_row(CYPHER_NODES_TABLE, &row, None)
+                .await
+        }
+
+        /// Get a node by ID
+        pub async fn get_node(&self, node_id: &str) -> ProtocolResult<Option<GraphNode>> {
+            self.ensure_tables_exist().await?;
+
+            let rows = self.storage.get_table_data(CYPHER_NODES_TABLE).await?;
+
+            for row in rows {
+                if let Some(SqlValue::Text(id)) = row.get("id") {
+                    if id == node_id {
+                        let labels: Vec<String> = match row.get("labels") {
+                            Some(SqlValue::Json(v)) => {
+                                serde_json::from_value(v.clone()).unwrap_or_default()
+                            }
+                            _ => vec![],
+                        };
+
+                        let properties: HashMap<String, serde_json::Value> =
+                            match row.get("properties") {
+                                Some(SqlValue::Json(v)) => {
+                                    serde_json::from_value(v.clone()).unwrap_or_default()
+                                }
+                                _ => HashMap::new(),
+                            };
+
+                        return Ok(Some(GraphNode {
+                            id: id.clone(),
+                            labels,
+                            properties,
+                        }));
+                    }
+                }
+            }
+
+            Ok(None)
+        }
+
+        /// Get all nodes
+        pub async fn get_all_nodes(&self) -> ProtocolResult<Vec<GraphNode>> {
+            self.ensure_tables_exist().await?;
+
+            let rows = self.storage.get_table_data(CYPHER_NODES_TABLE).await?;
+            let mut result = Vec::new();
+
+            for row in rows {
+                if let Some(SqlValue::Text(id)) = row.get("id") {
+                    let labels: Vec<String> = match row.get("labels") {
+                        Some(SqlValue::Json(v)) => {
+                            serde_json::from_value(v.clone()).unwrap_or_default()
+                        }
+                        _ => vec![],
+                    };
+
+                    let properties: HashMap<String, serde_json::Value> = match row.get("properties")
+                    {
+                        Some(SqlValue::Json(v)) => {
+                            serde_json::from_value(v.clone()).unwrap_or_default()
+                        }
+                        _ => HashMap::new(),
+                    };
+
+                    result.push(GraphNode {
+                        id: id.clone(),
+                        labels,
+                        properties,
+                    });
+                }
+            }
+
+            Ok(result)
+        }
+
+        /// Store a relationship
+        pub async fn store_relationship(&self, rel: GraphRelationship) -> ProtocolResult<()> {
+            self.ensure_tables_exist().await?;
+
+            let properties = serde_json::to_value(&rel.properties).map_err(|e| {
+                ProtocolError::SerializationError(format!("Failed to serialize properties: {}", e))
+            })?;
+
+            let mut row = HashMap::new();
+            row.insert("id".to_string(), SqlValue::Text(rel.id.clone()));
+            row.insert(
+                "start_node".to_string(),
+                SqlValue::Text(rel.start_node.clone()),
+            );
+            row.insert("end_node".to_string(), SqlValue::Text(rel.end_node.clone()));
+            row.insert("rel_type".to_string(), SqlValue::Text(rel.rel_type.clone()));
+            row.insert("properties".to_string(), SqlValue::Json(properties));
+
+            // Delete existing if present
+            let rel_id = rel.id.clone();
+            let _ = self
+                .storage
+                .delete_rows(
+                    CYPHER_RELATIONSHIPS_TABLE,
+                    Some(Box::new(
+                        move |r| matches!(r.get("id"), Some(SqlValue::Text(id)) if id == &rel_id),
+                    )),
+                    None,
+                )
+                .await;
+
+            self.storage
+                .insert_row(CYPHER_RELATIONSHIPS_TABLE, &row, None)
+                .await
+        }
+
+        /// Get a relationship by ID
+        pub async fn get_relationship(
+            &self,
+            rel_id: &str,
+        ) -> ProtocolResult<Option<GraphRelationship>> {
+            self.ensure_tables_exist().await?;
+
+            let rows = self
+                .storage
+                .get_table_data(CYPHER_RELATIONSHIPS_TABLE)
+                .await?;
+
+            for row in rows {
+                if let Some(SqlValue::Text(id)) = row.get("id") {
+                    if id == rel_id {
+                        let start_node = match row.get("start_node") {
+                            Some(SqlValue::Text(s)) => s.clone(),
+                            _ => continue,
+                        };
+
+                        let end_node = match row.get("end_node") {
+                            Some(SqlValue::Text(s)) => s.clone(),
+                            _ => continue,
+                        };
+
+                        let rel_type = match row.get("rel_type") {
+                            Some(SqlValue::Text(s)) => s.clone(),
+                            _ => continue,
+                        };
+
+                        let properties: HashMap<String, serde_json::Value> =
+                            match row.get("properties") {
+                                Some(SqlValue::Json(v)) => {
+                                    serde_json::from_value(v.clone()).unwrap_or_default()
+                                }
+                                _ => HashMap::new(),
+                            };
+
+                        return Ok(Some(GraphRelationship {
+                            id: id.clone(),
+                            start_node,
+                            end_node,
+                            rel_type,
+                            properties,
+                        }));
+                    }
+                }
+            }
+
+            Ok(None)
+        }
+
+        /// Get all relationships
+        pub async fn get_all_relationships(&self) -> ProtocolResult<Vec<GraphRelationship>> {
+            self.ensure_tables_exist().await?;
+
+            let rows = self
+                .storage
+                .get_table_data(CYPHER_RELATIONSHIPS_TABLE)
+                .await?;
+            let mut result = Vec::new();
+
+            for row in rows {
+                if let Some(SqlValue::Text(id)) = row.get("id") {
+                    let start_node = match row.get("start_node") {
+                        Some(SqlValue::Text(s)) => s.clone(),
+                        _ => continue,
+                    };
+
+                    let end_node = match row.get("end_node") {
+                        Some(SqlValue::Text(s)) => s.clone(),
+                        _ => continue,
+                    };
+
+                    let rel_type = match row.get("rel_type") {
+                        Some(SqlValue::Text(s)) => s.clone(),
+                        _ => continue,
+                    };
+
+                    let properties: HashMap<String, serde_json::Value> = match row.get("properties")
+                    {
+                        Some(SqlValue::Json(v)) => {
+                            serde_json::from_value(v.clone()).unwrap_or_default()
+                        }
+                        _ => HashMap::new(),
+                    };
+
+                    result.push(GraphRelationship {
+                        id: id.clone(),
+                        start_node,
+                        end_node,
+                        rel_type,
+                        properties,
+                    });
+                }
+            }
+
+            Ok(result)
+        }
+
+        /// Shutdown the storage
+        pub async fn shutdown(&self) -> ProtocolResult<()> {
+            Ok(())
+        }
+    }
+}
+
+#[cfg(feature = "storage-rocksdb")]
+pub use cypher_storage_impl::UnifiedCypherStorage;
