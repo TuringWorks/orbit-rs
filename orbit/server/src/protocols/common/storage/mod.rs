@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 pub mod memory;
 pub mod tiered;
+pub mod unified;
 // TODO: Re-enable LSM storage once orbit-shared dependencies are properly resolved
 // pub mod lsm;
 
