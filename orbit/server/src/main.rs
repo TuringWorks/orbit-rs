@@ -446,28 +446,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
             postgres_unified,
             mysql_unified,
         } => {
-            // UnifiedTableStorage adapters are available for TableStorage trait usage
-            // Log that they are ready for use
-            info!("[Storage] UnifiedTableStorage adapters ready:");
-            info!("[Storage]   - PostgreSQL adapter: {} metrics tracked", postgres_unified.dialect());
-            info!("[Storage]   - MySQL adapter: {} metrics tracked", mysql_unified.dialect());
+            // UnifiedTableStorage adapters are available for protocol servers
+            info!("[Storage] Unified storage mode ENABLED - cross-protocol data sharing active:");
+            info!("[Storage]   - PostgreSQL: using UnifiedTableStorage ({})", postgres_unified.dialect());
+            info!("[Storage]   - MySQL: adapter ready ({})", mysql_unified.dialect());
 
-            // However, protocol servers currently expect Arc<TieredTableStorage>
-            // Until refactored to use Arc<dyn TableStorage>, we create TieredTableStorage
-            // instances that operate alongside unified storage
-            // NOTE: This means some operations use unified storage (via UnifiedTableStorage)
-            // while others still use per-protocol storage (via TieredTableStorage)
-            warn!("[Storage] Protocol servers require TieredTableStorage - creating hybrid mode");
-            info!("[Storage] Full unified mode requires protocol server refactoring to use Arc<dyn TableStorage>");
+            // PostgreSQL now uses UnifiedTableStorage directly via QueryEngine
+            // Other protocols (Redis, CQL) still use TieredTableStorage for now
+            // TODO: Integrate unified storage for Redis and CQL protocols
 
-            // Create isolated storage as compatibility layer for protocol servers
-            let postgres_data_dir = args.data_dir.join("postgresql");
             let redis_data_dir = args.data_dir.join("redis");
             let mysql_data_dir = args.data_dir.join("mysql");
             let cql_data_dir = args.data_dir.join("cql");
 
             let fallback_tiered_config = HybridStorageConfig::default();
 
+            // PostgreSQL uses UnifiedTableStorage via QueryEngine, but we still need
+            // TieredTableStorage for compatibility with some internal interfaces
+            let postgres_data_dir = args.data_dir.join("postgresql");
             let postgres_storage = Arc::new(TieredTableStorage::with_data_dir(
                 postgres_data_dir,
                 fallback_tiered_config.clone(),
@@ -507,8 +503,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .as_ref()
         .map_or(true, |c| c.enabled)
     {
+        // Pass unified storage if available for cross-protocol data sharing
+        let unified_postgres = match &storage_mode {
+            StorageMode::Unified { postgres_unified, .. } => Some(postgres_unified.clone()),
+            StorageMode::Isolated { .. } => None,
+        };
         let postgres_handle =
-            start_postgresql_server(&args, postgres_storage.clone(), rocksdb_storage.clone())
+            start_postgresql_server(&args, postgres_storage.clone(), rocksdb_storage.clone(), unified_postgres)
                 .await?;
         protocol_handles.push(postgres_handle);
         info!(
@@ -1115,11 +1116,19 @@ async fn start_postgresql_server(
     args: &Args,
     _storage: Arc<TieredTableStorage>,
     rocksdb: Arc<RocksDbTableStorage>,
+    unified_storage: Option<Arc<UnifiedTableStorage>>,
 ) -> Result<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>, Box<dyn Error>> {
+    use orbit_server::protocols::postgres_wire::persistent_storage::PersistentTableStorage;
+
     let bind_addr = format!("{}:{}", args.bind, args.postgres_port);
 
-    // Create QueryEngine with RocksDB persistence
-    let query_engine = QueryEngine::new_with_persistent_storage(rocksdb);
+    // Create QueryEngine with either unified storage or RocksDB persistence
+    let query_engine = if let Some(unified) = unified_storage {
+        info!("[PostgreSQL] Using unified storage for cross-protocol data sharing");
+        QueryEngine::new_with_persistent_storage(unified as Arc<dyn PersistentTableStorage>)
+    } else {
+        QueryEngine::new_with_persistent_storage(rocksdb)
+    };
 
     // Create PostgreSQL server with query engine
     let postgres_server = PostgresServer::new_with_query_engine(bind_addr, query_engine);

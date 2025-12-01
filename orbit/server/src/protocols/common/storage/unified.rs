@@ -928,3 +928,328 @@ mod tests {
         assert_eq!(storage.dialect(), "postgresql");
     }
 }
+
+// =============================================================================
+// PersistentTableStorage Implementation
+// =============================================================================
+// This implementation allows UnifiedTableStorage to be used with QueryEngine
+// which requires the PersistentTableStorage trait for PostgreSQL operations.
+
+#[cfg(feature = "storage-rocksdb")]
+mod persistent_storage_impl {
+    use super::*;
+    use crate::protocols::postgres_wire::persistent_storage::{
+        ColumnDefinition, ColumnType, PersistentTableStorage, QueryCondition,
+        TableRow, TableSchema as PersistentTableSchema,
+    };
+    use crate::protocols::postgres_wire::sql::types::SqlType;
+    use serde_json::Value as JsonValue;
+
+    impl UnifiedTableStorage {
+        /// Convert from PersistentTableStorage TableSchema to SQL executor TableSchema
+        fn persistent_schema_to_sql_schema(schema: &PersistentTableSchema) -> TableSchema {
+            use crate::protocols::postgres_wire::sql::executor::ColumnSchema;
+
+            let columns = schema
+                .columns
+                .iter()
+                .map(|col| {
+                    let data_type = match col.data_type {
+                        ColumnType::Serial => SqlType::Integer, // Serial is auto-incrementing integer
+                        ColumnType::Integer => SqlType::Integer,
+                        ColumnType::BigInt => SqlType::BigInt,
+                        ColumnType::Text => SqlType::Text,
+                        ColumnType::Varchar(n) => SqlType::Varchar(Some(n as u32)),
+                        ColumnType::Boolean => SqlType::Boolean,
+                        ColumnType::Json => SqlType::Json,
+                        ColumnType::Timestamp => SqlType::Timestamp { with_timezone: false },
+                    };
+                    ColumnSchema {
+                        name: col.name.clone(),
+                        data_type,
+                        nullable: col.nullable,
+                        default: None,
+                        constraints: Vec::new(),
+                    }
+                })
+                .collect();
+
+            TableSchema {
+                name: schema.name.clone(),
+                columns,
+                constraints: Vec::new(),
+                indexes: Vec::new(),
+            }
+        }
+
+        /// Convert from SQL executor TableSchema to PersistentTableStorage TableSchema
+        fn sql_schema_to_persistent_schema(schema: &TableSchema) -> PersistentTableSchema {
+            let columns = schema
+                .columns
+                .iter()
+                .map(|col| {
+                    let data_type = match &col.data_type {
+                        SqlType::Integer | SqlType::SmallInt => ColumnType::Integer,
+                        SqlType::BigInt => ColumnType::BigInt,
+                        SqlType::Text => ColumnType::Text,
+                        SqlType::Varchar(Some(n)) => ColumnType::Varchar(*n as i32),
+                        SqlType::Varchar(None) => ColumnType::Varchar(255),
+                        SqlType::Boolean => ColumnType::Boolean,
+                        SqlType::Json | SqlType::Jsonb => ColumnType::Json,
+                        SqlType::Timestamp { .. } => ColumnType::Timestamp,
+                        _ => ColumnType::Text, // Default fallback
+                    };
+
+                    ColumnDefinition {
+                        name: col.name.clone(),
+                        data_type,
+                        nullable: col.nullable,
+                        default_value: None,
+                    }
+                })
+                .collect();
+
+            PersistentTableSchema {
+                name: schema.name.clone(),
+                columns,
+                created_at: chrono::Utc::now(),
+                row_count: 0,
+            }
+        }
+
+        /// Convert JsonValue to SqlValue for row data
+        fn json_to_sql_value(value: &JsonValue) -> SqlValue {
+            match value {
+                JsonValue::Null => SqlValue::Null,
+                JsonValue::Bool(b) => SqlValue::Boolean(*b),
+                JsonValue::Number(n) => {
+                    if let Some(i) = n.as_i64() {
+                        SqlValue::BigInt(i)
+                    } else if let Some(f) = n.as_f64() {
+                        SqlValue::DoublePrecision(f)
+                    } else {
+                        SqlValue::Text(n.to_string())
+                    }
+                }
+                JsonValue::String(s) => SqlValue::Text(s.clone()),
+                JsonValue::Array(_) | JsonValue::Object(_) => SqlValue::Json(value.clone()),
+            }
+        }
+
+        /// Convert SqlValue to JsonValue for row data
+        fn sql_value_to_json(value: &SqlValue) -> JsonValue {
+            match value {
+                SqlValue::Null => JsonValue::Null,
+                SqlValue::Boolean(b) => JsonValue::Bool(*b),
+                SqlValue::SmallInt(i) => JsonValue::Number((*i as i64).into()),
+                SqlValue::Integer(i) => JsonValue::Number((*i as i64).into()),
+                SqlValue::BigInt(i) => JsonValue::Number((*i).into()),
+                SqlValue::Real(f) => serde_json::Number::from_f64(*f as f64)
+                    .map(JsonValue::Number)
+                    .unwrap_or(JsonValue::Null),
+                SqlValue::DoublePrecision(f) => serde_json::Number::from_f64(*f)
+                    .map(JsonValue::Number)
+                    .unwrap_or(JsonValue::Null),
+                SqlValue::Text(s) => JsonValue::String(s.clone()),
+                SqlValue::Varchar(s) => JsonValue::String(s.clone()),
+                SqlValue::Char(s) => JsonValue::String(s.clone()),
+                SqlValue::Json(v) | SqlValue::Jsonb(v) => v.clone(),
+                _ => JsonValue::String(value.to_postgres_string()),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl PersistentTableStorage for UnifiedTableStorage {
+        async fn create_table(&self, schema: PersistentTableSchema) -> ProtocolResult<()> {
+            let sql_schema = Self::persistent_schema_to_sql_schema(&schema);
+            self.store_table_schema(&sql_schema, None).await
+        }
+
+        async fn drop_table(&self, table_name: &str) -> ProtocolResult<()> {
+            self.remove_table_schema(table_name, None).await?;
+            Ok(())
+        }
+
+        async fn table_exists(&self, table_name: &str) -> ProtocolResult<bool> {
+            let schema = TableStorage::get_table_schema(self, table_name).await?;
+            Ok(schema.is_some())
+        }
+
+        async fn get_table_schema(
+            &self,
+            table_name: &str,
+        ) -> ProtocolResult<Option<PersistentTableSchema>> {
+            let schema = TableStorage::get_table_schema(self, table_name).await?;
+            Ok(schema.map(|s| Self::sql_schema_to_persistent_schema(&s)))
+        }
+
+        async fn list_tables(&self) -> ProtocolResult<Vec<String>> {
+            let schemas = self.list_table_schemas().await?;
+            Ok(schemas.into_iter().map(|s| s.name).collect())
+        }
+
+        async fn insert_row(&self, table_name: &str, row: TableRow) -> ProtocolResult<String> {
+            // Convert TableRow to HashMap<String, SqlValue>
+            let sql_row: HashMap<String, SqlValue> = row
+                .values
+                .iter()
+                .map(|(k, v)| (k.clone(), Self::json_to_sql_value(v)))
+                .collect();
+
+            TableStorage::insert_row(self, table_name, &sql_row, None).await?;
+            self.write_ops.fetch_add(1, Ordering::Relaxed);
+
+            // Generate a simple row ID (in real implementation, this would be from auto-increment)
+            Ok(uuid::Uuid::new_v4().to_string())
+        }
+
+        async fn update_rows(
+            &self,
+            table_name: &str,
+            set_values: HashMap<String, JsonValue>,
+            conditions: Vec<QueryCondition>,
+        ) -> ProtocolResult<i64> {
+            // Convert set_values to SqlValue
+            let updates: HashMap<String, SqlValue> = set_values
+                .iter()
+                .map(|(k, v)| (k.clone(), Self::json_to_sql_value(v)))
+                .collect();
+
+            // Create condition filter
+            let condition: Option<Box<dyn Fn(&HashMap<String, SqlValue>) -> bool + Send + Sync>> =
+                if conditions.is_empty() {
+                    None
+                } else {
+                    let conds = conditions.clone();
+                    Some(Box::new(move |row: &HashMap<String, SqlValue>| {
+                        conds.iter().all(|cond| {
+                            if let Some(row_value) = row.get(&cond.column) {
+                                let cond_value = Self::json_to_sql_value(&cond.value);
+                                match cond.operator.as_str() {
+                                    "=" | "==" => row_value == &cond_value,
+                                    "!=" | "<>" => row_value != &cond_value,
+                                    _ => true, // Skip complex operators for now
+                                }
+                            } else {
+                                false
+                            }
+                        })
+                    }))
+                };
+
+            let count = TableStorage::update_rows(self, table_name, &updates, condition, None).await?;
+            self.write_ops.fetch_add(1, Ordering::Relaxed);
+            Ok(count as i64)
+        }
+
+        async fn delete_rows(
+            &self,
+            table_name: &str,
+            conditions: Vec<QueryCondition>,
+        ) -> ProtocolResult<i64> {
+            // Create condition filter
+            let condition: Option<Box<dyn Fn(&HashMap<String, SqlValue>) -> bool + Send + Sync>> =
+                if conditions.is_empty() {
+                    None
+                } else {
+                    let conds = conditions.clone();
+                    Some(Box::new(move |row: &HashMap<String, SqlValue>| {
+                        conds.iter().all(|cond| {
+                            if let Some(row_value) = row.get(&cond.column) {
+                                let cond_value = Self::json_to_sql_value(&cond.value);
+                                match cond.operator.as_str() {
+                                    "=" | "==" => row_value == &cond_value,
+                                    "!=" | "<>" => row_value != &cond_value,
+                                    _ => true,
+                                }
+                            } else {
+                                false
+                            }
+                        })
+                    }))
+                };
+
+            let count = TableStorage::delete_rows(self, table_name, condition, None).await?;
+            self.delete_ops.fetch_add(1, Ordering::Relaxed);
+            Ok(count as i64)
+        }
+
+        async fn select_rows(
+            &self,
+            table_name: &str,
+            columns: Vec<String>,
+            conditions: Vec<QueryCondition>,
+            limit: Option<i64>,
+        ) -> ProtocolResult<Vec<TableRow>> {
+            self.read_ops.fetch_add(1, Ordering::Relaxed);
+
+            // Get all data from the table
+            let all_rows = self.get_table_data(table_name).await?;
+
+            // Filter rows based on conditions
+            let filtered: Vec<_> = all_rows
+                .into_iter()
+                .filter(|row| {
+                    conditions.iter().all(|cond| {
+                        if let Some(row_value) = row.get(&cond.column) {
+                            let cond_value = Self::json_to_sql_value(&cond.value);
+                            match cond.operator.as_str() {
+                                "=" | "==" => row_value == &cond_value,
+                                "!=" | "<>" => row_value != &cond_value,
+                                "<" => {
+                                    if let (SqlValue::BigInt(a), SqlValue::BigInt(b)) = (row_value, &cond_value) {
+                                        a < b
+                                    } else {
+                                        false
+                                    }
+                                }
+                                ">" => {
+                                    if let (SqlValue::BigInt(a), SqlValue::BigInt(b)) = (row_value, &cond_value) {
+                                        a > b
+                                    } else {
+                                        false
+                                    }
+                                }
+                                _ => true,
+                            }
+                        } else {
+                            conditions.is_empty()
+                        }
+                    })
+                })
+                .take(limit.unwrap_or(i64::MAX) as usize)
+                .collect();
+
+            // Convert to TableRow format with column projection
+            let result = filtered
+                .into_iter()
+                .map(|row| {
+                    let values: HashMap<String, JsonValue> = if columns.is_empty() {
+                        // SELECT * - return all columns
+                        row.iter()
+                            .map(|(k, v)| (k.clone(), Self::sql_value_to_json(v)))
+                            .collect()
+                    } else {
+                        // SELECT specific columns
+                        columns
+                            .iter()
+                            .filter_map(|col| {
+                                row.get(col)
+                                    .map(|v| (col.clone(), Self::sql_value_to_json(v)))
+                            })
+                            .collect()
+                    };
+
+                    TableRow {
+                        values,
+                        created_at: chrono::Utc::now(),
+                        updated_at: chrono::Utc::now(),
+                    }
+                })
+                .collect();
+
+            Ok(result)
+        }
+    }
+}
