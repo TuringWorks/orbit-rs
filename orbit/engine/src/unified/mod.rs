@@ -65,6 +65,7 @@
 //! 3. UnifiedStorage returns the same record
 //! 4. PostgresAdapter formats as SQL result set
 
+pub mod actor_tier_placement;
 pub mod adapters;
 pub mod operations;
 pub mod schema;
@@ -92,6 +93,10 @@ pub use tiered::{
     ColdBackendType, ColdDataFormat, ColdTierConfig, EvictionPolicy, HotTierConfig,
     StorageTier, TierMigrationConfig, TieredStorageBackend, TieredStorageConfig,
     TieredStorageMetrics, WarmTierConfig, WritePolicy,
+};
+pub use actor_tier_placement::{
+    ActorTierPlacement, ActorTierPlacementBuilder, ActorTierPlacementConfig,
+    ActorTierStats, ActorType, TierRecommendation,
 };
 
 // Future modules (to be implemented)
