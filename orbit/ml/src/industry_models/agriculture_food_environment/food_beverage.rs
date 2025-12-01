@@ -179,7 +179,7 @@ mod tests {
     #[tokio::test]
     async fn test_process_monitoring_system() {
         let params = vec!["temp".to_string(), "pressure".to_string()];
-        let mut model = ProcessMonitoringSystem::new(params);
+        let model = ProcessMonitoringSystem::new(params);
         assert_eq!(model.model_type(), "food_beverage.process_monitoring");
 
         let predictions = model.predict(&[]).await.unwrap();

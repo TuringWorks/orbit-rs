@@ -176,7 +176,7 @@ mod tests {
     #[tokio::test]
     async fn test_commodity_trading_model() {
         let commodities = vec!["gold".to_string(), "oil".to_string()];
-        let mut model = CommodityTradingModel::new(commodities);
+        let model = CommodityTradingModel::new(commodities);
         assert_eq!(model.model_type(), "trading.commodity");
 
         let predictions = model.predict(&[]).await.unwrap();

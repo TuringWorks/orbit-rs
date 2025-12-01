@@ -192,7 +192,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pipeline_leak_detector() {
-        let mut model = PipelineLeakDetector::new(100);
+        let model = PipelineLeakDetector::new(100);
         assert_eq!(model.model_type(), "infrastructure.pipeline_leak_detection");
 
         let predictions = model.predict(&[]).await.unwrap();

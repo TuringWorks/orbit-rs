@@ -133,7 +133,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_customer_churn_model() {
-        let mut model = CustomerChurnModel::new(90);
+        let model = CustomerChurnModel::new(90);
         assert_eq!(model.model_type(), "banking.customer_churn");
 
         let predictions = model.predict(&[]).await.unwrap();

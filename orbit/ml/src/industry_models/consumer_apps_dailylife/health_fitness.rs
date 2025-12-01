@@ -168,7 +168,7 @@ mod tests {
     #[tokio::test]
     async fn test_sleep_pattern_analyzer() {
         let stages = vec!["light".to_string(), "deep".to_string(), "rem".to_string()];
-        let mut model = SleepPatternAnalyzer::new(stages);
+        let model = SleepPatternAnalyzer::new(stages);
         assert_eq!(model.model_type(), "health_fitness.sleep_analysis");
 
         let predictions = model.predict(&[]).await.unwrap();

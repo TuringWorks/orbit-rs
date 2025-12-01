@@ -175,7 +175,7 @@ mod tests {
     #[tokio::test]
     async fn test_new_product_demand_predictor() {
         let features = vec!["price".to_string(), "category".to_string()];
-        let mut model = NewProductDemandPredictor::new(features);
+        let model = NewProductDemandPredictor::new(features);
         assert_eq!(model.model_type(), "cpg.new_product_demand");
 
         let predictions = model.predict(&[]).await.unwrap();

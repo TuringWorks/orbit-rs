@@ -124,7 +124,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_visual_perception_slam() {
-        let mut model = VisualPerceptionSLAM::new(true);
+        let model = VisualPerceptionSLAM::new(true);
         assert_eq!(model.model_type(), "robotics.visual_slam");
 
         let predictions = model.predict(&[]).await.unwrap();

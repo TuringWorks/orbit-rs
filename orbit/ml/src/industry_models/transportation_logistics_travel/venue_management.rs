@@ -192,7 +192,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_queue_management_system() {
-        let mut model = QueueManagementSystem::new(20);
+        let model = QueueManagementSystem::new(20);
         assert_eq!(model.model_type(), "venue_management.queue_management");
 
         let predictions = model.predict(&[]).await.unwrap();

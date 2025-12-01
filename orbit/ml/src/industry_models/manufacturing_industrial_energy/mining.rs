@@ -182,7 +182,7 @@ mod tests {
     #[tokio::test]
     async fn test_mining_equipment_maintenance() {
         let equipment = vec!["haul_truck".to_string(), "excavator".to_string()];
-        let mut model = MiningEquipmentMaintenance::new(equipment);
+        let model = MiningEquipmentMaintenance::new(equipment);
         assert_eq!(model.model_type(), "mining.equipment_maintenance");
 
         let predictions = model.predict(&[]).await.unwrap();

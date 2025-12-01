@@ -192,7 +192,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ocean_current_predictor() {
-        let mut model = OceanCurrentPredictor::new(48);
+        let model = OceanCurrentPredictor::new(48);
         assert_eq!(
             model.model_type(),
             "marine_exploration.ocean_current_prediction"

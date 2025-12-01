@@ -117,7 +117,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_audience_targeting_optimizer() {
-        let mut model = AudienceTargetingOptimizer::new(20);
+        let model = AudienceTargetingOptimizer::new(20);
         assert_eq!(model.model_type(), "advertising.audience_targeting");
 
         let predictions = model.predict(&[]).await.unwrap();
@@ -126,7 +126,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_marketing_budget_optimizer() {
-        let mut model = MarketingBudgetOptimizer::new(8);
+        let model = MarketingBudgetOptimizer::new(8);
         assert_eq!(model.model_type(), "advertising.budget_optimization");
 
         let predictions = model.predict(&[]).await.unwrap();

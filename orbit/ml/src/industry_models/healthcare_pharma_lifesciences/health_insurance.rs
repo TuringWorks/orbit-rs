@@ -170,7 +170,7 @@ mod tests {
     #[tokio::test]
     async fn test_utilization_predictor() {
         let services = vec!["inpatient".to_string(), "outpatient".to_string()];
-        let mut model = UtilizationPredictor::new(services);
+        let model = UtilizationPredictor::new(services);
         assert_eq!(model.model_type(), "healthcare.utilization_prediction");
 
         let predictions = model.predict(&[]).await.unwrap();

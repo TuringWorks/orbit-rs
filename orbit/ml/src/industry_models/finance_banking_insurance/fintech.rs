@@ -218,7 +218,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_credit_scoring_model() {
-        let mut model = CreditScoringModel::new(300.0, 850.0);
+        let model = CreditScoringModel::new(300.0, 850.0);
         assert_eq!(model.model_type(), "fintech.credit_scoring");
 
         let predictions = model.predict(&[]).await.unwrap();

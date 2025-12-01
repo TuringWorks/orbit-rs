@@ -312,7 +312,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_graphsage() {
-        let mut model = GraphSAGE::new(2, "mean".to_string(), 128);
+        let model = GraphSAGE::new(2, "mean".to_string(), 128);
         assert_eq!(model.model_type(), "gnn.graphsage");
 
         let predictions = model.predict(&[]).await.unwrap();
@@ -330,7 +330,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_knowledge_graph_embedding() {
-        let mut model = KnowledgeGraphEmbedding::new(100, 10000, 50);
+        let model = KnowledgeGraphEmbedding::new(100, 10000, 50);
         assert_eq!(model.model_type(), "gnn.knowledge_graph_embedding");
 
         let predictions = model.predict(&[]).await.unwrap();

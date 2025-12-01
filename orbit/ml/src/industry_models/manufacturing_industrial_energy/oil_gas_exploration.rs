@@ -193,7 +193,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_production_optimizer() {
-        let mut model = ProductionOptimizer::new(50);
+        let model = ProductionOptimizer::new(50);
         assert_eq!(
             model.model_type(),
             "oil_gas_exploration.production_optimization"

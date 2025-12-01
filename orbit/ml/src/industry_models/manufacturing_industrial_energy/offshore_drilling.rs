@@ -127,7 +127,7 @@ mod tests {
     #[tokio::test]
     async fn test_offshore_equipment_predictor() {
         let equipment = vec!["blowout_preventer".to_string(), "top_drive".to_string()];
-        let mut model = OffshoreEquipmentPredictor::new(equipment);
+        let model = OffshoreEquipmentPredictor::new(equipment);
         assert_eq!(model.model_type(), "offshore_drilling.equipment_failure");
 
         let predictions = model.predict(&[]).await.unwrap();

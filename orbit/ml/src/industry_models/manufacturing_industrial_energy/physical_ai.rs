@@ -126,7 +126,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_human_pose_estimator() {
-        let mut model = HumanPoseEstimator::new(17, true); // COCO keypoints, 3D
+        let model = HumanPoseEstimator::new(17, true); // COCO keypoints, 3D
         assert_eq!(model.model_type(), "physical_ai.pose_estimation");
 
         let predictions = model.predict(&[]).await.unwrap();

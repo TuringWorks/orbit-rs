@@ -668,7 +668,7 @@ async fn test_mysql_to_aql_cross_protocol() {
     mysql.insert("documents", document, "id").await.unwrap();
 
     // Read via AQL adapter (ArangoDB style)
-    let aql = AdapterFactory::aql(Arc::clone(&storage), Arc::clone(&registry));
+    let _aql = AdapterFactory::aql(Arc::clone(&storage), Arc::clone(&registry));
 
     // AQL adapter stores in graph:nodes namespace - access via REST for table data
     let rest = AdapterFactory::rest(Arc::clone(&storage), Arc::clone(&registry));

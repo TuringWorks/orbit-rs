@@ -132,7 +132,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_production_scheduler() {
-        let mut model = ProductionScheduler::new(10, 50);
+        let model = ProductionScheduler::new(10, 50);
         assert_eq!(model.model_type(), "manufacturing.production_scheduling");
 
         let predictions = model.predict(&[]).await.unwrap();

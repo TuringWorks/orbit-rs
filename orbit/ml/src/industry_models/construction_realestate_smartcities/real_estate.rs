@@ -166,7 +166,7 @@ mod tests {
     #[tokio::test]
     async fn test_rental_yield_predictor() {
         let segments = vec!["residential".to_string(), "commercial".to_string()];
-        let mut model = RentalYieldPredictor::new(segments);
+        let model = RentalYieldPredictor::new(segments);
         assert_eq!(model.model_type(), "real_estate.rental_yield");
 
         let predictions = model.predict(&[]).await.unwrap();

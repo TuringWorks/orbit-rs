@@ -129,7 +129,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_time_series_forecaster() {
-        let mut model = TimeSeriesForecaster::new(24);
+        let model = TimeSeriesForecaster::new(24);
         assert_eq!(model.model_type(), "iot.time_series_forecasting");
 
         let predictions = model.predict(&[]).await.unwrap();

@@ -127,7 +127,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_renewable_energy_forecaster() {
-        let mut model = RenewableEnergyForecaster::new("solar".to_string(), 24);
+        let model = RenewableEnergyForecaster::new("solar".to_string(), 24);
         assert_eq!(model.model_type(), "energy.renewable_forecasting");
 
         let predictions = model.predict(&[]).await.unwrap();

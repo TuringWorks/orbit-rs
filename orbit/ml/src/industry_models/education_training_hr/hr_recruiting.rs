@@ -194,7 +194,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_skill_graph_analyzer() {
-        let mut model = SkillGraphAnalyzer::new(1000, 200);
+        let model = SkillGraphAnalyzer::new(1000, 200);
         assert_eq!(model.model_type(), "hr_recruiting.skill_graph_analysis");
 
         let predictions = model.predict(&[]).await.unwrap();

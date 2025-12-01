@@ -116,7 +116,7 @@ mod tests {
     #[tokio::test]
     async fn test_generative_design_engine() {
         let constraints = vec!["size".to_string(), "color".to_string()];
-        let mut model = GenerativeDesignEngine::new(constraints);
+        let model = GenerativeDesignEngine::new(constraints);
         assert_eq!(model.model_type(), "design_creative.generative_design");
 
         let predictions = model.predict(&[]).await.unwrap();
@@ -125,7 +125,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ux_layout_optimizer() {
-        let mut model = UXLayoutOptimizer::new(10);
+        let model = UXLayoutOptimizer::new(10);
         assert_eq!(model.model_type(), "design_creative.ux_layout_optimization");
 
         let predictions = model.predict(&[]).await.unwrap();

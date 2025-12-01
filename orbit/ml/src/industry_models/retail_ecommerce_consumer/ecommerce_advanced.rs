@@ -308,7 +308,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_dynamic_pricing_engine() {
-        let mut model = DynamicPricingEngine::new(5000);
+        let model = DynamicPricingEngine::new(5000);
         assert_eq!(model.model_type(), "ecommerce.dynamic_pricing");
 
         let predictions = model.predict(&[]).await.unwrap();

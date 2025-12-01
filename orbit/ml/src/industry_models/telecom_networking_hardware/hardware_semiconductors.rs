@@ -117,7 +117,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_semiconductor_yield_optimizer() {
-        let mut model = SemiconductorYieldOptimizer::new(25);
+        let model = SemiconductorYieldOptimizer::new(25);
         assert_eq!(model.model_type(), "hardware.yield_optimization");
 
         let predictions = model.predict(&[]).await.unwrap();

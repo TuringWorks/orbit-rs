@@ -133,7 +133,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_vehicle_maintenance_predictor() {
-        let mut model = VehicleMaintenancePredictor::new(10000);
+        let model = VehicleMaintenancePredictor::new(10000);
         assert_eq!(model.model_type(), "automotive.predictive_maintenance");
 
         let predictions = model.predict(&[]).await.unwrap();

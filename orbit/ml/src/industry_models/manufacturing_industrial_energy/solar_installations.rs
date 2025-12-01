@@ -130,7 +130,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_solar_site_optimizer() {
-        let mut model = SolarSiteOptimizer::new(15);
+        let model = SolarSiteOptimizer::new(15);
         assert_eq!(model.model_type(), "solar_installations.site_optimization");
 
         let predictions = model.predict(&[]).await.unwrap();

@@ -213,7 +213,7 @@ mod tests {
     #[tokio::test]
     async fn test_molecular_property_predictor() {
         let properties = vec!["logP".to_string(), "solubility".to_string()];
-        let mut model = MolecularPropertyPredictor::new(properties);
+        let model = MolecularPropertyPredictor::new(properties);
         assert_eq!(
             model.model_type(),
             "pharmaceutical_research.molecular_properties"
@@ -246,7 +246,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_de_novo_drug_designer() {
-        let mut model = DeNovoDrugDesigner::new(128);
+        let model = DeNovoDrugDesigner::new(128);
         assert_eq!(model.model_type(), "pharmaceutical_research.de_novo_design");
 
         let predictions = model.predict(&[]).await.unwrap();

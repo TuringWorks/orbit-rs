@@ -178,7 +178,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_son_controller() {
-        let mut model = SelfOptimizingNetworkController::new(500);
+        let model = SelfOptimizingNetworkController::new(500);
         assert_eq!(model.model_type(), "telecom.self_optimizing_network");
 
         let predictions = model.predict(&[]).await.unwrap();

@@ -289,7 +289,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ticket_demand_forecaster() {
-        let mut model = TicketDemandForecaster::new(30);
+        let model = TicketDemandForecaster::new(30);
         assert_eq!(model.model_type(), "ticketing.demand_forecasting");
 
         let predictions = model.predict(&[]).await.unwrap();
@@ -318,7 +318,7 @@ mod tests {
     #[tokio::test]
     async fn test_no_show_predictor() {
         let categories = vec!["flight".to_string(), "event".to_string()];
-        let mut model = NoShowPredictor::new(categories);
+        let model = NoShowPredictor::new(categories);
         assert_eq!(model.model_type(), "ticketing.no_show_prediction");
 
         let predictions = model.predict(&[]).await.unwrap();

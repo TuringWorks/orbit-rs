@@ -175,7 +175,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_energy_consumption_predictor() {
-        let mut model = EnergyConsumptionPredictor::new(24);
+        let model = EnergyConsumptionPredictor::new(24);
         assert_eq!(model.model_type(), "building_management.energy_prediction");
 
         let predictions = model.predict(&[]).await.unwrap();

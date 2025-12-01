@@ -182,7 +182,7 @@ mod tests {
     #[tokio::test]
     async fn test_remote_monitoring_anomaly_detector() {
         let metrics_list = vec!["spo2".to_string(), "bp".to_string()];
-        let mut model = RemoteMonitoringAnomalyDetector::new(metrics_list);
+        let model = RemoteMonitoringAnomalyDetector::new(metrics_list);
         assert_eq!(model.model_type(), "healthcare.remote_monitoring");
 
         let predictions = model.predict(&[]).await.unwrap();

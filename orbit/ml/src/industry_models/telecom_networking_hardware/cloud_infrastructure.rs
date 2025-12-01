@@ -117,7 +117,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cloud_autoscaling_optimizer() {
-        let mut model = CloudAutoscalingOptimizer::new(10);
+        let model = CloudAutoscalingOptimizer::new(10);
         assert_eq!(model.model_type(), "cloud_infrastructure.autoscaling");
 
         let predictions = model.predict(&[]).await.unwrap();
