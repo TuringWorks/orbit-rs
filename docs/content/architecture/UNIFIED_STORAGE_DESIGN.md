@@ -33,17 +33,17 @@ A **single unified storage layer** that all protocols share:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Protocol Layer                              │
-├─────────┬─────────┬─────────┬─────────┬─────────┬──────────────┤
+│                      Protocol Layer                             │
+├─────────┬───────-──┬─────────┬─────────┬─────────┬────────────-─┤
 │  Redis  │PostgreSQL│  MySQL  │   CQL   │ Cypher  │  AQL/REST    │
 │ Adapter │ Adapter  │ Adapter │ Adapter │ Adapter │  Adapter     │
-├─────────┴─────────┴─────────┴─────────┴─────────┴──────────────┤
-│                    Schema Registry                               │
+├─────────┴──────-───┴─────────┴─────────┴─────────┴───────────-──┤
+│                    Schema Registry                              │
 ├─────────────────────────────────────────────────────────────────┤
-│                 Unified Query Engine                             │
+│                 Unified Query Engine                            │
 ├─────────────────────────────────────────────────────────────────┤
-│                   Unified Storage                                │
-│         (Single RocksDB + Tiered Storage Backend)                │
+│                   Unified Storage                               │
+│         (Single RocksDB + Tiered Storage Backend)               │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
