@@ -6,6 +6,7 @@
 
 use crate::protocols::cypher::types::{GraphNode, GraphRelationship};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
+use async_trait::async_trait;
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 use serde_json;
 use std::collections::HashMap;
@@ -13,6 +14,36 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{error, info};
+
+/// Trait for Cypher graph storage providers
+/// This abstraction allows both RocksDB-based and unified storage backends
+/// to be used interchangeably with Cypher servers.
+#[async_trait]
+pub trait CypherStorageProvider: Send + Sync {
+    /// Initialize the storage backend
+    async fn initialize(&self) -> ProtocolResult<()>;
+
+    /// Store a node
+    async fn store_node(&self, node: GraphNode) -> ProtocolResult<()>;
+
+    /// Get a node by ID
+    async fn get_node(&self, node_id: &str) -> ProtocolResult<Option<GraphNode>>;
+
+    /// Get all nodes
+    async fn get_all_nodes(&self) -> ProtocolResult<Vec<GraphNode>>;
+
+    /// Store a relationship
+    async fn store_relationship(&self, rel: GraphRelationship) -> ProtocolResult<()>;
+
+    /// Get a relationship by ID
+    async fn get_relationship(&self, rel_id: &str) -> ProtocolResult<Option<GraphRelationship>>;
+
+    /// Get all relationships
+    async fn get_all_relationships(&self) -> ProtocolResult<Vec<GraphRelationship>>;
+
+    /// Shutdown the storage backend
+    async fn shutdown(&self) -> ProtocolResult<()>;
+}
 
 /// Cypher graph storage with RocksDB persistence
 #[derive(Debug)]
@@ -230,5 +261,41 @@ impl CypherGraphStorage {
             info!("CypherGraphStorage: RocksDB closed and lock released");
         }
         Ok(())
+    }
+}
+
+/// Implement the CypherStorageProvider trait for CypherGraphStorage
+#[async_trait]
+impl CypherStorageProvider for CypherGraphStorage {
+    async fn initialize(&self) -> ProtocolResult<()> {
+        CypherGraphStorage::initialize(self).await
+    }
+
+    async fn store_node(&self, node: GraphNode) -> ProtocolResult<()> {
+        CypherGraphStorage::store_node(self, node).await
+    }
+
+    async fn get_node(&self, node_id: &str) -> ProtocolResult<Option<GraphNode>> {
+        CypherGraphStorage::get_node(self, node_id).await
+    }
+
+    async fn get_all_nodes(&self) -> ProtocolResult<Vec<GraphNode>> {
+        CypherGraphStorage::get_all_nodes(self).await
+    }
+
+    async fn store_relationship(&self, rel: GraphRelationship) -> ProtocolResult<()> {
+        CypherGraphStorage::store_relationship(self, rel).await
+    }
+
+    async fn get_relationship(&self, rel_id: &str) -> ProtocolResult<Option<GraphRelationship>> {
+        CypherGraphStorage::get_relationship(self, rel_id).await
+    }
+
+    async fn get_all_relationships(&self) -> ProtocolResult<Vec<GraphRelationship>> {
+        CypherGraphStorage::get_all_relationships(self).await
+    }
+
+    async fn shutdown(&self) -> ProtocolResult<()> {
+        CypherGraphStorage::shutdown(self).await
     }
 }

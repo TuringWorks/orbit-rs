@@ -1977,6 +1977,45 @@ mod aql_storage_impl {
             Ok(())
         }
     }
+
+    /// Implement AqlStorageProvider trait for UnifiedAqlStorage
+    #[async_trait]
+    impl crate::protocols::aql::AqlStorageProvider for UnifiedAqlStorage {
+        async fn initialize(&self) -> ProtocolResult<()> {
+            UnifiedAqlStorage::initialize(self).await
+        }
+
+        async fn store_collection(&self, collection: AqlCollection) -> ProtocolResult<()> {
+            UnifiedAqlStorage::store_collection(self, collection).await
+        }
+
+        async fn get_collection(&self, name: &str) -> ProtocolResult<Option<AqlCollection>> {
+            UnifiedAqlStorage::get_collection(self, name).await
+        }
+
+        async fn store_document(&self, doc: AqlDocument) -> ProtocolResult<()> {
+            UnifiedAqlStorage::store_document(self, doc).await
+        }
+
+        async fn get_document(
+            &self,
+            collection: &str,
+            key: &str,
+        ) -> ProtocolResult<Option<AqlDocument>> {
+            UnifiedAqlStorage::get_document(self, collection, key).await
+        }
+
+        async fn get_collection_documents(
+            &self,
+            collection: &str,
+        ) -> ProtocolResult<Vec<AqlDocument>> {
+            UnifiedAqlStorage::get_collection_documents(self, collection).await
+        }
+
+        async fn shutdown(&self) -> ProtocolResult<()> {
+            UnifiedAqlStorage::shutdown(self).await
+        }
+    }
 }
 
 #[cfg(feature = "storage-rocksdb")]
@@ -2349,6 +2388,45 @@ mod cypher_storage_impl {
         /// Shutdown the storage
         pub async fn shutdown(&self) -> ProtocolResult<()> {
             Ok(())
+        }
+    }
+
+    /// Implement CypherStorageProvider trait for UnifiedCypherStorage
+    #[async_trait]
+    impl crate::protocols::cypher::CypherStorageProvider for UnifiedCypherStorage {
+        async fn initialize(&self) -> ProtocolResult<()> {
+            UnifiedCypherStorage::initialize(self).await
+        }
+
+        async fn store_node(&self, node: GraphNode) -> ProtocolResult<()> {
+            UnifiedCypherStorage::store_node(self, node).await
+        }
+
+        async fn get_node(&self, node_id: &str) -> ProtocolResult<Option<GraphNode>> {
+            UnifiedCypherStorage::get_node(self, node_id).await
+        }
+
+        async fn get_all_nodes(&self) -> ProtocolResult<Vec<GraphNode>> {
+            UnifiedCypherStorage::get_all_nodes(self).await
+        }
+
+        async fn store_relationship(&self, rel: GraphRelationship) -> ProtocolResult<()> {
+            UnifiedCypherStorage::store_relationship(self, rel).await
+        }
+
+        async fn get_relationship(
+            &self,
+            rel_id: &str,
+        ) -> ProtocolResult<Option<GraphRelationship>> {
+            UnifiedCypherStorage::get_relationship(self, rel_id).await
+        }
+
+        async fn get_all_relationships(&self) -> ProtocolResult<Vec<GraphRelationship>> {
+            UnifiedCypherStorage::get_all_relationships(self).await
+        }
+
+        async fn shutdown(&self) -> ProtocolResult<()> {
+            UnifiedCypherStorage::shutdown(self).await
         }
     }
 }

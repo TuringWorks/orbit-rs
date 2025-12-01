@@ -72,6 +72,11 @@ enum StorageMode {
         /// UnifiedRedisDataProvider for Redis protocol to share storage with other protocols
         redis_unified:
             Arc<orbit_server::protocols::common::storage::unified::UnifiedRedisDataProvider>,
+        /// UnifiedAqlStorage for AQL/ArangoDB protocol to share storage with other protocols
+        aql_unified: Arc<orbit_server::protocols::common::storage::unified::UnifiedAqlStorage>,
+        /// UnifiedCypherStorage for Cypher/Neo4j protocol to share storage with other protocols
+        cypher_unified:
+            Arc<orbit_server::protocols::common::storage::unified::UnifiedCypherStorage>,
     },
 }
 
@@ -383,11 +388,29 @@ async fn main() -> Result<(), Box<dyn Error>> {
             ),
         );
 
+        // Create UnifiedAqlStorage for AQL/ArangoDB protocol
+        let aql_unified_storage = UnifiedTableStorage::aql(integration.clone());
+        let aql_unified = Arc::new(
+            orbit_server::protocols::common::storage::unified::UnifiedAqlStorage::new(Arc::new(
+                aql_unified_storage,
+            )),
+        );
+
+        // Create UnifiedCypherStorage for Cypher/Neo4j protocol
+        let cypher_unified_storage = UnifiedTableStorage::cypher(integration.clone());
+        let cypher_unified = Arc::new(
+            orbit_server::protocols::common::storage::unified::UnifiedCypherStorage::new(Arc::new(
+                cypher_unified_storage,
+            )),
+        );
+
         // Initialize the unified storage adapters
         postgres_unified.initialize().await?;
         mysql_unified.initialize().await?;
         cql_unified.initialize().await?;
         redis_unified.initialize().await?;
+        aql_unified.initialize().await?;
+        cypher_unified.initialize().await?;
 
         info!("[Storage] Unified storage initialized - cross-protocol data sharing ENABLED");
         info!(
@@ -401,6 +424,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             mysql_unified,
             cql_unified,
             redis_unified,
+            aql_unified,
+            cypher_unified,
         }
     } else {
         // Create independent tiered storage for each protocol with protocol-specific data directories
@@ -465,6 +490,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             mysql_unified,
             cql_unified,
             redis_unified: _,
+            aql_unified: _,
+            cypher_unified: _,
         } => {
             // UnifiedTableStorage adapters are available for protocol servers
             info!("[Storage] Unified storage mode ENABLED - cross-protocol data sharing active:");
@@ -481,6 +508,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 cql_unified.dialect()
             );
             info!("[Storage]   - Redis: using UnifiedRedisDataProvider (cross-protocol)");
+            info!("[Storage]   - AQL: using UnifiedAqlStorage (cross-protocol)");
+            info!("[Storage]   - Cypher: using UnifiedCypherStorage (cross-protocol)");
 
             // PostgreSQL, MySQL, and CQL use UnifiedTableStorage directly
             // Redis still uses TieredTableStorage due to different data model (key-value with TTL)
