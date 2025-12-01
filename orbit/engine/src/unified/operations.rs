@@ -5,6 +5,7 @@
 //! Cassandra, Cypher, AQL, and REST protocols.
 
 use super::types::{RecordId, UniversalValue};
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// Operations that any protocol can express
@@ -536,7 +537,7 @@ impl Default for IsolationLevel {
 }
 
 /// Schema definition for a namespace
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NamespaceSchema {
     /// Field definitions
     pub fields: Vec<FieldDefinition>,
@@ -547,7 +548,7 @@ pub struct NamespaceSchema {
 }
 
 /// Field definition in a schema
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldDefinition {
     pub name: String,
     pub field_type: FieldType,
@@ -556,7 +557,7 @@ pub struct FieldDefinition {
 }
 
 /// Field type in a schema
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FieldType {
     Bool,
     Int,
@@ -574,7 +575,7 @@ pub enum FieldType {
 }
 
 /// Index definition
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexDefinition {
     pub name: String,
     pub fields: Vec<String>,
@@ -583,7 +584,7 @@ pub struct IndexDefinition {
 }
 
 /// Type of index
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum IndexType {
     BTree,
     Hash,

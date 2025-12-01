@@ -66,6 +66,7 @@
 //! 4. PostgresAdapter formats as SQL result set
 
 pub mod operations;
+pub mod schema;
 pub mod storage;
 pub mod types;
 
@@ -75,6 +76,7 @@ pub use operations::{
     IndexType, IsolationLevel, NamespaceSchema, NodePattern, RelationshipDirection,
     RelationshipPattern, SortOrder, UniversalOperation,
 };
+pub use schema::{Protocol, ProtocolProjection, SchemaRegistry, SchemaVersion};
 pub use storage::{
     MemoryBackend, UnifiedStorage, UnifiedStorageBackend, UnifiedStorageConfig,
     UnifiedStorageError, UnifiedStorageMetrics, UnifiedStorageResult,
@@ -82,9 +84,8 @@ pub use storage::{
 pub use types::{RecordId, RecordMetadata, UniversalRecord, UniversalResult, UniversalValue};
 
 // Future modules (to be implemented)
-// pub mod schema;     // SchemaRegistry
-// pub mod backend;    // RocksDB backend
-// pub mod index;      // Index management
-// pub mod transaction; // Transaction management
-// pub mod cache;      // Caching layer
-// pub mod adapters;   // Protocol adapters
+// pub mod backend;     // RocksDB persistent backend
+// pub mod index;       // Secondary index management
+// pub mod transaction; // Distributed transaction coordination
+// pub mod cache;       // Query result caching
+// pub mod adapters;    // Protocol-specific adapters
