@@ -1,12 +1,22 @@
 //! Industry-specific machine learning models
 //!
-//! This module provides pre-built ML models for various industry verticals including:
-//! - Business: Healthcare, Fintech, Banking, Insurance, Adtech, Defense, Logistics
-//! - Advanced AI: Physical AI, Drug Discovery, Genomics, Physics, Industrial AI, IoT
-//! - Critical Industry: Retail, Fashion, FMCG/CPG, Supply Chain, Critical Equipment
-//! - Heavy Industry: Aerospace, Petroleum, Robotics, Energy, Manufacturing
-//! - Food Service: Fast Food, Restaurants, Industrial Supplies
-//! - Specialized Manufacturing: Automotive, Consumer Electronics
+//! Organized into 15 major industry categories following standard taxonomy:
+//!
+//! 1. **Technology, Media & Internet** - Software, platforms, social media, gaming, entertainment
+//! 2. **Finance, Banking & Insurance** - Banking, capital markets, insurance, fintech
+//! 3. **Healthcare, Pharma & Life Sciences** - Hospitals, pharma, biotech, medical devices
+//! 4. **Retail, E-Commerce & Consumer Goods** - Retail, e-commerce, CPG, fashion
+//! 5. **Transportation, Logistics & Travel** - Logistics, airlines, ride-sharing, hospitality
+//! 6. **Manufacturing, Industrial & Energy** - Manufacturing, robotics, oil & gas, utilities, clean energy
+//! 7. **Agriculture, Food & Environment** - Agriculture, food, fisheries, climate
+//! 8. **Construction, Real Estate & Smart Cities** - Construction, real estate, urban planning
+//! 9. **Telecom, Networking & Hardware** - Telecom, semiconductors, cloud infrastructure
+//! 10. **Education, Training & HR** - EdTech, corporate learning, recruiting
+//! 11. **Government, Defense & Public Sector** - Public admin, defense, law enforcement
+//! 12. **Legal, Compliance & Professional Services** - Legal, consulting, audit
+//! 13. **Arts, Design & Creative Industries** - Advertising, design, publishing
+//! 14. **Consumer Apps & Daily-Life Services** - Personal finance, health apps, home IoT
+//! 15. **Cross-Cutting Horizontal** - Forecasting, recommendations, anomaly detection, CV, NLP
 
 // Common infrastructure
 pub mod common;
@@ -17,30 +27,19 @@ pub use common::{
     TrainingConfig,
 };
 
-#[cfg(feature = "industry-healthcare")]
-/// Healthcare-specific machine learning models and utilities
-pub mod healthcare;
-
-#[cfg(feature = "industry-fintech")]
-/// Financial technology machine learning models and utilities
-pub mod fintech;
-
-#[cfg(feature = "industry-adtech")]
-/// Advertising technology machine learning models and utilities
-pub mod adtech;
-
-#[cfg(feature = "industry-defense")]
-/// Defense and security machine learning models and utilities
-pub mod defense;
-
-#[cfg(feature = "industry-logistics")]
-/// Logistics and supply chain machine learning models and utilities
-pub mod logistics;
-
-#[cfg(feature = "industry-banking")]
-/// Banking and financial services machine learning models and utilities
-pub mod banking;
-
-#[cfg(feature = "industry-insurance")]
-/// Insurance industry machine learning models and utilities
-pub mod insurance;
+// 15 Major Industry Categories
+pub mod technology_media_internet;
+pub mod finance_banking_insurance;
+pub mod healthcare_pharma_lifesciences;
+pub mod retail_ecommerce_consumer;
+pub mod transportation_logistics_travel;
+pub mod manufacturing_industrial_energy;
+pub mod agriculture_food_environment;
+pub mod construction_realestate_smartcities;
+pub mod telecom_networking_hardware;
+pub mod education_training_hr;
+pub mod government_defense_publicsector;
+pub mod legal_compliance_professional;
+pub mod arts_design_creative;
+pub mod consumer_apps_dailylife;
+pub mod cross_cutting_horizontal;
