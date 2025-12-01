@@ -749,8 +749,11 @@ impl TableStorage for UnifiedTableStorage {
     ) -> ProtocolResult<usize> {
         self.delete_ops.fetch_add(1, Ordering::Relaxed);
 
-        // Note: condition filtering is not fully supported through SqlAdapter
-        // For now, delete all matching rows
+        // NOTE: Conditional deletion is NOT supported through this method due to
+        // async_trait lifetime limitations with Fn trait objects.
+        // Callers that need conditional deletion should use direct key-based deletion
+        // through the underlying storage instead.
+        // For now, this deletes ALL rows (same behavior as memory backend).
         let count = self
             .sql_adapter
             .delete(table_name, None)
@@ -1551,24 +1554,16 @@ mod redis_provider_impl {
             metrics.delete_operations += 1;
             drop(metrics);
 
-            let key_owned = key.to_string();
-            let count = self
+            // Delete by key directly using the underlying storage
+            let deleted = self
                 .storage
-                .delete_rows(
-                    REDIS_KV_TABLE,
-                    Some(Box::new(move |row| {
-                        if let Some(SqlValue::Text(k)) = row.get("key") {
-                            k == &key_owned
-                        } else {
-                            false
-                        }
-                    })),
-                    None,
-                )
+                .integration
+                .storage()
+                .delete(REDIS_KV_TABLE, key)
                 .await
-                .map_err(|e| orbit_shared::OrbitError::storage(e.to_string()))?;
+                .is_ok();
 
-            Ok(count > 0)
+            Ok(deleted)
         }
 
         async fn exists(&self, key: &str) -> OrbitResult<bool> {
@@ -1627,21 +1622,35 @@ mod redis_provider_impl {
 
             let now = Self::current_timestamp();
 
-            let count = self
+            // Fetch all rows and find expired ones
+            let rows = self
                 .storage
-                .delete_rows(
-                    REDIS_KV_TABLE,
-                    Some(Box::new(move |row| {
-                        if let Some(SqlValue::BigInt(exp)) = row.get("expiration") {
-                            now >= *exp as u64
-                        } else {
-                            false
-                        }
-                    })),
-                    None,
-                )
+                .get_table_data(REDIS_KV_TABLE)
                 .await
                 .map_err(|e| orbit_shared::OrbitError::storage(e.to_string()))?;
+
+            // Collect keys to delete
+            let mut keys_to_delete = Vec::new();
+            for row in &rows {
+                if let Some(SqlValue::BigInt(exp)) = row.get("expiration") {
+                    if now >= *exp as u64 {
+                        if let Some(SqlValue::Text(key)) = row.get("key") {
+                            keys_to_delete.push(key.clone());
+                        }
+                    }
+                }
+            }
+
+            // Delete each expired key
+            let count = keys_to_delete.len();
+            for key in keys_to_delete {
+                let _ = self
+                    .storage
+                    .integration
+                    .storage()
+                    .delete(REDIS_KV_TABLE, &key)
+                    .await;
+            }
 
             let mut metrics = self.metrics.write().await;
             metrics.expired_keys_cleaned += count as u64;
@@ -1837,17 +1846,13 @@ mod aql_storage_impl {
             row.insert("name".to_string(), SqlValue::Text(collection.name.clone()));
             row.insert("data".to_string(), SqlValue::Json(data));
 
-            // Delete existing if present
-            let name = collection.name.clone();
+            // Delete existing collection by name directly using the underlying storage
+            // (don't use delete_rows which doesn't support conditions)
             let _ = self
                 .storage
-                .delete_rows(
-                    AQL_COLLECTIONS_TABLE,
-                    Some(Box::new(
-                        move |r| matches!(r.get("name"), Some(SqlValue::Text(n)) if n == &name),
-                    )),
-                    None,
-                )
+                .integration
+                .storage()
+                .delete(AQL_COLLECTIONS_TABLE, &collection.name)
                 .await;
 
             self.storage
@@ -1864,8 +1869,19 @@ mod aql_storage_impl {
             for row in rows {
                 if let Some(SqlValue::Text(n)) = row.get("name") {
                     if n == name {
-                        if let Some(SqlValue::Json(data)) = row.get("data") {
-                            let collection: AqlCollection = serde_json::from_value(data.clone())
+                        // Handle both Json and Composite types (the latter comes from
+                        // unified storage's round-trip conversion through UniversalValue::Map)
+                        let data_value = match row.get("data") {
+                            Some(SqlValue::Json(data)) => Some(data.clone()),
+                            Some(SqlValue::Composite(map)) => {
+                                // Convert Composite back to JSON
+                                Some(Self::composite_to_json(map))
+                            }
+                            _ => None,
+                        };
+
+                        if let Some(data) = data_value {
+                            let collection: AqlCollection = serde_json::from_value(data)
                                 .map_err(|e| {
                                     ProtocolError::SerializationError(format!(
                                         "Failed to deserialize collection: {}",
@@ -1879,6 +1895,41 @@ mod aql_storage_impl {
             }
 
             Ok(None)
+        }
+
+        /// Convert a SqlValue::Composite back to serde_json::Value
+        fn composite_to_json(map: &HashMap<String, SqlValue>) -> serde_json::Value {
+            let json_map: serde_json::Map<String, serde_json::Value> = map
+                .iter()
+                .map(|(k, v)| (k.clone(), Self::sql_value_to_json(v)))
+                .collect();
+            serde_json::Value::Object(json_map)
+        }
+
+        /// Convert SqlValue to serde_json::Value
+        fn sql_value_to_json(value: &SqlValue) -> serde_json::Value {
+            match value {
+                SqlValue::Null => serde_json::Value::Null,
+                SqlValue::Boolean(b) => serde_json::Value::Bool(*b),
+                SqlValue::SmallInt(i) => serde_json::Value::Number((*i as i64).into()),
+                SqlValue::Integer(i) => serde_json::Value::Number((*i as i64).into()),
+                SqlValue::BigInt(i) => serde_json::Value::Number((*i).into()),
+                SqlValue::Real(f) => serde_json::Number::from_f64(*f as f64)
+                    .map(serde_json::Value::Number)
+                    .unwrap_or(serde_json::Value::Null),
+                SqlValue::DoublePrecision(f) => serde_json::Number::from_f64(*f)
+                    .map(serde_json::Value::Number)
+                    .unwrap_or(serde_json::Value::Null),
+                SqlValue::Char(s) | SqlValue::Varchar(s) | SqlValue::Text(s) => {
+                    serde_json::Value::String(s.clone())
+                }
+                SqlValue::Json(v) | SqlValue::Jsonb(v) => v.clone(),
+                SqlValue::Array(arr) => {
+                    serde_json::Value::Array(arr.iter().map(Self::sql_value_to_json).collect())
+                }
+                SqlValue::Composite(map) => Self::composite_to_json(map),
+                _ => serde_json::Value::Null, // For types that don't have a direct JSON equivalent
+            }
         }
 
         /// Store a document
@@ -1897,17 +1948,13 @@ mod aql_storage_impl {
             row.insert("key".to_string(), SqlValue::Text(doc.key.clone()));
             row.insert("data".to_string(), SqlValue::Json(data));
 
-            // Delete existing if present
-            let doc_id = doc.id.clone();
+            // Delete existing document by key directly using the underlying storage
+            // (don't use delete_rows which doesn't support conditions)
             let _ = self
                 .storage
-                .delete_rows(
-                    AQL_DOCUMENTS_TABLE,
-                    Some(Box::new(
-                        move |r| matches!(r.get("id"), Some(SqlValue::Text(id)) if id == &doc_id),
-                    )),
-                    None,
-                )
+                .integration
+                .storage()
+                .delete(AQL_DOCUMENTS_TABLE, &doc.id)
                 .await;
 
             self.storage
@@ -1931,9 +1978,20 @@ mod aql_storage_impl {
                 let matches_key = matches!(row.get("key"), Some(SqlValue::Text(k)) if k == key);
 
                 if matches_collection && matches_key {
-                    if let Some(SqlValue::Json(data)) = row.get("data") {
+                    // Handle both Json and Composite types (the latter comes from
+                    // unified storage's round-trip conversion through UniversalValue::Map)
+                    let data_value = match row.get("data") {
+                        Some(SqlValue::Json(data)) => Some(data.clone()),
+                        Some(SqlValue::Composite(map)) => {
+                            // Convert Composite back to JSON
+                            Some(Self::composite_to_json(map))
+                        }
+                        _ => None,
+                    };
+
+                    if let Some(data) = data_value {
                         let doc: AqlDocument =
-                            serde_json::from_value(data.clone()).map_err(|e| {
+                            serde_json::from_value(data).map_err(|e| {
                                 ProtocolError::SerializationError(format!(
                                     "Failed to deserialize document: {}",
                                     e
@@ -1960,8 +2018,15 @@ mod aql_storage_impl {
             for row in rows {
                 if let Some(SqlValue::Text(c)) = row.get("collection") {
                     if c == collection {
-                        if let Some(SqlValue::Json(data)) = row.get("data") {
-                            if let Ok(doc) = serde_json::from_value::<AqlDocument>(data.clone()) {
+                        // Handle both Json and Composite types
+                        let data_value = match row.get("data") {
+                            Some(SqlValue::Json(data)) => Some(data.clone()),
+                            Some(SqlValue::Composite(map)) => Some(Self::composite_to_json(map)),
+                            _ => None,
+                        };
+
+                        if let Some(data) = data_value {
+                            if let Ok(doc) = serde_json::from_value::<AqlDocument>(data) {
                                 result.push(doc);
                             }
                         }
@@ -2045,6 +2110,43 @@ mod cypher_storage_impl {
         /// Create a new unified Cypher storage
         pub fn new(storage: Arc<UnifiedTableStorage>) -> Self {
             Self { storage }
+        }
+
+        /// Convert a SqlValue::Composite back to serde_json::Value
+        /// This handles the case where JSON data goes through the memory backend
+        /// and gets converted to UniversalValue::Map then back to SqlValue::Composite
+        fn composite_to_json(map: &HashMap<String, SqlValue>) -> serde_json::Value {
+            let json_map: serde_json::Map<String, serde_json::Value> = map
+                .iter()
+                .map(|(k, v)| (k.clone(), Self::sql_value_to_json(v)))
+                .collect();
+            serde_json::Value::Object(json_map)
+        }
+
+        /// Convert SqlValue to serde_json::Value
+        fn sql_value_to_json(value: &SqlValue) -> serde_json::Value {
+            match value {
+                SqlValue::Null => serde_json::Value::Null,
+                SqlValue::Boolean(b) => serde_json::Value::Bool(*b),
+                SqlValue::SmallInt(i) => serde_json::Value::Number((*i as i64).into()),
+                SqlValue::Integer(i) => serde_json::Value::Number((*i as i64).into()),
+                SqlValue::BigInt(i) => serde_json::Value::Number((*i).into()),
+                SqlValue::Real(f) => serde_json::Number::from_f64(*f as f64)
+                    .map(serde_json::Value::Number)
+                    .unwrap_or(serde_json::Value::Null),
+                SqlValue::DoublePrecision(f) => serde_json::Number::from_f64(*f)
+                    .map(serde_json::Value::Number)
+                    .unwrap_or(serde_json::Value::Null),
+                SqlValue::Char(s) | SqlValue::Varchar(s) | SqlValue::Text(s) => {
+                    serde_json::Value::String(s.clone())
+                }
+                SqlValue::Json(v) | SqlValue::Jsonb(v) => v.clone(),
+                SqlValue::Array(arr) => {
+                    serde_json::Value::Array(arr.iter().map(Self::sql_value_to_json).collect())
+                }
+                SqlValue::Composite(map) => Self::composite_to_json(map),
+                _ => serde_json::Value::Null,
+            }
         }
 
         /// Ensure the internal Cypher tables exist
@@ -2160,17 +2262,13 @@ mod cypher_storage_impl {
             row.insert("labels".to_string(), SqlValue::Json(labels));
             row.insert("properties".to_string(), SqlValue::Json(properties));
 
-            // Delete existing if present
-            let node_id = node.id.clone();
+            // Delete existing node by ID directly using the underlying storage
+            // (don't use delete_rows which doesn't support conditions)
             let _ = self
                 .storage
-                .delete_rows(
-                    CYPHER_NODES_TABLE,
-                    Some(Box::new(
-                        move |r| matches!(r.get("id"), Some(SqlValue::Text(id)) if id == &node_id),
-                    )),
-                    None,
-                )
+                .integration
+                .storage()
+                .delete(CYPHER_NODES_TABLE, &node.id)
                 .await;
 
             self.storage
@@ -2187,20 +2285,30 @@ mod cypher_storage_impl {
             for row in rows {
                 if let Some(SqlValue::Text(id)) = row.get("id") {
                     if id == node_id {
-                        let labels: Vec<String> = match row.get("labels") {
-                            Some(SqlValue::Json(v)) => {
-                                serde_json::from_value(v.clone()).unwrap_or_default()
+                        // Handle SqlValue::Json, SqlValue::Composite, and SqlValue::Array (memory backend round-trip)
+                        let labels_value = match row.get("labels") {
+                            Some(SqlValue::Json(v)) => Some(v.clone()),
+                            Some(SqlValue::Composite(map)) => Some(Self::composite_to_json(map)),
+                            Some(SqlValue::Array(arr)) => {
+                                // Convert SqlValue::Array back to JSON array
+                                Some(serde_json::Value::Array(
+                                    arr.iter().map(Self::sql_value_to_json).collect(),
+                                ))
                             }
-                            _ => vec![],
+                            _ => None,
                         };
+                        let labels: Vec<String> = labels_value
+                            .and_then(|v| serde_json::from_value(v).ok())
+                            .unwrap_or_default();
 
-                        let properties: HashMap<String, serde_json::Value> =
-                            match row.get("properties") {
-                                Some(SqlValue::Json(v)) => {
-                                    serde_json::from_value(v.clone()).unwrap_or_default()
-                                }
-                                _ => HashMap::new(),
-                            };
+                        let properties_value = match row.get("properties") {
+                            Some(SqlValue::Json(v)) => Some(v.clone()),
+                            Some(SqlValue::Composite(map)) => Some(Self::composite_to_json(map)),
+                            _ => None,
+                        };
+                        let properties: HashMap<String, serde_json::Value> = properties_value
+                            .and_then(|v| serde_json::from_value(v).ok())
+                            .unwrap_or_default();
 
                         return Ok(Some(GraphNode {
                             id: id.clone(),
@@ -2223,20 +2331,30 @@ mod cypher_storage_impl {
 
             for row in rows {
                 if let Some(SqlValue::Text(id)) = row.get("id") {
-                    let labels: Vec<String> = match row.get("labels") {
-                        Some(SqlValue::Json(v)) => {
-                            serde_json::from_value(v.clone()).unwrap_or_default()
+                    // Handle SqlValue::Json, SqlValue::Composite, and SqlValue::Array (memory backend round-trip)
+                    let labels_value = match row.get("labels") {
+                        Some(SqlValue::Json(v)) => Some(v.clone()),
+                        Some(SqlValue::Composite(map)) => Some(Self::composite_to_json(map)),
+                        Some(SqlValue::Array(arr)) => {
+                            // Convert SqlValue::Array back to JSON array
+                            Some(serde_json::Value::Array(
+                                arr.iter().map(Self::sql_value_to_json).collect(),
+                            ))
                         }
-                        _ => vec![],
+                        _ => None,
                     };
+                    let labels: Vec<String> = labels_value
+                        .and_then(|v| serde_json::from_value(v).ok())
+                        .unwrap_or_default();
 
-                    let properties: HashMap<String, serde_json::Value> = match row.get("properties")
-                    {
-                        Some(SqlValue::Json(v)) => {
-                            serde_json::from_value(v.clone()).unwrap_or_default()
-                        }
-                        _ => HashMap::new(),
+                    let properties_value = match row.get("properties") {
+                        Some(SqlValue::Json(v)) => Some(v.clone()),
+                        Some(SqlValue::Composite(map)) => Some(Self::composite_to_json(map)),
+                        _ => None,
                     };
+                    let properties: HashMap<String, serde_json::Value> = properties_value
+                        .and_then(|v| serde_json::from_value(v).ok())
+                        .unwrap_or_default();
 
                     result.push(GraphNode {
                         id: id.clone(),
@@ -2267,17 +2385,13 @@ mod cypher_storage_impl {
             row.insert("rel_type".to_string(), SqlValue::Text(rel.rel_type.clone()));
             row.insert("properties".to_string(), SqlValue::Json(properties));
 
-            // Delete existing if present
-            let rel_id = rel.id.clone();
+            // Delete existing relationship by ID directly using the underlying storage
+            // (don't use delete_rows which doesn't support conditions)
             let _ = self
                 .storage
-                .delete_rows(
-                    CYPHER_RELATIONSHIPS_TABLE,
-                    Some(Box::new(
-                        move |r| matches!(r.get("id"), Some(SqlValue::Text(id)) if id == &rel_id),
-                    )),
-                    None,
-                )
+                .integration
+                .storage()
+                .delete(CYPHER_RELATIONSHIPS_TABLE, &rel.id)
                 .await;
 
             self.storage
@@ -2315,13 +2429,15 @@ mod cypher_storage_impl {
                             _ => continue,
                         };
 
-                        let properties: HashMap<String, serde_json::Value> =
-                            match row.get("properties") {
-                                Some(SqlValue::Json(v)) => {
-                                    serde_json::from_value(v.clone()).unwrap_or_default()
-                                }
-                                _ => HashMap::new(),
-                            };
+                        // Handle both SqlValue::Json and SqlValue::Composite (memory backend round-trip)
+                        let properties_value = match row.get("properties") {
+                            Some(SqlValue::Json(v)) => Some(v.clone()),
+                            Some(SqlValue::Composite(map)) => Some(Self::composite_to_json(map)),
+                            _ => None,
+                        };
+                        let properties: HashMap<String, serde_json::Value> = properties_value
+                            .and_then(|v| serde_json::from_value(v).ok())
+                            .unwrap_or_default();
 
                         return Ok(Some(GraphRelationship {
                             id: id.clone(),
@@ -2364,13 +2480,15 @@ mod cypher_storage_impl {
                         _ => continue,
                     };
 
-                    let properties: HashMap<String, serde_json::Value> = match row.get("properties")
-                    {
-                        Some(SqlValue::Json(v)) => {
-                            serde_json::from_value(v.clone()).unwrap_or_default()
-                        }
-                        _ => HashMap::new(),
+                    // Handle both SqlValue::Json and SqlValue::Composite (memory backend round-trip)
+                    let properties_value = match row.get("properties") {
+                        Some(SqlValue::Json(v)) => Some(v.clone()),
+                        Some(SqlValue::Composite(map)) => Some(Self::composite_to_json(map)),
+                        _ => None,
                     };
+                    let properties: HashMap<String, serde_json::Value> = properties_value
+                        .and_then(|v| serde_json::from_value(v).ok())
+                        .unwrap_or_default();
 
                     result.push(GraphRelationship {
                         id: id.clone(),
@@ -2433,3 +2551,486 @@ mod cypher_storage_impl {
 
 #[cfg(feature = "storage-rocksdb")]
 pub use cypher_storage_impl::UnifiedCypherStorage;
+
+// =============================================================================
+// TESTS FOR UNIFIED STORAGE PROVIDERS
+// =============================================================================
+
+#[cfg(test)]
+#[cfg(feature = "storage-rocksdb")]
+mod storage_provider_tests {
+    use super::*;
+    use crate::protocols::aql::data_model::{
+        AqlCollection, AqlDocument, AqlValue, CollectionStatus, CollectionType,
+    };
+    use crate::protocols::aql::storage::AqlStorage;
+    use crate::protocols::aql::AqlStorageProvider;
+    use crate::protocols::cypher::storage::CypherGraphStorage;
+    use crate::protocols::cypher::types::{GraphNode, GraphRelationship};
+    use crate::protocols::cypher::CypherStorageProvider;
+    use crate::unified_storage::{UnifiedStorageIntegration, UnifiedStorageIntegrationConfig};
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+
+    /// Create a unified storage integration for testing
+    async fn create_unified_storage() -> (Arc<UnifiedStorageIntegration>, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let config = UnifiedStorageIntegrationConfig {
+            data_dir: temp_dir.path().to_string_lossy().to_string(),
+            enable_ttl_expiration: false,
+            ttl_check_interval_secs: 60,
+            max_scan_limit: 1000,
+            // Use memory backend for testing - this avoids RocksDB setup
+            use_memory_backend: true,
+        };
+        let integration = UnifiedStorageIntegration::with_config(config)
+            .await
+            .expect("Failed to create unified storage");
+        (Arc::new(integration), temp_dir)
+    }
+
+    /// Create isolated RocksDB AQL storage for testing
+    async fn create_isolated_aql_storage() -> (Arc<AqlStorage>, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let storage = Arc::new(AqlStorage::new(temp_dir.path()));
+        storage.initialize().await.unwrap();
+        (storage, temp_dir)
+    }
+
+    /// Create isolated RocksDB Cypher storage for testing
+    async fn create_isolated_cypher_storage() -> (Arc<CypherGraphStorage>, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let storage = Arc::new(CypherGraphStorage::new(temp_dir.path()));
+        storage.initialize().await.unwrap();
+        (storage, temp_dir)
+    }
+
+    // =========================================================================
+    // AQL Storage Provider Tests - Testing trait-based storage switching
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_aql_isolated_storage_basic_operations() {
+        let (storage, _temp_dir) = create_isolated_aql_storage().await;
+        let provider: Arc<dyn AqlStorageProvider> = storage;
+
+        // Test collection operations
+        let collection = AqlCollection {
+            name: "test_users".to_string(),
+            collection_type: CollectionType::Document,
+            status: CollectionStatus::Loaded,
+            count: 0,
+            indexes: vec![],
+        };
+
+        provider.store_collection(collection.clone()).await.unwrap();
+
+        let retrieved = provider.get_collection("test_users").await.unwrap();
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().name, "test_users");
+
+        // Test document operations
+        let mut data = HashMap::new();
+        data.insert("name".to_string(), AqlValue::String("Alice".to_string()));
+        let doc = AqlDocument::new("test_users", "alice".to_string(), data);
+
+        provider.store_document(doc.clone()).await.unwrap();
+
+        let retrieved_doc = provider.get_document("test_users", "alice").await.unwrap();
+        assert!(retrieved_doc.is_some());
+        assert_eq!(retrieved_doc.unwrap().key, "alice");
+    }
+
+    #[tokio::test]
+    async fn test_aql_unified_storage_basic_operations() {
+        let (integration, _temp_dir) = create_unified_storage().await;
+
+        // Create unified AQL storage
+        let aql_storage = UnifiedTableStorage::aql(integration.clone());
+        let unified_aql = Arc::new(UnifiedAqlStorage::new(Arc::new(aql_storage)));
+        unified_aql.initialize().await.unwrap();
+
+        let provider: Arc<dyn AqlStorageProvider> = unified_aql;
+
+        // Test collection operations (same API as isolated storage)
+        let collection = AqlCollection {
+            name: "unified_users".to_string(),
+            collection_type: CollectionType::Document,
+            status: CollectionStatus::Loaded,
+            count: 0,
+            indexes: vec![],
+        };
+
+        provider.store_collection(collection.clone()).await.unwrap();
+
+        let retrieved = provider.get_collection("unified_users").await.unwrap();
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().name, "unified_users");
+
+        // Test document operations
+        let mut data = HashMap::new();
+        data.insert("name".to_string(), AqlValue::String("Bob".to_string()));
+        let doc = AqlDocument::new("unified_users", "bob".to_string(), data);
+
+        provider.store_document(doc.clone()).await.unwrap();
+
+        let retrieved_doc = provider.get_document("unified_users", "bob").await.unwrap();
+        assert!(retrieved_doc.is_some());
+        assert_eq!(retrieved_doc.unwrap().key, "bob");
+    }
+
+    #[tokio::test]
+    async fn test_aql_storage_mode_switching() {
+        // First, use isolated storage
+        let (isolated_storage, _temp_dir1) = create_isolated_aql_storage().await;
+        let isolated_provider: Arc<dyn AqlStorageProvider> = isolated_storage;
+
+        let collection = AqlCollection {
+            name: "switch_test".to_string(),
+            collection_type: CollectionType::Document,
+            status: CollectionStatus::Loaded,
+            count: 0,
+            indexes: vec![],
+        };
+
+        isolated_provider
+            .store_collection(collection.clone())
+            .await
+            .unwrap();
+        let mut data = HashMap::new();
+        data.insert(
+            "value".to_string(),
+            AqlValue::String("isolated".to_string()),
+        );
+        let doc = AqlDocument::new("switch_test", "key1".to_string(), data);
+        isolated_provider.store_document(doc).await.unwrap();
+
+        // Verify data in isolated storage
+        let retrieved = isolated_provider
+            .get_document("switch_test", "key1")
+            .await
+            .unwrap();
+        assert!(retrieved.is_some());
+
+        // Now, use unified storage (separate storage - data won't transfer)
+        let (integration, _temp_dir2) = create_unified_storage().await;
+        let aql_storage = UnifiedTableStorage::aql(integration.clone());
+        let unified_aql = Arc::new(UnifiedAqlStorage::new(Arc::new(aql_storage)));
+        unified_aql.initialize().await.unwrap();
+        let unified_provider: Arc<dyn AqlStorageProvider> = unified_aql;
+
+        // Unified storage starts fresh - no data from isolated
+        let retrieved_unified = unified_provider
+            .get_document("switch_test", "key1")
+            .await
+            .unwrap();
+        assert!(retrieved_unified.is_none());
+
+        // Store new data in unified storage
+        let mut data2 = HashMap::new();
+        data2.insert("value".to_string(), AqlValue::String("unified".to_string()));
+        let doc2 = AqlDocument::new("switch_test", "key2".to_string(), data2);
+        unified_provider
+            .store_collection(collection.clone())
+            .await
+            .unwrap();
+        unified_provider.store_document(doc2).await.unwrap();
+
+        // Verify unified storage has its own data
+        let retrieved_unified2 = unified_provider
+            .get_document("switch_test", "key2")
+            .await
+            .unwrap();
+        assert!(retrieved_unified2.is_some());
+
+        // Original isolated storage still has its data
+        let original_data = isolated_provider
+            .get_document("switch_test", "key1")
+            .await
+            .unwrap();
+        assert!(original_data.is_some());
+    }
+
+    // =========================================================================
+    // Cypher Storage Provider Tests - Testing trait-based storage switching
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_cypher_isolated_storage_basic_operations() {
+        let (storage, _temp_dir) = create_isolated_cypher_storage().await;
+        let provider: Arc<dyn CypherStorageProvider> = storage;
+
+        // Test node operations
+        let mut props = HashMap::new();
+        props.insert("name".to_string(), serde_json::json!("Alice"));
+
+        let node = GraphNode {
+            id: "user:1".to_string(),
+            labels: vec!["User".to_string()],
+            properties: props,
+        };
+
+        provider.store_node(node.clone()).await.unwrap();
+
+        let retrieved = provider.get_node("user:1").await.unwrap();
+        assert!(retrieved.is_some());
+        let retrieved_node = retrieved.unwrap();
+        assert_eq!(retrieved_node.id, "user:1");
+        assert_eq!(retrieved_node.labels, vec!["User"]);
+
+        // Test relationship operations
+        let mut rel_props = HashMap::new();
+        rel_props.insert("since".to_string(), serde_json::json!("2024"));
+
+        let rel = GraphRelationship {
+            id: "rel:1".to_string(),
+            start_node: "user:1".to_string(),
+            end_node: "user:2".to_string(),
+            rel_type: "KNOWS".to_string(),
+            properties: rel_props,
+        };
+
+        provider.store_relationship(rel.clone()).await.unwrap();
+
+        let retrieved_rel = provider.get_relationship("rel:1").await.unwrap();
+        assert!(retrieved_rel.is_some());
+        assert_eq!(retrieved_rel.unwrap().rel_type, "KNOWS");
+    }
+
+    #[tokio::test]
+    async fn test_cypher_unified_storage_basic_operations() {
+        let (integration, _temp_dir) = create_unified_storage().await;
+
+        // Create unified Cypher storage
+        let cypher_storage = UnifiedTableStorage::cypher(integration.clone());
+        let unified_cypher = Arc::new(UnifiedCypherStorage::new(Arc::new(cypher_storage)));
+        unified_cypher.initialize().await.unwrap();
+
+        let provider: Arc<dyn CypherStorageProvider> = unified_cypher;
+
+        // Test node operations (same API as isolated storage)
+        let mut props = HashMap::new();
+        props.insert("name".to_string(), serde_json::json!("Bob"));
+
+        let node = GraphNode {
+            id: "unified_user:1".to_string(),
+            labels: vec!["Person".to_string()],
+            properties: props,
+        };
+
+        provider.store_node(node.clone()).await.unwrap();
+
+        let retrieved = provider.get_node("unified_user:1").await.unwrap();
+        assert!(retrieved.is_some());
+        let retrieved_node = retrieved.unwrap();
+        assert_eq!(retrieved_node.id, "unified_user:1");
+        assert_eq!(retrieved_node.labels, vec!["Person"]);
+
+        // Test get_all_nodes
+        let all_nodes = provider.get_all_nodes().await.unwrap();
+        assert!(!all_nodes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_cypher_storage_mode_switching() {
+        // First, use isolated storage
+        let (isolated_storage, _temp_dir1) = create_isolated_cypher_storage().await;
+        let isolated_provider: Arc<dyn CypherStorageProvider> = isolated_storage;
+
+        let mut props = HashMap::new();
+        props.insert("storage_type".to_string(), serde_json::json!("isolated"));
+
+        let node = GraphNode {
+            id: "switch_node:1".to_string(),
+            labels: vec!["TestNode".to_string()],
+            properties: props,
+        };
+
+        isolated_provider.store_node(node.clone()).await.unwrap();
+
+        // Verify data in isolated storage
+        let retrieved = isolated_provider
+            .get_node("switch_node:1")
+            .await
+            .unwrap();
+        assert!(retrieved.is_some());
+
+        // Now switch to unified storage (separate storage - data won't transfer)
+        let (integration, _temp_dir2) = create_unified_storage().await;
+        let cypher_storage = UnifiedTableStorage::cypher(integration.clone());
+        let unified_cypher = Arc::new(UnifiedCypherStorage::new(Arc::new(cypher_storage)));
+        unified_cypher.initialize().await.unwrap();
+        let unified_provider: Arc<dyn CypherStorageProvider> = unified_cypher;
+
+        // Unified storage starts fresh
+        let retrieved_unified = unified_provider
+            .get_node("switch_node:1")
+            .await
+            .unwrap();
+        assert!(retrieved_unified.is_none());
+
+        // Store new data in unified storage
+        let mut props2 = HashMap::new();
+        props2.insert("storage_type".to_string(), serde_json::json!("unified"));
+
+        let node2 = GraphNode {
+            id: "switch_node:2".to_string(),
+            labels: vec!["UnifiedNode".to_string()],
+            properties: props2,
+        };
+
+        unified_provider.store_node(node2).await.unwrap();
+
+        // Verify unified storage has its own data
+        let retrieved_unified2 = unified_provider
+            .get_node("switch_node:2")
+            .await
+            .unwrap();
+        assert!(retrieved_unified2.is_some());
+
+        // Original isolated storage still has its data
+        let original_data = isolated_provider
+            .get_node("switch_node:1")
+            .await
+            .unwrap();
+        assert!(original_data.is_some());
+    }
+
+    // =========================================================================
+    // Cross-Protocol Tests - Verify data isolation or sharing as configured
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_unified_storage_cross_protocol_isolation() {
+        // Create a single unified storage integration
+        let (integration, _temp_dir) = create_unified_storage().await;
+
+        // Create AQL storage using this integration
+        let aql_storage = UnifiedTableStorage::aql(integration.clone());
+        let unified_aql = Arc::new(UnifiedAqlStorage::new(Arc::new(aql_storage)));
+        unified_aql.initialize().await.unwrap();
+
+        // Create Cypher storage using the SAME integration
+        let cypher_storage = UnifiedTableStorage::cypher(integration.clone());
+        let unified_cypher = Arc::new(UnifiedCypherStorage::new(Arc::new(cypher_storage)));
+        unified_cypher.initialize().await.unwrap();
+
+        // Store data in AQL
+        let collection = AqlCollection {
+            name: "cross_test".to_string(),
+            collection_type: CollectionType::Document,
+            status: CollectionStatus::Loaded,
+            count: 0,
+            indexes: vec![],
+        };
+        unified_aql.store_collection(collection).await.unwrap();
+
+        let mut aql_data = HashMap::new();
+        aql_data.insert(
+            "source".to_string(),
+            AqlValue::String("aql_protocol".to_string()),
+        );
+        let aql_doc = AqlDocument::new("cross_test", "doc1".to_string(), aql_data);
+        unified_aql.store_document(aql_doc).await.unwrap();
+
+        // Store data in Cypher
+        let mut cypher_props = HashMap::new();
+        cypher_props.insert("source".to_string(), serde_json::json!("cypher_protocol"));
+
+        let cypher_node = GraphNode {
+            id: "cross_node:1".to_string(),
+            labels: vec!["CrossTest".to_string()],
+            properties: cypher_props,
+        };
+        unified_cypher.store_node(cypher_node).await.unwrap();
+
+        // Verify AQL data
+        let aql_retrieved = unified_aql
+            .get_document("cross_test", "doc1")
+            .await
+            .unwrap();
+        assert!(aql_retrieved.is_some());
+
+        // Verify Cypher data
+        let cypher_retrieved = unified_cypher.get_node("cross_node:1").await.unwrap();
+        assert!(cypher_retrieved.is_some());
+
+        // Each protocol maintains its own namespace
+        // AQL data is NOT directly visible in Cypher and vice versa
+        // (they use different internal tables: __aql_* vs __cypher_*)
+        let cypher_nodes = unified_cypher.get_all_nodes().await.unwrap();
+        assert_eq!(cypher_nodes.len(), 1); // Only the Cypher node, not AQL document
+    }
+
+    #[tokio::test]
+    async fn test_aql_provider_get_collection_documents() {
+        let (integration, _temp_dir) = create_unified_storage().await;
+        let aql_storage = UnifiedTableStorage::aql(integration.clone());
+        let unified_aql = Arc::new(UnifiedAqlStorage::new(Arc::new(aql_storage)));
+        unified_aql.initialize().await.unwrap();
+
+        let provider: Arc<dyn AqlStorageProvider> = unified_aql;
+
+        // Create collection
+        let collection = AqlCollection {
+            name: "docs_test".to_string(),
+            collection_type: CollectionType::Document,
+            status: CollectionStatus::Loaded,
+            count: 0,
+            indexes: vec![],
+        };
+        provider.store_collection(collection).await.unwrap();
+
+        // Store multiple documents
+        for i in 0..5 {
+            let mut data = HashMap::new();
+            data.insert(
+                "index".to_string(),
+                AqlValue::Number(serde_json::Number::from(i)),
+            );
+            let doc = AqlDocument::new("docs_test", format!("doc{}", i), data);
+            provider.store_document(doc).await.unwrap();
+        }
+
+        // Verify all documents retrieved
+        let all_docs = provider.get_collection_documents("docs_test").await.unwrap();
+        assert_eq!(all_docs.len(), 5);
+    }
+
+    #[tokio::test]
+    async fn test_cypher_provider_get_all_relationships() {
+        let (integration, _temp_dir) = create_unified_storage().await;
+        let cypher_storage = UnifiedTableStorage::cypher(integration.clone());
+        let unified_cypher = Arc::new(UnifiedCypherStorage::new(Arc::new(cypher_storage)));
+        unified_cypher.initialize().await.unwrap();
+
+        let provider: Arc<dyn CypherStorageProvider> = unified_cypher;
+
+        // Create nodes
+        for i in 0..3 {
+            let node = GraphNode {
+                id: format!("rel_test_node:{}", i),
+                labels: vec!["Node".to_string()],
+                properties: HashMap::new(),
+            };
+            provider.store_node(node).await.unwrap();
+        }
+
+        // Create relationships
+        for i in 0..2 {
+            let rel = GraphRelationship {
+                id: format!("rel_test:{}", i),
+                start_node: format!("rel_test_node:{}", i),
+                end_node: format!("rel_test_node:{}", i + 1),
+                rel_type: "CONNECTS".to_string(),
+                properties: HashMap::new(),
+            };
+            provider.store_relationship(rel).await.unwrap();
+        }
+
+        // Verify all relationships retrieved
+        let all_rels = provider.get_all_relationships().await.unwrap();
+        assert_eq!(all_rels.len(), 2);
+    }
+}

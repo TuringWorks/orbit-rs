@@ -69,6 +69,7 @@ pub mod actor_tier_placement;
 pub mod adapters;
 pub mod index;
 pub mod operations;
+pub mod s3_backend;
 pub mod schema;
 pub mod storage;
 pub mod tiered;
@@ -102,6 +103,9 @@ pub use types::{RecordId, RecordMetadata, UniversalRecord, UniversalResult, Univ
 
 // Re-export index types
 pub use index::{IndexEntry, IndexStats, SecondaryIndexManager};
+
+// Re-export S3 backend
+pub use s3_backend::{S3Backend, S3BackendConfig};
 
 // Future modules (to be implemented)
 // pub mod backend;     // RocksDB persistent backend
