@@ -17,6 +17,7 @@ pub struct MarketMixModeler {
 }
 
 impl MarketMixModeler {
+    /// Create a new market mix modeler
     pub fn new(marketing_channels: Vec<String>, num_products: usize) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -65,6 +66,7 @@ pub struct NewProductDemandPredictor {
 }
 
 impl NewProductDemandPredictor {
+    /// Create a new new product demand predictor
     pub fn new(product_features: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -113,6 +115,7 @@ pub struct SupplyChainForecaster {
 }
 
 impl SupplyChainForecaster {
+    /// Create a new supply chain forecaster
     pub fn new(forecast_horizon_days: usize, num_skus: usize) -> Self {
         Self {
             model_version: "1.0.0".to_string(),

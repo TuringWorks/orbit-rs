@@ -253,7 +253,10 @@ impl IndustryModel for NoShowPredictor {
         metrics.precision = 0.86;
         metrics.recall = 0.87;
         metrics.calculate_f1();
-        metrics.add_custom_metric("overbooking_optimization_revenue_increase_pct".to_string(), 12.3);
+        metrics.add_custom_metric(
+            "overbooking_optimization_revenue_increase_pct".to_string(),
+            12.3,
+        );
         Ok(metrics)
     }
 

@@ -118,6 +118,7 @@ pub struct ThreeDMolecularModel {
 }
 
 impl ThreeDMolecularModel {
+    /// Create a new molecular property predictor
     pub fn new(atom_features: usize) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -164,6 +165,7 @@ pub struct DeNovoDrugDesigner {
 }
 
 impl DeNovoDrugDesigner {
+    /// Create a new drug-target interaction model
     pub fn new(latent_dim: usize) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -212,7 +214,10 @@ mod tests {
     async fn test_molecular_property_predictor() {
         let properties = vec!["logP".to_string(), "solubility".to_string()];
         let mut model = MolecularPropertyPredictor::new(properties);
-        assert_eq!(model.model_type(), "pharmaceutical_research.molecular_properties");
+        assert_eq!(
+            model.model_type(),
+            "pharmaceutical_research.molecular_properties"
+        );
 
         let predictions = model.predict(&[]).await.unwrap();
         assert_eq!(predictions.len(), 2);
@@ -221,7 +226,10 @@ mod tests {
     #[tokio::test]
     async fn test_binding_affinity_model() {
         let mut model = BindingAffinityModel::new(true);
-        assert_eq!(model.model_type(), "pharmaceutical_research.binding_affinity");
+        assert_eq!(
+            model.model_type(),
+            "pharmaceutical_research.binding_affinity"
+        );
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.mae.unwrap() < 2.0);

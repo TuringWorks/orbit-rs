@@ -155,7 +155,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_gan() {
-        let mut model = GenerativeAdversarialNetwork::new(100, vec![256, 512, 1024], vec![1024, 512, 256], 784);
+        let mut model =
+            GenerativeAdversarialNetwork::new(100, vec![256, 512, 1024], vec![1024, 512, 256], 784);
         assert_eq!(model.model_type(), "generative.gan");
 
         let metrics = model.train(&[]).await.unwrap();

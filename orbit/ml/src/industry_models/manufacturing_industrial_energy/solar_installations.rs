@@ -116,7 +116,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_solar_defect_detector() {
-        let defects = vec!["hotspot".to_string(), "crack".to_string(), "delamination".to_string()];
+        let defects = vec![
+            "hotspot".to_string(),
+            "crack".to_string(),
+            "delamination".to_string(),
+        ];
         let mut model = SolarDefectDetector::new(defects);
         assert_eq!(model.model_type(), "solar_installations.defect_detection");
 

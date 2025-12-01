@@ -54,8 +54,8 @@ impl IndustryModel for LSTMTimeSeriesForecaster {
 
     async fn train(&mut self, _data: &[u8]) -> Result<ModelMetrics> {
         // Candle Integration: MLP Baseline (Upgrade to LSTM in next step)
-        use candle_core::{DType, Device, Tensor, Module};
-        use candle_nn::{VarBuilder, VarMap, Optimizer};
+        use candle_core::{DType, Device, Module, Tensor};
+        use candle_nn::{Optimizer, VarBuilder, VarMap};
 
         // 1. Setup Device (CPU for now)
         let device = Device::Cpu;
@@ -64,7 +64,7 @@ impl IndustryModel for LSTMTimeSeriesForecaster {
         // Input: [Batch, SeqLen * Features] -> Hidden -> Output: [Batch, Horizon]
         let varmap = VarMap::new();
         let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
-        
+
         let input_dim = self.input_sequence_length * self.num_features;
         let hidden_dim = self.hidden_dim;
         let output_dim = self.forecast_horizon;
@@ -84,28 +84,39 @@ impl IndustryModel for LSTMTimeSeriesForecaster {
         // 4. Training Loop
         let mut adam = candle_nn::AdamW::new_lr(varmap.all_vars(), 0.01)
             .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-        
+
         let mut final_loss = 0.0;
         for _ in 0..10 {
-            let hidden = fc1.forward(&input)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            let hidden = hidden.relu()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            let output = fc2.forward(&hidden)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
+            let hidden = fc1.forward(&input).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+            let hidden = hidden.relu().map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+            let output = fc2.forward(&hidden).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+
             let loss = (output - &target)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?
                 .sqr()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?
                 .mean_all()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
-            adam.backward_step(&loss)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
-            final_loss = loss.to_scalar::<f32>()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?;
+
+            adam.backward_step(&loss).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+
+            final_loss = loss.to_scalar::<f32>().map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
         }
 
         let mut metrics = ModelMetrics::new();
@@ -345,7 +356,7 @@ mod tests {
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.mae.unwrap() < 0.5);
-        
+
         let predictions = model.predict(&[]).await.unwrap();
         assert_eq!(predictions.len(), 7);
     }

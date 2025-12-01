@@ -16,6 +16,7 @@ pub struct PropertyValuationModel {
 }
 
 impl PropertyValuationModel {
+    /// Create a new property valuation model
     pub fn new(property_features: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -63,6 +64,7 @@ pub struct RentalYieldPredictor {
 }
 
 impl RentalYieldPredictor {
+    /// Create a new rental yield predictor
     pub fn new(market_segments: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -109,6 +111,7 @@ pub struct MarketTrendAnalyzer {
 }
 
 impl MarketTrendAnalyzer {
+    /// Create a new market trend analyzer
     pub fn new(regions: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),

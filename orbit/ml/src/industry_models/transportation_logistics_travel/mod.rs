@@ -7,15 +7,15 @@
 //! - Travel & Hospitality
 //! - Ticketing Systems
 
+pub mod autonomous_fleet;
 pub mod fleet_logistics;
 pub mod rail_systems;
-pub mod autonomous_fleet;
-pub mod venue_management;
 pub mod ticketing;
+pub mod venue_management;
 
 // Re-export commonly used types
+pub use autonomous_fleet::*;
 pub use fleet_logistics::*;
 pub use rail_systems::*;
-pub use autonomous_fleet::*;
-pub use venue_management::*;
 pub use ticketing::*;
+pub use venue_management::*;

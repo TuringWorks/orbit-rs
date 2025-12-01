@@ -181,7 +181,10 @@ mod tests {
     async fn test_security_threat_detector() {
         let threats = vec!["weapon".to_string(), "suspicious_behavior".to_string()];
         let mut model = SecurityThreatDetector::new(threats);
-        assert_eq!(model.model_type(), "venue_management.security_threat_detection");
+        assert_eq!(
+            model.model_type(),
+            "venue_management.security_threat_detection"
+        );
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.accuracy > 0.92);

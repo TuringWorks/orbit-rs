@@ -39,8 +39,8 @@ impl IndustryModel for FraudDetectionModel {
 
     async fn train(&mut self, _data: &[u8]) -> Result<ModelMetrics> {
         // Candle Integration: Fraud Detection (GNN/GCN)
-        use candle_core::{DType, Device, Tensor, Module};
-        use candle_nn::{VarBuilder, VarMap, Optimizer};
+        use candle_core::{DType, Device, Module, Tensor};
+        use candle_nn::{Optimizer, VarBuilder, VarMap};
 
         // 1. Setup Device
         let device = Device::Cpu;
@@ -67,11 +67,11 @@ impl IndustryModel for FraudDetectionModel {
             .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?
             .relu() // Make non-negative
             .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-        
+
         // Node Features (H): [NumNodes, InputDim]
         let features = Tensor::randn(0f32, 1f32, (num_nodes, input_dim), &device)
             .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-        
+
         let target = Tensor::randn(0f32, 1f32, (num_nodes, output_dim), &device)
             .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
 
@@ -83,32 +83,45 @@ impl IndustryModel for FraudDetectionModel {
         for _ in 0..10 {
             // GCN Layer 1: A * H * W1
             // H * W1
-            let hw1 = w1.forward(&features)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
+            let hw1 = w1.forward(&features).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
             // A * (H * W1)
-            let ahw1 = adj.matmul(&hw1)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            let h1 = ahw1.relu()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
+            let ahw1 = adj.matmul(&hw1).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+            let h1 = ahw1.relu().map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+
             // GCN Layer 2: A * H1 * W2
-            let hw2 = w2.forward(&h1)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            let output = adj.matmul(&hw2)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
+            let hw2 = w2.forward(&h1).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+            let output = adj.matmul(&hw2).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+
             let loss = (output - &target)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?
                 .sqr()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?
                 .mean_all()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
-            adam.backward_step(&loss)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
-            final_loss = loss.to_scalar::<f32>()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?;
+
+            adam.backward_step(&loss).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+
+            final_loss = loss.to_scalar::<f32>().map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
         }
 
         let mut metrics = ModelMetrics::new();
@@ -195,7 +208,11 @@ mod tests {
         assert_eq!(model.model_type(), "fintech.fraud_detection");
 
         let metrics = model.train(&[]).await.unwrap();
-        assert!(metrics.custom_metrics.as_ref().unwrap().contains_key("candle_backend"));
+        assert!(metrics
+            .custom_metrics
+            .as_ref()
+            .unwrap()
+            .contains_key("candle_backend"));
         assert!(metrics.auc_roc.unwrap() > 0.95);
     }
 

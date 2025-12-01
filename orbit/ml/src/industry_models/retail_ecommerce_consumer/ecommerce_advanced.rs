@@ -18,6 +18,7 @@ pub struct ProductRecommender {
 }
 
 impl ProductRecommender {
+    /// Create a new product recommender
     pub fn new(num_products: usize, embedding_dim: usize) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -66,6 +67,7 @@ pub struct DynamicPricingEngine {
 }
 
 impl DynamicPricingEngine {
+    /// Create a new dynamic pricing engine
     pub fn new(num_products: usize) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -112,6 +114,7 @@ pub struct VisualSearchSystem {
 }
 
 impl VisualSearchSystem {
+    /// Create a new visual search system
     pub fn new(embedding_dim: usize) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -159,6 +162,7 @@ pub struct DemandForecaster {
 }
 
 impl DemandForecaster {
+    /// Create a new demand forecaster
     pub fn new(forecast_horizon_days: usize, num_products: usize) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -179,9 +183,9 @@ impl IndustryModel for DemandForecaster {
     }
 
     async fn train(&mut self, _data: &[u8]) -> Result<ModelMetrics> {
-        use candle_core::{DType, Device, Tensor, Module, IndexOp};
-        use candle_nn::{VarBuilder, VarMap, Optimizer, RNN};
+        use candle_core::{DType, Device, IndexOp, Module, Tensor};
         use candle_nn::rnn::LSTMState;
+        use candle_nn::{Optimizer, VarBuilder, VarMap, RNN};
 
         // 1. Setup Device
         let device = Device::Cpu;
@@ -197,7 +201,7 @@ impl IndustryModel for DemandForecaster {
         // RNN Cell
         let rnn = candle_nn::lstm(input_dim, hidden_dim, Default::default(), vs.pp("lstm"))
             .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-        
+
         // Output projection
         let fc = candle_nn::linear(hidden_dim, output_dim, vs.pp("fc"))
             .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
@@ -217,20 +221,26 @@ impl IndustryModel for DemandForecaster {
         let mut final_loss = 0.0;
         for _ in 0..5 {
             // Initialize LSTM state (h0, c0)
-            let h0 = Tensor::zeros((batch_size, hidden_dim), DType::F32, &device)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            let c0 = Tensor::zeros((batch_size, hidden_dim), DType::F32, &device)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
+            let h0 = Tensor::zeros((batch_size, hidden_dim), DType::F32, &device).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+            let c0 = Tensor::zeros((batch_size, hidden_dim), DType::F32, &device).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
             let mut state = LSTMState::new(h0, c0);
-            
+
             let mut last_hidden = Tensor::zeros((batch_size, hidden_dim), DType::F32, &device)
-                 .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?;
 
             for t in 0..seq_len {
-                let x_t = input.i((.., t, ..))
-                    .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-                let state_next = rnn.step(&x_t, &state)
-                    .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
+                let x_t = input.i((.., t, ..)).map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?;
+                let state_next = rnn.step(&x_t, &state).map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?;
                 state = state_next;
                 // Capture last hidden state (h_n)
                 if t == seq_len - 1 {
@@ -238,21 +248,30 @@ impl IndustryModel for DemandForecaster {
                 }
             }
 
-            let output = fc.forward(&last_hidden)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
+            let output = fc.forward(&last_hidden).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+
             let loss = (output - &target)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?
                 .sqr()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?
                 .mean_all()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
-            adam.backward_step(&loss)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
-            final_loss = loss.to_scalar::<f32>()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?;
+
+            adam.backward_step(&loss).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+
+            final_loss = loss.to_scalar::<f32>().map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
         }
 
         let mut metrics = ModelMetrics::new();

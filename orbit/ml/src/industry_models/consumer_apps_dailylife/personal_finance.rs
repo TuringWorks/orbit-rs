@@ -16,6 +16,7 @@ pub struct TransactionCategorizer {
 }
 
 impl TransactionCategorizer {
+    /// Create a new transaction categorizer
     pub fn new(categories: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -64,6 +65,7 @@ pub struct SavingsRecommender {
 }
 
 impl SavingsRecommender {
+    /// Create a new savings recommender
     pub fn new(num_strategies: usize) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -110,6 +112,7 @@ pub struct BudgetAnomalyDetector {
 }
 
 impl BudgetAnomalyDetector {
+    /// Create a new budget anomaly detector
     pub fn new(spending_categories: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -158,7 +161,10 @@ mod tests {
     async fn test_transaction_categorizer() {
         let categories = vec!["food".to_string(), "transport".to_string()];
         let mut model = TransactionCategorizer::new(categories);
-        assert_eq!(model.model_type(), "personal_finance.transaction_categorization");
+        assert_eq!(
+            model.model_type(),
+            "personal_finance.transaction_categorization"
+        );
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.accuracy > 0.90);
@@ -167,7 +173,10 @@ mod tests {
     #[tokio::test]
     async fn test_savings_recommender() {
         let mut model = SavingsRecommender::new(5);
-        assert_eq!(model.model_type(), "personal_finance.savings_recommendation");
+        assert_eq!(
+            model.model_type(),
+            "personal_finance.savings_recommendation"
+        );
 
         let predictions = model.predict(&[]).await.unwrap();
         assert_eq!(predictions.len(), 5);

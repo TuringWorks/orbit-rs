@@ -122,7 +122,10 @@ mod tests {
     async fn test_demand_forecasting_model() {
         let categories = vec!["smartphones".to_string(), "laptops".to_string()];
         let mut model = DemandForecastingModel::new(categories, 12);
-        assert_eq!(model.model_type(), "consumer_electronics.demand_forecasting");
+        assert_eq!(
+            model.model_type(),
+            "consumer_electronics.demand_forecasting"
+        );
 
         let predictions = model.predict(&[]).await.unwrap();
         assert_eq!(predictions.len(), 12);

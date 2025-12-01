@@ -125,7 +125,10 @@ mod tests {
     #[tokio::test]
     async fn test_cox_proportional_hazards() {
         let mut model = CoxProportionalHazards::new(20, 0.01);
-        assert_eq!(model.model_type(), "survival_analysis.cox_proportional_hazards");
+        assert_eq!(
+            model.model_type(),
+            "survival_analysis.cox_proportional_hazards"
+        );
 
         let metrics = model.train(&[]).await.unwrap();
         let custom = metrics.custom_metrics.as_ref().unwrap();

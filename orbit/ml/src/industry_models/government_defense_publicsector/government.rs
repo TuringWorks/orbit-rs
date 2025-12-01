@@ -293,7 +293,10 @@ mod tests {
     async fn test_citizen_service_optimizer() {
         let services = vec!["permits".to_string(), "licenses".to_string()];
         let mut model = CitizenServiceOptimizer::new(services);
-        assert_eq!(model.model_type(), "government.citizen_service_optimization");
+        assert_eq!(
+            model.model_type(),
+            "government.citizen_service_optimization"
+        );
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.custom_metrics.is_some());

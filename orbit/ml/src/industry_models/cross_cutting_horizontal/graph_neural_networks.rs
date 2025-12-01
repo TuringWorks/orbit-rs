@@ -188,7 +188,11 @@ pub struct MessagePassingNeuralNetwork {
 
 impl MessagePassingNeuralNetwork {
     /// Create a new MPNN
-    pub fn new(num_message_passing_steps: usize, node_hidden_dim: usize, edge_hidden_dim: usize) -> Self {
+    pub fn new(
+        num_message_passing_steps: usize,
+        node_hidden_dim: usize,
+        edge_hidden_dim: usize,
+    ) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
             num_message_passing_steps,

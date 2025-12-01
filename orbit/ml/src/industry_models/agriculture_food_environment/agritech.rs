@@ -19,6 +19,7 @@ pub struct CropYieldPredictor {
 
 impl CropYieldPredictor {
     /// Create a new crop yield predictor
+    /// Create a new crop yield predictor
     pub fn new(crop_types: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -68,6 +69,7 @@ pub struct PestDiseaseDetector {
 }
 
 impl PestDiseaseDetector {
+    /// Create a new pest and disease detector
     /// Create a new pest and disease detector
     pub fn new(num_classes: usize) -> Self {
         Self {
@@ -119,6 +121,7 @@ pub struct PrecisionAgricultureRL {
 }
 
 impl PrecisionAgricultureRL {
+    /// Create a new precision agriculture RL model
     pub fn new(resource_types: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -166,6 +169,7 @@ pub struct SpatioTemporalYieldPredictor {
 }
 
 impl SpatioTemporalYieldPredictor {
+    /// Create a new spatio-temporal yield predictor
     pub fn new(spatial_resolution_meters: f32) -> Self {
         Self {
             model_version: "1.0.0".to_string(),

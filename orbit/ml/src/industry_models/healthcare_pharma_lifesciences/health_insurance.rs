@@ -16,6 +16,7 @@ pub struct ClaimsFraudDetector {
 }
 
 impl ClaimsFraudDetector {
+    /// Create a new claims fraud detector
     pub fn new(fraud_indicators: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -65,6 +66,7 @@ pub struct UtilizationPredictor {
 }
 
 impl UtilizationPredictor {
+    /// Create a new utilization predictor
     pub fn new(service_types: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -112,6 +114,7 @@ pub struct RiskAdjustmentModel {
 }
 
 impl RiskAdjustmentModel {
+    /// Create a new risk adjustment model
     pub fn new(risk_factors: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),

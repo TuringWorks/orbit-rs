@@ -185,7 +185,10 @@ mod tests {
     #[tokio::test]
     async fn test_occupancy_predictor() {
         let mut model = OccupancyPredictor::new(50);
-        assert_eq!(model.model_type(), "building_management.occupancy_prediction");
+        assert_eq!(
+            model.model_type(),
+            "building_management.occupancy_prediction"
+        );
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.accuracy > 0.90);

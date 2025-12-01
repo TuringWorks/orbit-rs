@@ -5,9 +5,9 @@
 //! - Consulting & Advisory
 //! - Audit, Tax & Accounting
 
-pub mod legal_services;
 pub mod audit_tax_accounting;
+pub mod legal_services;
 
 // Re-export commonly used types
-pub use legal_services::*;
 pub use audit_tax_accounting::*;
+pub use legal_services::*;

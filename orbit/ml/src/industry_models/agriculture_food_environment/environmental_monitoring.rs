@@ -16,6 +16,7 @@ pub struct WeatherRiskForecaster {
 }
 
 impl WeatherRiskForecaster {
+    /// Create a new weather risk forecaster
     pub fn new(risk_types: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -64,6 +65,7 @@ pub struct PollutionMonitor {
 }
 
 impl PollutionMonitor {
+    /// Create a new pollution monitor
     pub fn new(pollutants: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -110,6 +112,7 @@ pub struct ClimateRiskScorer {
 }
 
 impl ClimateRiskScorer {
+    /// Create a new climate risk scorer
     pub fn new(risk_factors: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),

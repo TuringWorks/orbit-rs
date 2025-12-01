@@ -16,6 +16,7 @@ pub struct EnergyOptimizer {
 }
 
 impl EnergyOptimizer {
+    /// Create a new energy optimizer
     pub fn new(appliances: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -63,6 +64,7 @@ pub struct HomeSecuritySystem {
 }
 
 impl HomeSecuritySystem {
+    /// Create a new home security system
     pub fn new(camera_zones: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -111,6 +113,7 @@ pub struct ApplianceFailurePredictor {
 }
 
 impl ApplianceFailurePredictor {
+    /// Create a new appliance failure predictor
     pub fn new(appliance_type: String) -> Self {
         Self {
             model_version: "1.0.0".to_string(),

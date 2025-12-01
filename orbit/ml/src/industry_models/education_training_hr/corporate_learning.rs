@@ -127,7 +127,10 @@ mod tests {
     async fn test_training_effectiveness_predictor() {
         let programs = vec!["leadership".to_string(), "technical".to_string()];
         let mut model = TrainingEffectivenessPredictor::new(programs);
-        assert_eq!(model.model_type(), "corporate_learning.training_effectiveness");
+        assert_eq!(
+            model.model_type(),
+            "corporate_learning.training_effectiveness"
+        );
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.accuracy > 0.75);

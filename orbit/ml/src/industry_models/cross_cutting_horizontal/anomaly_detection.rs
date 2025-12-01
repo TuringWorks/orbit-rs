@@ -107,8 +107,8 @@ impl IndustryModel for AutoencoderAnomalyDetector {
 
     async fn train(&mut self, _data: &[u8]) -> Result<ModelMetrics> {
         // Candle Integration: Autoencoder
-        use candle_core::{DType, Device, Tensor, Module};
-        use candle_nn::{VarBuilder, VarMap, Optimizer};
+        use candle_core::{DType, Device, Module, Tensor};
+        use candle_nn::{Optimizer, VarBuilder, VarMap};
 
         // 1. Setup Device
         let device = Device::Cpu;
@@ -120,7 +120,7 @@ impl IndustryModel for AutoencoderAnomalyDetector {
         // Simplified Autoencoder: Input -> Latent -> Output
         let input_dim = self.input_dim;
         let latent_dim = self.latent_dim;
-        
+
         let enc = candle_nn::linear(input_dim, latent_dim, vs.pp("enc"))
             .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
         let dec = candle_nn::linear(latent_dim, input_dim, vs.pp("dec"))
@@ -137,25 +137,36 @@ impl IndustryModel for AutoencoderAnomalyDetector {
 
         let mut final_loss = 0.0;
         for _ in 0..10 {
-            let latent = enc.forward(&input)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            let latent = latent.relu()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            let reconstruction = dec.forward(&latent)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
+            let latent = enc.forward(&input).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+            let latent = latent.relu().map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+            let reconstruction = dec.forward(&latent).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+
             let loss = (reconstruction - &input)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?
                 .sqr()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?
                 .mean_all()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
-            adam.backward_step(&loss)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
-            final_loss = loss.to_scalar::<f32>()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?;
+
+            adam.backward_step(&loss).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+
+            final_loss = loss.to_scalar::<f32>().map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
         }
 
         let mut metrics = ModelMetrics::new();
@@ -252,7 +263,11 @@ mod tests {
         assert_eq!(model.model_type(), "anomaly_detection.autoencoder");
 
         let metrics = model.train(&[]).await.unwrap();
-        assert!(metrics.custom_metrics.as_ref().unwrap().contains_key("candle_backend"));
+        assert!(metrics
+            .custom_metrics
+            .as_ref()
+            .unwrap()
+            .contains_key("candle_backend"));
     }
 
     #[tokio::test]

@@ -19,6 +19,7 @@
 //! 15. **Cross-Cutting Horizontal** - Forecasting, recommendations, anomaly detection, CV, NLP
 
 // Common infrastructure
+/// Common traits and types shared across industry models
 pub mod common;
 
 // Re-export common types
@@ -28,18 +29,18 @@ pub use common::{
 };
 
 // 15 Major Industry Categories
-pub mod technology_media_internet;
-pub mod finance_banking_insurance;
-pub mod healthcare_pharma_lifesciences;
-pub mod retail_ecommerce_consumer;
-pub mod transportation_logistics_travel;
-pub mod manufacturing_industrial_energy;
 pub mod agriculture_food_environment;
-pub mod construction_realestate_smartcities;
-pub mod telecom_networking_hardware;
-pub mod education_training_hr;
-pub mod government_defense_publicsector;
-pub mod legal_compliance_professional;
 pub mod arts_design_creative;
+pub mod construction_realestate_smartcities;
 pub mod consumer_apps_dailylife;
 pub mod cross_cutting_horizontal;
+pub mod education_training_hr;
+pub mod finance_banking_insurance;
+pub mod government_defense_publicsector;
+pub mod healthcare_pharma_lifesciences;
+pub mod legal_compliance_professional;
+pub mod manufacturing_industrial_energy;
+pub mod retail_ecommerce_consumer;
+pub mod technology_media_internet;
+pub mod telecom_networking_hardware;
+pub mod transportation_logistics_travel;

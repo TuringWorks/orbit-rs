@@ -54,7 +54,10 @@ impl IndustryModel for DiseaseOutbreakPredictor {
 
     async fn predict(&self, _input: &[u8]) -> Result<Vec<f32>> {
         // TODO: Implement inference
-        Ok(vec![0.0; self.disease_types.len() * self.forecast_horizon_days])
+        Ok(vec![
+            0.0;
+            self.disease_types.len() * self.forecast_horizon_days
+        ])
     }
 
     async fn evaluate(&self, _test_data: &[u8]) -> Result<ModelMetrics> {
@@ -242,7 +245,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_social_determinants_analyzer() {
-        let categories = vec!["housing".to_string(), "education".to_string(), "income".to_string()];
+        let categories = vec![
+            "housing".to_string(),
+            "education".to_string(),
+            "income".to_string(),
+        ];
         let mut model = SocialDeterminantsAnalyzer::new(categories);
         assert_eq!(model.model_type(), "population_health.social_determinants");
 
@@ -253,7 +260,10 @@ mod tests {
     #[tokio::test]
     async fn test_vaccination_coverage_optimizer() {
         let mut model = VaccinationCoverageOptimizer::new(50);
-        assert_eq!(model.model_type(), "population_health.vaccination_optimization");
+        assert_eq!(
+            model.model_type(),
+            "population_health.vaccination_optimization"
+        );
 
         let predictions = model.predict(&[]).await.unwrap();
         assert_eq!(predictions.len(), 50);

@@ -16,6 +16,7 @@ pub struct ShelfLifePredictor {
 }
 
 impl ShelfLifePredictor {
+    /// Create a new shelf life predictor
     pub fn new(product_type: String) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -63,6 +64,7 @@ pub struct QualityControlSystem {
 }
 
 impl QualityControlSystem {
+    /// Create a new quality control system
     pub fn new(defect_types: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -111,6 +113,7 @@ pub struct ProcessMonitoringSystem {
 }
 
 impl ProcessMonitoringSystem {
+    /// Create a new process monitoring system
     pub fn new(process_parameters: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),

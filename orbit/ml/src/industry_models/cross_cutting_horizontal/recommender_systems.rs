@@ -43,8 +43,8 @@ impl IndustryModel for MatrixFactorizationRecommender {
 
     async fn train(&mut self, _data: &[u8]) -> Result<ModelMetrics> {
         // Candle Integration: Matrix Factorization
-        use candle_core::{DType, Device, Tensor, Module};
-        use candle_nn::{VarBuilder, VarMap, Optimizer};
+        use candle_core::{DType, Device, Module, Tensor};
+        use candle_nn::{Optimizer, VarBuilder, VarMap};
 
         // 1. Setup Device
         let device = Device::Cpu;
@@ -74,29 +74,43 @@ impl IndustryModel for MatrixFactorizationRecommender {
 
         let mut final_loss = 0.0;
         for _ in 0..10 {
-            let u = user_emb.forward(&user_ids)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            let i = item_emb.forward(&item_ids)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
+            let u = user_emb.forward(&user_ids).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+            let i = item_emb.forward(&item_ids).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+
             // Dot product: (u * i).sum(1)
             let scores = (u * i)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?
                 .sum(1)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?;
+
             let loss = (scores - &ratings)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?
                 .sqr()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?
                 .mean_all()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
-            adam.backward_step(&loss)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
-            final_loss = loss.to_scalar::<f32>()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?;
+
+            adam.backward_step(&loss).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+
+            final_loss = loss.to_scalar::<f32>().map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
         }
 
         let mut metrics = ModelMetrics::new();
@@ -263,7 +277,7 @@ mod tests {
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.custom_metrics.is_some());
-        
+
         let predictions = model.predict(&[]).await.unwrap();
         assert_eq!(predictions.len(), 10);
     }
