@@ -257,7 +257,7 @@ mod tests {
         let model = MedicalImagingClassifier::new(5);
         
         // Serialize
-        let serialized = model.serialize().unwrap();
+        let serialized = IndustryModel::serialize(&model).unwrap();
         assert!(!serialized.is_empty());
         
         // Deserialize
