@@ -30,7 +30,7 @@
 use super::operations::{FilterExpression, SortOrder, UniversalOperation};
 use super::schema::{Protocol, SchemaRegistry};
 use super::storage::{UnifiedStorage, UnifiedStorageError, UnifiedStorageResult};
-use super::types::{RecordId, UniversalRecord, UniversalResult, UniversalValue};
+use super::types::{UniversalResult, UniversalValue};
 use async_trait::async_trait;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -44,7 +44,8 @@ pub trait ProtocolAdapter: Send + Sync {
     fn protocol(&self) -> Protocol;
 
     /// Execute a universal operation and return the result
-    async fn execute(&self, operation: UniversalOperation) -> UnifiedStorageResult<UniversalResult>;
+    async fn execute(&self, operation: UniversalOperation)
+        -> UnifiedStorageResult<UniversalResult>;
 
     /// Translate protocol-specific input to UniversalValue
     fn to_universal(&self, data: &[u8]) -> UnifiedStorageResult<UniversalValue>;
@@ -156,7 +157,10 @@ impl RedisAdapter {
 
     pub async fn set(&self, key: &str, value: UniversalValue) -> UnifiedStorageResult<()> {
         let (namespace, key) = self.parse_key(key);
-        self.base.storage.put(&namespace, &key, value, None, false, None).await?;
+        self.base
+            .storage
+            .put(&namespace, &key, value, None, false, None)
+            .await?;
         Ok(())
     }
 
@@ -168,13 +172,21 @@ impl RedisAdapter {
     ) -> UnifiedStorageResult<()> {
         let (namespace, key) = self.parse_key(key);
         let ttl = Some(Duration::from_secs(seconds));
-        self.base.storage.put(&namespace, &key, value, ttl, false, None).await?;
+        self.base
+            .storage
+            .put(&namespace, &key, value, ttl, false, None)
+            .await?;
         Ok(())
     }
 
     pub async fn setnx(&self, key: &str, value: UniversalValue) -> UnifiedStorageResult<bool> {
         let (namespace, key) = self.parse_key(key);
-        match self.base.storage.put(&namespace, &key, value, None, true, None).await {
+        match self
+            .base
+            .storage
+            .put(&namespace, &key, value, None, true, None)
+            .await
+        {
             Ok(_) => Ok(true),
             Err(UnifiedStorageError::KeyExists { .. }) => Ok(false),
             Err(e) => Err(e),
@@ -214,23 +226,35 @@ impl RedisAdapter {
 
         // Get current value
         let current = match self.base.storage.get(&namespace, &key).await? {
-            UniversalResult::Record(record) => {
-                match record.value {
-                    UniversalValue::Int(i) => i,
-                    UniversalValue::String(s) => s.parse::<i64>().unwrap_or(0),
-                    _ => 0,
-                }
-            }
+            UniversalResult::Record(record) => match record.value {
+                UniversalValue::Int(i) => i,
+                UniversalValue::String(s) => s.parse::<i64>().unwrap_or(0),
+                _ => 0,
+            },
             _ => 0,
         };
 
         let new_value = current + delta;
-        self.base.storage.put(&namespace, &key, UniversalValue::Int(new_value), None, false, None).await?;
+        self.base
+            .storage
+            .put(
+                &namespace,
+                &key,
+                UniversalValue::Int(new_value),
+                None,
+                false,
+                None,
+            )
+            .await?;
         Ok(new_value)
     }
 
     // Redis hash commands
-    pub async fn hget(&self, key: &str, field: &str) -> UnifiedStorageResult<Option<UniversalValue>> {
+    pub async fn hget(
+        &self,
+        key: &str,
+        field: &str,
+    ) -> UnifiedStorageResult<Option<UniversalValue>> {
         let (namespace, key) = self.parse_key(key);
         let result = self.base.storage.get(&namespace, &key).await?;
 
@@ -246,7 +270,12 @@ impl RedisAdapter {
         }
     }
 
-    pub async fn hset(&self, key: &str, field: &str, value: UniversalValue) -> UnifiedStorageResult<bool> {
+    pub async fn hset(
+        &self,
+        key: &str,
+        field: &str,
+        value: UniversalValue,
+    ) -> UnifiedStorageResult<bool> {
         let (namespace, key) = self.parse_key(key);
 
         // Get current record or create new one
@@ -264,11 +293,25 @@ impl RedisAdapter {
         let is_new = !map.contains_key(field);
         map.insert(field.to_string(), value);
 
-        self.base.storage.put(&namespace, &key, UniversalValue::Map(map), None, false, None).await?;
+        self.base
+            .storage
+            .put(
+                &namespace,
+                &key,
+                UniversalValue::Map(map),
+                None,
+                false,
+                None,
+            )
+            .await?;
         Ok(is_new)
     }
 
-    pub async fn hmset(&self, key: &str, fields: Vec<(String, UniversalValue)>) -> UnifiedStorageResult<()> {
+    pub async fn hmset(
+        &self,
+        key: &str,
+        fields: Vec<(String, UniversalValue)>,
+    ) -> UnifiedStorageResult<()> {
         let (namespace, key) = self.parse_key(key);
 
         let mut map = match self.base.storage.get(&namespace, &key).await? {
@@ -286,11 +329,24 @@ impl RedisAdapter {
             map.insert(field, value);
         }
 
-        self.base.storage.put(&namespace, &key, UniversalValue::Map(map), None, false, None).await?;
+        self.base
+            .storage
+            .put(
+                &namespace,
+                &key,
+                UniversalValue::Map(map),
+                None,
+                false,
+                None,
+            )
+            .await?;
         Ok(())
     }
 
-    pub async fn hgetall(&self, key: &str) -> UnifiedStorageResult<Option<BTreeMap<String, UniversalValue>>> {
+    pub async fn hgetall(
+        &self,
+        key: &str,
+    ) -> UnifiedStorageResult<Option<BTreeMap<String, UniversalValue>>> {
         let (namespace, key) = self.parse_key(key);
         let result = self.base.storage.get(&namespace, &key).await?;
 
@@ -327,7 +383,17 @@ impl RedisAdapter {
             }
         }
 
-        self.base.storage.put(&namespace, &key, UniversalValue::Map(map), None, false, None).await?;
+        self.base
+            .storage
+            .put(
+                &namespace,
+                &key,
+                UniversalValue::Map(map),
+                None,
+                false,
+                None,
+            )
+            .await?;
         Ok(count)
     }
 
@@ -345,19 +411,31 @@ impl RedisAdapter {
             _ => BTreeMap::new(),
         };
 
-        let current = map.get(field)
-            .and_then(|v| v.as_int())
-            .unwrap_or(0);
+        let current = map.get(field).and_then(|v| v.as_int()).unwrap_or(0);
 
         let new_value = current + delta;
         map.insert(field.to_string(), UniversalValue::Int(new_value));
 
-        self.base.storage.put(&namespace, &key, UniversalValue::Map(map), None, false, None).await?;
+        self.base
+            .storage
+            .put(
+                &namespace,
+                &key,
+                UniversalValue::Map(map),
+                None,
+                false,
+                None,
+            )
+            .await?;
         Ok(new_value)
     }
 
     // Redis list commands
-    pub async fn lpush(&self, key: &str, values: Vec<UniversalValue>) -> UnifiedStorageResult<usize> {
+    pub async fn lpush(
+        &self,
+        key: &str,
+        values: Vec<UniversalValue>,
+    ) -> UnifiedStorageResult<usize> {
         let (namespace, key) = self.parse_key(key);
 
         let mut list = match self.base.storage.get(&namespace, &key).await? {
@@ -377,11 +455,25 @@ impl RedisAdapter {
         }
 
         let len = list.len();
-        self.base.storage.put(&namespace, &key, UniversalValue::List(list), None, false, None).await?;
+        self.base
+            .storage
+            .put(
+                &namespace,
+                &key,
+                UniversalValue::List(list),
+                None,
+                false,
+                None,
+            )
+            .await?;
         Ok(len)
     }
 
-    pub async fn rpush(&self, key: &str, values: Vec<UniversalValue>) -> UnifiedStorageResult<usize> {
+    pub async fn rpush(
+        &self,
+        key: &str,
+        values: Vec<UniversalValue>,
+    ) -> UnifiedStorageResult<usize> {
         let (namespace, key) = self.parse_key(key);
 
         let mut list = match self.base.storage.get(&namespace, &key).await? {
@@ -398,11 +490,25 @@ impl RedisAdapter {
         list.extend(values);
 
         let len = list.len();
-        self.base.storage.put(&namespace, &key, UniversalValue::List(list), None, false, None).await?;
+        self.base
+            .storage
+            .put(
+                &namespace,
+                &key,
+                UniversalValue::List(list),
+                None,
+                false,
+                None,
+            )
+            .await?;
         Ok(len)
     }
 
-    pub async fn lpop(&self, key: &str, count: Option<usize>) -> UnifiedStorageResult<Vec<UniversalValue>> {
+    pub async fn lpop(
+        &self,
+        key: &str,
+        count: Option<usize>,
+    ) -> UnifiedStorageResult<Vec<UniversalValue>> {
         let (namespace, key) = self.parse_key(key);
 
         let mut list = match self.base.storage.get(&namespace, &key).await? {
@@ -426,11 +532,25 @@ impl RedisAdapter {
             popped.push(list.remove(0));
         }
 
-        self.base.storage.put(&namespace, &key, UniversalValue::List(list), None, false, None).await?;
+        self.base
+            .storage
+            .put(
+                &namespace,
+                &key,
+                UniversalValue::List(list),
+                None,
+                false,
+                None,
+            )
+            .await?;
         Ok(popped)
     }
 
-    pub async fn rpop(&self, key: &str, count: Option<usize>) -> UnifiedStorageResult<Vec<UniversalValue>> {
+    pub async fn rpop(
+        &self,
+        key: &str,
+        count: Option<usize>,
+    ) -> UnifiedStorageResult<Vec<UniversalValue>> {
         let (namespace, key) = self.parse_key(key);
 
         let mut list = match self.base.storage.get(&namespace, &key).await? {
@@ -454,11 +574,26 @@ impl RedisAdapter {
             popped.push(list.pop().unwrap());
         }
 
-        self.base.storage.put(&namespace, &key, UniversalValue::List(list), None, false, None).await?;
+        self.base
+            .storage
+            .put(
+                &namespace,
+                &key,
+                UniversalValue::List(list),
+                None,
+                false,
+                None,
+            )
+            .await?;
         Ok(popped)
     }
 
-    pub async fn lrange(&self, key: &str, start: i64, stop: i64) -> UnifiedStorageResult<Vec<UniversalValue>> {
+    pub async fn lrange(
+        &self,
+        key: &str,
+        start: i64,
+        stop: i64,
+    ) -> UnifiedStorageResult<Vec<UniversalValue>> {
         let (namespace, key) = self.parse_key(key);
 
         let list = match self.base.storage.get(&namespace, &key).await? {
@@ -473,8 +608,16 @@ impl RedisAdapter {
         };
 
         let len = list.len() as i64;
-        let start = if start < 0 { (len + start).max(0) } else { start.min(len) } as usize;
-        let stop = if stop < 0 { (len + stop + 1).max(0) } else { (stop + 1).min(len) } as usize;
+        let start = if start < 0 {
+            (len + start).max(0)
+        } else {
+            start.min(len)
+        } as usize;
+        let stop = if stop < 0 {
+            (len + stop + 1).max(0)
+        } else {
+            (stop + 1).min(len)
+        } as usize;
 
         if start >= stop {
             return Ok(Vec::new());
@@ -501,7 +644,11 @@ impl RedisAdapter {
     }
 
     // Redis set commands
-    pub async fn sadd(&self, key: &str, members: Vec<UniversalValue>) -> UnifiedStorageResult<usize> {
+    pub async fn sadd(
+        &self,
+        key: &str,
+        members: Vec<UniversalValue>,
+    ) -> UnifiedStorageResult<usize> {
         let (namespace, key) = self.parse_key(key);
 
         let mut set = match self.base.storage.get(&namespace, &key).await? {
@@ -523,11 +670,25 @@ impl RedisAdapter {
             }
         }
 
-        self.base.storage.put(&namespace, &key, UniversalValue::Set(set), None, false, None).await?;
+        self.base
+            .storage
+            .put(
+                &namespace,
+                &key,
+                UniversalValue::Set(set),
+                None,
+                false,
+                None,
+            )
+            .await?;
         Ok(added)
     }
 
-    pub async fn srem(&self, key: &str, members: Vec<UniversalValue>) -> UnifiedStorageResult<usize> {
+    pub async fn srem(
+        &self,
+        key: &str,
+        members: Vec<UniversalValue>,
+    ) -> UnifiedStorageResult<usize> {
         let (namespace, key) = self.parse_key(key);
 
         let mut set = match self.base.storage.get(&namespace, &key).await? {
@@ -549,11 +710,25 @@ impl RedisAdapter {
             }
         }
 
-        self.base.storage.put(&namespace, &key, UniversalValue::Set(set), None, false, None).await?;
+        self.base
+            .storage
+            .put(
+                &namespace,
+                &key,
+                UniversalValue::Set(set),
+                None,
+                false,
+                None,
+            )
+            .await?;
         Ok(removed)
     }
 
-    pub async fn sismember(&self, key: &str, member: &UniversalValue) -> UnifiedStorageResult<bool> {
+    pub async fn sismember(
+        &self,
+        key: &str,
+        member: &UniversalValue,
+    ) -> UnifiedStorageResult<bool> {
         let (namespace, key) = self.parse_key(key);
 
         let set = match self.base.storage.get(&namespace, &key).await? {
@@ -588,7 +763,11 @@ impl RedisAdapter {
     }
 
     // Redis sorted set commands
-    pub async fn zadd(&self, key: &str, members: Vec<(UniversalValue, f64)>) -> UnifiedStorageResult<usize> {
+    pub async fn zadd(
+        &self,
+        key: &str,
+        members: Vec<(UniversalValue, f64)>,
+    ) -> UnifiedStorageResult<usize> {
         let (namespace, key) = self.parse_key(key);
 
         let mut sorted_set = match self.base.storage.get(&namespace, &key).await? {
@@ -615,7 +794,17 @@ impl RedisAdapter {
         // Sort by score
         sorted_set.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
-        self.base.storage.put(&namespace, &key, UniversalValue::SortedSet(sorted_set), None, false, None).await?;
+        self.base
+            .storage
+            .put(
+                &namespace,
+                &key,
+                UniversalValue::SortedSet(sorted_set),
+                None,
+                false,
+                None,
+            )
+            .await?;
         Ok(added)
     }
 
@@ -676,8 +865,16 @@ impl RedisAdapter {
         };
 
         let len = sorted_set.len() as i64;
-        let start = if start < 0 { (len + start).max(0) } else { start.min(len) } as usize;
-        let stop = if stop < 0 { (len + stop + 1).max(0) } else { (stop + 1).min(len) } as usize;
+        let start = if start < 0 {
+            (len + start).max(0)
+        } else {
+            start.min(len)
+        } as usize;
+        let stop = if stop < 0 {
+            (len + stop + 1).max(0)
+        } else {
+            (stop + 1).min(len)
+        } as usize;
 
         if start >= stop {
             return Ok(Vec::new());
@@ -700,7 +897,17 @@ impl RedisAdapter {
         match result {
             UniversalResult::Record(record) => {
                 // Re-put with TTL
-                self.base.storage.put(&namespace, &key, record.value, Some(Duration::from_secs(seconds)), false, None).await?;
+                self.base
+                    .storage
+                    .put(
+                        &namespace,
+                        &key,
+                        record.value,
+                        Some(Duration::from_secs(seconds)),
+                        false,
+                        None,
+                    )
+                    .await?;
                 Ok(true)
             }
             _ => Ok(false),
@@ -715,14 +922,11 @@ impl RedisAdapter {
 
     // Key scanning
     pub async fn keys(&self, pattern: &str) -> UnifiedStorageResult<Vec<String>> {
-        let result = self.base.storage.scan(
-            &self.default_namespace,
-            None,
-            None,
-            None,
-            None,
-            Vec::new(),
-        ).await?;
+        let result = self
+            .base
+            .storage
+            .scan(&self.default_namespace, None, None, None, None, Vec::new())
+            .await?;
 
         if let UniversalResult::Records(records) = result {
             let keys: Vec<String> = records
@@ -742,9 +946,7 @@ impl RedisAdapter {
             return true;
         }
 
-        let regex_pattern = pattern
-            .replace("*", ".*")
-            .replace("?", ".");
+        let regex_pattern = pattern.replace("*", ".*").replace("?", ".");
 
         regex::Regex::new(&format!("^{}$", regex_pattern))
             .map(|re| re.is_match(key))
@@ -758,14 +960,27 @@ impl ProtocolAdapter for RedisAdapter {
         Protocol::Redis
     }
 
-    async fn execute(&self, operation: UniversalOperation) -> UnifiedStorageResult<UniversalResult> {
+    async fn execute(
+        &self,
+        operation: UniversalOperation,
+    ) -> UnifiedStorageResult<UniversalResult> {
         // Delegate to storage layer
         match operation {
             UniversalOperation::Get { namespace, key } => {
                 self.base.storage.get(&namespace, &key).await
             }
-            UniversalOperation::Put { namespace, key, value, ttl, if_not_exists, if_version } => {
-                self.base.storage.put(&namespace, &key, value, ttl, if_not_exists, if_version).await
+            UniversalOperation::Put {
+                namespace,
+                key,
+                value,
+                ttl,
+                if_not_exists,
+                if_version,
+            } => {
+                self.base
+                    .storage
+                    .put(&namespace, &key, value, ttl, if_not_exists, if_version)
+                    .await
             }
             UniversalOperation::Delete { namespace, key } => {
                 self.base.storage.delete(&namespace, &key).await
@@ -773,7 +988,9 @@ impl ProtocolAdapter for RedisAdapter {
             UniversalOperation::Exists { namespace, key } => {
                 self.base.storage.exists(&namespace, &key).await
             }
-            _ => Err(UnifiedStorageError::NotImplemented("Operation not supported".to_string())),
+            _ => Err(UnifiedStorageError::NotImplemented(
+                "Operation not supported".to_string(),
+            )),
         }
     }
 
@@ -841,7 +1058,10 @@ impl SqlAdapter {
                 UnifiedStorageError::InvalidData(format!("Missing primary key: {}", primary_key))
             })?;
 
-        self.base.storage.put(table, &key, UniversalValue::Map(row), None, false, None).await?;
+        self.base
+            .storage
+            .put(table, &key, UniversalValue::Map(row), None, false, None)
+            .await?;
         Ok(())
     }
 
@@ -856,21 +1076,23 @@ impl SqlAdapter {
         offset: Option<usize>,
     ) -> UnifiedStorageResult<Vec<BTreeMap<String, UniversalValue>>> {
         let projection = columns.unwrap_or_default();
-        let result = self.base.storage.scan(table, filter, limit, offset, order_by, projection).await?;
+        let result = self
+            .base
+            .storage
+            .scan(table, filter, limit, offset, order_by, projection)
+            .await?;
 
         let rows: Vec<BTreeMap<String, UniversalValue>> = match result {
-            UniversalResult::Records(records) => {
-                records
-                    .into_iter()
-                    .filter_map(|r| {
-                        if let UniversalValue::Map(map) = r.value {
-                            Some(map)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
-            }
+            UniversalResult::Records(records) => records
+                .into_iter()
+                .filter_map(|r| {
+                    if let UniversalValue::Map(map) = r.value {
+                        Some(map)
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
             _ => Vec::new(),
         };
 
@@ -884,7 +1106,11 @@ impl SqlAdapter {
         updates: BTreeMap<String, UniversalValue>,
         filter: Option<FilterExpression>,
     ) -> UnifiedStorageResult<u64> {
-        let result = self.base.storage.scan(table, filter, None, None, None, Vec::new()).await?;
+        let result = self
+            .base
+            .storage
+            .scan(table, filter, None, None, None, Vec::new())
+            .await?;
         let mut count = 0u64;
 
         if let UniversalResult::Records(records) = result {
@@ -893,7 +1119,17 @@ impl SqlAdapter {
                     for (field, value) in &updates {
                         map.insert(field.clone(), value.clone());
                     }
-                    self.base.storage.put(table, &record.id.key, UniversalValue::Map(map), None, false, None).await?;
+                    self.base
+                        .storage
+                        .put(
+                            table,
+                            &record.id.key,
+                            UniversalValue::Map(map),
+                            None,
+                            false,
+                            None,
+                        )
+                        .await?;
                     count += 1;
                 }
             }
@@ -903,8 +1139,16 @@ impl SqlAdapter {
     }
 
     /// Delete rows from a table
-    pub async fn delete(&self, table: &str, filter: Option<FilterExpression>) -> UnifiedStorageResult<u64> {
-        let result = self.base.storage.scan(table, filter, None, None, None, Vec::new()).await?;
+    pub async fn delete(
+        &self,
+        table: &str,
+        filter: Option<FilterExpression>,
+    ) -> UnifiedStorageResult<u64> {
+        let result = self
+            .base
+            .storage
+            .scan(table, filter, None, None, None, Vec::new())
+            .await?;
 
         if let UniversalResult::Records(records) = result {
             let keys: Vec<String> = records.into_iter().map(|r| r.id.key).collect();
@@ -917,8 +1161,16 @@ impl SqlAdapter {
     }
 
     /// Count rows in a table
-    pub async fn count(&self, table: &str, filter: Option<FilterExpression>) -> UnifiedStorageResult<u64> {
-        let result = self.base.storage.scan(table, filter, None, None, None, Vec::new()).await?;
+    pub async fn count(
+        &self,
+        table: &str,
+        filter: Option<FilterExpression>,
+    ) -> UnifiedStorageResult<u64> {
+        let result = self
+            .base
+            .storage
+            .scan(table, filter, None, None, None, Vec::new())
+            .await?;
 
         if let UniversalResult::Records(records) = result {
             Ok(records.len() as u64)
@@ -934,21 +1186,46 @@ impl ProtocolAdapter for SqlAdapter {
         self.base.protocol
     }
 
-    async fn execute(&self, operation: UniversalOperation) -> UnifiedStorageResult<UniversalResult> {
+    async fn execute(
+        &self,
+        operation: UniversalOperation,
+    ) -> UnifiedStorageResult<UniversalResult> {
         match operation {
             UniversalOperation::Get { namespace, key } => {
                 self.base.storage.get(&namespace, &key).await
             }
-            UniversalOperation::Put { namespace, key, value, ttl, if_not_exists, if_version } => {
-                self.base.storage.put(&namespace, &key, value, ttl, if_not_exists, if_version).await
+            UniversalOperation::Put {
+                namespace,
+                key,
+                value,
+                ttl,
+                if_not_exists,
+                if_version,
+            } => {
+                self.base
+                    .storage
+                    .put(&namespace, &key, value, ttl, if_not_exists, if_version)
+                    .await
             }
             UniversalOperation::Delete { namespace, key } => {
                 self.base.storage.delete(&namespace, &key).await
             }
-            UniversalOperation::Scan { namespace, filter, limit, offset, order_by, projection } => {
-                self.base.storage.scan(&namespace, filter, limit, offset, order_by, projection).await
+            UniversalOperation::Scan {
+                namespace,
+                filter,
+                limit,
+                offset,
+                order_by,
+                projection,
+            } => {
+                self.base
+                    .storage
+                    .scan(&namespace, filter, limit, offset, order_by, projection)
+                    .await
             }
-            _ => Err(UnifiedStorageError::NotImplemented("Operation not supported".to_string())),
+            _ => Err(UnifiedStorageError::NotImplemented(
+                "Operation not supported".to_string(),
+            )),
         }
     }
 
@@ -1013,10 +1290,23 @@ impl CqlAdapter {
                 _ => None,
             })
             .ok_or_else(|| {
-                UnifiedStorageError::InvalidData(format!("Missing partition key: {}", partition_key))
+                UnifiedStorageError::InvalidData(format!(
+                    "Missing partition key: {}",
+                    partition_key
+                ))
             })?;
 
-        self.base.storage.put(&namespace, &key, UniversalValue::Map(row), None, false, None).await?;
+        self.base
+            .storage
+            .put(
+                &namespace,
+                &key,
+                UniversalValue::Map(row),
+                None,
+                false,
+                None,
+            )
+            .await?;
         Ok(())
     }
 
@@ -1030,21 +1320,23 @@ impl CqlAdapter {
     ) -> UnifiedStorageResult<Vec<BTreeMap<String, UniversalValue>>> {
         let namespace = self.full_namespace(table);
         let projection = columns.unwrap_or_default();
-        let result = self.base.storage.scan(&namespace, filter, limit, None, None, projection).await?;
+        let result = self
+            .base
+            .storage
+            .scan(&namespace, filter, limit, None, None, projection)
+            .await?;
 
         let rows: Vec<BTreeMap<String, UniversalValue>> = match result {
-            UniversalResult::Records(records) => {
-                records
-                    .into_iter()
-                    .filter_map(|r| {
-                        if let UniversalValue::Map(map) = r.value {
-                            Some(map)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
-            }
+            UniversalResult::Records(records) => records
+                .into_iter()
+                .filter_map(|r| {
+                    if let UniversalValue::Map(map) = r.value {
+                        Some(map)
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
             _ => Vec::new(),
         };
 
@@ -1058,15 +1350,30 @@ impl ProtocolAdapter for CqlAdapter {
         Protocol::CQL
     }
 
-    async fn execute(&self, operation: UniversalOperation) -> UnifiedStorageResult<UniversalResult> {
+    async fn execute(
+        &self,
+        operation: UniversalOperation,
+    ) -> UnifiedStorageResult<UniversalResult> {
         match operation {
             UniversalOperation::Get { namespace, key } => {
                 self.base.storage.get(&namespace, &key).await
             }
-            UniversalOperation::Put { namespace, key, value, ttl, if_not_exists, if_version } => {
-                self.base.storage.put(&namespace, &key, value, ttl, if_not_exists, if_version).await
+            UniversalOperation::Put {
+                namespace,
+                key,
+                value,
+                ttl,
+                if_not_exists,
+                if_version,
+            } => {
+                self.base
+                    .storage
+                    .put(&namespace, &key, value, ttl, if_not_exists, if_version)
+                    .await
             }
-            _ => Err(UnifiedStorageError::NotImplemented("Operation not supported".to_string())),
+            _ => Err(UnifiedStorageError::NotImplemented(
+                "Operation not supported".to_string(),
+            )),
         }
     }
 
@@ -1124,7 +1431,10 @@ impl GraphAdapter {
             properties,
         };
 
-        self.base.storage.put(&self.node_namespace, id, node, None, false, None).await?;
+        self.base
+            .storage
+            .put(&self.node_namespace, id, node, None, false, None)
+            .await?;
         Ok(())
     }
 
@@ -1145,7 +1455,10 @@ impl GraphAdapter {
             properties,
         };
 
-        self.base.storage.put(&self.edge_namespace, id, edge, None, false, None).await?;
+        self.base
+            .storage
+            .put(&self.edge_namespace, id, edge, None, false, None)
+            .await?;
         Ok(())
     }
 
@@ -1159,23 +1472,28 @@ impl GraphAdapter {
     }
 
     /// Get nodes by label
-    pub async fn get_nodes_by_label(&self, label: &str) -> UnifiedStorageResult<Vec<UniversalValue>> {
-        let result = self.base.storage.scan(&self.node_namespace, None, None, None, None, Vec::new()).await?;
+    pub async fn get_nodes_by_label(
+        &self,
+        label: &str,
+    ) -> UnifiedStorageResult<Vec<UniversalValue>> {
+        let result = self
+            .base
+            .storage
+            .scan(&self.node_namespace, None, None, None, None, Vec::new())
+            .await?;
 
         let nodes: Vec<UniversalValue> = match result {
-            UniversalResult::Records(records) => {
-                records
-                    .into_iter()
-                    .filter_map(|r| {
-                        if let UniversalValue::Node { ref labels, .. } = r.value {
-                            if labels.contains(&label.to_string()) {
-                                return Some(r.value);
-                            }
+            UniversalResult::Records(records) => records
+                .into_iter()
+                .filter_map(|r| {
+                    if let UniversalValue::Node { ref labels, .. } = r.value {
+                        if labels.contains(&label.to_string()) {
+                            return Some(r.value);
                         }
-                        None
-                    })
-                    .collect()
-            }
+                    }
+                    None
+                })
+                .collect(),
             _ => Vec::new(),
         };
 
@@ -1189,48 +1507,50 @@ impl GraphAdapter {
         direction: Option<&str>,
         rel_type: Option<&str>,
     ) -> UnifiedStorageResult<Vec<UniversalValue>> {
-        let result = self.base.storage.scan(&self.edge_namespace, None, None, None, None, Vec::new()).await?;
+        let result = self
+            .base
+            .storage
+            .scan(&self.edge_namespace, None, None, None, None, Vec::new())
+            .await?;
 
         let edges: Vec<UniversalValue> = match result {
-            UniversalResult::Records(records) => {
-                records
-                    .into_iter()
-                    .filter_map(|r| {
-                        if let UniversalValue::Relationship {
-                            ref start_node,
-                            ref end_node,
-                            rel_type: ref rt,
-                            ..
-                        } = r.value
-                        {
-                            if let Some(filter_type) = rel_type {
-                                if rt != filter_type {
-                                    return None;
+            UniversalResult::Records(records) => records
+                .into_iter()
+                .filter_map(|r| {
+                    if let UniversalValue::Relationship {
+                        ref start_node,
+                        ref end_node,
+                        rel_type: ref rt,
+                        ..
+                    } = r.value
+                    {
+                        if let Some(filter_type) = rel_type {
+                            if rt != filter_type {
+                                return None;
+                            }
+                        }
+
+                        match direction {
+                            Some("outgoing") => {
+                                if start_node == node_id {
+                                    return Some(r.value);
                                 }
                             }
-
-                            match direction {
-                                Some("outgoing") => {
-                                    if start_node == node_id {
-                                        return Some(r.value);
-                                    }
+                            Some("incoming") => {
+                                if end_node == node_id {
+                                    return Some(r.value);
                                 }
-                                Some("incoming") => {
-                                    if end_node == node_id {
-                                        return Some(r.value);
-                                    }
-                                }
-                                _ => {
-                                    if start_node == node_id || end_node == node_id {
-                                        return Some(r.value);
-                                    }
+                            }
+                            _ => {
+                                if start_node == node_id || end_node == node_id {
+                                    return Some(r.value);
                                 }
                             }
                         }
-                        None
-                    })
-                    .collect()
-            }
+                    }
+                    None
+                })
+                .collect(),
             _ => Vec::new(),
         };
 
@@ -1244,12 +1564,17 @@ impl ProtocolAdapter for GraphAdapter {
         self.base.protocol
     }
 
-    async fn execute(&self, operation: UniversalOperation) -> UnifiedStorageResult<UniversalResult> {
+    async fn execute(
+        &self,
+        operation: UniversalOperation,
+    ) -> UnifiedStorageResult<UniversalResult> {
         match operation {
             UniversalOperation::Get { namespace, key } => {
                 self.base.storage.get(&namespace, &key).await
             }
-            _ => Err(UnifiedStorageError::NotImplemented("Operation not supported".to_string())),
+            _ => Err(UnifiedStorageError::NotImplemented(
+                "Operation not supported".to_string(),
+            )),
         }
     }
 
@@ -1282,7 +1607,11 @@ impl RestAdapter {
     }
 
     /// GET /resource/:id
-    pub async fn get(&self, resource: &str, id: &str) -> UnifiedStorageResult<Option<UniversalValue>> {
+    pub async fn get(
+        &self,
+        resource: &str,
+        id: &str,
+    ) -> UnifiedStorageResult<Option<UniversalValue>> {
         let result = self.base.storage.get(resource, id).await?;
         match result {
             UniversalResult::Record(record) => Ok(Some(record.value)),
@@ -1298,11 +1627,13 @@ impl RestAdapter {
         limit: Option<usize>,
         offset: Option<usize>,
     ) -> UnifiedStorageResult<Vec<UniversalValue>> {
-        let result = self.base.storage.scan(resource, filter, limit, offset, None, Vec::new()).await?;
+        let result = self
+            .base
+            .storage
+            .scan(resource, filter, limit, offset, None, Vec::new())
+            .await?;
         match result {
-            UniversalResult::Records(records) => {
-                Ok(records.into_iter().map(|r| r.value).collect())
-            }
+            UniversalResult::Records(records) => Ok(records.into_iter().map(|r| r.value).collect()),
             _ => Ok(Vec::new()),
         }
     }
@@ -1314,7 +1645,10 @@ impl RestAdapter {
         id: &str,
         data: UniversalValue,
     ) -> UnifiedStorageResult<()> {
-        self.base.storage.put(resource, id, data, None, false, None).await?;
+        self.base
+            .storage
+            .put(resource, id, data, None, false, None)
+            .await?;
         Ok(())
     }
 
@@ -1325,7 +1659,10 @@ impl RestAdapter {
         id: &str,
         data: UniversalValue,
     ) -> UnifiedStorageResult<()> {
-        self.base.storage.put(resource, id, data, None, false, None).await?;
+        self.base
+            .storage
+            .put(resource, id, data, None, false, None)
+            .await?;
         Ok(())
     }
 
@@ -1352,7 +1689,10 @@ impl RestAdapter {
                 for (field, value) in updates {
                     map.insert(field, value);
                 }
-                self.base.storage.put(resource, id, UniversalValue::Map(map), None, false, None).await?;
+                self.base
+                    .storage
+                    .put(resource, id, UniversalValue::Map(map), None, false, None)
+                    .await?;
             }
         }
 
@@ -1366,18 +1706,33 @@ impl ProtocolAdapter for RestAdapter {
         Protocol::REST
     }
 
-    async fn execute(&self, operation: UniversalOperation) -> UnifiedStorageResult<UniversalResult> {
+    async fn execute(
+        &self,
+        operation: UniversalOperation,
+    ) -> UnifiedStorageResult<UniversalResult> {
         match operation {
             UniversalOperation::Get { namespace, key } => {
                 self.base.storage.get(&namespace, &key).await
             }
-            UniversalOperation::Put { namespace, key, value, ttl, if_not_exists, if_version } => {
-                self.base.storage.put(&namespace, &key, value, ttl, if_not_exists, if_version).await
+            UniversalOperation::Put {
+                namespace,
+                key,
+                value,
+                ttl,
+                if_not_exists,
+                if_version,
+            } => {
+                self.base
+                    .storage
+                    .put(&namespace, &key, value, ttl, if_not_exists, if_version)
+                    .await
             }
             UniversalOperation::Delete { namespace, key } => {
                 self.base.storage.delete(&namespace, &key).await
             }
-            _ => Err(UnifiedStorageError::NotImplemented("Operation not supported".to_string())),
+            _ => Err(UnifiedStorageError::NotImplemented(
+                "Operation not supported".to_string(),
+            )),
         }
     }
 
@@ -1401,12 +1756,18 @@ pub struct AdapterFactory;
 
 impl AdapterFactory {
     /// Create a Redis adapter
-    pub fn redis(storage: Arc<UnifiedStorage>, schema_registry: Arc<SchemaRegistry>) -> RedisAdapter {
+    pub fn redis(
+        storage: Arc<UnifiedStorage>,
+        schema_registry: Arc<SchemaRegistry>,
+    ) -> RedisAdapter {
         RedisAdapter::new(storage, schema_registry)
     }
 
     /// Create a PostgreSQL adapter
-    pub fn postgres(storage: Arc<UnifiedStorage>, schema_registry: Arc<SchemaRegistry>) -> SqlAdapter {
+    pub fn postgres(
+        storage: Arc<UnifiedStorage>,
+        schema_registry: Arc<SchemaRegistry>,
+    ) -> SqlAdapter {
         SqlAdapter::postgres(storage, schema_registry)
     }
 
@@ -1421,7 +1782,10 @@ impl AdapterFactory {
     }
 
     /// Create a Cypher adapter
-    pub fn cypher(storage: Arc<UnifiedStorage>, schema_registry: Arc<SchemaRegistry>) -> GraphAdapter {
+    pub fn cypher(
+        storage: Arc<UnifiedStorage>,
+        schema_registry: Arc<SchemaRegistry>,
+    ) -> GraphAdapter {
         GraphAdapter::cypher(storage, schema_registry)
     }
 
@@ -1456,16 +1820,25 @@ mod tests {
         let adapter = RedisAdapter::new(storage, registry);
 
         // SET and GET
-        adapter.set("mykey", UniversalValue::String("myvalue".to_string())).await.unwrap();
+        adapter
+            .set("mykey", UniversalValue::String("myvalue".to_string()))
+            .await
+            .unwrap();
         let value = adapter.get("mykey").await.unwrap();
         assert_eq!(value, Some(UniversalValue::String("myvalue".to_string())));
 
         // SETNX - should fail because key exists
-        let result = adapter.setnx("mykey", UniversalValue::String("newvalue".to_string())).await.unwrap();
+        let result = adapter
+            .setnx("mykey", UniversalValue::String("newvalue".to_string()))
+            .await
+            .unwrap();
         assert!(!result);
 
         // SETNX - should succeed for new key
-        let result = adapter.setnx("newkey", UniversalValue::String("newvalue".to_string())).await.unwrap();
+        let result = adapter
+            .setnx("newkey", UniversalValue::String("newvalue".to_string()))
+            .await
+            .unwrap();
         assert!(result);
 
         // DEL
@@ -1483,7 +1856,14 @@ mod tests {
         let adapter = RedisAdapter::new(storage, registry);
 
         // HSET
-        let created = adapter.hset("myhash", "field1", UniversalValue::String("value1".to_string())).await.unwrap();
+        let created = adapter
+            .hset(
+                "myhash",
+                "field1",
+                UniversalValue::String("value1".to_string()),
+            )
+            .await
+            .unwrap();
         assert!(created);
 
         // HGET
@@ -1491,7 +1871,10 @@ mod tests {
         assert_eq!(value, Some(UniversalValue::String("value1".to_string())));
 
         // HINCRBY
-        adapter.hset("myhash", "counter", UniversalValue::Int(0)).await.unwrap();
+        adapter
+            .hset("myhash", "counter", UniversalValue::Int(0))
+            .await
+            .unwrap();
         let new_val = adapter.hincrby("myhash", "counter", 5).await.unwrap();
         assert_eq!(new_val, 5);
 
@@ -1509,14 +1892,23 @@ mod tests {
         let adapter = RedisAdapter::new(storage, registry);
 
         // LPUSH
-        let len = adapter.lpush("mylist", vec![
-            UniversalValue::String("a".to_string()),
-            UniversalValue::String("b".to_string()),
-        ]).await.unwrap();
+        let len = adapter
+            .lpush(
+                "mylist",
+                vec![
+                    UniversalValue::String("a".to_string()),
+                    UniversalValue::String("b".to_string()),
+                ],
+            )
+            .await
+            .unwrap();
         assert_eq!(len, 2);
 
         // RPUSH
-        let len = adapter.rpush("mylist", vec![UniversalValue::String("c".to_string())]).await.unwrap();
+        let len = adapter
+            .rpush("mylist", vec![UniversalValue::String("c".to_string())])
+            .await
+            .unwrap();
         assert_eq!(len, 3);
 
         // LRANGE
@@ -1540,31 +1932,52 @@ mod tests {
         // INSERT
         let mut row1 = BTreeMap::new();
         row1.insert("id".to_string(), UniversalValue::Int(1));
-        row1.insert("name".to_string(), UniversalValue::String("Alice".to_string()));
+        row1.insert(
+            "name".to_string(),
+            UniversalValue::String("Alice".to_string()),
+        );
         row1.insert("age".to_string(), UniversalValue::Int(30));
         adapter.insert("users", row1, "id").await.unwrap();
 
         let mut row2 = BTreeMap::new();
         row2.insert("id".to_string(), UniversalValue::Int(2));
-        row2.insert("name".to_string(), UniversalValue::String("Bob".to_string()));
+        row2.insert(
+            "name".to_string(),
+            UniversalValue::String("Bob".to_string()),
+        );
         row2.insert("age".to_string(), UniversalValue::Int(25));
         adapter.insert("users", row2, "id").await.unwrap();
 
         // SELECT all
-        let rows = adapter.select("users", None, None, None, None, None).await.unwrap();
+        let rows = adapter
+            .select("users", None, None, None, None, None)
+            .await
+            .unwrap();
         assert_eq!(rows.len(), 2);
 
         // SELECT with filter
         let filter = FilterExpression::Gt("age".to_string(), UniversalValue::Int(28));
-        let rows = adapter.select("users", None, Some(filter), None, None, None).await.unwrap();
+        let rows = adapter
+            .select("users", None, Some(filter), None, None, None)
+            .await
+            .unwrap();
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].get("name"), Some(&UniversalValue::String("Alice".to_string())));
+        assert_eq!(
+            rows[0].get("name"),
+            Some(&UniversalValue::String("Alice".to_string()))
+        );
 
         // UPDATE
         let mut updates = BTreeMap::new();
         updates.insert("age".to_string(), UniversalValue::Int(31));
-        let filter = FilterExpression::Eq("name".to_string(), UniversalValue::String("Alice".to_string()));
-        let count = adapter.update("users", updates, Some(filter)).await.unwrap();
+        let filter = FilterExpression::Eq(
+            "name".to_string(),
+            UniversalValue::String("Alice".to_string()),
+        );
+        let count = adapter
+            .update("users", updates, Some(filter))
+            .await
+            .unwrap();
         assert_eq!(count, 1);
 
         // COUNT
@@ -1572,7 +1985,10 @@ mod tests {
         assert_eq!(count, 2);
 
         // DELETE
-        let filter = FilterExpression::Eq("name".to_string(), UniversalValue::String("Bob".to_string()));
+        let filter = FilterExpression::Eq(
+            "name".to_string(),
+            UniversalValue::String("Bob".to_string()),
+        );
         let count = adapter.delete("users", Some(filter)).await.unwrap();
         assert_eq!(count, 1);
 
@@ -1586,21 +2002,47 @@ mod tests {
 
         // Write via Redis adapter
         let redis = RedisAdapter::new(Arc::clone(&storage), Arc::clone(&registry));
-        redis.hset("users:alice", "name", UniversalValue::String("Alice".to_string())).await.unwrap();
-        redis.hset("users:alice", "email", UniversalValue::String("alice@example.com".to_string())).await.unwrap();
+        redis
+            .hset(
+                "users:alice",
+                "name",
+                UniversalValue::String("Alice".to_string()),
+            )
+            .await
+            .unwrap();
+        redis
+            .hset(
+                "users:alice",
+                "email",
+                UniversalValue::String("alice@example.com".to_string()),
+            )
+            .await
+            .unwrap();
 
         // Read via SQL adapter (same data!)
         let sql = SqlAdapter::postgres(Arc::clone(&storage), Arc::clone(&registry));
-        let rows = sql.select("users", None, None, None, None, None).await.unwrap();
+        let rows = sql
+            .select("users", None, None, None, None, None)
+            .await
+            .unwrap();
         assert_eq!(rows.len(), 1);
         let row = &rows[0];
-        assert_eq!(row.get("name"), Some(&UniversalValue::String("Alice".to_string())));
-        assert_eq!(row.get("email"), Some(&UniversalValue::String("alice@example.com".to_string())));
+        assert_eq!(
+            row.get("name"),
+            Some(&UniversalValue::String("Alice".to_string()))
+        );
+        assert_eq!(
+            row.get("email"),
+            Some(&UniversalValue::String("alice@example.com".to_string()))
+        );
 
         // Write via SQL, read via REST
         let mut bob = BTreeMap::new();
         bob.insert("id".to_string(), UniversalValue::String("bob".to_string()));
-        bob.insert("name".to_string(), UniversalValue::String("Bob".to_string()));
+        bob.insert(
+            "name".to_string(),
+            UniversalValue::String("Bob".to_string()),
+        );
         sql.insert("users", bob, "id").await.unwrap();
 
         let rest = RestAdapter::new(Arc::clone(&storage), Arc::clone(&registry));
@@ -1615,15 +2057,30 @@ mod tests {
 
         // Create nodes
         let mut props = BTreeMap::new();
-        props.insert("name".to_string(), UniversalValue::String("Alice".to_string()));
-        adapter.create_node("n1", vec!["Person".to_string()], props.clone()).await.unwrap();
+        props.insert(
+            "name".to_string(),
+            UniversalValue::String("Alice".to_string()),
+        );
+        adapter
+            .create_node("n1", vec!["Person".to_string()], props.clone())
+            .await
+            .unwrap();
 
-        props.insert("name".to_string(), UniversalValue::String("Bob".to_string()));
-        adapter.create_node("n2", vec!["Person".to_string()], props).await.unwrap();
+        props.insert(
+            "name".to_string(),
+            UniversalValue::String("Bob".to_string()),
+        );
+        adapter
+            .create_node("n2", vec!["Person".to_string()], props)
+            .await
+            .unwrap();
 
         // Create relationship
         let edge_props = BTreeMap::new();
-        adapter.create_relationship("e1", "KNOWS", "n1", "n2", edge_props).await.unwrap();
+        adapter
+            .create_relationship("e1", "KNOWS", "n1", "n2", edge_props)
+            .await
+            .unwrap();
 
         // Query node
         let node = adapter.get_node("n1").await.unwrap();
@@ -1634,7 +2091,10 @@ mod tests {
         assert_eq!(persons.len(), 2);
 
         // Query relationships
-        let rels = adapter.get_relationships("n1", Some("outgoing"), None).await.unwrap();
+        let rels = adapter
+            .get_relationships("n1", Some("outgoing"), None)
+            .await
+            .unwrap();
         assert_eq!(rels.len(), 1);
     }
 
@@ -1645,9 +2105,18 @@ mod tests {
 
         // POST (create)
         let mut user = BTreeMap::new();
-        user.insert("name".to_string(), UniversalValue::String("Alice".to_string()));
-        user.insert("email".to_string(), UniversalValue::String("alice@example.com".to_string()));
-        adapter.create("users", "1", UniversalValue::Map(user)).await.unwrap();
+        user.insert(
+            "name".to_string(),
+            UniversalValue::String("Alice".to_string()),
+        );
+        user.insert(
+            "email".to_string(),
+            UniversalValue::String("alice@example.com".to_string()),
+        );
+        adapter
+            .create("users", "1", UniversalValue::Map(user))
+            .await
+            .unwrap();
 
         // GET
         let user = adapter.get("users", "1").await.unwrap();
@@ -1659,12 +2128,18 @@ mod tests {
 
         // PATCH
         let mut updates = BTreeMap::new();
-        updates.insert("email".to_string(), UniversalValue::String("alice@newmail.com".to_string()));
+        updates.insert(
+            "email".to_string(),
+            UniversalValue::String("alice@newmail.com".to_string()),
+        );
         adapter.patch("users", "1", updates).await.unwrap();
 
         let user = adapter.get("users", "1").await.unwrap().unwrap();
         if let UniversalValue::Map(map) = user {
-            assert_eq!(map.get("email"), Some(&UniversalValue::String("alice@newmail.com".to_string())));
+            assert_eq!(
+                map.get("email"),
+                Some(&UniversalValue::String("alice@newmail.com".to_string()))
+            );
         }
 
         // DELETE

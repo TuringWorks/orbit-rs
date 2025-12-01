@@ -74,6 +74,10 @@ pub mod tiered;
 pub mod types;
 
 // Re-export commonly used types
+pub use actor_tier_placement::{
+    ActorTierPlacement, ActorTierPlacementBuilder, ActorTierPlacementConfig, ActorTierStats,
+    ActorType, TierRecommendation,
+};
 pub use adapters::{
     AdapterFactory, BaseAdapter, CqlAdapter, GraphAdapter, ProtocolAdapter, RedisAdapter,
     RestAdapter, SqlAdapter,
@@ -88,16 +92,12 @@ pub use storage::{
     MemoryBackend, UnifiedStorage, UnifiedStorageBackend, UnifiedStorageConfig,
     UnifiedStorageError, UnifiedStorageMetrics, UnifiedStorageResult,
 };
-pub use types::{RecordId, RecordMetadata, UniversalRecord, UniversalResult, UniversalValue};
 pub use tiered::{
-    ColdBackendType, ColdDataFormat, ColdTierConfig, EvictionPolicy, HotTierConfig,
-    StorageTier, TierMigrationConfig, TieredStorageBackend, TieredStorageConfig,
-    TieredStorageMetrics, WarmTierConfig, WritePolicy,
+    ColdBackendType, ColdDataFormat, ColdTierConfig, EvictionPolicy, HotTierConfig, StorageTier,
+    TierMigrationConfig, TieredStorageBackend, TieredStorageConfig, TieredStorageMetrics,
+    WarmTierConfig, WritePolicy,
 };
-pub use actor_tier_placement::{
-    ActorTierPlacement, ActorTierPlacementBuilder, ActorTierPlacementConfig,
-    ActorTierStats, ActorType, TierRecommendation,
-};
+pub use types::{RecordId, RecordMetadata, UniversalRecord, UniversalResult, UniversalValue};
 
 // Future modules (to be implemented)
 // pub mod backend;     // RocksDB persistent backend

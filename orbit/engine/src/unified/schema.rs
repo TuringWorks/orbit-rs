@@ -219,14 +219,16 @@ impl SchemaRegistry {
         if let Some(ref storage) = self.storage {
             let json = serde_json::to_string(&schema)
                 .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?;
-            storage.put(
-                "__schema__",
-                name,
-                UniversalValue::String(json),
-                None,
-                false,
-                None,
-            ).await?;
+            storage
+                .put(
+                    "__schema__",
+                    name,
+                    UniversalValue::String(json),
+                    None,
+                    false,
+                    None,
+                )
+                .await?;
         }
 
         // Create default projections for all protocols
@@ -291,9 +293,9 @@ impl SchemaRegistry {
     ) -> UnifiedStorageResult<()> {
         let mut schemas = self.schemas.write().await;
 
-        let schema = schemas.get_mut(namespace).ok_or_else(|| {
-            UnifiedStorageError::NamespaceNotFound(namespace.to_string())
-        })?;
+        let schema = schemas
+            .get_mut(namespace)
+            .ok_or_else(|| UnifiedStorageError::NamespaceNotFound(namespace.to_string()))?;
 
         // Check for duplicate field
         if schema.fields.iter().any(|f| f.name == field.name) {
@@ -309,14 +311,16 @@ impl SchemaRegistry {
         if let Some(ref storage) = self.storage {
             let json = serde_json::to_string(&*schema)
                 .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?;
-            storage.put(
-                "__schema__",
-                namespace,
-                UniversalValue::String(json),
-                None,
-                false,
-                None,
-            ).await?;
+            storage
+                .put(
+                    "__schema__",
+                    namespace,
+                    UniversalValue::String(json),
+                    None,
+                    false,
+                    None,
+                )
+                .await?;
         }
 
         Ok(())
@@ -330,9 +334,9 @@ impl SchemaRegistry {
     ) -> UnifiedStorageResult<bool> {
         let mut schemas = self.schemas.write().await;
 
-        let schema = schemas.get_mut(namespace).ok_or_else(|| {
-            UnifiedStorageError::NamespaceNotFound(namespace.to_string())
-        })?;
+        let schema = schemas
+            .get_mut(namespace)
+            .ok_or_else(|| UnifiedStorageError::NamespaceNotFound(namespace.to_string()))?;
 
         // Check if field is part of primary key
         if schema.primary_key.contains(&field_name.to_string()) {
@@ -351,14 +355,16 @@ impl SchemaRegistry {
             if let Some(ref storage) = self.storage {
                 let json = serde_json::to_string(&*schema)
                     .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?;
-                storage.put(
-                    "__schema__",
-                    namespace,
-                    UniversalValue::String(json),
-                    None,
-                    false,
-                    None,
-                ).await?;
+                storage
+                    .put(
+                        "__schema__",
+                        namespace,
+                        UniversalValue::String(json),
+                        None,
+                        false,
+                        None,
+                    )
+                    .await?;
             }
         }
 
@@ -373,9 +379,9 @@ impl SchemaRegistry {
     ) -> UnifiedStorageResult<()> {
         let mut schemas = self.schemas.write().await;
 
-        let schema = schemas.get_mut(namespace).ok_or_else(|| {
-            UnifiedStorageError::NamespaceNotFound(namespace.to_string())
-        })?;
+        let schema = schemas
+            .get_mut(namespace)
+            .ok_or_else(|| UnifiedStorageError::NamespaceNotFound(namespace.to_string()))?;
 
         // Check for duplicate index name
         if schema.indexes.iter().any(|i| i.name == index.name) {
@@ -401,14 +407,16 @@ impl SchemaRegistry {
         if let Some(ref storage) = self.storage {
             let json = serde_json::to_string(&*schema)
                 .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?;
-            storage.put(
-                "__schema__",
-                namespace,
-                UniversalValue::String(json),
-                None,
-                false,
-                None,
-            ).await?;
+            storage
+                .put(
+                    "__schema__",
+                    namespace,
+                    UniversalValue::String(json),
+                    None,
+                    false,
+                    None,
+                )
+                .await?;
         }
 
         Ok(())
@@ -422,9 +430,9 @@ impl SchemaRegistry {
     ) -> UnifiedStorageResult<bool> {
         let mut schemas = self.schemas.write().await;
 
-        let schema = schemas.get_mut(namespace).ok_or_else(|| {
-            UnifiedStorageError::NamespaceNotFound(namespace.to_string())
-        })?;
+        let schema = schemas
+            .get_mut(namespace)
+            .ok_or_else(|| UnifiedStorageError::NamespaceNotFound(namespace.to_string()))?;
 
         let original_len = schema.indexes.len();
         schema.indexes.retain(|i| i.name != index_name);
@@ -435,14 +443,16 @@ impl SchemaRegistry {
             if let Some(ref storage) = self.storage {
                 let json = serde_json::to_string(&*schema)
                     .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?;
-                storage.put(
-                    "__schema__",
-                    namespace,
-                    UniversalValue::String(json),
-                    None,
-                    false,
-                    None,
-                ).await?;
+                storage
+                    .put(
+                        "__schema__",
+                        namespace,
+                        UniversalValue::String(json),
+                        None,
+                        false,
+                        None,
+                    )
+                    .await?;
             }
         }
 
@@ -516,7 +526,9 @@ impl SchemaRegistry {
             projection.visible = visible;
             Ok(())
         } else {
-            Err(UnifiedStorageError::NamespaceNotFound(namespace.to_string()))
+            Err(UnifiedStorageError::NamespaceNotFound(
+                namespace.to_string(),
+            ))
         }
     }
 
@@ -614,7 +626,7 @@ impl SchemaRegistry {
     // ============================================================================
 
     /// Infer a schema from a sample record
-    pub fn infer_schema(namespace: &str, sample: &UniversalValue) -> Option<NamespaceSchema> {
+    pub fn infer_schema(_namespace: &str, sample: &UniversalValue) -> Option<NamespaceSchema> {
         if let UniversalValue::Map(fields) = sample {
             let field_defs: Vec<FieldDefinition> = fields
                 .iter()
@@ -645,7 +657,8 @@ impl SchemaRegistry {
             UniversalValue::String(_) => FieldType::String,
             UniversalValue::Bytes(_) => FieldType::Bytes,
             UniversalValue::List(items) => {
-                let inner_type = items.first()
+                let inner_type = items
+                    .first()
                     .map(Self::infer_field_type)
                     .unwrap_or(FieldType::String);
                 FieldType::List(Box::new(inner_type))
@@ -677,8 +690,8 @@ impl Default for SchemaRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::operations::IndexType;
+    use super::*;
 
     fn create_test_schema() -> NamespaceSchema {
         NamespaceSchema {
@@ -712,7 +725,10 @@ mod tests {
         let registry = SchemaRegistry::new();
         let schema = create_test_schema();
 
-        registry.create_namespace("users", schema.clone()).await.unwrap();
+        registry
+            .create_namespace("users", schema.clone())
+            .await
+            .unwrap();
 
         assert!(registry.namespace_exists("users").await);
         let retrieved = registry.get_schema("users").await.unwrap();
@@ -724,10 +740,16 @@ mod tests {
         let registry = SchemaRegistry::new();
         let schema = create_test_schema();
 
-        registry.create_namespace("users", schema.clone()).await.unwrap();
+        registry
+            .create_namespace("users", schema.clone())
+            .await
+            .unwrap();
         let result = registry.create_namespace("users", schema).await;
 
-        assert!(matches!(result, Err(UnifiedStorageError::NamespaceExists(_))));
+        assert!(matches!(
+            result,
+            Err(UnifiedStorageError::NamespaceExists(_))
+        ));
     }
 
     #[tokio::test]
@@ -787,7 +809,10 @@ mod tests {
         registry.create_namespace("users", schema).await.unwrap();
 
         let result = registry.remove_field("users", "id").await;
-        assert!(matches!(result, Err(UnifiedStorageError::InvalidOperation(_))));
+        assert!(matches!(
+            result,
+            Err(UnifiedStorageError::InvalidOperation(_))
+        ));
     }
 
     #[tokio::test]
@@ -836,7 +861,10 @@ mod tests {
 
         assert!(registry.is_visible(Protocol::Redis, "users").await);
 
-        registry.set_visibility(Protocol::Redis, "users", false).await.unwrap();
+        registry
+            .set_visibility(Protocol::Redis, "users", false)
+            .await
+            .unwrap();
 
         assert!(!registry.is_visible(Protocol::Redis, "users").await);
     }
@@ -846,24 +874,54 @@ mod tests {
         let registry = SchemaRegistry::new();
 
         // PostgreSQL types
-        assert_eq!(registry.get_protocol_type(Protocol::PostgreSQL, &FieldType::Int), "BIGINT");
-        assert_eq!(registry.get_protocol_type(Protocol::PostgreSQL, &FieldType::String), "TEXT");
-        assert_eq!(registry.get_protocol_type(Protocol::PostgreSQL, &FieldType::Vector(128)), "VECTOR(128)");
+        assert_eq!(
+            registry.get_protocol_type(Protocol::PostgreSQL, &FieldType::Int),
+            "BIGINT"
+        );
+        assert_eq!(
+            registry.get_protocol_type(Protocol::PostgreSQL, &FieldType::String),
+            "TEXT"
+        );
+        assert_eq!(
+            registry.get_protocol_type(Protocol::PostgreSQL, &FieldType::Vector(128)),
+            "VECTOR(128)"
+        );
 
         // CQL types
-        assert_eq!(registry.get_protocol_type(Protocol::CQL, &FieldType::Int), "bigint");
-        assert_eq!(registry.get_protocol_type(Protocol::CQL, &FieldType::String), "text");
+        assert_eq!(
+            registry.get_protocol_type(Protocol::CQL, &FieldType::Int),
+            "bigint"
+        );
+        assert_eq!(
+            registry.get_protocol_type(Protocol::CQL, &FieldType::String),
+            "text"
+        );
 
         // Redis types
-        assert_eq!(registry.get_protocol_type(Protocol::Redis, &FieldType::List(Box::new(FieldType::String))), "list");
-        assert_eq!(registry.get_protocol_type(Protocol::Redis, &FieldType::Map(Box::new(FieldType::String), Box::new(FieldType::String))), "hash");
+        assert_eq!(
+            registry.get_protocol_type(
+                Protocol::Redis,
+                &FieldType::List(Box::new(FieldType::String))
+            ),
+            "list"
+        );
+        assert_eq!(
+            registry.get_protocol_type(
+                Protocol::Redis,
+                &FieldType::Map(Box::new(FieldType::String), Box::new(FieldType::String))
+            ),
+            "hash"
+        );
     }
 
     #[tokio::test]
     async fn test_infer_schema() {
         let mut sample = BTreeMap::new();
         sample.insert("id".to_string(), UniversalValue::Int(1));
-        sample.insert("name".to_string(), UniversalValue::String("Alice".to_string()));
+        sample.insert(
+            "name".to_string(),
+            UniversalValue::String("Alice".to_string()),
+        );
         sample.insert("active".to_string(), UniversalValue::Bool(true));
 
         let schema = SchemaRegistry::infer_schema("users", &UniversalValue::Map(sample));

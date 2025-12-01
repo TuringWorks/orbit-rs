@@ -166,9 +166,7 @@ impl UnifiedStorageIntegration {
             "postgresql" | "postgres" => {
                 AdapterFactory::postgres(Arc::clone(&self.storage), Arc::clone(&self.registry))
             }
-            "mysql" => {
-                AdapterFactory::mysql(Arc::clone(&self.storage), Arc::clone(&self.registry))
-            }
+            "mysql" => AdapterFactory::mysql(Arc::clone(&self.storage), Arc::clone(&self.registry)),
             _ => AdapterFactory::postgres(Arc::clone(&self.storage), Arc::clone(&self.registry)), // Default to PostgreSQL
         }
     }

@@ -8,9 +8,9 @@ pub mod persistence;
 pub mod protocols;
 pub mod server;
 pub mod services;
-pub mod unified_storage;
 #[cfg(test)]
 mod test_pooling_integration;
+pub mod unified_storage;
 
 pub use features::Features;
 pub use load_balancer::{LoadBalancer, LoadBalancerStats, LoadBalancingStrategy, NodeLoad};

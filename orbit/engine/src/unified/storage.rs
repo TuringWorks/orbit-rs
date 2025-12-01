@@ -29,8 +29,8 @@
 //! - Secondary indexes: `idx:{namespace}:{field}:{value}:{key}`
 //! - TTL tracking: `ttl:{expiration_timestamp}:{namespace}:{key}`
 
-use super::types::{RecordId, RecordMetadata, UniversalRecord, UniversalResult, UniversalValue};
 use super::operations::{FilterExpression, SortOrder, UniversalOperation};
+use super::types::{RecordId, RecordMetadata, UniversalRecord, UniversalResult, UniversalValue};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -189,7 +189,11 @@ pub trait UnifiedStorageBackend: Send + Sync {
     async fn exists(&self, key: &str) -> UnifiedStorageResult<bool>;
 
     /// Scan keys with a prefix
-    async fn scan_prefix(&self, prefix: &str, limit: Option<usize>) -> UnifiedStorageResult<Vec<(String, Vec<u8>)>>;
+    async fn scan_prefix(
+        &self,
+        prefix: &str,
+        limit: Option<usize>,
+    ) -> UnifiedStorageResult<Vec<(String, Vec<u8>)>>;
 
     /// Batch put operation
     async fn put_batch(&self, entries: Vec<(String, Vec<u8>)>) -> UnifiedStorageResult<()>;
@@ -265,7 +269,8 @@ impl UnifiedStorageBackend for MemoryBackend {
         // Update total records metric
         let mut metrics = self.metrics.write().await;
         metrics.total_records = data.len() as u64;
-        metrics.memory_usage_bytes = data.iter().map(|(k, v)| k.len() + v.len()).sum::<usize>() as u64;
+        metrics.memory_usage_bytes =
+            data.iter().map(|(k, v)| k.len() + v.len()).sum::<usize>() as u64;
 
         Ok(())
     }
@@ -288,7 +293,11 @@ impl UnifiedStorageBackend for MemoryBackend {
         Ok(data.contains_key(key))
     }
 
-    async fn scan_prefix(&self, prefix: &str, limit: Option<usize>) -> UnifiedStorageResult<Vec<(String, Vec<u8>)>> {
+    async fn scan_prefix(
+        &self,
+        prefix: &str,
+        limit: Option<usize>,
+    ) -> UnifiedStorageResult<Vec<(String, Vec<u8>)>> {
         let data = self.data.read().await;
         let mut results: Vec<_> = data
             .iter()
@@ -317,7 +326,8 @@ impl UnifiedStorageBackend for MemoryBackend {
         // Update metrics
         let mut metrics = self.metrics.write().await;
         metrics.total_records = data.len() as u64;
-        metrics.memory_usage_bytes = data.iter().map(|(k, v)| k.len() + v.len()).sum::<usize>() as u64;
+        metrics.memory_usage_bytes =
+            data.iter().map(|(k, v)| k.len() + v.len()).sum::<usize>() as u64;
 
         Ok(())
     }
@@ -379,103 +389,158 @@ impl UnifiedStorage {
     }
 
     /// Execute a universal operation
-    pub async fn execute(&self, operation: UniversalOperation) -> UnifiedStorageResult<UniversalResult> {
+    pub async fn execute(
+        &self,
+        operation: UniversalOperation,
+    ) -> UnifiedStorageResult<UniversalResult> {
         match operation {
-            UniversalOperation::Get { namespace, key } => {
-                self.get(&namespace, &key).await
+            UniversalOperation::Get { namespace, key } => self.get(&namespace, &key).await,
+            UniversalOperation::Put {
+                namespace,
+                key,
+                value,
+                ttl,
+                if_not_exists,
+                if_version,
+            } => {
+                self.put(&namespace, &key, value, ttl, if_not_exists, if_version)
+                    .await
             }
-            UniversalOperation::Put { namespace, key, value, ttl, if_not_exists, if_version } => {
-                self.put(&namespace, &key, value, ttl, if_not_exists, if_version).await
-            }
-            UniversalOperation::Delete { namespace, key } => {
-                self.delete(&namespace, &key).await
-            }
-            UniversalOperation::Exists { namespace, key } => {
-                self.exists(&namespace, &key).await
-            }
+            UniversalOperation::Delete { namespace, key } => self.delete(&namespace, &key).await,
+            UniversalOperation::Exists { namespace, key } => self.exists(&namespace, &key).await,
             UniversalOperation::MultiGet { namespace, keys } => {
                 self.multi_get(&namespace, &keys).await
             }
-            UniversalOperation::MultiPut { records } => {
-                self.multi_put(records).await
-            }
+            UniversalOperation::MultiPut { records } => self.multi_put(records).await,
             UniversalOperation::MultiDelete { namespace, keys } => {
                 self.multi_delete(&namespace, &keys).await
             }
-            UniversalOperation::Scan { namespace, filter, limit, offset, order_by, projection } => {
-                self.scan(&namespace, filter, limit, offset, order_by, projection).await
+            UniversalOperation::Scan {
+                namespace,
+                filter,
+                limit,
+                offset,
+                order_by,
+                projection,
+            } => {
+                self.scan(&namespace, filter, limit, offset, order_by, projection)
+                    .await
             }
-            UniversalOperation::ScanKeys { namespace, pattern, limit, cursor: _ } => {
-                self.scan_keys(&namespace, pattern, limit).await
-            }
-            UniversalOperation::Count { namespace, filter } => {
-                self.count(&namespace, filter).await
-            }
-            UniversalOperation::GetField { namespace, key, field } => {
-                self.get_field(&namespace, &key, &field).await
-            }
-            UniversalOperation::SetField { namespace, key, field, value } => {
-                self.set_field(&namespace, &key, &field, value).await
-            }
-            UniversalOperation::DeleteField { namespace, key, field } => {
-                self.delete_field(&namespace, &key, &field).await
-            }
-            UniversalOperation::IncrementField { namespace, key, field, delta } => {
-                self.increment_field(&namespace, &key, &field, delta).await
-            }
-            UniversalOperation::ListPushFront { namespace, key, values } => {
-                self.list_push_front(&namespace, &key, values).await
-            }
-            UniversalOperation::ListPushBack { namespace, key, values } => {
-                self.list_push_back(&namespace, &key, values).await
-            }
-            UniversalOperation::ListPopFront { namespace, key, count } => {
-                self.list_pop_front(&namespace, &key, count).await
-            }
-            UniversalOperation::ListPopBack { namespace, key, count } => {
-                self.list_pop_back(&namespace, &key, count).await
-            }
-            UniversalOperation::ListRange { namespace, key, start, stop } => {
-                self.list_range(&namespace, &key, start, stop).await
-            }
+            UniversalOperation::ScanKeys {
+                namespace,
+                pattern,
+                limit,
+                cursor: _,
+            } => self.scan_keys(&namespace, pattern, limit).await,
+            UniversalOperation::Count { namespace, filter } => self.count(&namespace, filter).await,
+            UniversalOperation::GetField {
+                namespace,
+                key,
+                field,
+            } => self.get_field(&namespace, &key, &field).await,
+            UniversalOperation::SetField {
+                namespace,
+                key,
+                field,
+                value,
+            } => self.set_field(&namespace, &key, &field, value).await,
+            UniversalOperation::DeleteField {
+                namespace,
+                key,
+                field,
+            } => self.delete_field(&namespace, &key, &field).await,
+            UniversalOperation::IncrementField {
+                namespace,
+                key,
+                field,
+                delta,
+            } => self.increment_field(&namespace, &key, &field, delta).await,
+            UniversalOperation::ListPushFront {
+                namespace,
+                key,
+                values,
+            } => self.list_push_front(&namespace, &key, values).await,
+            UniversalOperation::ListPushBack {
+                namespace,
+                key,
+                values,
+            } => self.list_push_back(&namespace, &key, values).await,
+            UniversalOperation::ListPopFront {
+                namespace,
+                key,
+                count,
+            } => self.list_pop_front(&namespace, &key, count).await,
+            UniversalOperation::ListPopBack {
+                namespace,
+                key,
+                count,
+            } => self.list_pop_back(&namespace, &key, count).await,
+            UniversalOperation::ListRange {
+                namespace,
+                key,
+                start,
+                stop,
+            } => self.list_range(&namespace, &key, start, stop).await,
             UniversalOperation::ListLength { namespace, key } => {
                 self.list_length(&namespace, &key).await
             }
-            UniversalOperation::SetAdd { namespace, key, members } => {
-                self.set_add(&namespace, &key, members).await
-            }
-            UniversalOperation::SetRemove { namespace, key, members } => {
-                self.set_remove(&namespace, &key, members).await
-            }
-            UniversalOperation::SetIsMember { namespace, key, member } => {
-                self.set_is_member(&namespace, &key, member).await
-            }
+            UniversalOperation::SetAdd {
+                namespace,
+                key,
+                members,
+            } => self.set_add(&namespace, &key, members).await,
+            UniversalOperation::SetRemove {
+                namespace,
+                key,
+                members,
+            } => self.set_remove(&namespace, &key, members).await,
+            UniversalOperation::SetIsMember {
+                namespace,
+                key,
+                member,
+            } => self.set_is_member(&namespace, &key, member).await,
             UniversalOperation::SetMembers { namespace, key } => {
                 self.set_members(&namespace, &key).await
             }
-            UniversalOperation::SortedSetAdd { namespace, key, members } => {
-                self.sorted_set_add(&namespace, &key, members).await
+            UniversalOperation::SortedSetAdd {
+                namespace,
+                key,
+                members,
+            } => self.sorted_set_add(&namespace, &key, members).await,
+            UniversalOperation::SortedSetRangeByScore {
+                namespace,
+                key,
+                min,
+                max,
+                limit,
+                offset,
+            } => {
+                self.sorted_set_range_by_score(&namespace, &key, min, max, limit, offset)
+                    .await
             }
-            UniversalOperation::SortedSetRangeByScore { namespace, key, min, max, limit, offset } => {
-                self.sorted_set_range_by_score(&namespace, &key, min, max, limit, offset).await
+            UniversalOperation::SortedSetRangeByRank {
+                namespace,
+                key,
+                start,
+                stop,
+                with_scores,
+            } => {
+                self.sorted_set_range_by_rank(&namespace, &key, start, stop, with_scores)
+                    .await
             }
-            UniversalOperation::SortedSetRangeByRank { namespace, key, start, stop, with_scores } => {
-                self.sorted_set_range_by_rank(&namespace, &key, start, stop, with_scores).await
-            }
-            UniversalOperation::SetTTL { namespace, key, ttl } => {
-                self.set_ttl(&namespace, &key, ttl).await
-            }
-            UniversalOperation::GetTTL { namespace, key } => {
-                self.get_ttl(&namespace, &key).await
-            }
+            UniversalOperation::SetTTL {
+                namespace,
+                key,
+                ttl,
+            } => self.set_ttl(&namespace, &key, ttl).await,
+            UniversalOperation::GetTTL { namespace, key } => self.get_ttl(&namespace, &key).await,
             UniversalOperation::RemoveTTL { namespace, key } => {
                 self.remove_ttl(&namespace, &key).await
             }
-            _ => {
-                Err(UnifiedStorageError::InvalidOperation(
-                    format!("Operation not yet implemented: {:?}", std::mem::discriminant(&operation))
-                ))
-            }
+            _ => Err(UnifiedStorageError::InvalidOperation(format!(
+                "Operation not yet implemented: {:?}",
+                std::mem::discriminant(&operation)
+            ))),
         }
     }
 
@@ -576,7 +641,11 @@ impl UnifiedStorage {
     }
 
     /// Delete a record
-    pub async fn delete(&self, namespace: &str, key: &str) -> UnifiedStorageResult<UniversalResult> {
+    pub async fn delete(
+        &self,
+        namespace: &str,
+        key: &str,
+    ) -> UnifiedStorageResult<UniversalResult> {
         let storage_key = Self::data_key(namespace, key);
         let removed = self.backend.delete(&storage_key).await?;
 
@@ -588,7 +657,11 @@ impl UnifiedStorage {
     }
 
     /// Check if a key exists
-    pub async fn exists(&self, namespace: &str, key: &str) -> UnifiedStorageResult<UniversalResult> {
+    pub async fn exists(
+        &self,
+        namespace: &str,
+        key: &str,
+    ) -> UnifiedStorageResult<UniversalResult> {
         let storage_key = Self::data_key(namespace, key);
 
         if self.backend.exists(&storage_key).await? {
@@ -612,7 +685,11 @@ impl UnifiedStorage {
     // ============================================================================
 
     /// Get multiple records
-    pub async fn multi_get(&self, namespace: &str, keys: &[String]) -> UnifiedStorageResult<UniversalResult> {
+    pub async fn multi_get(
+        &self,
+        namespace: &str,
+        keys: &[String],
+    ) -> UnifiedStorageResult<UniversalResult> {
         let mut records = Vec::with_capacity(keys.len());
 
         for key in keys {
@@ -626,7 +703,10 @@ impl UnifiedStorage {
     }
 
     /// Put multiple records
-    pub async fn multi_put(&self, records: Vec<(RecordId, UniversalValue)>) -> UnifiedStorageResult<UniversalResult> {
+    pub async fn multi_put(
+        &self,
+        records: Vec<(RecordId, UniversalValue)>,
+    ) -> UnifiedStorageResult<UniversalResult> {
         let mut entries = Vec::with_capacity(records.len());
 
         for (id, value) in records {
@@ -648,11 +728,12 @@ impl UnifiedStorage {
     }
 
     /// Delete multiple records
-    pub async fn multi_delete(&self, namespace: &str, keys: &[String]) -> UnifiedStorageResult<UniversalResult> {
-        let storage_keys: Vec<String> = keys
-            .iter()
-            .map(|k| Self::data_key(namespace, k))
-            .collect();
+    pub async fn multi_delete(
+        &self,
+        namespace: &str,
+        keys: &[String],
+    ) -> UnifiedStorageResult<UniversalResult> {
+        let storage_keys: Vec<String> = keys.iter().map(|k| Self::data_key(namespace, k)).collect();
 
         let count = self.backend.delete_batch(storage_keys).await?;
 
@@ -712,7 +793,9 @@ impl UnifiedStorage {
                         (Some(UniversalValue::Float(a)), Some(UniversalValue::Float(b))) => {
                             a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
                         }
-                        (Some(UniversalValue::String(a)), Some(UniversalValue::String(b))) => a.cmp(b),
+                        (Some(UniversalValue::String(a)), Some(UniversalValue::String(b))) => {
+                            a.cmp(b)
+                        }
                         _ => std::cmp::Ordering::Equal,
                     };
 
@@ -794,7 +877,11 @@ impl UnifiedStorage {
     }
 
     /// Count records in a namespace
-    pub async fn count(&self, namespace: &str, filter: Option<FilterExpression>) -> UnifiedStorageResult<UniversalResult> {
+    pub async fn count(
+        &self,
+        namespace: &str,
+        filter: Option<FilterExpression>,
+    ) -> UnifiedStorageResult<UniversalResult> {
         let prefix = format!("data:{}:", namespace);
         let entries = self.backend.scan_prefix(&prefix, None).await?;
 
@@ -825,7 +912,12 @@ impl UnifiedStorage {
     // ============================================================================
 
     /// Get a specific field from a record
-    pub async fn get_field(&self, namespace: &str, key: &str, field: &str) -> UnifiedStorageResult<UniversalResult> {
+    pub async fn get_field(
+        &self,
+        namespace: &str,
+        key: &str,
+        field: &str,
+    ) -> UnifiedStorageResult<UniversalResult> {
         match self.get(namespace, key).await? {
             UniversalResult::Record(record) => {
                 if let Some(value) = record.get_field(field) {
@@ -849,13 +941,16 @@ impl UnifiedStorage {
         let storage_key = Self::data_key(namespace, key);
 
         let mut record = match self.backend.get(&storage_key).await? {
-            Some(data) => {
-                serde_json::from_slice::<UniversalRecord>(&data)
-                    .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?
-            }
+            Some(data) => serde_json::from_slice::<UniversalRecord>(&data)
+                .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?,
             None => {
                 // Create new record with Map value
-                UniversalRecord::new(namespace, key, UniversalValue::Map(BTreeMap::new()), "unified")
+                UniversalRecord::new(
+                    namespace,
+                    key,
+                    UniversalValue::Map(BTreeMap::new()),
+                    "unified",
+                )
             }
         };
 
@@ -887,14 +982,17 @@ impl UnifiedStorage {
     }
 
     /// Delete a field from a record
-    pub async fn delete_field(&self, namespace: &str, key: &str, field: &str) -> UnifiedStorageResult<UniversalResult> {
+    pub async fn delete_field(
+        &self,
+        namespace: &str,
+        key: &str,
+        field: &str,
+    ) -> UnifiedStorageResult<UniversalResult> {
         let storage_key = Self::data_key(namespace, key);
 
         let mut record = match self.backend.get(&storage_key).await? {
-            Some(data) => {
-                serde_json::from_slice::<UniversalRecord>(&data)
-                    .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?
-            }
+            Some(data) => serde_json::from_slice::<UniversalRecord>(&data)
+                .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?,
             None => return Ok(UniversalResult::Count(0)),
         };
 
@@ -926,13 +1024,14 @@ impl UnifiedStorage {
         let storage_key = Self::data_key(namespace, key);
 
         let mut record = match self.backend.get(&storage_key).await? {
-            Some(data) => {
-                serde_json::from_slice::<UniversalRecord>(&data)
-                    .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?
-            }
-            None => {
-                UniversalRecord::new(namespace, key, UniversalValue::Map(BTreeMap::new()), "unified")
-            }
+            Some(data) => serde_json::from_slice::<UniversalRecord>(&data)
+                .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?,
+            None => UniversalRecord::new(
+                namespace,
+                key,
+                UniversalValue::Map(BTreeMap::new()),
+                "unified",
+            ),
         };
 
         let new_value = if let UniversalValue::Map(ref mut m) = record.value {
@@ -942,7 +1041,7 @@ impl UnifiedStorage {
             new_value
         } else {
             return Err(UnifiedStorageError::InvalidOperation(
-                "Cannot increment field on non-Map value".to_string()
+                "Cannot increment field on non-Map value".to_string(),
             ));
         };
 
@@ -970,10 +1069,8 @@ impl UnifiedStorage {
         let storage_key = Self::data_key(namespace, key);
 
         let mut record = match self.backend.get(&storage_key).await? {
-            Some(data) => {
-                serde_json::from_slice::<UniversalRecord>(&data)
-                    .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?
-            }
+            Some(data) => serde_json::from_slice::<UniversalRecord>(&data)
+                .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?,
             None => {
                 UniversalRecord::new(namespace, key, UniversalValue::List(Vec::new()), "unified")
             }
@@ -986,7 +1083,7 @@ impl UnifiedStorage {
             list.len()
         } else {
             return Err(UnifiedStorageError::InvalidOperation(
-                "Cannot push to non-List value".to_string()
+                "Cannot push to non-List value".to_string(),
             ));
         };
 
@@ -1010,10 +1107,8 @@ impl UnifiedStorage {
         let storage_key = Self::data_key(namespace, key);
 
         let mut record = match self.backend.get(&storage_key).await? {
-            Some(data) => {
-                serde_json::from_slice::<UniversalRecord>(&data)
-                    .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?
-            }
+            Some(data) => serde_json::from_slice::<UniversalRecord>(&data)
+                .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?,
             None => {
                 UniversalRecord::new(namespace, key, UniversalValue::List(Vec::new()), "unified")
             }
@@ -1024,7 +1119,7 @@ impl UnifiedStorage {
             list.len()
         } else {
             return Err(UnifiedStorageError::InvalidOperation(
-                "Cannot push to non-List value".to_string()
+                "Cannot push to non-List value".to_string(),
             ));
         };
 
@@ -1048,10 +1143,8 @@ impl UnifiedStorage {
         let storage_key = Self::data_key(namespace, key);
 
         let mut record = match self.backend.get(&storage_key).await? {
-            Some(data) => {
-                serde_json::from_slice::<UniversalRecord>(&data)
-                    .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?
-            }
+            Some(data) => serde_json::from_slice::<UniversalRecord>(&data)
+                .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?,
             None => return Ok(UniversalResult::Empty),
         };
 
@@ -1067,7 +1160,7 @@ impl UnifiedStorage {
             values
         } else {
             return Err(UnifiedStorageError::InvalidOperation(
-                "Cannot pop from non-List value".to_string()
+                "Cannot pop from non-List value".to_string(),
             ));
         };
 
@@ -1095,10 +1188,8 @@ impl UnifiedStorage {
         let storage_key = Self::data_key(namespace, key);
 
         let mut record = match self.backend.get(&storage_key).await? {
-            Some(data) => {
-                serde_json::from_slice::<UniversalRecord>(&data)
-                    .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?
-            }
+            Some(data) => serde_json::from_slice::<UniversalRecord>(&data)
+                .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?,
             None => return Ok(UniversalResult::Empty),
         };
 
@@ -1115,7 +1206,7 @@ impl UnifiedStorage {
             values
         } else {
             return Err(UnifiedStorageError::InvalidOperation(
-                "Cannot pop from non-List value".to_string()
+                "Cannot pop from non-List value".to_string(),
             ));
         };
 
@@ -1147,7 +1238,11 @@ impl UnifiedStorage {
                     let len = list.len() as i64;
 
                     // Handle negative indices (like Redis)
-                    let start = if start < 0 { (len + start).max(0) } else { start };
+                    let start = if start < 0 {
+                        (len + start).max(0)
+                    } else {
+                        start
+                    };
                     let stop = if stop < 0 { len + stop + 1 } else { stop + 1 };
 
                     let start = start.max(0) as usize;
@@ -1163,7 +1258,7 @@ impl UnifiedStorage {
                     Ok(UniversalResult::Values(values))
                 } else {
                     Err(UnifiedStorageError::InvalidOperation(
-                        "Cannot get range from non-List value".to_string()
+                        "Cannot get range from non-List value".to_string(),
                     ))
                 }
             }
@@ -1172,14 +1267,18 @@ impl UnifiedStorage {
     }
 
     /// Get list length
-    pub async fn list_length(&self, namespace: &str, key: &str) -> UnifiedStorageResult<UniversalResult> {
+    pub async fn list_length(
+        &self,
+        namespace: &str,
+        key: &str,
+    ) -> UnifiedStorageResult<UniversalResult> {
         match self.get(namespace, key).await? {
             UniversalResult::Record(record) => {
                 if let UniversalValue::List(ref list) = record.value {
                     Ok(UniversalResult::Count(list.len() as u64))
                 } else {
                     Err(UnifiedStorageError::InvalidOperation(
-                        "Cannot get length of non-List value".to_string()
+                        "Cannot get length of non-List value".to_string(),
                     ))
                 }
             }
@@ -1201,10 +1300,8 @@ impl UnifiedStorage {
         let storage_key = Self::data_key(namespace, key);
 
         let mut record = match self.backend.get(&storage_key).await? {
-            Some(data) => {
-                serde_json::from_slice::<UniversalRecord>(&data)
-                    .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?
-            }
+            Some(data) => serde_json::from_slice::<UniversalRecord>(&data)
+                .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?,
             None => {
                 UniversalRecord::new(namespace, key, UniversalValue::Set(Vec::new()), "unified")
             }
@@ -1221,7 +1318,7 @@ impl UnifiedStorage {
             }
         } else {
             return Err(UnifiedStorageError::InvalidOperation(
-                "Cannot add to non-Set value".to_string()
+                "Cannot add to non-Set value".to_string(),
             ));
         }
 
@@ -1245,10 +1342,8 @@ impl UnifiedStorage {
         let storage_key = Self::data_key(namespace, key);
 
         let mut record = match self.backend.get(&storage_key).await? {
-            Some(data) => {
-                serde_json::from_slice::<UniversalRecord>(&data)
-                    .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?
-            }
+            Some(data) => serde_json::from_slice::<UniversalRecord>(&data)
+                .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?,
             None => return Ok(UniversalResult::Count(0)),
         };
 
@@ -1263,7 +1358,7 @@ impl UnifiedStorage {
             }
         } else {
             return Err(UnifiedStorageError::InvalidOperation(
-                "Cannot remove from non-Set value".to_string()
+                "Cannot remove from non-Set value".to_string(),
             ));
         }
 
@@ -1291,7 +1386,7 @@ impl UnifiedStorage {
                     Ok(UniversalResult::Value(UniversalValue::Bool(is_member)))
                 } else {
                     Err(UnifiedStorageError::InvalidOperation(
-                        "Cannot check membership on non-Set value".to_string()
+                        "Cannot check membership on non-Set value".to_string(),
                     ))
                 }
             }
@@ -1300,14 +1395,18 @@ impl UnifiedStorage {
     }
 
     /// Get all members of a set
-    pub async fn set_members(&self, namespace: &str, key: &str) -> UnifiedStorageResult<UniversalResult> {
+    pub async fn set_members(
+        &self,
+        namespace: &str,
+        key: &str,
+    ) -> UnifiedStorageResult<UniversalResult> {
         match self.get(namespace, key).await? {
             UniversalResult::Record(record) => {
                 if let UniversalValue::Set(set) = record.value {
                     Ok(UniversalResult::Values(set))
                 } else {
                     Err(UnifiedStorageError::InvalidOperation(
-                        "Cannot get members of non-Set value".to_string()
+                        "Cannot get members of non-Set value".to_string(),
                     ))
                 }
             }
@@ -1329,13 +1428,14 @@ impl UnifiedStorage {
         let storage_key = Self::data_key(namespace, key);
 
         let mut record = match self.backend.get(&storage_key).await? {
-            Some(data) => {
-                serde_json::from_slice::<UniversalRecord>(&data)
-                    .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?
-            }
-            None => {
-                UniversalRecord::new(namespace, key, UniversalValue::SortedSet(Vec::new()), "unified")
-            }
+            Some(data) => serde_json::from_slice::<UniversalRecord>(&data)
+                .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?,
+            None => UniversalRecord::new(
+                namespace,
+                key,
+                UniversalValue::SortedSet(Vec::new()),
+                "unified",
+            ),
         };
 
         let mut added = 0u64;
@@ -1356,7 +1456,7 @@ impl UnifiedStorage {
             sorted_set.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
         } else {
             return Err(UnifiedStorageError::InvalidOperation(
-                "Cannot add to non-SortedSet value".to_string()
+                "Cannot add to non-SortedSet value".to_string(),
             ));
         }
 
@@ -1394,7 +1494,7 @@ impl UnifiedStorage {
                     Ok(UniversalResult::Values(values))
                 } else {
                     Err(UnifiedStorageError::InvalidOperation(
-                        "Cannot range on non-SortedSet value".to_string()
+                        "Cannot range on non-SortedSet value".to_string(),
                     ))
                 }
             }
@@ -1417,7 +1517,11 @@ impl UnifiedStorage {
                     let len = sorted_set.len() as i64;
 
                     // Handle negative indices
-                    let start = if start < 0 { (len + start).max(0) } else { start };
+                    let start = if start < 0 {
+                        (len + start).max(0)
+                    } else {
+                        start
+                    };
                     let stop = if stop < 0 { len + stop + 1 } else { stop + 1 };
 
                     let start = start.max(0) as usize;
@@ -1444,7 +1548,7 @@ impl UnifiedStorage {
                     }
                 } else {
                     Err(UnifiedStorageError::InvalidOperation(
-                        "Cannot range on non-SortedSet value".to_string()
+                        "Cannot range on non-SortedSet value".to_string(),
                     ))
                 }
             }
@@ -1466,10 +1570,8 @@ impl UnifiedStorage {
         let storage_key = Self::data_key(namespace, key);
 
         let mut record = match self.backend.get(&storage_key).await? {
-            Some(data) => {
-                serde_json::from_slice::<UniversalRecord>(&data)
-                    .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?
-            }
+            Some(data) => serde_json::from_slice::<UniversalRecord>(&data)
+                .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?,
             None => return Ok(UniversalResult::Value(UniversalValue::Bool(false))),
         };
 
@@ -1486,13 +1588,19 @@ impl UnifiedStorage {
     }
 
     /// Get remaining TTL
-    pub async fn get_ttl(&self, namespace: &str, key: &str) -> UnifiedStorageResult<UniversalResult> {
+    pub async fn get_ttl(
+        &self,
+        namespace: &str,
+        key: &str,
+    ) -> UnifiedStorageResult<UniversalResult> {
         match self.get(namespace, key).await? {
             UniversalResult::Record(record) => {
                 if let Some(ttl) = record.metadata.ttl {
                     let now = chrono::Utc::now().timestamp_millis();
                     let remaining = (ttl - now) / 1000; // Return in seconds
-                    Ok(UniversalResult::Value(UniversalValue::Int(remaining.max(-1))))
+                    Ok(UniversalResult::Value(UniversalValue::Int(
+                        remaining.max(-1),
+                    )))
                 } else {
                     // -1 means no TTL set (Redis convention)
                     Ok(UniversalResult::Value(UniversalValue::Int(-1)))
@@ -1506,14 +1614,16 @@ impl UnifiedStorage {
     }
 
     /// Remove TTL from a key (make it persistent)
-    pub async fn remove_ttl(&self, namespace: &str, key: &str) -> UnifiedStorageResult<UniversalResult> {
+    pub async fn remove_ttl(
+        &self,
+        namespace: &str,
+        key: &str,
+    ) -> UnifiedStorageResult<UniversalResult> {
         let storage_key = Self::data_key(namespace, key);
 
         let mut record = match self.backend.get(&storage_key).await? {
-            Some(data) => {
-                serde_json::from_slice::<UniversalRecord>(&data)
-                    .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?
-            }
+            Some(data) => serde_json::from_slice::<UniversalRecord>(&data)
+                .map_err(|e| UnifiedStorageError::Serialization(e.to_string()))?,
             None => return Ok(UniversalResult::Value(UniversalValue::Bool(false))),
         };
 
@@ -1543,56 +1653,66 @@ impl UnifiedStorage {
                 record.get_field(field).map_or(true, |v| v != value)
             }
             FilterExpression::Gt(field, value) => {
-                self.compare_values(record.get_field(field), Some(value)) == Some(std::cmp::Ordering::Greater)
+                self.compare_values(record.get_field(field), Some(value))
+                    == Some(std::cmp::Ordering::Greater)
             }
             FilterExpression::Gte(field, value) => {
-                matches!(self.compare_values(record.get_field(field), Some(value)), Some(std::cmp::Ordering::Greater | std::cmp::Ordering::Equal))
+                matches!(
+                    self.compare_values(record.get_field(field), Some(value)),
+                    Some(std::cmp::Ordering::Greater | std::cmp::Ordering::Equal)
+                )
             }
             FilterExpression::Lt(field, value) => {
-                self.compare_values(record.get_field(field), Some(value)) == Some(std::cmp::Ordering::Less)
+                self.compare_values(record.get_field(field), Some(value))
+                    == Some(std::cmp::Ordering::Less)
             }
             FilterExpression::Lte(field, value) => {
-                matches!(self.compare_values(record.get_field(field), Some(value)), Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal))
+                matches!(
+                    self.compare_values(record.get_field(field), Some(value)),
+                    Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)
+                )
             }
-            FilterExpression::In(field, values) => {
-                record.get_field(field).map_or(false, |v| values.contains(v))
-            }
-            FilterExpression::NotIn(field, values) => {
-                record.get_field(field).map_or(true, |v| !values.contains(v))
-            }
+            FilterExpression::In(field, values) => record
+                .get_field(field)
+                .map_or(false, |v| values.contains(v)),
+            FilterExpression::NotIn(field, values) => record
+                .get_field(field)
+                .map_or(true, |v| !values.contains(v)),
             FilterExpression::Between(field, min, max) => {
                 if let Some(v) = record.get_field(field) {
-                    matches!(self.compare_values(Some(v), Some(min)), Some(std::cmp::Ordering::Greater | std::cmp::Ordering::Equal))
-                        && matches!(self.compare_values(Some(v), Some(max)), Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal))
+                    matches!(
+                        self.compare_values(Some(v), Some(min)),
+                        Some(std::cmp::Ordering::Greater | std::cmp::Ordering::Equal)
+                    ) && matches!(
+                        self.compare_values(Some(v), Some(max)),
+                        Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)
+                    )
                 } else {
                     false
                 }
             }
-            FilterExpression::Like(field, pattern) => {
-                record.get_field(field)
-                    .and_then(|v| v.as_str())
-                    .map_or(false, |s| self.matches_like_pattern(s, pattern))
-            }
-            FilterExpression::ILike(field, pattern) => {
-                record.get_field(field)
-                    .and_then(|v| v.as_str())
-                    .map_or(false, |s| self.matches_like_pattern(&s.to_lowercase(), &pattern.to_lowercase()))
-            }
-            FilterExpression::StartsWith(field, prefix) => {
-                record.get_field(field)
-                    .and_then(|v| v.as_str())
-                    .map_or(false, |s| s.starts_with(prefix))
-            }
-            FilterExpression::EndsWith(field, suffix) => {
-                record.get_field(field)
-                    .and_then(|v| v.as_str())
-                    .map_or(false, |s| s.ends_with(suffix))
-            }
-            FilterExpression::Contains(field, substring) => {
-                record.get_field(field)
-                    .and_then(|v| v.as_str())
-                    .map_or(false, |s| s.contains(substring))
-            }
+            FilterExpression::Like(field, pattern) => record
+                .get_field(field)
+                .and_then(|v| v.as_str())
+                .map_or(false, |s| self.matches_like_pattern(s, pattern)),
+            FilterExpression::ILike(field, pattern) => record
+                .get_field(field)
+                .and_then(|v| v.as_str())
+                .map_or(false, |s| {
+                    self.matches_like_pattern(&s.to_lowercase(), &pattern.to_lowercase())
+                }),
+            FilterExpression::StartsWith(field, prefix) => record
+                .get_field(field)
+                .and_then(|v| v.as_str())
+                .map_or(false, |s| s.starts_with(prefix)),
+            FilterExpression::EndsWith(field, suffix) => record
+                .get_field(field)
+                .and_then(|v| v.as_str())
+                .map_or(false, |s| s.ends_with(suffix)),
+            FilterExpression::Contains(field, substring) => record
+                .get_field(field)
+                .and_then(|v| v.as_str())
+                .map_or(false, |s| s.contains(substring)),
             FilterExpression::IsNull(field) => {
                 record.get_field(field).map_or(true, |v| v.is_null())
             }
@@ -1605,9 +1725,7 @@ impl UnifiedStorage {
             FilterExpression::Or(left, right) => {
                 self.matches_filter(record, left) || self.matches_filter(record, right)
             }
-            FilterExpression::Not(expr) => {
-                !self.matches_filter(record, expr)
-            }
+            FilterExpression::Not(expr) => !self.matches_filter(record, expr),
             _ => {
                 // Other filters not yet implemented
                 true
@@ -1616,13 +1734,21 @@ impl UnifiedStorage {
     }
 
     /// Compare two UniversalValues
-    fn compare_values(&self, a: Option<&UniversalValue>, b: Option<&UniversalValue>) -> Option<std::cmp::Ordering> {
+    fn compare_values(
+        &self,
+        a: Option<&UniversalValue>,
+        b: Option<&UniversalValue>,
+    ) -> Option<std::cmp::Ordering> {
         match (a, b) {
             (Some(UniversalValue::Int(a)), Some(UniversalValue::Int(b))) => Some(a.cmp(b)),
             (Some(UniversalValue::Float(a)), Some(UniversalValue::Float(b))) => a.partial_cmp(b),
             (Some(UniversalValue::String(a)), Some(UniversalValue::String(b))) => Some(a.cmp(b)),
-            (Some(UniversalValue::Int(a)), Some(UniversalValue::Float(b))) => (*a as f64).partial_cmp(b),
-            (Some(UniversalValue::Float(a)), Some(UniversalValue::Int(b))) => a.partial_cmp(&(*b as f64)),
+            (Some(UniversalValue::Int(a)), Some(UniversalValue::Float(b))) => {
+                (*a as f64).partial_cmp(b)
+            }
+            (Some(UniversalValue::Float(a)), Some(UniversalValue::Int(b))) => {
+                a.partial_cmp(&(*b as f64))
+            }
             _ => None,
         }
     }
@@ -1630,9 +1756,7 @@ impl UnifiedStorage {
     /// Match SQL LIKE pattern
     fn matches_like_pattern(&self, s: &str, pattern: &str) -> bool {
         // Simple LIKE implementation: % = any sequence, _ = single char
-        let regex_pattern = pattern
-            .replace('%', ".*")
-            .replace('_', ".");
+        let regex_pattern = pattern.replace('%', ".*").replace('_', ".");
         regex::Regex::new(&format!("^{}$", regex_pattern))
             .map(|re| re.is_match(s))
             .unwrap_or(false)
@@ -1641,9 +1765,7 @@ impl UnifiedStorage {
     /// Match glob pattern (like Redis KEYS)
     fn matches_pattern(&self, s: &str, pattern: &str) -> bool {
         // Simple glob: * = any sequence, ? = single char
-        let regex_pattern = pattern
-            .replace('*', ".*")
-            .replace('?', ".");
+        let regex_pattern = pattern.replace('*', ".*").replace('?', ".");
         regex::Regex::new(&format!("^{}$", regex_pattern))
             .map(|re| re.is_match(s))
             .unwrap_or(false)
@@ -1665,14 +1787,17 @@ mod tests {
         storage.initialize().await.unwrap();
 
         // Put
-        let result = storage.put(
-            "users",
-            "alice",
-            UniversalValue::String("Alice".to_string()),
-            None,
-            false,
-            None,
-        ).await.unwrap();
+        let result = storage
+            .put(
+                "users",
+                "alice",
+                UniversalValue::String("Alice".to_string()),
+                None,
+                false,
+                None,
+            )
+            .await
+            .unwrap();
         assert!(matches!(result, UniversalResult::Ok));
 
         // Get
@@ -1688,7 +1813,10 @@ mod tests {
 
         // Exists
         let result = storage.exists("users", "alice").await.unwrap();
-        assert!(matches!(result, UniversalResult::Value(UniversalValue::Bool(true))));
+        assert!(matches!(
+            result,
+            UniversalResult::Value(UniversalValue::Bool(true))
+        ));
 
         // Delete
         let result = storage.delete("users", "alice").await.unwrap();
@@ -1696,7 +1824,10 @@ mod tests {
 
         // Verify deleted
         let result = storage.exists("users", "alice").await.unwrap();
-        assert!(matches!(result, UniversalResult::Value(UniversalValue::Bool(false))));
+        assert!(matches!(
+            result,
+            UniversalResult::Value(UniversalValue::Bool(false))
+        ));
     }
 
     #[tokio::test]
@@ -1705,19 +1836,41 @@ mod tests {
         storage.initialize().await.unwrap();
 
         // Set field
-        storage.set_field("users", "alice", "name", UniversalValue::String("Alice".to_string())).await.unwrap();
-        storage.set_field("users", "alice", "age", UniversalValue::Int(30)).await.unwrap();
+        storage
+            .set_field(
+                "users",
+                "alice",
+                "name",
+                UniversalValue::String("Alice".to_string()),
+            )
+            .await
+            .unwrap();
+        storage
+            .set_field("users", "alice", "age", UniversalValue::Int(30))
+            .await
+            .unwrap();
 
         // Get field
         let result = storage.get_field("users", "alice", "name").await.unwrap();
-        assert!(matches!(result, UniversalResult::Value(UniversalValue::String(ref s)) if s == "Alice"));
+        assert!(
+            matches!(result, UniversalResult::Value(UniversalValue::String(ref s)) if s == "Alice")
+        );
 
         // Increment field
-        let result = storage.increment_field("users", "alice", "age", 5).await.unwrap();
-        assert!(matches!(result, UniversalResult::Value(UniversalValue::Int(35))));
+        let result = storage
+            .increment_field("users", "alice", "age", 5)
+            .await
+            .unwrap();
+        assert!(matches!(
+            result,
+            UniversalResult::Value(UniversalValue::Int(35))
+        ));
 
         // Delete field
-        let result = storage.delete_field("users", "alice", "name").await.unwrap();
+        let result = storage
+            .delete_field("users", "alice", "name")
+            .await
+            .unwrap();
         assert!(matches!(result, UniversalResult::Count(1)));
     }
 
@@ -1727,15 +1880,27 @@ mod tests {
         storage.initialize().await.unwrap();
 
         // Push back
-        storage.list_push_back("lists", "mylist", vec![
-            UniversalValue::String("a".to_string()),
-            UniversalValue::String("b".to_string()),
-        ]).await.unwrap();
+        storage
+            .list_push_back(
+                "lists",
+                "mylist",
+                vec![
+                    UniversalValue::String("a".to_string()),
+                    UniversalValue::String("b".to_string()),
+                ],
+            )
+            .await
+            .unwrap();
 
         // Push front
-        storage.list_push_front("lists", "mylist", vec![
-            UniversalValue::String("x".to_string()),
-        ]).await.unwrap();
+        storage
+            .list_push_front(
+                "lists",
+                "mylist",
+                vec![UniversalValue::String("x".to_string())],
+            )
+            .await
+            .unwrap();
 
         // Range
         let result = storage.list_range("lists", "mylist", 0, -1).await.unwrap();
@@ -1760,21 +1925,39 @@ mod tests {
         storage.initialize().await.unwrap();
 
         // Add members
-        let result = storage.set_add("sets", "myset", vec![
-            UniversalValue::String("a".to_string()),
-            UniversalValue::String("b".to_string()),
-            UniversalValue::String("c".to_string()),
-        ]).await.unwrap();
+        let result = storage
+            .set_add(
+                "sets",
+                "myset",
+                vec![
+                    UniversalValue::String("a".to_string()),
+                    UniversalValue::String("b".to_string()),
+                    UniversalValue::String("c".to_string()),
+                ],
+            )
+            .await
+            .unwrap();
         assert!(matches!(result, UniversalResult::Count(3)));
 
         // Is member
-        let result = storage.set_is_member("sets", "myset", UniversalValue::String("a".to_string())).await.unwrap();
-        assert!(matches!(result, UniversalResult::Value(UniversalValue::Bool(true))));
+        let result = storage
+            .set_is_member("sets", "myset", UniversalValue::String("a".to_string()))
+            .await
+            .unwrap();
+        assert!(matches!(
+            result,
+            UniversalResult::Value(UniversalValue::Bool(true))
+        ));
 
         // Remove member
-        let result = storage.set_remove("sets", "myset", vec![
-            UniversalValue::String("a".to_string()),
-        ]).await.unwrap();
+        let result = storage
+            .set_remove(
+                "sets",
+                "myset",
+                vec![UniversalValue::String("a".to_string())],
+            )
+            .await
+            .unwrap();
         assert!(matches!(result, UniversalResult::Count(1)));
 
         // Members
@@ -1793,14 +1976,24 @@ mod tests {
         storage.initialize().await.unwrap();
 
         // Add members with scores
-        storage.sorted_set_add("zsets", "myzset", vec![
-            (UniversalValue::String("a".to_string()), 1.0),
-            (UniversalValue::String("b".to_string()), 2.0),
-            (UniversalValue::String("c".to_string()), 3.0),
-        ]).await.unwrap();
+        storage
+            .sorted_set_add(
+                "zsets",
+                "myzset",
+                vec![
+                    (UniversalValue::String("a".to_string()), 1.0),
+                    (UniversalValue::String("b".to_string()), 2.0),
+                    (UniversalValue::String("c".to_string()), 3.0),
+                ],
+            )
+            .await
+            .unwrap();
 
         // Range by score
-        let result = storage.sorted_set_range_by_score("zsets", "myzset", 1.0, 2.5, None, None).await.unwrap();
+        let result = storage
+            .sorted_set_range_by_score("zsets", "myzset", 1.0, 2.5, None, None)
+            .await
+            .unwrap();
         match result {
             UniversalResult::Values(values) => {
                 assert_eq!(values.len(), 2);
@@ -1817,10 +2010,15 @@ mod tests {
         storage.initialize().await.unwrap();
 
         // Put with if_not_exists
-        storage.put("test", "key1", UniversalValue::Int(1), None, true, None).await.unwrap();
+        storage
+            .put("test", "key1", UniversalValue::Int(1), None, true, None)
+            .await
+            .unwrap();
 
         // Second put should fail
-        let result = storage.put("test", "key1", UniversalValue::Int(2), None, true, None).await;
+        let result = storage
+            .put("test", "key1", UniversalValue::Int(2), None, true, None)
+            .await;
         assert!(matches!(result, Err(UnifiedStorageError::KeyExists { .. })));
 
         // Verify original value
@@ -1842,20 +2040,29 @@ mod tests {
         for i in 1..=10 {
             let mut map = BTreeMap::new();
             map.insert("id".to_string(), UniversalValue::Int(i));
-            map.insert("name".to_string(), UniversalValue::String(format!("user{}", i)));
-            storage.put(
-                "users",
-                &format!("user{}", i),
-                UniversalValue::Map(map),
-                None,
-                false,
-                None,
-            ).await.unwrap();
+            map.insert(
+                "name".to_string(),
+                UniversalValue::String(format!("user{}", i)),
+            );
+            storage
+                .put(
+                    "users",
+                    &format!("user{}", i),
+                    UniversalValue::Map(map),
+                    None,
+                    false,
+                    None,
+                )
+                .await
+                .unwrap();
         }
 
         // Scan with filter
         let filter = FilterExpression::Gt("id".to_string(), UniversalValue::Int(5));
-        let result = storage.scan("users", Some(filter), None, None, None, vec![]).await.unwrap();
+        let result = storage
+            .scan("users", Some(filter), None, None, None, vec![])
+            .await
+            .unwrap();
 
         match result {
             UniversalResult::Records(records) => {

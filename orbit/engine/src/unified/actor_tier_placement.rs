@@ -192,10 +192,7 @@ pub struct ActorTierPlacement {
 
 impl ActorTierPlacement {
     /// Create a new actor tier placement manager
-    pub fn new(
-        config: ActorTierPlacementConfig,
-        storage_config: TieredStorageConfig,
-    ) -> Self {
+    pub fn new(config: ActorTierPlacementConfig, storage_config: TieredStorageConfig) -> Self {
         let storage = Arc::new(TieredStorageBackend::new(storage_config));
 
         info!(
@@ -264,12 +261,17 @@ impl ActorTierPlacement {
         let base_tier = self.get_tier_for_actor_type(actor_type);
 
         // Check if access pattern suggests promotion
-        if self.config.enable_auto_promotion && access_count >= self.config.promotion_threshold as u64 {
+        if self.config.enable_auto_promotion
+            && access_count >= self.config.promotion_threshold as u64
+        {
             match base_tier {
                 StorageTier::Cold => {
                     return TierRecommendation {
                         tier: StorageTier::Warm,
-                        reason: format!("High access count ({}) suggests promotion from cold to warm", access_count),
+                        reason: format!(
+                            "High access count ({}) suggests promotion from cold to warm",
+                            access_count
+                        ),
                         confidence: 0.8,
                     };
                 }
@@ -277,7 +279,10 @@ impl ActorTierPlacement {
                     if access_count >= (self.config.promotion_threshold * 2) as u64 {
                         return TierRecommendation {
                             tier: StorageTier::Hot,
-                            reason: format!("Very high access count ({}) suggests promotion to hot tier", access_count),
+                            reason: format!(
+                                "Very high access count ({}) suggests promotion to hot tier",
+                                access_count
+                            ),
                             confidence: 0.9,
                         };
                     }
@@ -364,9 +369,15 @@ impl ActorTierPlacement {
                 {
                     let mut stats = self.stats.write().await;
                     match current {
-                        StorageTier::Hot => stats.hot_tier_actors = stats.hot_tier_actors.saturating_sub(1),
-                        StorageTier::Warm => stats.warm_tier_actors = stats.warm_tier_actors.saturating_sub(1),
-                        StorageTier::Cold => stats.cold_tier_actors = stats.cold_tier_actors.saturating_sub(1),
+                        StorageTier::Hot => {
+                            stats.hot_tier_actors = stats.hot_tier_actors.saturating_sub(1)
+                        }
+                        StorageTier::Warm => {
+                            stats.warm_tier_actors = stats.warm_tier_actors.saturating_sub(1)
+                        }
+                        StorageTier::Cold => {
+                            stats.cold_tier_actors = stats.cold_tier_actors.saturating_sub(1)
+                        }
                     }
                     match target_tier {
                         StorageTier::Hot => stats.hot_tier_actors += 1,
@@ -415,9 +426,15 @@ impl ActorTierPlacement {
                 {
                     let mut stats = self.stats.write().await;
                     match current {
-                        StorageTier::Hot => stats.hot_tier_actors = stats.hot_tier_actors.saturating_sub(1),
-                        StorageTier::Warm => stats.warm_tier_actors = stats.warm_tier_actors.saturating_sub(1),
-                        StorageTier::Cold => stats.cold_tier_actors = stats.cold_tier_actors.saturating_sub(1),
+                        StorageTier::Hot => {
+                            stats.hot_tier_actors = stats.hot_tier_actors.saturating_sub(1)
+                        }
+                        StorageTier::Warm => {
+                            stats.warm_tier_actors = stats.warm_tier_actors.saturating_sub(1)
+                        }
+                        StorageTier::Cold => {
+                            stats.cold_tier_actors = stats.cold_tier_actors.saturating_sub(1)
+                        }
                     }
                     match target_tier {
                         StorageTier::Hot => stats.hot_tier_actors += 1,
@@ -526,14 +543,32 @@ mod tests {
         let config = ActorTierPlacementConfig::default();
 
         // Hot tier actors
-        assert_eq!(config.actor_tier_mapping.get("row"), Some(&StorageTier::Hot));
-        assert_eq!(config.actor_tier_mapping.get("field"), Some(&StorageTier::Hot));
-        assert_eq!(config.actor_tier_mapping.get("index"), Some(&StorageTier::Hot));
+        assert_eq!(
+            config.actor_tier_mapping.get("row"),
+            Some(&StorageTier::Hot)
+        );
+        assert_eq!(
+            config.actor_tier_mapping.get("field"),
+            Some(&StorageTier::Hot)
+        );
+        assert_eq!(
+            config.actor_tier_mapping.get("index"),
+            Some(&StorageTier::Hot)
+        );
 
         // Warm tier actors
-        assert_eq!(config.actor_tier_mapping.get("table"), Some(&StorageTier::Warm));
-        assert_eq!(config.actor_tier_mapping.get("extent"), Some(&StorageTier::Warm));
-        assert_eq!(config.actor_tier_mapping.get("column"), Some(&StorageTier::Warm));
+        assert_eq!(
+            config.actor_tier_mapping.get("table"),
+            Some(&StorageTier::Warm)
+        );
+        assert_eq!(
+            config.actor_tier_mapping.get("extent"),
+            Some(&StorageTier::Warm)
+        );
+        assert_eq!(
+            config.actor_tier_mapping.get("column"),
+            Some(&StorageTier::Warm)
+        );
     }
 
     #[test]
@@ -559,11 +594,17 @@ mod tests {
         placement.initialize().await.unwrap();
 
         // Register row actor (should be hot)
-        let tier = placement.register_actor("actor1", ActorType::Row).await.unwrap();
+        let tier = placement
+            .register_actor("actor1", ActorType::Row)
+            .await
+            .unwrap();
         assert_eq!(tier, StorageTier::Hot);
 
         // Register table actor (should be warm)
-        let tier = placement.register_actor("actor2", ActorType::Table).await.unwrap();
+        let tier = placement
+            .register_actor("actor2", ActorType::Table)
+            .await
+            .unwrap();
         assert_eq!(tier, StorageTier::Warm);
 
         // Check stats
@@ -582,12 +623,24 @@ mod tests {
         placement.initialize().await.unwrap();
 
         // Register table actor (warm tier)
-        placement.register_actor("actor1", ActorType::Table).await.unwrap();
-        assert_eq!(placement.get_actor_tier("actor1").await, Some(StorageTier::Warm));
+        placement
+            .register_actor("actor1", ActorType::Table)
+            .await
+            .unwrap();
+        assert_eq!(
+            placement.get_actor_tier("actor1").await,
+            Some(StorageTier::Warm)
+        );
 
         // Promote to hot tier
-        placement.promote_actor("actor1", StorageTier::Hot).await.unwrap();
-        assert_eq!(placement.get_actor_tier("actor1").await, Some(StorageTier::Hot));
+        placement
+            .promote_actor("actor1", StorageTier::Hot)
+            .await
+            .unwrap();
+        assert_eq!(
+            placement.get_actor_tier("actor1").await,
+            Some(StorageTier::Hot)
+        );
 
         // Check stats
         let stats = placement.stats().await;
@@ -606,12 +659,24 @@ mod tests {
         placement.initialize().await.unwrap();
 
         // Register row actor (hot tier)
-        placement.register_actor("actor1", ActorType::Row).await.unwrap();
-        assert_eq!(placement.get_actor_tier("actor1").await, Some(StorageTier::Hot));
+        placement
+            .register_actor("actor1", ActorType::Row)
+            .await
+            .unwrap();
+        assert_eq!(
+            placement.get_actor_tier("actor1").await,
+            Some(StorageTier::Hot)
+        );
 
         // Demote to warm tier
-        placement.demote_actor("actor1", StorageTier::Warm).await.unwrap();
-        assert_eq!(placement.get_actor_tier("actor1").await, Some(StorageTier::Warm));
+        placement
+            .demote_actor("actor1", StorageTier::Warm)
+            .await
+            .unwrap();
+        assert_eq!(
+            placement.get_actor_tier("actor1").await,
+            Some(StorageTier::Warm)
+        );
 
         // Check stats
         let stats = placement.stats().await;
@@ -634,7 +699,10 @@ mod tests {
 
         assert!(config.enabled);
         assert_eq!(config.default_tier, StorageTier::Cold);
-        assert_eq!(config.actor_tier_mapping.get("cache"), Some(&StorageTier::Hot));
+        assert_eq!(
+            config.actor_tier_mapping.get("cache"),
+            Some(&StorageTier::Hot)
+        );
         assert_eq!(config.promotion_threshold, 5);
         assert_eq!(config.demotion_idle_secs, 300);
     }

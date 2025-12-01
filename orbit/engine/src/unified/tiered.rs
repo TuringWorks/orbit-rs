@@ -44,7 +44,9 @@
 //! - **Write-through**: Writes go to Hot + Warm for durability
 //! - **Read-through**: Misses in Hot tier fetch from Warm/Cold
 
-use super::storage::{MemoryBackend, UnifiedStorageBackend, UnifiedStorageMetrics, UnifiedStorageResult};
+use super::storage::{
+    MemoryBackend, UnifiedStorageBackend, UnifiedStorageMetrics, UnifiedStorageResult,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -286,8 +288,8 @@ impl Default for TierMigrationConfig {
         Self {
             enabled: true,
             check_interval_secs: 60,
-            hot_to_warm_idle_secs: 300,     // 5 minutes
-            warm_to_cold_idle_secs: 86400,  // 24 hours
+            hot_to_warm_idle_secs: 300,    // 5 minutes
+            warm_to_cold_idle_secs: 86400, // 24 hours
             promotion_access_count: 10,
             max_concurrent_migrations: 4,
         }
@@ -418,9 +420,7 @@ impl TieredStorageBackend {
     pub fn new(config: TieredStorageConfig) -> Self {
         info!(
             "[TieredStorage] Creating tiered backend with hot={}, warm={}, cold={}",
-            config.hot_tier.enabled,
-            config.warm_tier.enabled,
-            config.cold_tier.enabled
+            config.hot_tier.enabled, config.warm_tier.enabled, config.cold_tier.enabled
         );
 
         Self {
@@ -503,9 +503,13 @@ impl TieredStorageBackend {
                 EvictionPolicy::Adaptive => {
                     // Combine LRU and LFU: score = access_count / idle_time
                     candidates.sort_by(|a, b| {
-                        let score_a = a.1.access_count as f64 / (a.1.idle_duration().as_secs_f64() + 1.0);
-                        let score_b = b.1.access_count as f64 / (b.1.idle_duration().as_secs_f64() + 1.0);
-                        score_a.partial_cmp(&score_b).unwrap_or(std::cmp::Ordering::Equal)
+                        let score_a =
+                            a.1.access_count as f64 / (a.1.idle_duration().as_secs_f64() + 1.0);
+                        let score_b =
+                            b.1.access_count as f64 / (b.1.idle_duration().as_secs_f64() + 1.0);
+                        score_a
+                            .partial_cmp(&score_b)
+                            .unwrap_or(std::cmp::Ordering::Equal)
                     });
                 }
             }
@@ -592,7 +596,10 @@ impl TieredStorageBackend {
                 meta.tier = StorageTier::Hot;
                 meta.touch();
             } else {
-                metadata.insert(key.to_string(), EntryMetadata::new(StorageTier::Hot, value.len()));
+                metadata.insert(
+                    key.to_string(),
+                    EntryMetadata::new(StorageTier::Hot, value.len()),
+                );
             }
         }
 
@@ -640,8 +647,7 @@ impl UnifiedStorageBackend for TieredStorageBackend {
             self.warm_tier.initialize().await?;
             info!(
                 "[TieredStorage] Warm tier enabled: dir={}, compression={}",
-                self.config.warm_tier.data_dir,
-                self.config.warm_tier.compression_algorithm
+                self.config.warm_tier.data_dir, self.config.warm_tier.compression_algorithm
             );
         }
 
@@ -649,8 +655,7 @@ impl UnifiedStorageBackend for TieredStorageBackend {
             self.cold_tier.initialize().await?;
             info!(
                 "[TieredStorage] Cold tier enabled: backend={:?}, bucket={}",
-                self.config.cold_tier.backend,
-                self.config.cold_tier.bucket
+                self.config.cold_tier.backend, self.config.cold_tier.bucket
             );
         }
 
@@ -666,7 +671,10 @@ impl UnifiedStorageBackend for TieredStorageBackend {
             let hot = self.hot_tier.read().await;
             for (key, value) in hot.iter() {
                 if let Err(e) = self.warm_tier.put(key, value).await {
-                    warn!("[TieredStorage] Failed to flush key {} to warm tier: {}", key, e);
+                    warn!(
+                        "[TieredStorage] Failed to flush key {} to warm tier: {}",
+                        key, e
+                    );
                 }
             }
         }
@@ -722,7 +730,10 @@ impl UnifiedStorageBackend for TieredStorageBackend {
                     }
                 };
 
-                if should_promote && self.config.hot_tier.enabled && self.config.hot_tier.read_through {
+                if should_promote
+                    && self.config.hot_tier.enabled
+                    && self.config.hot_tier.read_through
+                {
                     let _ = self.promote_to_hot(key, &value).await;
                 }
 
@@ -803,12 +814,18 @@ impl UnifiedStorageBackend for TieredStorageBackend {
                     *size += value.len();
 
                     let mut metadata = self.metadata.write().await;
-                    metadata.insert(key.to_string(), EntryMetadata::new(StorageTier::Hot, value.len()));
+                    metadata.insert(
+                        key.to_string(),
+                        EntryMetadata::new(StorageTier::Hot, value.len()),
+                    );
                 } else if self.config.warm_tier.enabled {
                     self.warm_tier.put(key, value).await?;
 
                     let mut metadata = self.metadata.write().await;
-                    metadata.insert(key.to_string(), EntryMetadata::new(StorageTier::Warm, value.len()));
+                    metadata.insert(
+                        key.to_string(),
+                        EntryMetadata::new(StorageTier::Warm, value.len()),
+                    );
                 }
             }
             WritePolicy::WriteAround => {
@@ -817,7 +834,10 @@ impl UnifiedStorageBackend for TieredStorageBackend {
                     self.warm_tier.put(key, value).await?;
 
                     let mut metadata = self.metadata.write().await;
-                    metadata.insert(key.to_string(), EntryMetadata::new(StorageTier::Warm, value.len()));
+                    metadata.insert(
+                        key.to_string(),
+                        EntryMetadata::new(StorageTier::Warm, value.len()),
+                    );
                 }
             }
         }
@@ -886,7 +906,11 @@ impl UnifiedStorageBackend for TieredStorageBackend {
         Ok(false)
     }
 
-    async fn scan_prefix(&self, prefix: &str, limit: Option<usize>) -> UnifiedStorageResult<Vec<(String, Vec<u8>)>> {
+    async fn scan_prefix(
+        &self,
+        prefix: &str,
+        limit: Option<usize>,
+    ) -> UnifiedStorageResult<Vec<(String, Vec<u8>)>> {
         let mut results: HashMap<String, Vec<u8>> = HashMap::new();
 
         // Scan cold tier first (lowest priority, will be overwritten)
@@ -1038,7 +1062,10 @@ mod tests {
 
         // Add entries that exceed hot tier size
         for i in 0..20 {
-            backend.put(&format!("key{}", i), format!("value{}", i).as_bytes()).await.unwrap();
+            backend
+                .put(&format!("key{}", i), format!("value{}", i).as_bytes())
+                .await
+                .unwrap();
         }
 
         // Some entries should have been evicted to warm tier
@@ -1098,10 +1125,10 @@ mod tests {
         assert!(backend.exists("batch:3").await.unwrap());
 
         // Batch delete
-        let count = backend.delete_batch(vec![
-            "batch:1".to_string(),
-            "batch:2".to_string(),
-        ]).await.unwrap();
+        let count = backend
+            .delete_batch(vec!["batch:1".to_string(), "batch:2".to_string()])
+            .await
+            .unwrap();
         assert_eq!(count, 2);
 
         // Verify deletions

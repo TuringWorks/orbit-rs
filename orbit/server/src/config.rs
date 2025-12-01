@@ -1882,8 +1882,8 @@ impl Default for TierMigrationConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            hot_to_warm_secs: 3600,        // 1 hour
-            warm_to_cold_secs: 86400 * 7,  // 7 days
+            hot_to_warm_secs: 3600,       // 1 hour
+            warm_to_cold_secs: 86400 * 7, // 7 days
             scan_interval_secs: 60,
             batch_size: 1000,
             priority_strategy: "age".to_string(),
@@ -1929,15 +1929,15 @@ impl Default for ActorTierPlacementConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            table_actor_tier: "warm".to_string(),   // Metadata in RocksDB
-            extent_actor_tier: "warm".to_string(),  // Data blocks in RocksDB
-            column_actor_tier: "hot".to_string(),   // Frequently accessed columns in memory
-            row_actor_tier: "hot".to_string(),      // Active rows in memory
-            field_actor_tier: "hot".to_string(),    // Individual fields in memory
-            index_actor_tier: "hot".to_string(),    // Indexes in memory for fast lookups
+            table_actor_tier: "warm".to_string(), // Metadata in RocksDB
+            extent_actor_tier: "warm".to_string(), // Data blocks in RocksDB
+            column_actor_tier: "hot".to_string(), // Frequently accessed columns in memory
+            row_actor_tier: "hot".to_string(),    // Active rows in memory
+            field_actor_tier: "hot".to_string(),  // Individual fields in memory
+            index_actor_tier: "hot".to_string(),  // Indexes in memory for fast lookups
             dynamic_migration: true,
             promotion_access_count: 10,
-            demotion_idle_secs: 1800,               // 30 minutes
+            demotion_idle_secs: 1800, // 30 minutes
         }
     }
 }
