@@ -1160,7 +1160,6 @@ Update this PRD.md when you:
 [ ] Read current PRD.md before making changes
 [ ] Make code changes
 [ ] Update relevant PRD.md sections
-[ ] Update "Last Updated" date at top
 [ ] Update test counts if changed
 [ ] Run: cargo fmt --all
 [ ] Run: cargo clippy --workspace -- -D warnings
