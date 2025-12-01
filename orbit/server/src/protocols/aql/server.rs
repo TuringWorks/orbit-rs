@@ -1,9 +1,9 @@
-//! AQL/ArangoDB server with RocksDB persistence
+//! AQL/ArangoDB server with pluggable storage
 
 #![cfg(feature = "storage-rocksdb")]
 
 use crate::protocols::aql::http_server::AqlHttpServer;
-use crate::protocols::aql::storage::AqlStorage;
+use crate::protocols::aql::storage::AqlStorageProvider;
 use crate::protocols::error::ProtocolResult;
 use std::sync::Arc;
 use tracing::info;
@@ -11,12 +11,15 @@ use tracing::info;
 /// AQL/ArangoDB protocol server
 pub struct AqlServer {
     bind_addr: String,
-    storage: Arc<AqlStorage>,
+    storage: Arc<dyn AqlStorageProvider>,
 }
 
 impl AqlServer {
-    /// Create a new AQL server with storage
-    pub fn new_with_storage(bind_addr: impl Into<String>, storage: Arc<AqlStorage>) -> Self {
+    /// Create a new AQL server with storage provider
+    pub fn new_with_storage(
+        bind_addr: impl Into<String>,
+        storage: Arc<dyn AqlStorageProvider>,
+    ) -> Self {
         Self {
             bind_addr: bind_addr.into(),
             storage,

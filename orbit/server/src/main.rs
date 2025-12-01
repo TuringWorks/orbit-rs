@@ -31,12 +31,12 @@ use tokio::task::JoinHandle;
 use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use orbit_server::protocols::aql::{AqlServer, AqlStorage};
+use orbit_server::protocols::aql::{AqlServer, AqlStorage, AqlStorageProvider};
 use orbit_server::protocols::common::storage::tiered::TieredTableStorage;
 use orbit_server::protocols::common::storage::unified::UnifiedTableStorage;
 use orbit_server::protocols::common::storage::TableStorage;
 use orbit_server::protocols::cql::CqlConfig;
-use orbit_server::protocols::cypher::{CypherGraphStorage, CypherServer};
+use orbit_server::protocols::cypher::{CypherGraphStorage, CypherServer, CypherStorageProvider};
 use orbit_server::protocols::mysql::MySqlConfig;
 use orbit_server::protocols::persistence::redis_data::RedisDataProvider;
 use orbit_server::protocols::postgres_wire::sql::execution::hybrid::HybridStorageConfig;
@@ -706,11 +706,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // Start Cypher/Neo4j protocol adapter (port 7687)
-    let cypher_data_dir = args.data_dir.join("cypher");
-    let cypher_storage = Arc::new(CypherGraphStorage::new(cypher_data_dir));
-    cypher_storage.initialize().await?;
-
     let cypher_bind_addr = format!("{}:7687", args.bind);
+    let cypher_storage: Arc<dyn CypherStorageProvider> = if unified_storage_enabled {
+        // Use unified storage for cross-protocol data access
+        if let StorageMode::Unified { cypher_unified, .. } = &storage_mode {
+            info!("[Cypher] Using unified storage for cross-protocol data access");
+            cypher_unified.clone()
+        } else {
+            // Fallback to isolated storage
+            let cypher_data_dir = args.data_dir.join("cypher");
+            let storage = Arc::new(CypherGraphStorage::new(cypher_data_dir));
+            storage.initialize().await?;
+            storage
+        }
+    } else {
+        // Use isolated per-protocol storage
+        let cypher_data_dir = args.data_dir.join("cypher");
+        let storage = Arc::new(CypherGraphStorage::new(cypher_data_dir));
+        storage.initialize().await?;
+        storage
+    };
+
     let cypher_server = CypherServer::new_with_storage(cypher_bind_addr, cypher_storage);
     let cypher_handle = tokio::spawn(async move {
         cypher_server
@@ -722,11 +738,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("[Cypher] Cypher/Neo4j protocol adapter started on port 7687");
 
     // Start AQL/ArangoDB protocol adapter (port 8529)
-    let aql_data_dir = args.data_dir.join("aql");
-    let aql_storage = Arc::new(AqlStorage::new(aql_data_dir));
-    aql_storage.initialize().await?;
-
     let aql_bind_addr = format!("{}:8529", args.bind);
+    let aql_storage: Arc<dyn AqlStorageProvider> = if unified_storage_enabled {
+        // Use unified storage for cross-protocol data access
+        if let StorageMode::Unified { aql_unified, .. } = &storage_mode {
+            info!("[AQL] Using unified storage for cross-protocol data access");
+            aql_unified.clone()
+        } else {
+            // Fallback to isolated storage
+            let aql_data_dir = args.data_dir.join("aql");
+            let storage = Arc::new(AqlStorage::new(aql_data_dir));
+            storage.initialize().await?;
+            storage
+        }
+    } else {
+        // Use isolated per-protocol storage
+        let aql_data_dir = args.data_dir.join("aql");
+        let storage = Arc::new(AqlStorage::new(aql_data_dir));
+        storage.initialize().await?;
+        storage
+    };
+
     let aql_server = AqlServer::new_with_storage(aql_bind_addr, aql_storage);
     let aql_handle = tokio::spawn(async move {
         aql_server

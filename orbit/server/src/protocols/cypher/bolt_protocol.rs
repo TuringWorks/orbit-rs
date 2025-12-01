@@ -21,7 +21,7 @@
 
 use crate::protocols::cypher::cypher_parser::CypherParser;
 #[cfg(feature = "storage-rocksdb")]
-use crate::protocols::cypher::storage::CypherGraphStorage;
+use crate::protocols::cypher::storage::CypherStorageProvider;
 use crate::protocols::cypher::types::{GraphNode, GraphRelationship};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -513,7 +513,7 @@ pub enum BoltMessage {
 pub struct BoltProtocolHandler {
     version: Option<BoltVersion>,
     #[cfg(feature = "storage-rocksdb")]
-    storage: Arc<CypherGraphStorage>,
+    storage: Arc<dyn CypherStorageProvider>,
     parser: CypherParser,
     /// Authentication state
     auth_state: AuthState,
@@ -534,7 +534,7 @@ pub struct BoltProtocolHandler {
 impl BoltProtocolHandler {
     /// Create a new Bolt protocol handler
     #[cfg(feature = "storage-rocksdb")]
-    pub fn new(storage: Arc<CypherGraphStorage>) -> Self {
+    pub fn new(storage: Arc<dyn CypherStorageProvider>) -> Self {
         Self {
             version: None,
             storage,

@@ -6,7 +6,7 @@
 #![cfg(feature = "storage-rocksdb")]
 
 use crate::protocols::aql::query_engine::{AqlQueryEngine, AqlQueryResult};
-use crate::protocols::aql::storage::AqlStorage;
+use crate::protocols::aql::storage::AqlStorageProvider;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
@@ -59,14 +59,14 @@ struct AqlCursorResponse {
 /// ArangoDB HTTP API server
 pub struct AqlHttpServer {
     bind_addr: String,
-    storage: Arc<AqlStorage>,
+    storage: Arc<dyn AqlStorageProvider>,
     query_engine: Arc<AqlQueryEngine>,
     cursors: Arc<RwLock<HashMap<String, AqlCursor>>>,
 }
 
 impl AqlHttpServer {
     /// Create a new AQL HTTP server
-    pub fn new(bind_addr: impl Into<String>, storage: Arc<AqlStorage>) -> Self {
+    pub fn new(bind_addr: impl Into<String>, storage: Arc<dyn AqlStorageProvider>) -> Self {
         let query_engine = Arc::new(AqlQueryEngine::new());
         Self {
             bind_addr: bind_addr.into(),
@@ -129,7 +129,7 @@ impl AqlHttpServer {
 /// Handle HTTP request
 async fn handle_request(
     req: Request<hyper::body::Incoming>,
-    storage: Arc<AqlStorage>,
+    storage: Arc<dyn AqlStorageProvider>,
     query_engine: Arc<AqlQueryEngine>,
     cursors: Arc<RwLock<HashMap<String, AqlCursor>>>,
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
@@ -294,7 +294,7 @@ async fn handle_collection_request(
     method: &Method,
     _path: &str,
     _body: Bytes,
-    _storage: Arc<AqlStorage>,
+    _storage: Arc<dyn AqlStorageProvider>,
 ) -> Response<Full<Bytes>> {
     match method {
         &Method::GET => {
@@ -324,7 +324,7 @@ async fn handle_document_request(
     method: &Method,
     path: &str,
     body: Bytes,
-    _storage: Arc<AqlStorage>,
+    _storage: Arc<dyn AqlStorageProvider>,
 ) -> Response<Full<Bytes>> {
     // Parse collection and key from path: /_api/document/{collection}/{key}
     let parts: Vec<&str> = path
