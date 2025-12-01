@@ -67,6 +67,7 @@ enum StorageMode {
         /// UnifiedTableStorage adapters for protocol servers that need TableStorage
         postgres_unified: Arc<UnifiedTableStorage>,
         mysql_unified: Arc<UnifiedTableStorage>,
+        cql_unified: Arc<UnifiedTableStorage>,
     },
 }
 
@@ -368,10 +369,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // Create UnifiedTableStorage adapters for each SQL protocol
         let postgres_unified = Arc::new(UnifiedTableStorage::postgres(integration.clone()));
         let mysql_unified = Arc::new(UnifiedTableStorage::mysql(integration.clone()));
+        let cql_unified = Arc::new(UnifiedTableStorage::cql(integration.clone()));
 
         // Initialize the unified storage adapters
         postgres_unified.initialize().await?;
         mysql_unified.initialize().await?;
+        cql_unified.initialize().await?;
 
         info!("[Storage] Unified storage initialized - cross-protocol data sharing ENABLED");
         info!(
@@ -383,6 +386,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             integration,
             postgres_unified,
             mysql_unified,
+            cql_unified,
         }
     } else {
         // Create independent tiered storage for each protocol with protocol-specific data directories
@@ -445,19 +449,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
             integration: _,
             postgres_unified,
             mysql_unified,
+            cql_unified,
         } => {
             // UnifiedTableStorage adapters are available for protocol servers
             info!("[Storage] Unified storage mode ENABLED - cross-protocol data sharing active:");
-            info!("[Storage]   - PostgreSQL: using UnifiedTableStorage ({})", postgres_unified.dialect());
-            info!("[Storage]   - MySQL: adapter ready ({})", mysql_unified.dialect());
+            info!(
+                "[Storage]   - PostgreSQL: using UnifiedTableStorage ({})",
+                postgres_unified.dialect()
+            );
+            info!(
+                "[Storage]   - MySQL: using UnifiedTableStorage ({})",
+                mysql_unified.dialect()
+            );
+            info!(
+                "[Storage]   - CQL: using UnifiedTableStorage ({})",
+                cql_unified.dialect()
+            );
+            info!("[Storage]   - Redis: using TieredTableStorage (key-value model)");
 
-            // PostgreSQL now uses UnifiedTableStorage directly via QueryEngine
-            // Other protocols (Redis, CQL) still use TieredTableStorage for now
-            // TODO: Integrate unified storage for Redis and CQL protocols
+            // PostgreSQL, MySQL, and CQL use UnifiedTableStorage directly
+            // Redis still uses TieredTableStorage due to different data model (key-value with TTL)
 
             let redis_data_dir = args.data_dir.join("redis");
-            let mysql_data_dir = args.data_dir.join("mysql");
-            let cql_data_dir = args.data_dir.join("cql");
 
             let fallback_tiered_config = HybridStorageConfig::default();
 
@@ -472,10 +485,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 redis_data_dir,
                 fallback_tiered_config.clone(),
             ));
+            // MySQL and CQL use unified storage directly - these are dummy fallbacks for interfaces
+            let mysql_data_dir = args.data_dir.join("mysql");
             let mysql_storage = Arc::new(TieredTableStorage::with_data_dir(
                 mysql_data_dir,
                 fallback_tiered_config.clone(),
             ));
+            let cql_data_dir = args.data_dir.join("cql");
             let cql_storage = Arc::new(TieredTableStorage::with_data_dir(
                 cql_data_dir,
                 fallback_tiered_config,
@@ -505,12 +521,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
     {
         // Pass unified storage if available for cross-protocol data sharing
         let unified_postgres = match &storage_mode {
-            StorageMode::Unified { postgres_unified, .. } => Some(postgres_unified.clone()),
+            StorageMode::Unified {
+                postgres_unified, ..
+            } => Some(postgres_unified.clone()),
             StorageMode::Isolated { .. } => None,
         };
-        let postgres_handle =
-            start_postgresql_server(&args, postgres_storage.clone(), rocksdb_storage.clone(), unified_postgres)
-                .await?;
+        let postgres_handle = start_postgresql_server(
+            &args,
+            postgres_storage.clone(),
+            rocksdb_storage.clone(),
+            unified_postgres,
+        )
+        .await?;
         protocol_handles.push(postgres_handle);
         info!(
             "[PostgreSQL] PostgreSQL wire protocol server started on port {}",
@@ -560,7 +582,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
             password: None,
         };
 
-        let mysql_server = MySqlServer::new_with_storage(mysql_config, mysql_storage).await?;
+        // Use unified storage if available for cross-protocol data sharing
+        let unified_mysql = match &storage_mode {
+            StorageMode::Unified { mysql_unified, .. } => Some(mysql_unified.clone()),
+            StorageMode::Isolated { .. } => None,
+        };
+
+        let mysql_server = if let Some(unified) = unified_mysql {
+            info!("[MySQL] Using unified storage for cross-protocol data sharing");
+            MySqlServer::new_with_storage(mysql_config, unified).await?
+        } else {
+            MySqlServer::new_with_storage(mysql_config, mysql_storage).await?
+        };
+
         let mysql_handle = tokio::spawn(async move {
             mysql_server
                 .start()
@@ -590,7 +624,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
             password: None,
         };
 
-        let cql_server = CqlServer::new_with_storage(cql_config, cql_storage).await?;
+        // Use unified storage if available for cross-protocol data sharing
+        let unified_cql = match &storage_mode {
+            StorageMode::Unified { cql_unified, .. } => Some(cql_unified.clone()),
+            StorageMode::Isolated { .. } => None,
+        };
+
+        let cql_server = if let Some(unified) = unified_cql {
+            info!("[CQL] Using unified storage for cross-protocol data sharing");
+            CqlServer::new_with_storage(cql_config, unified).await?
+        } else {
+            CqlServer::new_with_storage(cql_config, cql_storage).await?
+        };
+
         let cql_handle = tokio::spawn(async move {
             cql_server
                 .start()

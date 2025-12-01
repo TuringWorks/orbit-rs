@@ -82,6 +82,25 @@ impl UnifiedTableStorage {
         }
     }
 
+    /// Create a new unified table storage for CQL (Cassandra Query Language)
+    pub fn cql(integration: Arc<UnifiedStorageIntegration>) -> Self {
+        let sql_adapter = integration.sql_adapter("cql");
+        Self {
+            integration,
+            sql_adapter,
+            dialect: "cql".to_string(),
+            table_schemas: RwLock::new(HashMap::new()),
+            index_schemas: RwLock::new(HashMap::new()),
+            view_schemas: RwLock::new(HashMap::new()),
+            schema_definitions: RwLock::new(HashMap::new()),
+            extensions: RwLock::new(HashMap::new()),
+            settings: RwLock::new(HashMap::new()),
+            read_ops: AtomicU64::new(0),
+            write_ops: AtomicU64::new(0),
+            delete_ops: AtomicU64::new(0),
+        }
+    }
+
     /// Get the underlying integration
     pub fn integration(&self) -> &Arc<UnifiedStorageIntegration> {
         &self.integration
@@ -119,12 +138,8 @@ impl UnifiedTableStorage {
                 let nanos = secs * 1_000_000_000 + t.nanosecond() as i64;
                 UniversalValue::Time(nanos)
             }
-            SqlValue::Timestamp(ts) => {
-                UniversalValue::Timestamp(ts.and_utc().timestamp_millis())
-            }
-            SqlValue::TimestampWithTimezone(ts) => {
-                UniversalValue::Timestamp(ts.timestamp_millis())
-            }
+            SqlValue::Timestamp(ts) => UniversalValue::Timestamp(ts.and_utc().timestamp_millis()),
+            SqlValue::TimestampWithTimezone(ts) => UniversalValue::Timestamp(ts.timestamp_millis()),
             SqlValue::TimeWithTimezone(ts) => UniversalValue::Timestamp(ts.timestamp_millis()),
             SqlValue::Json(v) | SqlValue::Jsonb(v) => {
                 // Convert JSON to UniversalValue
@@ -146,18 +161,14 @@ impl UnifiedTableStorage {
             SqlValue::Vector(v) => UniversalValue::Vector(v.clone()),
             SqlValue::HalfVec(v) => UniversalValue::Vector(v.clone()),
             SqlValue::Inet(ip) => UniversalValue::String(ip.to_string()),
-            SqlValue::Macaddr(mac) => {
-                UniversalValue::String(format!(
-                    "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-                    mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
-                ))
-            }
-            SqlValue::Macaddr8(mac) => {
-                UniversalValue::String(format!(
-                    "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-                    mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], mac[6], mac[7]
-                ))
-            }
+            SqlValue::Macaddr(mac) => UniversalValue::String(format!(
+                "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+            )),
+            SqlValue::Macaddr8(mac) => UniversalValue::String(format!(
+                "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], mac[6], mac[7]
+            )),
             SqlValue::Xml(s) => UniversalValue::String(s.clone()),
             SqlValue::Interval(i) => {
                 // Store as duration in microseconds
@@ -245,7 +256,10 @@ impl UnifiedTableStorage {
                     .iter()
                     .map(|e| {
                         let mut map = BTreeMap::new();
-                        map.insert("lexeme".to_string(), UniversalValue::String(e.lexeme.clone()));
+                        map.insert(
+                            "lexeme".to_string(),
+                            UniversalValue::String(e.lexeme.clone()),
+                        );
                         map.insert(
                             "positions".to_string(),
                             UniversalValue::List(
@@ -371,47 +385,73 @@ impl UnifiedTableStorage {
             }
             UniversalValue::Duration(nanos) => {
                 let microseconds = *nanos / 1000;
-                SqlValue::Interval(crate::protocols::postgres_wire::sql::types::PostgresInterval {
-                    months: 0,
-                    days: 0,
-                    microseconds,
-                })
+                SqlValue::Interval(
+                    crate::protocols::postgres_wire::sql::types::PostgresInterval {
+                        months: 0,
+                        days: 0,
+                        microseconds,
+                    },
+                )
             }
-            UniversalValue::Node { id, labels, properties } => {
+            UniversalValue::Node {
+                id,
+                labels,
+                properties,
+            } => {
                 let mut map = BTreeMap::new();
                 map.insert("id".to_string(), UniversalValue::String(id.clone()));
                 map.insert(
                     "labels".to_string(),
                     UniversalValue::List(
-                        labels.iter().map(|l| UniversalValue::String(l.clone())).collect(),
+                        labels
+                            .iter()
+                            .map(|l| UniversalValue::String(l.clone()))
+                            .collect(),
                     ),
                 );
-                map.insert("properties".to_string(), UniversalValue::Map(properties.clone()));
+                map.insert(
+                    "properties".to_string(),
+                    UniversalValue::Map(properties.clone()),
+                );
                 SqlValue::Json(Self::universal_to_json(&UniversalValue::Map(map)))
             }
-            UniversalValue::Relationship { id, rel_type, start_node, end_node, properties } => {
+            UniversalValue::Relationship {
+                id,
+                rel_type,
+                start_node,
+                end_node,
+                properties,
+            } => {
                 let mut map = BTreeMap::new();
                 map.insert("id".to_string(), UniversalValue::String(id.clone()));
                 map.insert("type".to_string(), UniversalValue::String(rel_type.clone()));
-                map.insert("start_node".to_string(), UniversalValue::String(start_node.clone()));
-                map.insert("end_node".to_string(), UniversalValue::String(end_node.clone()));
-                map.insert("properties".to_string(), UniversalValue::Map(properties.clone()));
+                map.insert(
+                    "start_node".to_string(),
+                    UniversalValue::String(start_node.clone()),
+                );
+                map.insert(
+                    "end_node".to_string(),
+                    UniversalValue::String(end_node.clone()),
+                );
+                map.insert(
+                    "properties".to_string(),
+                    UniversalValue::Map(properties.clone()),
+                );
                 SqlValue::Json(Self::universal_to_json(&UniversalValue::Map(map)))
             }
-            UniversalValue::Path(path) => {
-                SqlValue::Json(serde_json::Value::Array(
-                    path.iter().map(Self::universal_to_json).collect(),
-                ))
-            }
+            UniversalValue::Path(path) => SqlValue::Json(serde_json::Value::Array(
+                path.iter().map(Self::universal_to_json).collect(),
+            )),
             UniversalValue::Point { lat, lon } => SqlValue::Point(*lon, *lat),
             UniversalValue::Polygon(points) => SqlValue::Polygon(points.clone()),
-            UniversalValue::BoundingBox { min_lat, min_lon, max_lat, max_lon } => {
-                SqlValue::Box((*max_lon, *max_lat), (*min_lon, *min_lat))
-            }
+            UniversalValue::BoundingBox {
+                min_lat,
+                min_lon,
+                max_lat,
+                max_lon,
+            } => SqlValue::Box((*max_lon, *max_lat), (*min_lon, *min_lat)),
             UniversalValue::Vector(v) => SqlValue::Vector(v.clone()),
-            UniversalValue::Uuid(bytes) => {
-                SqlValue::Uuid(uuid::Uuid::from_bytes(*bytes))
-            }
+            UniversalValue::Uuid(bytes) => SqlValue::Uuid(uuid::Uuid::from_bytes(*bytes)),
         }
     }
 
@@ -425,12 +465,10 @@ impl UnifiedTableStorage {
                 serde_json::Value::Number(serde_json::Number::from_f64(*f).unwrap_or(0.into()))
             }
             UniversalValue::String(s) => serde_json::Value::String(s.clone()),
-            UniversalValue::Bytes(b) => {
-                serde_json::Value::String(base64::prelude::Engine::encode(
-                    &base64::prelude::BASE64_STANDARD,
-                    b,
-                ))
-            }
+            UniversalValue::Bytes(b) => serde_json::Value::String(base64::prelude::Engine::encode(
+                &base64::prelude::BASE64_STANDARD,
+                b,
+            )),
             UniversalValue::List(list) => {
                 serde_json::Value::Array(list.iter().map(Self::universal_to_json).collect())
             }
@@ -470,13 +508,17 @@ impl UnifiedTableStorage {
             schema
                 .columns
                 .iter()
-                .find(|c| c.constraints.iter().any(|constraint| {
-                    constraint.to_uppercase().contains("PRIMARY")
-                }))
+                .find(|c| {
+                    c.constraints
+                        .iter()
+                        .any(|constraint| constraint.to_uppercase().contains("PRIMARY"))
+                })
                 .map(|c| c.name.clone())
                 .or_else(|| {
                     // Fall back to first column named "id" or first column
-                    schema.columns.iter()
+                    schema
+                        .columns
+                        .iter()
                         .find(|c| c.name.to_lowercase() == "id")
                         .or_else(|| schema.columns.first())
                         .map(|c| c.name.clone())
@@ -615,7 +657,10 @@ impl TableStorage for UnifiedTableStorage {
             .await
             .map_err(|e| ProtocolError::Other(format!("Storage error: {}", e)))?;
 
-        Ok(rows.into_iter().map(|r| Self::universal_row_to_sql(&r)).collect())
+        Ok(rows
+            .into_iter()
+            .map(|r| Self::universal_row_to_sql(&r))
+            .collect())
     }
 
     async fn update_rows(
@@ -939,8 +984,8 @@ mod tests {
 mod persistent_storage_impl {
     use super::*;
     use crate::protocols::postgres_wire::persistent_storage::{
-        ColumnDefinition, ColumnType, PersistentTableStorage, QueryCondition,
-        TableRow, TableSchema as PersistentTableSchema,
+        ColumnDefinition, ColumnType, PersistentTableStorage, QueryCondition, TableRow,
+        TableSchema as PersistentTableSchema,
     };
     use crate::protocols::postgres_wire::sql::types::SqlType;
     use serde_json::Value as JsonValue;
@@ -962,7 +1007,9 @@ mod persistent_storage_impl {
                         ColumnType::Varchar(n) => SqlType::Varchar(Some(n as u32)),
                         ColumnType::Boolean => SqlType::Boolean,
                         ColumnType::Json => SqlType::Json,
-                        ColumnType::Timestamp => SqlType::Timestamp { with_timezone: false },
+                        ColumnType::Timestamp => SqlType::Timestamp {
+                            with_timezone: false,
+                        },
                     };
                     ColumnSchema {
                         name: col.name.clone(),
@@ -1138,7 +1185,8 @@ mod persistent_storage_impl {
                     }))
                 };
 
-            let count = TableStorage::update_rows(self, table_name, &updates, condition, None).await?;
+            let count =
+                TableStorage::update_rows(self, table_name, &updates, condition, None).await?;
             self.write_ops.fetch_add(1, Ordering::Relaxed);
             Ok(count as i64)
         }
@@ -1198,14 +1246,18 @@ mod persistent_storage_impl {
                                 "=" | "==" => row_value == &cond_value,
                                 "!=" | "<>" => row_value != &cond_value,
                                 "<" => {
-                                    if let (SqlValue::BigInt(a), SqlValue::BigInt(b)) = (row_value, &cond_value) {
+                                    if let (SqlValue::BigInt(a), SqlValue::BigInt(b)) =
+                                        (row_value, &cond_value)
+                                    {
                                         a < b
                                     } else {
                                         false
                                     }
                                 }
                                 ">" => {
-                                    if let (SqlValue::BigInt(a), SqlValue::BigInt(b)) = (row_value, &cond_value) {
+                                    if let (SqlValue::BigInt(a), SqlValue::BigInt(b)) =
+                                        (row_value, &cond_value)
+                                    {
                                         a > b
                                     } else {
                                         false
