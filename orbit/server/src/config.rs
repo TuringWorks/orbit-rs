@@ -1248,6 +1248,9 @@ pub struct UnifiedStorageCfg {
 
     /// Actor tier placement configuration
     pub actor_placement: ActorTierPlacementConfig,
+
+    /// Cluster configuration for distributed unified storage
+    pub cluster: UnifiedClusterConfig,
 }
 
 /// Hot tier (in-memory) configuration
@@ -1491,6 +1494,302 @@ pub struct ActorTierPlacementConfig {
     pub demotion_idle_secs: u64,
 }
 
+/// Cluster configuration for distributed unified storage
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnifiedClusterConfig {
+    /// Enable cluster mode for unified storage
+    pub enabled: bool,
+
+    /// Replication configuration
+    pub replication: ReplicationConfig,
+
+    /// Sharding/partitioning configuration
+    pub sharding: ShardingConfig,
+
+    /// Node failure detection and recovery
+    pub failure_detection: FailureDetectionConfig,
+
+    /// Data consistency configuration
+    pub consistency: ConsistencyConfig,
+
+    /// Node eviction configuration
+    pub eviction: NodeEvictionConfig,
+}
+
+/// Replication configuration for data durability
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReplicationConfig {
+    /// Enable data replication
+    pub enabled: bool,
+
+    /// Replication factor (number of copies)
+    pub replication_factor: u32,
+
+    /// Replication strategy: "sync", "async", "semi_sync"
+    pub strategy: String,
+
+    /// Minimum replicas for write acknowledgment (sync/semi_sync)
+    pub min_ack_replicas: u32,
+
+    /// Async replication lag threshold in milliseconds
+    pub max_lag_ms: u64,
+
+    /// Enable read from replicas
+    pub read_from_replicas: bool,
+
+    /// Replica selection strategy: "nearest", "round_robin", "random"
+    pub replica_selection: String,
+}
+
+/// Sharding configuration for data distribution
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShardingConfig {
+    /// Enable sharding
+    pub enabled: bool,
+
+    /// Number of virtual shards (for consistent hashing)
+    pub virtual_shards: u32,
+
+    /// Sharding strategy: "consistent_hash", "range", "directory"
+    pub strategy: String,
+
+    /// Shard key field (for automatic sharding)
+    pub shard_key: Option<String>,
+
+    /// Enable automatic rebalancing when nodes change
+    pub auto_rebalance: bool,
+
+    /// Rebalance threshold (percentage imbalance to trigger)
+    pub rebalance_threshold: f64,
+
+    /// Maximum concurrent shard migrations
+    pub max_concurrent_migrations: u32,
+}
+
+/// Failure detection configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FailureDetectionConfig {
+    /// Enable failure detection
+    pub enabled: bool,
+
+    /// Heartbeat interval in milliseconds
+    pub heartbeat_interval_ms: u64,
+
+    /// Heartbeat timeout in milliseconds
+    pub heartbeat_timeout_ms: u64,
+
+    /// Number of missed heartbeats before marking node as suspect
+    pub suspect_threshold: u32,
+
+    /// Number of missed heartbeats before marking node as failed
+    pub failure_threshold: u32,
+
+    /// Gossip protocol settings
+    pub gossip: GossipConfig,
+
+    /// Recovery configuration
+    pub recovery: RecoveryConfig,
+}
+
+/// Gossip protocol configuration for failure detection
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GossipConfig {
+    /// Enable gossip-based failure detection
+    pub enabled: bool,
+
+    /// Gossip interval in milliseconds
+    pub interval_ms: u64,
+
+    /// Number of nodes to gossip with per round
+    pub fanout: u32,
+
+    /// Suspicion timeout in milliseconds
+    pub suspicion_timeout_ms: u64,
+}
+
+/// Recovery configuration for failed nodes
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecoveryConfig {
+    /// Enable automatic recovery
+    pub enabled: bool,
+
+    /// Recovery mode: "full", "incremental", "lazy"
+    pub mode: String,
+
+    /// Recovery priority: "data_first", "availability_first"
+    pub priority: String,
+
+    /// Maximum recovery bandwidth in MB/s (0 = unlimited)
+    pub max_bandwidth_mbps: u64,
+
+    /// Recovery batch size
+    pub batch_size: usize,
+
+    /// Delay before starting recovery (to allow node to rejoin)
+    pub recovery_delay_secs: u64,
+}
+
+/// Data consistency configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsistencyConfig {
+    /// Default consistency level: "eventual", "strong", "bounded_staleness"
+    pub default_level: String,
+
+    /// Read consistency: "any", "one", "quorum", "all"
+    pub read_consistency: String,
+
+    /// Write consistency: "any", "one", "quorum", "all"
+    pub write_consistency: String,
+
+    /// Bounded staleness window in milliseconds (for bounded_staleness)
+    pub staleness_bound_ms: u64,
+
+    /// Enable read-your-writes consistency
+    pub read_your_writes: bool,
+
+    /// Enable causal consistency
+    pub causal_consistency: bool,
+
+    /// Conflict resolution strategy: "last_write_wins", "vector_clock", "custom"
+    pub conflict_resolution: String,
+}
+
+/// Node eviction configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeEvictionConfig {
+    /// Enable node eviction
+    pub enabled: bool,
+
+    /// Eviction policy: "manual", "auto_unhealthy", "auto_resource"
+    pub policy: String,
+
+    /// Resource threshold for auto eviction (CPU/memory percentage)
+    pub resource_threshold: f64,
+
+    /// Grace period before eviction in seconds
+    pub grace_period_secs: u64,
+
+    /// Enable graceful shutdown (drain connections first)
+    pub graceful_shutdown: bool,
+
+    /// Drain timeout in seconds
+    pub drain_timeout_secs: u64,
+
+    /// Enable data migration before eviction
+    pub migrate_data_before_eviction: bool,
+
+    /// Blacklist duration for evicted nodes in seconds
+    pub blacklist_duration_secs: u64,
+}
+
+impl Default for UnifiedClusterConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            replication: ReplicationConfig::default(),
+            sharding: ShardingConfig::default(),
+            failure_detection: FailureDetectionConfig::default(),
+            consistency: ConsistencyConfig::default(),
+            eviction: NodeEvictionConfig::default(),
+        }
+    }
+}
+
+impl Default for ReplicationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            replication_factor: 3,
+            strategy: "async".to_string(),
+            min_ack_replicas: 1,
+            max_lag_ms: 1000,
+            read_from_replicas: true,
+            replica_selection: "nearest".to_string(),
+        }
+    }
+}
+
+impl Default for ShardingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            virtual_shards: 256,
+            strategy: "consistent_hash".to_string(),
+            shard_key: None,
+            auto_rebalance: true,
+            rebalance_threshold: 0.1,
+            max_concurrent_migrations: 2,
+        }
+    }
+}
+
+impl Default for FailureDetectionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            heartbeat_interval_ms: 1000,
+            heartbeat_timeout_ms: 5000,
+            suspect_threshold: 3,
+            failure_threshold: 5,
+            gossip: GossipConfig::default(),
+            recovery: RecoveryConfig::default(),
+        }
+    }
+}
+
+impl Default for GossipConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            interval_ms: 500,
+            fanout: 3,
+            suspicion_timeout_ms: 10000,
+        }
+    }
+}
+
+impl Default for RecoveryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            mode: "incremental".to_string(),
+            priority: "availability_first".to_string(),
+            max_bandwidth_mbps: 100,
+            batch_size: 1000,
+            recovery_delay_secs: 30,
+        }
+    }
+}
+
+impl Default for ConsistencyConfig {
+    fn default() -> Self {
+        Self {
+            default_level: "eventual".to_string(),
+            read_consistency: "one".to_string(),
+            write_consistency: "quorum".to_string(),
+            staleness_bound_ms: 5000,
+            read_your_writes: true,
+            causal_consistency: false,
+            conflict_resolution: "last_write_wins".to_string(),
+        }
+    }
+}
+
+impl Default for NodeEvictionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            policy: "auto_unhealthy".to_string(),
+            resource_threshold: 0.95,
+            grace_period_secs: 60,
+            graceful_shutdown: true,
+            drain_timeout_secs: 300,
+            migrate_data_before_eviction: true,
+            blacklist_duration_secs: 300,
+        }
+    }
+}
+
 impl Default for UnifiedStorageCfg {
     fn default() -> Self {
         Self {
@@ -1503,6 +1802,7 @@ impl Default for UnifiedStorageCfg {
             cross_protocol: CrossProtocolConfig::default(),
             ttl: TtlConfig::default(),
             actor_placement: ActorTierPlacementConfig::default(),
+            cluster: UnifiedClusterConfig::default(),
         }
     }
 }

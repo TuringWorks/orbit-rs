@@ -473,6 +473,80 @@ promotion_access_count = 10
 demotion_idle_secs = 1800   # 30 minutes
 
 # ================================
+# CLUSTER CONFIGURATION
+# ================================
+# Distributed unified storage with replication, sharding, and fault tolerance
+
+[unified_storage.cluster]
+# Enable cluster mode for unified storage
+enabled = false  # Set to true for multi-node deployments
+
+# Data Replication for Durability
+[unified_storage.cluster.replication]
+enabled = true
+replication_factor = 3              # Number of data copies
+strategy = "async"                  # Options: "sync", "async", "semi_sync"
+min_ack_replicas = 1               # Replicas required for write ack
+max_lag_ms = 1000                  # Max replication lag for async
+read_from_replicas = true          # Enable replica reads
+replica_selection = "nearest"       # Options: "nearest", "round_robin", "random"
+
+# Data Sharding/Partitioning
+[unified_storage.cluster.sharding]
+enabled = true
+virtual_shards = 256               # Virtual nodes for consistent hashing
+strategy = "consistent_hash"       # Options: "consistent_hash", "range", "directory"
+# shard_key = "id"                 # Optional: field for automatic sharding
+auto_rebalance = true              # Rebalance on node changes
+rebalance_threshold = 0.1          # 10% imbalance triggers rebalance
+max_concurrent_migrations = 2      # Limit concurrent shard moves
+
+# Node Failure Detection
+[unified_storage.cluster.failure_detection]
+enabled = true
+heartbeat_interval_ms = 1000       # Send heartbeat every second
+heartbeat_timeout_ms = 5000        # 5 second timeout
+suspect_threshold = 3              # Missed heartbeats before suspect
+failure_threshold = 5              # Missed heartbeats before failed
+
+# Gossip Protocol for Distributed Failure Detection
+[unified_storage.cluster.failure_detection.gossip]
+enabled = true
+interval_ms = 500                  # Gossip every 500ms
+fanout = 3                         # Gossip to 3 random nodes
+suspicion_timeout_ms = 10000       # 10 second suspicion window
+
+# Node Recovery Configuration
+[unified_storage.cluster.failure_detection.recovery]
+enabled = true
+mode = "incremental"               # Options: "full", "incremental", "lazy"
+priority = "availability_first"    # Options: "data_first", "availability_first"
+max_bandwidth_mbps = 100           # Limit recovery network usage
+batch_size = 1000                  # Records per recovery batch
+recovery_delay_secs = 30           # Wait before starting recovery
+
+# Data Consistency Settings
+[unified_storage.cluster.consistency]
+default_level = "eventual"         # Options: "eventual", "strong", "bounded_staleness"
+read_consistency = "one"           # Options: "any", "one", "quorum", "all"
+write_consistency = "quorum"       # Options: "any", "one", "quorum", "all"
+staleness_bound_ms = 5000          # Max staleness for bounded_staleness
+read_your_writes = true            # Guarantee read-your-writes
+causal_consistency = false         # Enable causal ordering
+conflict_resolution = "last_write_wins"  # Options: "last_write_wins", "vector_clock", "custom"
+
+# Node Eviction Configuration
+[unified_storage.cluster.eviction]
+enabled = true
+policy = "auto_unhealthy"          # Options: "manual", "auto_unhealthy", "auto_resource"
+resource_threshold = 0.95          # 95% resource usage triggers eviction
+grace_period_secs = 60             # Wait before evicting
+graceful_shutdown = true           # Drain connections first
+drain_timeout_secs = 300           # 5 minute drain timeout
+migrate_data_before_eviction = true # Move data before node leaves
+blacklist_duration_secs = 300      # Evicted nodes blocked for 5 minutes
+
+# ================================
 # EXAMPLE USAGE INSTRUCTIONS
 # ================================
 
