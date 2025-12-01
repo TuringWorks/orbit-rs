@@ -594,11 +594,35 @@ pub enum BinaryOperator {
     ContainedBy,
     Overlap,
 
-    // JSON
+    // JSON path operators
+    /// -> operator: extract JSON object field
     JsonExtract,
+    /// ->> operator: extract JSON object field as text
     JsonExtractText,
+    /// #> operator: extract JSON sub-object at path
+    JsonPathExtract,
+    /// #>> operator: extract JSON sub-object at path as text
+    JsonPathExtractText,
+
+    // JSON containment operators
+    /// @> operator: does left JSON contain right JSON
     JsonContains,
+    /// <@ operator: is left JSON contained in right JSON
     JsonContainedBy,
+    /// ? operator: does string exist as top-level key
+    JsonExists,
+    /// ?| operator: do any strings exist as top-level keys
+    JsonExistsAny,
+    /// ?& operator: do all strings exist as top-level keys
+    JsonExistsAll,
+
+    // JSON manipulation
+    /// || operator: concatenate JSON values
+    JsonConcat,
+    /// - operator: delete key or array element
+    JsonDelete,
+    /// #- operator: delete path
+    JsonDeletePath,
 
     // Pattern matching
     Match,
