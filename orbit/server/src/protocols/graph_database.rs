@@ -513,6 +513,63 @@ impl GraphActor {
                     estimated_cost += step.estimated_cost;
                     steps.push(step);
                 }
+                crate::protocols::cypher::cypher_parser::CypherClause::Unwind {
+                    expression,
+                    variable,
+                } => {
+                    let step = PlanStep {
+                        operation: "Unwind".to_string(),
+                        description: format!("Unwind expression as {variable}: {expression:?}"),
+                        estimated_rows: 100, // Depends on list size
+                        estimated_cost: 3.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::Foreach {
+                    variable,
+                    list,
+                    clauses,
+                } => {
+                    let step = PlanStep {
+                        operation: "Foreach".to_string(),
+                        description: format!(
+                            "Foreach {variable} in {list:?}: {} clauses",
+                            clauses.len()
+                        ),
+                        estimated_rows: 100, // Depends on list size
+                        estimated_cost: 5.0 * clauses.len() as f64,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::CaseExpression {
+                    test_expression,
+                    when_clauses,
+                    else_result,
+                } => {
+                    let else_desc = if else_result.is_some() {
+                        " with ELSE"
+                    } else {
+                        ""
+                    };
+                    let step = PlanStep {
+                        operation: "Case".to_string(),
+                        description: format!(
+                            "CASE {} with {} WHEN clauses{}",
+                            test_expression.as_deref().unwrap_or(""),
+                            when_clauses.len(),
+                            else_desc
+                        ),
+                        estimated_rows: 100,
+                        estimated_cost: 2.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
             }
         }
 

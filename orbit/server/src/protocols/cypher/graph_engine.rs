@@ -173,6 +173,46 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     result_nodes.extend(nodes);
                     result_relationships.extend(rels);
                 }
+                CypherClause::Unwind {
+                    expression,
+                    variable,
+                } => {
+                    // UNWIND: expand a list into individual rows
+                    tracing::debug!(
+                        "Executing UNWIND clause: {:?} AS {}",
+                        expression,
+                        variable
+                    );
+                    // TODO: Implement UNWIND execution - expand list expression to rows
+                }
+                CypherClause::Foreach {
+                    variable,
+                    list,
+                    clauses: inner_clauses,
+                } => {
+                    // FOREACH: execute side effects for each list element
+                    tracing::debug!(
+                        "Executing FOREACH clause: {} IN {:?}, {} inner clauses",
+                        variable,
+                        list,
+                        inner_clauses.len()
+                    );
+                    // TODO: Implement FOREACH execution
+                }
+                CypherClause::CaseExpression {
+                    test_expression,
+                    when_clauses,
+                    else_result,
+                } => {
+                    // CASE expression evaluation
+                    tracing::debug!(
+                        "Executing CASE expression: test={:?}, {} whens, else={:?}",
+                        test_expression,
+                        when_clauses.len(),
+                        else_result
+                    );
+                    // TODO: Implement CASE expression execution
+                }
             }
         }
 
