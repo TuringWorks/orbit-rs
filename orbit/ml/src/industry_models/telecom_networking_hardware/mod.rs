@@ -5,4 +5,11 @@
 //! - Hardware & Semiconductors
 //! - Cloud & Infrastructure Providers
 
-// Placeholder for future models
+pub mod telecom_operators;
+pub mod hardware_semiconductors;
+pub mod cloud_infrastructure;
+
+// Re-export commonly used types
+pub use telecom_operators::*;
+pub use hardware_semiconductors::*;
+pub use cloud_infrastructure::*;

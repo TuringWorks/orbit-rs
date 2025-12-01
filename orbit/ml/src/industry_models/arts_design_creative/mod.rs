@@ -5,4 +5,9 @@
 //! - Design, Architecture & Creative Tools
 //! - Publishing, Writing & Knowledge Work
 
-// Placeholder for future models
+pub mod advertising_marketing;
+pub mod design_creative_tools;
+
+// Re-export commonly used types
+pub use advertising_marketing::*;
+pub use design_creative_tools::*;
