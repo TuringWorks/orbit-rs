@@ -435,18 +435,31 @@ impl TieredStorageBackend {
                             if config.cold_tier.backend == ColdBackendType::MinIO {
                                 "http://localhost:9000".to_string()
                             } else {
-                                format!("https://s3.{}.amazonaws.com", 
-                                    config.cold_tier.region.as_ref().unwrap_or(&"us-east-1".to_string()))
+                                format!(
+                                    "https://s3.{}.amazonaws.com",
+                                    config
+                                        .cold_tier
+                                        .region
+                                        .as_ref()
+                                        .unwrap_or(&"us-east-1".to_string())
+                                )
                             }
                         }),
                         access_key_id: config.cold_tier.access_key.clone().unwrap_or_default(),
                         secret_access_key: config.cold_tier.secret_key.clone().unwrap_or_default(),
-                        region: config.cold_tier.region.clone().unwrap_or_else(|| "us-east-1".to_string()),
+                        region: config
+                            .cold_tier
+                            .region
+                            .clone()
+                            .unwrap_or_else(|| "us-east-1".to_string()),
                         bucket: config.cold_tier.bucket.clone(),
                         prefix: config.cold_tier.prefix.clone(),
                         path_style_access: config.cold_tier.backend == ColdBackendType::MinIO,
                     };
-                    info!("[TieredStorage] Creating S3/MinIO cold tier backend: bucket={}", s3_config.bucket);
+                    info!(
+                        "[TieredStorage] Creating S3/MinIO cold tier backend: bucket={}",
+                        s3_config.bucket
+                    );
                     Arc::new(S3Backend::new(s3_config))
                 }
                 _ => {

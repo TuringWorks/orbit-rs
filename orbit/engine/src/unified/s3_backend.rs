@@ -3,7 +3,9 @@
 //! This module provides an S3-compatible storage backend that can be used
 //! for cold tier storage in the tiered storage system.
 
-use super::storage::{UnifiedStorageBackend, UnifiedStorageError, UnifiedStorageMetrics, UnifiedStorageResult};
+use super::storage::{
+    UnifiedStorageBackend, UnifiedStorageError, UnifiedStorageMetrics, UnifiedStorageResult,
+};
 use async_trait::async_trait;
 use opendal::services::S3;
 use opendal::Operator;
@@ -104,7 +106,9 @@ impl S3Backend {
 
     /// Create a MinIO backend for testing
     pub fn minio(endpoint: &str, access_key: &str, secret_key: &str, bucket: &str) -> Self {
-        Self::new(S3BackendConfig::minio(endpoint, access_key, secret_key, bucket))
+        Self::new(S3BackendConfig::minio(
+            endpoint, access_key, secret_key, bucket,
+        ))
     }
 
     /// Create with default MinIO settings (localhost:9000, minioadmin/minioadmin)
@@ -145,7 +149,9 @@ impl S3Backend {
         }
 
         let op = Operator::new(builder)
-            .map_err(|e| UnifiedStorageError::Backend(format!("Failed to create S3 operator: {}", e)))?
+            .map_err(|e| {
+                UnifiedStorageError::Backend(format!("Failed to create S3 operator: {}", e))
+            })?
             .finish();
 
         *guard = Some(op.clone());
@@ -181,13 +187,16 @@ impl UnifiedStorageBackend for S3Backend {
                         "[S3Backend] Bucket {} does not exist, attempting to create it",
                         self.config.bucket
                     );
-                    
+
                     // Try to create the bucket by writing a marker file
                     // OpenDAL doesn't have direct bucket creation, but writing a file
                     // to a non-existent bucket in MinIO will auto-create it if configured
                     match op.write("_bucket_marker", Vec::<u8>::new()).await {
                         Ok(_) => {
-                            info!("[S3Backend] Bucket {} created successfully", self.config.bucket);
+                            info!(
+                                "[S3Backend] Bucket {} created successfully",
+                                self.config.bucket
+                            );
                             // Clean up marker file
                             let _ = op.delete("_bucket_marker").await;
                         }
@@ -212,7 +221,6 @@ impl UnifiedStorageBackend for S3Backend {
                 }
             }
         }
-
 
         Ok(())
     }
@@ -254,13 +262,11 @@ impl UnifiedStorageBackend for S3Backend {
         let op = self.get_operator().await?;
         let full_key = self.full_key(key);
 
-        op.write(&full_key, value.to_vec())
-            .await
-            .map_err(|e| {
-                self.error_count.fetch_add(1, Ordering::Relaxed);
-                error!("[S3Backend] PUT {} failed: {}", key, e);
-                UnifiedStorageError::Backend(format!("S3 put failed: {}", e))
-            })?;
+        op.write(&full_key, value.to_vec()).await.map_err(|e| {
+            self.error_count.fetch_add(1, Ordering::Relaxed);
+            error!("[S3Backend] PUT {} failed: {}", key, e);
+            UnifiedStorageError::Backend(format!("S3 put failed: {}", e))
+        })?;
 
         debug!("[S3Backend] PUT {}: {} bytes", key, value.len());
         Ok(())

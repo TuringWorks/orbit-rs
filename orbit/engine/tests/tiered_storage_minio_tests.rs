@@ -24,8 +24,8 @@
 //! Or use docker-compose with the provided configuration.
 
 use orbit_engine::unified::{
-    ColdBackendType, ColdTierConfig, EvictionPolicy, HotTierConfig, S3Backend,
-    S3BackendConfig, StorageTier, TierMigrationConfig, TieredStorageBackend, TieredStorageConfig,
+    ColdBackendType, ColdTierConfig, EvictionPolicy, HotTierConfig, S3Backend, S3BackendConfig,
+    StorageTier, TierMigrationConfig, TieredStorageBackend, TieredStorageConfig,
     UnifiedStorageBackend, WarmTierConfig, WritePolicy,
 };
 use std::sync::Arc;
@@ -91,7 +91,7 @@ async fn setup_minio_bucket() {
         "orbit-cold-storage",
     );
     let backend = S3Backend::new(config);
-    
+
     // Try to initialize - this will create the bucket if it doesn't exist
     match backend.initialize().await {
         Ok(_) => println!("✓ Bucket 'orbit-cold-storage' is ready"),
@@ -108,7 +108,7 @@ async fn setup_minio_bucket() {
             println!("✓ Bucket 'orbit-cold-storage' created successfully");
         }
     }
-    
+
     backend.shutdown().await.ok();
 }
 
@@ -123,7 +123,10 @@ async fn test_s3_backend_basic_operations() {
         "orbit-cold-storage",
     );
     let backend = S3Backend::new(config);
-    backend.initialize().await.expect("Failed to initialize S3 backend");
+    backend
+        .initialize()
+        .await
+        .expect("Failed to initialize S3 backend");
 
     let test_key = format!("test-basic-{}", uuid::Uuid::new_v4());
     let test_value = b"Hello, MinIO!";
@@ -139,11 +142,17 @@ async fn test_s3_backend_basic_operations() {
     assert_eq!(retrieved, Some(test_value.to_vec()));
 
     // EXISTS
-    assert!(backend.exists(&test_key).await.expect("Failed to check exists"));
+    assert!(backend
+        .exists(&test_key)
+        .await
+        .expect("Failed to check exists"));
 
     // DELETE
     assert!(backend.delete(&test_key).await.expect("Failed to delete"));
-    assert!(!backend.exists(&test_key).await.expect("Failed to check exists after delete"));
+    assert!(!backend
+        .exists(&test_key)
+        .await
+        .expect("Failed to check exists after delete"));
 
     backend.shutdown().await.expect("Failed to shutdown");
 }
@@ -166,7 +175,10 @@ async fn test_s3_backend_scan_prefix() {
     // Put multiple values with prefix
     for i in 0..5 {
         backend
-            .put(&format!("{}key{}", prefix, i), format!("value{}", i).as_bytes())
+            .put(
+                &format!("{}key{}", prefix, i),
+                format!("value{}", i).as_bytes(),
+            )
             .await
             .expect("Failed to put");
     }
@@ -198,7 +210,10 @@ async fn test_s3_backend_scan_prefix() {
     for (key, _) in results {
         backend.delete(&key).await.expect("Failed to cleanup");
     }
-    backend.delete(&other_key).await.expect("Failed to cleanup other");
+    backend
+        .delete(&other_key)
+        .await
+        .expect("Failed to cleanup other");
 
     backend.shutdown().await.expect("Failed to shutdown");
 }
@@ -209,13 +224,19 @@ async fn test_s3_backend_scan_prefix() {
 async fn test_hot_to_warm_propagation() {
     let config = create_minio_tiered_config("orbit-cold-storage");
     let backend = TieredStorageBackend::new(config);
-    backend.initialize().await.expect("Failed to initialize tiered backend");
+    backend
+        .initialize()
+        .await
+        .expect("Failed to initialize tiered backend");
 
     // Write data that will fit in hot tier
     for i in 0..5 {
         let key = format!("hot-test:{}", i);
         let value = format!("value-{}", i);
-        backend.put(&key, value.as_bytes()).await.expect("Failed to put");
+        backend
+            .put(&key, value.as_bytes())
+            .await
+            .expect("Failed to put");
     }
 
     // All should be in hot tier initially
@@ -233,12 +254,18 @@ async fn test_hot_to_warm_propagation() {
     let large_value = vec![0u8; 100 * 1024]; // 100KB per entry
     for i in 0..20 {
         let key = format!("eviction-test:{}", i);
-        backend.put(&key, &large_value).await.expect("Failed to put large value");
+        backend
+            .put(&key, &large_value)
+            .await
+            .expect("Failed to put large value");
     }
 
     // Check metrics for evictions
     let metrics = backend.tiered_metrics().await;
-    println!("Evictions: {}, Demotions: {}", metrics.evictions, metrics.demotions);
+    println!(
+        "Evictions: {}, Demotions: {}",
+        metrics.evictions, metrics.demotions
+    );
 
     // Some entries should have been evicted to warm tier
     assert!(
@@ -272,7 +299,10 @@ async fn test_warm_to_cold_archival() {
     for i in 0..5 {
         let key = format!("warm-test:{}", i);
         let value = format!("warm-value-{}", i);
-        backend.put(&key, value.as_bytes()).await.expect("Failed to put");
+        backend
+            .put(&key, value.as_bytes())
+            .await
+            .expect("Failed to put");
 
         // Verify in warm tier
         assert_eq!(
@@ -330,13 +360,19 @@ async fn test_cold_tier_recall() {
     };
 
     let s3_backend = S3Backend::new(s3_config.clone());
-    s3_backend.initialize().await.expect("Failed to initialize S3");
+    s3_backend
+        .initialize()
+        .await
+        .expect("Failed to initialize S3");
 
     // Pre-populate cold storage
     for i in 0..5 {
         let key = format!("cold-data:{}", i);
         let value = format!("{{\"id\": {}, \"data\": \"cold-value-{}\"}}", i, i);
-        s3_backend.put(&key, value.as_bytes()).await.expect("Failed to put to S3");
+        s3_backend
+            .put(&key, value.as_bytes())
+            .await
+            .expect("Failed to put to S3");
     }
 
     s3_backend.shutdown().await.ok();
@@ -346,7 +382,10 @@ async fn test_cold_tier_recall() {
     config.cold_tier.prefix = s3_prefix;
 
     let backend = TieredStorageBackend::new(config);
-    backend.initialize().await.expect("Failed to initialize tiered");
+    backend
+        .initialize()
+        .await
+        .expect("Failed to initialize tiered");
 
     // Read data from cold tier (should trigger read-through)
     for i in 0..5 {
@@ -363,7 +402,10 @@ async fn test_cold_tier_recall() {
 
     // Check cold tier hit metrics
     let metrics = backend.tiered_metrics().await;
-    assert!(metrics.cold_tier_hits >= 5, "Expected at least 5 cold tier hits");
+    assert!(
+        metrics.cold_tier_hits >= 5,
+        "Expected at least 5 cold tier hits"
+    );
 
     backend.shutdown().await.expect("Failed to shutdown");
 }
@@ -381,7 +423,10 @@ async fn test_tier_promotion_on_access() {
 
     // Write data with write-around to put in warm tier
     let key = "promotion-test:1";
-    backend.put(key, b"test-value").await.expect("Failed to put");
+    backend
+        .put(key, b"test-value")
+        .await
+        .expect("Failed to put");
 
     // Move to warm tier by evicting from hot
     // In real usage, this would happen via time-based demotion
@@ -416,14 +461,24 @@ async fn test_multi_tier_consistency() {
     let updated_value = b"updated-value";
 
     // Write initial value
-    backend.put(key, initial_value).await.expect("Failed to put initial");
+    backend
+        .put(key, initial_value)
+        .await
+        .expect("Failed to put initial");
 
     // Update the value
-    backend.put(key, updated_value).await.expect("Failed to put updated");
+    backend
+        .put(key, updated_value)
+        .await
+        .expect("Failed to put updated");
 
     // Verify the updated value is returned regardless of tier
     let value = backend.get(key).await.expect("Failed to get");
-    assert_eq!(value, Some(updated_value.to_vec()), "Should get updated value");
+    assert_eq!(
+        value,
+        Some(updated_value.to_vec()),
+        "Should get updated value"
+    );
 
     // Force eviction to warm tier
     let large_value = vec![0u8; 500 * 1024];
@@ -435,7 +490,10 @@ async fn test_multi_tier_consistency() {
     }
 
     // Value should still be consistent after eviction
-    let value_after_eviction = backend.get(key).await.expect("Failed to get after eviction");
+    let value_after_eviction = backend
+        .get(key)
+        .await
+        .expect("Failed to get after eviction");
     assert_eq!(
         value_after_eviction,
         Some(updated_value.to_vec()),
@@ -466,7 +524,11 @@ async fn test_batch_operations_across_tiers() {
     // Verify all entries exist
     for (key, expected_value) in &entries {
         let value = backend.get(key).await.expect("Failed to get");
-        assert_eq!(value.as_ref(), Some(expected_value), "Batch put value mismatch");
+        assert_eq!(
+            value.as_ref(),
+            Some(expected_value),
+            "Batch put value mismatch"
+        );
     }
 
     // Batch delete half
@@ -504,7 +566,10 @@ async fn test_scan_across_tiers() {
     // Put entries (will go to hot tier)
     for i in 0..5 {
         backend
-            .put(&format!("{}entry:{}", prefix, i), format!("value-{}", i).as_bytes())
+            .put(
+                &format!("{}entry:{}", prefix, i),
+                format!("value-{}", i).as_bytes(),
+            )
             .await
             .expect("Failed to put");
     }
@@ -618,7 +683,10 @@ async fn test_graceful_shutdown() {
     sleep(Duration::from_millis(200)).await;
 
     // Shutdown should complete gracefully
-    backend.shutdown().await.expect("Failed to shutdown gracefully");
+    backend
+        .shutdown()
+        .await
+        .expect("Failed to shutdown gracefully");
 
     // Cancel the write task
     write_handle.abort();

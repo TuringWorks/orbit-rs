@@ -1881,8 +1881,8 @@ mod aql_storage_impl {
                         };
 
                         if let Some(data) = data_value {
-                            let collection: AqlCollection = serde_json::from_value(data)
-                                .map_err(|e| {
+                            let collection: AqlCollection =
+                                serde_json::from_value(data).map_err(|e| {
                                     ProtocolError::SerializationError(format!(
                                         "Failed to deserialize collection: {}",
                                         e
@@ -1990,13 +1990,12 @@ mod aql_storage_impl {
                     };
 
                     if let Some(data) = data_value {
-                        let doc: AqlDocument =
-                            serde_json::from_value(data).map_err(|e| {
-                                ProtocolError::SerializationError(format!(
-                                    "Failed to deserialize document: {}",
-                                    e
-                                ))
-                            })?;
+                        let doc: AqlDocument = serde_json::from_value(data).map_err(|e| {
+                            ProtocolError::SerializationError(format!(
+                                "Failed to deserialize document: {}",
+                                e
+                            ))
+                        })?;
                         return Ok(Some(doc));
                     }
                 }
@@ -2850,10 +2849,7 @@ mod storage_provider_tests {
         isolated_provider.store_node(node.clone()).await.unwrap();
 
         // Verify data in isolated storage
-        let retrieved = isolated_provider
-            .get_node("switch_node:1")
-            .await
-            .unwrap();
+        let retrieved = isolated_provider.get_node("switch_node:1").await.unwrap();
         assert!(retrieved.is_some());
 
         // Now switch to unified storage (separate storage - data won't transfer)
@@ -2864,10 +2860,7 @@ mod storage_provider_tests {
         let unified_provider: Arc<dyn CypherStorageProvider> = unified_cypher;
 
         // Unified storage starts fresh
-        let retrieved_unified = unified_provider
-            .get_node("switch_node:1")
-            .await
-            .unwrap();
+        let retrieved_unified = unified_provider.get_node("switch_node:1").await.unwrap();
         assert!(retrieved_unified.is_none());
 
         // Store new data in unified storage
@@ -2883,17 +2876,11 @@ mod storage_provider_tests {
         unified_provider.store_node(node2).await.unwrap();
 
         // Verify unified storage has its own data
-        let retrieved_unified2 = unified_provider
-            .get_node("switch_node:2")
-            .await
-            .unwrap();
+        let retrieved_unified2 = unified_provider.get_node("switch_node:2").await.unwrap();
         assert!(retrieved_unified2.is_some());
 
         // Original isolated storage still has its data
-        let original_data = isolated_provider
-            .get_node("switch_node:1")
-            .await
-            .unwrap();
+        let original_data = isolated_provider.get_node("switch_node:1").await.unwrap();
         assert!(original_data.is_some());
     }
 
@@ -2994,7 +2981,10 @@ mod storage_provider_tests {
         }
 
         // Verify all documents retrieved
-        let all_docs = provider.get_collection_documents("docs_test").await.unwrap();
+        let all_docs = provider
+            .get_collection_documents("docs_test")
+            .await
+            .unwrap();
         assert_eq!(all_docs.len(), 5);
     }
 
