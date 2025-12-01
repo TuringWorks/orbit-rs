@@ -525,7 +525,120 @@ impl UnifiedStorage {
 }
 ```
 
-### 6. RocksDB Backend with Column Families
+### 6. Secondary Index Manager
+
+The `SecondaryIndexManager` provides efficient secondary index management for queries on non-primary-key fields. It enables fast lookups like "find all users with email = 'alice@example.com'" without scanning all records.
+
+```rust
+// Location: orbit/engine/src/unified/index.rs
+
+use std::sync::Arc;
+use std::collections::HashMap;
+use tokio::sync::RwLock;
+
+/// An entry in a secondary index
+pub struct IndexEntry {
+    pub namespace: String,
+    pub index_name: String,
+    pub field_value: String,
+    pub record_key: String,
+}
+
+/// Statistics for an index
+pub struct IndexStats {
+    pub entry_count: u64,
+    pub unique_values: u64,
+    pub name: String,
+    pub fields: Vec<String>,
+    pub unique: bool,
+}
+
+/// Secondary Index Manager
+pub struct SecondaryIndexManager {
+    storage: Arc<UnifiedStorage>,
+    index_cache: Arc<RwLock<HashMap<String, Vec<IndexDefinition>>>>,
+}
+
+impl SecondaryIndexManager {
+    /// Register indexes for a namespace
+    pub async fn register_indexes(&self, namespace: &str, indexes: Vec<IndexDefinition>);
+
+    /// Get registered indexes for a namespace
+    pub async fn get_indexes(&self, namespace: &str) -> Vec<IndexDefinition>;
+
+    /// Index a record (creates index entries)
+    pub async fn index_record(&self, record: &UniversalRecord) -> Result<usize>;
+
+    /// Remove index entries for a record
+    pub async fn unindex_record(&self, namespace: &str, key: &str, old_record: Option<&UniversalRecord>) -> Result<usize>;
+
+    /// Query records by index (exact match)
+    pub async fn query_by_index(&self, namespace: &str, index_name: &str, field_value: &str) -> Result<Vec<String>>;
+
+    /// Query records by index with range
+    pub async fn query_by_index_range(&self, namespace: &str, index_name: &str, min: Option<&str>, max: Option<&str>) -> Result<Vec<String>>;
+
+    /// Check if a unique constraint would be violated
+    pub async fn check_unique_constraint(&self, namespace: &str, index_name: &str, field_value: &str, exclude_key: Option<&str>) -> Result<bool>;
+
+    /// Rebuild all indexes for a namespace
+    pub async fn rebuild_indexes(&self, namespace: &str) -> Result<usize>;
+
+    /// Get statistics for an index
+    pub async fn get_index_stats(&self, namespace: &str, index_name: &str) -> Result<IndexStats>;
+}
+```
+
+#### Index Storage Format
+
+Index entries are stored with the following key format:
+- **Namespace**: `__idx__{original_namespace}` (e.g., `__idx__users`)
+- **Key**: `{index_name}:{field_value}:{record_key}` (e.g., `idx_email:alice@example.com:alice`)
+
+This allows efficient prefix scanning for index lookups.
+
+#### Index Types Supported
+
+| Index Type | Description | Use Case |
+|------------|-------------|----------|
+| Single-field | Index on one field | `CREATE INDEX idx_email ON users(email)` |
+| Composite | Index on multiple fields | `CREATE INDEX idx_city_name ON users(city, name)` |
+| Unique | Enforces uniqueness | `CREATE UNIQUE INDEX idx_email ON users(email)` |
+
+#### Example Usage
+
+```rust
+// Register indexes for a namespace
+let indexes = vec![
+    IndexDefinition {
+        name: "idx_email".to_string(),
+        fields: vec!["email".to_string()],
+        unique: true,
+        index_type: IndexType::BTree,
+    },
+    IndexDefinition {
+        name: "idx_city".to_string(),
+        fields: vec!["city".to_string()],
+        unique: false,
+        index_type: IndexType::BTree,
+    },
+];
+index_manager.register_indexes("users", indexes).await;
+
+// Index a record
+let record = UniversalRecord::new("users", "alice", value, "redis");
+index_manager.index_record(&record).await?;
+
+// Query by index
+let user_keys = index_manager.query_by_index("users", "idx_email", "alice@example.com").await?;
+// Returns: ["alice"]
+
+// Check unique constraint before insert
+let can_insert = index_manager.check_unique_constraint("users", "idx_email", "alice@example.com", None).await?;
+// Returns: false (email already exists)
+```
+
+### 7. RocksDB Backend with Column Families
 
 ```rust
 // Location: orbit/engine/src/unified/backend.rs
@@ -797,7 +910,7 @@ impl TransactionManager {
 
 ### Phase 7: Performance & Polish (Week 9-10)
 - [ ] Caching layer
-- [ ] Index optimization
+- [x] Index optimization (SecondaryIndexManager implemented)
 - [ ] Transaction handling
 - [ ] Documentation and examples
 
@@ -807,24 +920,22 @@ impl TransactionManager {
 
 ```
 orbit/engine/src/unified/
-├── mod.rs                 # Module exports
-├── types.rs               # UniversalValue, UniversalRecord, RecordId
-├── operations.rs          # UniversalOperation, FilterExpression
-├── storage.rs             # UnifiedStorage implementation
-├── backend.rs             # RocksDB backend
-├── schema.rs              # SchemaRegistry, NamespaceSchema
-├── index.rs               # IndexManager
-├── transaction.rs         # TransactionManager
-├── cache.rs               # Caching layer
-└── adapters/
-    ├── mod.rs             # ProtocolAdapter trait
-    ├── redis.rs           # Redis adapter
-    ├── postgresql.rs      # PostgreSQL adapter
-    ├── mysql.rs           # MySQL adapter
-    ├── cql.rs             # CQL adapter
-    ├── cypher.rs          # Cypher adapter
-    ├── aql.rs             # AQL adapter
-    └── rest.rs            # REST adapter
+├── mod.rs                      # Module exports
+├── types.rs                    # UniversalValue, UniversalRecord, RecordId
+├── operations.rs               # UniversalOperation, FilterExpression, IndexDefinition
+├── storage.rs                  # UnifiedStorage implementation (MemoryBackend)
+├── schema.rs                   # SchemaRegistry, NamespaceSchema
+├── index.rs                    # SecondaryIndexManager (IMPLEMENTED)
+├── tiered.rs                   # TieredStorageBackend (hot/warm/cold)
+├── actor_tier_placement.rs     # Actor placement decisions
+├── adapters.rs                 # ProtocolAdapter trait and implementations:
+│                               #   - RedisAdapter, SqlAdapter, CqlAdapter
+│                               #   - GraphAdapter, RestAdapter, GrpcAdapter
+│
+# Future modules (planned):
+├── backend.rs                  # RocksDB persistent backend
+├── transaction.rs              # TransactionManager
+└── cache.rs                    # Caching layer
 ```
 
 ---

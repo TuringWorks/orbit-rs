@@ -1,54 +1,34 @@
-//! Secondary Index Management for Unified Storage
+//! Secondary Index Manager for Unified Storage
 //!
-//! This module provides secondary index support for the unified storage layer,
-//! enabling efficient queries on non-primary-key fields.
+//! This module provides secondary index management for efficient queries on non-primary-key fields.
+//! It enables fast lookups like "find all users with email = 'alice@example.com'" without
+//! scanning all records.
 //!
-//! # Index Key Format
+//! # Index Storage Format
 //!
-//! Secondary indexes are stored with the following key format:
-//! ```text
-//! idx:{namespace}:{index_name}:{field_value}:{record_key}
-//! ```
+//! Index entries are stored with the key format:
+//! - Namespace: `__idx__{namespace}` (e.g., `__idx__users`)
+//! - Key: `{index_name}:{field_value}:{record_key}` (e.g., `idx_email:alice@example.com:alice`)
 //!
-//! # Supported Index Types
-//!
-//! - `BTree`: Standard B-tree index for range queries and equality
-//! - `Hash`: Hash index for fast equality lookups
-//! - `FullText`: Full-text search index (uses inverted index)
-//! - `Geospatial`: Geospatial index for location queries
-//! - `Vector`: Vector similarity search index
-//!
-//! # Example
-//!
-//! ```rust,ignore
-//! use orbit_engine::unified::index::SecondaryIndexManager;
-//!
-//! let index_manager = SecondaryIndexManager::new(storage.clone());
-//!
-//! // Create index on email field
-//! index_manager.create_index("users", "idx_email", vec!["email"], IndexType::Hash, false).await?;
-//!
-//! // Query by email
-//! let records = index_manager.query_by_index("users", "idx_email", "alice@example.com").await?;
-//! ```
+//! This allows efficient prefix scanning for index lookups.
 
 use super::operations::IndexDefinition;
 use super::storage::{UnifiedStorage, UnifiedStorageResult};
-use super::types::{UniversalRecord, UniversalResult, UniversalValue};
-use std::collections::BTreeSet;
+use super::types::{UniversalRecord, UniversalValue};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-/// Secondary index entry stored in the backend
+/// An entry in a secondary index
 #[derive(Debug, Clone)]
 pub struct IndexEntry {
     /// The namespace this index belongs to
     pub namespace: String,
-    /// The index name
+    /// The name of the index
     pub index_name: String,
-    /// The indexed field value
+    /// The field value being indexed
     pub field_value: String,
-    /// The primary key of the record
+    /// The key of the record this entry points to
     pub record_key: String,
 }
 
@@ -63,48 +43,56 @@ impl IndexEntry {
         }
     }
 
-    /// Convert to storage key
-    pub fn to_storage_key(&self) -> String {
-        format!(
-            "idx:{}:{}:{}:{}",
-            self.namespace, self.index_name, self.field_value, self.record_key
-        )
+    /// Get the storage namespace for this index entry
+    pub fn storage_namespace(&self) -> String {
+        format!("__idx__{}", self.namespace)
     }
 
-    /// Parse from storage key
-    pub fn from_storage_key(key: &str) -> Option<Self> {
-        let parts: Vec<&str> = key.splitn(5, ':').collect();
-        if parts.len() == 5 && parts[0] == "idx" {
-            Some(Self {
-                namespace: parts[1].to_string(),
-                index_name: parts[2].to_string(),
-                field_value: parts[3].to_string(),
-                record_key: parts[4].to_string(),
-            })
-        } else {
-            None
-        }
+    /// Get the storage key for this index entry
+    pub fn storage_key(&self) -> String {
+        format!(
+            "{}:{}:{}",
+            self.index_name, self.field_value, self.record_key
+        )
     }
 }
 
-/// Manager for secondary indexes
+/// Statistics for an index
+#[derive(Debug, Clone, Default)]
+pub struct IndexStats {
+    /// Number of entries in the index
+    pub entry_count: u64,
+    /// Number of unique values
+    pub unique_values: u64,
+    /// Index name
+    pub name: String,
+    /// Fields covered by this index
+    pub fields: Vec<String>,
+    /// Whether this is a unique index
+    pub unique: bool,
+}
+
+/// Secondary Index Manager
+///
+/// Manages secondary indexes for efficient queries on non-primary-key fields.
+/// Works with the UnifiedStorage to maintain index consistency.
 pub struct SecondaryIndexManager {
-    /// Reference to the unified storage
+    /// Reference to the underlying storage
     storage: Arc<UnifiedStorage>,
-    /// Cache of index definitions per namespace
-    index_cache: Arc<RwLock<std::collections::HashMap<String, Vec<IndexDefinition>>>>,
+    /// Cache of registered indexes per namespace
+    index_cache: Arc<RwLock<HashMap<String, Vec<IndexDefinition>>>>,
 }
 
 impl SecondaryIndexManager {
-    /// Create a new secondary index manager
+    /// Create a new SecondaryIndexManager
     pub fn new(storage: Arc<UnifiedStorage>) -> Self {
         Self {
             storage,
-            index_cache: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            index_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    /// Register index definitions for a namespace
+    /// Register indexes for a namespace
     pub async fn register_indexes(&self, namespace: &str, indexes: Vec<IndexDefinition>) {
         let mut cache = self.index_cache.write().await;
         cache.insert(namespace.to_string(), indexes);
@@ -116,7 +104,7 @@ impl SecondaryIndexManager {
         cache.get(namespace).cloned().unwrap_or_default()
     }
 
-    /// Build index entries for a record
+    /// Build index entries for a record based on registered indexes
     pub fn build_index_entries(
         &self,
         record: &UniversalRecord,
@@ -125,133 +113,117 @@ impl SecondaryIndexManager {
         let mut entries = Vec::new();
 
         for index in indexes {
-            // Build composite key from all indexed fields
-            let field_values: Vec<String> = index
-                .fields
-                .iter()
-                .filter_map(|field| {
-                    record.get_field(field).map(|v| self.value_to_index_key(v))
-                })
-                .collect();
+            // For single-field indexes, extract the field value
+            if index.fields.len() == 1 {
+                let field = &index.fields[0];
+                if let Some(value) = record.get_field(field) {
+                    let field_value = self.value_to_string(value);
+                    entries.push(IndexEntry::new(
+                        &record.id.namespace,
+                        &index.name,
+                        &field_value,
+                        &record.id.key,
+                    ));
+                }
+            } else {
+                // For composite indexes, concatenate field values
+                let field_values: Vec<String> = index
+                    .fields
+                    .iter()
+                    .filter_map(|f| record.get_field(f).map(|v| self.value_to_string(v)))
+                    .collect();
 
-            // Only create index entry if all fields have values
-            if field_values.len() == index.fields.len() {
-                let composite_value = field_values.join(":");
-                entries.push(IndexEntry::new(
-                    &record.id.namespace,
-                    &index.name,
-                    &composite_value,
-                    &record.id.key,
-                ));
+                if field_values.len() == index.fields.len() {
+                    let composite_value = field_values.join(":");
+                    entries.push(IndexEntry::new(
+                        &record.id.namespace,
+                        &index.name,
+                        &composite_value,
+                        &record.id.key,
+                    ));
+                }
             }
         }
 
         entries
     }
 
-    /// Convert a value to an index key string
-    fn value_to_index_key(&self, value: &UniversalValue) -> String {
-        match value {
-            UniversalValue::Null => "null".to_string(),
-            UniversalValue::Bool(b) => b.to_string(),
-            UniversalValue::Int(i) => format!("{:020}", i), // Zero-padded for proper ordering
-            UniversalValue::Float(f) => format!("{:020.10}", f),
-            UniversalValue::String(s) => s.clone(),
-            UniversalValue::Bytes(b) => {
-                // Simple hex encoding without external crate
-                b.iter().map(|byte| format!("{:02x}", byte)).collect()
-            }
-            UniversalValue::Timestamp(ts) => format!("{:020}", ts),
-            _ => serde_json::to_string(value).unwrap_or_default(),
-        }
-    }
-
-    /// Index a record (called during put operations)
-    pub async fn index_record(
-        &self,
-        record: &UniversalRecord,
-    ) -> UnifiedStorageResult<usize> {
+    /// Index a record (creates index entries)
+    pub async fn index_record(&self, record: &UniversalRecord) -> UnifiedStorageResult<usize> {
         let indexes = self.get_indexes(&record.id.namespace).await;
         if indexes.is_empty() {
             return Ok(0);
         }
 
         let entries = self.build_index_entries(record, &indexes);
-        let mut indexed_count = 0;
+        let count = entries.len();
 
         for entry in entries {
-            // Store index entry using namespace-based key
-            // Key format: {namespace}:{index_name}:{field_value}:{record_key}
-            let index_key = format!(
-                "{}:{}:{}",
-                entry.index_name, entry.field_value, entry.record_key
-            );
+            // Store index entry: value is the record key for reference
             self.storage
                 .put(
-                    &format!("__idx__{}", entry.namespace),
-                    &index_key,
-                    UniversalValue::String(record.id.key.clone()),
+                    &entry.storage_namespace(),
+                    &entry.storage_key(),
+                    UniversalValue::String(entry.record_key.clone()),
                     None,
                     false,
                     None,
                 )
                 .await?;
-            indexed_count += 1;
         }
 
-        Ok(indexed_count)
+        Ok(count)
     }
 
-    /// Remove index entries for a record (called during delete operations)
+    /// Remove index entries for a record
     pub async fn unindex_record(
         &self,
         namespace: &str,
         key: &str,
         old_record: Option<&UniversalRecord>,
     ) -> UnifiedStorageResult<usize> {
-        let indexes = self.get_indexes(namespace).await;
-        if indexes.is_empty() {
-            return Ok(0);
-        }
-
-        let idx_namespace = format!("__idx__{}", namespace);
-
-        // If we have the old record, use it to build exact index entries to delete
+        // If we have the old record, use it to build entries to delete
         if let Some(record) = old_record {
+            let indexes = self.get_indexes(namespace).await;
             let entries = self.build_index_entries(record, &indexes);
-            let mut removed_count = 0;
+            let count = entries.len();
 
             for entry in entries {
-                let index_key = format!(
-                    "{}:{}:{}",
-                    entry.index_name, entry.field_value, entry.record_key
-                );
-                self.storage.delete(&idx_namespace, &index_key).await?;
-                removed_count += 1;
+                self.storage
+                    .delete(&entry.storage_namespace(), &entry.storage_key())
+                    .await?;
             }
 
-            return Ok(removed_count);
+            return Ok(count);
         }
 
-        // Otherwise, scan for index entries containing this key
-        let result = self
-            .storage
-            .scan_keys(&idx_namespace, Some(format!("*:{}", key)), None)
-            .await?;
+        // Otherwise, scan for index entries referencing this key
+        let indexes = self.get_indexes(namespace).await;
+        let idx_namespace = format!("__idx__{}", namespace);
+        let mut deleted = 0;
 
-        let mut removed_count = 0;
-        if let UniversalResult::Values(keys) = result {
-            for k in keys {
-                if let UniversalValue::String(key_str) = k {
-                    if key_str.ends_with(&format!(":{}", key)) {
-                        self.storage.delete(&idx_namespace, &key_str).await?;
-                        removed_count += 1;
+        for index in &indexes {
+            // Scan all entries for this index and find ones pointing to our key
+            let prefix = format!("{}:", index.name);
+            let result = self
+                .storage
+                .scan_keys(&idx_namespace, Some(format!("{}*", prefix)), None)
+                .await?;
+
+            if let super::types::UniversalResult::Values(keys) = result {
+                for key_val in keys {
+                    if let UniversalValue::String(idx_key) = key_val {
+                        // Check if this entry points to our record
+                        if idx_key.ends_with(&format!(":{}", key)) {
+                            self.storage.delete(&idx_namespace, &idx_key).await?;
+                            deleted += 1;
+                        }
                     }
                 }
             }
         }
 
-        Ok(removed_count)
+        Ok(deleted)
     }
 
     /// Query records by index
@@ -262,31 +234,31 @@ impl SecondaryIndexManager {
         field_value: &str,
     ) -> UnifiedStorageResult<Vec<String>> {
         let idx_namespace = format!("__idx__{}", namespace);
-        // Pattern: {index_name}:{field_value}:*
-        let pattern = format!("{}:{}:*", index_name, field_value);
+        let prefix = format!("{}:{}:", index_name, field_value);
+
         let result = self
             .storage
-            .scan_keys(&idx_namespace, Some(pattern), None)
+            .scan_keys(&idx_namespace, Some(format!("{}*", prefix)), None)
             .await?;
 
-        let mut keys = Vec::new();
-        if let UniversalResult::Values(index_keys) = result {
-            for k in index_keys {
-                if let UniversalValue::String(key_str) = k {
-                    // Key format: {index_name}:{field_value}:{record_key}
-                    // Extract record_key from the end
-                    let parts: Vec<&str> = key_str.rsplitn(2, ':').collect();
-                    if parts.len() == 2 {
-                        keys.push(parts[0].to_string());
+        let mut record_keys = Vec::new();
+
+        if let super::types::UniversalResult::Values(keys) = result {
+            for key_val in keys {
+                if let UniversalValue::String(idx_key) = key_val {
+                    // Extract record key by stripping the known prefix
+                    // Index key format: {index_name}:{field_value}:{record_key}
+                    if let Some(record_key) = idx_key.strip_prefix(&prefix) {
+                        record_keys.push(record_key.to_string());
                     }
                 }
             }
         }
 
-        Ok(keys)
+        Ok(record_keys)
     }
 
-    /// Query records by index range (for BTree indexes)
+    /// Query records by index with range
     pub async fn query_by_index_range(
         &self,
         namespace: &str,
@@ -295,24 +267,25 @@ impl SecondaryIndexManager {
         max_value: Option<&str>,
     ) -> UnifiedStorageResult<Vec<String>> {
         let idx_namespace = format!("__idx__{}", namespace);
-        // Scan all index entries for this index
-        let pattern = format!("{}:*", index_name);
+        let prefix = format!("{}:", index_name);
+
         let result = self
             .storage
-            .scan_keys(&idx_namespace, Some(pattern), None)
+            .scan_keys(&idx_namespace, Some(format!("{}*", prefix)), None)
             .await?;
 
-        let mut keys = BTreeSet::new();
-        if let UniversalResult::Values(index_keys) = result {
-            for k in index_keys {
-                if let UniversalValue::String(key_str) = k {
-                    // Key format: {index_name}:{field_value}:{record_key}
-                    let parts: Vec<&str> = key_str.splitn(3, ':').collect();
+        let mut record_keys = Vec::new();
+
+        if let super::types::UniversalResult::Values(keys) = result {
+            for key_val in keys {
+                if let UniversalValue::String(idx_key) = key_val {
+                    // Extract field_value from index key: {index_name}:{field_value}:{record_key}
+                    let parts: Vec<&str> = idx_key.splitn(3, ':').collect();
                     if parts.len() == 3 {
                         let field_value = parts[1];
                         let record_key = parts[2];
 
-                        // Check if value is in range
+                        // Check if within range
                         let in_range = match (min_value, max_value) {
                             (Some(min), Some(max)) => field_value >= min && field_value <= max,
                             (Some(min), None) => field_value >= min,
@@ -321,17 +294,17 @@ impl SecondaryIndexManager {
                         };
 
                         if in_range {
-                            keys.insert(record_key.to_string());
+                            record_keys.push(record_key.to_string());
                         }
                     }
                 }
             }
         }
 
-        Ok(keys.into_iter().collect())
+        Ok(record_keys)
     }
 
-    /// Check if a unique index constraint would be violated
+    /// Check if a unique constraint would be violated
     pub async fn check_unique_constraint(
         &self,
         namespace: &str,
@@ -339,42 +312,51 @@ impl SecondaryIndexManager {
         field_value: &str,
         exclude_key: Option<&str>,
     ) -> UnifiedStorageResult<bool> {
-        let keys = self.query_by_index(namespace, index_name, field_value).await?;
+        let existing = self
+            .query_by_index(namespace, index_name, field_value)
+            .await?;
 
-        match exclude_key {
-            Some(exclude) => Ok(keys.iter().any(|k| k != exclude)),
-            None => Ok(!keys.is_empty()),
+        if existing.is_empty() {
+            return Ok(true); // No conflict
         }
+
+        // If we're updating a record, exclude it from the check
+        if let Some(key) = exclude_key {
+            let conflicts: Vec<_> = existing.iter().filter(|k| k.as_str() != key).collect();
+            return Ok(conflicts.is_empty());
+        }
+
+        Ok(false) // Conflict exists
     }
 
-    /// Rebuild all indexes for a namespace (for maintenance)
+    /// Rebuild all indexes for a namespace
     pub async fn rebuild_indexes(&self, namespace: &str) -> UnifiedStorageResult<usize> {
         let indexes = self.get_indexes(namespace).await;
         if indexes.is_empty() {
             return Ok(0);
         }
 
+        // First, delete all existing index entries
         let idx_namespace = format!("__idx__{}", namespace);
-
-        // First, delete all existing index entries for this namespace
         let result = self.storage.scan_keys(&idx_namespace, None, None).await?;
 
-        if let UniversalResult::Values(keys) = result {
-            for k in keys {
-                if let UniversalValue::String(key_str) = k {
-                    self.storage.delete(&idx_namespace, &key_str).await?;
+        if let super::types::UniversalResult::Values(keys) = result {
+            for key_val in keys {
+                if let UniversalValue::String(key) = key_val {
+                    self.storage.delete(&idx_namespace, &key).await?;
                 }
             }
         }
 
         // Now scan all records and rebuild indexes
-        let records_result = self
+        let result = self
             .storage
             .scan(namespace, None, None, None, None, vec![])
             .await?;
 
         let mut indexed_count = 0;
-        if let UniversalResult::Records(records) = records_result {
+
+        if let super::types::UniversalResult::Records(records) = result {
             for record in records {
                 indexed_count += self.index_record(&record).await?;
             }
@@ -383,29 +365,37 @@ impl SecondaryIndexManager {
         Ok(indexed_count)
     }
 
-    /// Get index statistics
+    /// Get statistics for an index
     pub async fn get_index_stats(
         &self,
         namespace: &str,
         index_name: &str,
     ) -> UnifiedStorageResult<IndexStats> {
+        let indexes = self.get_indexes(namespace).await;
+        let index = indexes.iter().find(|i| i.name == index_name);
+
+        let (fields, unique) = index
+            .map(|i| (i.fields.clone(), i.unique))
+            .unwrap_or_default();
+
         let idx_namespace = format!("__idx__{}", namespace);
-        let pattern = format!("{}:*", index_name);
+        let prefix = format!("{}:", index_name);
+
         let result = self
             .storage
-            .scan_keys(&idx_namespace, Some(pattern), None)
+            .scan_keys(&idx_namespace, Some(format!("{}*", prefix)), None)
             .await?;
 
-        let mut entry_count = 0;
+        let mut entry_count = 0u64;
         let mut unique_values = std::collections::HashSet::new();
 
-        if let UniversalResult::Values(keys) = result {
-            for k in keys {
-                if let UniversalValue::String(key_str) = k {
-                    // Key format: {index_name}:{field_value}:{record_key}
-                    let parts: Vec<&str> = key_str.splitn(3, ':').collect();
-                    if parts.len() == 3 {
-                        entry_count += 1;
+        if let super::types::UniversalResult::Values(keys) = result {
+            for key_val in keys {
+                if let UniversalValue::String(idx_key) = key_val {
+                    entry_count += 1;
+                    // Extract field_value: {index_name}:{field_value}:{record_key}
+                    let parts: Vec<&str> = idx_key.splitn(3, ':').collect();
+                    if parts.len() >= 2 {
                         unique_values.insert(parts[1].to_string());
                     }
                 }
@@ -413,32 +403,29 @@ impl SecondaryIndexManager {
         }
 
         Ok(IndexStats {
-            namespace: namespace.to_string(),
-            index_name: index_name.to_string(),
             entry_count,
-            unique_value_count: unique_values.len(),
-            selectivity: if entry_count > 0 {
-                unique_values.len() as f64 / entry_count as f64
-            } else {
-                0.0
-            },
+            unique_values: unique_values.len() as u64,
+            name: index_name.to_string(),
+            fields,
+            unique,
         })
     }
-}
 
-/// Statistics for an index
-#[derive(Debug, Clone)]
-pub struct IndexStats {
-    /// Namespace the index belongs to
-    pub namespace: String,
-    /// Name of the index
-    pub index_name: String,
-    /// Total number of index entries
-    pub entry_count: usize,
-    /// Number of unique indexed values
-    pub unique_value_count: usize,
-    /// Selectivity (unique_values / total_entries), higher is better
-    pub selectivity: f64,
+    /// Convert a UniversalValue to a string for indexing
+    fn value_to_string(&self, value: &UniversalValue) -> String {
+        match value {
+            UniversalValue::Null => "null".to_string(),
+            UniversalValue::Bool(b) => b.to_string(),
+            UniversalValue::Int(i) => i.to_string(),
+            UniversalValue::Float(f) => f.to_string(),
+            UniversalValue::String(s) => s.clone(),
+            UniversalValue::Bytes(b) => b.iter().map(|byte| format!("{:02x}", byte)).collect(),
+            UniversalValue::Timestamp(t) => t.to_string(),
+            UniversalValue::Uuid(u) => u.iter().map(|byte| format!("{:02x}", byte)).collect(),
+            // For complex types, use JSON representation
+            _ => serde_json::to_string(value).unwrap_or_else(|_| "unknown".to_string()),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -448,61 +435,82 @@ mod tests {
     use crate::unified::types::RecordId;
     use std::collections::BTreeMap;
 
-    async fn setup() -> (Arc<UnifiedStorage>, SecondaryIndexManager) {
-        let storage = Arc::new(UnifiedStorage::with_memory_backend());
+    async fn create_test_storage() -> Arc<UnifiedStorage> {
+        let storage = UnifiedStorage::with_memory_backend();
         storage.initialize().await.unwrap();
-        let index_manager = SecondaryIndexManager::new(storage.clone());
-        (storage, index_manager)
+        Arc::new(storage)
+    }
+
+    fn create_user_record(
+        namespace: &str,
+        key: &str,
+        name: &str,
+        email: &str,
+        city: &str,
+    ) -> UniversalRecord {
+        let mut fields = BTreeMap::new();
+        fields.insert("name".to_string(), UniversalValue::String(name.to_string()));
+        fields.insert(
+            "email".to_string(),
+            UniversalValue::String(email.to_string()),
+        );
+        fields.insert("city".to_string(), UniversalValue::String(city.to_string()));
+
+        UniversalRecord {
+            id: RecordId::new(namespace, key),
+            value: UniversalValue::Map(fields),
+            metadata: crate::unified::types::RecordMetadata::new("test"),
+        }
     }
 
     #[tokio::test]
-    async fn test_index_entry_key_format() {
-        let entry = IndexEntry::new("users", "idx_email", "alice@example.com", "user123");
-        let key = entry.to_storage_key();
-        assert_eq!(key, "idx:users:idx_email:alice@example.com:user123");
+    async fn test_index_registration() {
+        let storage = create_test_storage().await;
+        let index_manager = SecondaryIndexManager::new(storage);
 
-        let parsed = IndexEntry::from_storage_key(&key).unwrap();
-        assert_eq!(parsed.namespace, "users");
-        assert_eq!(parsed.index_name, "idx_email");
-        assert_eq!(parsed.field_value, "alice@example.com");
-        assert_eq!(parsed.record_key, "user123");
+        let indexes = vec![
+            IndexDefinition {
+                name: "idx_email".to_string(),
+                fields: vec!["email".to_string()],
+                unique: true,
+                index_type: IndexType::BTree,
+            },
+            IndexDefinition {
+                name: "idx_city".to_string(),
+                fields: vec!["city".to_string()],
+                unique: false,
+                index_type: IndexType::BTree,
+            },
+        ];
+
+        index_manager.register_indexes("users", indexes).await;
+
+        let registered = index_manager.get_indexes("users").await;
+        assert_eq!(registered.len(), 2);
+        assert_eq!(registered[0].name, "idx_email");
+        assert_eq!(registered[1].name, "idx_city");
     }
 
     #[tokio::test]
     async fn test_index_record() {
-        let (storage, index_manager) = setup().await;
+        let storage = create_test_storage().await;
+        let index_manager = SecondaryIndexManager::new(storage.clone());
 
-        // Register index
+        // Register indexes
         let indexes = vec![IndexDefinition {
             name: "idx_email".to_string(),
             fields: vec!["email".to_string()],
             unique: true,
-            index_type: IndexType::Hash,
+            index_type: IndexType::BTree,
         }];
         index_manager.register_indexes("users", indexes).await;
 
-        // Create and store record
-        let mut fields = BTreeMap::new();
-        fields.insert(
-            "email".to_string(),
-            UniversalValue::String("alice@example.com".to_string()),
-        );
-        fields.insert(
-            "name".to_string(),
-            UniversalValue::String("Alice".to_string()),
-        );
-
-        let record = UniversalRecord {
-            id: RecordId::new("users", "alice"),
-            value: UniversalValue::Map(fields),
-            metadata: super::super::types::RecordMetadata::new("test"),
-        };
-
-        // Store the record first
+        // Create and store a record
+        let record = create_user_record("users", "alice", "Alice", "alice@example.com", "NYC");
         storage
             .put(
-                "users",
-                "alice",
+                &record.id.namespace,
+                &record.id.key,
                 record.value.clone(),
                 None,
                 false,
@@ -512,8 +520,8 @@ mod tests {
             .unwrap();
 
         // Index the record
-        let count = index_manager.index_record(&record).await.unwrap();
-        assert_eq!(count, 1);
+        let indexed = index_manager.index_record(&record).await.unwrap();
+        assert_eq!(indexed, 1);
 
         // Query by index
         let keys = index_manager
@@ -525,121 +533,193 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_composite_index() {
-        let (_storage, index_manager) = setup().await;
+    async fn test_query_multiple_records() {
+        let storage = create_test_storage().await;
+        let index_manager = SecondaryIndexManager::new(storage.clone());
 
-        // Register composite index
+        // Register city index
         let indexes = vec![IndexDefinition {
-            name: "idx_name_age".to_string(),
-            fields: vec!["name".to_string(), "age".to_string()],
+            name: "idx_city".to_string(),
+            fields: vec!["city".to_string()],
             unique: false,
             index_type: IndexType::BTree,
         }];
         index_manager.register_indexes("users", indexes).await;
 
-        // Create record with both fields
-        let mut fields = BTreeMap::new();
-        fields.insert(
-            "name".to_string(),
-            UniversalValue::String("Alice".to_string()),
-        );
-        fields.insert("age".to_string(), UniversalValue::Int(30));
+        // Create multiple users in the same city
+        let users = [
+            ("alice", "Alice", "alice@example.com", "NYC"),
+            ("bob", "Bob", "bob@example.com", "NYC"),
+            ("charlie", "Charlie", "charlie@example.com", "LA"),
+        ];
 
-        let record = UniversalRecord {
-            id: RecordId::new("users", "alice"),
-            value: UniversalValue::Map(fields),
-            metadata: super::super::types::RecordMetadata::new("test"),
-        };
+        for (key, name, email, city) in users {
+            let record = create_user_record("users", key, name, email, city);
+            storage
+                .put(
+                    &record.id.namespace,
+                    &record.id.key,
+                    record.value.clone(),
+                    None,
+                    false,
+                    None,
+                )
+                .await
+                .unwrap();
+            index_manager.index_record(&record).await.unwrap();
+        }
 
-        // Index the record
-        let count = index_manager.index_record(&record).await.unwrap();
-        assert_eq!(count, 1);
-
-        // Query composite value (name:age)
-        let keys = index_manager
-            .query_by_index("users", "idx_name_age", "Alice:00000000000000000030")
+        // Query NYC users
+        let nyc_users = index_manager
+            .query_by_index("users", "idx_city", "NYC")
             .await
             .unwrap();
-        assert_eq!(keys.len(), 1);
-        assert_eq!(keys[0], "alice");
+        assert_eq!(nyc_users.len(), 2);
+        assert!(nyc_users.contains(&"alice".to_string()));
+        assert!(nyc_users.contains(&"bob".to_string()));
+
+        // Query LA users
+        let la_users = index_manager
+            .query_by_index("users", "idx_city", "LA")
+            .await
+            .unwrap();
+        assert_eq!(la_users.len(), 1);
+        assert_eq!(la_users[0], "charlie");
     }
 
     #[tokio::test]
     async fn test_unique_constraint() {
-        let (storage, index_manager) = setup().await;
+        let storage = create_test_storage().await;
+        let index_manager = SecondaryIndexManager::new(storage.clone());
 
-        // Register unique index
+        // Register unique email index
         let indexes = vec![IndexDefinition {
             name: "idx_email".to_string(),
             fields: vec!["email".to_string()],
             unique: true,
-            index_type: IndexType::Hash,
+            index_type: IndexType::BTree,
         }];
         index_manager.register_indexes("users", indexes).await;
 
-        // Create and index first record
-        let mut fields1 = BTreeMap::new();
-        fields1.insert(
-            "email".to_string(),
-            UniversalValue::String("alice@example.com".to_string()),
-        );
-
-        let record1 = UniversalRecord {
-            id: RecordId::new("users", "alice"),
-            value: UniversalValue::Map(fields1),
-            metadata: super::super::types::RecordMetadata::new("test"),
-        };
-
+        // Index first user
+        let record1 = create_user_record("users", "alice", "Alice", "alice@example.com", "NYC");
         storage
-            .put("users", "alice", record1.value.clone(), None, false, None)
+            .put(
+                &record1.id.namespace,
+                &record1.id.key,
+                record1.value.clone(),
+                None,
+                false,
+                None,
+            )
             .await
             .unwrap();
         index_manager.index_record(&record1).await.unwrap();
 
-        // Check unique constraint - should be violated
-        let violated = index_manager
+        // Check unique constraint - should fail for same email
+        let can_insert = index_manager
             .check_unique_constraint("users", "idx_email", "alice@example.com", None)
             .await
             .unwrap();
-        assert!(violated);
+        assert!(!can_insert);
 
-        // Check unique constraint with exclude - should not be violated
-        let violated = index_manager
+        // Check unique constraint - should pass for different email
+        let can_insert = index_manager
+            .check_unique_constraint("users", "idx_email", "bob@example.com", None)
+            .await
+            .unwrap();
+        assert!(can_insert);
+
+        // Check unique constraint - should pass when excluding the same record
+        let can_insert = index_manager
             .check_unique_constraint("users", "idx_email", "alice@example.com", Some("alice"))
             .await
             .unwrap();
-        assert!(!violated);
+        assert!(can_insert);
+    }
+
+    #[tokio::test]
+    async fn test_unindex_record() {
+        let storage = create_test_storage().await;
+        let index_manager = SecondaryIndexManager::new(storage.clone());
+
+        // Register index
+        let indexes = vec![IndexDefinition {
+            name: "idx_email".to_string(),
+            fields: vec!["email".to_string()],
+            unique: true,
+            index_type: IndexType::BTree,
+        }];
+        index_manager.register_indexes("users", indexes).await;
+
+        // Create and index a record
+        let record = create_user_record("users", "alice", "Alice", "alice@example.com", "NYC");
+        storage
+            .put(
+                &record.id.namespace,
+                &record.id.key,
+                record.value.clone(),
+                None,
+                false,
+                None,
+            )
+            .await
+            .unwrap();
+        index_manager.index_record(&record).await.unwrap();
+
+        // Verify index entry exists
+        let keys = index_manager
+            .query_by_index("users", "idx_email", "alice@example.com")
+            .await
+            .unwrap();
+        assert_eq!(keys.len(), 1);
+
+        // Unindex the record
+        index_manager
+            .unindex_record("users", "alice", Some(&record))
+            .await
+            .unwrap();
+
+        // Verify index entry is removed
+        let keys = index_manager
+            .query_by_index("users", "idx_email", "alice@example.com")
+            .await
+            .unwrap();
+        assert_eq!(keys.len(), 0);
     }
 
     #[tokio::test]
     async fn test_index_stats() {
-        let (storage, index_manager) = setup().await;
+        let storage = create_test_storage().await;
+        let index_manager = SecondaryIndexManager::new(storage.clone());
 
         // Register index
         let indexes = vec![IndexDefinition {
             name: "idx_city".to_string(),
             fields: vec!["city".to_string()],
             unique: false,
-            index_type: IndexType::Hash,
+            index_type: IndexType::BTree,
         }];
         index_manager.register_indexes("users", indexes).await;
 
-        // Create and index multiple records
-        for (key, city) in [("alice", "NYC"), ("bob", "NYC"), ("charlie", "LA")] {
-            let mut fields = BTreeMap::new();
-            fields.insert(
-                "city".to_string(),
-                UniversalValue::String(city.to_string()),
-            );
+        // Create multiple records
+        let users = [
+            ("alice", "Alice", "alice@example.com", "NYC"),
+            ("bob", "Bob", "bob@example.com", "NYC"),
+            ("charlie", "Charlie", "charlie@example.com", "LA"),
+        ];
 
-            let record = UniversalRecord {
-                id: RecordId::new("users", key),
-                value: UniversalValue::Map(fields),
-                metadata: super::super::types::RecordMetadata::new("test"),
-            };
-
+        for (key, name, email, city) in users {
+            let record = create_user_record("users", key, name, email, city);
             storage
-                .put("users", key, record.value.clone(), None, false, None)
+                .put(
+                    &record.id.namespace,
+                    &record.id.key,
+                    record.value.clone(),
+                    None,
+                    false,
+                    None,
+                )
                 .await
                 .unwrap();
             index_manager.index_record(&record).await.unwrap();
@@ -650,9 +730,46 @@ mod tests {
             .get_index_stats("users", "idx_city")
             .await
             .unwrap();
-
         assert_eq!(stats.entry_count, 3);
-        assert_eq!(stats.unique_value_count, 2); // NYC and LA
-        assert!(stats.selectivity > 0.6 && stats.selectivity < 0.7); // 2/3 ≈ 0.667
+        assert_eq!(stats.unique_values, 2); // NYC and LA
+        assert_eq!(stats.name, "idx_city");
+    }
+
+    #[tokio::test]
+    async fn test_composite_index() {
+        let storage = create_test_storage().await;
+        let index_manager = SecondaryIndexManager::new(storage.clone());
+
+        // Register composite index
+        let indexes = vec![IndexDefinition {
+            name: "idx_city_name".to_string(),
+            fields: vec!["city".to_string(), "name".to_string()],
+            unique: false,
+            index_type: IndexType::BTree,
+        }];
+        index_manager.register_indexes("users", indexes).await;
+
+        // Create record
+        let record = create_user_record("users", "alice", "Alice", "alice@example.com", "NYC");
+        storage
+            .put(
+                &record.id.namespace,
+                &record.id.key,
+                record.value.clone(),
+                None,
+                false,
+                None,
+            )
+            .await
+            .unwrap();
+        index_manager.index_record(&record).await.unwrap();
+
+        // Query by composite value
+        let keys = index_manager
+            .query_by_index("users", "idx_city_name", "NYC:Alice")
+            .await
+            .unwrap();
+        assert_eq!(keys.len(), 1);
+        assert_eq!(keys[0], "alice");
     }
 }
