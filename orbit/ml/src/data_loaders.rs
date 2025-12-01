@@ -1,6 +1,6 @@
 //! Data loading infrastructure for ML training
 
-use ndarray::{Array2, Array4, s};
+use ndarray::{Array2, Array4};
 use crate::error::Result;
 
 /// Generic data loader trait
@@ -131,8 +131,23 @@ impl DataLoader for TimeSeriesDataLoader {
         let mut batch = Vec::new();
 
         for i in self.current_idx..end_idx {
-            let x = self.data.slice(s![i..i + self.sequence_length, ..]).to_owned();
-            let y = self.data.slice(s![i + 1..i + self.sequence_length + 1, ..]).to_owned();
+            // Extract sequences manually to avoid unsafe s! macro
+            let ncols = self.data.ncols();
+            let mut x_data = Vec::with_capacity(self.sequence_length * ncols);
+            let mut y_data = Vec::with_capacity(self.sequence_length * ncols);
+            
+            for row_idx in 0..self.sequence_length {
+                for col_idx in 0..ncols {
+                    x_data.push(self.data[[i + row_idx, col_idx]]);
+                    y_data.push(self.data[[i + row_idx + 1, col_idx]]);
+                }
+            }
+            
+            let x = Array2::from_shape_vec((self.sequence_length, ncols), x_data)
+                .map_err(|e| crate::error::MLError::data_processing(e.to_string()))?;
+            let y = Array2::from_shape_vec((self.sequence_length, ncols), y_data)
+                .map_err(|e| crate::error::MLError::data_processing(e.to_string()))?;
+            
             batch.push((x, y));
         }
 
