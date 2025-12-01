@@ -106,6 +106,8 @@ pub mod transaction_log;
 pub mod transactions;
 /// Database triggers
 pub mod triggers;
+/// Unified cross-protocol storage layer for true multi-protocol data sharing
+pub mod unified;
 
 // Re-export commonly used types
 pub use cluster::ClusterCoordinator;
