@@ -1745,21 +1745,20 @@ The cluster layer provides distributed system capabilities:
 The multi-protocol architecture provides several key advantages:
 
 1. **Seamless Migration**: Existing applications can connect using familiar protocols without code changes
-   - **Production-Ready**: Redis (RESP), PostgreSQL, OrbitQL, REST API, gRPC
-   - **Supported**: MySQL, CQL, Cypher/Bolt, AQL (in development)
+   - **Production-Ready**: Redis (RESP), PostgreSQL, MySQL, CQL, Cypher/Bolt, AQL, OrbitQL, REST API, gRPC
    - **Experimental**: MCP (AI agent integration)
 
 2. **Tool Compatibility**: Standard database tools work out of the box
    - **redis-cli**: Full compatibility with 50+ Redis commands
    - **psql**: Complete PostgreSQL wire protocol support
    - **pgAdmin, DataGrip**: Standard PostgreSQL clients supported
-   - **MySQL clients**: Framework ready for MySQL protocol
-   - **Neo4j clients**: Basic Bolt protocol support
+   - **MySQL clients**: Full MySQL wire protocol support
+   - **Neo4j clients**: Complete Bolt v4.4 protocol with Cypher support
 
 3. **Ecosystem Integration**: Leverage existing drivers and libraries from various ecosystems
    - **Redis ecosystem**: All Redis client libraries (redis-py, node-redis, etc.)
    - **PostgreSQL ecosystem**: All PostgreSQL drivers (psycopg2, JDBC, etc.)
-   - **Graph ecosystem**: Neo4j drivers and ArangoDB clients (in development)
+   - **Graph ecosystem**: Neo4j drivers (Python, Java, .NET, JavaScript) and ArangoDB clients
 
 4. **Flexible Access**: Choose the protocol that best fits your use case
    - **SQL (PostgreSQL/OrbitQL)**: Complex queries, analytics, ACID transactions

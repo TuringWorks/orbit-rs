@@ -18,8 +18,8 @@ Protocol adapters act as translation layers between external protocols and the O
 -  **PostgreSQL Wire Protocol** - **PRODUCTION-READY** - Full SQL DDL/DML, ACID transactions, RocksDB persistence
 -  **MySQL Wire Protocol** - **PRODUCTION-READY** - MySQL-compatible queries, RocksDB persistence
 -  **CQL/Cassandra** - **PRODUCTION-READY** - Wide-column operations, RocksDB persistence
--  **Cypher/Neo4j (Bolt)** - **IMPLEMENTED** - Graph queries, RocksDB persistence (Port 7687)
--  **AQL/ArangoDB** - **IMPLEMENTED** - Multi-model queries, RocksDB persistence (Port 8529)
+-  **Cypher/Neo4j (Bolt)** - **PRODUCTION-READY** - Full Bolt v4.4 protocol, 70+ Cypher functions, UNWIND/FOREACH/CASE, RocksDB persistence (Port 7687)
+-  **AQL/ArangoDB** - **PRODUCTION-READY** - Multi-model queries, RocksDB persistence (Port 8529)
 -  **Model Context Protocol (MCP)** - **EXPERIMENTAL** - Basic AI agent integration (partial implementation)
 -  **Redis Extensions** - Vector operations (VECTOR.*), Time Series (TS.*), Graph DB (GRAPH.*), Search (FT.*) - *Planned*
 -  **PostgreSQL TimescaleDB** - Advanced time-series analytics and hypertables - *Planned*

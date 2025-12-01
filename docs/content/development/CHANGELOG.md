@@ -11,6 +11,43 @@ All notable changes to the Orbit-RS project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2025-11-30
+
+### Added
+
+- **Neo4j/Cypher Protocol Enhancements**: Complete Bolt v4.4 protocol and comprehensive Cypher support
+  - **Bolt Protocol v4.4**:
+    - PackStream encoding/decoding (Null, Bool, Int, Float, String, List, Map, Structure)
+    - Connection handshake and version negotiation
+    - Authentication (HELLO with auth token)
+    - Transaction management (BEGIN/COMMIT/ROLLBACK)
+    - Streaming results (RUN/PULL/DISCARD)
+    - Connection routing (ROUTE message)
+  - **Cypher Query Language**:
+    - All standard clauses: MATCH, CREATE, MERGE, DELETE, SET, REMOVE, RETURN, WITH, WHERE
+    - Advanced clauses: UNWIND, FOREACH, CASE expressions
+    - Variable-length path patterns (`*1..3`)
+    - ORDER BY, SKIP, LIMIT support
+    - 70+ built-in functions (string, list, math, date/time, type, path)
+  - **Graph Engine Execution**:
+    - UNWIND clause execution for list expansion
+    - FOREACH clause execution with nested mutations (SET, CREATE, DELETE, REMOVE, MERGE)
+    - CASE expression evaluation (simple and searched)
+    - Pattern matching with node/relationship filters
+  - **Cypher Function Library** (`cypher_functions.rs`):
+    - String functions: toUpper, toLower, trim, replace, substring, split, reverse, etc.
+    - List functions: head, tail, last, range, slice, keys, labels, nodes, relationships
+    - Math functions: abs, ceil, floor, round, sqrt, sin, cos, tan, log, log10, exp, etc.
+    - Date/Time functions: date, datetime, time, duration
+    - Type functions: type, id, properties, coalesce
+    - Path functions: pathLength, startNode, endNode
+  - **Tests**: 68+ Cypher tests passing
+
+### Changed
+
+- Deprecated legacy `bolt.rs` in favor of comprehensive `bolt_protocol.rs` implementation
+- Updated Cypher module exports to include new function types (BinaryOperator, UnaryOperator)
+
 ## [0.1.0] - 2024-10-01
 
 ### Added
