@@ -2,7 +2,9 @@
 
 This document provides essential context for AI assistants working with the Orbit-RS codebase.
 
-> **Architecture Reference**: For detailed module structures, implementation patterns, and feature status, see [`docs/PRD.md`](docs/PRD.md) - the single source of truth for Orbit-RS architecture.
+> **Architecture References**: 
+> - [`docs/PRD.md`](docs/PRD.md) - Single source of truth for modules, directory structures, and feature status
+> - [`docs/content/architecture/ORBIT_ARCHITECTURE.md`](docs/content/architecture/ORBIT_ARCHITECTURE.md) - Detailed architecture patterns, transaction layer, query execution, network layer, and storage architecture
 
 ## Project Overview
 
@@ -125,7 +127,14 @@ orbit-rs/
 
 ## Architecture Patterns
 
-> **Detailed Reference**: See [`docs/PRD.md`](docs/PRD.md) for complete module structures, directory layouts, and implementation details.
+> **Detailed Reference**: See [`docs/PRD.md`](docs/PRD.md) for complete module structures and directory layouts.
+> **Implementation Details**: See [`docs/content/architecture/ORBIT_ARCHITECTURE.md`](docs/content/architecture/ORBIT_ARCHITECTURE.md) for:
+> - Transaction layer architecture (MVCC, 2PC, deadlock detection, Saga pattern)
+> - Query execution (vectorized, SIMD optimization, columnar format)
+> - Clustering and replication (Raft consensus, replication, CDC)
+> - Network layer (gRPC services, Protocol Buffers, transport layer, connection pooling)
+> - Hybrid storage architecture (actor-based RESP vs direct storage for SQL protocols)
+> - Performance characteristics and design trade-offs
 
 ### Virtual Actor System
 The core abstraction is virtual actors that:
@@ -224,12 +233,12 @@ Never commit database files (RocksDB manifests, WAL files, etc.) to the reposito
   - `docs/PERSISTENCE_COMPLETE_DOCUMENTATION.md` - Storage backends
   - `docs/PROTOCOL_ADAPTERS_INTEGRATION.md` - Protocol architecture
 
-## PRD.md Maintenance (REQUIRED)
+## PRD.md and ORBIT_ARCHITECTURE.md Maintenance (REQUIRED)
 
-**IMPORTANT**: When making architectural changes, you MUST update `docs/PRD.md` to keep it synchronized with the codebase.
+**IMPORTANT**: When making architectural changes, you MUST update the appropriate documentation files to keep them synchronized with the codebase.
 
 ### When to Update PRD.md
-Update PRD.md when you:
+Update **PRD.md** when you:
 - Add new modules, crates, or significant files
 - Change directory structures
 - Add or modify protocol implementations
@@ -238,11 +247,29 @@ Update PRD.md when you:
 - Modify storage or compute backends
 - Add new AI subsystems or features
 
-### What to Update
+### When to Update ORBIT_ARCHITECTURE.md
+Update **ORBIT_ARCHITECTURE.md** when you:
+- Change transaction layer implementation (MVCC, 2PC, Saga)
+- Modify query execution patterns (vectorization, SIMD)
+- Update clustering or replication logic (Raft, CDC)
+- Change network layer (gRPC services, transport)
+- Alter storage architecture (tiering, actor patterns)
+- Add new architectural patterns or design decisions
+- Modify performance characteristics or trade-offs
+
+### What to Update in PRD.md
 1. **Module Reference**: Update directory trees and file descriptions
 2. **Feature Status Matrix**: Update implementation status and test counts
 3. **Protocol Commands**: Add new commands or update existing ones
 4. **Architecture Sections**: Reflect structural changes
+
+### What to Update in ORBIT_ARCHITECTURE.md
+1. **Transaction Layer**: MVCC, 2PC, deadlock detection, Saga patterns
+2. **Query Execution**: Vectorized execution, SIMD, columnar format
+3. **Clustering**: Raft consensus, replication, CDC
+4. **Network Layer**: gRPC services, Protocol Buffers, transport
+5. **Storage Architecture**: Tiering, actor patterns, hybrid approaches
+6. **Performance Characteristics**: Latency, throughput, trade-offs
 
 ### Client SDK & Extension Updates (Breaking Changes)
 

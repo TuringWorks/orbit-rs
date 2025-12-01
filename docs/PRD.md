@@ -8,6 +8,7 @@ permalink: /PRD.html
 
 > **Last Updated**: November 29, 2025
 > **Status**: Production-Ready Multi-Protocol Database Platform
+> **Architecture Reference**: See [`docs/content/architecture/ORBIT_ARCHITECTURE.md`](content/architecture/ORBIT_ARCHITECTURE.md) for detailed architecture patterns, transaction layer (MVCC, 2PC, Saga), query execution (vectorized, SIMD), network layer (gRPC, Protocol Buffers), and hybrid storage architecture.
 
 ---
 
