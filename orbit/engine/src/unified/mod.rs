@@ -69,6 +69,7 @@ pub mod adapters;
 pub mod operations;
 pub mod schema;
 pub mod storage;
+pub mod tiered;
 pub mod types;
 
 // Re-export commonly used types
@@ -87,6 +88,11 @@ pub use storage::{
     UnifiedStorageError, UnifiedStorageMetrics, UnifiedStorageResult,
 };
 pub use types::{RecordId, RecordMetadata, UniversalRecord, UniversalResult, UniversalValue};
+pub use tiered::{
+    ColdBackendType, ColdDataFormat, ColdTierConfig, EvictionPolicy, HotTierConfig,
+    StorageTier, TierMigrationConfig, TieredStorageBackend, TieredStorageConfig,
+    TieredStorageMetrics, WarmTierConfig, WritePolicy,
+};
 
 // Future modules (to be implemented)
 // pub mod backend;     // RocksDB persistent backend
