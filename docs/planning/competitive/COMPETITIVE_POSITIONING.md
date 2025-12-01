@@ -2841,7 +2841,7 @@ Based on the comprehensive analysis of 20+ major database systems, several criti
 - **Pain Points**: Complex sync between client (RxDB) and server databases
 - **Competitive Context**: Unified replacement for RxDB + Firebase/Supabase
 - **Value Proposition**: Seamless offline-first with server-grade capabilities
-- **Size**: 150K+ modern web/mobile applications
+- **Size**: 148K+ modern web/mobile applications
 
 #### 8. AI-Enhanced Traditional Applications
 

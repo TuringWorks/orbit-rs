@@ -44,8 +44,8 @@ category: documentation
 
 ### Performance Metrics (Phase 8)
 
-- **Lines of Code**: 150,000+ lines of production-ready Rust code
-- **Test Coverage**: 79 passing tests with comprehensive coverage  
+- **Lines of Code**: 148,780+ lines of production-ready Rust code
+- **Test Coverage**: 1,078+ passing tests with comprehensive coverage  
 - **Throughput**: Up to 500k+ messages/second per core
 - **Protocol Support**: Redis, PostgreSQL, MCP, vector operations
 - **SQL Compatibility**: Full ANSI SQL compliance with PostgreSQL extensions

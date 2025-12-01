@@ -167,7 +167,7 @@ cargo test --package orbit-protocols --features integration
 
 **Data Type Coverage:** 0/11 tests (0%)
 
-**PostgreSQL Total:** 3/79 tests (3.8% coverage)
+**PostgreSQL Total:** 3/1,078+ tests (3.8% coverage)
 
 ---
 
