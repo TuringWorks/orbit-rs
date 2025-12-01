@@ -66,6 +66,7 @@
 //! 4. PostgresAdapter formats as SQL result set
 
 pub mod operations;
+pub mod storage;
 pub mod types;
 
 // Re-export commonly used types
@@ -74,10 +75,13 @@ pub use operations::{
     IndexType, IsolationLevel, NamespaceSchema, NodePattern, RelationshipDirection,
     RelationshipPattern, SortOrder, UniversalOperation,
 };
+pub use storage::{
+    MemoryBackend, UnifiedStorage, UnifiedStorageBackend, UnifiedStorageConfig,
+    UnifiedStorageError, UnifiedStorageMetrics, UnifiedStorageResult,
+};
 pub use types::{RecordId, RecordMetadata, UniversalRecord, UniversalResult, UniversalValue};
 
 // Future modules (to be implemented)
-// pub mod storage;    // UnifiedStorage implementation
 // pub mod schema;     // SchemaRegistry
 // pub mod backend;    // RocksDB backend
 // pub mod index;      // Index management
