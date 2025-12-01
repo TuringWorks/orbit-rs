@@ -1466,43 +1466,114 @@ SimpleLocalRegistry (in-memory actors)
 
 **How it works:**
 1. **In-Memory Actors**: `SimpleLocalRegistry` maintains in-memory actor instances as a cache
-2. **Persistent Backing**: All data is persisted to RocksDB via `RedisDataProvider`
+2. **Persistent Backing**: All data is persisted to RocksDB via `RocksDbRedisDataProvider`
 3. **Cache-First**: Reads check actors first, then fall back to RocksDB if not in cache
 4. **Write-Through**: Writes update both actors (cache) and RocksDB (persistence)
 
-**Code Example:**
+**Initialization (from `main.rs` lines 1046-1074):**
 ```rust
-// orbit/server/src/protocols/resp/simple_local.rs
+// Create RocksDB storage for Redis persistence
+let redis_data_path = args.data_dir.join("redis").join("rocksdb");
+let redis_provider = RocksDbRedisDataProvider::new(
+    redis_data_path.to_str().unwrap(),
+    RedisDataConfig::default(),
+)?;
+
+// Create RESP server with BOTH actors and persistence
+let redis_server = RespServer::new_with_persistence(
+    bind_addr, 
+    orbit_client, 
+    Some(Arc::new(redis_provider))  // ← RocksDB persistence enabled
+);
+```
+
+**Data Structure (from `simple_local.rs` lines 16-29):**
+```rust
 pub struct SimpleLocalRegistry {
     /// KeyValue actors (in-memory cache)
     keyvalue_actors: Arc<RwLock<HashMap<String, KeyValueActor>>>,
+    /// Hash actors
+    hash_actors: Arc<RwLock<HashMap<String, HashActor>>>,
+    /// List actors
+    list_actors: Arc<RwLock<HashMap<String, ListActor>>>,
+    /// Set actors
+    set_actors: Arc<RwLock<HashMap<String, SetActor>>>,
+    /// Sorted set actors
+    sorted_set_actors: Arc<RwLock<HashMap<String, SortedSetActor>>>,
     /// Optional persistent storage provider
-    persistent_storage: Option<Arc<dyn RedisDataProvider>>,
+    persistent_storage: Option<Arc<dyn RedisDataProvider>>,  // ← RocksDB
 }
+```
 
+**Write-Through Pattern (from `simple_local.rs` lines 128-148):**
+```rust
+// On SET: Update both cache and persistence
+"set_value" => {
+    let value: String = serde_json::from_value(args[0].clone())?;
+    actor.set_value(value.clone());  // ← Update actor (in-memory cache)
+
+    // Persist to storage if available
+    if let Some(provider) = &self.persistent_storage {
+        let redis_value = RedisValue::new(value);
+        provider.set(key, redis_value).await?;  // ← Write to RocksDB
+    }
+
+    Ok(serde_json::to_value(())?)
+}
+```
+
+**Cache-First Reads (from `simple_local.rs` lines 92-113):**
+```rust
 // On GET: Check persistent storage first, then cache
 if method == "get_value" {
     if let Some(provider) = &self.persistent_storage {
         if let Ok(Some(redis_value)) = provider.get(key).await {
-            // Update in-memory cache
+            // Update in-memory cache from RocksDB
+            let mut actors = self.keyvalue_actors.write().await;
             let actor = actors.entry(key.to_string()).or_insert_with(KeyValueActor::new);
             actor.set_value(redis_value.data.clone());
+            return Ok(serde_json::to_value(Some(redis_value.data))?);
         }
     }
 }
+// Fall back to in-memory actor if not in RocksDB
+```
 
-// On SET: Update both cache and persistence
-actor.set_value(value.clone());
-if let Some(provider) = &self.persistent_storage {
-    provider.set(key, redis_value).await?;
+**Startup Data Loading (from `simple_local.rs` lines 56-82):**
+```rust
+/// Load all keys from persistent storage on startup
+pub async fn load_from_persistence(&self) -> OrbitResult<()> {
+    if let Some(provider) = &self.persistent_storage {
+        debug!("Loading keys from persistent storage");
+        let keys = provider.keys("*").await?;
+        let mut actors = self.keyvalue_actors.write().await;
+
+        for key in keys {
+            if let Some(value) = provider.get(&key).await? {
+                let mut actor = KeyValueActor::new();
+                actor.set_value(value.data);
+                // Restore expiration if set
+                if let Some(expiration) = value.expiration {
+                    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+                    if expiration > now {
+                        actor.set_expiration(expiration - now);
+                    }
+                }
+                actors.insert(key, actor);
+            }
+        }
+        debug!("Loaded {} keys from persistent storage", actors.len());
+    }
+    Ok(())
 }
 ```
 
 **Why Actors for RESP?**
-- Provides Redis-compatible semantics (keys as actors)
-- Enables distributed actor system integration (future)
-- In-memory cache for performance
-- Persistent storage ensures data durability
+- **Redis Semantics**: Keys naturally map to actors (each key is an actor instance)
+- **Distributed Future**: Enables distributed actor system integration for Redis cluster mode
+- **Performance**: In-memory cache provides sub-millisecond latency for hot data
+- **Compatibility**: Maintains Redis-like behavior with actor lifecycle management
+- **Persistence**: RocksDB ensures data durability across restarts
 
 ### PostgreSQL, MySQL, CQL - Direct Storage
 
