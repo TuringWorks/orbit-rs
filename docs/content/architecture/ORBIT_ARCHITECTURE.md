@@ -898,10 +898,352 @@ The MCP server provides a complete natural language to SQL pipeline for LLM inte
 **MCP Implementation Statistics:**
 
 - **12 modules** created
-- **3,672 lines** of Rust code
-- **100%** of planned core features implemented
-- **Comprehensive test suite** with 12+ test cases
-- **Production deployment** configuration ready
+     - **12 modules** created
+     - **3,672 lines** of Rust code
+     - **100%** of planned core features implemented
+     - **Comprehensive test suite** with 12+ test cases
+     - **Production deployment** configuration ready
+
+## Transaction Layer Architecture
+
+### MVCC (Multi-Version Concurrency Control)
+
+Orbit-RS uses MVCC to provide snapshot isolation and high concurrency without read-write conflicts.
+
+```text
+Transaction Timeline:
+
+T1: BEGIN (snapshot_id=100)
+    │
+    ├─ Read row X (sees version with xmin<100, xmax>100)
+    │
+T2: BEGIN (snapshot_id=101)
+    │
+    ├─ Update row X (creates new version: xmin=101, xmax=∞)
+    │
+T1: ├─ Read row X (still sees old version: xmin<100)
+    │
+T2: ├─ COMMIT (version xmin=101 becomes visible to new txns)
+    │
+T1: ├─ Read row X (still sees old version: snapshot isolation)
+    │
+    └─ COMMIT
+
+T3: BEGIN (snapshot_id=102)
+    └─ Read row X (sees new version: xmin=101 < snapshot_id=102)
+```
+
+#### Row Versioning
+
+```rust
+pub struct RowVersion {
+    pub data: HashMap<String, SqlValue>,
+    pub xmin: TransactionId,  // Creating transaction
+    pub xmax: Option<TransactionId>,  // Deleting transaction
+    pub created_at: DateTime<Utc>,
+    pub committed: bool,
+}
+
+// Visibility rules
+fn is_visible(version: &RowVersion, snapshot: SnapshotId) -> bool {
+    version.committed
+        && version.xmin < snapshot
+        && (version.xmax.is_none() || version.xmax.unwrap() > snapshot)
+}
+```
+
+**Benefits:**
+- Readers never block writers
+- Writers never block readers
+- Snapshot isolation provides consistency
+- Higher concurrency than 2PL (Two-Phase Locking)
+
+**Trade-offs:**
+- Higher storage overhead (multiple versions)
+- Garbage collection needed for old versions
+
+### Distributed Transactions (2PC)
+
+Two-Phase Commit protocol for distributed ACID transactions across multiple nodes.
+
+```text
+Coordinator                    Participant A              Participant B
+    │                              │                          │
+    ├─ BEGIN                       │                          │
+    ├─ Prepare ────────────────────┼──────────────────────────┤
+    │                              │                          │
+    │                          PREPARE                    PREPARE
+    │                              │                          │
+    │                          Vote YES                   Vote YES
+    │  ◄─────────────────────────┼──────────────────────────┤
+    │                              │                          │
+    ├─ Decision: COMMIT            │                          │
+    ├─ Commit ─────────────────────┼──────────────────────────┤
+    │                              │                          │
+    │                          COMMIT                     COMMIT
+    │  ◄─────────────────────────┼──────────────────────────┤
+    │                              │                          │
+    ├─ DONE                        │                          │
+```
+
+**Implementation Features:**
+- Coordinator failover with transaction state recovery
+- SQLite-based transaction log with WAL journaling
+- Automatic cleanup of completed transactions
+- Participant coordination after recovery
+
+### Deadlock Detection
+
+```rust
+pub struct DeadlockDetector {
+    // Wait-for graph: transaction -> waiting for transaction
+    wait_graph: Arc<RwLock<HashMap<TransactionId, HashSet<TransactionId>>>>,
+}
+
+impl DeadlockDetector {
+    // Detect cycles using DFS
+    pub fn detect_deadlock(&self, tx_id: TransactionId)
+        -> Option<Vec<TransactionId>> {
+        // Returns cycle if deadlock detected
+    }
+
+    // Resolve by aborting youngest transaction
+    pub fn resolve_deadlock(&self, cycle: Vec<TransactionId>)
+        -> TransactionId {
+        // Returns transaction to abort
+    }
+}
+```
+
+**Deadlock Detection:**
+- Wait-for graph construction tracking resource dependencies
+- DFS-based cycle detection with O(N) complexity
+- Automatic deadlock resolution with configurable policies
+- Lock expiration and timeout handling
+
+**Lock Lifecycle:**
+```text
+Request → Wait Queue → Deadlock Check → Acquire → Hold → Release → Cleanup
+```
+
+### Saga Pattern Implementation
+
+Long-running distributed transactions with compensation.
+
+**Orchestration:**
+- Step-by-step execution with forward progress tracking
+- Automatic compensation on failure (backward recovery)
+- Persistent saga state for recovery after crashes
+- Event-driven coordination between saga steps
+
+**Compensation:**
+- Declarative compensation actions per step
+- Automatic rollback in reverse execution order
+- Idempotent compensation handlers
+- Compensation failure handling and retry logic
+
+**State Management:**
+```text
+Saga States: NotStarted → Running → Completed | Compensating → Compensated | Failed
+```
+
+### Transaction Metrics and Observability
+
+**Metric Types:**
+
+1. **Transaction Metrics**
+   - Counters: started, committed, aborted, failed, timeout
+   - Gauges: active transactions, queued operations
+   - Histograms: duration, prepare time, commit time, participant count
+
+2. **Saga Metrics**
+   - Counters: started, completed, failed, compensated, step execution
+   - Gauges: active sagas, queued sagas
+   - Histograms: saga duration, step duration, compensation duration
+
+3. **Lock Metrics**
+   - Counters: acquired, released, timeout, deadlock detected/resolved
+   - Gauges: held locks, waiting requests
+   - Histograms: wait duration, hold duration
+
+**Prometheus Integration:**
+- Automatic metric registration and collection
+- Node-scoped metrics for cluster-wide aggregation
+- Standard Prometheus metric naming conventions
+- Compatible with Grafana dashboards
+
+## Query Execution Architecture
+
+### Vectorized Execution
+
+Orbit-RS uses vectorized execution for high-performance analytical queries.
+
+```text
+Traditional Row-at-a-Time:
+┌─────┐    ┌──────┐   ┌─────┐
+│ Row │ →  │Filter│ → │ Agg │
+└─────┘    └──────┘   └─────┘
+  1 row      1 row     1 row
+
+Vectorized Batch-at-a-Time:
+┌──────────┐    ┌──────────┐    ┌──────────┐
+│ Batch    │ →  │ Filter   │ →  │   Agg    │
+│ 1024 rows│    │ 1024 rows│    │ 1024 rows│
+└──────────┘    └──────────┘    └──────────┘
+```
+
+**Benefits:**
+- Better CPU cache utilization
+- Reduced function call overhead
+- Enables SIMD optimizations
+- 5-10x faster aggregations
+
+### SIMD Optimization
+
+```rust
+// Scalar (1 comparison at a time)
+for i in 0..values.len() {
+    if values[i] > threshold {
+        results.push(i);
+    }
+}
+
+// SIMD (8 comparisons at a time with AVX2)
+for chunk in values.chunks(8) {
+    let vec = _mm256_loadu_si256(chunk);
+    let threshold_vec = _mm256_set1_epi32(threshold);
+    let mask = _mm256_cmpgt_epi32(vec, threshold_vec);
+    // Process mask to extract matching indices
+}
+```
+
+**Performance Gains:**
+- 5-10x faster aggregations
+- 3-5x faster filters
+- 2-3x better compression
+
+### Columnar Format
+
+```text
+Row-Based Storage:
+┌────┬──────┬───────┐
+│ id │ name │ price │
+├────┼──────┼───────┤
+│ 1  │ A    │ 10.0  │
+│ 2  │ B    │ 20.0  │
+│ 3  │ C    │ 15.0  │
+└────┴──────┴───────┘
+[1,A,10.0][2,B,20.0][3,C,15.0]
+
+Columnar Storage:
+┌────┬────┬────┐
+│ id │ id │ id │
+├────┼────┼────┤
+│ 1  │ 2  │ 3  │
+└────┴────┴────┘
+[1,2,3]
+
+┌──────┬──────┬──────┐
+│ name │ name │ name │
+├──────┼──────┼──────┤
+│ A    │ B    │ C    │
+└──────┴──────┴──────┘
+[A,B,C]
+
+┌───────┬───────┬───────┐
+│ price │ price │ price │
+├───────┼───────┼───────┤
+│ 10.0  │ 20.0  │ 15.0  │
+└───────┴───────┴───────┘
+[10.0,20.0,15.0]
+```
+
+**Benefits:**
+- Better compression (similar values together)
+- Cache-friendly for column scans
+- Skip irrelevant columns
+- SIMD-friendly contiguous data
+
+## Clustering and Replication
+
+### Raft Consensus
+
+```text
+Leader Election:
+
+Node A (Leader)     Node B (Follower)   Node C (Follower)
+    │                      │                    │
+    ├─ Heartbeat ──────────┼────────────────────┤
+    │  (term=5)            │                    │
+    │                      │                    │
+    │                   (timeout)               │
+    │                      │                    │
+    │                  RequestVote              │
+    │  ◄───────────────────┤                    │
+    │                  (term=6)                 │
+    │                      │                    │
+    ├─ Vote Granted ───────┤                    │
+    │                      │                    │
+    │                      ├─ RequestVote ──────┤
+    │                      │   (term=6)         │
+    │                      │                    │
+    │                      │  Vote Granted ─────┤
+    │                      │                    │
+    │                 (becomes leader)          │
+```
+
+### Replication
+
+```text
+Write Path with Replication:
+
+Client
+  │
+  ├─ Write Request
+  │
+  ▼
+Leader (Node A)
+  │
+  ├─ 1. Write to local log
+  ├─ 2. Replicate to followers
+  │     │
+  │     ├─────────────────┬─────────────────┐
+  │     ▼                 ▼                 ▼
+  │  Node B           Node C           Node D
+  │     │                 │                 │
+  │     ├─ Write log      ├─ Write log      ├─ Write log
+  │     ├─ ACK            ├─ ACK            ├─ ACK
+  │     │                 │                 │
+  │  ◄──┴─────────────────┴─────────────────┘
+  │
+  ├─ 3. Wait for quorum (2 of 3)
+  ├─ 4. Commit
+  │
+  ▼
+Response to Client
+```
+
+### Change Data Capture (CDC)
+
+```rust
+pub enum CdcEvent {
+    Insert { table: String, row: Row },
+    Update { table: String, old: Row, new: Row },
+    Delete { table: String, row: Row },
+    Ddl { statement: String },
+}
+
+// Subscribe to changes
+let mut stream = cdc.subscribe("users", CdcFilter::All).await?;
+while let Some(event) = stream.next().await {
+    match event {
+        CdcEvent::Insert { table, row } => {
+            // Handle insert
+        }
+        _ => {}
+    }
+}
+```
 
 ### Protocol Test Coverage Summary
 
@@ -917,6 +1259,303 @@ The MCP server provides a complete natural language to SQL pipeline for LLM inte
 | Cypher/Bolt | High | ✅ Production-Ready | 100% complete: Bolt protocol server, WHERE clause, 10+ tests, RocksDB persistence |
 | AQL | High | ✅ Production-Ready | 100% complete: HTTP server, query engine, 30+ tests, RocksDB persistence |
 | MCP | High | ✅ Production-Ready | 100% complete: All handlers, dynamic resources, 25+ tests |
+
+## Network Layer Architecture
+
+### gRPC Services
+
+Orbit-RS uses gRPC for high-performance inter-node communication and actor invocation.
+
+#### ConnectionService
+
+Bidirectional streaming service for actor communication.
+
+```protobuf
+service ConnectionService {
+    rpc OpenStream(stream MessageProto) returns (stream MessageProto);
+    rpc GetConnectionInfo(ConnectionInfoRequestProto) returns (ConnectionInfoResponseProto);
+}
+```
+
+**Implementation:**
+
+```rust
+pub struct OrbitConnectionService {
+    connections: Arc<Mutex<HashMap<String, mpsc::UnboundedSender<MessageProto>>>>,
+}
+
+impl connection_service_server::ConnectionService for OrbitConnectionService {
+    type OpenStreamStream = tokio_stream::wrappers::UnboundedReceiverStream<Result<MessageProto, Status>>;
+
+    async fn open_stream(
+        &self,
+        request: Request<Streaming<MessageProto>>,
+    ) -> Result<Response<Self::OpenStreamStream>, Status> {
+        // Bidirectional message streaming
+    }
+}
+```
+
+#### HealthService
+
+Standard health check service for monitoring.
+
+```protobuf
+service HealthService {
+    rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
+    rpc Watch(HealthCheckRequest) returns (stream HealthCheckResponse);
+}
+
+enum ServingStatus {
+    UNKNOWN = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+    SERVICE_UNKNOWN = 3;
+}
+```
+
+### Protocol Buffer Definitions
+
+#### Message Protocol
+
+```protobuf
+message MessageProto {
+    int64 message_id = 1;
+    NodeIdProto source = 2;
+    MessageTargetProto target = 3;
+    MessageContentProto content = 4;
+    int64 attempts = 5;
+}
+
+message MessageContentProto {
+    oneof content {
+        ErrorProto error = 1;
+        ConnectionInfoRequestProto info_request = 2;
+        ConnectionInfoResponseProto info_response = 3;
+        InvocationRequestProto invocation_request = 4;
+        InvocationResponseProto invocation_response = 5;
+        InvocationResponseErrorProto invocation_response_error = 6;
+    }
+}
+```
+
+#### Node Protocol
+
+```protobuf
+message NodeInfoProto {
+    NodeIdProto id = 1;
+    string url = 2;
+    uint32 port = 3;
+    NodeCapabilitiesProto capabilities = 4;
+    NodeStatusProto status = 5;
+    optional NodeLeaseProto lease = 6;
+}
+
+enum NodeStatusProto {
+    ACTIVE = 0;
+    DRAINING = 1;
+    STOPPED = 2;
+}
+```
+
+### Transport Layer
+
+#### Connection Pooling
+
+```rust
+use orbit_shared::transport::TransportConfig;
+
+let config = TransportConfig {
+    max_connections_per_endpoint: 10,  // Pool size per endpoint
+    connect_timeout: Duration::from_secs(5),
+    request_timeout: Duration::from_secs(30),
+    keep_alive_interval: Some(Duration::from_secs(30)),
+    keep_alive_timeout: Some(Duration::from_secs(10)),
+    max_message_size: 16 * 1024 * 1024, // 16MB
+    retry_attempts: 3,
+    retry_backoff_initial: Duration::from_millis(100),
+    retry_backoff_multiplier: 2.0,
+    tcp_keepalive: Some(Duration::from_secs(10)),
+    http2_adaptive_window: true,
+};
+```
+
+**Benefits:**
+- Eliminates connection establishment overhead
+- Reduces TCP handshake latency
+- Maintains persistent HTTP/2 connections
+- Automatic health-based cleanup
+
+#### Retry Logic
+
+```rust
+// Automatic retry with exponential backoff:
+// Attempt 1: immediate
+// Attempt 2: +100ms
+// Attempt 3: +200ms
+// Attempt 4: +400ms
+```
+
+**Retry Strategy:**
+- Exponential backoff prevents thundering herd
+- Non-retryable errors exit immediately (InvalidArgument, NotFound, PermissionDenied)
+- Timeout errors trigger retry
+- Network errors trigger retry
+
+#### Connection Metrics
+
+```rust
+let stats = pool.get_stats().await;
+println!("Total connections: {}", stats.total_connections);
+println!("Total requests: {}", stats.total_requests);
+println!("Total errors: {}", stats.total_errors);
+println!("Average latency: {}ms", stats.average_latency_ms);
+```
+
+**Metrics Tracked:**
+- Connection creation time
+- Last used timestamp
+- Request count per connection
+- Error count per connection
+- Average latency (exponential moving average)
+
+### Raft Transport
+
+Specialized gRPC transport for Raft consensus protocol.
+
+```rust
+#[async_trait]
+pub trait RaftTransport: Send + Sync {
+    async fn send_vote_request(
+        &self,
+        target: &NodeId,
+        request: VoteRequest,
+    ) -> OrbitResult<VoteResponse>;
+
+    async fn send_append_entries(
+        &self,
+        target: &NodeId,
+        request: AppendEntriesRequest,
+    ) -> OrbitResult<AppendEntriesResponse>;
+
+    async fn broadcast_heartbeat(
+        &self,
+        nodes: &[NodeId],
+        request: AppendEntriesRequest,
+    ) -> OrbitResult<Vec<AppendEntriesResponse>>;
+}
+```
+
+## Hybrid Storage Architecture
+
+Orbit-RS uses a hybrid approach combining actors and direct storage based on protocol requirements.
+
+### RESP/Redis Protocol - Actor-Based with Persistence
+
+**Architecture:**
+```text
+RESP Command
+    ↓
+SimpleLocalRegistry (in-memory actors)
+    ├─ KeyValueActor (cache)
+    ├─ ListActor (cache)
+    ├─ SetActor (cache)
+    ├─ SortedSetActor (cache)
+    └─ RedisDataProvider (RocksDB persistence)
+```
+
+**How it works:**
+1. **In-Memory Actors**: `SimpleLocalRegistry` maintains in-memory actor instances as a cache
+2. **Persistent Backing**: All data is persisted to RocksDB via `RedisDataProvider`
+3. **Cache-First**: Reads check actors first, then fall back to RocksDB if not in cache
+4. **Write-Through**: Writes update both actors (cache) and RocksDB (persistence)
+
+**Code Example:**
+```rust
+// orbit/server/src/protocols/resp/simple_local.rs
+pub struct SimpleLocalRegistry {
+    /// KeyValue actors (in-memory cache)
+    keyvalue_actors: Arc<RwLock<HashMap<String, KeyValueActor>>>,
+    /// Optional persistent storage provider
+    persistent_storage: Option<Arc<dyn RedisDataProvider>>,
+}
+
+// On GET: Check persistent storage first, then cache
+if method == "get_value" {
+    if let Some(provider) = &self.persistent_storage {
+        if let Ok(Some(redis_value)) = provider.get(key).await {
+            // Update in-memory cache
+            let actor = actors.entry(key.to_string()).or_insert_with(KeyValueActor::new);
+            actor.set_value(redis_value.data.clone());
+        }
+    }
+}
+
+// On SET: Update both cache and persistence
+actor.set_value(value.clone());
+if let Some(provider) = &self.persistent_storage {
+    provider.set(key, redis_value).await?;
+}
+```
+
+**Why Actors for RESP?**
+- Provides Redis-compatible semantics (keys as actors)
+- Enables distributed actor system integration (future)
+- In-memory cache for performance
+- Persistent storage ensures data durability
+
+### PostgreSQL, MySQL, CQL - Direct Storage
+
+**Architecture:**
+```text
+SQL Query
+    ↓
+TieredTableStorage
+    └─ RocksDB (direct storage)
+```
+
+**How it works:**
+- **No actors**: Direct RocksDB storage via `TieredTableStorage`
+- **Protocol-specific directories**: Each protocol has its own RocksDB instance
+  - PostgreSQL: `data/postgresql/rocksdb/`
+  - MySQL: `data/mysql/rocksdb/`
+  - CQL: `data/cql/rocksdb/`
+
+**Code Example:**
+```rust
+// orbit/server/src/main.rs
+let postgres_storage = Arc::new(TieredTableStorage::with_data_dir(
+    postgres_data_dir,
+    tiered_config.clone(),
+));
+// No actors - direct storage
+```
+
+### Storage Comparison
+
+| Protocol | Storage Type | Uses Actors? | Persistence | Data Directory |
+|----------|-------------|--------------|-------------|----------------|
+| **RESP/Redis** | Hybrid (Actors + RocksDB) | ✅ Yes (cache layer) | ✅ RocksDB | `data/redis/rocksdb/` |
+| **PostgreSQL** | Direct Storage | ❌ No | ✅ RocksDB | `data/postgresql/rocksdb/` |
+| **MySQL** | Direct Storage | ❌ No | ✅ RocksDB | `data/mysql/rocksdb/` |
+| **CQL** | Direct Storage | ❌ No | ✅ RocksDB | `data/cql/rocksdb/` |
+| **Cypher** | Direct Storage | ❌ No | ✅ RocksDB | `data/cypher/rocksdb/` |
+| **AQL** | Direct Storage | ❌ No | ✅ RocksDB | `data/aql/rocksdb/` |
+| **GraphRAG** | Direct Storage | ❌ No | ✅ RocksDB | `data/graphrag/rocksdb/` |
+
+**Why This Architecture?**
+
+**RESP Uses Actors Because:**
+1. **Redis Semantics**: Keys naturally map to actors
+2. **Distributed Future**: Enables distributed actor system integration
+3. **Performance**: In-memory cache for hot data
+4. **Compatibility**: Maintains Redis-like behavior
+
+**Other Protocols Use Direct Storage Because:**
+1. **SQL/Query Semantics**: Tables/collections don't map well to actors
+2. **Performance**: Direct storage is more efficient for bulk operations
+3. **Simplicity**: No need for actor abstraction layer
+4. **Consistency**: All protocols use the same RocksDB persistence pattern
 
 ## Storage Architecture Details
 
