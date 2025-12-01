@@ -1,4 +1,4 @@
-//! Drug Discovery industry ML models
+//! Pharmaceutical Research industry ML models
 //!
 //! Provides specialized models for pharmaceutical research including:
 //! - Molecular property prediction
@@ -30,7 +30,7 @@ impl MolecularPropertyPredictor {
 #[async_trait::async_trait]
 impl IndustryModel for MolecularPropertyPredictor {
     fn model_type(&self) -> &str {
-        "drug_discovery.molecular_properties"
+        "pharmaceutical_research.molecular_properties"
     }
 
     fn version(&self) -> &str {
@@ -80,7 +80,7 @@ impl BindingAffinityModel {
 #[async_trait::async_trait]
 impl IndustryModel for BindingAffinityModel {
     fn model_type(&self) -> &str {
-        "drug_discovery.binding_affinity"
+        "pharmaceutical_research.binding_affinity"
     }
 
     fn version(&self) -> &str {
@@ -118,7 +118,7 @@ mod tests {
     async fn test_molecular_property_predictor() {
         let properties = vec!["logP".to_string(), "solubility".to_string()];
         let mut model = MolecularPropertyPredictor::new(properties);
-        assert_eq!(model.model_type(), "drug_discovery.molecular_properties");
+        assert_eq!(model.model_type(), "pharmaceutical_research.molecular_properties");
 
         let predictions = model.predict(&[]).await.unwrap();
         assert_eq!(predictions.len(), 2);
@@ -127,7 +127,7 @@ mod tests {
     #[tokio::test]
     async fn test_binding_affinity_model() {
         let mut model = BindingAffinityModel::new(true);
-        assert_eq!(model.model_type(), "drug_discovery.binding_affinity");
+        assert_eq!(model.model_type(), "pharmaceutical_research.binding_affinity");
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.mae.unwrap() < 2.0);
