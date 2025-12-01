@@ -11,11 +11,13 @@ echo "🔍 Building example packages..."
 export CARGO_TERM_COLOR=always
 
 # List of example packages to build
+# Note: These examples don't currently exist in the project
+# Uncomment when they are added
 EXAMPLES=(
-    "hello-world"
-    "distributed-transactions-example"
-    "distributed-counter" 
-    "saga-example"
+    # "hello-world"
+    # "distributed-transactions-example"
+    # "distributed-counter" 
+    # "saga-example"
 )
 
 # Additional examples that might exist
