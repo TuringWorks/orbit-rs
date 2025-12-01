@@ -2316,6 +2316,63 @@ pub enum Expression {
     },
     /// List of expressions: [a, b, c]
     List(Vec<Expression>),
+    /// Function call: toUpper(x), size(list), date(), etc.
+    FunctionCall {
+        name: String,
+        arguments: Vec<Expression>,
+    },
+    /// CASE expression
+    Case {
+        test_expression: Option<Box<Expression>>,
+        when_clauses: Vec<(Expression, Expression)>,
+        else_result: Option<Box<Expression>>,
+    },
+    /// Mathematical operation: a + b, a * b, etc.
+    BinaryOp {
+        left: Box<Expression>,
+        operator: BinaryOperator,
+        right: Box<Expression>,
+    },
+    /// Unary operation: -x, NOT x
+    UnaryOp {
+        operator: UnaryOperator,
+        operand: Box<Expression>,
+    },
+}
+
+/// Binary operators for expressions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BinaryOperator {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Modulo,
+    Power,
+    StringConcat,
+    And,
+    Or,
+    Xor,
+    Equals,
+    NotEquals,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+    In,
+    StartsWith,
+    EndsWith,
+    Contains,
+    RegexMatch,
+}
+
+/// Unary operators for expressions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UnaryOperator {
+    Negate,
+    Not,
+    IsNull,
+    IsNotNull,
 }
 
 /// Aggregation functions supported in Cypher
