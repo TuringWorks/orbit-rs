@@ -7,7 +7,7 @@
 use crate::protocols::cypher::cypher_parser::{
     AggregationFunction, Condition, CypherClause, CypherQuery, Expression, NodePattern,
     OrderByItem, Pattern, PatternElement, PropertyAssignment, RelationshipDirection,
-    RelationshipPattern, RemoveItem, ReturnItem, VariableLengthSpec, WithItem,
+    RelationshipPattern, RemoveItem, ReturnItem, UnwindExpression, VariableLengthSpec, WithItem,
 };
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use orbit_shared::graph::{
@@ -178,12 +178,33 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     variable,
                 } => {
                     // UNWIND: expand a list into individual rows
-                    tracing::debug!(
-                        "Executing UNWIND clause: {:?} AS {}",
-                        expression,
-                        variable
+                    tracing::debug!("Executing UNWIND clause: {:?} AS {}", expression, variable);
+
+                    // Evaluate the expression to get a list
+                    let list_values = self.evaluate_unwind_expression(expression, &context)?;
+
+                    // For each value in the list, create a node binding
+                    let mut unwind_nodes = Vec::new();
+                    for value in list_values {
+                        // Create a virtual node for each unwound value
+                        let mut props = std::collections::HashMap::new();
+                        props.insert("_value".to_string(), value.clone());
+
+                        let node = GraphNode::new(vec!["_UnwoundValue".to_string()], props);
+                        unwind_nodes.push(node);
+                    }
+
+                    // Bind the unwound values to the variable
+                    context.bind_nodes(variable.clone(), unwind_nodes.clone());
+
+                    // Add to result set
+                    result_nodes.extend(unwind_nodes);
+
+                    info!(
+                        variable = %variable,
+                        count = result_nodes.len(),
+                        "UNWIND expanded list to rows"
                     );
-                    // TODO: Implement UNWIND execution - expand list expression to rows
                 }
                 CypherClause::Foreach {
                     variable,
@@ -197,7 +218,76 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                         list,
                         inner_clauses.len()
                     );
-                    // TODO: Implement FOREACH execution
+
+                    // Evaluate the list expression
+                    let list_values = self.evaluate_unwind_expression(list, &context)?;
+
+                    // For each value, execute the inner clauses
+                    for value in list_values {
+                        // Bind the current value to the loop variable
+                        let mut props = std::collections::HashMap::new();
+                        props.insert("_value".to_string(), value);
+
+                        let temp_node = GraphNode::new(vec!["_ForeachValue".to_string()], props);
+                        context.bind_nodes(variable.clone(), vec![temp_node]);
+
+                        // Execute each inner clause (side effects like SET, CREATE, etc.)
+                        for inner_clause in inner_clauses {
+                            match inner_clause {
+                                CypherClause::Set { assignments } => {
+                                    self.execute_set_clause(
+                                        assignments,
+                                        &mut context,
+                                        &mut result_nodes,
+                                    )
+                                    .await?;
+                                }
+                                CypherClause::Create { pattern } => {
+                                    let (nodes, rels) =
+                                        self.execute_create_clause(pattern, &mut context).await?;
+                                    result_nodes.extend(nodes);
+                                    result_relationships.extend(rels);
+                                }
+                                CypherClause::Delete { variables, detach } => {
+                                    self.execute_delete_clause(
+                                        variables,
+                                        *detach,
+                                        &mut context,
+                                        &mut result_nodes,
+                                        &mut result_relationships,
+                                    )
+                                    .await?;
+                                }
+                                CypherClause::Remove { items } => {
+                                    self.execute_remove_clause(
+                                        items,
+                                        &mut context,
+                                        &mut result_nodes,
+                                    )
+                                    .await?;
+                                }
+                                CypherClause::Merge { pattern } => {
+                                    let (nodes, rels) =
+                                        self.execute_merge_clause(pattern, &mut context).await?;
+                                    result_nodes.extend(nodes);
+                                    result_relationships.extend(rels);
+                                }
+                                _ => {
+                                    // Other clauses are not valid inside FOREACH
+                                    tracing::warn!(
+                                        "Skipping unsupported clause type in FOREACH: {:?}",
+                                        inner_clause
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    info!(
+                        variable = %variable,
+                        inner_clauses = inner_clauses.len(),
+                        "FOREACH executed side effects"
+                    );
                 }
                 CypherClause::CaseExpression {
                     test_expression,
@@ -205,13 +295,33 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     else_result,
                 } => {
                     // CASE expression evaluation
+                    // Note: CASE expressions are typically evaluated during RETURN projection
+                    // Here we store the case expression result for later use
                     tracing::debug!(
                         "Executing CASE expression: test={:?}, {} whens, else={:?}",
                         test_expression,
                         when_clauses.len(),
                         else_result
                     );
-                    // TODO: Implement CASE expression execution
+
+                    // Evaluate the CASE expression
+                    let result_value = self.evaluate_case_expression(
+                        test_expression.as_deref(),
+                        when_clauses,
+                        else_result.as_ref(),
+                        &context,
+                    )?;
+
+                    // Store as a virtual node with the case result
+                    let mut props = std::collections::HashMap::new();
+                    props.insert("_caseResult".to_string(), result_value);
+
+                    let case_node = GraphNode::new(vec!["_CaseResult".to_string()], props);
+
+                    context.bind_nodes("_case".to_string(), vec![case_node.clone()]);
+                    result_nodes.push(case_node);
+
+                    info!("CASE expression evaluated");
                 }
             }
         }
@@ -796,6 +906,156 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             (serde_json::Value::String(sa), serde_json::Value::String(sb)) => sa.cmp(sb) as i32,
             _ => 0,
         }
+    }
+
+    /// Evaluate an UNWIND expression to get a list of values
+    fn evaluate_unwind_expression(
+        &self,
+        expression: &UnwindExpression,
+        context: &ExecutionContext,
+    ) -> ProtocolResult<Vec<serde_json::Value>> {
+        match expression {
+            UnwindExpression::Variable(var_name) => {
+                // Look up the variable in the context
+                if let Some(nodes) = context.get_nodes(var_name) {
+                    // If it's bound to nodes, convert to JSON values
+                    let values = nodes
+                        .iter()
+                        .map(|n| {
+                            // Check if node has _value property (from previous UNWIND)
+                            if let Some(value) = n.properties.get("_value") {
+                                value.clone()
+                            } else {
+                                // Convert whole node to JSON
+                                serde_json::json!({
+                                    "id": n.id,
+                                    "labels": n.labels,
+                                    "properties": n.properties
+                                })
+                            }
+                        })
+                        .collect();
+                    Ok(values)
+                } else {
+                    // Return empty list if variable not found
+                    Ok(Vec::new())
+                }
+            }
+            UnwindExpression::List(values) => Ok(values.clone()),
+            UnwindExpression::Range { start, end, step } => {
+                let step_val = step.unwrap_or(1);
+                if step_val == 0 {
+                    return Err(ProtocolError::CypherError(
+                        "Range step cannot be zero".to_string(),
+                    ));
+                }
+
+                let mut result = Vec::new();
+                let mut current = *start;
+
+                if step_val > 0 {
+                    while current <= *end {
+                        result.push(serde_json::json!(current));
+                        current += step_val;
+                    }
+                } else {
+                    while current >= *end {
+                        result.push(serde_json::json!(current));
+                        current += step_val;
+                    }
+                }
+                Ok(result)
+            }
+            UnwindExpression::FunctionCall { name, args } => {
+                // Use the CypherFunctions module to evaluate
+                use crate::protocols::cypher::cypher_functions::{
+                    CypherFunctions, FunctionContext,
+                };
+
+                let func_context = FunctionContext::new();
+                let result = CypherFunctions::evaluate(name, args, &func_context)?;
+
+                // Convert result to a list
+                match result {
+                    serde_json::Value::Array(arr) => Ok(arr),
+                    other => Ok(vec![other]),
+                }
+            }
+            UnwindExpression::Property { variable, property } => {
+                // Get property from bound variable
+                if let Some(nodes) = context.get_nodes(variable) {
+                    if let Some(first_node) = nodes.first() {
+                        if let Some(value) = first_node.properties.get(property) {
+                            // If property is an array, return it; otherwise wrap in array
+                            match value {
+                                serde_json::Value::Array(arr) => Ok(arr.clone()),
+                                other => Ok(vec![other.clone()]),
+                            }
+                        } else {
+                            Ok(Vec::new())
+                        }
+                    } else {
+                        Ok(Vec::new())
+                    }
+                } else {
+                    Ok(Vec::new())
+                }
+            }
+        }
+    }
+
+    /// Evaluate a CASE expression
+    fn evaluate_case_expression(
+        &self,
+        test_expression: Option<&str>,
+        when_clauses: &[(String, serde_json::Value)],
+        else_result: Option<&serde_json::Value>,
+        context: &ExecutionContext,
+    ) -> ProtocolResult<serde_json::Value> {
+        if let Some(test_expr) = test_expression {
+            // Simple CASE: CASE expr WHEN val1 THEN result1 ...
+            // Get the test expression value from context
+            let test_value = if let Some(nodes) = context.get_nodes(test_expr) {
+                if let Some(node) = nodes.first() {
+                    node.properties
+                        .get("_value")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null)
+                } else {
+                    serde_json::Value::Null
+                }
+            } else {
+                serde_json::Value::Null
+            };
+
+            // Check each WHEN clause
+            for (when_expr, then_result) in when_clauses {
+                // Parse when_expr as a value and compare
+                let when_value: serde_json::Value =
+                    serde_json::from_str(when_expr).unwrap_or(serde_json::json!(when_expr));
+
+                if test_value == when_value {
+                    return Ok(then_result.clone());
+                }
+            }
+        } else {
+            // Searched CASE: CASE WHEN condition1 THEN result1 ...
+            // Each when_expr is a condition string
+            for (when_condition, then_result) in when_clauses {
+                // For now, treat the condition as a simple truthy check
+                // Full condition evaluation would require expression parsing
+                let is_true = when_condition.to_lowercase() == "true"
+                    || when_condition == "1"
+                    || !when_condition.is_empty();
+
+                if is_true {
+                    return Ok(then_result.clone());
+                }
+            }
+        }
+
+        // No WHEN matched, return ELSE or null
+        Ok(else_result.cloned().unwrap_or(serde_json::Value::Null))
     }
 
     /// Execute a DELETE clause
