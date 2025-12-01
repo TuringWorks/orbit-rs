@@ -39,6 +39,7 @@ parking_lot = "0.12"
 crossbeam = "0.8"
 md5 = "0.7"
 metrics = "0.24"
+regex = "1.10"
 
 # Persistence
 rocksdb = { version = "0.22", default-features = false, optional = true }

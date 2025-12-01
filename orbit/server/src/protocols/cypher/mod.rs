@@ -33,6 +33,7 @@ pub mod types;
 // #[cfg(test)]
 // mod tests;
 
+#[allow(deprecated)]
 pub use bolt::BoltProtocol;
 pub use bolt_protocol::BoltProtocolHandler;
 pub use cypher_functions::{CypherFunctions, FunctionContext};

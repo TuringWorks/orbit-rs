@@ -46,6 +46,9 @@ pub struct OrbitServerConfig {
 
     /// Storage configuration (tiered and cold storage)
     pub storage: Option<StorageConfig>,
+
+    /// Unified cross-protocol storage configuration
+    pub unified_storage: Option<UnifiedStorageCfg>,
 }
 
 /// Server identification and basic settings
@@ -1208,6 +1211,737 @@ pub struct MinioConfig {
     pub region: Option<String>,
 }
 
+// =============================================================================
+// UNIFIED CROSS-PROTOCOL STORAGE CONFIGURATION
+// =============================================================================
+
+/// Unified cross-protocol storage configuration
+///
+/// This configuration enables data written via one protocol (Redis, PostgreSQL,
+/// MySQL, CQL, Cypher, AQL, REST) to be immediately accessible through all other
+/// protocols via a shared tiered storage layer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnifiedStorageCfg {
+    /// Enable unified cross-protocol storage
+    pub enabled: bool,
+
+    /// Data directory for unified storage
+    pub data_dir: PathBuf,
+
+    /// Hot tier configuration (in-memory)
+    pub hot_tier: HotTierConfig,
+
+    /// Warm tier configuration (RocksDB)
+    pub warm_tier: WarmTierConfig,
+
+    /// Cold tier configuration (Cloud storage)
+    pub cold_tier: UnifiedColdTierConfig,
+
+    /// Tier migration configuration
+    pub tier_migration: TierMigrationConfig,
+
+    /// Cross-protocol configuration
+    pub cross_protocol: CrossProtocolConfig,
+
+    /// TTL and expiration settings
+    pub ttl: TtlConfig,
+
+    /// Actor tier placement configuration
+    pub actor_placement: ActorTierPlacementConfig,
+
+    /// Cluster configuration for distributed unified storage
+    pub cluster: UnifiedClusterConfig,
+}
+
+/// Hot tier (in-memory) configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HotTierConfig {
+    /// Enable hot tier
+    pub enabled: bool,
+
+    /// Maximum memory usage in MB
+    pub max_memory_mb: usize,
+
+    /// Eviction policy: "lru", "lfu", "fifo", "ttl"
+    pub eviction_policy: String,
+
+    /// Memory threshold percentage to trigger eviction (0.0-1.0)
+    pub eviction_threshold: f64,
+
+    /// Enable write-through to warm tier
+    pub write_through: bool,
+
+    /// Enable read-through from warm tier on cache miss
+    pub read_through: bool,
+
+    /// Prefetch configuration
+    pub prefetch: PrefetchConfig,
+}
+
+/// Prefetch configuration for hot tier
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrefetchConfig {
+    /// Enable prefetching
+    pub enabled: bool,
+
+    /// Prefetch batch size
+    pub batch_size: usize,
+
+    /// Prefetch trigger threshold (access count)
+    pub trigger_threshold: u64,
+}
+
+/// Warm tier (RocksDB) configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WarmTierConfig {
+    /// Enable warm tier
+    pub enabled: bool,
+
+    /// RocksDB data directory
+    pub data_dir: PathBuf,
+
+    /// Maximum disk usage in GB
+    pub max_disk_gb: usize,
+
+    /// Enable compression
+    pub enable_compression: bool,
+
+    /// Compression algorithm: "lz4", "snappy", "zstd", "none"
+    pub compression_algorithm: String,
+
+    /// Block cache size in MB
+    pub block_cache_mb: usize,
+
+    /// Write buffer size in MB
+    pub write_buffer_mb: usize,
+
+    /// Max write buffer number
+    pub max_write_buffers: u32,
+
+    /// Enable bloom filters
+    pub enable_bloom_filters: bool,
+
+    /// Bloom filter bits per key
+    pub bloom_bits_per_key: u32,
+
+    /// Enable WAL
+    pub enable_wal: bool,
+
+    /// Sync WAL on write
+    pub sync_wal: bool,
+}
+
+/// Unified cold tier configuration for cloud storage
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnifiedColdTierConfig {
+    /// Enable cold tier
+    pub enabled: bool,
+
+    /// Backend type: "s3", "azure", "gcs", "minio"
+    pub backend: String,
+
+    /// S3/MinIO configuration
+    pub s3: Option<S3Config>,
+
+    /// Azure Blob configuration
+    pub azure: Option<AzureStorageConfig>,
+
+    /// GCS configuration
+    pub gcs: Option<GcsConfig>,
+
+    /// Data format: "parquet", "iceberg", "delta"
+    pub data_format: String,
+
+    /// Partition strategy: "time", "hash", "range"
+    pub partition_strategy: String,
+
+    /// Compression for cold storage
+    pub compression: String,
+
+    /// Async upload settings
+    pub async_upload: AsyncUploadConfig,
+}
+
+/// Google Cloud Storage configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GcsConfig {
+    /// GCS bucket name
+    pub bucket: String,
+
+    /// Project ID
+    pub project_id: String,
+
+    /// Service account key file path (optional, uses ADC if not provided)
+    pub service_account_key: Option<PathBuf>,
+}
+
+/// Async upload configuration for cold tier
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AsyncUploadConfig {
+    /// Enable async upload
+    pub enabled: bool,
+
+    /// Upload batch size in MB
+    pub batch_size_mb: usize,
+
+    /// Upload interval in seconds
+    pub interval_secs: u64,
+
+    /// Maximum concurrent uploads
+    pub max_concurrent: usize,
+
+    /// Retry count
+    pub retry_count: u32,
+}
+
+/// Tier migration configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TierMigrationConfig {
+    /// Enable automatic tier migration
+    pub enabled: bool,
+
+    /// Hot to warm threshold (time since last access)
+    pub hot_to_warm_secs: u64,
+
+    /// Warm to cold threshold (time since last access)
+    pub warm_to_cold_secs: u64,
+
+    /// Migration scan interval in seconds
+    pub scan_interval_secs: u64,
+
+    /// Maximum records to migrate per scan
+    pub batch_size: usize,
+
+    /// Migration priority: "age", "size", "access_frequency"
+    pub priority_strategy: String,
+
+    /// Enable promotion (cold -> warm -> hot on access)
+    pub enable_promotion: bool,
+
+    /// Promotion threshold (access count to promote)
+    pub promotion_threshold: u64,
+}
+
+/// Cross-protocol configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrossProtocolConfig {
+    /// Enable cross-protocol data sharing
+    pub enabled: bool,
+
+    /// Protocols that share the unified storage
+    pub shared_protocols: Vec<String>,
+
+    /// Namespace mapping strategy: "auto", "explicit"
+    pub namespace_strategy: String,
+
+    /// Default namespace for unmapped data
+    pub default_namespace: String,
+
+    /// Enable schema inference
+    pub enable_schema_inference: bool,
+
+    /// Schema cache size
+    pub schema_cache_size: usize,
+}
+
+/// TTL and expiration configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TtlConfig {
+    /// Enable TTL expiration
+    pub enabled: bool,
+
+    /// TTL check interval in seconds
+    pub check_interval_secs: u64,
+
+    /// Maximum records to expire per check
+    pub batch_size: usize,
+
+    /// Default TTL in seconds (0 = no default TTL)
+    pub default_ttl_secs: u64,
+}
+
+/// Actor tier placement configuration for tier-aware actor architecture
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActorTierPlacementConfig {
+    /// Enable tier-aware actor placement
+    pub enabled: bool,
+
+    /// Table actor tier preference
+    pub table_actor_tier: String,
+
+    /// Extent actor tier preference
+    pub extent_actor_tier: String,
+
+    /// Column actor tier preference
+    pub column_actor_tier: String,
+
+    /// Row actor tier preference
+    pub row_actor_tier: String,
+
+    /// Field actor tier preference
+    pub field_actor_tier: String,
+
+    /// Index actor tier preference
+    pub index_actor_tier: String,
+
+    /// Enable dynamic tier migration based on access patterns
+    pub dynamic_migration: bool,
+
+    /// Access count threshold for tier promotion
+    pub promotion_access_count: u64,
+
+    /// Idle time threshold for tier demotion (seconds)
+    pub demotion_idle_secs: u64,
+}
+
+/// Cluster configuration for distributed unified storage
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnifiedClusterConfig {
+    /// Enable cluster mode for unified storage
+    pub enabled: bool,
+
+    /// Replication configuration
+    pub replication: ReplicationConfig,
+
+    /// Sharding/partitioning configuration
+    pub sharding: ShardingConfig,
+
+    /// Node failure detection and recovery
+    pub failure_detection: FailureDetectionConfig,
+
+    /// Data consistency configuration
+    pub consistency: ConsistencyConfig,
+
+    /// Node eviction configuration
+    pub eviction: NodeEvictionConfig,
+}
+
+/// Replication configuration for data durability
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReplicationConfig {
+    /// Enable data replication
+    pub enabled: bool,
+
+    /// Replication factor (number of copies)
+    pub replication_factor: u32,
+
+    /// Replication strategy: "sync", "async", "semi_sync"
+    pub strategy: String,
+
+    /// Minimum replicas for write acknowledgment (sync/semi_sync)
+    pub min_ack_replicas: u32,
+
+    /// Async replication lag threshold in milliseconds
+    pub max_lag_ms: u64,
+
+    /// Enable read from replicas
+    pub read_from_replicas: bool,
+
+    /// Replica selection strategy: "nearest", "round_robin", "random"
+    pub replica_selection: String,
+}
+
+/// Sharding configuration for data distribution
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShardingConfig {
+    /// Enable sharding
+    pub enabled: bool,
+
+    /// Number of virtual shards (for consistent hashing)
+    pub virtual_shards: u32,
+
+    /// Sharding strategy: "consistent_hash", "range", "directory"
+    pub strategy: String,
+
+    /// Shard key field (for automatic sharding)
+    pub shard_key: Option<String>,
+
+    /// Enable automatic rebalancing when nodes change
+    pub auto_rebalance: bool,
+
+    /// Rebalance threshold (percentage imbalance to trigger)
+    pub rebalance_threshold: f64,
+
+    /// Maximum concurrent shard migrations
+    pub max_concurrent_migrations: u32,
+}
+
+/// Failure detection configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FailureDetectionConfig {
+    /// Enable failure detection
+    pub enabled: bool,
+
+    /// Heartbeat interval in milliseconds
+    pub heartbeat_interval_ms: u64,
+
+    /// Heartbeat timeout in milliseconds
+    pub heartbeat_timeout_ms: u64,
+
+    /// Number of missed heartbeats before marking node as suspect
+    pub suspect_threshold: u32,
+
+    /// Number of missed heartbeats before marking node as failed
+    pub failure_threshold: u32,
+
+    /// Gossip protocol settings
+    pub gossip: GossipConfig,
+
+    /// Recovery configuration
+    pub recovery: RecoveryConfig,
+}
+
+/// Gossip protocol configuration for failure detection
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GossipConfig {
+    /// Enable gossip-based failure detection
+    pub enabled: bool,
+
+    /// Gossip interval in milliseconds
+    pub interval_ms: u64,
+
+    /// Number of nodes to gossip with per round
+    pub fanout: u32,
+
+    /// Suspicion timeout in milliseconds
+    pub suspicion_timeout_ms: u64,
+}
+
+/// Recovery configuration for failed nodes
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecoveryConfig {
+    /// Enable automatic recovery
+    pub enabled: bool,
+
+    /// Recovery mode: "full", "incremental", "lazy"
+    pub mode: String,
+
+    /// Recovery priority: "data_first", "availability_first"
+    pub priority: String,
+
+    /// Maximum recovery bandwidth in MB/s (0 = unlimited)
+    pub max_bandwidth_mbps: u64,
+
+    /// Recovery batch size
+    pub batch_size: usize,
+
+    /// Delay before starting recovery (to allow node to rejoin)
+    pub recovery_delay_secs: u64,
+}
+
+/// Data consistency configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsistencyConfig {
+    /// Default consistency level: "eventual", "strong", "bounded_staleness"
+    pub default_level: String,
+
+    /// Read consistency: "any", "one", "quorum", "all"
+    pub read_consistency: String,
+
+    /// Write consistency: "any", "one", "quorum", "all"
+    pub write_consistency: String,
+
+    /// Bounded staleness window in milliseconds (for bounded_staleness)
+    pub staleness_bound_ms: u64,
+
+    /// Enable read-your-writes consistency
+    pub read_your_writes: bool,
+
+    /// Enable causal consistency
+    pub causal_consistency: bool,
+
+    /// Conflict resolution strategy: "last_write_wins", "vector_clock", "custom"
+    pub conflict_resolution: String,
+}
+
+/// Node eviction configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeEvictionConfig {
+    /// Enable node eviction
+    pub enabled: bool,
+
+    /// Eviction policy: "manual", "auto_unhealthy", "auto_resource"
+    pub policy: String,
+
+    /// Resource threshold for auto eviction (CPU/memory percentage)
+    pub resource_threshold: f64,
+
+    /// Grace period before eviction in seconds
+    pub grace_period_secs: u64,
+
+    /// Enable graceful shutdown (drain connections first)
+    pub graceful_shutdown: bool,
+
+    /// Drain timeout in seconds
+    pub drain_timeout_secs: u64,
+
+    /// Enable data migration before eviction
+    pub migrate_data_before_eviction: bool,
+
+    /// Blacklist duration for evicted nodes in seconds
+    pub blacklist_duration_secs: u64,
+}
+
+impl Default for UnifiedClusterConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            replication: ReplicationConfig::default(),
+            sharding: ShardingConfig::default(),
+            failure_detection: FailureDetectionConfig::default(),
+            consistency: ConsistencyConfig::default(),
+            eviction: NodeEvictionConfig::default(),
+        }
+    }
+}
+
+impl Default for ReplicationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            replication_factor: 3,
+            strategy: "async".to_string(),
+            min_ack_replicas: 1,
+            max_lag_ms: 1000,
+            read_from_replicas: true,
+            replica_selection: "nearest".to_string(),
+        }
+    }
+}
+
+impl Default for ShardingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            virtual_shards: 256,
+            strategy: "consistent_hash".to_string(),
+            shard_key: None,
+            auto_rebalance: true,
+            rebalance_threshold: 0.1,
+            max_concurrent_migrations: 2,
+        }
+    }
+}
+
+impl Default for FailureDetectionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            heartbeat_interval_ms: 1000,
+            heartbeat_timeout_ms: 5000,
+            suspect_threshold: 3,
+            failure_threshold: 5,
+            gossip: GossipConfig::default(),
+            recovery: RecoveryConfig::default(),
+        }
+    }
+}
+
+impl Default for GossipConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            interval_ms: 500,
+            fanout: 3,
+            suspicion_timeout_ms: 10000,
+        }
+    }
+}
+
+impl Default for RecoveryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            mode: "incremental".to_string(),
+            priority: "availability_first".to_string(),
+            max_bandwidth_mbps: 100,
+            batch_size: 1000,
+            recovery_delay_secs: 30,
+        }
+    }
+}
+
+impl Default for ConsistencyConfig {
+    fn default() -> Self {
+        Self {
+            default_level: "eventual".to_string(),
+            read_consistency: "one".to_string(),
+            write_consistency: "quorum".to_string(),
+            staleness_bound_ms: 5000,
+            read_your_writes: true,
+            causal_consistency: false,
+            conflict_resolution: "last_write_wins".to_string(),
+        }
+    }
+}
+
+impl Default for NodeEvictionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            policy: "auto_unhealthy".to_string(),
+            resource_threshold: 0.95,
+            grace_period_secs: 60,
+            graceful_shutdown: true,
+            drain_timeout_secs: 300,
+            migrate_data_before_eviction: true,
+            blacklist_duration_secs: 300,
+        }
+    }
+}
+
+impl Default for UnifiedStorageCfg {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            data_dir: PathBuf::from("./data/unified"),
+            hot_tier: HotTierConfig::default(),
+            warm_tier: WarmTierConfig::default(),
+            cold_tier: UnifiedColdTierConfig::default(),
+            tier_migration: TierMigrationConfig::default(),
+            cross_protocol: CrossProtocolConfig::default(),
+            ttl: TtlConfig::default(),
+            actor_placement: ActorTierPlacementConfig::default(),
+            cluster: UnifiedClusterConfig::default(),
+        }
+    }
+}
+
+impl Default for HotTierConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_memory_mb: 1024,
+            eviction_policy: "lru".to_string(),
+            eviction_threshold: 0.85,
+            write_through: true,
+            read_through: true,
+            prefetch: PrefetchConfig::default(),
+        }
+    }
+}
+
+impl Default for PrefetchConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            batch_size: 100,
+            trigger_threshold: 3,
+        }
+    }
+}
+
+impl Default for WarmTierConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            data_dir: PathBuf::from("./data/unified/rocksdb"),
+            max_disk_gb: 100,
+            enable_compression: true,
+            compression_algorithm: "lz4".to_string(),
+            block_cache_mb: 256,
+            write_buffer_mb: 64,
+            max_write_buffers: 3,
+            enable_bloom_filters: true,
+            bloom_bits_per_key: 10,
+            enable_wal: true,
+            sync_wal: false,
+        }
+    }
+}
+
+impl Default for UnifiedColdTierConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            backend: "s3".to_string(),
+            s3: None,
+            azure: None,
+            gcs: None,
+            data_format: "parquet".to_string(),
+            partition_strategy: "time".to_string(),
+            compression: "snappy".to_string(),
+            async_upload: AsyncUploadConfig::default(),
+        }
+    }
+}
+
+impl Default for AsyncUploadConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            batch_size_mb: 64,
+            interval_secs: 300,
+            max_concurrent: 4,
+            retry_count: 3,
+        }
+    }
+}
+
+impl Default for TierMigrationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            hot_to_warm_secs: 3600,       // 1 hour
+            warm_to_cold_secs: 86400 * 7, // 7 days
+            scan_interval_secs: 60,
+            batch_size: 1000,
+            priority_strategy: "age".to_string(),
+            enable_promotion: true,
+            promotion_threshold: 5,
+        }
+    }
+}
+
+impl Default for CrossProtocolConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            shared_protocols: vec![
+                "redis".to_string(),
+                "postgresql".to_string(),
+                "mysql".to_string(),
+                "cql".to_string(),
+                "cypher".to_string(),
+                "aql".to_string(),
+                "rest".to_string(),
+            ],
+            namespace_strategy: "auto".to_string(),
+            default_namespace: "default".to_string(),
+            enable_schema_inference: true,
+            schema_cache_size: 1000,
+        }
+    }
+}
+
+impl Default for TtlConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            check_interval_secs: 60,
+            batch_size: 1000,
+            default_ttl_secs: 0,
+        }
+    }
+}
+
+impl Default for ActorTierPlacementConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            table_actor_tier: "warm".to_string(), // Metadata in RocksDB
+            extent_actor_tier: "warm".to_string(), // Data blocks in RocksDB
+            column_actor_tier: "hot".to_string(), // Frequently accessed columns in memory
+            row_actor_tier: "hot".to_string(),    // Active rows in memory
+            field_actor_tier: "hot".to_string(),  // Individual fields in memory
+            index_actor_tier: "hot".to_string(),  // Indexes in memory for fast lookups
+            dynamic_migration: true,
+            promotion_access_count: 10,
+            demotion_idle_secs: 1800, // 30 minutes
+        }
+    }
+}
+
 impl Default for OrbitServerConfig {
     fn default() -> Self {
         Self {
@@ -1221,6 +1955,7 @@ impl Default for OrbitServerConfig {
             pooling: PoolingConfig::default(),
             persistence: Some(PersistenceConfig::default()),
             storage: Some(StorageConfig::default()),
+            unified_storage: Some(UnifiedStorageCfg::default()),
         }
     }
 }
