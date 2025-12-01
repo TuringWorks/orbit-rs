@@ -128,7 +128,10 @@ mod tests {
     async fn test_log_anomaly_detector() {
         let sources = vec!["app".to_string(), "system".to_string()];
         let mut model = LogAnomalyDetector::new(sources);
-        assert_eq!(model.model_type(), "cloud_infrastructure.log_anomaly_detection");
+        assert_eq!(
+            model.model_type(),
+            "cloud_infrastructure.log_anomaly_detection"
+        );
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.accuracy > 0.90);

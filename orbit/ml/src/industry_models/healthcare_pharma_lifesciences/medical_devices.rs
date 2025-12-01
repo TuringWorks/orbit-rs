@@ -16,6 +16,7 @@ pub struct WearableDataAnalyzer {
 }
 
 impl WearableDataAnalyzer {
+    /// Create a new wearable data analyzer
     pub fn new(vital_signs: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -64,6 +65,7 @@ pub struct ArrhythmiaDetector {
 }
 
 impl ArrhythmiaDetector {
+    /// Create a new arrhythmia detector
     pub fn new(sampling_rate_hz: usize) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -113,6 +115,7 @@ pub struct RemoteMonitoringAnomalyDetector {
 }
 
 impl RemoteMonitoringAnomalyDetector {
+    /// Create a new remote monitoring anomaly detector
     pub fn new(monitored_metrics: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),

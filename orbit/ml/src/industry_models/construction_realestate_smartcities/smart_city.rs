@@ -169,6 +169,7 @@ pub struct PublicSafetySystem {
 }
 
 impl PublicSafetySystem {
+    /// Create a new infrastructure damage detector
     pub fn new(districts: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),

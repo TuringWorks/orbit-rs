@@ -118,25 +118,25 @@ pub use multi_language::javascript::JavaScriptMLEngine;
 pub use multi_language::lua::LuaMLEngine;
 
 #[cfg(feature = "industry-healthcare")]
-pub use industry_models::healthcare::HealthcareModels;
+pub use industry_models::healthcare_pharma_lifesciences as healthcare;
 
 #[cfg(feature = "industry-fintech")]
-pub use industry_models::fintech::FintechModels;
+pub use industry_models::finance_banking_insurance as fintech;
 
 #[cfg(feature = "industry-adtech")]
-pub use industry_models::adtech::AdtechModels;
+pub use industry_models::arts_design_creative as adtech;
 
 #[cfg(feature = "industry-defense")]
-pub use industry_models::defense::DefenseModels;
+pub use industry_models::government_defense_publicsector as defense;
 
 #[cfg(feature = "industry-logistics")]
-pub use industry_models::logistics::LogisticsModels;
+pub use industry_models::transportation_logistics_travel as logistics;
 
 #[cfg(feature = "industry-banking")]
-pub use industry_models::banking::BankingModels;
+pub use industry_models::finance_banking_insurance as banking;
 
 #[cfg(feature = "industry-insurance")]
-pub use industry_models::insurance::InsuranceModels;
+pub use industry_models::finance_banking_insurance as insurance;
 
 /// Version information
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

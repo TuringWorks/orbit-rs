@@ -5,11 +5,11 @@
 //! - Corporate Learning & L&D
 //! - HR, Recruiting & Talent Management
 
-pub mod education_tech;
 pub mod corporate_learning;
+pub mod education_tech;
 pub mod hr_recruiting;
 
 // Re-export commonly used types
-pub use education_tech::*;
 pub use corporate_learning::*;
+pub use education_tech::*;
 pub use hr_recruiting::*;

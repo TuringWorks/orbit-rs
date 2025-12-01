@@ -169,7 +169,10 @@ mod tests {
     async fn test_seismic_interpreter() {
         let types = vec!["fault".to_string(), "horizon".to_string()];
         let mut model = SeismicInterpreter::new(types);
-        assert_eq!(model.model_type(), "oil_gas_exploration.seismic_interpretation");
+        assert_eq!(
+            model.model_type(),
+            "oil_gas_exploration.seismic_interpretation"
+        );
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.accuracy > 0.85);
@@ -179,7 +182,10 @@ mod tests {
     async fn test_reservoir_characterizer() {
         let properties = vec!["porosity".to_string(), "permeability".to_string()];
         let mut model = ReservoirCharacterizer::new(properties);
-        assert_eq!(model.model_type(), "oil_gas_exploration.reservoir_characterization");
+        assert_eq!(
+            model.model_type(),
+            "oil_gas_exploration.reservoir_characterization"
+        );
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.mae.is_some());
@@ -188,7 +194,10 @@ mod tests {
     #[tokio::test]
     async fn test_production_optimizer() {
         let mut model = ProductionOptimizer::new(50);
-        assert_eq!(model.model_type(), "oil_gas_exploration.production_optimization");
+        assert_eq!(
+            model.model_type(),
+            "oil_gas_exploration.production_optimization"
+        );
 
         let predictions = model.predict(&[]).await.unwrap();
         assert_eq!(predictions.len(), 250);

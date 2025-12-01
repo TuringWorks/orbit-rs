@@ -184,7 +184,10 @@ mod tests {
     #[tokio::test]
     async fn test_marketplace_recommender() {
         let mut model = MarketplaceRecommender::new(100000, 50000, 128);
-        assert_eq!(model.model_type(), "internet_platforms.marketplace_recommender");
+        assert_eq!(
+            model.model_type(),
+            "internet_platforms.marketplace_recommender"
+        );
 
         let predictions = model.predict(&[]).await.unwrap();
         assert_eq!(predictions.len(), 10);

@@ -15,17 +15,17 @@
 //!
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────────┐
-//! │                      Schema Registry                             │
-//! │                                                                  │
+//! │                      Schema Registry                            │
+//! │                                                                 │
 //! │  ┌──────────────────┐  ┌──────────────────┐  ┌───────────────┐  │
 //! │  │    Namespace     │  │     Protocol     │  │    Schema     │  │
 //! │  │    Definitions   │  │   Projections    │  │   Versions    │  │
 //! │  └──────────────────┘  └──────────────────┘  └───────────────┘  │
-//! │                                                                  │
-//! │  Stores:                                                         │
-//! │  - schema:{namespace} -> NamespaceSchema                         │
-//! │  - projection:{protocol}:{namespace} -> ProtocolProjection       │
-//! │  - version:{namespace}:{version} -> SchemaVersion                │
+//! │                                                                 │
+//! │  Stores:                                                        │
+//! │  - schema:{namespace} -> NamespaceSchema                        │
+//! │  - projection:{protocol}:{namespace} -> ProtocolProjection      │
+//! │  - version:{namespace}:{version} -> SchemaVersion               │
 //! └─────────────────────────────────────────────────────────────────┘
 //! ```
 

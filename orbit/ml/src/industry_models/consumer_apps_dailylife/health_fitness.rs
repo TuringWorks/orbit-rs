@@ -16,6 +16,7 @@ pub struct ActivityTracker {
 }
 
 impl ActivityTracker {
+    /// Create a new activity tracker
     pub fn new(activity_types: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -64,6 +65,7 @@ pub struct SleepPatternAnalyzer {
 }
 
 impl SleepPatternAnalyzer {
+    /// Create a new sleep pattern analyzer
     pub fn new(sleep_stages: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -110,6 +112,7 @@ pub struct HabitFormationCoach {
 }
 
 impl HabitFormationCoach {
+    /// Create a new habit formation coach
     pub fn new(habit_types: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),

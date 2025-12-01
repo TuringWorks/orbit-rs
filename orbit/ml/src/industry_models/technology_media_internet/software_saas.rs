@@ -225,7 +225,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_user_churn_predictor() {
-        let factors = vec!["usage_frequency".to_string(), "feature_adoption".to_string()];
+        let factors = vec![
+            "usage_frequency".to_string(),
+            "feature_adoption".to_string(),
+        ];
         let mut model = UserChurnPredictor::new(factors);
         assert_eq!(model.model_type(), "software_saas.user_churn");
 

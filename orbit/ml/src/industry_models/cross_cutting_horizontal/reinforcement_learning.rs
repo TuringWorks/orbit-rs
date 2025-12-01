@@ -23,7 +23,12 @@ pub struct PPOAgent {
 
 impl PPOAgent {
     /// Create a new PPO agent
-    pub fn new(state_dim: usize, action_dim: usize, hidden_dims: Vec<usize>, clip_epsilon: f32) -> Self {
+    pub fn new(
+        state_dim: usize,
+        action_dim: usize,
+        hidden_dims: Vec<usize>,
+        clip_epsilon: f32,
+    ) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
             state_dim,
@@ -81,7 +86,12 @@ pub struct SACAgent {
 
 impl SACAgent {
     /// Create a new SAC agent
-    pub fn new(state_dim: usize, action_dim: usize, hidden_dims: Vec<usize>, temperature: f32) -> Self {
+    pub fn new(
+        state_dim: usize,
+        action_dim: usize,
+        hidden_dims: Vec<usize>,
+        temperature: f32,
+    ) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
             state_dim,
@@ -281,7 +291,10 @@ mod tests {
     #[tokio::test]
     async fn test_contextual_bandit() {
         let mut model = ContextualBanditAgent::new(20, 10, 0.1);
-        assert_eq!(model.model_type(), "reinforcement_learning.contextual_bandit");
+        assert_eq!(
+            model.model_type(),
+            "reinforcement_learning.contextual_bandit"
+        );
 
         let metrics = model.train(&[]).await.unwrap();
         let custom = metrics.custom_metrics.as_ref().unwrap();

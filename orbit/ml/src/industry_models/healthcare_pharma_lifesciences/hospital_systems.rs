@@ -171,6 +171,7 @@ pub struct SepsisRiskPredictor {
 }
 
 impl SepsisRiskPredictor {
+    /// Create a new patient flow optimizer
     pub fn new(vital_signs: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -191,8 +192,8 @@ impl IndustryModel for SepsisRiskPredictor {
 
     async fn train(&mut self, _data: &[u8]) -> Result<ModelMetrics> {
         // Candle Integration: DeepSurv (MLP for Survival Analysis)
-        use candle_core::{DType, Device, Tensor, Module};
-        use candle_nn::{VarBuilder, VarMap, Optimizer};
+        use candle_core::{DType, Device, Module, Tensor};
+        use candle_nn::{Optimizer, VarBuilder, VarMap};
 
         // 1. Setup Device
         let device = Device::Cpu;
@@ -201,7 +202,7 @@ impl IndustryModel for SepsisRiskPredictor {
         let varmap = VarMap::new();
         let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
 
-        let input_dim = self.vital_signs.len(); 
+        let input_dim = self.vital_signs.len();
         let hidden_dim = 32;
         let output_dim = 1; // Log hazard ratio
 
@@ -216,7 +217,7 @@ impl IndustryModel for SepsisRiskPredictor {
         let batch_size = 32;
         // Ensure input_dim is at least 1 to avoid errors if vital_signs is empty
         let effective_input_dim = if input_dim > 0 { input_dim } else { 1 };
-        
+
         let input = Tensor::randn(0f32, 1f32, (batch_size, effective_input_dim), &device)
             .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
         let target_risk = Tensor::randn(0f32, 1f32, (batch_size, output_dim), &device)
@@ -228,32 +229,45 @@ impl IndustryModel for SepsisRiskPredictor {
 
         let mut final_loss = 0.0;
         for _ in 0..10 {
-            let h1 = fc1.forward(&input)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            let h1 = h1.relu()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
-            let h2 = fc2.forward(&h1)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            let h2 = h2.relu()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
+            let h1 = fc1.forward(&input).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+            let h1 = h1.relu().map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
 
-            let output = fc3.forward(&h2)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
+            let h2 = fc2.forward(&h1).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+            let h2 = h2.relu().map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+
+            let output = fc3.forward(&h2).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+
             // Using MSE against a "risk score" for verification (Proxy for Cox Loss)
             let loss = (output - &target_risk)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?
                 .sqr()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?
                 .mean_all()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
-            adam.backward_step(&loss)
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
-            
-            final_loss = loss.to_scalar::<f32>()
-                .map_err(|e| super::super::common::IndustryModelError::TrainingError(e.to_string()))?;
+                .map_err(|e| {
+                    super::super::common::IndustryModelError::TrainingError(e.to_string())
+                })?;
+
+            adam.backward_step(&loss).map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
+
+            final_loss = loss.to_scalar::<f32>().map_err(|e| {
+                super::super::common::IndustryModelError::TrainingError(e.to_string())
+            })?;
         }
 
         let mut metrics = ModelMetrics::new();
@@ -282,6 +296,7 @@ pub struct MedicalImageSegmentation {
 }
 
 impl MedicalImageSegmentation {
+    /// Create a new resource allocator
     pub fn new(organ_type: String) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -311,7 +326,7 @@ impl IndustryModel for MedicalImageSegmentation {
 
     async fn predict(&self, _input: &[u8]) -> Result<Vec<f32>> {
         // Returns flattened segmentation mask
-        Ok(vec![0.0; 256 * 256]) 
+        Ok(vec![0.0; 256 * 256])
     }
 
     async fn evaluate(&self, _test_data: &[u8]) -> Result<ModelMetrics> {
@@ -338,7 +353,10 @@ mod tests {
     #[tokio::test]
     async fn test_readmission_predictor() {
         let mut model = ReadmissionPredictor::new(30);
-        assert_eq!(model.model_type(), "hospital_systems.readmission_prediction");
+        assert_eq!(
+            model.model_type(),
+            "hospital_systems.readmission_prediction"
+        );
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.accuracy > 0.85);

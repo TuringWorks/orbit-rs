@@ -7,25 +7,25 @@
 //! - Utilities & Power Grids
 //! - Clean Energy & Climate Tech
 
-pub mod manufacturing;
-pub mod automotive;
 pub mod aerospace;
-pub mod robotics;
-pub mod physical_ai;
-pub mod oil_gas_exploration;
-pub mod offshore_drilling;
-pub mod mining;
+pub mod automotive;
 pub mod energy;
+pub mod manufacturing;
+pub mod mining;
+pub mod offshore_drilling;
+pub mod oil_gas_exploration;
+pub mod physical_ai;
+pub mod robotics;
 pub mod solar_installations;
 
 // Re-export commonly used types
-pub use manufacturing::*;
-pub use automotive::*;
 pub use aerospace::*;
-pub use robotics::*;
-pub use physical_ai::*;
-pub use oil_gas_exploration::*;
-pub use offshore_drilling::*;
-pub use mining::*;
+pub use automotive::*;
 pub use energy::*;
+pub use manufacturing::*;
+pub use mining::*;
+pub use offshore_drilling::*;
+pub use oil_gas_exploration::*;
+pub use physical_ai::*;
+pub use robotics::*;
 pub use solar_installations::*;

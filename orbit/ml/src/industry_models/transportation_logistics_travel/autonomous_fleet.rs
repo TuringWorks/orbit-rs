@@ -101,7 +101,10 @@ impl IndustryModel for AVDemandPredictor {
 
     async fn predict(&self, _input: &[u8]) -> Result<Vec<f32>> {
         // TODO: Implement inference
-        Ok(vec![0.0; self.service_zones * (self.forecast_horizon_minutes / 5)])
+        Ok(vec![
+            0.0;
+            self.service_zones * (self.forecast_horizon_minutes / 5)
+        ])
     }
 
     async fn evaluate(&self, _test_data: &[u8]) -> Result<ModelMetrics> {

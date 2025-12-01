@@ -9,17 +9,17 @@
 //!
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────────┐
-//! │                      Protocol Layer                              │
-//! ├─────────┬─────────┬─────────┬─────────┬─────────┬──────────────┤
+//! │                      Protocol Layer                             │
+//! ├─────────┬────--────┬─────────┬─────────┬─────────┬──────────────┤
 //! │  Redis  │PostgreSQL│  MySQL  │   CQL   │ Cypher  │  AQL/REST    │
 //! │ Adapter │ Adapter  │ Adapter │ Adapter │ Adapter │  Adapter     │
-//! ├─────────┴─────────┴─────────┴─────────┴─────────┴──────────────┤
-//! │                    Schema Registry                               │
+//! ├─────────┴──────-───┴─────────┴─────────┴─────────┴──────────────┤
+//! │                    Schema Registry                              │
 //! ├─────────────────────────────────────────────────────────────────┤
-//! │                 Unified Query Engine                             │
+//! │                 Unified Query Engine                            │
 //! ├─────────────────────────────────────────────────────────────────┤
-//! │                   Unified Storage                                │
-//! │         (Single RocksDB + Tiered Storage Backend)                │
+//! │                   Unified Storage                               │
+//! │         (Single RocksDB + Tiered Storage Backend)               │
 //! └─────────────────────────────────────────────────────────────────┘
 //! ```
 //!
@@ -67,6 +67,7 @@
 
 pub mod actor_tier_placement;
 pub mod adapters;
+pub mod index;
 pub mod operations;
 pub mod schema;
 pub mod storage;
@@ -99,8 +100,10 @@ pub use tiered::{
 };
 pub use types::{RecordId, RecordMetadata, UniversalRecord, UniversalResult, UniversalValue};
 
+// Re-export index types
+pub use index::{IndexEntry, IndexStats, SecondaryIndexManager};
+
 // Future modules (to be implemented)
 // pub mod backend;     // RocksDB persistent backend
-// pub mod index;       // Secondary index management
 // pub mod transaction; // Distributed transaction coordination
 // pub mod cache;       // Query result caching

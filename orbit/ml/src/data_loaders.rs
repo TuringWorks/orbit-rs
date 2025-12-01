@@ -1,23 +1,24 @@
 //! Data loading infrastructure for ML training
 
-use ndarray::{Array2, Array4};
 use crate::error::Result;
+use ndarray::{Array2, Array4};
 
 /// Generic data loader trait
 pub trait DataLoader: Send + Sync {
+    /// The type of item returned by the loader
     type Item;
-    
+
     /// Load next batch of data
     fn next_batch(&mut self) -> Result<Option<Vec<Self::Item>>>;
-    
+
     /// Get total number of samples
     fn len(&self) -> usize;
-    
+
     /// Check if loader is empty
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
-    
+
     /// Reset loader to beginning
     fn reset(&mut self);
 }
@@ -33,6 +34,7 @@ pub struct ImageDataLoader {
 }
 
 impl ImageDataLoader {
+    /// Create a new image data loader
     pub fn new(
         image_paths: Vec<String>,
         labels: Vec<usize>,
@@ -108,6 +110,7 @@ pub struct TimeSeriesDataLoader {
 }
 
 impl TimeSeriesDataLoader {
+    /// Create a new time-series data loader
     pub fn new(data: Array2<f32>, sequence_length: usize, batch_size: usize) -> Self {
         Self {
             data,
@@ -135,19 +138,19 @@ impl DataLoader for TimeSeriesDataLoader {
             let ncols = self.data.ncols();
             let mut x_data = Vec::with_capacity(self.sequence_length * ncols);
             let mut y_data = Vec::with_capacity(self.sequence_length * ncols);
-            
+
             for row_idx in 0..self.sequence_length {
                 for col_idx in 0..ncols {
                     x_data.push(self.data[[i + row_idx, col_idx]]);
                     y_data.push(self.data[[i + row_idx + 1, col_idx]]);
                 }
             }
-            
+
             let x = Array2::from_shape_vec((self.sequence_length, ncols), x_data)
                 .map_err(|e| crate::error::MLError::invalid_input(e.to_string()))?;
             let y = Array2::from_shape_vec((self.sequence_length, ncols), y_data)
                 .map_err(|e| crate::error::MLError::invalid_input(e.to_string()))?;
-            
+
             batch.push((x, y));
         }
 
@@ -171,14 +174,19 @@ pub struct GraphDataLoader {
     current_idx: usize,
 }
 
+/// Graph data structure for GNNs
 #[derive(Clone)]
 pub struct GraphData {
+    /// Node feature matrix (num_nodes x num_features)
     pub node_features: Array2<f32>,
+    /// Edge indices (source, target)
     pub edge_index: Vec<(usize, usize)>,
+    /// Node or graph labels
     pub labels: Vec<usize>,
 }
 
 impl GraphDataLoader {
+    /// Create a new graph data loader
     pub fn new(graphs: Vec<GraphData>, batch_size: usize) -> Self {
         Self {
             graphs,
@@ -222,7 +230,7 @@ mod tests {
         let paths = vec!["img1.jpg".to_string(), "img2.jpg".to_string()];
         let labels = vec![0, 1];
         let mut loader = ImageDataLoader::new(paths, labels, 1, false, false);
-        
+
         assert_eq!(loader.len(), 2);
         assert!(!loader.is_empty());
     }
@@ -231,7 +239,7 @@ mod tests {
     fn test_time_series_data_loader() {
         let data = Array::from_shape_fn((100, 10), |(i, j)| (i + j) as f32);
         let mut loader = TimeSeriesDataLoader::new(data, 10, 5);
-        
+
         assert!(loader.len() > 0);
     }
 }

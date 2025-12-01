@@ -16,6 +16,7 @@ pub struct SiteSafetyMonitor {
 }
 
 impl SiteSafetyMonitor {
+    /// Create a new site safety monitor
     pub fn new(safety_zones: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
@@ -65,6 +66,7 @@ pub struct ProjectRiskAssessor {
 }
 
 impl ProjectRiskAssessor {
+    /// Create a new project risk assessor
     pub fn new(risk_categories: Vec<String>) -> Self {
         Self {
             model_version: "1.0.0".to_string(),

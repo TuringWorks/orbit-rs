@@ -14,16 +14,16 @@
 //! - Gaming & Interactive Entertainment
 
 pub mod consumer_electronics;
-pub mod iot;
-pub mod software_saas;
-pub mod internet_platforms;
-pub mod social_media;
 pub mod gaming;
+pub mod internet_platforms;
+pub mod iot;
+pub mod social_media;
+pub mod software_saas;
 
 // Re-export commonly used types
 pub use consumer_electronics::*;
-pub use iot::*;
-pub use software_saas::*;
-pub use internet_platforms::*;
-pub use social_media::*;
 pub use gaming::*;
+pub use internet_platforms::*;
+pub use iot::*;
+pub use social_media::*;
+pub use software_saas::*;
