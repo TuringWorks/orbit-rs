@@ -17,6 +17,7 @@ orbit-proto = { path = "../proto" }
 orbit-client = { path = "../client" }
 orbit-ml = { path = "../ml" }
 orbit-compute = { path = "../compute", optional = true }
+orbit-engine = { path = "../engine" }
 tokio.workspace = true
 tokio-stream.workspace = true
 tokio-util = { version = "0.7", features = ["codec"] }

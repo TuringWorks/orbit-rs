@@ -8,6 +8,7 @@ pub mod persistence;
 pub mod protocols;
 pub mod server;
 pub mod services;
+pub mod unified_storage;
 #[cfg(test)]
 mod test_pooling_integration;
 
@@ -16,4 +17,8 @@ pub use load_balancer::{LoadBalancer, LoadBalancerStats, LoadBalancingStrategy, 
 pub use mesh::{AddressableDirectory, ClusterManager, ClusterStats, DirectoryStats};
 pub use server::{
     OrbitServer, OrbitServerBuilder, OrbitServerConfig, ProtocolConfig, ProtocolStats, ServerStats,
+};
+pub use unified_storage::{
+    UnifiedStorageError, UnifiedStorageIntegration, UnifiedStorageIntegrationConfig,
+    UnifiedStorageMetrics,
 };

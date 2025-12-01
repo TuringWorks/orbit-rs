@@ -5243,6 +5243,7 @@ dependencies = [
  "nom",
  "orbit-client",
  "orbit-compute",
+ "orbit-engine",
  "orbit-ml",
  "orbit-proto",
  "orbit-shared",
