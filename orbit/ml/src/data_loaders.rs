@@ -1,8 +1,6 @@
 //! Data loading infrastructure for ML training
 
-use std::path::Path;
-use ndarray::{Array2, Array4};
-use serde::{Deserialize, Serialize};
+use ndarray::{Array2, Array4, s};
 use crate::error::Result;
 
 /// Generic data loader trait
@@ -53,7 +51,7 @@ impl ImageDataLoader {
     }
 
     /// Load and preprocess a single image
-    fn load_image(&self, path: &str) -> Result<Array4<f32>> {
+    fn load_image(&self, _path: &str) -> Result<Array4<f32>> {
         // In production, use image crate to load actual images
         // For now, return dummy data
         Ok(Array4::zeros((1, 3, 224, 224)))
