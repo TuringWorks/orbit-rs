@@ -8,7 +8,11 @@
 
 pub mod agritech;
 pub mod marine_exploration;
+pub mod food_beverage;
+pub mod environmental_monitoring;
 
 // Re-export commonly used types
 pub use agritech::*;
 pub use marine_exploration::*;
+pub use food_beverage::*;
+pub use environmental_monitoring::*;
