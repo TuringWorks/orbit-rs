@@ -238,3 +238,4 @@ target/coverage/
 
 # Cluster testing data
 cluster-data/
+.claude/settings.local.json
