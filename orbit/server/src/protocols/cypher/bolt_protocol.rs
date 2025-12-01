@@ -798,7 +798,11 @@ impl BoltProtocolHandler {
 
         // Skip the structure header (0xBn 0x01)
         self.decoder.reset();
-        let skip_offset = if bytes[0] >= 0xB0 && bytes[0] <= 0xBF { 2 } else { 1 };
+        let skip_offset = if bytes[0] >= 0xB0 && bytes[0] <= 0xBF {
+            2
+        } else {
+            1
+        };
 
         if skip_offset >= bytes.len() {
             return Ok(HashMap::new());
@@ -907,7 +911,11 @@ impl BoltProtocolHandler {
         }
 
         // Skip structure header
-        let skip_offset = if bytes[0] >= 0xB0 && bytes[0] <= 0xBF { 2 } else { 1 };
+        let skip_offset = if bytes[0] >= 0xB0 && bytes[0] <= 0xBF {
+            2
+        } else {
+            1
+        };
 
         self.decoder.reset();
         self.decoder.position = skip_offset;
@@ -1179,10 +1187,7 @@ impl BoltProtocolHandler {
                     expression,
                     variable,
                 } => {
-                    debug!(
-                        "UNWIND clause processing: {:?} AS {}",
-                        expression, variable
-                    );
+                    debug!("UNWIND clause processing: {:?} AS {}", expression, variable);
                 }
                 crate::protocols::cypher::cypher_parser::CypherClause::Foreach {
                     variable,
@@ -1347,7 +1352,11 @@ impl BoltProtocolHandler {
         }
 
         // Skip structure header
-        let skip_offset = if bytes[0] >= 0xB0 && bytes[0] <= 0xBF { 2 } else { 1 };
+        let skip_offset = if bytes[0] >= 0xB0 && bytes[0] <= 0xBF {
+            2
+        } else {
+            1
+        };
 
         self.decoder.reset();
         self.decoder.position = skip_offset;
@@ -1374,7 +1383,11 @@ impl BoltProtocolHandler {
 
         if self.transaction_state == TransactionState::Active {
             return self
-                .send_failure(stream, "TransactionError", "Transaction already in progress")
+                .send_failure(
+                    stream,
+                    "TransactionError",
+                    "Transaction already in progress",
+                )
                 .await;
         }
 

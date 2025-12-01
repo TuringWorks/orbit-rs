@@ -401,7 +401,9 @@ impl CypherFunctions {
     fn starts_with(args: &[Value]) -> ProtocolResult<Value> {
         Self::require_args(args, 2, "startsWith")?;
         match (&args[0], &args[1]) {
-            (Value::String(s), Value::String(prefix)) => Ok(Value::Bool(s.starts_with(prefix.as_str()))),
+            (Value::String(s), Value::String(prefix)) => {
+                Ok(Value::Bool(s.starts_with(prefix.as_str())))
+            }
             (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
             _ => Err(ProtocolError::CypherError(
                 "startsWith requires two string arguments".to_string(),
@@ -412,7 +414,9 @@ impl CypherFunctions {
     fn ends_with(args: &[Value]) -> ProtocolResult<Value> {
         Self::require_args(args, 2, "endsWith")?;
         match (&args[0], &args[1]) {
-            (Value::String(s), Value::String(suffix)) => Ok(Value::Bool(s.ends_with(suffix.as_str()))),
+            (Value::String(s), Value::String(suffix)) => {
+                Ok(Value::Bool(s.ends_with(suffix.as_str())))
+            }
             (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
             _ => Err(ProtocolError::CypherError(
                 "endsWith requires two string arguments".to_string(),
@@ -423,7 +427,9 @@ impl CypherFunctions {
     fn contains(args: &[Value]) -> ProtocolResult<Value> {
         Self::require_args(args, 2, "contains")?;
         match (&args[0], &args[1]) {
-            (Value::String(s), Value::String(substr)) => Ok(Value::Bool(s.contains(substr.as_str()))),
+            (Value::String(s), Value::String(substr)) => {
+                Ok(Value::Bool(s.contains(substr.as_str())))
+            }
             (Value::Array(arr), val) => Ok(Value::Bool(arr.contains(val))),
             (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
             _ => Err(ProtocolError::CypherError(
@@ -556,13 +562,19 @@ impl CypherFunctions {
         let accumulator = args[0].clone();
         let list = match &args[1] {
             Value::Array(arr) => arr.clone(),
-            _ => return Err(ProtocolError::CypherError(
-                "reduce requires a list as second argument".to_string(),
-            )),
+            _ => {
+                return Err(ProtocolError::CypherError(
+                    "reduce requires a list as second argument".to_string(),
+                ))
+            }
         };
 
         // Return accumulator for now - full reduce requires expression evaluation
-        Ok(if list.is_empty() { accumulator } else { list.last().cloned().unwrap_or(accumulator) })
+        Ok(if list.is_empty() {
+            accumulator
+        } else {
+            list.last().cloned().unwrap_or(accumulator)
+        })
     }
 
     fn keys(args: &[Value]) -> ProtocolResult<Value> {
@@ -628,10 +640,7 @@ impl CypherFunctions {
 
     fn collect(args: &[Value]) -> ProtocolResult<Value> {
         // Collect all non-null values into a list
-        let collected: Vec<Value> = args.iter()
-            .filter(|v| !v.is_null())
-            .cloned()
-            .collect();
+        let collected: Vec<Value> = args.iter().filter(|v| !v.is_null()).cloned().collect();
         Ok(Value::Array(collected))
     }
 
@@ -708,7 +717,13 @@ impl CypherFunctions {
     fn sign(args: &[Value]) -> ProtocolResult<Value> {
         Self::require_args(args, 1, "sign")?;
         let f = Self::get_float(&args[0])?;
-        Ok(json!(if f > 0.0 { 1 } else if f < 0.0 { -1 } else { 0 }))
+        Ok(json!(if f > 0.0 {
+            1
+        } else if f < 0.0 {
+            -1
+        } else {
+            0
+        }))
     }
 
     fn rand(_args: &[Value]) -> ProtocolResult<Value> {
@@ -988,14 +1003,12 @@ impl CypherFunctions {
                     )))
                 }
             }
-            Value::Object(obj) => {
-                Ok(json!({
-                    "hour": obj.get("hour").and_then(|v| v.as_u64()).unwrap_or(0),
-                    "minute": obj.get("minute").and_then(|v| v.as_u64()).unwrap_or(0),
-                    "second": obj.get("second").and_then(|v| v.as_u64()).unwrap_or(0),
-                    "nanosecond": obj.get("nanosecond").and_then(|v| v.as_u64()).unwrap_or(0)
-                }))
-            }
+            Value::Object(obj) => Ok(json!({
+                "hour": obj.get("hour").and_then(|v| v.as_u64()).unwrap_or(0),
+                "minute": obj.get("minute").and_then(|v| v.as_u64()).unwrap_or(0),
+                "second": obj.get("second").and_then(|v| v.as_u64()).unwrap_or(0),
+                "nanosecond": obj.get("nanosecond").and_then(|v| v.as_u64()).unwrap_or(0)
+            })),
             _ => Err(ProtocolError::CypherError(
                 "time requires a string or map argument".to_string(),
             )),
@@ -1037,14 +1050,12 @@ impl CypherFunctions {
                     "string": s
                 }))
             }
-            Value::Object(obj) => {
-                Ok(json!({
-                    "months": obj.get("months").and_then(|v| v.as_i64()).unwrap_or(0),
-                    "days": obj.get("days").and_then(|v| v.as_i64()).unwrap_or(0),
-                    "seconds": obj.get("seconds").and_then(|v| v.as_i64()).unwrap_or(0),
-                    "nanoseconds": obj.get("nanoseconds").and_then(|v| v.as_i64()).unwrap_or(0)
-                }))
-            }
+            Value::Object(obj) => Ok(json!({
+                "months": obj.get("months").and_then(|v| v.as_i64()).unwrap_or(0),
+                "days": obj.get("days").and_then(|v| v.as_i64()).unwrap_or(0),
+                "seconds": obj.get("seconds").and_then(|v| v.as_i64()).unwrap_or(0),
+                "nanoseconds": obj.get("nanoseconds").and_then(|v| v.as_i64()).unwrap_or(0)
+            })),
             _ => Err(ProtocolError::CypherError(
                 "duration requires a string or map argument".to_string(),
             )),
@@ -1055,9 +1066,11 @@ impl CypherFunctions {
         Self::require_args(args, 2, "date.truncate")?;
         let unit = match &args[0] {
             Value::String(s) => s.to_lowercase(),
-            _ => return Err(ProtocolError::CypherError(
-                "date.truncate requires a string unit".to_string(),
-            )),
+            _ => {
+                return Err(ProtocolError::CypherError(
+                    "date.truncate requires a string unit".to_string(),
+                ))
+            }
         };
 
         match &args[1] {
@@ -1089,9 +1102,11 @@ impl CypherFunctions {
         Self::require_args(args, 2, "datetime.truncate")?;
         let unit = match &args[0] {
             Value::String(s) => s.to_lowercase(),
-            _ => return Err(ProtocolError::CypherError(
-                "datetime.truncate requires a string unit".to_string(),
-            )),
+            _ => {
+                return Err(ProtocolError::CypherError(
+                    "datetime.truncate requires a string unit".to_string(),
+                ))
+            }
         };
 
         match &args[1] {
@@ -1409,18 +1424,14 @@ impl CypherFunctions {
             return Ok(Value::Null);
         }
 
-        let values: Vec<f64> = args.iter()
-            .filter_map(|v| v.as_f64())
-            .collect();
+        let values: Vec<f64> = args.iter().filter_map(|v| v.as_f64()).collect();
 
         if values.is_empty() {
             return Ok(Value::Null);
         }
 
         let mean = values.iter().sum::<f64>() / values.len() as f64;
-        let variance = values.iter()
-            .map(|x| (x - mean).powi(2))
-            .sum::<f64>() / values.len() as f64;
+        let variance = values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / values.len() as f64;
 
         Ok(json!(variance.sqrt()))
     }
@@ -1437,9 +1448,7 @@ impl CypherFunctions {
 
         match &args[0] {
             Value::Array(arr) => {
-                let mut values: Vec<f64> = arr.iter()
-                    .filter_map(|v| v.as_f64())
-                    .collect();
+                let mut values: Vec<f64> = arr.iter().filter_map(|v| v.as_f64()).collect();
 
                 if values.is_empty() {
                     return Ok(Value::Null);
@@ -1476,9 +1485,7 @@ impl CypherFunctions {
 
         match &args[0] {
             Value::Array(arr) => {
-                let mut values: Vec<f64> = arr.iter()
-                    .filter_map(|v| v.as_f64())
-                    .collect();
+                let mut values: Vec<f64> = arr.iter().filter_map(|v| v.as_f64()).collect();
 
                 if values.is_empty() {
                     return Ok(Value::Null);
@@ -1553,9 +1560,9 @@ impl CypherFunctions {
 
     fn get_float(value: &Value) -> ProtocolResult<f64> {
         match value {
-            Value::Number(n) => n.as_f64().ok_or_else(|| {
-                ProtocolError::CypherError("Expected numeric value".to_string())
-            }),
+            Value::Number(n) => n
+                .as_f64()
+                .ok_or_else(|| ProtocolError::CypherError("Expected numeric value".to_string())),
             Value::Null => Ok(f64::NAN),
             _ => Err(ProtocolError::CypherError(
                 "Expected numeric value".to_string(),
@@ -1568,7 +1575,13 @@ impl CypherFunctions {
             (Value::Number(na), Value::Number(nb)) => {
                 let fa = na.as_f64().unwrap_or(0.0);
                 let fb = nb.as_f64().unwrap_or(0.0);
-                if fa < fb { -1 } else if fa > fb { 1 } else { 0 }
+                if fa < fb {
+                    -1
+                } else if fa > fb {
+                    1
+                } else {
+                    0
+                }
             }
             (Value::String(sa), Value::String(sb)) => sa.cmp(sb) as i32,
             (Value::Bool(ba), Value::Bool(bb)) => ba.cmp(bb) as i32,
@@ -1638,7 +1651,9 @@ mod tests {
     #[test]
     fn test_substring() {
         let ctx = FunctionContext::new();
-        let result = CypherFunctions::evaluate("substring", &[json!("hello"), json!(1), json!(3)], &ctx).unwrap();
+        let result =
+            CypherFunctions::evaluate("substring", &[json!("hello"), json!(1), json!(3)], &ctx)
+                .unwrap();
         assert_eq!(result, json!("ell"));
     }
 
@@ -1668,7 +1683,8 @@ mod tests {
         let result = CypherFunctions::evaluate("range", &[json!(1), json!(5)], &ctx).unwrap();
         assert_eq!(result, json!([1, 2, 3, 4, 5]));
 
-        let result = CypherFunctions::evaluate("range", &[json!(0), json!(10), json!(2)], &ctx).unwrap();
+        let result =
+            CypherFunctions::evaluate("range", &[json!(0), json!(10), json!(2)], &ctx).unwrap();
         assert_eq!(result, json!([0, 2, 4, 6, 8, 10]));
     }
 
@@ -1689,7 +1705,9 @@ mod tests {
     #[test]
     fn test_coalesce() {
         let ctx = FunctionContext::new();
-        let result = CypherFunctions::evaluate("coalesce", &[Value::Null, json!(1), json!(2)], &ctx).unwrap();
+        let result =
+            CypherFunctions::evaluate("coalesce", &[Value::Null, json!(1), json!(2)], &ctx)
+                .unwrap();
         assert_eq!(result, json!(1));
     }
 

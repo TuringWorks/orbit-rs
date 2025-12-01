@@ -2141,9 +2141,16 @@ pub enum UnwindExpression {
     /// A literal list (e.g., `[1, 2, 3]`)
     List(Vec<serde_json::Value>),
     /// A range expression (e.g., `range(1, 10)`)
-    Range { start: i64, end: i64, step: Option<i64> },
+    Range {
+        start: i64,
+        end: i64,
+        step: Option<i64>,
+    },
     /// A function call returning a list
-    FunctionCall { name: String, args: Vec<serde_json::Value> },
+    FunctionCall {
+        name: String,
+        args: Vec<serde_json::Value>,
+    },
     /// Property access that returns a list (e.g., `n.tags`)
     Property { variable: String, property: String },
 }
