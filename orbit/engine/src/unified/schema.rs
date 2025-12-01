@@ -60,15 +60,22 @@ pub enum Protocol {
 
 impl std::fmt::Display for Protocol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl Protocol {
+    /// Get the protocol name as a string
+    pub fn as_str(&self) -> &'static str {
         match self {
-            Protocol::Redis => write!(f, "redis"),
-            Protocol::PostgreSQL => write!(f, "postgresql"),
-            Protocol::MySQL => write!(f, "mysql"),
-            Protocol::CQL => write!(f, "cql"),
-            Protocol::Cypher => write!(f, "cypher"),
-            Protocol::AQL => write!(f, "aql"),
-            Protocol::REST => write!(f, "rest"),
-            Protocol::GRPC => write!(f, "grpc"),
+            Protocol::Redis => "redis",
+            Protocol::PostgreSQL => "postgresql",
+            Protocol::MySQL => "mysql",
+            Protocol::CQL => "cql",
+            Protocol::Cypher => "cypher",
+            Protocol::AQL => "aql",
+            Protocol::REST => "rest",
+            Protocol::GRPC => "grpc",
         }
     }
 }

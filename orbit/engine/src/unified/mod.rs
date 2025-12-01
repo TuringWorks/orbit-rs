@@ -65,12 +65,17 @@
 //! 3. UnifiedStorage returns the same record
 //! 4. PostgresAdapter formats as SQL result set
 
+pub mod adapters;
 pub mod operations;
 pub mod schema;
 pub mod storage;
 pub mod types;
 
 // Re-export commonly used types
+pub use adapters::{
+    AdapterFactory, BaseAdapter, CqlAdapter, GraphAdapter, ProtocolAdapter, RedisAdapter,
+    RestAdapter, SqlAdapter,
+};
 pub use operations::{
     AggregateOp, FieldDefinition, FieldType, FilterExpression, GraphPattern, IndexDefinition,
     IndexType, IsolationLevel, NamespaceSchema, NodePattern, RelationshipDirection,
@@ -88,4 +93,3 @@ pub use types::{RecordId, RecordMetadata, UniversalRecord, UniversalResult, Univ
 // pub mod index;       // Secondary index management
 // pub mod transaction; // Distributed transaction coordination
 // pub mod cache;       // Query result caching
-// pub mod adapters;    // Protocol-specific adapters

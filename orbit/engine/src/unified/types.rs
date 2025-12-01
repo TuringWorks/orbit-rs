@@ -462,6 +462,14 @@ pub enum UniversalResult {
     Empty,
     /// Transaction ID for begin transaction
     TransactionId(String),
+    /// Operation returned keys (for KEYS/SCAN commands)
+    Keys(Vec<String>),
+    /// Operation returned scored values (for sorted sets)
+    ScoredValues(Vec<(UniversalValue, f64)>),
+    /// Operation returned an optional value
+    OptionalValue(Option<UniversalValue>),
+    /// Operation returned a boolean result
+    Bool(bool),
 }
 
 impl UniversalResult {

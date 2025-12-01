@@ -92,6 +92,18 @@ pub enum UnifiedStorageError {
     /// Invalid operation
     #[error("Invalid operation: {0}")]
     InvalidOperation(String),
+
+    /// Serialization error
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
+
+    /// Invalid data
+    #[error("Invalid data: {0}")]
+    InvalidData(String),
+
+    /// Not implemented
+    #[error("Not implemented: {0}")]
+    NotImplemented(String),
 }
 
 /// Result type for unified storage operations
