@@ -346,6 +346,133 @@ success_threshold = 2
 half_open_max_calls = 3
 
 # ================================
+# UNIFIED CROSS-PROTOCOL STORAGE
+# ================================
+# Enables data written via one protocol (Redis, PostgreSQL, MySQL, CQL, Cypher,
+# AQL, REST) to be immediately accessible through all other protocols via a
+# shared tiered storage layer with automatic data migration.
+
+[unified_storage]
+# Enable unified cross-protocol storage
+enabled = true
+# Data directory for unified storage
+data_dir = "./data/unified"
+
+# Hot Tier: In-Memory Storage (fastest access, limited capacity)
+[unified_storage.hot_tier]
+enabled = true
+max_memory_mb = 1024
+eviction_policy = "lru"     # Options: "lru", "lfu", "fifo", "ttl"
+eviction_threshold = 0.85   # Trigger eviction when 85% full
+write_through = true        # Write to warm tier on every write
+read_through = true         # Fetch from warm tier on cache miss
+
+[unified_storage.hot_tier.prefetch]
+enabled = true
+batch_size = 100
+trigger_threshold = 3       # Prefetch after 3 accesses to related data
+
+# Warm Tier: RocksDB Storage (persistent, SSD-optimized)
+[unified_storage.warm_tier]
+enabled = true
+data_dir = "./data/unified/rocksdb"
+max_disk_gb = 100
+enable_compression = true
+compression_algorithm = "lz4"  # Options: "lz4", "snappy", "zstd", "none"
+block_cache_mb = 256
+write_buffer_mb = 64
+max_write_buffers = 3
+enable_bloom_filters = true
+bloom_bits_per_key = 10
+enable_wal = true
+sync_wal = false
+
+# Cold Tier: Cloud Object Storage (archival, cost-effective)
+[unified_storage.cold_tier]
+enabled = false              # Enable when cloud storage is configured
+backend = "s3"              # Options: "s3", "azure", "gcs", "minio"
+data_format = "parquet"     # Options: "parquet", "iceberg", "delta"
+partition_strategy = "time" # Options: "time", "hash", "range"
+compression = "snappy"
+
+[unified_storage.cold_tier.async_upload]
+enabled = true
+batch_size_mb = 64
+interval_secs = 300         # Upload every 5 minutes
+max_concurrent = 4
+retry_count = 3
+
+# S3 Configuration (also works for MinIO and S3-compatible services)
+# [unified_storage.cold_tier.s3]
+# bucket = "orbit-cold-storage"
+# region = "us-east-1"
+# access_key_id = "your-access-key"
+# secret_access_key = "your-secret-key"
+# endpoint = "https://s3.amazonaws.com"  # Custom endpoint for MinIO
+
+# Azure Blob Configuration
+# [unified_storage.cold_tier.azure]
+# account_name = "your-account"
+# container_name = "orbit-cold-storage"
+# access_key = "your-access-key"
+
+# GCS Configuration
+# [unified_storage.cold_tier.gcs]
+# bucket = "orbit-cold-storage"
+# project_id = "your-project"
+# service_account_key = "/path/to/key.json"
+
+# Automatic Tier Migration
+[unified_storage.tier_migration]
+enabled = true
+hot_to_warm_secs = 3600     # Move to warm tier after 1 hour of no access
+warm_to_cold_secs = 604800  # Move to cold tier after 7 days
+scan_interval_secs = 60     # Check for migrations every minute
+batch_size = 1000           # Migrate up to 1000 records per batch
+priority_strategy = "age"   # Options: "age", "size", "access_frequency"
+enable_promotion = true     # Promote data back to hot tier on access
+promotion_threshold = 5     # Promote after 5 accesses
+
+# Cross-Protocol Data Sharing
+[unified_storage.cross_protocol]
+enabled = true
+shared_protocols = ["redis", "postgresql", "mysql", "cql", "cypher", "aql", "rest"]
+namespace_strategy = "auto"   # Options: "auto", "explicit"
+default_namespace = "default"
+enable_schema_inference = true
+schema_cache_size = 1000
+
+# TTL and Data Expiration
+[unified_storage.ttl]
+enabled = true
+check_interval_secs = 60
+batch_size = 1000
+default_ttl_secs = 0        # 0 = no default TTL
+
+# Tier-Aware Actor Placement
+# Maps database actor types to storage tiers for optimal performance
+[unified_storage.actor_placement]
+enabled = true
+# Table metadata actors - persist in warm tier
+table_actor_tier = "warm"
+# Data extent/block actors - persist in warm tier
+extent_actor_tier = "warm"
+# Column actors for frequently accessed columns - hot tier
+column_actor_tier = "hot"
+# Active row actors - hot tier for fast access
+row_actor_tier = "hot"
+# Field-level actors - hot tier
+field_actor_tier = "hot"
+# Index actors - always hot for fast lookups
+index_actor_tier = "hot"
+# Enable dynamic migration based on access patterns
+dynamic_migration = true
+# Promote actor to hot tier after this many accesses
+promotion_access_count = 10
+# Demote actor after this idle time (seconds)
+demotion_idle_secs = 1800   # 30 minutes
+
+# ================================
 # EXAMPLE USAGE INSTRUCTIONS
 # ================================
 
