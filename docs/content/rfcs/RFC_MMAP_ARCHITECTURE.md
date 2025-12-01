@@ -11,7 +11,6 @@ category: rfcs
 **Author**: Orbit-RS Team  
 **Status**: Draft  
 **Created**: 2025-01-08  
-**Updated**: 2025-01-08  
 
 ## Abstract
 

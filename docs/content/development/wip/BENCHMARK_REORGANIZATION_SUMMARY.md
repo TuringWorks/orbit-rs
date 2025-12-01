@@ -6,7 +6,6 @@ category: wip
 
 # OrbitQL Benchmark Reorganization - Documentation Update Summary
 
-**Date**: October 11, 2025  
 **Status**: ✅ Complete  
 **Impact**: Major documentation update reflecting benchmark architecture changes  
 

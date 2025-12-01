@@ -780,5 +780,4 @@ impl PostgresAdapter {
 
 ---
 
-**Last Updated**: 2025-11-18
 **Version**: 1.0

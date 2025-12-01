@@ -6,7 +6,6 @@ category: documentation
 
 ## Comprehensive Database Comparison Matrix: Orbit-RS vs Industry Leaders
 
-**Date**: October 13, 2025  
 **Author**: AI Assistant  
 **Status**: Active  
 **Version**: 2.0

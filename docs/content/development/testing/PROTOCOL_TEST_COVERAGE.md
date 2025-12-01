@@ -503,5 +503,4 @@ To improve test coverage:
 
 ---
 
-Last Updated: 2025-11-20
 Maintainer: Orbit Development Team

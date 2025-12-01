@@ -258,4 +258,3 @@ tiered-storage, transactions, clustering, storage-rocksdb, iceberg-cold, icelake
 
 ---
 
-*Last updated: 2025-11-26*

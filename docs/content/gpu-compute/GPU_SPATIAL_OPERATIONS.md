@@ -215,5 +215,4 @@ Tests cover:
 
 ---
 
-**Last Updated**: November 2025
 

@@ -11,7 +11,6 @@ permalink: /compute-acceleration/
 ### Orbit-Compute: Heterogeneous Computing for Maximum Performance
 
 **Status**:  Production Ready  
-**Updated**: 2025-10-09  
 **Applies to**: orbit-compute v1.0+
 
 ## Overview

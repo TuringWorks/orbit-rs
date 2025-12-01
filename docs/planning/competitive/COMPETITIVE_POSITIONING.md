@@ -7,7 +7,6 @@ category: planning
 ## Orbit-RS Competitive Positioning Document
 
 **Version**: 1.0  
-**Date**: October 9, 2025  
 **Status**: Draft  
 **Owner**: Product Strategy
 

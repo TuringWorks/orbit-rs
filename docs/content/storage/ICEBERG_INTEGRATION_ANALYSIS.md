@@ -1,6 +1,5 @@
 # Apache Iceberg Integration Analysis for Orbit Hybrid Storage
 
-**Date**: November 18, 2025
 **Scope**: Evaluating Apache Iceberg for warm/cold tier storage optimization
 **Status**: Architecture Analysis & Recommendation
 

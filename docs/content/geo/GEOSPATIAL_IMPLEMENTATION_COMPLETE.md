@@ -232,7 +232,6 @@ WHERE ST_Within(location, ST_GeomFromText('POLYGON((...))'))
 
 ---
 
-**Last Updated**: November 2025  
 **Version**: 1.0.0  
 **RFC**: RFC-2024-005
 

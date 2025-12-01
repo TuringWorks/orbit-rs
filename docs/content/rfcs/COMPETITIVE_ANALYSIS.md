@@ -4,7 +4,6 @@ title: Competitive Analysis: Orbit-RS vs Time Series & Analytics Leaders
 category: rfcs
 ---
 
-**Date**: October 9, 2025  
 **Author**: AI Assistant  
 **Status**: Draft  
 

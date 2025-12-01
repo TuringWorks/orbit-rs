@@ -6,7 +6,6 @@ category: wip
 
 # .gitignore Fix Summary - core.rs Missing in CI/CD
 
-**Date:** 2025-10-03  
 **Issue:** CI/CD failure - `cargo fmt --check` error  
 **Error Message:** `failed to resolve mod core: /home/runner/work/orbit-rs/orbit-rs/orbit/shared/src/transactions/core.rs does not exist`  
 **Status:**  Fixed

@@ -1,6 +1,5 @@
 # MCP and GraphRAG Completion Plan
 
-**Date**: November 2025  
 **Status**: Implementation In Progress
 
 ## Overview

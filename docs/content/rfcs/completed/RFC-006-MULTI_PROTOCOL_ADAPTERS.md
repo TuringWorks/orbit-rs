@@ -6,7 +6,6 @@ category: rfcs
 
 ## RFC-006: Multi-Protocol Adapters Analysis
 
-**Date**: October 9, 2025  
 **Author**: AI Assistant  
 **Status**: Draft  
 **Tracking Issue**: TBD  

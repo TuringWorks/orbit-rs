@@ -1,6 +1,5 @@
 # Documentation Update: GraphRAG Persistence Implementation
 
-**Date**: November 2025  
 **Status**: ✅ Complete
 
 ## Summary

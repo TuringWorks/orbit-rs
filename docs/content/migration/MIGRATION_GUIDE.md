@@ -600,4 +600,3 @@ Need help with your migration?
 
 ---
 
-**Last Updated:** November 2025

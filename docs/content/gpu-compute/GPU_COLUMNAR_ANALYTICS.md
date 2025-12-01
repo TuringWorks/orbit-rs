@@ -205,5 +205,4 @@ if row_count >= 10000 {
 
 ---
 
-**Last Updated**: November 2025
 

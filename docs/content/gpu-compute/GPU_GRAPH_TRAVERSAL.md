@@ -1,6 +1,5 @@
 # GPU-Accelerated Graph Traversal
 
-**Last Updated**: November 2025  
 **Status**: ✅ **Production Ready** (Metal + Vulkan fallback, u32 optimization, parent tracking)
 
 ---

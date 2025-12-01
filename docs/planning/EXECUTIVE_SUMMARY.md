@@ -5,7 +5,6 @@ category: planning
 ---
 
 **Version**: 1.0  
-**Date**: October 9, 2025  
 **Status**: Final  
 **Owner**: Strategic Planning
 

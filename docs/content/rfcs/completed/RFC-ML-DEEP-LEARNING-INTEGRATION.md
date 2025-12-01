@@ -11,7 +11,6 @@ category: documentation
 **Status:** Draft  
 **Author:** Orbit Development Team  
 **Created:** 2025-01-10  
-**Updated:** 2025-01-10  
 
 ## Abstract
 

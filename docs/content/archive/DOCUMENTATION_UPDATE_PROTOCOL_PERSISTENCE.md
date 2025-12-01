@@ -1,6 +1,5 @@
 # Documentation Update: Protocol Persistence
 
-**Date**: November 2025  
 **Status**: Complete
 
 ## Summary

@@ -6,7 +6,6 @@ category: rfcs
 
 ## RFC-003: Edge-Native Architecture for Orbit-RS
 
-**Date**: October 9, 2025  
 **Author**: AI Assistant  
 **Status**: Draft  
 **Tracking Issue**: TBD  

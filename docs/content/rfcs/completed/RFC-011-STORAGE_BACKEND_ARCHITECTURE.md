@@ -6,7 +6,6 @@ category: rfcs
 
 ## RFC-011: Storage Backend Architecture Analysis
 
-**Date**: October 9, 2025  
 **Author**: AI Assistant  
 **Status**: Draft  
 **Tracking Issue**: TBD  

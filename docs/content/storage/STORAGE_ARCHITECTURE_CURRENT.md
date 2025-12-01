@@ -1,6 +1,5 @@
 # Current Orbit Data Storage Architecture
 
-**Date**: November 2025  
 **Status**: Hybrid Architecture - Actors + Direct Storage
 
 ## Quick Answer

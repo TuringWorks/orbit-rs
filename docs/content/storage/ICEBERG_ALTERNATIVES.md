@@ -406,4 +406,3 @@ Offer optional Trino backend for time travel while waiting for native Rust solut
 - **Databend** (uses Icelake): https://github.com/datafuselabs/databend
 - **Apache Iceberg Spec**: https://iceberg.apache.org/spec/
 
-Last Updated: 2025-01-19

@@ -281,5 +281,4 @@ mypy orbit_client/
 
 ---
 
-**Last Updated**: November 2025
 
