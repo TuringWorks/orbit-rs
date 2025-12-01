@@ -43,6 +43,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Path functions: pathLength, startNode, endNode
   - **Tests**: 68+ Cypher tests passing
 
+- **Advanced Graph Analytics (Phase 15)**: Comprehensive graph algorithm procedures
+  - **Centrality Algorithms**:
+    - Eigenvector centrality with power iteration method
+    - Enhanced centrality measures (PageRank, Betweenness, Closeness, Degree - existing)
+  - **Similarity Algorithms**:
+    - Jaccard similarity (node neighborhood based)
+    - Cosine similarity (node embedding/feature vector based)
+    - Overlap coefficient similarity
+  - **Link Prediction Algorithms**:
+    - Common Neighbors scoring
+    - Adamic-Adar index (weighted common neighbors)
+    - Preferential Attachment score
+  - **Community Detection**:
+    - Louvain algorithm with modularity optimization
+    - Resolution parameter support for community granularity
+  - **Graph Structure Analysis**:
+    - K-Core decomposition (Batagelj-Zaversnik algorithm)
+    - Coreness values for all nodes
+    - K-specific core extraction
+  - **Tests**: 14 graph algorithm tests (all passing)
+
 ### Changed
 
 - Deprecated legacy `bolt.rs` in favor of comprehensive `bolt_protocol.rs` implementation

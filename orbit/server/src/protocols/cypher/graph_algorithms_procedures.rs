@@ -104,6 +104,20 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             "orbit.graph.closenesscentrality" => self.execute_closeness_centrality(args).await,
             "orbit.graph.degreecentrality" => self.execute_degree_centrality(args).await,
             "orbit.graph.trianglecount" => self.execute_triangle_count(args).await,
+            // Advanced Graph Analytics (Phase 15)
+            "orbit.graph.eigenvectorcentrality" => self.execute_eigenvector_centrality(args).await,
+            "orbit.graph.jaccardSimilarity" | "orbit.graph.jaccardsimilarity" => {
+                self.execute_jaccard_similarity(args).await
+            }
+            "orbit.graph.cosinesimilarity" => self.execute_cosine_similarity(args).await,
+            "orbit.graph.overlapsimilarity" => self.execute_overlap_similarity(args).await,
+            "orbit.graph.commonneighbors" => self.execute_common_neighbors(args).await,
+            "orbit.graph.adamicadar" => self.execute_adamic_adar(args).await,
+            "orbit.graph.preferentialattachment" => {
+                self.execute_preferential_attachment(args).await
+            }
+            "orbit.graph.louvain" => self.execute_louvain(args).await,
+            "orbit.graph.kcore" => self.execute_kcore(args).await,
             _ => Err(ProtocolError::CypherError(format!(
                 "Unknown graph algorithm procedure: {procedure_name}"
             ))),
@@ -1311,6 +1325,1039 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         })
     }
 
+    // ============================================================================
+    // Advanced Graph Analytics (Phase 15)
+    // ============================================================================
+
+    /// Execute orbit.graph.eigenvectorCentrality procedure
+    /// Computes eigenvector centrality using power iteration method
+    /// CALL orbit.graph.eigenvectorCentrality({iterations: 100, tolerance: 0.0001})
+    async fn execute_eigenvector_centrality(
+        &self,
+        args: &[JsonValue],
+    ) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            HashMap::new()
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let max_iterations = config
+            .get("iterations")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(100);
+
+        let tolerance = config
+            .get("tolerance")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0001);
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: Vec::new(),
+                relationships: Vec::new(),
+                columns: vec!["node_id".to_string(), "eigenvector_centrality".to_string()],
+                rows: Vec::new(),
+            });
+        }
+
+        // Build node index and adjacency matrix
+        let node_index: HashMap<&str, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.as_str(), i))
+            .collect();
+        let n = nodes.len();
+
+        // Build adjacency list (undirected)
+        let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_index.get(rel.start_node.to_string().as_str()),
+                node_index.get(rel.end_node.to_string().as_str()),
+            ) {
+                adj[from_idx].push(to_idx);
+                adj[to_idx].push(from_idx);
+            }
+        }
+
+        // Power iteration for eigenvector centrality
+        let mut centrality = vec![1.0f64 / n as f64; n];
+        let mut new_centrality = vec![0.0f64; n];
+
+        for _ in 0..max_iterations {
+            // Compute new centrality values
+            for i in 0..n {
+                new_centrality[i] = adj[i].iter().map(|&j| centrality[j]).sum();
+            }
+
+            // Normalize
+            let norm: f64 = new_centrality.iter().map(|&x| x * x).sum::<f64>().sqrt();
+            if norm > 0.0 {
+                for c in &mut new_centrality {
+                    *c /= norm;
+                }
+            }
+
+            // Check convergence
+            let diff: f64 = centrality
+                .iter()
+                .zip(new_centrality.iter())
+                .map(|(a, b)| (a - b).abs())
+                .sum();
+
+            std::mem::swap(&mut centrality, &mut new_centrality);
+
+            if diff < tolerance {
+                break;
+            }
+        }
+
+        info!("Eigenvector centrality computed for {} nodes", n);
+
+        let columns = vec!["node_id".to_string(), "eigenvector_centrality".to_string()];
+        let mut results: Vec<(f64, String)> = centrality
+            .iter()
+            .zip(nodes.iter())
+            .map(|(&c, n)| (c, n.id.to_string()))
+            .collect();
+        results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        let rows: Vec<Vec<Option<String>>> = results
+            .into_iter()
+            .map(|(c, id)| vec![Some(id), Some(format!("{:.6}", c))])
+            .collect();
+
+        Ok(QueryResult {
+            nodes: Vec::new(),
+            relationships: Vec::new(),
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute orbit.graph.jaccardSimilarity procedure
+    /// Computes Jaccard similarity between node pairs based on their neighborhoods
+    /// CALL orbit.graph.jaccardSimilarity({node1: "id1", node2: "id2"}) or
+    /// CALL orbit.graph.jaccardSimilarity({topK: 10}) for top-K similar pairs
+    async fn execute_jaccard_similarity(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            HashMap::new()
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: Vec::new(),
+                relationships: Vec::new(),
+                columns: vec![
+                    "node1".to_string(),
+                    "node2".to_string(),
+                    "similarity".to_string(),
+                ],
+                rows: Vec::new(),
+            });
+        }
+
+        // Build neighbor sets for each node
+        let mut neighbor_sets: HashMap<String, HashSet<String>> = HashMap::new();
+        for rel in &relationships {
+            let from = rel.start_node.to_string();
+            let to = rel.end_node.to_string();
+            neighbor_sets
+                .entry(from.clone())
+                .or_default()
+                .insert(to.clone());
+            neighbor_sets.entry(to).or_default().insert(from);
+        }
+
+        // If specific nodes requested
+        if let (Some(node1), Some(node2)) = (
+            config.get("node1").and_then(|v| v.as_str()),
+            config.get("node2").and_then(|v| v.as_str()),
+        ) {
+            let set1 = neighbor_sets.get(node1).cloned().unwrap_or_default();
+            let set2 = neighbor_sets.get(node2).cloned().unwrap_or_default();
+
+            let intersection = set1.intersection(&set2).count();
+            let union = set1.union(&set2).count();
+            let similarity = if union > 0 {
+                intersection as f64 / union as f64
+            } else {
+                0.0
+            };
+
+            return Ok(QueryResult {
+                nodes: Vec::new(),
+                relationships: Vec::new(),
+                columns: vec![
+                    "node1".to_string(),
+                    "node2".to_string(),
+                    "similarity".to_string(),
+                ],
+                rows: vec![vec![
+                    Some(node1.to_string()),
+                    Some(node2.to_string()),
+                    Some(format!("{:.6}", similarity)),
+                ]],
+            });
+        }
+
+        // Compute top-K similar pairs
+        let top_k = config
+            .get("topK")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(10);
+
+        let mut similarities: Vec<(String, String, f64)> = Vec::new();
+        let node_ids: Vec<&String> = neighbor_sets.keys().collect();
+
+        for i in 0..node_ids.len() {
+            for j in (i + 1)..node_ids.len() {
+                let set1 = &neighbor_sets[node_ids[i]];
+                let set2 = &neighbor_sets[node_ids[j]];
+
+                let intersection = set1.intersection(set2).count();
+                let union = set1.union(set2).count();
+
+                if union > 0 {
+                    let similarity = intersection as f64 / union as f64;
+                    if similarity > 0.0 {
+                        similarities.push((node_ids[i].clone(), node_ids[j].clone(), similarity));
+                    }
+                }
+            }
+        }
+
+        similarities.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+        similarities.truncate(top_k);
+
+        info!(
+            "Jaccard similarity computed, returning top {} pairs",
+            similarities.len()
+        );
+
+        let columns = vec![
+            "node1".to_string(),
+            "node2".to_string(),
+            "similarity".to_string(),
+        ];
+        let rows: Vec<Vec<Option<String>>> = similarities
+            .into_iter()
+            .map(|(n1, n2, sim)| vec![Some(n1), Some(n2), Some(format!("{:.6}", sim))])
+            .collect();
+
+        Ok(QueryResult {
+            nodes: Vec::new(),
+            relationships: Vec::new(),
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute orbit.graph.cosineSimilarity procedure
+    /// Computes cosine similarity between node feature vectors
+    /// CALL orbit.graph.cosineSimilarity({property: "embedding", topK: 10})
+    async fn execute_cosine_similarity(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            HashMap::new()
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let property = config
+            .get("property")
+            .and_then(|v| v.as_str())
+            .unwrap_or("embedding");
+
+        let top_k = config
+            .get("topK")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(10);
+
+        let nodes = self.get_all_nodes().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: Vec::new(),
+                relationships: Vec::new(),
+                columns: vec![
+                    "node1".to_string(),
+                    "node2".to_string(),
+                    "similarity".to_string(),
+                ],
+                rows: Vec::new(),
+            });
+        }
+
+        // Extract vectors from nodes
+        let mut node_vectors: Vec<(String, Vec<f64>)> = Vec::new();
+        for node in &nodes {
+            if let Some(vec_val) = node.properties.get(property) {
+                if let Some(arr) = vec_val.as_array() {
+                    let vec: Vec<f64> = arr.iter().filter_map(|v| v.as_f64()).collect();
+                    if !vec.is_empty() {
+                        node_vectors.push((node.id.to_string(), vec));
+                    }
+                }
+            }
+        }
+
+        if node_vectors.is_empty() {
+            return Ok(QueryResult {
+                nodes: Vec::new(),
+                relationships: Vec::new(),
+                columns: vec![
+                    "node1".to_string(),
+                    "node2".to_string(),
+                    "similarity".to_string(),
+                ],
+                rows: Vec::new(),
+            });
+        }
+
+        // Compute cosine similarities
+        let mut similarities: Vec<(String, String, f64)> = Vec::new();
+
+        for i in 0..node_vectors.len() {
+            for j in (i + 1)..node_vectors.len() {
+                let (id1, vec1) = &node_vectors[i];
+                let (id2, vec2) = &node_vectors[j];
+
+                if vec1.len() == vec2.len() {
+                    let dot: f64 = vec1.iter().zip(vec2.iter()).map(|(a, b)| a * b).sum();
+                    let norm1: f64 = vec1.iter().map(|x| x * x).sum::<f64>().sqrt();
+                    let norm2: f64 = vec2.iter().map(|x| x * x).sum::<f64>().sqrt();
+
+                    if norm1 > 0.0 && norm2 > 0.0 {
+                        let similarity = dot / (norm1 * norm2);
+                        similarities.push((id1.clone(), id2.clone(), similarity));
+                    }
+                }
+            }
+        }
+
+        similarities.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+        similarities.truncate(top_k);
+
+        info!(
+            "Cosine similarity computed, returning top {} pairs",
+            similarities.len()
+        );
+
+        let columns = vec![
+            "node1".to_string(),
+            "node2".to_string(),
+            "similarity".to_string(),
+        ];
+        let rows: Vec<Vec<Option<String>>> = similarities
+            .into_iter()
+            .map(|(n1, n2, sim)| vec![Some(n1), Some(n2), Some(format!("{:.6}", sim))])
+            .collect();
+
+        Ok(QueryResult {
+            nodes: Vec::new(),
+            relationships: Vec::new(),
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute orbit.graph.overlapSimilarity procedure
+    /// Computes overlap coefficient between node neighborhoods
+    /// CALL orbit.graph.overlapSimilarity({topK: 10})
+    async fn execute_overlap_similarity(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            HashMap::new()
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let top_k = config
+            .get("topK")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(10);
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: Vec::new(),
+                relationships: Vec::new(),
+                columns: vec![
+                    "node1".to_string(),
+                    "node2".to_string(),
+                    "similarity".to_string(),
+                ],
+                rows: Vec::new(),
+            });
+        }
+
+        // Build neighbor sets
+        let mut neighbor_sets: HashMap<String, HashSet<String>> = HashMap::new();
+        for rel in &relationships {
+            let from = rel.start_node.to_string();
+            let to = rel.end_node.to_string();
+            neighbor_sets
+                .entry(from.clone())
+                .or_default()
+                .insert(to.clone());
+            neighbor_sets.entry(to).or_default().insert(from);
+        }
+
+        // Compute overlap coefficients
+        let mut similarities: Vec<(String, String, f64)> = Vec::new();
+        let node_ids: Vec<&String> = neighbor_sets.keys().collect();
+
+        for i in 0..node_ids.len() {
+            for j in (i + 1)..node_ids.len() {
+                let set1 = &neighbor_sets[node_ids[i]];
+                let set2 = &neighbor_sets[node_ids[j]];
+
+                let intersection = set1.intersection(set2).count();
+                let min_size = set1.len().min(set2.len());
+
+                if min_size > 0 {
+                    let similarity = intersection as f64 / min_size as f64;
+                    if similarity > 0.0 {
+                        similarities.push((node_ids[i].clone(), node_ids[j].clone(), similarity));
+                    }
+                }
+            }
+        }
+
+        similarities.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+        similarities.truncate(top_k);
+
+        info!(
+            "Overlap similarity computed, returning top {} pairs",
+            similarities.len()
+        );
+
+        let columns = vec![
+            "node1".to_string(),
+            "node2".to_string(),
+            "similarity".to_string(),
+        ];
+        let rows: Vec<Vec<Option<String>>> = similarities
+            .into_iter()
+            .map(|(n1, n2, sim)| vec![Some(n1), Some(n2), Some(format!("{:.6}", sim))])
+            .collect();
+
+        Ok(QueryResult {
+            nodes: Vec::new(),
+            relationships: Vec::new(),
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute orbit.graph.commonNeighbors procedure
+    /// Link prediction using common neighbors count
+    /// CALL orbit.graph.commonNeighbors({node1: "id1", node2: "id2"}) or
+    /// CALL orbit.graph.commonNeighbors({topK: 10}) for top-K predictions
+    async fn execute_common_neighbors(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            HashMap::new()
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: Vec::new(),
+                relationships: Vec::new(),
+                columns: vec![
+                    "node1".to_string(),
+                    "node2".to_string(),
+                    "common_neighbors".to_string(),
+                ],
+                rows: Vec::new(),
+            });
+        }
+
+        // Build neighbor sets and existing edges
+        let mut neighbor_sets: HashMap<String, HashSet<String>> = HashMap::new();
+        let mut existing_edges: HashSet<(String, String)> = HashSet::new();
+
+        for rel in &relationships {
+            let from = rel.start_node.to_string();
+            let to = rel.end_node.to_string();
+            neighbor_sets
+                .entry(from.clone())
+                .or_default()
+                .insert(to.clone());
+            neighbor_sets
+                .entry(to.clone())
+                .or_default()
+                .insert(from.clone());
+
+            existing_edges.insert((from.clone().min(to.clone()), from.max(to)));
+        }
+
+        // If specific nodes requested
+        if let (Some(node1), Some(node2)) = (
+            config.get("node1").and_then(|v| v.as_str()),
+            config.get("node2").and_then(|v| v.as_str()),
+        ) {
+            let set1 = neighbor_sets.get(node1).cloned().unwrap_or_default();
+            let set2 = neighbor_sets.get(node2).cloned().unwrap_or_default();
+            let common = set1.intersection(&set2).count();
+
+            return Ok(QueryResult {
+                nodes: Vec::new(),
+                relationships: Vec::new(),
+                columns: vec![
+                    "node1".to_string(),
+                    "node2".to_string(),
+                    "common_neighbors".to_string(),
+                ],
+                rows: vec![vec![
+                    Some(node1.to_string()),
+                    Some(node2.to_string()),
+                    Some(common.to_string()),
+                ]],
+            });
+        }
+
+        // Predict links for non-connected pairs
+        let top_k = config
+            .get("topK")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(10);
+
+        let mut predictions: Vec<(String, String, usize)> = Vec::new();
+        let node_ids: Vec<&String> = neighbor_sets.keys().collect();
+
+        for i in 0..node_ids.len() {
+            for j in (i + 1)..node_ids.len() {
+                let n1 = node_ids[i];
+                let n2 = node_ids[j];
+                let edge_key = (n1.clone().min(n2.clone()), n1.clone().max(n2.clone()));
+
+                // Only predict for non-existing edges
+                if !existing_edges.contains(&edge_key) {
+                    let set1 = &neighbor_sets[n1];
+                    let set2 = &neighbor_sets[n2];
+                    let common = set1.intersection(set2).count();
+
+                    if common > 0 {
+                        predictions.push((n1.clone(), n2.clone(), common));
+                    }
+                }
+            }
+        }
+
+        predictions.sort_by(|a, b| b.2.cmp(&a.2));
+        predictions.truncate(top_k);
+
+        info!(
+            "Common neighbors link prediction: {} pairs",
+            predictions.len()
+        );
+
+        let columns = vec![
+            "node1".to_string(),
+            "node2".to_string(),
+            "common_neighbors".to_string(),
+        ];
+        let rows: Vec<Vec<Option<String>>> = predictions
+            .into_iter()
+            .map(|(n1, n2, cn)| vec![Some(n1), Some(n2), Some(cn.to_string())])
+            .collect();
+
+        Ok(QueryResult {
+            nodes: Vec::new(),
+            relationships: Vec::new(),
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute orbit.graph.adamicAdar procedure
+    /// Link prediction using Adamic-Adar index
+    /// CALL orbit.graph.adamicAdar({topK: 10})
+    async fn execute_adamic_adar(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            HashMap::new()
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let top_k = config
+            .get("topK")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(10);
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: Vec::new(),
+                relationships: Vec::new(),
+                columns: vec![
+                    "node1".to_string(),
+                    "node2".to_string(),
+                    "adamic_adar_score".to_string(),
+                ],
+                rows: Vec::new(),
+            });
+        }
+
+        // Build neighbor sets and existing edges
+        let mut neighbor_sets: HashMap<String, HashSet<String>> = HashMap::new();
+        let mut existing_edges: HashSet<(String, String)> = HashSet::new();
+
+        for rel in &relationships {
+            let from = rel.start_node.to_string();
+            let to = rel.end_node.to_string();
+            neighbor_sets
+                .entry(from.clone())
+                .or_default()
+                .insert(to.clone());
+            neighbor_sets
+                .entry(to.clone())
+                .or_default()
+                .insert(from.clone());
+
+            existing_edges.insert((from.clone().min(to.clone()), from.max(to)));
+        }
+
+        // Compute Adamic-Adar index for non-connected pairs
+        let mut predictions: Vec<(String, String, f64)> = Vec::new();
+        let node_ids: Vec<&String> = neighbor_sets.keys().collect();
+
+        for i in 0..node_ids.len() {
+            for j in (i + 1)..node_ids.len() {
+                let n1 = node_ids[i];
+                let n2 = node_ids[j];
+                let edge_key = (n1.clone().min(n2.clone()), n1.clone().max(n2.clone()));
+
+                if !existing_edges.contains(&edge_key) {
+                    let set1 = &neighbor_sets[n1];
+                    let set2 = &neighbor_sets[n2];
+
+                    // Adamic-Adar: sum of 1/log(degree) for common neighbors
+                    let score: f64 = set1
+                        .intersection(set2)
+                        .map(|common| {
+                            let degree = neighbor_sets.get(common).map(|s| s.len()).unwrap_or(1);
+                            if degree > 1 {
+                                1.0 / (degree as f64).ln()
+                            } else {
+                                0.0
+                            }
+                        })
+                        .sum();
+
+                    if score > 0.0 {
+                        predictions.push((n1.clone(), n2.clone(), score));
+                    }
+                }
+            }
+        }
+
+        predictions.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+        predictions.truncate(top_k);
+
+        info!("Adamic-Adar link prediction: {} pairs", predictions.len());
+
+        let columns = vec![
+            "node1".to_string(),
+            "node2".to_string(),
+            "adamic_adar_score".to_string(),
+        ];
+        let rows: Vec<Vec<Option<String>>> = predictions
+            .into_iter()
+            .map(|(n1, n2, score)| vec![Some(n1), Some(n2), Some(format!("{:.6}", score))])
+            .collect();
+
+        Ok(QueryResult {
+            nodes: Vec::new(),
+            relationships: Vec::new(),
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute orbit.graph.preferentialAttachment procedure
+    /// Link prediction using preferential attachment score
+    /// CALL orbit.graph.preferentialAttachment({topK: 10})
+    async fn execute_preferential_attachment(
+        &self,
+        args: &[JsonValue],
+    ) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            HashMap::new()
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let top_k = config
+            .get("topK")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(10);
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: Vec::new(),
+                relationships: Vec::new(),
+                columns: vec![
+                    "node1".to_string(),
+                    "node2".to_string(),
+                    "pa_score".to_string(),
+                ],
+                rows: Vec::new(),
+            });
+        }
+
+        // Build neighbor sets and existing edges
+        let mut neighbor_sets: HashMap<String, HashSet<String>> = HashMap::new();
+        let mut existing_edges: HashSet<(String, String)> = HashSet::new();
+
+        for rel in &relationships {
+            let from = rel.start_node.to_string();
+            let to = rel.end_node.to_string();
+            neighbor_sets
+                .entry(from.clone())
+                .or_default()
+                .insert(to.clone());
+            neighbor_sets
+                .entry(to.clone())
+                .or_default()
+                .insert(from.clone());
+
+            existing_edges.insert((from.clone().min(to.clone()), from.max(to)));
+        }
+
+        // Preferential attachment: degree(u) * degree(v)
+        let mut predictions: Vec<(String, String, usize)> = Vec::new();
+        let node_ids: Vec<&String> = neighbor_sets.keys().collect();
+
+        for i in 0..node_ids.len() {
+            for j in (i + 1)..node_ids.len() {
+                let n1 = node_ids[i];
+                let n2 = node_ids[j];
+                let edge_key = (n1.clone().min(n2.clone()), n1.clone().max(n2.clone()));
+
+                if !existing_edges.contains(&edge_key) {
+                    let deg1 = neighbor_sets[n1].len();
+                    let deg2 = neighbor_sets[n2].len();
+                    let score = deg1 * deg2;
+
+                    if score > 0 {
+                        predictions.push((n1.clone(), n2.clone(), score));
+                    }
+                }
+            }
+        }
+
+        predictions.sort_by(|a, b| b.2.cmp(&a.2));
+        predictions.truncate(top_k);
+
+        info!(
+            "Preferential attachment link prediction: {} pairs",
+            predictions.len()
+        );
+
+        let columns = vec![
+            "node1".to_string(),
+            "node2".to_string(),
+            "pa_score".to_string(),
+        ];
+        let rows: Vec<Vec<Option<String>>> = predictions
+            .into_iter()
+            .map(|(n1, n2, score)| vec![Some(n1), Some(n2), Some(score.to_string())])
+            .collect();
+
+        Ok(QueryResult {
+            nodes: Vec::new(),
+            relationships: Vec::new(),
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute orbit.graph.louvain procedure
+    /// Community detection using Louvain algorithm
+    /// CALL orbit.graph.louvain({resolution: 1.0, iterations: 10})
+    async fn execute_louvain(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            HashMap::new()
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let resolution = config
+            .get("resolution")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+
+        let max_iterations = config
+            .get("iterations")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(10);
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: Vec::new(),
+                relationships: Vec::new(),
+                columns: vec!["node_id".to_string(), "community".to_string()],
+                rows: Vec::new(),
+            });
+        }
+
+        // Build node index
+        let node_index: HashMap<&str, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.as_str(), i))
+            .collect();
+        let n = nodes.len();
+
+        // Build weighted adjacency list
+        let mut adj: Vec<Vec<(usize, f64)>> = vec![Vec::new(); n];
+        let mut total_weight = 0.0f64;
+
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_index.get(rel.start_node.to_string().as_str()),
+                node_index.get(rel.end_node.to_string().as_str()),
+            ) {
+                let weight = rel
+                    .properties
+                    .get("weight")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(1.0);
+
+                adj[from_idx].push((to_idx, weight));
+                adj[to_idx].push((from_idx, weight));
+                total_weight += weight;
+            }
+        }
+
+        // Initialize: each node in its own community
+        let mut community: Vec<usize> = (0..n).collect();
+        let mut node_weights: Vec<f64> = vec![0.0; n];
+
+        for i in 0..n {
+            for &(_, w) in &adj[i] {
+                node_weights[i] += w;
+            }
+        }
+
+        // Louvain phase 1: local moving
+        for _ in 0..max_iterations {
+            let mut improved = false;
+
+            for i in 0..n {
+                let current_community = community[i];
+
+                // Calculate weights to neighboring communities
+                let mut community_weights: HashMap<usize, f64> = HashMap::new();
+                for &(neighbor, weight) in &adj[i] {
+                    *community_weights.entry(community[neighbor]).or_insert(0.0) += weight;
+                }
+
+                // Calculate modularity gain for moving to each community
+                let mut best_community = current_community;
+                let mut best_gain = 0.0f64;
+
+                let ki = node_weights[i];
+
+                for (&target_community, &ki_in) in &community_weights {
+                    if target_community == current_community {
+                        continue;
+                    }
+
+                    // Calculate sigma_tot for target community
+                    let sigma_tot: f64 = (0..n)
+                        .filter(|&j| community[j] == target_community)
+                        .map(|j| node_weights[j])
+                        .sum();
+
+                    // Modularity gain
+                    let gain = ki_in - resolution * sigma_tot * ki / (2.0 * total_weight);
+
+                    if gain > best_gain {
+                        best_gain = gain;
+                        best_community = target_community;
+                    }
+                }
+
+                if best_community != current_community {
+                    community[i] = best_community;
+                    improved = true;
+                }
+            }
+
+            if !improved {
+                break;
+            }
+        }
+
+        // Renumber communities to be consecutive
+        let mut community_map: HashMap<usize, usize> = HashMap::new();
+        let mut next_id = 0;
+        for c in &mut community {
+            if let Some(&new_id) = community_map.get(c) {
+                *c = new_id;
+            } else {
+                community_map.insert(*c, next_id);
+                *c = next_id;
+                next_id += 1;
+            }
+        }
+
+        info!("Louvain detected {} communities", next_id);
+
+        let columns = vec!["node_id".to_string(), "community".to_string()];
+        let rows: Vec<Vec<Option<String>>> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, node)| vec![Some(node.id.to_string()), Some(community[i].to_string())])
+            .collect();
+
+        Ok(QueryResult {
+            nodes: Vec::new(),
+            relationships: Vec::new(),
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute orbit.graph.kcore procedure
+    /// K-core decomposition - finds the maximal subgraph where all nodes have degree >= k
+    /// CALL orbit.graph.kcore({k: 3}) or CALL orbit.graph.kcore() for coreness values
+    async fn execute_kcore(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            HashMap::new()
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let target_k = config.get("k").and_then(|v| v.as_u64()).map(|n| n as usize);
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: Vec::new(),
+                relationships: Vec::new(),
+                columns: vec!["node_id".to_string(), "coreness".to_string()],
+                rows: Vec::new(),
+            });
+        }
+
+        // Build node index and adjacency
+        let node_index: HashMap<&str, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.as_str(), i))
+            .collect();
+        let n = nodes.len();
+
+        let mut adj: Vec<HashSet<usize>> = vec![HashSet::new(); n];
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_index.get(rel.start_node.to_string().as_str()),
+                node_index.get(rel.end_node.to_string().as_str()),
+            ) {
+                adj[from_idx].insert(to_idx);
+                adj[to_idx].insert(from_idx);
+            }
+        }
+
+        // K-core decomposition using Batagelj-Zaversnik algorithm
+        let mut degree: Vec<usize> = adj.iter().map(|s| s.len()).collect();
+        let mut coreness = vec![0usize; n];
+        let mut removed = vec![false; n];
+
+        let max_degree = *degree.iter().max().unwrap_or(&0);
+
+        // Process nodes in order of increasing degree
+        for k in 0..=max_degree {
+            loop {
+                // Find a node with degree <= k that hasn't been removed
+                let node_to_remove = (0..n).filter(|&i| !removed[i] && degree[i] <= k).next();
+
+                match node_to_remove {
+                    Some(v) => {
+                        removed[v] = true;
+                        coreness[v] = k;
+
+                        // Update degrees of neighbors
+                        for &neighbor in &adj[v] {
+                            if !removed[neighbor] && degree[neighbor] > 0 {
+                                degree[neighbor] -= 1;
+                            }
+                        }
+                    }
+                    None => break,
+                }
+            }
+        }
+
+        let max_coreness = *coreness.iter().max().unwrap_or(&0);
+        info!(
+            "K-core decomposition complete, max coreness: {}",
+            max_coreness
+        );
+
+        // Return results based on whether specific k was requested
+        let columns = vec!["node_id".to_string(), "coreness".to_string()];
+        let rows: Vec<Vec<Option<String>>> = if let Some(k) = target_k {
+            // Return only nodes in k-core (coreness >= k)
+            nodes
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| coreness[*i] >= k)
+                .map(|(i, node)| vec![Some(node.id.to_string()), Some(coreness[i].to_string())])
+                .collect()
+        } else {
+            // Return coreness for all nodes
+            nodes
+                .iter()
+                .enumerate()
+                .map(|(i, node)| vec![Some(node.id.to_string()), Some(coreness[i].to_string())])
+                .collect()
+        };
+
+        Ok(QueryResult {
+            nodes: Vec::new(),
+            relationships: Vec::new(),
+            columns,
+            rows,
+        })
+    }
+
     // Helper methods
 
     /// Convert GraphStorage data to orbit-compute GraphData format for GPU processing
@@ -1576,5 +2623,192 @@ mod tests {
         let result = procedures.execute_community_detection(&[]).await.unwrap();
         // Should find at least one community with all 4 connected nodes
         assert!(!result.rows.is_empty());
+    }
+
+    // ============================================================================
+    // Tests for Advanced Graph Analytics (Phase 15)
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_eigenvector_centrality() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures
+            .execute_eigenvector_centrality(&[])
+            .await
+            .unwrap();
+        assert!(!result.rows.is_empty());
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.columns[0], "node_id");
+        assert_eq!(result.columns[1], "eigenvector_centrality");
+
+        // Check that values are normalized (between 0 and 1)
+        for row in &result.rows {
+            if let Some(ref val) = row[1] {
+                let centrality: f64 = val.parse().unwrap();
+                assert!(centrality >= 0.0 && centrality <= 1.0);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_jaccard_similarity() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures.execute_jaccard_similarity(&[]).await.unwrap();
+        assert_eq!(result.columns.len(), 3);
+        assert_eq!(result.columns[0], "node1");
+        assert_eq!(result.columns[1], "node2");
+        assert_eq!(result.columns[2], "similarity");
+
+        // Check similarity values are between 0 and 1
+        for row in &result.rows {
+            if let Some(ref val) = row[2] {
+                let similarity: f64 = val.parse().unwrap();
+                assert!(similarity >= 0.0 && similarity <= 1.0);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_overlap_similarity() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures.execute_overlap_similarity(&[]).await.unwrap();
+        assert_eq!(result.columns.len(), 3);
+        assert_eq!(result.columns[0], "node1");
+        assert_eq!(result.columns[1], "node2");
+        assert_eq!(result.columns[2], "similarity");
+    }
+
+    #[tokio::test]
+    async fn test_common_neighbors() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures.execute_common_neighbors(&[]).await.unwrap();
+        assert_eq!(result.columns.len(), 3);
+        assert_eq!(result.columns[0], "node1");
+        assert_eq!(result.columns[1], "node2");
+        assert_eq!(result.columns[2], "common_neighbors");
+    }
+
+    #[tokio::test]
+    async fn test_adamic_adar() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures.execute_adamic_adar(&[]).await.unwrap();
+        assert_eq!(result.columns.len(), 3);
+        assert_eq!(result.columns[0], "node1");
+        assert_eq!(result.columns[1], "node2");
+        assert_eq!(result.columns[2], "adamic_adar_score");
+    }
+
+    #[tokio::test]
+    async fn test_preferential_attachment() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures
+            .execute_preferential_attachment(&[])
+            .await
+            .unwrap();
+        assert_eq!(result.columns.len(), 3);
+        assert_eq!(result.columns[0], "node1");
+        assert_eq!(result.columns[1], "node2");
+        assert_eq!(result.columns[2], "pa_score");
+    }
+
+    #[tokio::test]
+    async fn test_louvain() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures.execute_louvain(&[]).await.unwrap();
+        assert!(!result.rows.is_empty());
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.columns[0], "node_id");
+        assert_eq!(result.columns[1], "community");
+
+        // All 4 nodes should have community assignments
+        assert_eq!(result.rows.len(), 4);
+    }
+
+    #[tokio::test]
+    async fn test_kcore() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures.execute_kcore(&[]).await.unwrap();
+        assert!(!result.rows.is_empty());
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.columns[0], "node_id");
+        assert_eq!(result.columns[1], "coreness");
+
+        // All 4 nodes should have coreness values
+        assert_eq!(result.rows.len(), 4);
+    }
+
+    #[tokio::test]
+    async fn test_kcore_with_specific_k() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        // Request k=2 core - nodes in the triangle (n1, n2, n3) have coreness >= 2
+        let args = vec![serde_json::json!({"k": 2})];
+        let result = procedures.execute_kcore(&args).await.unwrap();
+
+        // Only nodes with coreness >= 2 should be returned
+        for row in &result.rows {
+            if let Some(ref val) = row[1] {
+                let coreness: usize = val.parse().unwrap();
+                assert!(coreness >= 2);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_procedure_dispatcher() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        // Test that dispatcher routes to correct algorithms
+        let result = procedures
+            .execute_procedure("orbit.graph.eigenvectorcentrality", &[])
+            .await;
+        assert!(result.is_ok());
+
+        let result = procedures
+            .execute_procedure("orbit.graph.jaccardsimilarity", &[])
+            .await;
+        assert!(result.is_ok());
+
+        let result = procedures
+            .execute_procedure("orbit.graph.louvain", &[])
+            .await;
+        assert!(result.is_ok());
+
+        let result = procedures.execute_procedure("orbit.graph.kcore", &[]).await;
+        assert!(result.is_ok());
+
+        // Test unknown procedure returns error
+        let result = procedures
+            .execute_procedure("orbit.graph.unknown", &[])
+            .await;
+        assert!(result.is_err());
     }
 }
