@@ -218,7 +218,7 @@ impl DeadlockPreventer {
         let mut rec_stack = HashSet::new();
         let mut path = Vec::new();
 
-        for (tx_id, _) in &graph.transactions {
+        for tx_id in graph.transactions.keys() {
             if !visited.contains(tx_id) {
                 self.dfs_cycle_detection(
                     *tx_id,
@@ -235,6 +235,7 @@ impl DeadlockPreventer {
     }
 
     /// DFS for cycle detection
+    #[allow(clippy::only_used_in_recursion)]
     fn dfs_cycle_detection(
         &self,
         tx_id: TransactionId,

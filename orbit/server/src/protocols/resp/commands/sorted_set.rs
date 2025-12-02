@@ -94,7 +94,7 @@ impl SortedSetCommands {
 
     /// ZADD key score member [score member ...] - Add members with scores
     async fn cmd_zadd(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
-        if args.len() < 3 || (args.len() - 1) % 2 != 0 {
+        if args.len() < 3 || !(args.len() - 1).is_multiple_of(2) {
             return Err(ProtocolError::RespError(
                 "ERR wrong number of arguments for 'zadd' command".to_string(),
             ));

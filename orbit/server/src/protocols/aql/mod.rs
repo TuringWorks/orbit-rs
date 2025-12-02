@@ -43,7 +43,7 @@ pub use data_model::{AqlCollection, AqlDocument, AqlValue};
 pub use graphrag_engine::AqlGraphRAGEngine;
 pub use query_engine::{AqlQueryEngine, AqlQueryResult};
 pub use server::AqlServer;
-pub use storage::AqlStorage;
+pub use storage::{AqlStorage, AqlStorageProvider};
 
 // TODO: Add more AQL features
 // - Advanced aggregation functions

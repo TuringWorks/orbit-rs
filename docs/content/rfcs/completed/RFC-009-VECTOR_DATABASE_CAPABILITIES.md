@@ -6,7 +6,6 @@ category: rfcs
 
 ## RFC-009: Vector Database & Similarity Search Analysis
 
-**Date**: October 9, 2025  
 **Author**: AI Assistant  
 **Status**: Draft  
 **Tracking Issue**: TBD  

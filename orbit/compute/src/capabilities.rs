@@ -8,6 +8,16 @@ use std::fmt;
 use crate::errors::{CapabilityDetectionError, ComputeError};
 use serde::{Deserialize, Serialize};
 
+/// Check if CUDA support was detected at build time
+pub fn has_cuda_support() -> bool {
+    cfg!(has_cuda)
+}
+
+/// Check if Metal support was detected at build time
+pub fn has_metal_support() -> bool {
+    cfg!(has_metal)
+}
+
 /// Universal compute capability detection across all supported hardware
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UniversalComputeCapabilities {

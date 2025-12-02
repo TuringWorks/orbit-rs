@@ -1,48 +1,46 @@
-#[cfg(feature = "industry-healthcare")]
-/// Healthcare-specific machine learning models and utilities
-pub mod healthcare {
-    /// Pre-built ML models for healthcare applications
-    pub struct HealthcareModels;
-}
+//! Industry-specific machine learning models
+//!
+//! Organized into 15 major industry categories following standard taxonomy:
+//!
+//! 1. **Technology, Media & Internet** - Software, platforms, social media, gaming, entertainment
+//! 2. **Finance, Banking & Insurance** - Banking, capital markets, insurance, fintech
+//! 3. **Healthcare, Pharma & Life Sciences** - Hospitals, pharma, biotech, medical devices
+//! 4. **Retail, E-Commerce & Consumer Goods** - Retail, e-commerce, CPG, fashion
+//! 5. **Transportation, Logistics & Travel** - Logistics, airlines, ride-sharing, hospitality
+//! 6. **Manufacturing, Industrial & Energy** - Manufacturing, robotics, oil & gas, utilities, clean energy
+//! 7. **Agriculture, Food & Environment** - Agriculture, food, fisheries, climate
+//! 8. **Construction, Real Estate & Smart Cities** - Construction, real estate, urban planning
+//! 9. **Telecom, Networking & Hardware** - Telecom, semiconductors, cloud infrastructure
+//! 10. **Education, Training & HR** - EdTech, corporate learning, recruiting
+//! 11. **Government, Defense & Public Sector** - Public admin, defense, law enforcement
+//! 12. **Legal, Compliance & Professional Services** - Legal, consulting, audit
+//! 13. **Arts, Design & Creative Industries** - Advertising, design, publishing
+//! 14. **Consumer Apps & Daily-Life Services** - Personal finance, health apps, home IoT
+//! 15. **Cross-Cutting Horizontal** - Forecasting, recommendations, anomaly detection, CV, NLP
 
-#[cfg(feature = "industry-fintech")]
-/// Financial technology machine learning models and utilities
-pub mod fintech {
-    /// Pre-built ML models for fintech applications
-    pub struct FintechModels;
-}
+// Common infrastructure
+/// Common traits and types shared across industry models
+pub mod common;
 
-#[cfg(feature = "industry-adtech")]
-/// Advertising technology machine learning models and utilities
-pub mod adtech {
-    /// Pre-built ML models for adtech applications
-    pub struct AdtechModels;
-}
+// Re-export common types
+pub use common::{
+    IndustryModel, IndustryModelError, ModelConfig, ModelMetrics, ModelRegistry, Result,
+    TrainingConfig,
+};
 
-#[cfg(feature = "industry-defense")]
-/// Defense and security machine learning models and utilities
-pub mod defense {
-    /// Pre-built ML models for defense applications
-    pub struct DefenseModels;
-}
-
-#[cfg(feature = "industry-logistics")]
-/// Logistics and supply chain machine learning models and utilities
-pub mod logistics {
-    /// Pre-built ML models for logistics applications
-    pub struct LogisticsModels;
-}
-
-#[cfg(feature = "industry-banking")]
-/// Banking and financial services machine learning models and utilities
-pub mod banking {
-    /// Pre-built ML models for banking applications
-    pub struct BankingModels;
-}
-
-#[cfg(feature = "industry-insurance")]
-/// Insurance industry machine learning models and utilities
-pub mod insurance {
-    /// Pre-built ML models for insurance applications
-    pub struct InsuranceModels;
-}
+// 15 Major Industry Categories
+pub mod agriculture_food_environment;
+pub mod arts_design_creative;
+pub mod construction_realestate_smartcities;
+pub mod consumer_apps_dailylife;
+pub mod cross_cutting_horizontal;
+pub mod education_training_hr;
+pub mod finance_banking_insurance;
+pub mod government_defense_publicsector;
+pub mod healthcare_pharma_lifesciences;
+pub mod legal_compliance_professional;
+pub mod manufacturing_industrial_energy;
+pub mod retail_ecommerce_consumer;
+pub mod technology_media_internet;
+pub mod telecom_networking_hardware;
+pub mod transportation_logistics_travel;

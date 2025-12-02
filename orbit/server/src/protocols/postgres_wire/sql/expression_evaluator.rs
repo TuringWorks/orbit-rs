@@ -281,6 +281,22 @@ impl ExpressionEvaluator {
                 self.vector_distance(&left_val, &right_val, VectorOperator::CosineDistance)
             }
 
+            // JSON operators
+            BinaryOperator::JsonExtract => self.json_extract(&left_val, &right_val),
+            BinaryOperator::JsonExtractText => self.json_extract_text(&left_val, &right_val),
+            BinaryOperator::JsonPathExtract => self.json_path_extract(&left_val, &right_val),
+            BinaryOperator::JsonPathExtractText => {
+                self.json_path_extract_text(&left_val, &right_val)
+            }
+            BinaryOperator::JsonContains => self.json_contains(&left_val, &right_val),
+            BinaryOperator::JsonContainedBy => self.json_contained_by(&left_val, &right_val),
+            BinaryOperator::JsonExists => self.json_exists(&left_val, &right_val),
+            BinaryOperator::JsonExistsAny => self.json_exists_any(&left_val, &right_val),
+            BinaryOperator::JsonExistsAll => self.json_exists_all(&left_val, &right_val),
+            BinaryOperator::JsonConcat => self.json_concat(&left_val, &right_val),
+            BinaryOperator::JsonDelete => self.json_delete(&left_val, &right_val),
+            BinaryOperator::JsonDeletePath => self.json_delete_path(&left_val, &right_val),
+
             _ => Err(ProtocolError::not_implemented(
                 "Binary operator",
                 &format!("{operator:?}"),
@@ -1128,15 +1144,15 @@ impl ExpressionEvaluator {
         }
 
         match &args[0] {
-            SqlValue::Date(date) => Ok(SqlValue::Integer(date.year() as i32)),
+            SqlValue::Date(date) => Ok(SqlValue::Integer(date.year())),
             SqlValue::TimestampWithTimezone(ts) => {
                 let date = ts.date_naive();
-                Ok(SqlValue::Integer(date.year() as i32))
+                Ok(SqlValue::Integer(date.year()))
             }
             SqlValue::Text(s) => {
                 // Try to parse as date
                 if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-                    Ok(SqlValue::Integer(date.year() as i32))
+                    Ok(SqlValue::Integer(date.year()))
                 } else {
                     Err(ProtocolError::PostgresError(format!(
                         "YEAR requires date argument, got: {}",
@@ -1486,10 +1502,10 @@ impl ExpressionEvaluator {
         _case_insensitive: bool,
     ) -> String {
         let mut result = String::new();
-        let mut chars = pattern.chars().peekable();
+        let chars = pattern.chars().peekable();
         let mut escaped = false;
 
-        while let Some(c) = chars.next() {
+        for c in chars {
             if escaped {
                 // Previous character was escape, so this character is literal
                 result.push(c);
@@ -1559,13 +1575,14 @@ impl ExpressionEvaluator {
         let pattern_chars = pattern.chars().peekable();
 
         self.like_match_recursive(
-            &mut text_chars.collect::<Vec<_>>(),
-            &mut pattern_chars.collect::<Vec<_>>(),
+            &text_chars.collect::<Vec<_>>(),
+            &pattern_chars.collect::<Vec<_>>(),
             0,
             0,
         )
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn like_match_recursive(&self, text: &[char], pattern: &[char], ti: usize, pi: usize) -> bool {
         // Base cases
         if pi >= pattern.len() {
@@ -2265,12 +2282,9 @@ impl ExpressionEvaluator {
             // Check if row values <= current values
             let mut is_le = true;
             for (rv, cv) in row_order_values.iter().zip(current_order_values.iter()) {
-                match self.compare_values(rv, cv)? {
-                    Ordering::Greater => {
-                        is_le = false;
-                        break;
-                    }
-                    _ => {}
+                if self.compare_values(rv, cv)? == Ordering::Greater {
+                    is_le = false;
+                    break;
                 }
             }
 
@@ -2419,7 +2433,13 @@ impl ExpressionEvaluator {
         let pos = current_pos.min(partition_size.saturating_sub(1));
         let empty_context = EvaluationContext::empty();
 
-        let start = self.frame_bound_to_pos(&frame.start_bound, pos, partition_size, &empty_context, true);
+        let start = self.frame_bound_to_pos(
+            &frame.start_bound,
+            pos,
+            partition_size,
+            &empty_context,
+            true,
+        );
         let end = frame
             .end_bound
             .as_ref()
@@ -2444,8 +2464,10 @@ impl ExpressionEvaluator {
             FrameBound::Preceding(expr) => {
                 if let Ok(SqlValue::Integer(n)) = self.evaluate(expr, context) {
                     pos.saturating_sub(n as usize)
+                } else if is_start {
+                    0
                 } else {
-                    if is_start { 0 } else { pos }
+                    pos
                 }
             }
             FrameBound::CurrentRow => pos,
@@ -2541,6 +2563,190 @@ impl ExpressionEvaluator {
         let matches = self.match_like_pattern(text_str, &regex_pattern, case_insensitive);
 
         Ok(SqlValue::Boolean(if negated { !matches } else { matches }))
+    }
+
+    // ==================== JSON Operators ====================
+
+    /// Extract JSON field using -> operator
+    fn json_extract(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        let json = self.get_json_value(left)?;
+        match right {
+            SqlValue::Text(key) | SqlValue::Varchar(key) => {
+                super::json::JsonOperations::json_extract(&json, key)
+            }
+            SqlValue::Integer(idx) => {
+                super::json::JsonOperations::json_extract_index(&json, *idx as i64)
+            }
+            SqlValue::BigInt(idx) => super::json::JsonOperations::json_extract_index(&json, *idx),
+            _ => Err(ProtocolError::PostgresError(
+                "JSON extract requires string key or integer index".to_string(),
+            )),
+        }
+    }
+
+    /// Extract JSON field as text using ->> operator
+    fn json_extract_text(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        let json = self.get_json_value(left)?;
+        match right {
+            SqlValue::Text(key) | SqlValue::Varchar(key) => {
+                super::json::JsonOperations::json_extract_text(&json, key)
+            }
+            SqlValue::Integer(idx) => {
+                super::json::JsonOperations::json_extract_text_index(&json, *idx as i64)
+            }
+            SqlValue::BigInt(idx) => {
+                super::json::JsonOperations::json_extract_text_index(&json, *idx)
+            }
+            _ => Err(ProtocolError::PostgresError(
+                "JSON extract text requires string key or integer index".to_string(),
+            )),
+        }
+    }
+
+    /// Extract JSON sub-object at path using #> operator
+    fn json_path_extract(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        let json = self.get_json_value(left)?;
+        let path = self.get_json_path(right)?;
+        super::json::JsonOperations::json_path_extract(&json, &path)
+    }
+
+    /// Extract JSON sub-object at path as text using #>> operator
+    fn json_path_extract_text(
+        &self,
+        left: &SqlValue,
+        right: &SqlValue,
+    ) -> ProtocolResult<SqlValue> {
+        let json = self.get_json_value(left)?;
+        let path = self.get_json_path(right)?;
+        super::json::JsonOperations::json_path_extract_text(&json, &path)
+    }
+
+    /// Check if left JSON contains right JSON using @> operator
+    fn json_contains(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        let left_json = self.get_json_value(left)?;
+        let right_json = self.get_json_value(right)?;
+        super::json::JsonOperations::json_contains(&left_json, &right_json)
+    }
+
+    /// Check if left JSON is contained by right JSON using <@ operator
+    fn json_contained_by(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        let left_json = self.get_json_value(left)?;
+        let right_json = self.get_json_value(right)?;
+        super::json::JsonOperations::json_contained_by(&left_json, &right_json)
+    }
+
+    /// Check if string exists as top-level key using ? operator
+    fn json_exists(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        let json = self.get_json_value(left)?;
+        let key = self.get_string_value(right)?;
+        super::json::JsonOperations::json_exists(&json, &key)
+    }
+
+    /// Check if any strings exist as top-level keys using ?| operator
+    fn json_exists_any(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        let json = self.get_json_value(left)?;
+        let keys = self.get_string_array(right)?;
+        super::json::JsonOperations::json_exists_any(&json, &keys)
+    }
+
+    /// Check if all strings exist as top-level keys using ?& operator
+    fn json_exists_all(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        let json = self.get_json_value(left)?;
+        let keys = self.get_string_array(right)?;
+        super::json::JsonOperations::json_exists_all(&json, &keys)
+    }
+
+    /// Concatenate two JSON values using || operator
+    fn json_concat(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        let left_json = self.get_json_value(left)?;
+        let right_json = self.get_json_value(right)?;
+        super::json::JsonOperations::json_concat(&left_json, &right_json)
+    }
+
+    /// Delete key or array element using - operator
+    fn json_delete(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        let json = self.get_json_value(left)?;
+        let key = self.get_string_value(right)?;
+        super::json::JsonOperations::json_delete(&json, &key)
+    }
+
+    /// Delete path from JSONB using #- operator
+    fn json_delete_path(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        let json = self.get_json_value(left)?;
+        let path = self.get_json_path(right)?;
+        super::json::JsonOperations::jsonb_delete_path(&json, &path)
+    }
+
+    // JSON helper methods
+
+    fn get_json_value(&self, value: &SqlValue) -> ProtocolResult<serde_json::Value> {
+        match value {
+            SqlValue::Json(j) | SqlValue::Jsonb(j) => Ok(j.clone()),
+            SqlValue::Text(s) | SqlValue::Varchar(s) => serde_json::from_str(s)
+                .map_err(|e| ProtocolError::PostgresError(format!("Invalid JSON: {}", e))),
+            SqlValue::Null => Ok(serde_json::Value::Null),
+            _ => Err(ProtocolError::PostgresError(format!(
+                "Expected JSON value, got {:?}",
+                value
+            ))),
+        }
+    }
+
+    fn get_json_path(&self, value: &SqlValue) -> ProtocolResult<super::json::JsonPath> {
+        match value {
+            SqlValue::Array(arr) => {
+                let path_strs: Vec<String> = arr
+                    .iter()
+                    .map(|v| match v {
+                        SqlValue::Text(s) | SqlValue::Varchar(s) => Ok(s.clone()),
+                        SqlValue::Integer(i) => Ok(i.to_string()),
+                        SqlValue::BigInt(i) => Ok(i.to_string()),
+                        _ => Err(ProtocolError::PostgresError(
+                            "JSON path elements must be strings or integers".to_string(),
+                        )),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                super::json::JsonPath::from_text_array(&path_strs)
+            }
+            SqlValue::Text(s) | SqlValue::Varchar(s) => {
+                // Parse text array notation like '{key1,0,key2}'
+                let trimmed = s.trim_matches(|c| c == '{' || c == '}');
+                let parts: Vec<String> = trimmed.split(',').map(|s| s.trim().to_string()).collect();
+                super::json::JsonPath::from_text_array(&parts)
+            }
+            _ => Err(ProtocolError::PostgresError(
+                "JSON path must be a text array".to_string(),
+            )),
+        }
+    }
+
+    fn get_string_value(&self, value: &SqlValue) -> ProtocolResult<String> {
+        match value {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => Ok(s.clone()),
+            SqlValue::Integer(i) => Ok(i.to_string()),
+            SqlValue::BigInt(i) => Ok(i.to_string()),
+            _ => Err(ProtocolError::PostgresError(format!(
+                "Expected string value, got {:?}",
+                value
+            ))),
+        }
+    }
+
+    fn get_string_array(&self, value: &SqlValue) -> ProtocolResult<Vec<String>> {
+        match value {
+            SqlValue::Array(arr) => arr
+                .iter()
+                .map(|v| self.get_string_value(v))
+                .collect::<Result<Vec<_>, _>>(),
+            SqlValue::Text(s) | SqlValue::Varchar(s) => {
+                // Parse text array notation like '{a,b,c}'
+                let trimmed = s.trim_matches(|c| c == '{' || c == '}');
+                Ok(trimmed.split(',').map(|s| s.trim().to_string()).collect())
+            }
+            _ => Err(ProtocolError::PostgresError(
+                "Expected string array".to_string(),
+            )),
+        }
     }
 }
 

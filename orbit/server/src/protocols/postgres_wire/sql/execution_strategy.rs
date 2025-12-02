@@ -454,8 +454,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                 let predicate = update_stmt
                     .where_clause
                     .as_ref()
-                    .map(|where_expr| self.create_row_predicate(where_expr.clone()))
-                    .flatten();
+                    .and_then(|where_expr| self.create_row_predicate(where_expr.clone()));
 
                 let count = self
                     .executor
@@ -474,8 +473,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                 let predicate = delete_stmt
                     .where_clause
                     .as_ref()
-                    .map(|where_expr| self.create_row_predicate(where_expr.clone()))
-                    .flatten();
+                    .and_then(|where_expr| self.create_row_predicate(where_expr.clone()));
 
                 let count = self
                     .executor

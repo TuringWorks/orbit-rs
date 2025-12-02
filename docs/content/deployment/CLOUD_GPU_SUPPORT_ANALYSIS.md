@@ -6,7 +6,6 @@ category: deployment
 
 ## Cloud Provider GPU Support Analysis & Enhancement Plan
 
-**Date**: 2025-01-09  
 **Purpose**: Analyze and enhance Orbit-RS support for GPU instances across major cloud providers
 
 ## Current State Analysis

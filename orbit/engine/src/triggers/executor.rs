@@ -100,11 +100,11 @@ impl TriggerExecutor for TriggerExecutionService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::triggers::TriggerTiming;
-    use crate::procedures::{BinaryOperator, Block, Expression, Statement};
     use crate::metrics::QueryMetrics;
+    use crate::procedures::{BinaryOperator, Block, Expression, Statement};
     use crate::query::{ExecutionPlan, Query, QueryExecutor};
     use crate::storage::QueryResult;
+    use crate::triggers::TriggerTiming;
     use async_trait::async_trait;
 
     struct MockQueryExecutor;

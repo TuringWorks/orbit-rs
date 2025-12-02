@@ -43,6 +43,7 @@ pub mod execution;
 pub mod execution_strategy;
 pub mod executor;
 pub mod expression_evaluator;
+pub mod json;
 pub mod lexer;
 pub mod mvcc_executor;
 pub mod optimizer;

@@ -6,7 +6,6 @@ category: rfcs
 
 ## RFC-010: Time Series Engine Analysis
 
-**Date**: October 9, 2025  
 **Author**: AI Assistant  
 **Status**: Draft  
 **Tracking Issue**: TBD  

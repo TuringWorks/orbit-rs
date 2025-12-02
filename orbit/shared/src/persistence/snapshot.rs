@@ -993,7 +993,7 @@ mod tests {
 
         // List all snapshots
         let snapshots = encrypted_backend.list_snapshots(&actor_ref).await.unwrap();
-        assert!(snapshots.len() >= 1); // At least the latest version
+        assert!(!snapshots.is_empty()); // At least the latest version
 
         // Load specific version
         let version_3 = encrypted_backend

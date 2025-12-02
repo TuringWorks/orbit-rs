@@ -127,7 +127,7 @@ impl QueryBuilder {
                     if let Some(col) = intent.projections.first() {
                         sql.push_str(&format!("{}, COUNT(*) as count", col.name));
                     } else {
-                        sql.push_str("*");
+                        sql.push('*');
                     }
                 }
             }
@@ -143,7 +143,7 @@ impl QueryBuilder {
             .iter()
             .find(|e| matches!(e.entity_type, crate::protocols::mcp::nlp::EntityType::Table))
             .map(|e| e.value.clone())
-            .ok_or_else(|| SqlGenerationError::MissingTable)?;
+            .ok_or(SqlGenerationError::MissingTable)?;
 
         sql.push_str(&format!(" FROM {}", table_name));
 
@@ -153,8 +153,7 @@ impl QueryBuilder {
             let conditions: Vec<String> = intent
                 .conditions
                 .iter()
-                .enumerate()
-                .map(|(_idx, cond)| {
+                .map(|cond| {
                     let param_idx = parameters.len() + 1;
                     let (op_str, value) = self.format_condition(cond, param_idx);
                     parameters.push(value);
@@ -202,7 +201,7 @@ impl QueryBuilder {
             .iter()
             .find(|e| matches!(e.entity_type, crate::protocols::mcp::nlp::EntityType::Table))
             .map(|e| e.value.clone())
-            .ok_or_else(|| SqlGenerationError::MissingTable)?;
+            .ok_or(SqlGenerationError::MissingTable)?;
 
         // Extract column-value pairs from entities
         let mut columns = Vec::new();
@@ -261,7 +260,7 @@ impl QueryBuilder {
             .iter()
             .find(|e| matches!(e.entity_type, crate::protocols::mcp::nlp::EntityType::Table))
             .map(|e| e.value.clone())
-            .ok_or_else(|| SqlGenerationError::MissingTable)?;
+            .ok_or(SqlGenerationError::MissingTable)?;
 
         let mut sql = format!("UPDATE {} SET ", table_name);
         let mut parameters = Vec::new();
@@ -270,8 +269,7 @@ impl QueryBuilder {
         let set_clauses: Vec<String> = intent
             .conditions
             .iter()
-            .enumerate()
-            .map(|(_idx, cond)| {
+            .map(|cond| {
                 let param_idx = parameters.len() + 1;
                 let value = match &cond.value {
                     ConditionValue::String(s) => serde_json::Value::String(s.clone()),
@@ -332,8 +330,7 @@ impl QueryBuilder {
             let conditions: Vec<String> = intent
                 .conditions
                 .iter()
-                .enumerate()
-                .map(|(_idx, cond)| {
+                .map(|cond| {
                     let param_idx = parameters.len() + 1;
                     let (op_str, value) = self.format_condition(cond, param_idx);
                     parameters.push(value);
@@ -364,7 +361,7 @@ impl QueryBuilder {
             .iter()
             .find(|e| matches!(e.entity_type, crate::protocols::mcp::nlp::EntityType::Table))
             .map(|e| e.value.clone())
-            .ok_or_else(|| SqlGenerationError::MissingTable)?;
+            .ok_or(SqlGenerationError::MissingTable)?;
 
         // Generate a comprehensive analytical query
         let sql = format!(

@@ -6,7 +6,8 @@ This document provides instructions for AI coding assistants (Gemini, Copilot, W
 
 Before making any changes, read these files:
 1. **`docs/PRD.md`** - Single source of truth for architecture and modules
-2. **`CLAUDE.md`** - Quick development reference and commands
+2. **`docs/content/architecture/ORBIT_ARCHITECTURE.md`** - Detailed architecture patterns and implementation details
+3. **`CLAUDE.md`** - Quick development reference and commands
 
 ## Architecture Reference
 
@@ -19,12 +20,21 @@ Before making any changes, read these files:
 - Feature status matrix with test counts
 - Development guidelines
 
-## PRD.md Maintenance (MANDATORY)
+**`docs/content/architecture/ORBIT_ARCHITECTURE.md` is the authoritative reference** for:
+- Detailed architecture patterns and design decisions
+- Transaction layer (MVCC, 2PC, deadlock detection, Saga pattern)
+- Query execution (vectorized, SIMD, columnar format)
+- Clustering and replication (Raft consensus, CDC)
+- Network layer (gRPC services, Protocol Buffers, transport layer)
+- Hybrid storage architecture (actor-based RESP vs direct storage)
+- Performance characteristics and trade-offs
 
-**When making architectural changes, you MUST update `docs/PRD.md`.**
+## PRD.md and ORBIT_ARCHITECTURE.md Maintenance (MANDATORY)
 
-### Triggers for PRD.md Updates
-Update PRD.md when you:
+**When making architectural changes, you MUST update both `docs/PRD.md` and `docs/content/architecture/ORBIT_ARCHITECTURE.md`.**
+
+### Triggers for Updates
+Update **PRD.md** when you:
 - Add new modules, crates, or significant source files
 - Change directory structures or file organization
 - Add or modify protocol implementations or commands
@@ -33,6 +43,15 @@ Update PRD.md when you:
 - Modify storage or compute backends
 - Add new AI subsystems or capabilities
 - Change test coverage significantly
+
+Update **ORBIT_ARCHITECTURE.md** when you:
+- Change transaction layer implementation (MVCC, 2PC, Saga)
+- Modify query execution patterns (vectorization, SIMD)
+- Update clustering or replication logic (Raft, CDC)
+- Change network layer (gRPC services, transport)
+- Alter storage architecture (tiering, actor patterns)
+- Add new architectural patterns or design decisions
+- Modify performance characteristics or trade-offs
 
 ### Sections to Update
 1. **Module Reference** - Directory trees, file descriptions

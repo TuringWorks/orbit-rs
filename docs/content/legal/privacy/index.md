@@ -10,7 +10,6 @@ permalink: /legal/privacy/
 
 ## TuringWorks Privacy Policy for Orbit-RS Services
 
-### Last Updated: October 2024
 
 ---
 

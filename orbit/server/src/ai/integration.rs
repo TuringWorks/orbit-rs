@@ -16,7 +16,7 @@ use tracing::{error, info, warn};
 pub async fn initialize_ai_system(
     config: Option<AIConfig>,
 ) -> Result<(Arc<AIMasterController>, JoinHandle<()>)> {
-    let ai_config = config.unwrap_or_else(|| AIConfig {
+    let ai_config = config.unwrap_or(AIConfig {
         learning_mode: LearningMode::Continuous,
         optimization_level: OptimizationLevel::Balanced,
         predictive_scaling: true,

@@ -6,7 +6,7 @@
 #![cfg(feature = "storage-rocksdb")]
 
 use crate::protocols::aql::query_engine::{AqlQueryEngine, AqlQueryResult};
-use crate::protocols::aql::storage::AqlStorage;
+use crate::protocols::aql::storage::AqlStorageProvider;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
@@ -59,14 +59,14 @@ struct AqlCursorResponse {
 /// ArangoDB HTTP API server
 pub struct AqlHttpServer {
     bind_addr: String,
-    storage: Arc<AqlStorage>,
+    storage: Arc<dyn AqlStorageProvider>,
     query_engine: Arc<AqlQueryEngine>,
     cursors: Arc<RwLock<HashMap<String, AqlCursor>>>,
 }
 
 impl AqlHttpServer {
     /// Create a new AQL HTTP server
-    pub fn new(bind_addr: impl Into<String>, storage: Arc<AqlStorage>) -> Self {
+    pub fn new(bind_addr: impl Into<String>, storage: Arc<dyn AqlStorageProvider>) -> Self {
         let query_engine = Arc::new(AqlQueryEngine::new());
         Self {
             bind_addr: bind_addr.into(),
@@ -129,7 +129,7 @@ impl AqlHttpServer {
 /// Handle HTTP request
 async fn handle_request(
     req: Request<hyper::body::Incoming>,
-    storage: Arc<AqlStorage>,
+    storage: Arc<dyn AqlStorageProvider>,
     query_engine: Arc<AqlQueryEngine>,
     cursors: Arc<RwLock<HashMap<String, AqlCursor>>>,
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
@@ -177,8 +177,8 @@ async fn handle_cursor_request(
     query_engine: Arc<AqlQueryEngine>,
     cursors: Arc<RwLock<HashMap<String, AqlCursor>>>,
 ) -> Response<Full<Bytes>> {
-    match method {
-        &Method::POST => {
+    match *method {
+        Method::POST => {
             // Create new cursor (execute query)
             match serde_json::from_slice::<AqlQueryRequest>(&body) {
                 Ok(query_req) => match query_engine.execute_query(&query_req.query).await {
@@ -199,7 +199,7 @@ async fn handle_cursor_request(
                             .data
                             .iter()
                             .take(batch_size)
-                            .map(|v| aql_value_to_json(v))
+                            .map(aql_value_to_json)
                             .collect();
 
                         let response = AqlCursorResponse {
@@ -232,7 +232,7 @@ async fn handle_cursor_request(
                 }
             }
         }
-        &Method::PUT => {
+        Method::PUT => {
             // Get more results from cursor
             let cursor_id = path.strip_prefix("/_api/cursor/").unwrap_or("");
             if cursor_id.is_empty() {
@@ -251,7 +251,7 @@ async fn handle_cursor_request(
                     .iter()
                     .skip(start)
                     .take(batch_size)
-                    .map(|v| aql_value_to_json(v))
+                    .map(aql_value_to_json)
                     .collect();
 
                 cursor.position = end;
@@ -271,7 +271,7 @@ async fn handle_cursor_request(
                 error_response(StatusCode::NOT_FOUND, "Cursor not found")
             }
         }
-        &Method::DELETE => {
+        Method::DELETE => {
             // Delete cursor
             let cursor_id = path.strip_prefix("/_api/cursor/").unwrap_or("");
             if cursor_id.is_empty() {
@@ -294,16 +294,16 @@ async fn handle_collection_request(
     method: &Method,
     _path: &str,
     _body: Bytes,
-    _storage: Arc<AqlStorage>,
+    _storage: Arc<dyn AqlStorageProvider>,
 ) -> Response<Full<Bytes>> {
-    match method {
-        &Method::GET => {
+    match *method {
+        Method::GET => {
             // List collections
             // Simplified: return empty list for now
             let collections: Vec<serde_json::Value> = vec![];
             json_response(StatusCode::OK, &collections)
         }
-        &Method::POST => {
+        Method::POST => {
             // Create collection
             // Simplified: return success
             json_response(
@@ -324,7 +324,7 @@ async fn handle_document_request(
     method: &Method,
     path: &str,
     body: Bytes,
-    _storage: Arc<AqlStorage>,
+    _storage: Arc<dyn AqlStorageProvider>,
 ) -> Response<Full<Bytes>> {
     // Parse collection and key from path: /_api/document/{collection}/{key}
     let parts: Vec<&str> = path
@@ -333,8 +333,8 @@ async fn handle_document_request(
         .split('/')
         .collect();
 
-    match method {
-        &Method::GET => {
+    match *method {
+        Method::GET => {
             // Get document
             if parts.len() >= 2 {
                 let collection = parts[0];
@@ -348,9 +348,9 @@ async fn handle_document_request(
                 error_response(StatusCode::BAD_REQUEST, "Invalid document path")
             }
         }
-        &Method::POST => {
+        Method::POST => {
             // Create document
-            if parts.len() >= 1 {
+            if !parts.is_empty() {
                 let collection = parts[0];
                 match serde_json::from_slice::<serde_json::Value>(&body) {
                     Ok(_doc) => json_response(
@@ -370,7 +370,7 @@ async fn handle_document_request(
                 error_response(StatusCode::BAD_REQUEST, "Invalid collection path")
             }
         }
-        &Method::PUT => {
+        Method::PUT => {
             // Update document
             if parts.len() >= 2 {
                 json_response(StatusCode::OK, &serde_json::json!({"error": false}))
@@ -378,7 +378,7 @@ async fn handle_document_request(
                 error_response(StatusCode::BAD_REQUEST, "Invalid document path")
             }
         }
-        &Method::DELETE => {
+        Method::DELETE => {
             // Delete document
             if parts.len() >= 2 {
                 json_response(StatusCode::OK, &serde_json::json!({"error": false}))

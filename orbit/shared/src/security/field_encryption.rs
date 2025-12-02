@@ -710,11 +710,12 @@ mod tests {
         let config = FieldEncryptionConfig::new("data", EncryptionType::Randomized);
 
         // Test various JSON types
+        #[allow(clippy::approx_constant)]
         let values = vec![
             serde_json::json!(null),
             serde_json::json!(true),
             serde_json::json!(42),
-            serde_json::json!(3.14),
+            serde_json::json!(3.14), // Intentionally not PI - just testing arbitrary float
             serde_json::json!("string"),
             serde_json::json!(["array", "values"]),
             serde_json::json!({"nested": {"object": true}}),

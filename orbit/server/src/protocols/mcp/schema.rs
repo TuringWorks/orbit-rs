@@ -237,6 +237,12 @@ pub struct SchemaCache {
     pub last_updated: SystemTime,
 }
 
+impl Default for SchemaCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SchemaCache {
     /// Create a new schema cache
     pub fn new() -> Self {

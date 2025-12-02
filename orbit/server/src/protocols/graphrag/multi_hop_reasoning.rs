@@ -8,9 +8,9 @@ use orbit_client::OrbitClient;
 use orbit_shared::graphrag::{ConnectionExplanation, ReasoningPath};
 use orbit_shared::{Addressable, Key, OrbitError, OrbitResult};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashSet, VecDeque};
 #[cfg(feature = "gpu-acceleration")]
 use std::collections::HashMap;
+use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
@@ -525,9 +525,7 @@ impl MultiHopReasoningEngine {
                 .await
             {
                 Ok(neighbors) => {
-                    let neighbor_list = adjacency_map
-                        .entry(current_node.clone())
-                        .or_insert_with(Vec::new);
+                    let neighbor_list = adjacency_map.entry(current_node.clone()).or_default();
 
                     for (neighbor_id, _rel_id, _rel_type, confidence) in neighbors {
                         neighbor_list.push((neighbor_id.clone(), confidence));
@@ -677,9 +675,7 @@ impl MultiHopReasoningEngine {
                 .await
             {
                 Ok(neighbors) => {
-                    let neighbor_list = adjacency_map
-                        .entry(current_node.clone())
-                        .or_insert_with(Vec::new);
+                    let neighbor_list = adjacency_map.entry(current_node.clone()).or_default();
 
                     for (neighbor_id, _rel_id, _rel_type, confidence) in neighbors {
                         neighbor_list.push((neighbor_id.clone(), confidence));

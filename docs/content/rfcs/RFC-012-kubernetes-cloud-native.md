@@ -9,7 +9,6 @@ category: rfcs
 **Status**: Draft  
 **Author**: Engineering Team  
 **Created**: 2025-10-09  
-**Updated**: 2025-10-09
 
 ## Abstract
 

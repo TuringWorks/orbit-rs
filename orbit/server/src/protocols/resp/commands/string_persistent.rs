@@ -122,7 +122,7 @@ impl PersistentStringCommands {
                             "ERR invalid expire time in set".to_string(),
                         ));
                     }
-                    options.ttl_seconds = Some((milliseconds as u64 + 999) / 1000); // Round up to seconds
+                    options.ttl_seconds = Some((milliseconds as u64).div_ceil(1000)); // Round up to seconds
                     i += 2;
                 }
                 "NX" => {
@@ -238,7 +238,7 @@ impl PersistentStringCommands {
         let mut deleted_count = 0i64;
 
         for arg in args {
-            let key = self.get_string_arg(&[arg.clone()], 0, "DEL")?;
+            let key = self.get_string_arg(std::slice::from_ref(arg), 0, "DEL")?;
 
             match self.redis_provider.delete(&key).await {
                 Ok(true) => deleted_count += 1,
@@ -261,7 +261,7 @@ impl PersistentStringCommands {
         let mut exists_count = 0i64;
 
         for arg in args {
-            let key = self.get_string_arg(&[arg.clone()], 0, "EXISTS")?;
+            let key = self.get_string_arg(std::slice::from_ref(arg), 0, "EXISTS")?;
 
             match self.redis_provider.exists(&key).await {
                 Ok(true) => exists_count += 1,
@@ -297,8 +297,7 @@ impl PersistentStringCommands {
 
         let keys: Result<Vec<String>, _> = args
             .iter()
-            .enumerate()
-            .map(|(_i, arg)| self.get_string_arg(&[arg.clone()], 0, "MGET"))
+            .map(|arg| self.get_string_arg(std::slice::from_ref(arg), 0, "MGET"))
             .collect();
         let keys = keys?;
 
@@ -321,7 +320,7 @@ impl PersistentStringCommands {
     }
 
     async fn cmd_mset(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
-        if args.len() % 2 != 0 {
+        if !args.len().is_multiple_of(2) {
             return Err(ProtocolError::RespError(
                 "ERR wrong number of arguments for 'mset' command".to_string(),
             ));
@@ -330,8 +329,8 @@ impl PersistentStringCommands {
         let mut values = HashMap::new();
 
         for chunk in args.chunks(2) {
-            let key = self.get_string_arg(&chunk, 0, "MSET")?;
-            let value_str = self.get_string_arg(&chunk, 1, "MSET")?;
+            let key = self.get_string_arg(chunk, 0, "MSET")?;
+            let value_str = self.get_string_arg(chunk, 1, "MSET")?;
             let redis_value = RedisValue::new(value_str.clone());
             values.insert(key.clone(), redis_value);
             debug!("MSET {} {}", key, value_str);

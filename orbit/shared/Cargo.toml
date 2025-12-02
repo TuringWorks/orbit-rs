@@ -21,8 +21,8 @@ tokio.workspace = true
 async-trait.workspace = true
 uuid.workspace = true
 # Using SQLx fork with RSA vulnerability fix (RUSTSEC-2023-0071)
-# Repository: https://github.com/ravituringworks/sqlx-no-rsa
-sqlx = { git = "https://github.com/ravituringworks/sqlx-no-rsa.git", default-features = false, features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono", "uuid"] }
+# Repository: https://github.com/TuringWorks/sqlx-no-rsa
+sqlx = { git = "https://github.com/TuringWorks/sqlx-no-rsa.git", default-features = false, features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono", "uuid"] }
 tokio-util = "0.7"
 md5 = "0.7"
 tempfile = "3.0"

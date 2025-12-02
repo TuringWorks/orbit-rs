@@ -6,7 +6,6 @@ category: rfcs
 
 ## RFC-005: Virtual Actor System Analysis
 
-**Date**: October 9, 2025  
 **Author**: AI Assistant  
 **Status**: Draft  
 **Tracking Issue**: TBD  

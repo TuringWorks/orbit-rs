@@ -6,7 +6,6 @@ category: rfcs
 
 ## RFC-012: Query Languages Analysis (OrbitQL & SQL)
 
-**Date**: October 9, 2025  
 **Author**: AI Assistant  
 **Status**: Draft  
 **Tracking Issue**: TBD  

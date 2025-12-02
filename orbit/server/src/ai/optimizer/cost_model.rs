@@ -13,37 +13,39 @@ pub struct FeatureExtractor;
 impl FeatureExtractor {
     /// Extract features from a query plan for cost estimation
     pub fn extract_features(&self, plan: &QueryPlan) -> OrbitResult<Vec<f64>> {
-        let mut features = Vec::new();
-
-        // Basic plan features
-        features.push(plan.operation_count as f64);
-        features.push(plan.table_count as f64);
-        features.push(plan.join_count as f64);
-        features.push(plan.filter_count as f64);
-        features.push(plan.aggregation_count as f64);
-        features.push(plan.sort_count as f64);
-
-        // Estimated data size features
-        features.push(plan.estimated_input_rows as f64);
-        features.push(plan.estimated_output_rows as f64);
-        features.push(plan.estimated_memory_bytes as f64);
-
-        // Complexity features
-        features.push(plan.max_depth as f64);
-        features.push(plan.has_subquery as u8 as f64);
-        features.push(plan.has_window_function as u8 as f64);
-        features.push(plan.has_cte as u8 as f64);
-
-        // Index usage features
-        features.push(plan.index_usage_count as f64);
-        features.push(plan.full_scan_count as f64);
+        let features = vec![
+            // Basic plan features
+            plan.operation_count as f64,
+            plan.estimated_rows as f64,
+            plan.estimated_io_cost,
+            plan.estimated_cpu_cost,
+            plan.join_count as f64,
+            plan.sort_count as f64,
+            plan.aggregation_count as f64,
+            plan.filter_count as f64,
+            plan.projection_count as f64,
+            plan.limit_count as f64,
+            plan.distinct_count as f64,
+            plan.window_count as f64,
+            plan.set_op_count as f64,
+            plan.cte_count as f64,
+            plan.recursive_cte_count as f64,
+            plan.subquery_count as f64,
+            plan.correlated_subquery_count as f64,
+            plan.materialized_view_count as f64,
+            plan.foreign_key_check_count as f64,
+            plan.check_constraint_count as f64,
+            plan.trigger_count as f64,
+            plan.index_usage_count as f64,
+            plan.full_scan_count as f64,
+        ];
 
         Ok(features)
     }
 }
 
 /// Query plan structure for feature extraction
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct QueryPlan {
     pub operation_count: usize,
     pub table_count: usize,
@@ -60,28 +62,23 @@ pub struct QueryPlan {
     pub has_cte: bool,
     pub index_usage_count: usize,
     pub full_scan_count: usize,
-}
-
-impl Default for QueryPlan {
-    fn default() -> Self {
-        Self {
-            operation_count: 0,
-            table_count: 0,
-            join_count: 0,
-            filter_count: 0,
-            aggregation_count: 0,
-            sort_count: 0,
-            estimated_input_rows: 0,
-            estimated_output_rows: 0,
-            estimated_memory_bytes: 0,
-            max_depth: 0,
-            has_subquery: false,
-            has_window_function: false,
-            has_cte: false,
-            index_usage_count: 0,
-            full_scan_count: 0,
-        }
-    }
+    // Additional fields for feature extraction
+    pub estimated_rows: u64,
+    pub estimated_io_cost: f64,
+    pub estimated_cpu_cost: f64,
+    pub projection_count: usize,
+    pub limit_count: usize,
+    pub distinct_count: usize,
+    pub window_count: usize,
+    pub set_op_count: usize,
+    pub cte_count: usize,
+    pub recursive_cte_count: usize,
+    pub subquery_count: usize,
+    pub correlated_subquery_count: usize,
+    pub materialized_view_count: usize,
+    pub foreign_key_check_count: usize,
+    pub check_constraint_count: usize,
+    pub trigger_count: usize,
 }
 
 /// Neural network model for cost estimation
@@ -117,6 +114,12 @@ impl ModelWeights {
             weights: vec![0.1; feature_count],
             bias: 0.0,
         }
+    }
+}
+
+impl Default for CostEstimationModel {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -250,7 +253,7 @@ impl CostEstimationModel {
                 }
 
                 // The primary target is execution time (first element of targets)
-                let target = example.targets.get(0).copied().unwrap_or(0.0);
+                let target = example.targets.first().copied().unwrap_or(0.0);
                 let error = prediction - target;
 
                 // Apply example weight to the error

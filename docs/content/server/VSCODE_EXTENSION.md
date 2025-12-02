@@ -282,5 +282,4 @@ npm run package
 
 ---
 
-**Last Updated**: November 2025
 

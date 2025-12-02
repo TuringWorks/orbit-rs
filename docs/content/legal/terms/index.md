@@ -8,7 +8,6 @@ permalink: /legal/terms/
 
 ## Terms of Service
 
-### Last Updated: October 2024
 
 ---
 

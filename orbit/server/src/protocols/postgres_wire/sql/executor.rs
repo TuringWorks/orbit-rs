@@ -1495,6 +1495,7 @@ impl SqlExecutor {
     }
 
     /// Check if the FROM clause references information_schema tables
+    #[allow(clippy::only_used_in_recursion)]
     fn is_information_schema_query(&self, from_clause: &FromClause) -> bool {
         match from_clause {
             FromClause::Table { name, .. } => {

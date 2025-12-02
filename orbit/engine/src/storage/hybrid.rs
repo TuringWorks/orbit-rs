@@ -964,6 +964,7 @@ impl HybridStorageManager {
     }
 
     /// Evaluate a filter predicate on a row (HashMap representation)
+    #[allow(clippy::only_used_in_recursion)]
     fn evaluate_filter_on_row(
         &self,
         row: &HashMap<String, SqlValue>,

@@ -1,6 +1,5 @@
 # Orbit-RS Feature Matrix and Configuration Guide
 
-**Last Updated**: November 23, 2025
 **Version**: 1.0.0
 
 ## Overview

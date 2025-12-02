@@ -6,6 +6,7 @@
 
 use crate::protocols::aql::data_model::{AqlCollection, AqlDocument};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
+use async_trait::async_trait;
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 use serde_json;
 use std::collections::HashMap;
@@ -13,6 +14,37 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{error, info};
+
+/// Trait for AQL storage providers
+/// This abstraction allows both RocksDB-based and unified storage backends
+/// to be used interchangeably with AQL servers.
+#[async_trait]
+pub trait AqlStorageProvider: Send + Sync {
+    /// Initialize the storage backend
+    async fn initialize(&self) -> ProtocolResult<()>;
+
+    /// Store a collection
+    async fn store_collection(&self, collection: AqlCollection) -> ProtocolResult<()>;
+
+    /// Get a collection by name
+    async fn get_collection(&self, name: &str) -> ProtocolResult<Option<AqlCollection>>;
+
+    /// Store a document
+    async fn store_document(&self, doc: AqlDocument) -> ProtocolResult<()>;
+
+    /// Get a document by collection and key
+    async fn get_document(
+        &self,
+        collection: &str,
+        key: &str,
+    ) -> ProtocolResult<Option<AqlDocument>>;
+
+    /// Get all documents in a collection
+    async fn get_collection_documents(&self, collection: &str) -> ProtocolResult<Vec<AqlDocument>>;
+
+    /// Shutdown the storage backend
+    async fn shutdown(&self) -> ProtocolResult<()>;
+}
 
 /// AQL storage with RocksDB persistence
 pub struct AqlStorage {
@@ -241,5 +273,41 @@ impl AqlStorage {
             info!("AqlStorage: RocksDB closed and lock released");
         }
         Ok(())
+    }
+}
+
+/// Implement the AqlStorageProvider trait for AqlStorage
+#[async_trait]
+impl AqlStorageProvider for AqlStorage {
+    async fn initialize(&self) -> ProtocolResult<()> {
+        AqlStorage::initialize(self).await
+    }
+
+    async fn store_collection(&self, collection: AqlCollection) -> ProtocolResult<()> {
+        AqlStorage::store_collection(self, collection).await
+    }
+
+    async fn get_collection(&self, name: &str) -> ProtocolResult<Option<AqlCollection>> {
+        AqlStorage::get_collection(self, name).await
+    }
+
+    async fn store_document(&self, doc: AqlDocument) -> ProtocolResult<()> {
+        AqlStorage::store_document(self, doc).await
+    }
+
+    async fn get_document(
+        &self,
+        collection: &str,
+        key: &str,
+    ) -> ProtocolResult<Option<AqlDocument>> {
+        AqlStorage::get_document(self, collection, key).await
+    }
+
+    async fn get_collection_documents(&self, collection: &str) -> ProtocolResult<Vec<AqlDocument>> {
+        AqlStorage::get_collection_documents(self, collection).await
+    }
+
+    async fn shutdown(&self) -> ProtocolResult<()> {
+        AqlStorage::shutdown(self).await
     }
 }

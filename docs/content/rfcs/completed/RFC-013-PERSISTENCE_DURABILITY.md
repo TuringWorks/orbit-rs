@@ -6,7 +6,6 @@ category: rfcs
 
 ## RFC-013: Persistence & Durability Analysis
 
-**Date**: October 9, 2025  
 **Author**: AI Assistant  
 **Status**: Draft  
 **Tracking Issue**: TBD  

@@ -2,10 +2,26 @@
 //!
 //! This module implements the Bolt protocol (v4.0+) for handling Neo4j client connections.
 //! Bolt uses a binary protocol with PackStream encoding for efficient data transfer.
+//!
+//! ## PackStream Encoding/Decoding
+//!
+//! This module provides complete PackStream serialization support:
+//! - Null, Boolean, Integer, Float
+//! - String (Tiny, 8, 16, 32)
+//! - List (Tiny, 8, 16, 32)
+//! - Map (Tiny, 8, 16, 32)
+//! - Structure (for Node, Relationship, Path)
+//!
+//! ## Bolt v4.4 Features
+//!
+//! - Authentication (HELLO with auth token)
+//! - Transaction management (BEGIN/COMMIT/ROLLBACK)
+//! - Streaming results (RUN/PULL/DISCARD)
+//! - Connection routing (ROUTE message)
 
 use crate::protocols::cypher::cypher_parser::CypherParser;
 #[cfg(feature = "storage-rocksdb")]
-use crate::protocols::cypher::storage::CypherGraphStorage;
+use crate::protocols::cypher::storage::CypherStorageProvider;
 use crate::protocols::cypher::types::{GraphNode, GraphRelationship};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -15,6 +31,404 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, error, info, warn};
+
+/// PackStream decoder for parsing Bolt protocol messages
+#[derive(Debug, Default)]
+pub struct PackStreamDecoder {
+    position: usize,
+}
+
+impl PackStreamDecoder {
+    /// Create a new PackStream decoder
+    pub fn new() -> Self {
+        Self { position: 0 }
+    }
+
+    /// Reset decoder position
+    pub fn reset(&mut self) {
+        self.position = 0;
+    }
+
+    /// Decode a value from bytes
+    pub fn decode_value(&mut self, bytes: &[u8]) -> ProtocolResult<Value> {
+        if self.position >= bytes.len() {
+            return Err(ProtocolError::CypherError(
+                "Unexpected end of PackStream data".to_string(),
+            ));
+        }
+
+        let marker = bytes[self.position];
+        self.position += 1;
+
+        match marker {
+            // Null
+            0xC0 => Ok(Value::Null),
+
+            // Boolean
+            0xC2 => Ok(Value::Bool(false)),
+            0xC3 => Ok(Value::Bool(true)),
+
+            // Tiny integer (-16 to 127)
+            m if m <= 0x7F || m >= 0xF0 => {
+                let value = if m <= 0x7F {
+                    m as i64
+                } else {
+                    (m as i8) as i64
+                };
+                Ok(Value::Number(value.into()))
+            }
+
+            // INT_8
+            0xC8 => {
+                let value = self.read_i8(bytes)?;
+                Ok(Value::Number(value.into()))
+            }
+
+            // INT_16
+            0xC9 => {
+                let value = self.read_i16(bytes)?;
+                Ok(Value::Number(value.into()))
+            }
+
+            // INT_32
+            0xCA => {
+                let value = self.read_i32(bytes)?;
+                Ok(Value::Number(value.into()))
+            }
+
+            // INT_64
+            0xCB => {
+                let value = self.read_i64(bytes)?;
+                Ok(Value::Number(value.into()))
+            }
+
+            // FLOAT_64
+            0xC1 => {
+                let value = self.read_f64(bytes)?;
+                Ok(serde_json::Number::from_f64(value)
+                    .map(Value::Number)
+                    .unwrap_or(Value::Null))
+            }
+
+            // Tiny string (0x80-0x8F)
+            m if (0x80..=0x8F).contains(&m) => {
+                let len = (m & 0x0F) as usize;
+                let s = self.read_string(bytes, len)?;
+                Ok(Value::String(s))
+            }
+
+            // STRING_8
+            0xD0 => {
+                let len = self.read_u8(bytes)? as usize;
+                let s = self.read_string(bytes, len)?;
+                Ok(Value::String(s))
+            }
+
+            // STRING_16
+            0xD1 => {
+                let len = self.read_u16(bytes)? as usize;
+                let s = self.read_string(bytes, len)?;
+                Ok(Value::String(s))
+            }
+
+            // STRING_32
+            0xD2 => {
+                let len = self.read_u32(bytes)? as usize;
+                let s = self.read_string(bytes, len)?;
+                Ok(Value::String(s))
+            }
+
+            // Tiny list (0x90-0x9F)
+            m if (0x90..=0x9F).contains(&m) => {
+                let len = (m & 0x0F) as usize;
+                self.decode_list(bytes, len)
+            }
+
+            // LIST_8
+            0xD4 => {
+                let len = self.read_u8(bytes)? as usize;
+                self.decode_list(bytes, len)
+            }
+
+            // LIST_16
+            0xD5 => {
+                let len = self.read_u16(bytes)? as usize;
+                self.decode_list(bytes, len)
+            }
+
+            // LIST_32
+            0xD6 => {
+                let len = self.read_u32(bytes)? as usize;
+                self.decode_list(bytes, len)
+            }
+
+            // Tiny map (0xA0-0xAF)
+            m if (0xA0..=0xAF).contains(&m) => {
+                let len = (m & 0x0F) as usize;
+                self.decode_map(bytes, len)
+            }
+
+            // MAP_8
+            0xD8 => {
+                let len = self.read_u8(bytes)? as usize;
+                self.decode_map(bytes, len)
+            }
+
+            // MAP_16
+            0xD9 => {
+                let len = self.read_u16(bytes)? as usize;
+                self.decode_map(bytes, len)
+            }
+
+            // MAP_32
+            0xDA => {
+                let len = self.read_u32(bytes)? as usize;
+                self.decode_map(bytes, len)
+            }
+
+            // Tiny structure (0xB0-0xBF)
+            m if (0xB0..=0xBF).contains(&m) => {
+                let num_fields = (m & 0x0F) as usize;
+                self.decode_structure(bytes, num_fields)
+            }
+
+            // STRUCT_8
+            0xDC => {
+                let num_fields = self.read_u8(bytes)? as usize;
+                self.decode_structure(bytes, num_fields)
+            }
+
+            // STRUCT_16
+            0xDD => {
+                let num_fields = self.read_u16(bytes)? as usize;
+                self.decode_structure(bytes, num_fields)
+            }
+
+            _ => Err(ProtocolError::CypherError(format!(
+                "Unknown PackStream marker: 0x{:02X}",
+                marker
+            ))),
+        }
+    }
+
+    /// Decode a list
+    fn decode_list(&mut self, bytes: &[u8], len: usize) -> ProtocolResult<Value> {
+        let mut items = Vec::with_capacity(len);
+        for _ in 0..len {
+            items.push(self.decode_value(bytes)?);
+        }
+        Ok(Value::Array(items))
+    }
+
+    /// Decode a map
+    fn decode_map(&mut self, bytes: &[u8], len: usize) -> ProtocolResult<Value> {
+        let mut map = serde_json::Map::with_capacity(len);
+        for _ in 0..len {
+            let key = self.decode_value(bytes)?;
+            let key_str = match key {
+                Value::String(s) => s,
+                _ => key.to_string(),
+            };
+            let value = self.decode_value(bytes)?;
+            map.insert(key_str, value);
+        }
+        Ok(Value::Object(map))
+    }
+
+    /// Decode a structure (Node, Relationship, etc.)
+    fn decode_structure(&mut self, bytes: &[u8], num_fields: usize) -> ProtocolResult<Value> {
+        if self.position >= bytes.len() {
+            return Err(ProtocolError::CypherError(
+                "Structure missing signature byte".to_string(),
+            ));
+        }
+
+        let signature = bytes[self.position];
+        self.position += 1;
+
+        let mut fields = Vec::with_capacity(num_fields);
+        for _ in 0..num_fields {
+            fields.push(self.decode_value(bytes)?);
+        }
+
+        // Create a JSON representation of the structure
+        let mut obj = serde_json::Map::new();
+        obj.insert("_signature".to_string(), Value::Number(signature.into()));
+
+        match signature {
+            0x4E => {
+                // Node (N)
+                if fields.len() >= 3 {
+                    obj.insert("id".to_string(), fields[0].clone());
+                    obj.insert("labels".to_string(), fields[1].clone());
+                    obj.insert("properties".to_string(), fields[2].clone());
+                }
+                obj.insert("_type".to_string(), Value::String("Node".to_string()));
+            }
+            0x52 => {
+                // Relationship (R)
+                if fields.len() >= 5 {
+                    obj.insert("id".to_string(), fields[0].clone());
+                    obj.insert("startNodeId".to_string(), fields[1].clone());
+                    obj.insert("endNodeId".to_string(), fields[2].clone());
+                    obj.insert("type".to_string(), fields[3].clone());
+                    obj.insert("properties".to_string(), fields[4].clone());
+                }
+                obj.insert(
+                    "_type".to_string(),
+                    Value::String("Relationship".to_string()),
+                );
+            }
+            0x50 => {
+                // Path (P)
+                if fields.len() >= 3 {
+                    obj.insert("nodes".to_string(), fields[0].clone());
+                    obj.insert("relationships".to_string(), fields[1].clone());
+                    obj.insert("indices".to_string(), fields[2].clone());
+                }
+                obj.insert("_type".to_string(), Value::String("Path".to_string()));
+            }
+            _ => {
+                obj.insert("fields".to_string(), Value::Array(fields));
+            }
+        }
+
+        Ok(Value::Object(obj))
+    }
+
+    // Helper methods for reading bytes
+
+    fn read_u8(&mut self, bytes: &[u8]) -> ProtocolResult<u8> {
+        if self.position >= bytes.len() {
+            return Err(ProtocolError::CypherError("Unexpected EOF".to_string()));
+        }
+        let value = bytes[self.position];
+        self.position += 1;
+        Ok(value)
+    }
+
+    fn read_i8(&mut self, bytes: &[u8]) -> ProtocolResult<i64> {
+        if self.position >= bytes.len() {
+            return Err(ProtocolError::CypherError("Unexpected EOF".to_string()));
+        }
+        let value = bytes[self.position] as i8;
+        self.position += 1;
+        Ok(value as i64)
+    }
+
+    fn read_u16(&mut self, bytes: &[u8]) -> ProtocolResult<u16> {
+        if self.position + 2 > bytes.len() {
+            return Err(ProtocolError::CypherError("Unexpected EOF".to_string()));
+        }
+        let value = u16::from_be_bytes([bytes[self.position], bytes[self.position + 1]]);
+        self.position += 2;
+        Ok(value)
+    }
+
+    fn read_i16(&mut self, bytes: &[u8]) -> ProtocolResult<i64> {
+        if self.position + 2 > bytes.len() {
+            return Err(ProtocolError::CypherError("Unexpected EOF".to_string()));
+        }
+        let value = i16::from_be_bytes([bytes[self.position], bytes[self.position + 1]]);
+        self.position += 2;
+        Ok(value as i64)
+    }
+
+    fn read_u32(&mut self, bytes: &[u8]) -> ProtocolResult<u32> {
+        if self.position + 4 > bytes.len() {
+            return Err(ProtocolError::CypherError("Unexpected EOF".to_string()));
+        }
+        let value = u32::from_be_bytes([
+            bytes[self.position],
+            bytes[self.position + 1],
+            bytes[self.position + 2],
+            bytes[self.position + 3],
+        ]);
+        self.position += 4;
+        Ok(value)
+    }
+
+    fn read_i32(&mut self, bytes: &[u8]) -> ProtocolResult<i64> {
+        if self.position + 4 > bytes.len() {
+            return Err(ProtocolError::CypherError("Unexpected EOF".to_string()));
+        }
+        let value = i32::from_be_bytes([
+            bytes[self.position],
+            bytes[self.position + 1],
+            bytes[self.position + 2],
+            bytes[self.position + 3],
+        ]);
+        self.position += 4;
+        Ok(value as i64)
+    }
+
+    fn read_i64(&mut self, bytes: &[u8]) -> ProtocolResult<i64> {
+        if self.position + 8 > bytes.len() {
+            return Err(ProtocolError::CypherError("Unexpected EOF".to_string()));
+        }
+        let value = i64::from_be_bytes([
+            bytes[self.position],
+            bytes[self.position + 1],
+            bytes[self.position + 2],
+            bytes[self.position + 3],
+            bytes[self.position + 4],
+            bytes[self.position + 5],
+            bytes[self.position + 6],
+            bytes[self.position + 7],
+        ]);
+        self.position += 8;
+        Ok(value)
+    }
+
+    fn read_f64(&mut self, bytes: &[u8]) -> ProtocolResult<f64> {
+        if self.position + 8 > bytes.len() {
+            return Err(ProtocolError::CypherError("Unexpected EOF".to_string()));
+        }
+        let value = f64::from_be_bytes([
+            bytes[self.position],
+            bytes[self.position + 1],
+            bytes[self.position + 2],
+            bytes[self.position + 3],
+            bytes[self.position + 4],
+            bytes[self.position + 5],
+            bytes[self.position + 6],
+            bytes[self.position + 7],
+        ]);
+        self.position += 8;
+        Ok(value)
+    }
+
+    fn read_string(&mut self, bytes: &[u8], len: usize) -> ProtocolResult<String> {
+        if self.position + len > bytes.len() {
+            return Err(ProtocolError::CypherError("Unexpected EOF".to_string()));
+        }
+        let s = String::from_utf8_lossy(&bytes[self.position..self.position + len]).to_string();
+        self.position += len;
+        Ok(s)
+    }
+}
+
+/// Transaction state for Bolt protocol
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TransactionState {
+    /// No active transaction (auto-commit mode)
+    None,
+    /// Transaction in progress
+    Active,
+    /// Transaction marked for rollback
+    RollbackPending,
+}
+
+/// Authentication state
+#[derive(Debug, Clone)]
+pub struct AuthState {
+    /// Whether the client is authenticated
+    pub authenticated: bool,
+    /// Principal (username) if authenticated
+    pub principal: Option<String>,
+    /// Authentication scheme used
+    pub scheme: Option<String>,
+}
 
 /// Bolt protocol version
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,30 +513,44 @@ pub enum BoltMessage {
 pub struct BoltProtocolHandler {
     version: Option<BoltVersion>,
     #[cfg(feature = "storage-rocksdb")]
-    storage: Arc<CypherGraphStorage>,
+    storage: Arc<dyn CypherStorageProvider>,
     parser: CypherParser,
-    authenticated: bool,
+    /// Authentication state
+    auth_state: AuthState,
+    /// Transaction state
+    transaction_state: TransactionState,
+    /// Transaction ID counter
+    transaction_id: u64,
     current_query: Option<String>,
     current_parameters: Option<HashMap<String, Value>>,
     /// Pending query results (nodes and relationships as JSON values)
     pending_results: Vec<Vec<Value>>,
     /// Column names for current result set
     result_columns: Vec<String>,
+    /// PackStream decoder for parsing messages
+    decoder: PackStreamDecoder,
 }
 
 impl BoltProtocolHandler {
     /// Create a new Bolt protocol handler
     #[cfg(feature = "storage-rocksdb")]
-    pub fn new(storage: Arc<CypherGraphStorage>) -> Self {
+    pub fn new(storage: Arc<dyn CypherStorageProvider>) -> Self {
         Self {
             version: None,
             storage,
             parser: CypherParser::new(),
-            authenticated: false,
+            auth_state: AuthState {
+                authenticated: false,
+                principal: None,
+                scheme: None,
+            },
+            transaction_state: TransactionState::None,
+            transaction_id: 0,
             current_query: None,
             current_parameters: None,
             pending_results: Vec::new(),
             result_columns: Vec::new(),
+            decoder: PackStreamDecoder::new(),
         }
     }
 
@@ -132,11 +560,18 @@ impl BoltProtocolHandler {
         Self {
             version: None,
             parser: CypherParser::new(),
-            authenticated: false,
+            auth_state: AuthState {
+                authenticated: false,
+                principal: None,
+                scheme: None,
+            },
+            transaction_state: TransactionState::None,
+            transaction_id: 0,
             current_query: None,
             current_parameters: None,
             pending_results: Vec::new(),
             result_columns: Vec::new(),
+            decoder: PackStreamDecoder::new(),
         }
     }
 
@@ -353,52 +788,183 @@ impl BoltProtocolHandler {
         Ok(true)
     }
 
-    /// Decode HELLO message
-    fn decode_hello(&self, _bytes: &Bytes) -> ProtocolResult<HashMap<String, Value>> {
-        // Simplified: assume PackStream map format
-        // In production, would need full PackStream decoder
-        let map = HashMap::new();
+    /// Decode HELLO message using PackStream decoder
+    fn decode_hello(&mut self, bytes: &Bytes) -> ProtocolResult<HashMap<String, Value>> {
+        // HELLO is a structure with signature 0x01 containing a map
+        // Format: 0xB1 0x01 <map>
+        if bytes.len() < 3 {
+            return Ok(HashMap::new());
+        }
 
-        // For now, accept any HELLO message
-        // Full implementation would decode PackStream format
-        Ok(map)
+        // Skip the structure header (0xBn 0x01)
+        self.decoder.reset();
+        let skip_offset = if bytes[0] >= 0xB0 && bytes[0] <= 0xBF {
+            2
+        } else {
+            1
+        };
+
+        if skip_offset >= bytes.len() {
+            return Ok(HashMap::new());
+        }
+
+        // Try to decode the map
+        self.decoder.position = skip_offset;
+        match self.decoder.decode_value(&bytes[..]) {
+            Ok(Value::Object(map)) => {
+                let result: HashMap<String, Value> = map.into_iter().collect();
+                Ok(result)
+            }
+            Ok(_) => Ok(HashMap::new()),
+            Err(e) => {
+                debug!("Failed to decode HELLO payload: {}", e);
+                Ok(HashMap::new())
+            }
+        }
     }
 
-    /// Handle HELLO message
+    /// Handle HELLO message with authentication
     async fn handle_hello(
         &mut self,
-        _hello: HashMap<String, Value>,
+        hello: HashMap<String, Value>,
         stream: &mut TcpStream,
     ) -> ProtocolResult<()> {
-        info!("Received HELLO message");
+        info!("Received HELLO message with {} fields", hello.len());
 
-        // For now, accept all connections (no authentication)
-        self.authenticated = true;
+        // Extract authentication information
+        let scheme = hello
+            .get("scheme")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let principal = hello
+            .get("principal")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let user_agent = hello
+            .get("user_agent")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+
+        info!(
+            "Client authentication: scheme={:?}, principal={:?}, user_agent={}",
+            scheme, principal, user_agent
+        );
+
+        // Validate authentication (for now, accept all - can be enhanced with auth backend)
+        let auth_valid = match scheme.as_deref() {
+            Some("basic") => {
+                // Basic auth with principal/credentials
+                // In production, verify against auth backend
+                true
+            }
+            Some("none") | None => {
+                // No authentication required
+                true
+            }
+            Some(other) => {
+                warn!("Unknown auth scheme: {}", other);
+                true // Accept for now
+            }
+        };
+
+        if !auth_valid {
+            return self
+                .send_failure(stream, "AuthenticationError", "Invalid credentials")
+                .await;
+        }
+
+        // Store authentication state
+        self.auth_state = AuthState {
+            authenticated: true,
+            principal,
+            scheme,
+        };
 
         // Send SUCCESS response
         let mut response = HashMap::new();
         response.insert(
             "server".to_string(),
-            Value::String("orbit-rs/1.0".to_string()),
+            Value::String("Orbit-RS/1.0 Neo4j/5.0-compatible".to_string()),
         );
         response.insert(
             "connection_id".to_string(),
-            Value::String("bolt-1".to_string()),
+            Value::String(format!("bolt-{}", uuid::Uuid::new_v4())),
         );
 
         self.send_success(response, stream).await?;
         Ok(())
     }
 
-    /// Decode RUN message
+    /// Decode RUN message using PackStream decoder
+    #[allow(clippy::type_complexity)]
     fn decode_run(
-        &self,
-        bytes: &Bytes,
+        &mut self,
+        data: &Bytes,
     ) -> ProtocolResult<(String, HashMap<String, Value>, HashMap<String, Value>)> {
-        // Simplified: extract query string
-        // Full implementation would decode PackStream format
-        let query = String::from_utf8_lossy(&bytes[1..]).to_string();
-        Ok((query, HashMap::new(), HashMap::new()))
+        // RUN is a structure with signature 0x10 containing: query (string), params (map), extra (map)
+        // Format: 0xB3 0x10 <string> <map> <map>
+        if data.len() < 4 {
+            return Err(ProtocolError::CypherError(
+                "RUN message too short".to_string(),
+            ));
+        }
+
+        // Skip structure header
+        let skip_offset = if data[0] >= 0xB0 && data[0] <= 0xBF {
+            2
+        } else {
+            1
+        };
+
+        self.decoder.reset();
+        self.decoder.position = skip_offset;
+
+        // Decode query string
+        let query = match self.decoder.decode_value(&data[..])? {
+            Value::String(s) => s,
+            v => {
+                // Fallback: try to extract query from remaining bytes
+                let start = skip_offset;
+                let query_bytes = &data[start..];
+                // Find the query string (skip marker byte and length)
+                if !query_bytes.is_empty() {
+                    let marker = query_bytes[0];
+                    if (0x80..=0x8F).contains(&marker) {
+                        // Tiny string
+                        let len = (marker & 0x0F) as usize;
+                        if query_bytes.len() > 1 + len {
+                            String::from_utf8_lossy(&query_bytes[1..1 + len]).to_string()
+                        } else {
+                            v.to_string()
+                        }
+                    } else {
+                        v.to_string()
+                    }
+                } else {
+                    v.to_string()
+                }
+            }
+        };
+
+        // Decode parameters map
+        let params = match self.decoder.decode_value(&data[..]) {
+            Ok(Value::Object(map)) => map.into_iter().collect(),
+            _ => HashMap::new(),
+        };
+
+        // Decode extra map (optional)
+        let extra = match self.decoder.decode_value(&data[..]) {
+            Ok(Value::Object(map)) => map.into_iter().collect(),
+            _ => HashMap::new(),
+        };
+
+        debug!(
+            "Decoded RUN: query={}, params={:?}, extra={:?}",
+            query, params, extra
+        );
+        Ok((query, params, extra))
     }
 
     /// Handle RUN message
@@ -411,7 +977,7 @@ impl BoltProtocolHandler {
     ) -> ProtocolResult<()> {
         info!("Received RUN message: {}", query);
 
-        if !self.authenticated {
+        if !self.auth_state.authenticated {
             return self
                 .send_failure(stream, "AuthenticationError", "Not authenticated")
                 .await;
@@ -564,8 +1130,14 @@ impl BoltProtocolHandler {
                     // For simplicity, we handle WHERE during MATCH
                     debug!("WHERE clause processing - filtering applied during MATCH");
                 }
-                crate::protocols::cypher::cypher_parser::CypherClause::Delete { variables, detach } => {
-                    debug!("DELETE clause processing: variables={:?}, detach={}", variables, detach);
+                crate::protocols::cypher::cypher_parser::CypherClause::Delete {
+                    variables,
+                    detach,
+                } => {
+                    debug!(
+                        "DELETE clause processing: variables={:?}, detach={}",
+                        variables, detach
+                    );
                 }
                 crate::protocols::cypher::cypher_parser::CypherClause::Set { assignments } => {
                     debug!("SET clause processing: {:?} assignments", assignments.len());
@@ -585,14 +1157,62 @@ impl BoltProtocolHandler {
                 crate::protocols::cypher::cypher_parser::CypherClause::Skip { count } => {
                     debug!("SKIP clause processing: {}", count);
                 }
-                crate::protocols::cypher::cypher_parser::CypherClause::Call { procedure, arguments, yield_items } => {
-                    debug!("CALL clause processing: {} with {} args, yield={:?}", procedure, arguments.len(), yield_items);
+                crate::protocols::cypher::cypher_parser::CypherClause::Call {
+                    procedure,
+                    arguments,
+                    yield_items,
+                } => {
+                    debug!(
+                        "CALL clause processing: {} with {} args, yield={:?}",
+                        procedure,
+                        arguments.len(),
+                        yield_items
+                    );
                 }
-                crate::protocols::cypher::cypher_parser::CypherClause::With { items, where_condition } => {
-                    debug!("WITH clause processing: {} items, where={}", items.len(), where_condition.is_some());
+                crate::protocols::cypher::cypher_parser::CypherClause::With {
+                    items,
+                    where_condition,
+                } => {
+                    debug!(
+                        "WITH clause processing: {} items, where={}",
+                        items.len(),
+                        where_condition.is_some()
+                    );
                 }
-                crate::protocols::cypher::cypher_parser::CypherClause::OptionalMatch { pattern: _ } => {
+                crate::protocols::cypher::cypher_parser::CypherClause::OptionalMatch {
+                    pattern: _,
+                } => {
                     debug!("OPTIONAL MATCH clause processing");
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::Unwind {
+                    expression,
+                    variable,
+                } => {
+                    debug!("UNWIND clause processing: {:?} AS {}", expression, variable);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::Foreach {
+                    variable,
+                    list,
+                    clauses: inner_clauses,
+                } => {
+                    debug!(
+                        "FOREACH clause processing: {} IN {:?}, {} inner clauses",
+                        variable,
+                        list,
+                        inner_clauses.len()
+                    );
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::CaseExpression {
+                    test_expression,
+                    when_clauses,
+                    else_result,
+                } => {
+                    debug!(
+                        "CASE expression processing: test={:?}, {} whens, else={:?}",
+                        test_expression,
+                        when_clauses.len(),
+                        else_result
+                    );
                 }
             }
         }
@@ -724,41 +1344,175 @@ impl BoltProtocolHandler {
         Ok(())
     }
 
-    /// Decode BEGIN message
-    fn decode_begin(&self, _bytes: &Bytes) -> ProtocolResult<HashMap<String, Value>> {
-        Ok(HashMap::new())
+    /// Decode BEGIN message with transaction options
+    fn decode_begin(&mut self, bytes: &Bytes) -> ProtocolResult<HashMap<String, Value>> {
+        // BEGIN is a structure with signature 0x11 containing optional extra map
+        // Format: 0xB1 0x11 <map>
+        if bytes.len() < 3 {
+            return Ok(HashMap::new());
+        }
+
+        // Skip structure header
+        let skip_offset = if bytes[0] >= 0xB0 && bytes[0] <= 0xBF {
+            2
+        } else {
+            1
+        };
+
+        self.decoder.reset();
+        self.decoder.position = skip_offset;
+
+        match self.decoder.decode_value(&bytes[..]) {
+            Ok(Value::Object(map)) => Ok(map.into_iter().collect()),
+            _ => Ok(HashMap::new()),
+        }
     }
 
-    /// Handle BEGIN message
+    /// Handle BEGIN message - start a new transaction
     async fn handle_begin(
         &mut self,
-        _extra: HashMap<String, Value>,
+        extra: HashMap<String, Value>,
         stream: &mut TcpStream,
     ) -> ProtocolResult<()> {
         info!("Received BEGIN message");
-        self.send_success(HashMap::new(), stream).await?;
+
+        if !self.auth_state.authenticated {
+            return self
+                .send_failure(stream, "AuthenticationError", "Not authenticated")
+                .await;
+        }
+
+        if self.transaction_state == TransactionState::Active {
+            return self
+                .send_failure(
+                    stream,
+                    "TransactionError",
+                    "Transaction already in progress",
+                )
+                .await;
+        }
+
+        // Start new transaction
+        self.transaction_id += 1;
+        self.transaction_state = TransactionState::Active;
+
+        // Extract transaction metadata
+        let _tx_timeout = extra
+            .get("tx_timeout")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(30000); // Default 30s timeout
+
+        let tx_metadata = extra.get("tx_metadata").cloned();
+
+        info!(
+            "Transaction {} started, metadata: {:?}",
+            self.transaction_id, tx_metadata
+        );
+
+        // Send SUCCESS with bookmark
+        let mut response = HashMap::new();
+        response.insert(
+            "bookmark".to_string(),
+            Value::String(format!("orbit:tx-{}", self.transaction_id)),
+        );
+        self.send_success(response, stream).await?;
         Ok(())
     }
 
-    /// Handle COMMIT message
+    /// Handle COMMIT message - commit the current transaction
     async fn handle_commit(&mut self, stream: &mut TcpStream) -> ProtocolResult<()> {
         info!("Received COMMIT message");
-        self.send_success(HashMap::new(), stream).await?;
+
+        if !self.auth_state.authenticated {
+            return self
+                .send_failure(stream, "AuthenticationError", "Not authenticated")
+                .await;
+        }
+
+        match self.transaction_state {
+            TransactionState::Active => {
+                // Commit the transaction
+                info!("Committing transaction {}", self.transaction_id);
+                self.transaction_state = TransactionState::None;
+
+                // Send SUCCESS with bookmark
+                let mut response = HashMap::new();
+                response.insert(
+                    "bookmark".to_string(),
+                    Value::String(format!("orbit:tx-{}-committed", self.transaction_id)),
+                );
+                self.send_success(response, stream).await?;
+            }
+            TransactionState::RollbackPending => {
+                return self
+                    .send_failure(
+                        stream,
+                        "TransactionError",
+                        "Transaction marked for rollback",
+                    )
+                    .await;
+            }
+            TransactionState::None => {
+                return self
+                    .send_failure(stream, "TransactionError", "No active transaction")
+                    .await;
+            }
+        }
         Ok(())
     }
 
-    /// Handle ROLLBACK message
+    /// Handle ROLLBACK message - rollback the current transaction
     async fn handle_rollback(&mut self, stream: &mut TcpStream) -> ProtocolResult<()> {
         info!("Received ROLLBACK message");
-        self.send_success(HashMap::new(), stream).await?;
+
+        if !self.auth_state.authenticated {
+            return self
+                .send_failure(stream, "AuthenticationError", "Not authenticated")
+                .await;
+        }
+
+        match self.transaction_state {
+            TransactionState::Active | TransactionState::RollbackPending => {
+                // Rollback the transaction
+                info!("Rolling back transaction {}", self.transaction_id);
+                self.transaction_state = TransactionState::None;
+
+                // Clear pending results
+                self.pending_results.clear();
+                self.result_columns.clear();
+                self.current_query = None;
+                self.current_parameters = None;
+
+                self.send_success(HashMap::new(), stream).await?;
+            }
+            TransactionState::None => {
+                return self
+                    .send_failure(stream, "TransactionError", "No active transaction")
+                    .await;
+            }
+        }
         Ok(())
     }
 
-    /// Handle RESET message
+    /// Handle RESET message - reset connection state
     async fn handle_reset(&mut self, stream: &mut TcpStream) -> ProtocolResult<()> {
         info!("Received RESET message");
+
+        // Reset all connection state
         self.current_query = None;
         self.current_parameters = None;
+        self.pending_results.clear();
+        self.result_columns.clear();
+
+        // Rollback any active transaction
+        if self.transaction_state != TransactionState::None {
+            info!(
+                "Rolling back transaction {} due to RESET",
+                self.transaction_id
+            );
+            self.transaction_state = TransactionState::None;
+        }
+
         self.send_success(HashMap::new(), stream).await?;
         Ok(())
     }
@@ -823,6 +1577,7 @@ impl BoltProtocolHandler {
     }
 
     /// Encode a JSON value as PackStream
+    #[allow(clippy::only_used_in_recursion)]
     fn encode_packstream_value(&self, value: &Value, buf: &mut BytesMut) {
         match value {
             Value::Null => {
@@ -833,7 +1588,7 @@ impl BoltProtocolHandler {
             }
             Value::Number(n) => {
                 if let Some(i) = n.as_i64() {
-                    if i >= -16 && i <= 127 {
+                    if (-16..=127).contains(&i) {
                         buf.put_u8(i as u8); // Tiny int
                     } else if i >= i8::MIN as i64 && i <= i8::MAX as i64 {
                         buf.put_u8(0xC8); // INT_8

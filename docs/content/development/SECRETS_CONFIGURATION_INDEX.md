@@ -486,7 +486,6 @@ SECRETS_CONFIGURATION_INDEX.md (you are here)
 
 ---
 
-**Last Updated:** 2025-10-03  
 **Maintained By:** DevOps Team  
 **Review Schedule:** Quarterly
 

@@ -1,9 +1,9 @@
-//! Cypher/Bolt server with RocksDB persistence
+//! Cypher/Bolt server with pluggable storage
 
 #![cfg(feature = "storage-rocksdb")]
 
 use crate::protocols::cypher::bolt_protocol::BoltProtocolHandler;
-use crate::protocols::cypher::storage::CypherGraphStorage;
+use crate::protocols::cypher::storage::CypherStorageProvider;
 use crate::protocols::error::ProtocolResult;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -12,14 +12,14 @@ use tracing::{error, info};
 /// Cypher/Bolt protocol server
 pub struct CypherServer {
     bind_addr: String,
-    storage: Arc<CypherGraphStorage>,
+    storage: Arc<dyn CypherStorageProvider>,
 }
 
 impl CypherServer {
-    /// Create a new Cypher server with storage
+    /// Create a new Cypher server with storage provider
     pub fn new_with_storage(
         bind_addr: impl Into<String>,
-        storage: Arc<CypherGraphStorage>,
+        storage: Arc<dyn CypherStorageProvider>,
     ) -> Self {
         Self {
             bind_addr: bind_addr.into(),

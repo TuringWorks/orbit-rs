@@ -3,8 +3,6 @@
 //! This module extends the PostgreSQL query engine with pgvector compatibility,
 //! supporting vector data types, similarity operators, and vector functions.
 
-#![cfg(feature = "storage-rocksdb")]
-
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;

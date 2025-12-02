@@ -311,7 +311,7 @@ impl PostgresAdapter {
                 let projected_rows = if let Some(cols) = columns {
                     rows.into_iter()
                         .map(|mut row| {
-                            row.retain(|k, _| cols.contains(&k));
+                            row.retain(|k, _| cols.contains(k));
                             row
                         })
                         .collect()

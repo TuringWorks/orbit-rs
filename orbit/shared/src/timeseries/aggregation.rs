@@ -250,7 +250,7 @@ impl TimeSeriesAggregator {
     /// # Returns
     /// The percentile value as f64
     pub fn percentile(data_points: &[DataPoint], percentile: f64) -> Result<f64> {
-        if percentile < 0.0 || percentile > 100.0 {
+        if !(0.0..=100.0).contains(&percentile) {
             return Err(anyhow!("Percentile must be between 0 and 100"));
         }
 

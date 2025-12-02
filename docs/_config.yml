@@ -18,15 +18,15 @@ plugins:
   - jekyll-relative-links
 
 # Navigation structure
+# Note: Only include pages that exist at the root docs/ level
 header_pages:
   - index.md
   - project_overview.md
   - quick_start.md
-  - roadmap.md
   - features.md
-  - COMPUTE_ACCELERATION_GUIDE.md
   - contributing.md
   - overview.md
+  - status.md
 
 # Site configuration
 markdown: kramdown

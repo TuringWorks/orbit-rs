@@ -7,7 +7,6 @@ category: documentation
 ## GitHub Secrets Configuration Guide
 
 **Repository:** orbit-rs  
-**Date:** 2025-10-03  
 **Purpose:** Configure secrets for CI/CD pipeline deployment
 
 ---
@@ -435,7 +434,6 @@ Before running deployments, ensure:
 
 ---
 
-**Last Updated:** 2025-10-03  
 **Maintained By:** DevOps Team  
 **Review Schedule:** Quarterly
 

@@ -7,7 +7,6 @@ category: rfcs
 ## RFC: Alternative Persistence Implementations for orbit-rs
 
 **Status**: Draft  
-**Date**: 2025-10-06  
 **Authors**: AI Agent, Ravindra Boddipalli  
 
 ## Abstract

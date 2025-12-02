@@ -723,7 +723,7 @@ impl RTree {
         let mut results = Vec::new();
 
         if let Some(ref root) = self.root {
-            self.query_bbox_recursive(root, bbox, &mut results)?;
+            Self::query_bbox_recursive(root, bbox, &mut results)?;
         }
 
         Ok(results)
@@ -731,7 +731,6 @@ impl RTree {
 
     /// Recursively query bounding box.
     fn query_bbox_recursive(
-        &self,
         node: &RTreeNode,
         query_bbox: &BoundingBox,
         results: &mut Vec<(u64, SpatialGeometry)>,
@@ -755,7 +754,7 @@ impl RTree {
             for entry in &node.entries {
                 if entry.bounds.intersects(query_bbox) {
                     if let Some(ref child_node) = entry.child {
-                        self.query_bbox_recursive(child_node, query_bbox, results)?;
+                        Self::query_bbox_recursive(child_node, query_bbox, results)?;
                     }
                 }
             }

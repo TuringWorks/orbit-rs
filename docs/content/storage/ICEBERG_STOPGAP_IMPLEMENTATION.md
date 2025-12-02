@@ -1,6 +1,5 @@
 # Iceberg Snapshot API Stopgap Implementation
 
-**Date**: 2025-01-19
 **Status**:  **IMPLEMENTED**
 **Type**: Temporary Stopgap Solution
 **Migration**: Easy (when upstream adds support)

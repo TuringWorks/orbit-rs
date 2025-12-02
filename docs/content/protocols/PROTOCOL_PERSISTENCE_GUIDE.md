@@ -496,7 +496,6 @@ This is the main index for protocol persistence documentation:
 
 ---
 
-**Last Updated**: 2025-03-23
 **Version**: 1.0
 **Maintainer**: Orbit-RS Team
 

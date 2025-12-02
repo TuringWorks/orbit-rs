@@ -10,10 +10,15 @@ pub mod server;
 pub mod services;
 #[cfg(test)]
 mod test_pooling_integration;
+pub mod unified_storage;
 
 pub use features::Features;
 pub use load_balancer::{LoadBalancer, LoadBalancerStats, LoadBalancingStrategy, NodeLoad};
 pub use mesh::{AddressableDirectory, ClusterManager, ClusterStats, DirectoryStats};
 pub use server::{
     OrbitServer, OrbitServerBuilder, OrbitServerConfig, ProtocolConfig, ProtocolStats, ServerStats,
+};
+pub use unified_storage::{
+    UnifiedStorageError, UnifiedStorageIntegration, UnifiedStorageIntegrationConfig,
+    UnifiedStorageMetrics,
 };

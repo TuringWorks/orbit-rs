@@ -5,12 +5,14 @@
 //! into graph operations.
 
 use crate::protocols::cypher::cypher_parser::{
-    AggregationFunction, Condition, CypherClause, CypherQuery, Expression, NodePattern, OrderByItem,
-    Pattern, PatternElement, PropertyAssignment, RelationshipDirection, RelationshipPattern,
-    RemoveItem, ReturnItem, VariableLengthSpec, WithItem,
+    AggregationFunction, Condition, CypherClause, CypherQuery, Expression, NodePattern,
+    OrderByItem, Pattern, PatternElement, PropertyAssignment, RelationshipDirection,
+    RelationshipPattern, RemoveItem, ReturnItem, UnwindExpression, VariableLengthSpec, WithItem,
 };
 use crate::protocols::error::{ProtocolError, ProtocolResult};
-use orbit_shared::graph::{Direction, GraphNode, GraphRelationship, GraphStorage, NodeId, RelationshipId};
+use orbit_shared::graph::{
+    Direction, GraphNode, GraphRelationship, GraphStorage, NodeId, RelationshipId,
+};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tracing::{debug, info, instrument, warn};
@@ -93,14 +95,26 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                         .apply_where_filter_nodes(condition, &result_nodes, &context)
                         .await?;
                     result_relationships = self
-                        .apply_where_filter_relationships(condition, &result_relationships, &context)
+                        .apply_where_filter_relationships(
+                            condition,
+                            &result_relationships,
+                            &context,
+                        )
                         .await?;
                 }
                 CypherClause::Delete { variables, detach } => {
-                    self.execute_delete_clause(variables, *detach, &mut context, &mut result_nodes, &mut result_relationships).await?;
+                    self.execute_delete_clause(
+                        variables,
+                        *detach,
+                        &mut context,
+                        &mut result_nodes,
+                        &mut result_relationships,
+                    )
+                    .await?;
                 }
                 CypherClause::Set { assignments } => {
-                    self.execute_set_clause(assignments, &mut context, &mut result_nodes).await?;
+                    self.execute_set_clause(assignments, &mut context, &mut result_nodes)
+                        .await?;
                 }
                 CypherClause::Merge { pattern } => {
                     let (nodes, rels) = self.execute_merge_clause(pattern, &mut context).await?;
@@ -108,7 +122,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     result_relationships.extend(rels);
                 }
                 CypherClause::Remove { items } => {
-                    self.execute_remove_clause(items, &mut context, &mut result_nodes).await?;
+                    self.execute_remove_clause(items, &mut context, &mut result_nodes)
+                        .await?;
                 }
                 CypherClause::Call {
                     procedure,
@@ -117,7 +132,11 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 } => {
                     // Execute procedure call and return result directly
                     let result = self
-                        .execute_call_clause(procedure.clone(), arguments.clone(), yield_items.clone())
+                        .execute_call_clause(
+                            procedure.clone(),
+                            arguments.clone(),
+                            yield_items.clone(),
+                        )
                         .await?;
                     // For CALL statements, return the result immediately
                     // unless there are more clauses that process the data
@@ -129,19 +148,180 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     result_relationships.extend(result.relationships);
                 }
                 // ORDER BY, LIMIT, SKIP already collected in first pass
-                CypherClause::OrderBy { .. } | CypherClause::Limit { .. } | CypherClause::Skip { .. } => {}
+                CypherClause::OrderBy { .. }
+                | CypherClause::Limit { .. }
+                | CypherClause::Skip { .. } => {}
                 CypherClause::With {
                     items,
                     where_condition,
                 } => {
                     // WITH clause: filter and rename variables for next clause
-                    self.execute_with_clause(items, where_condition.as_ref(), &mut context, &mut result_nodes, &mut result_relationships).await?;
+                    self.execute_with_clause(
+                        items,
+                        where_condition.as_ref(),
+                        &mut context,
+                        &mut result_nodes,
+                        &mut result_relationships,
+                    )
+                    .await?;
                 }
                 CypherClause::OptionalMatch { pattern } => {
                     // OPTIONAL MATCH: like MATCH but doesn't filter out non-matches
-                    let (nodes, rels) = self.execute_optional_match_clause(pattern, &mut context).await?;
+                    let (nodes, rels) = self
+                        .execute_optional_match_clause(pattern, &mut context)
+                        .await?;
                     result_nodes.extend(nodes);
                     result_relationships.extend(rels);
+                }
+                CypherClause::Unwind {
+                    expression,
+                    variable,
+                } => {
+                    // UNWIND: expand a list into individual rows
+                    tracing::debug!("Executing UNWIND clause: {:?} AS {}", expression, variable);
+
+                    // Evaluate the expression to get a list
+                    let list_values = self.evaluate_unwind_expression(expression, &context)?;
+
+                    // For each value in the list, create a node binding
+                    let mut unwind_nodes = Vec::new();
+                    for value in list_values {
+                        // Create a virtual node for each unwound value
+                        let mut props = std::collections::HashMap::new();
+                        props.insert("_value".to_string(), value.clone());
+
+                        let node = GraphNode::new(vec!["_UnwoundValue".to_string()], props);
+                        unwind_nodes.push(node);
+                    }
+
+                    // Bind the unwound values to the variable
+                    context.bind_nodes(variable.clone(), unwind_nodes.clone());
+
+                    // Add to result set
+                    result_nodes.extend(unwind_nodes);
+
+                    info!(
+                        variable = %variable,
+                        count = result_nodes.len(),
+                        "UNWIND expanded list to rows"
+                    );
+                }
+                CypherClause::Foreach {
+                    variable,
+                    list,
+                    clauses: inner_clauses,
+                } => {
+                    // FOREACH: execute side effects for each list element
+                    tracing::debug!(
+                        "Executing FOREACH clause: {} IN {:?}, {} inner clauses",
+                        variable,
+                        list,
+                        inner_clauses.len()
+                    );
+
+                    // Evaluate the list expression
+                    let list_values = self.evaluate_unwind_expression(list, &context)?;
+
+                    // For each value, execute the inner clauses
+                    for value in list_values {
+                        // Bind the current value to the loop variable
+                        let mut props = std::collections::HashMap::new();
+                        props.insert("_value".to_string(), value);
+
+                        let temp_node = GraphNode::new(vec!["_ForeachValue".to_string()], props);
+                        context.bind_nodes(variable.clone(), vec![temp_node]);
+
+                        // Execute each inner clause (side effects like SET, CREATE, etc.)
+                        for inner_clause in inner_clauses {
+                            match inner_clause {
+                                CypherClause::Set { assignments } => {
+                                    self.execute_set_clause(
+                                        assignments,
+                                        &mut context,
+                                        &mut result_nodes,
+                                    )
+                                    .await?;
+                                }
+                                CypherClause::Create { pattern } => {
+                                    let (nodes, rels) =
+                                        self.execute_create_clause(pattern, &mut context).await?;
+                                    result_nodes.extend(nodes);
+                                    result_relationships.extend(rels);
+                                }
+                                CypherClause::Delete { variables, detach } => {
+                                    self.execute_delete_clause(
+                                        variables,
+                                        *detach,
+                                        &mut context,
+                                        &mut result_nodes,
+                                        &mut result_relationships,
+                                    )
+                                    .await?;
+                                }
+                                CypherClause::Remove { items } => {
+                                    self.execute_remove_clause(
+                                        items,
+                                        &mut context,
+                                        &mut result_nodes,
+                                    )
+                                    .await?;
+                                }
+                                CypherClause::Merge { pattern } => {
+                                    let (nodes, rels) =
+                                        self.execute_merge_clause(pattern, &mut context).await?;
+                                    result_nodes.extend(nodes);
+                                    result_relationships.extend(rels);
+                                }
+                                _ => {
+                                    // Other clauses are not valid inside FOREACH
+                                    tracing::warn!(
+                                        "Skipping unsupported clause type in FOREACH: {:?}",
+                                        inner_clause
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    info!(
+                        variable = %variable,
+                        inner_clauses = inner_clauses.len(),
+                        "FOREACH executed side effects"
+                    );
+                }
+                CypherClause::CaseExpression {
+                    test_expression,
+                    when_clauses,
+                    else_result,
+                } => {
+                    // CASE expression evaluation
+                    // Note: CASE expressions are typically evaluated during RETURN projection
+                    // Here we store the case expression result for later use
+                    tracing::debug!(
+                        "Executing CASE expression: test={:?}, {} whens, else={:?}",
+                        test_expression,
+                        when_clauses.len(),
+                        else_result
+                    );
+
+                    // Evaluate the CASE expression
+                    let result_value = self.evaluate_case_expression(
+                        test_expression.as_deref(),
+                        when_clauses,
+                        else_result.as_ref(),
+                        &context,
+                    )?;
+
+                    // Store as a virtual node with the case result
+                    let mut props = std::collections::HashMap::new();
+                    props.insert("_caseResult".to_string(), result_value);
+
+                    let case_node = GraphNode::new(vec!["_CaseResult".to_string()], props);
+
+                    context.bind_nodes("_case".to_string(), vec![case_node.clone()]);
+                    result_nodes.push(case_node);
+
+                    info!("CASE expression evaluated");
                 }
             }
         }
@@ -275,10 +455,12 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
 
             // Check if the variable matches nodes already in our result set
             // This is important for LIMIT/SKIP/ORDER BY which modify the result set
-            let nodes_in_result: Vec<_> = nodes.iter()
+            let nodes_in_result: Vec<_> = nodes
+                .iter()
                 .filter(|n| {
                     // Check if any node matches this variable binding
-                    context.get_nodes(&item.expression)
+                    context
+                        .get_nodes(&item.expression)
                         .map(|bound| bound.iter().any(|b| b.id == n.id))
                         .unwrap_or(false)
                 })
@@ -429,11 +611,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             // Get relationships from current node
             let relationships = self
                 .storage
-                .get_relationships(
-                    &current_node_id,
-                    direction,
-                    rel_types.map(|t| t.to_vec()),
-                )
+                .get_relationships(&current_node_id, direction, rel_types.map(|t| t.to_vec()))
                 .await
                 .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
 
@@ -730,6 +908,156 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         }
     }
 
+    /// Evaluate an UNWIND expression to get a list of values
+    fn evaluate_unwind_expression(
+        &self,
+        expression: &UnwindExpression,
+        context: &ExecutionContext,
+    ) -> ProtocolResult<Vec<serde_json::Value>> {
+        match expression {
+            UnwindExpression::Variable(var_name) => {
+                // Look up the variable in the context
+                if let Some(nodes) = context.get_nodes(var_name) {
+                    // If it's bound to nodes, convert to JSON values
+                    let values = nodes
+                        .iter()
+                        .map(|n| {
+                            // Check if node has _value property (from previous UNWIND)
+                            if let Some(value) = n.properties.get("_value") {
+                                value.clone()
+                            } else {
+                                // Convert whole node to JSON
+                                serde_json::json!({
+                                    "id": n.id,
+                                    "labels": n.labels,
+                                    "properties": n.properties
+                                })
+                            }
+                        })
+                        .collect();
+                    Ok(values)
+                } else {
+                    // Return empty list if variable not found
+                    Ok(Vec::new())
+                }
+            }
+            UnwindExpression::List(values) => Ok(values.clone()),
+            UnwindExpression::Range { start, end, step } => {
+                let step_val = step.unwrap_or(1);
+                if step_val == 0 {
+                    return Err(ProtocolError::CypherError(
+                        "Range step cannot be zero".to_string(),
+                    ));
+                }
+
+                let mut result = Vec::new();
+                let mut current = *start;
+
+                if step_val > 0 {
+                    while current <= *end {
+                        result.push(serde_json::json!(current));
+                        current += step_val;
+                    }
+                } else {
+                    while current >= *end {
+                        result.push(serde_json::json!(current));
+                        current += step_val;
+                    }
+                }
+                Ok(result)
+            }
+            UnwindExpression::FunctionCall { name, args } => {
+                // Use the CypherFunctions module to evaluate
+                use crate::protocols::cypher::cypher_functions::{
+                    CypherFunctions, FunctionContext,
+                };
+
+                let func_context = FunctionContext::new();
+                let result = CypherFunctions::evaluate(name, args, &func_context)?;
+
+                // Convert result to a list
+                match result {
+                    serde_json::Value::Array(arr) => Ok(arr),
+                    other => Ok(vec![other]),
+                }
+            }
+            UnwindExpression::Property { variable, property } => {
+                // Get property from bound variable
+                if let Some(nodes) = context.get_nodes(variable) {
+                    if let Some(first_node) = nodes.first() {
+                        if let Some(value) = first_node.properties.get(property) {
+                            // If property is an array, return it; otherwise wrap in array
+                            match value {
+                                serde_json::Value::Array(arr) => Ok(arr.clone()),
+                                other => Ok(vec![other.clone()]),
+                            }
+                        } else {
+                            Ok(Vec::new())
+                        }
+                    } else {
+                        Ok(Vec::new())
+                    }
+                } else {
+                    Ok(Vec::new())
+                }
+            }
+        }
+    }
+
+    /// Evaluate a CASE expression
+    fn evaluate_case_expression(
+        &self,
+        test_expression: Option<&str>,
+        when_clauses: &[(String, serde_json::Value)],
+        else_result: Option<&serde_json::Value>,
+        context: &ExecutionContext,
+    ) -> ProtocolResult<serde_json::Value> {
+        if let Some(test_expr) = test_expression {
+            // Simple CASE: CASE expr WHEN val1 THEN result1 ...
+            // Get the test expression value from context
+            let test_value = if let Some(nodes) = context.get_nodes(test_expr) {
+                if let Some(node) = nodes.first() {
+                    node.properties
+                        .get("_value")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null)
+                } else {
+                    serde_json::Value::Null
+                }
+            } else {
+                serde_json::Value::Null
+            };
+
+            // Check each WHEN clause
+            for (when_expr, then_result) in when_clauses {
+                // Parse when_expr as a value and compare
+                let when_value: serde_json::Value =
+                    serde_json::from_str(when_expr).unwrap_or(serde_json::json!(when_expr));
+
+                if test_value == when_value {
+                    return Ok(then_result.clone());
+                }
+            }
+        } else {
+            // Searched CASE: CASE WHEN condition1 THEN result1 ...
+            // Each when_expr is a condition string
+            for (when_condition, then_result) in when_clauses {
+                // For now, treat the condition as a simple truthy check
+                // Full condition evaluation would require expression parsing
+                let is_true = when_condition.to_lowercase() == "true"
+                    || when_condition == "1"
+                    || !when_condition.is_empty();
+
+                if is_true {
+                    return Ok(then_result.clone());
+                }
+            }
+        }
+
+        // No WHEN matched, return ELSE or null
+        Ok(else_result.cloned().unwrap_or(serde_json::Value::Null))
+    }
+
     /// Execute a DELETE clause
     async fn execute_delete_clause(
         &self,
@@ -809,7 +1137,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         &self,
         assignments: &[PropertyAssignment],
         context: &mut ExecutionContext,
-        result_nodes: &mut Vec<GraphNode>,
+        result_nodes: &mut [GraphNode],
     ) -> ProtocolResult<()> {
         for assignment in assignments {
             // Parse target: variable.property
@@ -844,7 +1172,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
 
                     // Update in result_nodes
                     if let Some(result_node) = result_nodes.iter_mut().find(|n| n.id == node.id) {
-                        result_node.properties.insert(prop.to_string(), assignment.value.clone());
+                        result_node
+                            .properties
+                            .insert(prop.to_string(), assignment.value.clone());
                     }
                 }
                 // Update context with modified nodes
@@ -852,10 +1182,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             }
         }
 
-        info!(
-            assignments_count = assignments.len(),
-            "Executed SET clause"
-        );
+        info!(assignments_count = assignments.len(), "Executed SET clause");
 
         Ok(())
     }
@@ -918,7 +1245,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         &self,
         items: &[RemoveItem],
         context: &mut ExecutionContext,
-        result_nodes: &mut Vec<GraphNode>,
+        result_nodes: &mut [GraphNode],
     ) -> ProtocolResult<()> {
         for item in items {
             match item {
@@ -935,7 +1262,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                                 .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
 
                             // Update in result_nodes
-                            if let Some(result_node) = result_nodes.iter_mut().find(|n| n.id == node.id) {
+                            if let Some(result_node) =
+                                result_nodes.iter_mut().find(|n| n.id == node.id)
+                            {
                                 result_node.properties.remove(property);
                             }
                         }
@@ -951,7 +1280,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                                 .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
 
                             // Update in result_nodes
-                            if let Some(result_node) = result_nodes.iter_mut().find(|n| n.id == node.id) {
+                            if let Some(result_node) =
+                                result_nodes.iter_mut().find(|n| n.id == node.id)
+                            {
                                 result_node.labels.retain(|l| l != label);
                             }
                         }
@@ -960,10 +1291,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             }
         }
 
-        info!(
-            items_count = items.len(),
-            "Executed REMOVE clause"
-        );
+        info!(items_count = items.len(), "Executed REMOVE clause");
 
         Ok(())
     }
@@ -1029,7 +1357,11 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         nodes.sort_by(|a, b| {
             for item in order_items {
                 // Parse expression: might be "property" or "var.property"
-                let prop_name = item.expression.split('.').last().unwrap_or(&item.expression);
+                let prop_name = item
+                    .expression
+                    .split('.')
+                    .next_back()
+                    .unwrap_or(&item.expression);
 
                 let val_a = a.properties.get(prop_name);
                 let val_b = b.properties.get(prop_name);
@@ -1042,11 +1374,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 };
 
                 if cmp != 0 {
-                    let ordering = match cmp.cmp(&0) {
-                        std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
-                        std::cmp::Ordering::Less => std::cmp::Ordering::Less,
-                        std::cmp::Ordering::Equal => std::cmp::Ordering::Equal,
-                    };
+                    let ordering = cmp.cmp(&0);
                     return if item.descending {
                         ordering.reverse()
                     } else {
@@ -1071,13 +1399,14 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         let mut new_context = ExecutionContext::new();
 
         for item in items {
-            let alias = item.alias.clone().unwrap_or_else(|| {
-                match &item.expression {
+            let alias = item
+                .alias
+                .clone()
+                .unwrap_or_else(|| match &item.expression {
                     Expression::Variable(v) => v.clone(),
                     Expression::PropertyAccess { variable, .. } => variable.clone(),
                     _ => "result".to_string(),
-                }
-            });
+                });
 
             match &item.expression {
                 Expression::Variable(var) => {
@@ -1094,9 +1423,14 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                         new_context.bind_nodes(alias, nodes.clone());
                     }
                 }
-                Expression::Aggregation { function, argument, distinct } => {
+                Expression::Aggregation {
+                    function,
+                    argument,
+                    distinct,
+                } => {
                     // Aggregation - compute and store result
-                    let agg_result = self.evaluate_aggregation(function, argument, *distinct, context)?;
+                    let agg_result =
+                        self.evaluate_aggregation(function, argument, *distinct, context)?;
                     // Store aggregation result in context (as a special marker node)
                     new_context.bind_nodes(alias, vec![agg_result]);
                 }
@@ -1104,7 +1438,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     // COUNT(*) - count all nodes
                     let count = result_nodes.len();
                     let mut count_node = GraphNode::new(Vec::new(), HashMap::new());
-                    count_node.properties.insert("value".to_string(), serde_json::Value::Number(count.into()));
+                    count_node
+                        .properties
+                        .insert("value".to_string(), serde_json::Value::Number(count.into()));
                     new_context.bind_nodes(alias, vec![count_node]);
                 }
                 _ => {}
@@ -1113,8 +1449,12 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
 
         // Apply WHERE condition if present
         if let Some(condition) = where_condition {
-            *result_nodes = self.apply_where_filter_nodes(condition, result_nodes, &new_context).await?;
-            *result_relationships = self.apply_where_filter_relationships(condition, result_relationships, &new_context).await?;
+            *result_nodes = self
+                .apply_where_filter_nodes(condition, result_nodes, &new_context)
+                .await?;
+            *result_relationships = self
+                .apply_where_filter_relationships(condition, result_relationships, &new_context)
+                .await?;
         }
 
         // Replace context with new context
@@ -1153,14 +1493,20 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         let values: Vec<serde_json::Value> = match argument {
             Expression::Variable(var) => {
                 if let Some(nodes) = context.get_nodes(var) {
-                    nodes.iter().map(|n| serde_json::to_value(n).unwrap_or(serde_json::Value::Null)).collect()
+                    nodes
+                        .iter()
+                        .map(|n| serde_json::to_value(n).unwrap_or(serde_json::Value::Null))
+                        .collect()
                 } else {
                     Vec::new()
                 }
             }
             Expression::PropertyAccess { variable, property } => {
                 if let Some(nodes) = context.get_nodes(variable) {
-                    nodes.iter().filter_map(|n| n.properties.get(property).cloned()).collect()
+                    nodes
+                        .iter()
+                        .filter_map(|n| n.properties.get(property).cloned())
+                        .collect()
                 } else {
                     Vec::new()
                 }
@@ -1169,14 +1515,12 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         };
 
         let result = match function {
-            AggregationFunction::Count => {
-                serde_json::Value::Number(values.len().into())
-            }
+            AggregationFunction::Count => serde_json::Value::Number(values.len().into()),
             AggregationFunction::Sum => {
-                let sum: f64 = values.iter()
-                    .filter_map(|v| v.as_f64())
-                    .sum();
-                serde_json::Value::Number(serde_json::Number::from_f64(sum).unwrap_or(serde_json::Number::from(0)))
+                let sum: f64 = values.iter().filter_map(|v| v.as_f64()).sum();
+                serde_json::Value::Number(
+                    serde_json::Number::from_f64(sum).unwrap_or(serde_json::Number::from(0)),
+                )
             }
             AggregationFunction::Avg => {
                 let nums: Vec<f64> = values.iter().filter_map(|v| v.as_f64()).collect();
@@ -1184,26 +1528,32 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     serde_json::Value::Null
                 } else {
                     let avg = nums.iter().sum::<f64>() / nums.len() as f64;
-                    serde_json::Value::Number(serde_json::Number::from_f64(avg).unwrap_or(serde_json::Number::from(0)))
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(avg).unwrap_or(serde_json::Number::from(0)),
+                    )
                 }
             }
-            AggregationFunction::Min => {
-                values.iter()
-                    .filter_map(|v| v.as_f64())
-                    .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                    .map(|n| serde_json::Value::Number(serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0))))
-                    .unwrap_or(serde_json::Value::Null)
-            }
-            AggregationFunction::Max => {
-                values.iter()
-                    .filter_map(|v| v.as_f64())
-                    .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                    .map(|n| serde_json::Value::Number(serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0))))
-                    .unwrap_or(serde_json::Value::Null)
-            }
-            AggregationFunction::Collect => {
-                serde_json::Value::Array(values)
-            }
+            AggregationFunction::Min => values
+                .iter()
+                .filter_map(|v| v.as_f64())
+                .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|n| {
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0)),
+                    )
+                })
+                .unwrap_or(serde_json::Value::Null),
+            AggregationFunction::Max => values
+                .iter()
+                .filter_map(|v| v.as_f64())
+                .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|n| {
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0)),
+                    )
+                })
+                .unwrap_or(serde_json::Value::Null),
+            AggregationFunction::Collect => serde_json::Value::Array(values),
         };
 
         result_node.properties.insert("value".to_string(), result);
@@ -1433,9 +1783,18 @@ mod tests {
         let engine = create_test_engine().await;
 
         // Create nodes with different values
-        engine.execute_query("CREATE (n:Person {name: 'Charlie', age: 30})").await.unwrap();
-        engine.execute_query("CREATE (n:Person {name: 'Alice', age: 25})").await.unwrap();
-        engine.execute_query("CREATE (n:Person {name: 'Bob', age: 35})").await.unwrap();
+        engine
+            .execute_query("CREATE (n:Person {name: 'Charlie', age: 30})")
+            .await
+            .unwrap();
+        engine
+            .execute_query("CREATE (n:Person {name: 'Alice', age: 25})")
+            .await
+            .unwrap();
+        engine
+            .execute_query("CREATE (n:Person {name: 'Bob', age: 35})")
+            .await
+            .unwrap();
 
         // Query with ORDER BY name ASC
         let asc_result = engine
@@ -1457,10 +1816,22 @@ mod tests {
         let engine = create_test_engine().await;
 
         // Create a chain of nodes: A -> B -> C -> D
-        engine.execute_query("CREATE (a:Person {name: 'A'})").await.unwrap();
-        engine.execute_query("CREATE (b:Person {name: 'B'})").await.unwrap();
-        engine.execute_query("CREATE (c:Person {name: 'C'})").await.unwrap();
-        engine.execute_query("CREATE (d:Person {name: 'D'})").await.unwrap();
+        engine
+            .execute_query("CREATE (a:Person {name: 'A'})")
+            .await
+            .unwrap();
+        engine
+            .execute_query("CREATE (b:Person {name: 'B'})")
+            .await
+            .unwrap();
+        engine
+            .execute_query("CREATE (c:Person {name: 'C'})")
+            .await
+            .unwrap();
+        engine
+            .execute_query("CREATE (d:Person {name: 'D'})")
+            .await
+            .unwrap();
 
         // Parse a query with variable-length path (just test parsing)
         let parser = crate::protocols::cypher::cypher_parser::CypherParser::new();
@@ -1480,8 +1851,14 @@ mod tests {
         let engine = create_test_engine().await;
 
         // Create nodes
-        engine.execute_query("CREATE (a:Person {name: 'A'})").await.unwrap();
-        engine.execute_query("CREATE (b:Person {name: 'B'})").await.unwrap();
+        engine
+            .execute_query("CREATE (a:Person {name: 'A'})")
+            .await
+            .unwrap();
+        engine
+            .execute_query("CREATE (b:Person {name: 'B'})")
+            .await
+            .unwrap();
 
         // Parse a query with variable-length path with bounds
         let parser = crate::protocols::cypher::cypher_parser::CypherParser::new();

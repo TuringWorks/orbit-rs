@@ -11,10 +11,9 @@
 use orbit_engine::addressable::{AddressableReference, Key};
 use orbit_engine::cluster::NodeId;
 use orbit_engine::transactions::{
-    DeadlockCycle, DeadlockDetector, DistributedLock, LockId, LockMode,
-    LockOwner, LockRequest, LockStatus, TransactionConfig,
-    TransactionId, TransactionOperation, TransactionState, TransactionVote,
-    DistributedTransaction,
+    DeadlockCycle, DeadlockDetector, DistributedLock, DistributedTransaction, LockId, LockMode,
+    LockOwner, LockRequest, LockStatus, TransactionConfig, TransactionId, TransactionOperation,
+    TransactionState, TransactionVote,
 };
 use std::time::{Duration, SystemTime};
 
@@ -27,7 +26,9 @@ fn test_node_id(name: &str) -> NodeId {
 fn test_actor_ref(actor_type: &str, actor_id: &str) -> AddressableReference {
     AddressableReference {
         addressable_type: actor_type.to_string(),
-        key: Key::StringKey { key: actor_id.to_string() },
+        key: Key::StringKey {
+            key: actor_id.to_string(),
+        },
     }
 }
 
@@ -395,7 +396,11 @@ async fn test_deadlock_detector_no_cycle() {
 
     // T1 waits for T2, but no cycle
     detector
-        .add_wait_for("tx-1".to_string(), "tx-2".to_string(), "resource-A".to_string())
+        .add_wait_for(
+            "tx-1".to_string(),
+            "tx-2".to_string(),
+            "resource-A".to_string(),
+        )
         .await;
 
     assert!(detector.detect_deadlock().await.is_none());
@@ -407,10 +412,18 @@ async fn test_deadlock_detector_simple_cycle() {
 
     // Create a simple deadlock: T1 -> T2 -> T1
     detector
-        .add_wait_for("tx-1".to_string(), "tx-2".to_string(), "resource-A".to_string())
+        .add_wait_for(
+            "tx-1".to_string(),
+            "tx-2".to_string(),
+            "resource-A".to_string(),
+        )
         .await;
     detector
-        .add_wait_for("tx-2".to_string(), "tx-1".to_string(), "resource-B".to_string())
+        .add_wait_for(
+            "tx-2".to_string(),
+            "tx-1".to_string(),
+            "resource-B".to_string(),
+        )
         .await;
 
     let deadlock = detector.detect_deadlock().await;
@@ -427,13 +440,25 @@ async fn test_deadlock_detector_complex_cycle() {
 
     // Create a 3-way deadlock: T1 -> T2 -> T3 -> T1
     detector
-        .add_wait_for("tx-1".to_string(), "tx-2".to_string(), "resource-A".to_string())
+        .add_wait_for(
+            "tx-1".to_string(),
+            "tx-2".to_string(),
+            "resource-A".to_string(),
+        )
         .await;
     detector
-        .add_wait_for("tx-2".to_string(), "tx-3".to_string(), "resource-B".to_string())
+        .add_wait_for(
+            "tx-2".to_string(),
+            "tx-3".to_string(),
+            "resource-B".to_string(),
+        )
         .await;
     detector
-        .add_wait_for("tx-3".to_string(), "tx-1".to_string(), "resource-C".to_string())
+        .add_wait_for(
+            "tx-3".to_string(),
+            "tx-1".to_string(),
+            "resource-C".to_string(),
+        )
         .await;
 
     let deadlock = detector.detect_deadlock().await;
@@ -449,10 +474,18 @@ async fn test_deadlock_detector_remove_transaction() {
 
     // Create deadlock
     detector
-        .add_wait_for("tx-1".to_string(), "tx-2".to_string(), "resource-A".to_string())
+        .add_wait_for(
+            "tx-1".to_string(),
+            "tx-2".to_string(),
+            "resource-A".to_string(),
+        )
         .await;
     detector
-        .add_wait_for("tx-2".to_string(), "tx-1".to_string(), "resource-B".to_string())
+        .add_wait_for(
+            "tx-2".to_string(),
+            "tx-1".to_string(),
+            "resource-B".to_string(),
+        )
         .await;
 
     assert!(detector.detect_deadlock().await.is_some());
@@ -653,10 +686,18 @@ async fn test_deadlock_detector_no_false_positives() {
 
     // Linear chain: T1 -> T2 -> T3 (no cycle)
     detector
-        .add_wait_for("tx-1".to_string(), "tx-2".to_string(), "resource-A".to_string())
+        .add_wait_for(
+            "tx-1".to_string(),
+            "tx-2".to_string(),
+            "resource-A".to_string(),
+        )
         .await;
     detector
-        .add_wait_for("tx-2".to_string(), "tx-3".to_string(), "resource-B".to_string())
+        .add_wait_for(
+            "tx-2".to_string(),
+            "tx-3".to_string(),
+            "resource-B".to_string(),
+        )
         .await;
 
     assert!(detector.detect_deadlock().await.is_none());
@@ -668,10 +709,18 @@ async fn test_multiple_independent_wait_chains() {
 
     // Two independent chains, no cycles
     detector
-        .add_wait_for("tx-1".to_string(), "tx-2".to_string(), "resource-A".to_string())
+        .add_wait_for(
+            "tx-1".to_string(),
+            "tx-2".to_string(),
+            "resource-A".to_string(),
+        )
         .await;
     detector
-        .add_wait_for("tx-3".to_string(), "tx-4".to_string(), "resource-B".to_string())
+        .add_wait_for(
+            "tx-3".to_string(),
+            "tx-4".to_string(),
+            "resource-B".to_string(),
+        )
         .await;
 
     assert!(detector.detect_deadlock().await.is_none());

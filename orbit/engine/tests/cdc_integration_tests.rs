@@ -9,11 +9,11 @@
 
 // CDC is always available in orbit-engine (part of core functionality)
 
-use orbit_shared::{
-    CdcConsumer, CdcCoordinator, CdcEvent, CdcFilter, CdcStats, CdcSubscription,
-    DmlOperation, OrbitResult,
-};
 use async_trait::async_trait;
+use orbit_shared::{
+    CdcConsumer, CdcCoordinator, CdcEvent, CdcFilter, CdcStats, CdcSubscription, DmlOperation,
+    OrbitResult,
+};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -147,10 +147,7 @@ fn test_cdc_event_update_creation() {
 
 #[test]
 fn test_cdc_event_delete_creation() {
-    let old_values = test_values(&[
-        ("id", json!(1)),
-        ("name", json!("Alice")),
-    ]);
+    let old_values = test_values(&[("id", json!(1)), ("name", json!("Alice"))]);
 
     let event = CdcEvent::delete("users".to_string(), "1".to_string(), old_values);
 
@@ -221,7 +218,11 @@ fn test_cdc_filter_tables() {
 
     assert!(filter.tables.is_some());
     assert_eq!(filter.tables.as_ref().unwrap().len(), 2);
-    assert!(filter.tables.as_ref().unwrap().contains(&"users".to_string()));
+    assert!(filter
+        .tables
+        .as_ref()
+        .unwrap()
+        .contains(&"users".to_string()));
 }
 
 #[test]
@@ -531,11 +532,19 @@ async fn test_cdc_coordinator_stats_by_operation() {
     // Capture various operations
     let insert_values = test_values(&[("id", json!(1))]);
     coordinator
-        .capture_event(CdcEvent::insert("users".to_string(), "1".to_string(), insert_values.clone()))
+        .capture_event(CdcEvent::insert(
+            "users".to_string(),
+            "1".to_string(),
+            insert_values.clone(),
+        ))
         .await
         .unwrap();
     coordinator
-        .capture_event(CdcEvent::insert("users".to_string(), "2".to_string(), insert_values))
+        .capture_event(CdcEvent::insert(
+            "users".to_string(),
+            "2".to_string(),
+            insert_values,
+        ))
         .await
         .unwrap();
 
@@ -552,15 +561,37 @@ async fn test_cdc_coordinator_stats_by_operation() {
         .unwrap();
 
     coordinator
-        .capture_event(CdcEvent::delete("users".to_string(), "2".to_string(), old_values))
+        .capture_event(CdcEvent::delete(
+            "users".to_string(),
+            "2".to_string(),
+            old_values,
+        ))
         .await
         .unwrap();
 
     let stats = coordinator.get_stats().await;
     assert_eq!(stats.total_events, 4);
-    assert_eq!(*stats.events_by_operation.get(&DmlOperation::Insert).unwrap_or(&0), 2);
-    assert_eq!(*stats.events_by_operation.get(&DmlOperation::Update).unwrap_or(&0), 1);
-    assert_eq!(*stats.events_by_operation.get(&DmlOperation::Delete).unwrap_or(&0), 1);
+    assert_eq!(
+        *stats
+            .events_by_operation
+            .get(&DmlOperation::Insert)
+            .unwrap_or(&0),
+        2
+    );
+    assert_eq!(
+        *stats
+            .events_by_operation
+            .get(&DmlOperation::Update)
+            .unwrap_or(&0),
+        1
+    );
+    assert_eq!(
+        *stats
+            .events_by_operation
+            .get(&DmlOperation::Delete)
+            .unwrap_or(&0),
+        1
+    );
 }
 
 #[tokio::test]
@@ -571,15 +602,27 @@ async fn test_cdc_coordinator_stats_by_table() {
     let values = test_values(&[("id", json!(1))]);
 
     coordinator
-        .capture_event(CdcEvent::insert("users".to_string(), "1".to_string(), values.clone()))
+        .capture_event(CdcEvent::insert(
+            "users".to_string(),
+            "1".to_string(),
+            values.clone(),
+        ))
         .await
         .unwrap();
     coordinator
-        .capture_event(CdcEvent::insert("users".to_string(), "2".to_string(), values.clone()))
+        .capture_event(CdcEvent::insert(
+            "users".to_string(),
+            "2".to_string(),
+            values.clone(),
+        ))
         .await
         .unwrap();
     coordinator
-        .capture_event(CdcEvent::insert("orders".to_string(), "1".to_string(), values))
+        .capture_event(CdcEvent::insert(
+            "orders".to_string(),
+            "1".to_string(),
+            values,
+        ))
         .await
         .unwrap();
 
@@ -656,8 +699,9 @@ async fn test_cdc_full_lifecycle() {
     // 2. Update
     let old_values = test_values(&[("email", json!("alice@example.com"))]);
     let new_values = test_values(&[("email", json!("alice.smith@example.com"))]);
-    let update_event = CdcEvent::update("users".to_string(), "1".to_string(), old_values, new_values)
-        .with_transaction_id("tx-002".to_string());
+    let update_event =
+        CdcEvent::update("users".to_string(), "1".to_string(), old_values, new_values)
+            .with_transaction_id("tx-002".to_string());
     coordinator.capture_event(update_event).await.unwrap();
 
     // 3. Delete
@@ -739,11 +783,19 @@ async fn test_cdc_selective_consumption() {
     // Capture various operations
     let values = test_values(&[("id", json!(1))]);
     coordinator
-        .capture_event(CdcEvent::insert("test".to_string(), "1".to_string(), values.clone()))
+        .capture_event(CdcEvent::insert(
+            "test".to_string(),
+            "1".to_string(),
+            values.clone(),
+        ))
         .await
         .unwrap();
     coordinator
-        .capture_event(CdcEvent::delete("test".to_string(), "1".to_string(), values))
+        .capture_event(CdcEvent::delete(
+            "test".to_string(),
+            "1".to_string(),
+            values,
+        ))
         .await
         .unwrap();
 

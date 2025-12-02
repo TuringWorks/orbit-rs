@@ -3,8 +3,6 @@
 //! This module provides integration between the MCP server and Orbit-RS's
 //! PostgreSQL wire protocol and query engine.
 
-#![cfg(feature = "storage-rocksdb")]
-
 use crate::protocols::mcp::result_processor::{QueryResult as McpQueryResult, Row};
 use crate::protocols::mcp::sql_generator::GeneratedQuery;
 use crate::protocols::mcp::types::McpError;
@@ -218,11 +216,11 @@ impl OrbitMcpIntegration {
                     name: col.name.clone(),
                     data_type,
                     nullable: col.nullable,
-                    default_value: col.default_value.as_ref().and_then(|v| {
+                    default_value: col.default_value.as_ref().map(|v| {
                         if let Some(s) = v.as_str() {
-                            Some(s.to_string())
+                            s.to_string()
                         } else {
-                            Some(serde_json::to_string(v).unwrap_or_default())
+                            serde_json::to_string(v).unwrap_or_default()
                         }
                     }),
                     is_primary_key: false, // Would need to check constraints

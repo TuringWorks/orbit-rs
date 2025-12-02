@@ -352,5 +352,4 @@ pub async fn write(&self, batch: &ColumnBatch) -> EngineResult<()> {
 ---
 
 **Document Version**: 1.0
-**Last Updated**: 2025-01-19
 **Next Review**: End of Phase 2

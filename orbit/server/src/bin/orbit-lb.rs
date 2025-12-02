@@ -90,7 +90,10 @@ impl ProxyConfig {
 fn parse_proxy_spec(spec: &str, backend_host: &str) -> Result<(u16, Vec<SocketAddr>), String> {
     let parts: Vec<&str> = spec.split(':').collect();
     if parts.len() != 2 {
-        return Err(format!("Invalid spec '{}': expected listen_port:backend_ports", spec));
+        return Err(format!(
+            "Invalid spec '{}': expected listen_port:backend_ports",
+            spec
+        ));
     }
 
     let listen_port: u16 = parts[0]
@@ -100,7 +103,10 @@ fn parse_proxy_spec(spec: &str, backend_host: &str) -> Result<(u16, Vec<SocketAd
     let backends: Result<Vec<SocketAddr>, String> = parts[1]
         .split(',')
         .map(|p| {
-            let port: u16 = p.trim().parse().map_err(|_| format!("Invalid port: {}", p))?;
+            let port: u16 = p
+                .trim()
+                .parse()
+                .map_err(|_| format!("Invalid port: {}", p))?;
             Ok(format!("{}:{}", backend_host, port).parse().unwrap())
         })
         .collect();

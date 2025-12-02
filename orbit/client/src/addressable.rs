@@ -77,8 +77,15 @@ pub trait ActorImplementation: ActorLifecycle + Any + Send + Sync {
     }
 
     /// Handle a dynamic invocation
-    async fn handle_invocation(&self, method: &str, _args: Vec<serde_json::Value>) -> OrbitResult<serde_json::Value> {
-        Err(OrbitError::internal(format!("Method {} not implemented", method)))
+    async fn handle_invocation(
+        &self,
+        method: &str,
+        _args: Vec<serde_json::Value>,
+    ) -> OrbitResult<serde_json::Value> {
+        Err(OrbitError::internal(format!(
+            "Method {} not implemented",
+            method
+        )))
     }
 }
 

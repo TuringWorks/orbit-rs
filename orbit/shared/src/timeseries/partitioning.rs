@@ -738,7 +738,7 @@ mod tests {
         }
 
         // Should have multiple partitions now
-        assert!(manager.size_assignment.partition_sizes.len() >= 1);
+        assert!(!manager.size_assignment.partition_sizes.is_empty());
     }
 
     #[test]

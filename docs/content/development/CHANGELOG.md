@@ -11,6 +11,189 @@ All notable changes to the Orbit-RS project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2025-12-01
+
+### Added
+
+- **S3/MinIO Cold Storage Backend** (2025-12-01): Production-ready S3-compatible storage for tiered architecture
+  - **S3Backend Implementation** (`orbit-engine/src/unified/s3_backend.rs`)
+    - Full `UnifiedStorageBackend` trait implementation using OpenDAL
+    - Support for MinIO (on-premises) and AWS S3 (cloud) configurations
+    - Path-style access for MinIO compatibility
+    - Complete CRUD operations: `get`, `put`, `delete`, `exists`
+    - Prefix scanning with `scan_prefix` for efficient range queries
+    - Batch operations: `put_batch`, `delete_batch` for bulk data movement
+    - Operational metrics tracking (read/write/delete/error counts)
+  - **TieredStorageBackend Enhancements**
+    - New `archive_to_cold()` method for explicit cold tier archival
+    - Integration with S3Backend for cold tier storage
+    - Seamless tier migration: Hot → Warm → Cold
+    - Cold tier recall with automatic promotion to hot tier
+  - **Comprehensive Integration Tests** (`orbit-engine/tests/tiered_storage_minio_tests.rs`)
+    - S3 basic operations (put, get, delete, exists)
+    - Scan prefix operations across cold storage
+    - Hot → Warm propagation with eviction
+    - Warm → Cold archival workflow
+    - Cold tier recall and automatic promotion
+    - Multi-tier consistency verification
+    - Batch operations across tiers
+    - Cross-tier scan functionality
+    - Metrics accuracy validation
+    - Graceful shutdown handling
+  - **Configuration Options**
+    - `S3BackendConfig` with endpoint, access key, secret key, region, bucket
+    - Convenience constructors: `minio()`, `aws_s3()`, `minio_default()`
+    - Configurable path prefix for data organization
+
+  **Usage Example:**
+  ```bash
+  # Start MinIO
+  docker run -p 9000:9000 -p 9001:9001 minio/minio server /data --console-address ":9001"
+
+  # Create bucket
+  docker exec -it <container> mc mb /data/orbit-cold-storage
+
+  # Run tests
+  cargo test -p orbit-engine tiered_storage_minio -- --ignored
+  ```
+
+  **Files Added:**
+  - `orbit/engine/src/unified/s3_backend.rs` - S3 backend implementation (410 lines)
+  - `orbit/engine/tests/tiered_storage_minio_tests.rs` - Integration tests (450 lines)
+
+  **Files Modified:**
+  - `orbit/engine/Cargo.toml` - Added `services-s3` feature to opendal
+  - `orbit/engine/src/unified/mod.rs` - Added s3_backend module exports
+  - `orbit/engine/src/unified/tiered.rs` - Added `archive_to_cold()` method
+
+- **Unified Cross-Protocol Storage Layer** (2025-12-01): True data sharing across all protocols
+  - **UnifiedTableStorage Integration**
+    - PostgreSQL, MySQL, CQL adapters wired to unified storage
+    - AQL and Cypher servers integrated with unified storage
+    - Cross-protocol data visibility (write via Redis, read via PostgreSQL)
+  - **Storage Provider Traits**
+    - `AqlStorageProvider` trait for ArangoDB-compatible operations
+    - `CypherStorageProvider` trait for graph operations
+    - Redis, PostgreSQL, MySQL unified adapters
+  - **Secondary Index Manager**
+    - Efficient field-based queries across protocols
+    - Index creation and maintenance
+    - Query optimization with index hints
+
+- **Tiered Storage Backend** (2025-11-25): Hot/Warm/Cold tier architecture
+  - **Three-Tier Storage System**
+    - Hot tier: In-memory for frequently accessed data
+    - Warm tier: RocksDB for balanced read/write performance
+    - Cold tier: S3/MinIO for archival storage
+  - **Actor-Tier Placement Integration**
+    - Tier-aware actor storage with automatic data movement
+    - Access pattern-based tier migration
+    - Configurable eviction policies (LRU, LFU, TTL)
+  - **Feature Flags**
+    - `tiered-storage` feature for enabling tier support
+    - Configurable via `UnifiedStorageConfig`
+  - **TOML Configuration Support**
+    - Cluster-aware unified storage configuration
+    - Tiered storage settings in `orbit-server.toml`
+    - Environment-specific configuration profiles
+
+- **Metal GPU Acceleration** (2025-12-01): Apple Silicon optimization for ML workloads
+  - Dynamic device selection at runtime
+  - Metal Performance Shaders integration
+  - Build-time device capability detection
+  - Opt-in CUDA support to fix non-CUDA system builds
+
+- **Comprehensive ML Framework Expansion** (2025-11-25 to 2025-12-01): 100+ industry-specific models
+  - **Foundational Models** (Phase 1): 18 cross-cutting architectures
+    - Candle framework integration for all models
+    - Graph Neural Network (GNN) comprehensive models
+    - Dynamic device selection and Metal GPU acceleration
+  - **Industry Verticals** (reorganized into 15 major categories):
+    - **Healthcare**: 10+ models (medical imaging, clinical NLP, drug discovery, population health, hospital systems)
+    - **Retail & E-Commerce**: 9 models (recommendation, demand forecasting, inventory optimization)
+    - **Consumer Apps**: 9 models (personalization, content moderation, engagement prediction)
+    - **Agriculture & Environment**: 9 models (crop analysis, climate prediction, soil health)
+    - **Construction & Real Estate**: 8 models (property valuation, project risk, site analysis)
+    - **Technology, Media & Internet**: 12 models (ad targeting, content recommendation, fraud detection)
+    - **Financial Services**: Insurance, banking, trading models
+    - **Energy & Utilities**: Oil & gas exploration, solar, offshore, smart grid
+    - **Transportation & Logistics**: Autonomous fleet, rail systems, marine exploration
+    - **Government & Public Sector**: 5 models (fraud detection, resource allocation)
+    - **Education, Training & HR**: 8 models (learning analytics, talent management)
+    - **Telecom**: Network optimization, churn prediction
+    - **Legal & Compliance**: Contract analysis, regulatory monitoring
+    - **Arts & Design**: Creative generation, style transfer
+    - **Smart City & Infrastructure**: Building management, urban planning, venue management
+    - **Ticketing Systems**: 5 comprehensive models (dynamic pricing, fraud detection)
+
+### Changed
+
+- Updated `sqlx-no-rsa` git URL to TuringWorks organization
+- Removed unnecessary `mut` keywords and unused variables for cleaner code
+- Updated CI/CD verification scripts for pipeline reliability
+
+### Fixed
+
+- Build compilation warnings resolved across workspace
+- CUDA support made opt-in to fix builds on non-CUDA systems
+- Code formatting applied via `cargo fmt`
+
+### Added (Previous - 2025-11-30)
+
+- **Neo4j/Cypher Protocol Enhancements**: Complete Bolt v4.4 protocol and comprehensive Cypher support
+  - **Bolt Protocol v4.4**:
+    - PackStream encoding/decoding (Null, Bool, Int, Float, String, List, Map, Structure)
+    - Connection handshake and version negotiation
+    - Authentication (HELLO with auth token)
+    - Transaction management (BEGIN/COMMIT/ROLLBACK)
+    - Streaming results (RUN/PULL/DISCARD)
+    - Connection routing (ROUTE message)
+  - **Cypher Query Language**:
+    - All standard clauses: MATCH, CREATE, MERGE, DELETE, SET, REMOVE, RETURN, WITH, WHERE
+    - Advanced clauses: UNWIND, FOREACH, CASE expressions
+    - Variable-length path patterns (`*1..3`)
+    - ORDER BY, SKIP, LIMIT support
+    - 70+ built-in functions (string, list, math, date/time, type, path)
+  - **Graph Engine Execution**:
+    - UNWIND clause execution for list expansion
+    - FOREACH clause execution with nested mutations (SET, CREATE, DELETE, REMOVE, MERGE)
+    - CASE expression evaluation (simple and searched)
+    - Pattern matching with node/relationship filters
+  - **Cypher Function Library** (`cypher_functions.rs`):
+    - String functions: toUpper, toLower, trim, replace, substring, split, reverse, etc.
+    - List functions: head, tail, last, range, slice, keys, labels, nodes, relationships
+    - Math functions: abs, ceil, floor, round, sqrt, sin, cos, tan, log, log10, exp, etc.
+    - Date/Time functions: date, datetime, time, duration
+    - Type functions: type, id, properties, coalesce
+    - Path functions: pathLength, startNode, endNode
+  - **Tests**: 68+ Cypher tests passing
+
+- **Advanced Graph Analytics (Phase 15)**: Comprehensive graph algorithm procedures
+  - **Centrality Algorithms**:
+    - Eigenvector centrality with power iteration method
+    - Enhanced centrality measures (PageRank, Betweenness, Closeness, Degree - existing)
+  - **Similarity Algorithms**:
+    - Jaccard similarity (node neighborhood based)
+    - Cosine similarity (node embedding/feature vector based)
+    - Overlap coefficient similarity
+  - **Link Prediction Algorithms**:
+    - Common Neighbors scoring
+    - Adamic-Adar index (weighted common neighbors)
+    - Preferential Attachment score
+  - **Community Detection**:
+    - Louvain algorithm with modularity optimization
+    - Resolution parameter support for community granularity
+  - **Graph Structure Analysis**:
+    - K-Core decomposition (Batagelj-Zaversnik algorithm)
+    - Coreness values for all nodes
+    - K-specific core extraction
+  - **Tests**: 14 graph algorithm tests (all passing)
+
+### Changed
+
+- Deprecated legacy `bolt.rs` in favor of comprehensive `bolt_protocol.rs` implementation
+- Updated Cypher module exports to include new function types (BinaryOperator, UnaryOperator)
+
 ## [0.1.0] - 2024-10-01
 
 ### Added
@@ -179,6 +362,516 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added (Unreleased)
+
+#### **Documentation Improvements and Link Fixes** (2025-11-30)
+
+##### Comprehensive Documentation Site Maintenance
+
+- **Fixed 50+ Broken Documentation Links**
+  - Updated `features.md` with 30+ corrected documentation paths
+  - Fixed `ORBIT_ARCHITECTURE.md` relative links for MySQL, CQL, and persistence documentation
+  - Corrected `index.md`, `quick_start.md`, and `project_overview.md` navigation links
+  - Replaced archived documentation references with current content paths
+
+- **New Documentation**
+  - Added comprehensive API Reference (`docs/content/api/API_REFERENCE.md`)
+    - Orbit Client API documentation
+    - Actor System API with lifecycle management
+    - Transaction API (2PC and Saga patterns)
+    - Protocol APIs (PostgreSQL, Redis, MySQL, CQL, REST, gRPC)
+    - Model Context Protocol (MCP) integration guide
+  - Added Migration Guides (`docs/content/migration/MIGRATION_GUIDE.md`)
+    - PostgreSQL migration with schema export and data transfer
+    - Redis migration with RDB snapshots and SCAN-based approaches
+    - Multi-database consolidation strategies
+
+- **Jekyll Site Configuration Fixes**
+  - Fixed `_config.yml` header_pages to reference existing files only
+  - Added proper Jekyll front matter to PRD.md and virtual_actor_persistence.md
+  - Resolved header duplication issues on rendered pages
+
+- **Documentation Path Corrections**
+  - `content/protocols/` for protocol documentation (MySQL, CQL, PostgreSQL)
+  - `content/server/` for server-related documentation
+  - `content/storage/` for persistence documentation
+  - `content/ai/` for AI/ML documentation
+  - `content/gpu-compute/` for compute acceleration guides
+  - `content/rfcs/completed/` for completed RFC documents
+  - `content/graph-rag/` for GraphRAG documentation
+
+**Files Modified:**
+- `docs/features.md` - 35 link corrections
+- `docs/index.md` - 8+ link corrections
+- `docs/quick_start.md` - 6 link corrections
+- `docs/PRD.md` - Added Jekyll front matter
+- `docs/content/storage/virtual_actor_persistence.md` - Fixed header duplication
+- `docs/content/architecture/ORBIT_ARCHITECTURE.md` - 6 link corrections
+- `docs/_config.yml` - Header pages configuration
+
+**Files Added:**
+- `docs/content/api/API_REFERENCE.md` - Comprehensive API documentation
+- `docs/content/migration/MIGRATION_GUIDE.md` - Database migration guides
+
+#### **Infrastructure: Lightweight TCP Load Balancer** (2025-11-28)
+
+- **New `orbit-lb` Binary**: Rust-based TCP load balancer for cluster testing
+  - Multiple load balancing strategies (round-robin, least connections)
+  - Health check integration with automatic failover
+  - Multi-protocol support (Redis, PostgreSQL, MySQL, CQL, gRPC)
+  - Configurable backend pools and connection limits
+
+- **Cluster Testing Scripts**
+  - `scripts/start-cluster.sh` - Local multi-node cluster startup
+  - `scripts/start-cluster-lb.sh` - Cluster with load balancer integration
+  - Automated node discovery and registration
+
+#### **Feature: OrbitClient In-Process Communication** (2025-11-27)
+
+- **In-Process Actor Communication**
+  - Direct actor invocation without network overhead
+  - Shared memory communication for co-located actors
+  - Transparent fallback to gRPC for distributed calls
+  - Improved latency for local actor interactions
+
+#### **Feature: Enhanced Cypher Query Language** (2025-11-25)
+
+##### Complete Cypher Parser and Graph Algorithm Support
+
+- **Extended Cypher Operations**
+  - `DELETE` and `DETACH DELETE` for node/relationship removal
+  - `SET` for property updates with multiple assignment patterns
+  - `MERGE` for upsert operations with ON CREATE/ON MATCH clauses
+  - `REMOVE` for property and label removal
+  - `ORDER BY` with ASC/DESC and multi-field sorting
+  - `LIMIT` and `SKIP` for result pagination
+
+- **CALL Procedure Support**
+  - Graph algorithm procedures: PageRank, BFS, DFS, Dijkstra shortest path
+  - Centrality metrics: Betweenness, Closeness, Degree centrality
+  - Community detection: Connected components, Triangle counting
+  - Pattern matching: Variable-length paths, relationship patterns
+
+- **Query Enhancements**
+  - Aggregation functions (COUNT, SUM, AVG, MIN, MAX, COLLECT)
+  - `WITH` clause for query pipelining
+  - Variable-length path patterns `[*1..5]`
+  - 38+ tests passing (100% pass rate)
+
+#### **Feature: Time Series Compression and Aggregation** (2025-11-24)
+
+##### Production-Ready Time Series Engine
+
+- **Compression Algorithms**
+  - Delta encoding for timestamps
+  - Double-Delta (Facebook Gorilla) for high compression
+  - XOR-based floating-point compression
+  - Configurable compression thresholds
+
+- **Aggregation Functions**
+  - Moving Average (SMA, EMA, WMA)
+  - EWMA (Exponentially Weighted Moving Average)
+  - Rate and Derivative calculations
+  - Anomaly detection with configurable thresholds
+
+- **Partitioning Strategies**
+  - Series count-based partitioning
+  - Data size-based partitioning
+  - Composite partitioning with multiple criteria
+  - Automatic partition management
+
+- **New Commands**
+  - `TS.CREATERULE` for downsampling rules
+  - `TS.RANGE` with AGGREGATION support
+  - Enhanced retention policies
+  - 44+ tests passing
+
+#### **Feature: Security Framework (RFC-014)** (2025-11-22)
+
+##### Enterprise Security with Multi-Tenant Isolation
+
+- **Row-Level Security (RLS)**
+  - Policy-based row filtering
+  - User context propagation
+  - Automatic query rewriting
+  - Multi-tenant data isolation
+
+- **Field-Level Encryption (FLE)**
+  - AES-256-GCM encryption
+  - Key rotation support
+  - Searchable encryption for indexed fields
+  - Transparent encryption/decryption
+
+- **Dynamic Data Masking**
+  - Configurable masking patterns
+  - Role-based mask application
+  - Partial masking (first/last N characters)
+  - Custom masking functions
+
+- **Multi-Tenant Security Framework**
+  - Tenant isolation at storage level
+  - Cross-tenant access prevention
+  - Audit logging per tenant
+  - Resource quotas and limits
+
+#### **Feature: GPU Acceleration Backends** (2025-11-20)
+
+##### Cross-Platform Heterogeneous Compute Engine
+
+- **CUDA Backend** (`gpu-cuda` feature)
+  - NVIDIA GPU support with cudarc integration
+  - NVRTC runtime compilation
+  - Filter, bitmap, and aggregation operations
+  - Vector similarity (cosine, euclidean, dot product)
+  - Spatial distance calculations (Haversine)
+  - Graph traversal (BFS, Dijkstra)
+  - Tiled matrix multiplication (GEMM)
+  - Time-series window aggregation
+  - Hash join operations (build & probe)
+
+- **WindowsML Backend** (`gpu-windowsml` feature)
+  - DirectX 12 device initialization
+  - DirectML availability detection
+  - CPU fallback with rayon parallel processing
+  - Windows 10 1903+ support
+
+- **Metal Backend** (macOS/iOS)
+  - Apple Silicon optimization
+  - Unified memory architecture
+  - Complete test coverage
+  - 5-50x speedups for parallelizable workloads
+
+- **Vulkan Backend** (Cross-platform)
+  - SPIR-V shader compilation
+  - GLSL compute shaders
+  - Cross-platform GPU abstraction
+  - Device pooling for reduced initialization overhead
+
+- **Auto-Detection System**
+  - Intelligent hardware discovery
+  - Automatic workload routing
+  - Graceful fallback to CPU SIMD
+  - Performance-based device selection
+
+#### **Feature: Apache Iceberg Cold Tier Integration** (2025-11-15)
+
+##### Three-Tier Hybrid Storage Architecture
+
+- **Iceberg Integration**
+  - Apache Iceberg format for cold tier storage
+  - Parquet files with Zstd compression
+  - Metadata-based pruning (100-1000x faster queries)
+  - Time travel queries via snapshots
+  - Schema evolution without data rewrites
+
+- **HybridStorageManager**
+  - Hot tier: RocksDB for OLTP workloads
+  - Warm tier: Columnar batches for analytics
+  - Cold tier: Iceberg on S3/Azure Blob
+  - Automatic tier migration based on access patterns
+
+- **Cloud Storage Support**
+  - AWS S3 integration
+  - Azure Blob Storage support
+  - MinIO for on-premises deployments
+  - Configurable retention policies
+
+- **Time Travel Support**
+  - `AS OF TIMESTAMP` queries
+  - `AS OF VERSION` queries
+  - Cross-protocol time travel (PostgreSQL, Redis, MySQL, CQL)
+  - Snapshot management and cleanup
+
+#### **Feature: PostgreSQL SCRAM-SHA-256 Authentication** (2025-11-12)
+
+- **Enhanced Authentication**
+  - MD5 password authentication
+  - SCRAM-SHA-256 (RFC 7677) support
+  - Channel binding for TLS connections
+  - Proper salting and iteration counts
+
+#### **Feature: Vectorized Query Execution** (2025-11-10)
+
+- **Columnar Execution Engine**
+  - Batch-oriented processing
+  - SIMD-optimized operators
+  - Late materialization
+  - Predicate pushdown
+
+- **Performance Benchmarks**
+  - Comprehensive Phase 9 benchmarks
+  - TPC-H style queries
+  - Comparison metrics vs row-based execution
+
+#### **Infrastructure: Code Reorganization** (2025-11-08)
+
+- **Project Structure**
+  - All crates moved under `orbit/` parent directory
+  - Consistent naming conventions
+  - Improved module organization
+  - Updated documentation links
+
+- **Dependency Updates**
+  - tonic 0.14, prost 0.14
+  - kube 0.99, k8s-openapi 0.23
+  - Security fix for protobuf vulnerability (removed tikv-client)
+
+#### **Feature: Streaming ML Inference Pipeline** (2025-11-05)
+
+- **Real-Time ML Processing**
+  - Streaming inference with batching
+  - Model caching for hot paths
+  - Asynchronous prediction pipelines
+  - Integration with actor system
+
+- **Actor Memory Behavior Traits**
+  - RFC_ACTOR_MEMORY_INTEGRATION implementation
+  - Memory-aware actor scheduling
+  - Garbage collection integration
+  - Resource limit enforcement
+
+#### **Feature: Phase 9 Query Optimization** (2025-01-15)
+
+##### Complete Query Optimization Implementation
+
+- **Cost-Based Optimizer**
+  - Histogram statistics collection
+  - Cardinality estimation
+  - Join order optimization
+  - Index selection algorithms
+
+- **Rule-Based Optimizer**
+  - Predicate pushdown
+  - Projection pruning
+  - Common subexpression elimination
+  - Constant folding
+
+- **Query Execution**
+  - Parallel query execution
+  - Pipeline breaking operators
+  - Memory-aware execution
+  - Spill-to-disk support
+
+#### **Feature: Multi-Protocol Geospatial Support** (2025-01-12)
+
+- **PostGIS-Compatible Functions**
+  - ST_Distance, ST_Within, ST_Contains, ST_Intersects
+  - Geometry creation (ST_Point, ST_Polygon, ST_LineString)
+  - Coordinate transformations (ST_Transform, ST_SetSRID)
+  - Spatial indexing with R-tree
+
+- **Cross-Protocol Support**
+  - PostgreSQL wire protocol spatial queries
+  - Redis GEO commands (GEOADD, GEODIST, GEORADIUS)
+  - OrbitQL spatial functions
+  - CQL geospatial predicates
+
+#### **Feature: MVCC SQL Engine Integration** (2025-01-08)
+
+- **Multi-Version Concurrency Control**
+  - Snapshot isolation
+  - Read committed isolation
+  - Version chain management
+  - Garbage collection for old versions
+
+- **Transaction Support**
+  - BEGIN, COMMIT, ROLLBACK
+  - Savepoints
+  - Nested transactions
+  - Deadlock detection
+
+#### **Feature: Spring Framework Integration** (2025-01-05)
+
+- **orbit-client-spring Crate**
+  - Spring-like dependency injection
+  - Annotation-based configuration
+  - Bean lifecycle management
+  - Auto-configuration support
+
+- **orbit-server-prometheus Crate**
+  - Prometheus metrics exposition
+  - Custom metric types (Counter, Gauge, Histogram)
+  - Label support
+  - /metrics endpoint
+
+- **orbit-server-etcd Crate**
+  - Service discovery
+  - Leader election
+  - Distributed configuration
+  - Watch notifications
+
+#### **Feature: Heterogeneous Compute Engine** (2024-12-28)
+
+##### Cross-Platform Hardware Acceleration
+
+- **CPU SIMD Optimization**
+  - AVX-512 for x86_64
+  - NEON for ARM64
+  - SVE for ARM servers
+  - Auto-vectorization
+
+- **Neural Engine Support**
+  - Apple Neural Engine (Core ML)
+  - Snapdragon Hexagon DSP
+  - Intel OpenVINO
+  - Model format conversion
+
+- **Unified Compute API**
+  - Device abstraction layer
+  - Automatic device selection
+  - Fallback chain
+  - Performance monitoring
+
+#### **Feature: Advanced Memory Management** (2024-12-25)
+
+- **Virtual Actor Memory System**
+  - Working set management
+  - Memory pressure detection
+  - Eviction policies (LRU, LFU, ARC)
+  - Memory quotas per actor
+
+- **Actor Dehydration/Rehydration**
+  - State serialization
+  - Lazy loading
+  - Memory-mapped state
+  - Compression support
+
+#### **Feature: ML SQL Functions** (2024-12-22)
+
+- **Statistical Functions**
+  - Linear regression (ML_LINEAR_REGRESSION)
+  - Clustering (ML_KMEANS)
+  - Classification (ML_CLASSIFY)
+  - Anomaly detection (ML_ANOMALY_SCORE)
+
+- **Vector Operations**
+  - Embedding generation (ML_EMBED)
+  - Similarity search (ML_SIMILARITY)
+  - Dimensionality reduction (ML_PCA)
+  - Vector normalization
+
+#### **Feature: GraphRAG Implementation** (2024-12-18)
+
+##### Complete Graph-Based RAG System
+
+- **Knowledge Graph Construction**
+  - Entity extraction from documents
+  - Relationship identification
+  - Graph schema inference
+  - Incremental updates
+
+- **RAG Query Processing**
+  - Multi-hop reasoning
+  - Subgraph retrieval
+  - Context aggregation
+  - Answer generation
+
+- **Multi-Protocol Access**
+  - RESP commands (GRAPHRAG.*)
+  - PostgreSQL functions
+  - Cypher queries
+  - REST API
+
+#### **Feature: RESP Protocol Complete Implementation** (2024-12-15)
+
+- **124+ Redis Commands**
+  - String operations (GET, SET, MGET, MSET, etc.)
+  - Hash operations (HGET, HSET, HMGET, etc.)
+  - List operations (LPUSH, RPUSH, LPOP, RPOP, etc.)
+  - Set operations (SADD, SREM, SMEMBERS, etc.)
+  - Sorted Set operations (ZADD, ZRANGE, ZSCORE, etc.)
+  - Pub/Sub (SUBSCRIBE, PUBLISH, PSUBSCRIBE)
+
+- **Extended Commands**
+  - Vector operations (VECTOR.ADD, VECTOR.SEARCH)
+  - Time series (TS.CREATE, TS.ADD, TS.RANGE)
+  - Graph commands (GRAPH.QUERY)
+  - Search (FT.CREATE, FT.SEARCH)
+
+#### **Feature: Configurable Persistence Backends** (2024-12-10)
+
+- **Storage Options**
+  - In-Memory (fastest, no durability)
+  - COW B+ Tree (balanced read/write)
+  - LSM-Tree (write-optimized)
+  - RocksDB (production-ready)
+
+- **Kubernetes Integration**
+  - Persistence CRD configuration
+  - Volume provisioning
+  - Backup/restore support
+  - Migration between backends
+
+#### **Feature: Time Series Database Engine** (2024-12-05)
+
+- **Core Capabilities**
+  - High-ingestion rate
+  - Downsampling rules
+  - Retention policies
+  - Label-based filtering
+
+- **Query Features**
+  - Range queries
+  - Aggregation windows
+  - Rate calculations
+  - Gap filling
+
+#### **Feature: AQL Query Parser** (2024-12-01)
+
+- **ArangoDB Compatibility**
+  - FOR/FILTER/RETURN syntax
+  - Graph traversal (GRAPH, SHORTEST_PATH)
+  - Document operations
+  - Array functions
+
+#### **Feature: Cypher Query Parser** (2024-11-28)
+
+- **Neo4j Compatibility**
+  - MATCH, CREATE, RETURN
+  - WHERE clause with predicates
+  - Relationship patterns
+  - Path queries
+
+#### **Feature: Graph Database Core** (2024-11-25)
+
+- **Graph Storage**
+  - Node and relationship storage
+  - Property storage
+  - Index management
+  - Label support
+
+- **Graph Operations**
+  - Node CRUD
+  - Relationship CRUD
+  - Pattern matching
+  - Traversal algorithms
+
+#### **Feature: MCP Server Foundation** (2024-11-20)
+
+- **Model Context Protocol**
+  - Tool definitions
+  - Resource discovery
+  - Prompt handling
+  - Schema exposure
+
+- **AI Integration**
+  - Natural language to SQL
+  - Query explanation
+  - Data summarization
+  - Context-aware responses
+
+#### **Feature: SQL DML Support** (2024-11-15)
+
+- **Data Manipulation**
+  - SELECT with WHERE, ORDER BY, LIMIT
+  - INSERT with VALUES and SELECT
+  - UPDATE with SET and WHERE
+  - DELETE with WHERE
+
+- **Query Features**
+  - JOINs (INNER, LEFT, RIGHT, FULL)
+  - Subqueries (scalar, correlated)
+  - GROUP BY with HAVING
+  - UNION, INTERSECT, EXCEPT
 
 ####  **Major Feature: Digital Ocean Cloud Deployment Support** (2025-01-09)
 

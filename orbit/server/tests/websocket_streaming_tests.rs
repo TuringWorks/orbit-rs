@@ -313,11 +313,12 @@ fn test_subscribe_request_parse_from_json() {
         }
     }"#;
 
-    let request: SubscribeRequest =
-        serde_json::from_str(json_str).expect("Deserialization failed");
+    let request: SubscribeRequest = serde_json::from_str(json_str).expect("Deserialization failed");
     assert_eq!(request.event_types.len(), 2);
     assert!(request.event_types.contains(&"system_event".to_string()));
-    assert!(request.event_types.contains(&"transaction_event".to_string()));
+    assert!(request
+        .event_types
+        .contains(&"transaction_event".to_string()));
 }
 
 #[test]
@@ -327,8 +328,7 @@ fn test_subscribe_request_empty_filters() {
         "filters": {}
     }"#;
 
-    let request: SubscribeRequest =
-        serde_json::from_str(json_str).expect("Deserialization failed");
+    let request: SubscribeRequest = serde_json::from_str(json_str).expect("Deserialization failed");
     assert_eq!(request.event_types.len(), 1);
     assert!(request.filters.is_some());
 }
@@ -416,7 +416,10 @@ async fn test_event_broadcaster_actor_deactivated() {
     let mut receiver = handler.subscribe();
 
     broadcaster
-        .actor_deactivated("SessionActor".to_string(), json!({"session_id": "sess-123"}))
+        .actor_deactivated(
+            "SessionActor".to_string(),
+            json!({"session_id": "sess-123"}),
+        )
         .await;
 
     let event = receiver.recv().await.expect("Failed to receive event");
@@ -554,7 +557,10 @@ async fn test_broadcast_sequential_events() {
     for expected_order in 1..=3 {
         let event = receiver.recv().await.expect("Failed to receive event");
         match event {
-            WebSocketMessage::SystemEvent { event_type: _, data } => {
+            WebSocketMessage::SystemEvent {
+                event_type: _,
+                data,
+            } => {
                 assert_eq!(data["order"], expected_order);
             }
             _ => panic!("Wrong event type"),

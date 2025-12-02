@@ -6,7 +6,6 @@ category: wip
 
 # GitHub Actions Cache Fix - core.rs Detection Issue
 
-**Date:** 2025-10-03  
 **Issue:** CI/CD still failing with "core.rs does not exist" error despite file being in repository  
 **Root Cause:** Stale GitHub Actions cache  
 **Status:**  Fixed
@@ -353,7 +352,6 @@ After the fix is deployed:
 **Status:**  Fixed (cache key updated)  
 **Next Steps:** Monitor next CI/CD run to confirm fix  
 **Cache Version:** v2  
-**Last Updated:** 2025-10-03
 
 For future cache issues, bump the version number in `.github/workflows/ci-cd.yml`:
 ```yaml

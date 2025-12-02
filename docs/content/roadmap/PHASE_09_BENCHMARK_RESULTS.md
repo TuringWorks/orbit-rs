@@ -1,6 +1,5 @@
 # Phase 9 Performance Benchmark Results
 
-**Date**: November 18, 2025
 **System**: M-series Mac (aarch64-apple-darwin)
 **Rust**: stable
 **Benchmark Framework**: Criterion.rs

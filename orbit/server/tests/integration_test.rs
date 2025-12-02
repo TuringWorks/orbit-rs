@@ -41,14 +41,15 @@ fn kill_process_by_name(name: &str) {
 fn get_matching_processes(name: &str) -> Vec<String> {
     #[cfg(unix)]
     {
-        let output = Command::new("ps")
-            .arg("aux")
-            .output()
-            .unwrap_or_else(|_| std::process::Output {
-                status: std::process::ExitStatus::default(),
-                stdout: Vec::new(),
-                stderr: Vec::new(),
-            });
+        let output =
+            Command::new("ps")
+                .arg("aux")
+                .output()
+                .unwrap_or_else(|_| std::process::Output {
+                    status: std::process::ExitStatus::default(),
+                    stdout: Vec::new(),
+                    stderr: Vec::new(),
+                });
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         stdout

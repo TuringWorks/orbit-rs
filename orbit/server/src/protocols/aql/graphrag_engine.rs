@@ -944,14 +944,14 @@ impl AqlGraphRAGEngine {
                 );
                 entity_obj.insert(
                     "labels".to_string(),
-                    AqlValue::Array(n.labels.into_iter().map(|l| AqlValue::String(l)).collect()),
+                    AqlValue::Array(n.labels.into_iter().map(AqlValue::String).collect()),
                 );
                 entity_obj.insert(
                     "source_documents".to_string(),
                     AqlValue::Array(
                         n.source_documents
                             .into_iter()
-                            .map(|d| AqlValue::String(d))
+                            .map(AqlValue::String)
                             .collect(),
                     ),
                 );
@@ -1086,11 +1086,11 @@ impl AqlGraphRAGEngine {
         for rel in &relationships {
             adjacency
                 .entry(rel.from_entity_id.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(rel.to_entity_id.clone());
             adjacency
                 .entry(rel.to_entity_id.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(rel.from_entity_id.clone());
         }
 
@@ -1144,12 +1144,7 @@ impl AqlGraphRAGEngine {
                 );
                 comm_obj.insert(
                     "entity_ids".to_string(),
-                    AqlValue::Array(
-                        community
-                            .into_iter()
-                            .map(|id| AqlValue::String(id))
-                            .collect(),
-                    ),
+                    AqlValue::Array(community.into_iter().map(AqlValue::String).collect()),
                 );
                 AqlValue::Object(comm_obj)
             })

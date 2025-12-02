@@ -84,6 +84,13 @@ impl CypherParser {
             "ASCENDING" => Token::Asc,
             "CALL" => Token::Call,
             "YIELD" => Token::Yield,
+            "UNWIND" => Token::Unwind,
+            "FOREACH" => Token::Foreach,
+            "CASE" => Token::Case,
+            "WHEN" => Token::When,
+            "THEN" => Token::Then,
+            "ELSE" => Token::Else,
+            "END" => Token::End,
             // Aggregation functions
             "COUNT" => Token::Count,
             "SUM" => Token::Sum,
@@ -148,6 +155,13 @@ enum Token {
     Asc,
     Call,
     Yield,
+    Unwind,
+    Foreach,
+    Case,
+    When,
+    Then,
+    Else,
+    End,
 
     // Aggregation functions
     Count,
@@ -183,15 +197,15 @@ enum Token {
     Comma,
     Colon,
     Dot,
-    DoubleDot,      // .. for range
+    DoubleDot, // .. for range
     Equals,
-    NotEquals,      // !=
-    GreaterThan,    // >
-    LessThan,       // <
+    NotEquals,          // !=
+    GreaterThan,        // >
+    LessThan,           // <
     GreaterThanOrEqual, // >=
     LessThanOrEqual,    // <=
-    Star,           // * for variable-length paths and COUNT(*)
-    Pipe,           // | for relationship type alternatives
+    Star,               // * for variable-length paths and COUNT(*)
+    Pipe,               // | for relationship type alternatives
 }
 
 /// Specialized tokenizer for Cypher queries with reduced complexity
@@ -518,6 +532,12 @@ impl TokenParser {
                         ));
                     }
                 }
+                Some(Token::Unwind) => {
+                    clauses.push(self.parse_unwind_clause()?);
+                }
+                Some(Token::Foreach) => {
+                    clauses.push(self.parse_foreach_clause()?);
+                }
                 Some(token) => {
                     return Err(ProtocolError::CypherError(format!(
                         "Unexpected token: {token:?}"
@@ -626,7 +646,8 @@ impl TokenParser {
             };
 
             // Check for COUNT(*)
-            if func == AggregationFunction::Count && matches!(self.current_token(), Some(Token::Star))
+            if func == AggregationFunction::Count
+                && matches!(self.current_token(), Some(Token::Star))
             {
                 self.advance();
                 self.expect_token(Token::RightParen)?;
@@ -724,17 +745,12 @@ impl TokenParser {
         let mut variables = Vec::new();
 
         // Parse comma-separated list of variables to delete
-        loop {
-            if let Some(Token::Identifier(var)) = self.current_token() {
-                variables.push(var.clone());
-                self.advance();
+        while let Some(Token::Identifier(var)) = self.current_token() {
+            variables.push(var.clone());
+            self.advance();
 
-                // Check for comma
-                if matches!(self.current_token(), Some(Token::Comma)) {
-                    self.advance();
-                } else {
-                    break;
-                }
+            if let Some(Token::Comma) = self.current_token() {
+                self.advance();
             } else {
                 break;
             }
@@ -850,55 +866,46 @@ impl TokenParser {
         let mut items = Vec::new();
 
         // Parse comma-separated list of items to remove
-        loop {
-            if let Some(Token::Identifier(var)) = self.current_token() {
-                let var = var.clone();
+        while let Some(Token::Identifier(var)) = self.current_token() {
+            let var = var.clone();
+            self.advance();
+
+            if let Some(Token::Dot) = self.current_token() {
                 self.advance();
-
-                match self.current_token() {
-                    Some(Token::Dot) => {
-                        // Remove property: var.property
-                        self.advance();
-                        if let Some(Token::Identifier(prop)) = self.current_token() {
-                            items.push(RemoveItem::Property {
-                                variable: var,
-                                property: prop.clone(),
-                            });
-                            self.advance();
-                        } else {
-                            return Err(ProtocolError::CypherError(
-                                "Expected property name after '.'".to_string(),
-                            ));
-                        }
-                    }
-                    Some(Token::Colon) => {
-                        // Remove label: var:Label
-                        self.advance();
-                        if let Some(Token::Identifier(label)) = self.current_token() {
-                            items.push(RemoveItem::Label {
-                                variable: var,
-                                label: label.clone(),
-                            });
-                            self.advance();
-                        } else {
-                            return Err(ProtocolError::CypherError(
-                                "Expected label name after ':'".to_string(),
-                            ));
-                        }
-                    }
-                    _ => {
-                        return Err(ProtocolError::CypherError(
-                            "Expected '.' or ':' after variable in REMOVE clause".to_string(),
-                        ));
-                    }
-                }
-
-                // Check for comma
-                if matches!(self.current_token(), Some(Token::Comma)) {
+                if let Some(Token::Identifier(prop)) = self.current_token() {
+                    let prop = prop.clone();
                     self.advance();
+                    items.push(RemoveItem::Property {
+                        variable: var,
+                        property: prop,
+                    });
                 } else {
-                    break;
+                    return Err(ProtocolError::CypherError(
+                        "Expected property name after dot".to_string(),
+                    ));
                 }
+            } else if let Some(Token::Colon) = self.current_token() {
+                self.advance();
+                if let Some(Token::Identifier(label)) = self.current_token() {
+                    let label = label.clone();
+                    self.advance();
+                    items.push(RemoveItem::Label {
+                        variable: var,
+                        label,
+                    });
+                } else {
+                    return Err(ProtocolError::CypherError(
+                        "Expected label name after colon".to_string(),
+                    ));
+                }
+            } else {
+                return Err(ProtocolError::CypherError(
+                    "Expected . or : after variable in REMOVE clause".to_string(),
+                ));
+            }
+
+            if let Some(Token::Comma) = self.current_token() {
+                self.advance();
             } else {
                 break;
             }
@@ -920,44 +927,40 @@ impl TokenParser {
         let mut items = Vec::new();
 
         // Parse comma-separated list of order by items
-        loop {
-            if let Some(Token::Identifier(expr)) = self.current_token() {
-                let mut expression = expr.clone();
+        while let Some(Token::Identifier(expr)) = self.current_token() {
+            let mut expression = expr.clone();
+            self.advance();
+
+            // Check for property access (var.property)
+            if matches!(self.current_token(), Some(Token::Dot)) {
                 self.advance();
-
-                // Check for property access (var.property)
-                if matches!(self.current_token(), Some(Token::Dot)) {
+                if let Some(Token::Identifier(prop)) = self.current_token() {
+                    expression = format!("{}.{}", expression, prop);
                     self.advance();
-                    if let Some(Token::Identifier(prop)) = self.current_token() {
-                        expression = format!("{}.{}", expression, prop);
-                        self.advance();
-                    }
                 }
+            }
 
-                // Check for direction
-                let descending = match self.current_token() {
-                    Some(Token::Desc) => {
-                        self.advance();
-                        true
-                    }
-                    Some(Token::Asc) => {
-                        self.advance();
-                        false
-                    }
-                    _ => false,
-                };
-
-                items.push(OrderByItem {
-                    expression,
-                    descending,
-                });
-
-                // Check for comma
-                if matches!(self.current_token(), Some(Token::Comma)) {
+            // Check for direction
+            let descending = match self.current_token() {
+                Some(Token::Desc) => {
                     self.advance();
-                } else {
-                    break;
+                    true
                 }
+                Some(Token::Asc) => {
+                    self.advance();
+                    false
+                }
+                _ => false,
+            };
+
+            items.push(OrderByItem {
+                expression,
+                descending,
+            });
+
+            // Check for comma
+            if matches!(self.current_token(), Some(Token::Comma)) {
+                self.advance();
             } else {
                 break;
             }
@@ -1000,9 +1003,8 @@ impl TokenParser {
             Some(Token::Number(n)) => {
                 let n = n.clone();
                 self.advance();
-                n.parse::<usize>().map_err(|_| {
-                    ProtocolError::CypherError(format!("Invalid SKIP value: {}", n))
-                })?
+                n.parse::<usize>()
+                    .map_err(|_| ProtocolError::CypherError(format!("Invalid SKIP value: {}", n)))?
             }
             _ => {
                 return Err(ProtocolError::CypherError(
@@ -1021,16 +1023,11 @@ impl TokenParser {
 
         // Parse procedure name (may have dots, e.g., orbit.graph.pagerank)
         let mut procedure = String::new();
-        loop {
-            match self.current_token() {
-                Some(Token::Identifier(name)) => {
-                    procedure.push_str(name);
-                    self.advance();
-                }
-                _ => break,
-            }
-            // Check for dot continuation
-            if matches!(self.current_token(), Some(Token::Dot)) {
+        while let Some(Token::Identifier(name)) = self.current_token() {
+            procedure.push_str(name);
+            self.advance();
+
+            if let Some(Token::Dot) = self.current_token() {
                 procedure.push('.');
                 self.advance();
             } else {
@@ -1076,15 +1073,11 @@ impl TokenParser {
         let yield_items = if matches!(self.current_token(), Some(Token::Yield)) {
             self.advance();
             let mut items = Vec::new();
-            loop {
-                match self.current_token() {
-                    Some(Token::Identifier(name)) => {
-                        items.push(name.clone());
-                        self.advance();
-                    }
-                    _ => break,
-                }
-                if matches!(self.current_token(), Some(Token::Comma)) {
+            while let Some(Token::Identifier(name)) = self.current_token() {
+                items.push(name.clone());
+                self.advance();
+
+                if let Some(Token::Comma) = self.current_token() {
                     self.advance();
                 } else {
                     break;
@@ -1114,10 +1107,7 @@ impl TokenParser {
                 } else if let Ok(f) = n.parse::<f64>() {
                     Ok(serde_json::json!(f))
                 } else {
-                    Err(ProtocolError::CypherError(format!(
-                        "Invalid number: {}",
-                        n
-                    )))
+                    Err(ProtocolError::CypherError(format!("Invalid number: {}", n)))
                 }
             }
             Some(Token::String(s)) => {
@@ -1261,6 +1251,242 @@ impl TokenParser {
         self.expect_token(Token::Match)?;
         let pattern = self.parse_pattern()?;
         Ok(CypherClause::OptionalMatch { pattern })
+    }
+
+    /// Parse an UNWIND clause
+    /// Syntax: UNWIND expression AS variable
+    /// Example: UNWIND [1, 2, 3] AS x
+    /// Example: UNWIND range(1, 10) AS n
+    /// Example: UNWIND items AS item
+    fn parse_unwind_clause(&mut self) -> ProtocolResult<CypherClause> {
+        self.expect_token(Token::Unwind)?;
+
+        // Parse the expression to unwind
+        let expression = self.parse_unwind_expression()?;
+
+        // Expect AS
+        self.expect_token(Token::As)?;
+
+        // Parse the variable name
+        let variable = match self.current_token() {
+            Some(Token::Identifier(name)) => {
+                let var = name.clone();
+                self.advance();
+                var
+            }
+            _ => {
+                return Err(ProtocolError::CypherError(
+                    "Expected variable name after AS in UNWIND".to_string(),
+                ))
+            }
+        };
+
+        Ok(CypherClause::Unwind {
+            expression,
+            variable,
+        })
+    }
+
+    /// Parse a FOREACH clause
+    /// Syntax: FOREACH (variable IN list | clauses)
+    /// Example: FOREACH (x IN [1, 2, 3] | SET x.processed = true)
+    fn parse_foreach_clause(&mut self) -> ProtocolResult<CypherClause> {
+        self.expect_token(Token::Foreach)?;
+        self.expect_token(Token::LeftParen)?;
+
+        // Parse variable name
+        let variable = match self.current_token() {
+            Some(Token::Identifier(name)) => {
+                let var = name.clone();
+                self.advance();
+                var
+            }
+            _ => {
+                return Err(ProtocolError::CypherError(
+                    "Expected variable name in FOREACH".to_string(),
+                ))
+            }
+        };
+
+        // Expect IN
+        self.expect_token(Token::In)?;
+
+        // Parse the list expression
+        let list = self.parse_unwind_expression()?;
+
+        // Expect pipe |
+        if !matches!(self.current_token(), Some(Token::Pipe)) {
+            return Err(ProtocolError::CypherError(
+                "Expected | in FOREACH clause".to_string(),
+            ));
+        }
+        self.advance();
+
+        // Parse inner clauses until )
+        let mut clauses = Vec::new();
+        while !matches!(self.current_token(), Some(Token::RightParen) | None) {
+            match self.current_token() {
+                Some(Token::Set) => clauses.push(self.parse_set_clause()?),
+                Some(Token::Detach) => {
+                    self.advance(); // consume DETACH
+                    clauses.push(self.parse_delete_clause(true)?);
+                }
+                Some(Token::Delete) => {
+                    clauses.push(self.parse_delete_clause(false)?);
+                }
+                Some(Token::Create) => clauses.push(self.parse_create_clause()?),
+                Some(Token::Merge) => clauses.push(self.parse_merge_clause()?),
+                Some(Token::Remove) => clauses.push(self.parse_remove_clause()?),
+                _ => break,
+            }
+        }
+
+        self.expect_token(Token::RightParen)?;
+
+        Ok(CypherClause::Foreach {
+            variable,
+            list,
+            clauses,
+        })
+    }
+
+    /// Parse an UNWIND expression (list, range, variable, function call, or property)
+    fn parse_unwind_expression(&mut self) -> ProtocolResult<UnwindExpression> {
+        match self.current_token() {
+            // List literal: [1, 2, 3]
+            Some(Token::LeftBracket) => {
+                self.advance();
+                let mut elements = Vec::new();
+
+                while !matches!(self.current_token(), Some(Token::RightBracket) | None) {
+                    // Parse element
+                    let value = self.parse_literal_value()?;
+                    elements.push(value);
+
+                    // Comma or end
+                    if matches!(self.current_token(), Some(Token::Comma)) {
+                        self.advance();
+                    }
+                }
+
+                self.expect_token(Token::RightBracket)?;
+                Ok(UnwindExpression::List(elements))
+            }
+            // Variable, function call, or property access
+            Some(Token::Identifier(name)) => {
+                let name = name.clone();
+                self.advance();
+
+                // Check for function call: name(...)
+                if matches!(self.current_token(), Some(Token::LeftParen)) {
+                    self.advance();
+                    let mut args = Vec::new();
+
+                    // Special handling for range(start, end, step?)
+                    if name.to_lowercase() == "range" {
+                        while !matches!(self.current_token(), Some(Token::RightParen) | None) {
+                            let value = self.parse_literal_value()?;
+                            args.push(value);
+                            if matches!(self.current_token(), Some(Token::Comma)) {
+                                self.advance();
+                            }
+                        }
+                        self.expect_token(Token::RightParen)?;
+
+                        if args.len() >= 2 {
+                            let start = args[0].as_i64().unwrap_or(0);
+                            let end = args[1].as_i64().unwrap_or(0);
+                            let step = args.get(2).and_then(|v| v.as_i64());
+                            return Ok(UnwindExpression::Range { start, end, step });
+                        }
+                    }
+
+                    // General function call
+                    while !matches!(self.current_token(), Some(Token::RightParen) | None) {
+                        let value = self.parse_literal_value()?;
+                        args.push(value);
+                        if matches!(self.current_token(), Some(Token::Comma)) {
+                            self.advance();
+                        }
+                    }
+                    self.expect_token(Token::RightParen)?;
+
+                    Ok(UnwindExpression::FunctionCall { name, args })
+                }
+                // Check for property access: variable.property
+                else if matches!(self.current_token(), Some(Token::Dot)) {
+                    self.advance();
+                    let property = match self.current_token() {
+                        Some(Token::Identifier(prop)) => {
+                            let p = prop.clone();
+                            self.advance();
+                            p
+                        }
+                        _ => {
+                            return Err(ProtocolError::CypherError(
+                                "Expected property name after dot".to_string(),
+                            ))
+                        }
+                    };
+                    Ok(UnwindExpression::Property {
+                        variable: name,
+                        property,
+                    })
+                }
+                // Simple variable reference
+                else {
+                    Ok(UnwindExpression::Variable(name))
+                }
+            }
+            _ => Err(ProtocolError::CypherError(
+                "Expected list expression in UNWIND".to_string(),
+            )),
+        }
+    }
+
+    /// Parse a literal value for UNWIND expressions
+    fn parse_literal_value(&mut self) -> ProtocolResult<serde_json::Value> {
+        match self.current_token() {
+            Some(Token::Number(n)) => {
+                let num_str = n.clone();
+                self.advance();
+                if num_str.contains('.') {
+                    Ok(serde_json::Value::Number(
+                        serde_json::Number::from_f64(num_str.parse::<f64>().unwrap_or(0.0))
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ))
+                } else {
+                    Ok(serde_json::Value::Number(
+                        num_str.parse::<i64>().unwrap_or(0).into(),
+                    ))
+                }
+            }
+            Some(Token::String(s)) => {
+                let str_val = s.clone();
+                self.advance();
+                Ok(serde_json::Value::String(str_val))
+            }
+            Some(Token::True) => {
+                self.advance();
+                Ok(serde_json::Value::Bool(true))
+            }
+            Some(Token::False) => {
+                self.advance();
+                Ok(serde_json::Value::Bool(false))
+            }
+            Some(Token::Null) => {
+                self.advance();
+                Ok(serde_json::Value::Null)
+            }
+            Some(Token::Identifier(name)) => {
+                let name = name.clone();
+                self.advance();
+                Ok(serde_json::Value::String(format!("${}", name))) // Variable reference
+            }
+            _ => Err(ProtocolError::CypherError(
+                "Expected literal value".to_string(),
+            )),
+        }
     }
 
     fn parse_pattern(&mut self) -> ProtocolResult<Pattern> {
@@ -1524,7 +1750,10 @@ impl TokenParser {
     }
 
     /// Parse relationship pattern from a single string (legacy format)
-    fn parse_relationship_pattern_from_string(&self, rel_str: &str) -> ProtocolResult<RelationshipPattern> {
+    fn parse_relationship_pattern_from_string(
+        &self,
+        rel_str: &str,
+    ) -> ProtocolResult<RelationshipPattern> {
         let mut rel_type = None;
         let mut rel_types = Vec::new();
         let mut variable_length = None;
@@ -1696,7 +1925,10 @@ impl TokenParser {
                 if let Some(Token::Identifier(label)) = self.current_token() {
                     let label = label.clone();
                     self.advance();
-                    return Ok(Condition::HasLabel { variable: var, label });
+                    return Ok(Condition::HasLabel {
+                        variable: var,
+                        label,
+                    });
                 }
             }
 
@@ -1709,7 +1941,7 @@ impl TokenParser {
 
     fn parse_property_condition(&mut self, property: &str) -> ProtocolResult<Condition> {
         let prop = property.to_string();
-        
+
         // Check for comparison operator
         let operator = match self.current_token() {
             Some(Token::Equals) => {
@@ -1755,7 +1987,9 @@ impl TokenParser {
                 if let Ok(num) = n.parse::<i64>() {
                     serde_json::Value::Number(num.into())
                 } else if let Ok(num) = n.parse::<f64>() {
-                    serde_json::Value::Number(serde_json::Number::from_f64(num).unwrap_or(serde_json::Number::from(0)))
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(num).unwrap_or(serde_json::Number::from(0)),
+                    )
                 } else {
                     serde_json::Value::String(n)
                 }
@@ -1844,9 +2078,54 @@ pub enum CypherClause {
         where_condition: Option<Condition>,
     },
     /// OPTIONAL MATCH clause (matches patterns that may not exist)
-    OptionalMatch {
-        pattern: Pattern,
+    OptionalMatch { pattern: Pattern },
+    /// UNWIND clause for expanding lists into rows
+    Unwind {
+        /// Expression to unwind (typically a list)
+        expression: UnwindExpression,
+        /// Variable to bind each element to
+        variable: String,
     },
+    /// FOREACH clause for side effects on list elements
+    Foreach {
+        /// Variable bound to each list element
+        variable: String,
+        /// List expression to iterate
+        list: UnwindExpression,
+        /// Clauses to execute for each element
+        clauses: Vec<CypherClause>,
+    },
+    /// CASE expression (used within RETURN)
+    CaseExpression {
+        /// Optional test expression (for simple CASE)
+        test_expression: Option<String>,
+        /// WHEN-THEN pairs
+        when_clauses: Vec<(String, serde_json::Value)>,
+        /// ELSE result
+        else_result: Option<serde_json::Value>,
+    },
+}
+
+/// Expression that can be unwound (used in UNWIND/FOREACH)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum UnwindExpression {
+    /// A variable reference (e.g., `items`)
+    Variable(String),
+    /// A literal list (e.g., `[1, 2, 3]`)
+    List(Vec<serde_json::Value>),
+    /// A range expression (e.g., `range(1, 10)`)
+    Range {
+        start: i64,
+        end: i64,
+        step: Option<i64>,
+    },
+    /// A function call returning a list
+    FunctionCall {
+        name: String,
+        args: Vec<serde_json::Value>,
+    },
+    /// Property access that returns a list (e.g., `n.tags`)
+    Property { variable: String, property: String },
 }
 
 /// Property assignment for SET clause
@@ -1957,9 +2236,7 @@ pub enum Condition {
         value: serde_json::Value,
     },
     /// Property exists check
-    PropertyExists {
-        property: String,
-    },
+    PropertyExists { property: String },
     /// Logical AND
     And {
         left: Box<Condition>,
@@ -1971,19 +2248,11 @@ pub enum Condition {
         right: Box<Condition>,
     },
     /// Logical NOT
-    Not {
-        condition: Box<Condition>,
-    },
+    Not { condition: Box<Condition> },
     /// Node label check
-    HasLabel {
-        variable: String,
-        label: String,
-    },
+    HasLabel { variable: String, label: String },
     /// Relationship type check
-    HasRelationshipType {
-        variable: String,
-        rel_type: String,
-    },
+    HasRelationshipType { variable: String, rel_type: String },
 }
 
 /// Comparison operators for WHERE clauses
@@ -2009,10 +2278,7 @@ pub enum Expression {
     /// Simple variable reference: n
     Variable(String),
     /// Property access: n.name
-    PropertyAccess {
-        variable: String,
-        property: String,
-    },
+    PropertyAccess { variable: String, property: String },
     /// Aggregation function: COUNT(n), SUM(n.age)
     Aggregation {
         function: AggregationFunction,
@@ -2030,6 +2296,63 @@ pub enum Expression {
     },
     /// List of expressions: [a, b, c]
     List(Vec<Expression>),
+    /// Function call: toUpper(x), size(list), date(), etc.
+    FunctionCall {
+        name: String,
+        arguments: Vec<Expression>,
+    },
+    /// CASE expression
+    Case {
+        test_expression: Option<Box<Expression>>,
+        when_clauses: Vec<(Expression, Expression)>,
+        else_result: Option<Box<Expression>>,
+    },
+    /// Mathematical operation: a + b, a * b, etc.
+    BinaryOp {
+        left: Box<Expression>,
+        operator: BinaryOperator,
+        right: Box<Expression>,
+    },
+    /// Unary operation: -x, NOT x
+    UnaryOp {
+        operator: UnaryOperator,
+        operand: Box<Expression>,
+    },
+}
+
+/// Binary operators for expressions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BinaryOperator {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Modulo,
+    Power,
+    StringConcat,
+    And,
+    Or,
+    Xor,
+    Equals,
+    NotEquals,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+    In,
+    StartsWith,
+    EndsWith,
+    Contains,
+    RegexMatch,
+}
+
+/// Unary operators for expressions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UnaryOperator {
+    Negate,
+    Not,
+    IsNull,
+    IsNotNull,
 }
 
 /// Aggregation functions supported in Cypher
@@ -2183,7 +2506,10 @@ mod tests {
             CypherClause::Set { assignments } => {
                 assert_eq!(assignments.len(), 1);
                 assert_eq!(assignments[0].target, "n.name");
-                assert_eq!(assignments[0].value, serde_json::Value::String("Bob".to_string()));
+                assert_eq!(
+                    assignments[0].value,
+                    serde_json::Value::String("Bob".to_string())
+                );
             }
             _ => panic!("Expected SET clause"),
         }
@@ -2492,7 +2818,9 @@ mod tests {
             CypherClause::Return { items } => {
                 assert_eq!(items.len(), 1);
                 match &items[0].expr {
-                    Expression::Aggregation { function, distinct, .. } => {
+                    Expression::Aggregation {
+                        function, distinct, ..
+                    } => {
                         assert_eq!(*function, AggregationFunction::Count);
                         assert!(!distinct);
                     }
@@ -2534,21 +2862,21 @@ mod tests {
         let parsed = result.unwrap();
 
         match &parsed.clauses[1] {
-            CypherClause::Return { items } => {
-                match &items[0].expr {
-                    Expression::Aggregation { function, argument, .. } => {
-                        assert_eq!(*function, AggregationFunction::Sum);
-                        match argument.as_ref() {
-                            Expression::PropertyAccess { variable, property } => {
-                                assert_eq!(variable, "n");
-                                assert_eq!(property, "age");
-                            }
-                            _ => panic!("Expected PropertyAccess in aggregation"),
+            CypherClause::Return { items } => match &items[0].expr {
+                Expression::Aggregation {
+                    function, argument, ..
+                } => {
+                    assert_eq!(*function, AggregationFunction::Sum);
+                    match argument.as_ref() {
+                        Expression::PropertyAccess { variable, property } => {
+                            assert_eq!(variable, "n");
+                            assert_eq!(property, "age");
                         }
+                        _ => panic!("Expected PropertyAccess in aggregation"),
                     }
-                    _ => panic!("Expected Aggregation expression"),
                 }
-            }
+                _ => panic!("Expected Aggregation expression"),
+            },
             _ => panic!("Expected RETURN clause"),
         }
     }
@@ -2563,14 +2891,12 @@ mod tests {
         let parsed = result.unwrap();
 
         match &parsed.clauses[1] {
-            CypherClause::Return { items } => {
-                match &items[0].expr {
-                    Expression::Aggregation { function, .. } => {
-                        assert_eq!(*function, AggregationFunction::Avg);
-                    }
-                    _ => panic!("Expected Aggregation expression"),
+            CypherClause::Return { items } => match &items[0].expr {
+                Expression::Aggregation { function, .. } => {
+                    assert_eq!(*function, AggregationFunction::Avg);
                 }
-            }
+                _ => panic!("Expected Aggregation expression"),
+            },
             _ => panic!("Expected RETURN clause"),
         }
     }
@@ -2585,14 +2911,12 @@ mod tests {
         let parsed = result.unwrap();
 
         match &parsed.clauses[1] {
-            CypherClause::Return { items } => {
-                match &items[0].expr {
-                    Expression::Aggregation { function, .. } => {
-                        assert_eq!(*function, AggregationFunction::Collect);
-                    }
-                    _ => panic!("Expected Aggregation expression"),
+            CypherClause::Return { items } => match &items[0].expr {
+                Expression::Aggregation { function, .. } => {
+                    assert_eq!(*function, AggregationFunction::Collect);
                 }
-            }
+                _ => panic!("Expected Aggregation expression"),
+            },
             _ => panic!("Expected RETURN clause"),
         }
     }
@@ -2607,15 +2931,15 @@ mod tests {
         let parsed = result.unwrap();
 
         match &parsed.clauses[1] {
-            CypherClause::Return { items } => {
-                match &items[0].expr {
-                    Expression::Aggregation { function, distinct, .. } => {
-                        assert_eq!(*function, AggregationFunction::Count);
-                        assert!(*distinct);
-                    }
-                    _ => panic!("Expected Aggregation expression"),
+            CypherClause::Return { items } => match &items[0].expr {
+                Expression::Aggregation {
+                    function, distinct, ..
+                } => {
+                    assert_eq!(*function, AggregationFunction::Count);
+                    assert!(*distinct);
                 }
-            }
+                _ => panic!("Expected Aggregation expression"),
+            },
             _ => panic!("Expected RETURN clause"),
         }
     }
@@ -2631,7 +2955,10 @@ mod tests {
         assert_eq!(parsed.clauses.len(), 3); // MATCH, WITH, RETURN
 
         match &parsed.clauses[1] {
-            CypherClause::With { items, where_condition } => {
+            CypherClause::With {
+                items,
+                where_condition,
+            } => {
                 assert_eq!(items.len(), 1);
                 assert_eq!(items[0].alias, Some("name".to_string()));
                 assert!(where_condition.is_none());
@@ -2651,7 +2978,10 @@ mod tests {
         assert_eq!(parsed.clauses.len(), 3); // MATCH, WITH, RETURN
 
         match &parsed.clauses[1] {
-            CypherClause::With { items, where_condition } => {
+            CypherClause::With {
+                items,
+                where_condition,
+            } => {
                 assert_eq!(items.len(), 1);
                 assert!(where_condition.is_some());
             }

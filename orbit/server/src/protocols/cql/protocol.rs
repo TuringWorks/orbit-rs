@@ -172,10 +172,12 @@ impl CqlOpcode {
 /// Consistency level for queries
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
+#[derive(Default)]
 pub enum ConsistencyLevel {
     /// Any (write only)
     Any = 0x0000,
     /// One replica
+    #[default]
     One = 0x0001,
     /// Two replicas
     Two = 0x0002,
@@ -214,12 +216,6 @@ impl ConsistencyLevel {
             0x000A => Ok(ConsistencyLevel::LocalOne),
             _ => Err(ProtocolError::InvalidConsistencyLevel(value)),
         }
-    }
-}
-
-impl Default for ConsistencyLevel {
-    fn default() -> Self {
-        ConsistencyLevel::One
     }
 }
 

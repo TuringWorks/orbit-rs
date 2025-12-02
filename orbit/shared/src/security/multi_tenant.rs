@@ -688,19 +688,15 @@ impl TenantManager {
                 && policy.is_allowed("*", action)
             {
                 return TenantAccessResult::AllowedViaCrossTenant(format!(
-                    "Policy allows {} access from {} to {}",
-                    format!("{:?}", action),
-                    policy.source_tenant,
-                    policy.target_tenant
+                    "Policy allows {action:?} access from {} to {}",
+                    policy.source_tenant, policy.target_tenant
                 ));
             }
         }
 
         TenantAccessResult::Denied(format!(
-            "No cross-tenant policy allows {} access from {} to {}",
-            format!("{:?}", action),
-            ctx.tenant_id,
-            resource_tenant
+            "No cross-tenant policy allows {action:?} access from {} to {}",
+            ctx.tenant_id, resource_tenant
         ))
     }
 
