@@ -11,7 +11,7 @@ source "$SCRIPT_DIR/../utils.sh"
 
 # Configuration
 TIMEOUT_SECONDS=${COVERAGE_TIMEOUT:-300}  # 5 minutes default
-FEATURES="resp,postgres-wire,cypher,rest"
+FEATURES="protocol-redis,protocol-postgres,query-cypher,protocol-rest"
 COVERAGE_METHOD=${COVERAGE_METHOD:-"tarpaulin"}  # tarpaulin, llvm-cov, or both
 SKIP_SLOW=${SKIP_SLOW:-"false"}
 
@@ -30,15 +30,15 @@ run_tarpaulin_coverage() {
     # Check and install cargo-tarpaulin if needed
     install_cargo_tool "cargo-tarpaulin"
     
-    print_info "Running: cargo tarpaulin --verbose --features=\"$FEATURES\" --workspace --timeout 120 --out Xml --output-dir ./coverage"
+    print_info "Running: cargo tarpaulin --verbose --features=\"$FEATURES\" -p orbit-server --timeout 120 --out Xml --output-dir ./coverage"
     
-    if run_with_timeout "$TIMEOUT_SECONDS" cargo tarpaulin --verbose --features="$FEATURES" --workspace --timeout 120 --out Xml --output-dir ./coverage; then
+    if run_with_timeout "$TIMEOUT_SECONDS" cargo tarpaulin --verbose --features="$FEATURES" -p orbit-server --timeout 120 --out Xml --output-dir ./coverage; then
         print_success "Tarpaulin XML coverage generation successful"
         
         # Also generate HTML report for local viewing if not in fast mode
         if [ "$SKIP_SLOW" != "true" ]; then
             print_info "Generating HTML coverage report..."
-            if run_with_timeout "$TIMEOUT_SECONDS" cargo tarpaulin --verbose --features="$FEATURES" --workspace --timeout 120 --out Html --output-dir ./coverage; then
+            if run_with_timeout "$TIMEOUT_SECONDS" cargo tarpaulin --verbose --features="$FEATURES" -p orbit-server --timeout 120 --out Html --output-dir ./coverage; then
                 print_success "HTML coverage report generated at coverage/tarpaulin-report.html"
             fi
         fi

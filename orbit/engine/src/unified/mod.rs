@@ -25,10 +25,10 @@
 //!
 //! # Key Components
 //!
-//! - [`types::UniversalValue`]: A canonical data type that all protocols map to/from
-//! - [`operations::UniversalOperation`]: Protocol-agnostic operations (CRUD, queries, etc.)
-//! - [`storage::UnifiedStorage`]: Single storage backend shared by all protocols
-//! - [`schema::SchemaRegistry`]: Manages namespace schemas and cross-protocol projections
+//! - [`crate::unified::types::UniversalValue`]: A canonical data type that all protocols map to/from
+//! - [`crate::unified::operations::UniversalOperation`]: Protocol-agnostic operations (CRUD, queries, etc.)
+//! - [`crate::unified::storage::UnifiedStorage`]: Single storage backend shared by all protocols
+//! - [`crate::unified::schema::SchemaRegistry`]: Manages namespace schemas and cross-protocol projections
 //! - Protocol Adapters: Translate between protocol-specific and universal formats
 //!
 //! # Example
