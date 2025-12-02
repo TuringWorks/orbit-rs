@@ -733,6 +733,18 @@ impl Linear {
             Ok(output)
         }
     }
+
+    /// Get the weight matrix for embedding lookup
+    ///
+    /// The weight matrix has shape [out_features, in_features].
+    /// For embedding layers, this is [hidden_size, vocab_size], where
+    /// each column represents an embedding vector for a token.
+    ///
+    /// # Returns
+    /// Reference to the weight matrix
+    pub fn weights(&self) -> &Array2<f64> {
+        &self.weight
+    }
 }
 
 #[cfg(test)]
