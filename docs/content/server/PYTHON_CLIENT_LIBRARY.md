@@ -1,4 +1,8 @@
-# Orbit-RS Python Client Library
+---
+layout: default
+title: "Orbit-RS Python Client Library"
+category: "clients"
+---
 
 **Status**: ✅ Complete  
 **Version**: 0.1.0

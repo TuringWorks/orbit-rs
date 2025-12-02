@@ -1,4 +1,8 @@
-# MySQL Protocol Adapter - Complete Documentation
+---
+layout: default
+title: "MySQL Protocol Adapter - Complete Documentation"
+category: "protocols"
+---
 
 **Status**: ✅ **95-100% Production Ready**  
 **Version**: 1.0.0

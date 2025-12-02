@@ -260,8 +260,8 @@ Orbit-RS is ideal for building:
 
 ### 🏗️ **Architecture & Core Systems**
 
-- [🎭 **Virtual Actor Persistence**](content/architecture/virtual_actor_persistence.md) - Actor state management
-- [💳 **Advanced Transaction Features**](content/features/advanced_transaction_features.md) - Distributed transactions
+- [🎭 **Virtual Actor Persistence**](content/storage/virtual_actor_persistence.md) - Actor state management
+- [💳 **Advanced Transaction Features**](content/server/advanced_transaction_features.md) - Distributed transactions
 - [⚡ **Compute Acceleration Guide**](content/gpu-compute/COMPUTE_ACCELERATION_GUIDE.md) - GPU/Neural acceleration
 - [🧠 **AI-Native Subsystems**](PRD.md#ai-native-subsystems) - Intelligent database features
 
@@ -271,12 +271,12 @@ Orbit-RS is ideal for building:
 - [🐘 **PostgreSQL Integration**](content/protocols/POSTGRES_WIRE_IMPLEMENTATION.md) - PostgreSQL wire protocol
 - [🐬 **MySQL Documentation**](content/protocols/MYSQL_COMPLETE_DOCUMENTATION.md) - MySQL wire protocol
 - [📊 **Time Series**](content/server/TIMESERIES_IMPLEMENTATION_SUMMARY.md) - RedisTimeSeries compatibility
-- [🔍 **Vector Operations**](content/protocols/vector_commands.md) - AI/ML vector database
+- [🔍 **Vector Operations**](content/server/vector_commands.md) - AI/ML vector database
 
 ### 🚀 **Operations & Deployment**
 
-- [☸️ **Kubernetes Complete Documentation**](content/deployment/KUBERNETES_COMPLETE_DOCUMENTATION.md) - Production K8s setup
-- [🔒 **Security Guide**](content/security/SECURITY_COMPLETE_DOCUMENTATION.md) - Security policies and best practices
+- [☸️ **Kubernetes Complete Documentation**](content/server/KUBERNETES_COMPLETE_DOCUMENTATION.md) - Production K8s setup
+- [🔒 **Security Guide**](content/server/SECURITY_COMPLETE_DOCUMENTATION.md) - Security policies and best practices
 - [📈 **Monitoring Guide**](content/operations/OPERATIONS_RUNBOOK.md) - Metrics and observability
 - [⚙️ **Configuration Reference**](content/deployment/CONFIGURATION.md) - Complete configuration guide
 
