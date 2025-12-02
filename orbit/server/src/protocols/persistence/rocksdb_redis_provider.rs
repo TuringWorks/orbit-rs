@@ -35,12 +35,39 @@ impl RocksDbRedisDataProvider {
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
 
-        // Define column families
-        let cf_descriptors = vec![
-            ColumnFamilyDescriptor::new(CF_DATA, Options::default()),
-            ColumnFamilyDescriptor::new(CF_EXPIRATION, Options::default()),
-            ColumnFamilyDescriptor::new(CF_METADATA, Options::default()),
-        ];
+        // Required column families for Redis storage
+        let required_cfs = vec![CF_DATA, CF_EXPIRATION, CF_METADATA];
+
+        let db_path = path.as_ref();
+
+        // Get existing column families if database exists (migration support)
+        let existing_cfs = if db_path.exists() {
+            match DB::list_cf(&opts, db_path) {
+                Ok(cfs) => cfs,
+                Err(_) => vec!["default".to_string()],
+            }
+        } else {
+            vec!["default".to_string()]
+        };
+
+        // Merge existing CFs with required CFs (preserves existing data)
+        let mut all_cfs: Vec<String> = existing_cfs;
+        for cf in &required_cfs {
+            if !all_cfs.iter().any(|existing| existing == *cf) {
+                all_cfs.push(cf.to_string());
+            }
+        }
+
+        // Create descriptors for all column families
+        let cf_descriptors: Vec<ColumnFamilyDescriptor> = all_cfs
+            .iter()
+            .map(|name| ColumnFamilyDescriptor::new(name, Options::default()))
+            .collect();
+
+        tracing::info!(
+            "Opening Redis RocksDB with column families: {:?}",
+            all_cfs
+        );
 
         // Open database with column families
         let db = DB::open_cf_descriptors(&opts, path, cf_descriptors)
