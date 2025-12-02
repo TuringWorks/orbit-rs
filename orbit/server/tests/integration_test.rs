@@ -21,7 +21,10 @@ use tokio::time::sleep;
 fn kill_process_by_name(name: &str) {
     #[cfg(unix)]
     {
+        // Try SIGTERM first
         let _ = Command::new("killall").arg(name).output();
+        // Then SIGKILL to be sure
+        let _ = Command::new("killall").arg("-9").arg(name).output();
     }
 
     #[cfg(windows)]
@@ -52,6 +55,8 @@ fn get_matching_processes(name: &str) -> Vec<String> {
             .lines()
             .filter(|line| line.contains(name))
             .filter(|line| !line.contains("grep"))
+            .filter(|line| !line.contains("cargo")) // Exclude cargo wrapper
+            .filter(|line| !line.contains("integration_test")) // Exclude test runner
             .map(|s| s.to_string())
             .collect()
     }
@@ -73,6 +78,8 @@ fn get_matching_processes(name: &str) -> Vec<String> {
             .lines()
             .filter(|line| line.to_lowercase().contains(&name.to_lowercase()))
             .filter(|line| !line.contains("INFO:")) // Filter out "INFO: No tasks" message
+            .filter(|line| !line.to_lowercase().contains("cargo"))
+            .filter(|line| !line.to_lowercase().contains("integration_test"))
             .map(|s| s.to_string())
             .collect()
     }
@@ -84,10 +91,26 @@ async fn cleanup_lingering_instances() {
     kill_process_by_name("orbit-server");
     kill_process_by_name("multi-protocol-server");
 
-    // Give processes time to terminate
-    sleep(Duration::from_millis(500)).await;
+    // Wait for processes to terminate with retry loop (up to 5 seconds)
+    let start = std::time::Instant::now();
+    let timeout = Duration::from_secs(5);
+    
+    while start.elapsed() < timeout {
+        let orbit_processes = get_matching_processes("orbit-server");
+        let multi_processes = get_matching_processes("multi-protocol-server");
+        let count = orbit_processes.len() + multi_processes.len();
+        
+        if count == 0 {
+            return;
+        }
+        
+        // Retry kill if still running
+        kill_process_by_name("orbit-server");
+        kill_process_by_name("multi-protocol-server");
+        sleep(Duration::from_millis(500)).await;
+    }
 
-    // Verify cleanup
+    // Final verification
     let orbit_processes = get_matching_processes("orbit-server");
     let multi_processes = get_matching_processes("multi-protocol-server");
     let orbit_count = orbit_processes.len() + multi_processes.len();
