@@ -5,7 +5,10 @@ This directory contains a comprehensive suite of compatibility checks for the Po
 ## Contents
 
 - `compatibility_check.py`: A Python script that runs a series of SQL commands to verify support for various PostgreSQL features.
-- `requirements.txt`: Python dependencies for the script.
+- `pgvector_check.py`: Verifies support for the `pgvector` extension (vector embeddings, similarity search).
+- `timescale_check.py`: Verifies support for the `timescaledb` extension (hypertables, time-series functions).
+- `pg18_check.py`: Verifies support for PostgreSQL 18 features (JSON_TABLE, UUIDv7).
+- `requirements.txt`: Python dependencies for the scripts.
 
 ## Running the Checks
 
@@ -24,6 +27,15 @@ This directory contains a comprehensive suite of compatibility checks for the Po
     export PG_DBNAME=testdb
     
     python3 compatibility_check.py
+    
+    # Run pgvector checks
+    python3 pgvector_check.py
+    
+    # Run TimescaleDB checks
+    python3 timescale_check.py
+    
+    # Run PostgreSQL 18 checks
+    python3 pg18_check.py
     ```
 
 ## Advanced Testing
