@@ -20,9 +20,11 @@ cpu-simd-arm-neon = []
 cpu-simd-arm-sve = []
 
 # GPU acceleration features
-gpu-acceleration = ["gpu-metal", "gpu-cuda", "gpu-rocm", "gpu-opencl", "gpu-vulkan", "gpu-windowsml"]
+# Note: gpu-cuda is NOT included by default - it requires CUDA toolkit to be installed
+# Enable it explicitly with --features gpu-cuda when CUDA is available
+gpu-acceleration = ["gpu-metal", "gpu-vulkan"]
 gpu-metal = [] # Apple Metal (fully implemented on macOS)
-gpu-cuda = ["cudarc"] # NVIDIA CUDA (fully implemented with cudarc)
+gpu-cuda = ["cudarc"] # NVIDIA CUDA (opt-in only - requires CUDA toolkit)
 gpu-rocm = [] # AMD ROCm (placeholder - needs implementation)
 gpu-opencl = [] # Cross-platform OpenCL (placeholder - needs implementation)
 gpu-vulkan = ["vulkano"] # Cross-platform Vulkan compute
