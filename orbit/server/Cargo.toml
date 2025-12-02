@@ -224,4 +224,4 @@ debug-tools = []
 mockall.workspace = true
 tokio-test = "0.4"
 tempfile = "3.10"
-redis = "0.24"
+redis = "0.32"
