@@ -123,40 +123,42 @@ redis-cli -h localhost -p 6379
 
 ### **AI/ML Vector Operations - pgvector Compatible**
 
-**Orbit-RS provides full pgvector compatibility with vector similarity search across PostgreSQL and Redis protocols:**
+**Orbit-RS provides pgvector-compatible syntax for vector similarity search:**
 
 ```sql
--- PostgreSQL with full pgvector support
+-- Enable pgvector extension
 CREATE EXTENSION vector;
+
+-- Create table with vector column
 CREATE TABLE documents (
     id SERIAL PRIMARY KEY,
     content TEXT,
-    embedding vector(1536)  -- OpenAI text-embedding-ada-002 dimensions
+    embedding vector(384)  -- 384-dimensional embeddings
 );
 
 -- Insert vector embeddings
-INSERT INTO documents (content, embedding) VALUES 
-    ('AI and machine learning', '[0.1,0.2,0.3,...,0.1536]'),
-    ('Database systems', '[0.4,0.5,0.6,...,0.1536]');
+INSERT INTO documents (content, embedding) VALUES
+    ('AI and machine learning', '[0.1,0.2,0.3,0.4]'),
+    ('Database systems', '[0.4,0.5,0.6,0.7]');
 
 -- Vector similarity search with L2 distance
-SELECT content, embedding <-> '[0.2,0.3,0.4,...,0.1536]' AS distance
-FROM documents 
-ORDER BY distance 
+SELECT content, embedding <-> '[0.2,0.3,0.4,0.5]' AS distance
+FROM documents
+ORDER BY distance
 LIMIT 5;
 
 -- Cosine similarity search
-SELECT content, embedding <=> '[0.2,0.3,0.4,...,0.1536]' AS cosine_distance
-FROM documents 
-ORDER BY cosine_distance 
+SELECT content, embedding <=> '[0.2,0.3,0.4,0.5]' AS cosine_distance
+FROM documents
+ORDER BY cosine_distance
 LIMIT 5;
 
--- Create HNSW index for fast approximate similarity search
-CREATE INDEX ON documents USING hnsw (embedding vector_cosine_ops) 
+-- Create HNSW index (syntax supported, index used for query planning)
+CREATE INDEX ON documents USING hnsw (embedding vector_cosine_ops)
 WITH (m = 16, ef_construction = 64);
 
--- Create IVFFlat index for exact similarity search
-CREATE INDEX ON documents USING ivfflat (embedding vector_l2_ops) 
+-- Create IVFFlat index
+CREATE INDEX ON documents USING ivfflat (embedding vector_l2_ops)
 WITH (lists = 100);
 ```
 
