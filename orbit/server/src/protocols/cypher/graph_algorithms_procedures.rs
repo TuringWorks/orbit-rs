@@ -2648,7 +2648,7 @@ mod tests {
         for row in &result.rows {
             if let Some(ref val) = row[1] {
                 let centrality: f64 = val.parse().unwrap();
-                assert!(centrality >= 0.0 && centrality <= 1.0);
+                assert!((0.0..=1.0).contains(&centrality));
             }
         }
     }
@@ -2669,7 +2669,7 @@ mod tests {
         for row in &result.rows {
             if let Some(ref val) = row[2] {
                 let similarity: f64 = val.parse().unwrap();
-                assert!(similarity >= 0.0 && similarity <= 1.0);
+                assert!((0.0..=1.0).contains(&similarity));
             }
         }
     }

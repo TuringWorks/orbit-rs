@@ -21,7 +21,7 @@ use tokio::time::sleep;
 // Helper Functions
 // =============================================================================
 
-/// Kill processes by name - cross-platform implementation
+///   Kill processes by name - cross-platform implementation
 fn kill_process_by_name(name: &str) {
     #[cfg(unix)]
     {
@@ -108,10 +108,7 @@ async fn is_port_listening(port: u16) -> bool {
     use tokio::net::TcpListener;
 
     // Try to bind to the port - if it fails, the port is already in use (listening)
-    match TcpListener::bind(format!("127.0.0.1:{}", port)).await {
-        Ok(_) => false, // Port is free
-        Err(_) => true, // Port is in use
-    }
+    TcpListener::bind(format!("127.0.0.1:{}", port)).await.is_err()
 }
 
 /// Wait for a port to start listening (max timeout in seconds)
@@ -171,7 +168,7 @@ async fn test_data_directories_created() {
 
     // Start server in background
     let mut child = Command::new("cargo")
-        .args(&["run", "-p", "orbit-server", "--"])
+        .args(["run", "-p", "orbit-server", "--"])
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -207,6 +204,7 @@ async fn test_data_directories_created() {
 
     // Cleanup
     let _ = child.kill();
+    let _ = child.wait();
     cleanup_lingering_instances().await;
 }
 
@@ -217,7 +215,7 @@ async fn test_rocksdb_persistence_initialized() {
 
     // Start server in background
     let mut child = Command::new("cargo")
-        .args(&["run", "-p", "orbit-server", "--"])
+        .args(["run", "-p", "orbit-server", "--"])
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -232,6 +230,7 @@ async fn test_rocksdb_persistence_initialized() {
 
     // Cleanup
     let _ = child.kill();
+    let _ = child.wait();
     cleanup_lingering_instances().await;
 }
 
@@ -242,7 +241,7 @@ async fn test_all_protocol_ports_listening() {
 
     // Start server in background
     let mut child = Command::new("cargo")
-        .args(&["run", "-p", "orbit-server", "--"])
+        .args(["run", "-p", "orbit-server", "--"])
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -266,6 +265,7 @@ async fn test_all_protocol_ports_listening() {
 
     // Cleanup
     let _ = child.kill();
+    let _ = child.wait();
     cleanup_lingering_instances().await;
 }
 
@@ -276,7 +276,7 @@ async fn test_prometheus_metrics_endpoint() {
 
     // Start server in background
     let mut child = Command::new("cargo")
-        .args(&["run", "-p", "orbit-server", "--"])
+        .args(["run", "-p", "orbit-server", "--"])
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -292,6 +292,7 @@ async fn test_prometheus_metrics_endpoint() {
 
     // Cleanup
     let _ = child.kill();
+    let _ = child.wait();
     cleanup_lingering_instances().await;
 }
 
@@ -308,7 +309,7 @@ async fn test_minio_configuration_loaded() {
 
     // Start server in background
     let mut child = Command::new("cargo")
-        .args(&["run", "-p", "orbit-server", "--"])
+        .args(["run", "-p", "orbit-server", "--"])
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -327,6 +328,7 @@ async fn test_minio_configuration_loaded() {
 
     // Cleanup
     let _ = child.kill();
+    let _ = child.wait();
     cleanup_lingering_instances().await;
 }
 
@@ -337,7 +339,7 @@ async fn test_wal_enabled() {
 
     // Start server in background
     let mut child = Command::new("cargo")
-        .args(&["run", "-p", "orbit-server", "--"])
+        .args(["run", "-p", "orbit-server", "--"])
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -353,6 +355,7 @@ async fn test_wal_enabled() {
 
     // Cleanup
     let _ = child.kill();
+    let _ = child.wait();
     cleanup_lingering_instances().await;
 }
 
@@ -363,7 +366,7 @@ async fn test_postgresql_wire_protocol_connection() {
 
     // Start server in background
     let mut child = Command::new("cargo")
-        .args(&["run", "-p", "orbit-server", "--"])
+        .args(["run", "-p", "orbit-server", "--"])
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -380,6 +383,7 @@ async fn test_postgresql_wire_protocol_connection() {
 
     // Cleanup
     let _ = child.kill();
+    let _ = child.wait();
     cleanup_lingering_instances().await;
 }
 
@@ -390,7 +394,7 @@ async fn test_redis_resp_protocol_connection() {
 
     // Start server in background
     let mut child = Command::new("cargo")
-        .args(&["run", "-p", "orbit-server", "--"])
+        .args(["run", "-p", "orbit-server", "--"])
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -403,6 +407,7 @@ async fn test_redis_resp_protocol_connection() {
 
     // Cleanup
     let _ = child.kill();
+    let _ = child.wait();
     cleanup_lingering_instances().await;
 }
 
@@ -426,7 +431,7 @@ async fn test_multiple_restarts_no_lingering_instances() {
 
         // Start server
         let mut child = Command::new("cargo")
-            .args(&["run", "-p", "orbit-server", "--"])
+            .args(["run", "-p", "orbit-server", "--"])
             .spawn()
             .expect("Failed to start orbit-server");
 
@@ -435,6 +440,7 @@ async fn test_multiple_restarts_no_lingering_instances() {
 
         // Kill server
         let _ = child.kill();
+        let _ = child.wait();
 
         // Cleanup
         cleanup_lingering_instances().await;
@@ -459,7 +465,7 @@ async fn test_concurrent_protocol_connections() {
 
     // Start server
     let mut child = Command::new("cargo")
-        .args(&["run", "-p", "orbit-server", "--"])
+        .args(["run", "-p", "orbit-server", "--"])
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -483,5 +489,6 @@ async fn test_concurrent_protocol_connections() {
 
     // Cleanup
     let _ = child.kill();
+    let _ = child.wait();
     cleanup_lingering_instances().await;
 }

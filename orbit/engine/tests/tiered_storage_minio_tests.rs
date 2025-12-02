@@ -596,7 +596,7 @@ async fn test_scan_across_tiers() {
         assert!(key.starts_with(&prefix));
         let idx: usize = key
             .split(':')
-            .last()
+            .next_back()
             .unwrap()
             .parse()
             .expect("Invalid index");

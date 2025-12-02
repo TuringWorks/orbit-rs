@@ -329,7 +329,7 @@ mod tests {
 
     #[test]
     fn test_complete_pgvector_workflow() {
-        let sqls = vec![
+        let sqls = [
             "CREATE EXTENSION IF NOT EXISTS vector",
             "CREATE TABLE documents (
                 id SERIAL PRIMARY KEY,

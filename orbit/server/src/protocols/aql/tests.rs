@@ -1,7 +1,7 @@
 //! Comprehensive test suite for AQL protocol
 
 #[cfg(test)]
-mod tests {
+mod aql_tests {
     use super::super::aql_parser::AqlParser;
     use super::super::data_model::{
         AqlCollection, AqlDocument, AqlValue, CollectionStatus, CollectionType,
