@@ -243,11 +243,7 @@ impl Predictor {
     ///
     /// # Returns
     /// Raw prediction values from the model
-    pub async fn predict_features(
-        &self,
-        model_name: &str,
-        features: &[f64],
-    ) -> Result<Vec<f64>> {
+    pub async fn predict_features(&self, model_name: &str, features: &[f64]) -> Result<Vec<f64>> {
         self.run_model_inference(model_name, features).await
     }
 
@@ -285,11 +281,7 @@ impl Predictor {
     }
 
     /// Run actual model inference
-    async fn run_model_inference(
-        &self,
-        model_name: &str,
-        features: &[f64],
-    ) -> Result<Vec<f64>> {
+    async fn run_model_inference(&self, model_name: &str, features: &[f64]) -> Result<Vec<f64>> {
         // Try to get model from registry if available
         if let Some(registry) = &self.registry {
             let registry_guard = registry.read().await;
@@ -391,7 +383,10 @@ fn compute_confidence(value: f64) -> f64 {
 fn softmax_normalize(values: &[f64]) -> Vec<f64> {
     let max_val = values.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
     let exp_sum: f64 = values.iter().map(|&v| (v - max_val).exp()).sum();
-    values.iter().map(|&v| (v - max_val).exp() / exp_sum).collect()
+    values
+        .iter()
+        .map(|&v| (v - max_val).exp() / exp_sum)
+        .collect()
 }
 
 impl Default for InferenceConfig {

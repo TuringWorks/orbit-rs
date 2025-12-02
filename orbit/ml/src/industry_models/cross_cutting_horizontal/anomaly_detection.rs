@@ -73,7 +73,12 @@ impl IsolationNode {
         IsolationNode::Internal {
             feature_idx,
             split_value,
-            left: Box::new(Self::build(&left_data, current_height + 1, height_limit, rng)),
+            left: Box::new(Self::build(
+                &left_data,
+                current_height + 1,
+                height_limit,
+                rng,
+            )),
             right: Box::new(Self::build(
                 &right_data,
                 current_height + 1,
@@ -86,9 +91,7 @@ impl IsolationNode {
     /// Calculate path length for a sample
     fn path_length(&self, sample: &[f64], current_height: usize) -> f64 {
         match self {
-            IsolationNode::External { size } => {
-                current_height as f64 + Self::c_factor(*size)
-            }
+            IsolationNode::External { size } => current_height as f64 + Self::c_factor(*size),
             IsolationNode::Internal {
                 feature_idx,
                 split_value,
@@ -168,7 +171,11 @@ impl IsolationForestDetector {
         }
 
         // Calculate average path length across all trees
-        let avg_path_length: f64 = self.trees.iter().map(|tree| tree.path_length(sample, 0)).sum::<f64>()
+        let avg_path_length: f64 = self
+            .trees
+            .iter()
+            .map(|tree| tree.path_length(sample, 0))
+            .sum::<f64>()
             / self.trees.len() as f64;
 
         // Normalize using c(n) factor
@@ -239,18 +246,14 @@ impl IndustryModel for IsolationForestDetector {
         scores.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         // Set threshold at (1 - contamination) percentile
-        let threshold_idx =
-            ((1.0 - self.contamination as f64) * scores.len() as f64) as usize;
+        let threshold_idx = ((1.0 - self.contamination as f64) * scores.len() as f64) as usize;
         self.threshold = scores
             .get(threshold_idx.min(scores.len().saturating_sub(1)))
             .copied()
             .unwrap_or(0.5);
 
         // Calculate metrics on training data
-        let anomaly_count = samples
-            .iter()
-            .filter(|s| self.is_anomaly(s))
-            .count();
+        let anomaly_count = samples.iter().filter(|s| self.is_anomaly(s)).count();
         let anomaly_rate = anomaly_count as f64 / samples.len() as f64;
 
         let mut metrics = ModelMetrics::new();
@@ -530,11 +533,7 @@ impl OneClassSVMDetector {
 
     /// RBF kernel: K(x, y) = exp(-gamma * ||x - y||^2)
     fn rbf_kernel(&self, x: &[f64], y: &[f64]) -> f64 {
-        let sq_dist: f64 = x
-            .iter()
-            .zip(y.iter())
-            .map(|(a, b)| (a - b).powi(2))
-            .sum();
+        let sq_dist: f64 = x.iter().zip(y.iter()).map(|(a, b)| (a - b).powi(2)).sum();
         (-self.gamma as f64 * sq_dist).exp()
     }
 
@@ -676,7 +675,10 @@ impl IndustryModel for OneClassSVMDetector {
         metrics.recall = 0.82;
         metrics.calculate_f1();
         metrics.auc_roc = Some(0.89);
-        metrics.add_custom_metric("n_support_vectors".to_string(), self.support_vectors.len() as f64);
+        metrics.add_custom_metric(
+            "n_support_vectors".to_string(),
+            self.support_vectors.len() as f64,
+        );
         metrics.add_custom_metric("rho".to_string(), self.rho);
         metrics.add_custom_metric("gamma".to_string(), self.gamma as f64);
         metrics.add_custom_metric("training_anomaly_rate".to_string(), anomaly_rate);

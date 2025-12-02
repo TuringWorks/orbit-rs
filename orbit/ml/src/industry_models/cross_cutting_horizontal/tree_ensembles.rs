@@ -78,8 +78,8 @@ impl TreeNode {
             for i in 0..values.len().saturating_sub(1) {
                 let threshold = (values[i] + values[i + 1]) / 2.0;
 
-                let (left_idx, right_idx): (Vec<usize>, Vec<usize>) = (0..features.len())
-                    .partition(|&i| features[i][feature_idx] <= threshold);
+                let (left_idx, right_idx): (Vec<usize>, Vec<usize>) =
+                    (0..features.len()).partition(|&i| features[i][feature_idx] <= threshold);
 
                 if left_idx.len() < min_samples_leaf || right_idx.len() < min_samples_leaf {
                     continue;
@@ -97,15 +97,24 @@ impl TreeNode {
         }
 
         // If no valid split found, return leaf
-        if best_gain == f64::NEG_INFINITY || best_left_indices.is_empty() || best_right_indices.is_empty() {
+        if best_gain == f64::NEG_INFINITY
+            || best_left_indices.is_empty()
+            || best_right_indices.is_empty()
+        {
             let mean = targets.iter().sum::<f64>() / targets.len() as f64;
             return TreeNode::Leaf { value: mean };
         }
 
         // Build child nodes
-        let left_features: Vec<Vec<f64>> = best_left_indices.iter().map(|&i| features[i].clone()).collect();
+        let left_features: Vec<Vec<f64>> = best_left_indices
+            .iter()
+            .map(|&i| features[i].clone())
+            .collect();
         let left_targets: Vec<f64> = best_left_indices.iter().map(|&i| targets[i]).collect();
-        let right_features: Vec<Vec<f64>> = best_right_indices.iter().map(|&i| features[i].clone()).collect();
+        let right_features: Vec<Vec<f64>> = best_right_indices
+            .iter()
+            .map(|&i| features[i].clone())
+            .collect();
         let right_targets: Vec<f64> = best_right_indices.iter().map(|&i| targets[i]).collect();
 
         TreeNode::Internal {
@@ -140,7 +149,11 @@ impl TreeNode {
 
         // Parent variance
         let parent_mean = targets.iter().sum::<f64>() / n;
-        let parent_var: f64 = targets.iter().map(|&t| (t - parent_mean).powi(2)).sum::<f64>() / n;
+        let parent_var: f64 = targets
+            .iter()
+            .map(|&t| (t - parent_mean).powi(2))
+            .sum::<f64>()
+            / n;
 
         // Left variance
         let left_sum: f64 = left_idx.iter().map(|&i| targets[i]).sum();
@@ -215,12 +228,7 @@ pub struct GradientBoostingModel {
 
 impl GradientBoostingModel {
     /// Create a new gradient boosting model
-    pub fn new(
-        n_estimators: usize,
-        max_depth: usize,
-        learning_rate: f64,
-        task: &str,
-    ) -> Self {
+    pub fn new(n_estimators: usize, max_depth: usize, learning_rate: f64, task: &str) -> Self {
         Self {
             model_version: "1.0.0".to_string(),
             n_estimators,
@@ -354,7 +362,11 @@ impl IndustryModel for GradientBoostingModel {
                 .iter()
                 .map(|f| {
                     let score: f64 = f.iter().take(3).sum();
-                    if score > 0.0 { 1.0 } else { 0.0 }
+                    if score > 0.0 {
+                        1.0
+                    } else {
+                        0.0
+                    }
                 })
                 .collect();
 
@@ -417,10 +429,8 @@ impl IndustryModel for GradientBoostingModel {
                 .iter()
                 .map(|&i| features[i].clone())
                 .collect();
-            let subsample_gradients: Vec<f64> = sample_indices
-                .iter()
-                .map(|&i| gradients[i])
-                .collect();
+            let subsample_gradients: Vec<f64> =
+                sample_indices.iter().map(|&i| gradients[i]).collect();
 
             // Build tree on gradients
             let tree = TreeNode::build(
@@ -541,7 +551,11 @@ impl IndustryModel for GradientBoostingModel {
                 .iter()
                 .map(|f| {
                     let score: f64 = f.iter().take(3).sum();
-                    if score > 0.0 { 1.0 } else { 0.0 }
+                    if score > 0.0 {
+                        1.0
+                    } else {
+                        0.0
+                    }
                 })
                 .collect();
 
@@ -674,7 +688,11 @@ impl IndustryModel for RandomForestModel {
                 .iter()
                 .map(|f| {
                     let score: f64 = f.iter().take(3).sum();
-                    if score > 0.0 { 1.0 } else { 0.0 }
+                    if score > 0.0 {
+                        1.0
+                    } else {
+                        0.0
+                    }
                 })
                 .collect();
 
@@ -690,12 +708,15 @@ impl IndustryModel for RandomForestModel {
         for _ in 0..self.n_estimators {
             // Bootstrap sampling
             let indices: Vec<usize> = if self.bootstrap {
-                (0..n_samples).map(|_| rng.gen_range(0..n_samples)).collect()
+                (0..n_samples)
+                    .map(|_| rng.gen_range(0..n_samples))
+                    .collect()
             } else {
                 (0..n_samples).collect()
             };
 
-            let sample_features: Vec<Vec<f64>> = indices.iter().map(|&i| features[i].clone()).collect();
+            let sample_features: Vec<Vec<f64>> =
+                indices.iter().map(|&i| features[i].clone()).collect();
             let sample_targets: Vec<f64> = indices.iter().map(|&i| targets[i]).collect();
 
             let tree = TreeNode::build(
@@ -778,10 +799,7 @@ mod tests {
     #[tokio::test]
     async fn test_random_forest() {
         let mut model = RandomForestModel::new(10, 5, "classification");
-        assert_eq!(
-            model.model_type(),
-            "tree_ensemble.random_forest_classifier"
-        );
+        assert_eq!(model.model_type(), "tree_ensemble.random_forest_classifier");
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.f1_score > 0.0);
