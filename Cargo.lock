@@ -5193,6 +5193,7 @@ dependencies = [
  "futures",
  "mockall",
  "orbit-client",
+ "orbit-engine",
  "orbit-proto",
  "orbit-server",
  "orbit-shared",

@@ -146,7 +146,7 @@ impl EmbeddingLayer {
     ///
     /// # Arguments
     /// * `input_ids` - Token IDs of shape [batch_size, seq_len]
-    /// * `_position_ids` - Optional position IDs (currently unused)
+    /// * `position_ids` - Optional position IDs. If None, positions 0..seq_len are used
     /// * `token_type_ids` - Optional token type IDs for sentence pairs
     ///
     /// # Returns
@@ -154,31 +154,80 @@ impl EmbeddingLayer {
     pub fn forward(
         &self,
         input_ids: &Array2<i32>,
-        _position_ids: Option<&Array2<i32>>,
+        position_ids: Option<&Array2<i32>>,
         token_type_ids: Option<&Array2<i32>>,
     ) -> Result<Array3<f64>> {
         let (batch_size, seq_len) = input_ids.dim();
         let hidden_size = self.token_embeddings.out_features;
+        let vocab_size = self.token_embeddings.in_features;
 
-        // Token embeddings
-        let embeddings = Array3::<f64>::zeros((batch_size, seq_len, hidden_size));
+        // Initialize embeddings array
+        let mut embeddings = Array3::<f64>::zeros((batch_size, seq_len, hidden_size));
 
-        // TODO: Implement actual embedding lookup
-        // This is a simplified version - in practice would use embedding lookup tables
+        // Token embedding lookup
+        // Weight matrix shape: [hidden_size, vocab_size]
+        // Each column is an embedding vector for a token
+        let token_weights = self.token_embeddings.weights();
 
-        // Add position embeddings if available
-        if let Some(_pos_emb) = &self.position_embeddings {
-            // Add positional embeddings
-        }
+        for b in 0..batch_size {
+            for s in 0..seq_len {
+                let token_id = input_ids[[b, s]] as usize;
+                // Clamp token_id to valid range to prevent out-of-bounds
+                let token_id = token_id.min(vocab_size - 1);
 
-        // Add token type embeddings if available
-        if let Some(_token_type_ids) = token_type_ids {
-            if let Some(_token_type_emb) = &self.token_type_embeddings {
-                // Add token type embeddings
+                // Look up embedding vector (column token_id from weight matrix)
+                for h in 0..hidden_size {
+                    embeddings[[b, s, h]] = token_weights[[h, token_id]];
+                }
             }
         }
 
-        // Apply layer normalization and dropout
+        // Add position embeddings if available
+        if let Some(pos_emb) = &self.position_embeddings {
+            let pos_weights = pos_emb.weights();
+            let max_positions = pos_emb.in_features;
+
+            for b in 0..batch_size {
+                for s in 0..seq_len {
+                    // Use provided position_ids or default to sequential positions
+                    let pos_id = if let Some(pos_ids) = position_ids {
+                        pos_ids[[b, s]] as usize
+                    } else {
+                        s
+                    };
+                    // Clamp position to valid range
+                    let pos_id = pos_id.min(max_positions - 1);
+
+                    // Add positional embedding
+                    for h in 0..hidden_size {
+                        embeddings[[b, s, h]] += pos_weights[[h, pos_id]];
+                    }
+                }
+            }
+        }
+
+        // Add token type embeddings if available
+        if let Some(type_ids) = token_type_ids {
+            if let Some(token_type_emb) = &self.token_type_embeddings {
+                let type_weights = token_type_emb.weights();
+                let num_types = token_type_emb.in_features;
+
+                for b in 0..batch_size {
+                    for s in 0..seq_len {
+                        let type_id = type_ids[[b, s]] as usize;
+                        // Clamp type_id to valid range (typically 0 or 1 for sentence pairs)
+                        let type_id = type_id.min(num_types - 1);
+
+                        // Add token type embedding
+                        for h in 0..hidden_size {
+                            embeddings[[b, s, h]] += type_weights[[h, type_id]];
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apply layer normalization
         let normalized = self.layer_norm.forward(&embeddings)?;
 
         Ok(normalized)

@@ -133,14 +133,34 @@ pub enum OutputType {
     Structured,
 }
 
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+/// Entry storing both metadata and an optional loaded model instance
+pub struct ModelEntry {
+    /// Model metadata
+    pub metadata: ModelMetadata,
+    /// Optional loaded model instance for inference
+    pub model: Option<Arc<dyn Model>>,
+}
+
+impl std::fmt::Debug for ModelEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ModelEntry")
+            .field("metadata", &self.metadata)
+            .field("model_loaded", &self.model.is_some())
+            .finish()
+    }
+}
+
 /// Central registry for managing model metadata and lifecycle
 ///
 /// Provides a centralized location for storing, retrieving, and managing
 /// model metadata across the Orbit ML system.
 #[derive(Debug)]
 pub struct ModelRegistry {
-    /// Storage for model metadata indexed by model name
-    models: HashMap<String, ModelMetadata>,
+    /// Storage for model entries indexed by model name
+    models: HashMap<String, ModelEntry>,
 }
 
 impl ModelRegistry {
@@ -165,7 +185,36 @@ impl ModelRegistry {
     /// # Note
     /// If a model with the same name exists, it will be replaced
     pub async fn register_model(&mut self, metadata: ModelMetadata) -> Result<()> {
-        self.models.insert(metadata.name.clone(), metadata);
+        self.models.insert(
+            metadata.name.clone(),
+            ModelEntry {
+                metadata,
+                model: None,
+            },
+        );
+        Ok(())
+    }
+
+    /// Register a model with both metadata and instance
+    ///
+    /// # Arguments
+    /// * `metadata` - Complete model metadata
+    /// * `model` - The model instance implementing the Model trait
+    ///
+    /// # Returns
+    /// Ok(()) if registration succeeds
+    pub async fn register_model_with_instance(
+        &mut self,
+        metadata: ModelMetadata,
+        model: Arc<dyn Model>,
+    ) -> Result<()> {
+        self.models.insert(
+            metadata.name.clone(),
+            ModelEntry {
+                metadata,
+                model: Some(model),
+            },
+        );
         Ok(())
     }
 
@@ -177,7 +226,18 @@ impl ModelRegistry {
     /// # Returns
     /// Some(metadata) if model exists, None otherwise
     pub async fn get_model(&self, name: &str) -> Result<Option<ModelMetadata>> {
-        Ok(self.models.get(name).cloned())
+        Ok(self.models.get(name).map(|e| e.metadata.clone()))
+    }
+
+    /// Get a loaded model instance by name
+    ///
+    /// # Arguments
+    /// * `name` - Name of the model to retrieve
+    ///
+    /// # Returns
+    /// Some(model) if model exists and is loaded, None otherwise
+    pub fn get_model_instance(&self, name: &str) -> Option<Arc<dyn Model>> {
+        self.models.get(name).and_then(|e| e.model.clone())
     }
 
     /// List metadata for all registered models
@@ -185,7 +245,7 @@ impl ModelRegistry {
     /// # Returns
     /// Vector containing metadata for all models in the registry
     pub async fn list_models(&self) -> Result<Vec<ModelMetadata>> {
-        Ok(self.models.values().cloned().collect())
+        Ok(self.models.values().map(|e| e.metadata.clone()).collect())
     }
 
     /// Remove a model from the registry
@@ -203,6 +263,9 @@ impl ModelRegistry {
         }
     }
 }
+
+/// Shared model registry wrapped in an Arc<RwLock> for concurrent access
+pub type SharedModelRegistry = Arc<RwLock<ModelRegistry>>;
 
 #[cfg(test)]
 mod tests {

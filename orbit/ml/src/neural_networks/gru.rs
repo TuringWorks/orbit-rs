@@ -346,7 +346,7 @@ impl NeuralNetwork for GRUNetwork {
         Ok(())
     }
 
-    async fn update_weights(&mut self, _optimizer: &dyn Optimizer) -> Result<()> {
+    async fn update_weights(&mut self, optimizer: &dyn Optimizer) -> Result<()> {
         if self.gradients.is_empty() {
             return Ok(());
         }
@@ -360,8 +360,7 @@ impl NeuralNetwork for GRUNetwork {
             // We might need to extend Optimizer to handle raw updates or map params.
             // For MVP, we'll do simple SGD update: param -= lr * grad
 
-            // TODO: Use actual optimizer. For now, simple SGD with lr=0.01
-            let lr = 0.01;
+            let lr = optimizer.learning_rate();
 
             layer.w_z = &layer.w_z - &(grads.d_w_z.mapv(|g| g * lr));
             layer.u_z = &layer.u_z - &(grads.d_u_z.mapv(|g| g * lr));

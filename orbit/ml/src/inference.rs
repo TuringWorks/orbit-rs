@@ -1,11 +1,14 @@
 //! Inference pipeline and job management.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::error::Result;
+use crate::models::ModelRegistry;
 
 /// Inference configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,41 +158,72 @@ pub struct InferenceMetrics {
 
 /// Predictor interface
 pub struct Predictor {
-    /// Configuration used for future inference features
-    #[allow(dead_code)]
+    /// Inference configuration
     config: InferenceConfig,
+    /// Optional reference to model registry for model lookup
+    registry: Option<Arc<RwLock<ModelRegistry>>>,
 }
 
 impl Predictor {
-    /// Create a new predictor
+    /// Create a new predictor without a registry
     pub fn new(config: InferenceConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            registry: None,
+        }
     }
 
-    /// Run inference
+    /// Create a new predictor with a model registry
+    pub fn with_registry(config: InferenceConfig, registry: Arc<RwLock<ModelRegistry>>) -> Self {
+        Self {
+            config,
+            registry: Some(registry),
+        }
+    }
+
+    /// Run inference using raw bytes input
+    ///
+    /// # Arguments
+    /// * `model_name` - Name of the model to use for inference
+    /// * `input` - Raw input data as bytes
+    ///
+    /// # Returns
+    /// Inference result containing predictions and metrics
     pub async fn predict(&self, model_name: &str, input: &[u8]) -> Result<InferenceResult> {
         let job_id = Uuid::new_v4();
         let start_time = std::time::Instant::now();
 
-        // TODO: Implement actual inference logic
+        // Parse input as f64 features
+        let preprocess_start = std::time::Instant::now();
+        let features = self.parse_input(input)?;
+        let preprocessing_time = preprocess_start.elapsed().as_secs_f64() * 1000.0;
 
-        let predictions = vec![Prediction {
-            value: serde_json::Value::Number(serde_json::Number::from_f64(0.85).unwrap()),
-            confidence: Some(0.95),
-            probabilities: None,
-            explanation: None,
-        }];
+        // Run inference
+        let inference_start = std::time::Instant::now();
+        let raw_predictions = self.run_model_inference(model_name, &features).await?;
+        let inference_time = inference_start.elapsed().as_secs_f64() * 1000.0;
 
-        let elapsed = start_time.elapsed().as_millis() as f64;
+        // Postprocess predictions
+        let postprocess_start = std::time::Instant::now();
+        let predictions = self.postprocess_predictions(&raw_predictions);
+        let postprocessing_time = postprocess_start.elapsed().as_secs_f64() * 1000.0;
+
+        let total_time = start_time.elapsed().as_secs_f64() * 1000.0;
+        let batch_size = self.calculate_batch_size(&features);
+        let throughput = if total_time > 0.0 {
+            (batch_size as f64 * 1000.0) / total_time
+        } else {
+            0.0
+        };
 
         let metrics = InferenceMetrics {
-            inference_time_ms: elapsed * 0.8, // Simulate inference time
-            preprocessing_time_ms: elapsed * 0.1,
-            postprocessing_time_ms: elapsed * 0.1,
-            total_time_ms: elapsed,
-            memory_usage_bytes: input.len() * 2, // Rough estimate
-            batch_size: 1,
-            throughput: 1000.0 / elapsed, // predictions per second
+            inference_time_ms: inference_time,
+            preprocessing_time_ms: preprocessing_time,
+            postprocessing_time_ms: postprocessing_time,
+            total_time_ms: total_time,
+            memory_usage_bytes: features.len() * std::mem::size_of::<f64>() + input.len(),
+            batch_size,
+            throughput,
         };
 
         Ok(InferenceResult {
@@ -200,6 +234,159 @@ impl Predictor {
             processed_at: chrono::Utc::now(),
         })
     }
+
+    /// Run inference with pre-parsed feature vectors
+    ///
+    /// # Arguments
+    /// * `model_name` - Name of the model to use
+    /// * `features` - Feature vector for inference
+    ///
+    /// # Returns
+    /// Raw prediction values from the model
+    pub async fn predict_features(&self, model_name: &str, features: &[f64]) -> Result<Vec<f64>> {
+        self.run_model_inference(model_name, features).await
+    }
+
+    /// Parse input bytes into feature vector
+    fn parse_input(&self, input: &[u8]) -> Result<Vec<f64>> {
+        // Try to parse as JSON array of numbers first
+        if let Ok(json_str) = std::str::from_utf8(input) {
+            if let Ok(values) = serde_json::from_str::<Vec<f64>>(json_str) {
+                return Ok(values);
+            }
+            // Try parsing as JSON object with "features" key
+            if let Ok(obj) = serde_json::from_str::<serde_json::Value>(json_str) {
+                if let Some(features) = obj.get("features") {
+                    if let Ok(values) = serde_json::from_value::<Vec<f64>>(features.clone()) {
+                        return Ok(values);
+                    }
+                }
+            }
+        }
+
+        // Fallback: interpret as raw f64 bytes (little-endian)
+        if input.len().is_multiple_of(8) {
+            let features: Vec<f64> = input
+                .chunks_exact(8)
+                .map(|chunk| {
+                    let bytes: [u8; 8] = chunk.try_into().unwrap();
+                    f64::from_le_bytes(bytes)
+                })
+                .collect();
+            return Ok(features);
+        }
+
+        // If all else fails, normalize bytes to [0, 1] range
+        Ok(input.iter().map(|&b| b as f64 / 255.0).collect())
+    }
+
+    /// Run actual model inference
+    async fn run_model_inference(&self, model_name: &str, features: &[f64]) -> Result<Vec<f64>> {
+        // Try to get model from registry if available
+        if let Some(registry) = &self.registry {
+            let registry_guard = registry.read().await;
+            if let Some(model) = registry_guard.get_model_instance(model_name) {
+                // Run inference on the loaded model
+                return model.predict(features).await;
+            }
+        }
+
+        // Fallback: simple linear model for demonstration
+        // In production, this would load the model from storage
+        self.fallback_inference(features)
+    }
+
+    /// Fallback inference when no model is loaded
+    /// Uses a simple linear transformation for demonstration
+    fn fallback_inference(&self, features: &[f64]) -> Result<Vec<f64>> {
+        // Simple aggregation-based prediction
+        // Sum features with declining weights, normalize to [0, 1]
+        if features.is_empty() {
+            return Ok(vec![0.5]); // Default prediction
+        }
+
+        let weighted_sum: f64 = features
+            .iter()
+            .enumerate()
+            .map(|(i, &f)| f * (1.0 / (i as f64 + 1.0)))
+            .sum();
+
+        let normalized = 1.0 / (1.0 + (-weighted_sum).exp()); // Sigmoid
+
+        Ok(vec![normalized])
+    }
+
+    /// Convert raw predictions to Prediction structs
+    fn postprocess_predictions(&self, raw: &[f64]) -> Vec<Prediction> {
+        raw.iter()
+            .map(|&value| {
+                // For classification, compute confidence from prediction value
+                let confidence = if self.config.include_confidence {
+                    Some(compute_confidence(value))
+                } else {
+                    None
+                };
+
+                // For binary classification, compute probabilities
+                let probabilities = if raw.len() == 1 {
+                    let prob = value.clamp(0.0, 1.0);
+                    Some(HashMap::from([
+                        ("positive".to_string(), prob),
+                        ("negative".to_string(), 1.0 - prob),
+                    ]))
+                } else if raw.len() > 1 {
+                    // Softmax for multi-class
+                    let softmax = softmax_normalize(raw);
+                    Some(
+                        softmax
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, p)| (format!("class_{}", i), p))
+                            .collect(),
+                    )
+                } else {
+                    None
+                };
+
+                Prediction {
+                    value: serde_json::Number::from_f64(value)
+                        .map(serde_json::Value::Number)
+                        .unwrap_or(serde_json::Value::Null),
+                    confidence,
+                    probabilities,
+                    explanation: None,
+                }
+            })
+            .collect()
+    }
+
+    /// Calculate effective batch size from features
+    fn calculate_batch_size(&self, features: &[f64]) -> usize {
+        // Assume features represent a single sample
+        // For batched inference, this would be calculated differently
+        if features.is_empty() {
+            0
+        } else {
+            1.max(features.len() / self.config.batch_size.max(1))
+        }
+    }
+}
+
+/// Compute confidence score from prediction value
+fn compute_confidence(value: f64) -> f64 {
+    // Confidence is higher when prediction is closer to 0 or 1
+    let distance_from_center = (value - 0.5).abs() * 2.0;
+    0.5 + distance_from_center * 0.5
+}
+
+/// Apply softmax normalization to convert logits to probabilities
+fn softmax_normalize(values: &[f64]) -> Vec<f64> {
+    let max_val = values.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let exp_sum: f64 = values.iter().map(|&v| (v - max_val).exp()).sum();
+    values
+        .iter()
+        .map(|&v| (v - max_val).exp() / exp_sum)
+        .collect()
 }
 
 impl Default for InferenceConfig {

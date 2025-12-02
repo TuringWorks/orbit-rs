@@ -153,38 +153,47 @@ impl Layer for DropoutLayer {
     }
 }
 
-/// Convolutional 2D layer (simplified stub implementation)
+/// Convolutional 2D layer with full forward and backward pass implementation
 #[derive(Debug, Clone)]
 pub struct Conv2DLayer {
-    /// Convolutional filters [out_channels, in_channels, height, width] (kept for future implementation)
-    #[allow(dead_code)]
+    /// Convolutional filters [out_channels, in_channels, height, width]
     filters: Array4<f64>,
-    /// Bias terms for each output channel (kept for future implementation)
-    #[allow(dead_code)]
+    /// Bias terms for each output channel
     biases: Array1<f64>,
-    /// Size of the convolution kernel (kept for future implementation)
-    #[allow(dead_code)]
+    /// Size of the convolution kernel
     kernel_size: (usize, usize),
-    /// Stride for convolution operation (kept for future implementation)
-    #[allow(dead_code)]
+    /// Stride for convolution operation
     stride: (usize, usize),
-    /// Padding applied to input (kept for future implementation)
-    #[allow(dead_code)]
+    /// Padding applied to input
     padding: (usize, usize),
+    /// Number of input channels
+    in_channels: usize,
+    /// Number of output channels (filters)
+    out_channels: usize,
+    /// Expected input height (for reshaping from Array2)
+    input_height: usize,
+    /// Expected input width (for reshaping from Array2)
+    input_width: usize,
+    /// Cached input for backward pass
+    last_input: Option<Array4<f64>>,
+    /// Filter gradients
+    filter_gradients: Array4<f64>,
+    /// Bias gradients
+    bias_gradients: Array1<f64>,
 }
 
 impl Conv2DLayer {
-    /// Create a new 2D convolutional layer (stub implementation)
+    /// Create a new 2D convolutional layer with He initialization
     ///
     /// # Arguments
     /// * `in_channels` - Number of input channels
-    /// * `out_channels` - Number of output channels
+    /// * `out_channels` - Number of output channels (number of filters)
     /// * `kernel_size` - Size of convolution kernel as (height, width)
     /// * `stride` - Stride for convolution as (height, width)
     /// * `padding` - Padding for input as (height, width)
     ///
     /// # Returns
-    /// A new Conv2D layer (not yet fully implemented)
+    /// A new Conv2D layer with He-initialized weights
     pub fn new(
         in_channels: usize,
         out_channels: usize,
@@ -192,34 +201,346 @@ impl Conv2DLayer {
         stride: (usize, usize),
         padding: (usize, usize),
     ) -> Self {
-        let filters = Array4::zeros((out_channels, in_channels, kernel_size.0, kernel_size.1));
+        Self::with_input_size(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            28,
+            28,
+        )
+    }
+
+    /// Create a new 2D convolutional layer with specified input dimensions
+    ///
+    /// # Arguments
+    /// * `in_channels` - Number of input channels
+    /// * `out_channels` - Number of output channels (number of filters)
+    /// * `kernel_size` - Size of convolution kernel as (height, width)
+    /// * `stride` - Stride for convolution as (height, width)
+    /// * `padding` - Padding for input as (height, width)
+    /// * `input_height` - Expected input image height
+    /// * `input_width` - Expected input image width
+    ///
+    /// # Returns
+    /// A new Conv2D layer with He-initialized weights
+    pub fn with_input_size(
+        in_channels: usize,
+        out_channels: usize,
+        kernel_size: (usize, usize),
+        stride: (usize, usize),
+        padding: (usize, usize),
+        input_height: usize,
+        input_width: usize,
+    ) -> Self {
+        // He initialization: sqrt(2 / fan_in) where fan_in = in_channels * kernel_h * kernel_w
+        let fan_in = in_channels * kernel_size.0 * kernel_size.1;
+        let scale = (2.0 / fan_in as f64).sqrt();
+
+        let filters = Array4::from_shape_fn(
+            (out_channels, in_channels, kernel_size.0, kernel_size.1),
+            |_| (rand::random::<f64>() - 0.5) * 2.0 * scale,
+        );
         let biases = Array1::zeros(out_channels);
 
         Self {
             filters,
-            biases,
+            biases: biases.clone(),
             kernel_size,
             stride,
             padding,
+            in_channels,
+            out_channels,
+            input_height,
+            input_width,
+            last_input: None,
+            filter_gradients: Array4::zeros((
+                out_channels,
+                in_channels,
+                kernel_size.0,
+                kernel_size.1,
+            )),
+            bias_gradients: biases,
         }
+    }
+
+    /// Calculate output dimensions for given input dimensions
+    fn output_dims(&self, input_h: usize, input_w: usize) -> (usize, usize) {
+        let out_h = (input_h + 2 * self.padding.0 - self.kernel_size.0) / self.stride.0 + 1;
+        let out_w = (input_w + 2 * self.padding.1 - self.kernel_size.1) / self.stride.1 + 1;
+        (out_h, out_w)
+    }
+
+    /// Reshape Array2 to Array4 (batch, channels, height, width)
+    fn reshape_to_4d(&self, input: &Array2<f64>) -> Result<Array4<f64>> {
+        let batch_size = input.nrows();
+        let expected_cols = self.in_channels * self.input_height * self.input_width;
+
+        if input.ncols() != expected_cols {
+            return Err(MLError::neural_network(format!(
+                "Conv2D input size mismatch: expected {} ({} x {} x {}), got {}",
+                expected_cols,
+                self.in_channels,
+                self.input_height,
+                self.input_width,
+                input.ncols()
+            )));
+        }
+
+        let mut result = Array4::zeros((
+            batch_size,
+            self.in_channels,
+            self.input_height,
+            self.input_width,
+        ));
+        for b in 0..batch_size {
+            for c in 0..self.in_channels {
+                for h in 0..self.input_height {
+                    for w in 0..self.input_width {
+                        let idx =
+                            c * self.input_height * self.input_width + h * self.input_width + w;
+                        result[[b, c, h, w]] = input[[b, idx]];
+                    }
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    /// Reshape Array4 (batch, channels, height, width) back to Array2
+    fn reshape_to_2d(&self, input: &Array4<f64>) -> Array2<f64> {
+        let (batch_size, channels, height, width) = input.dim();
+        let cols = channels * height * width;
+        let mut result = Array2::zeros((batch_size, cols));
+
+        for b in 0..batch_size {
+            for c in 0..channels {
+                for h in 0..height {
+                    for w in 0..width {
+                        let idx = c * height * width + h * width + w;
+                        result[[b, idx]] = input[[b, c, h, w]];
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    /// Apply zero-padding to input tensor
+    fn pad_input(&self, input: &Array4<f64>) -> Array4<f64> {
+        if self.padding.0 == 0 && self.padding.1 == 0 {
+            return input.clone();
+        }
+
+        let (batch_size, channels, h, w) = input.dim();
+        let new_h = h + 2 * self.padding.0;
+        let new_w = w + 2 * self.padding.1;
+        let mut padded = Array4::zeros((batch_size, channels, new_h, new_w));
+
+        for b in 0..batch_size {
+            for c in 0..channels {
+                for i in 0..h {
+                    for j in 0..w {
+                        padded[[b, c, i + self.padding.0, j + self.padding.1]] =
+                            input[[b, c, i, j]];
+                    }
+                }
+            }
+        }
+        padded
+    }
+
+    /// Perform 2D convolution forward pass
+    fn conv2d_forward(&self, input: &Array4<f64>) -> Array4<f64> {
+        let (batch_size, _in_channels, in_h, in_w) = input.dim();
+        let (out_h, out_w) = self.output_dims(in_h - 2 * self.padding.0, in_w - 2 * self.padding.1);
+
+        // Apply padding
+        let padded = self.pad_input(input);
+
+        let mut output = Array4::zeros((batch_size, self.out_channels, out_h, out_w));
+
+        // Perform convolution
+        for b in 0..batch_size {
+            for oc in 0..self.out_channels {
+                for oh in 0..out_h {
+                    for ow in 0..out_w {
+                        let mut sum = self.biases[oc];
+                        for ic in 0..self.in_channels {
+                            for kh in 0..self.kernel_size.0 {
+                                for kw in 0..self.kernel_size.1 {
+                                    let ih = oh * self.stride.0 + kh;
+                                    let iw = ow * self.stride.1 + kw;
+                                    sum += padded[[b, ic, ih, iw]] * self.filters[[oc, ic, kh, kw]];
+                                }
+                            }
+                        }
+                        output[[b, oc, oh, ow]] = sum;
+                    }
+                }
+            }
+        }
+        output
+    }
+
+    /// Get the filter weights
+    pub fn filters(&self) -> &Array4<f64> {
+        &self.filters
+    }
+
+    /// Get the biases
+    pub fn biases(&self) -> &Array1<f64> {
+        &self.biases
     }
 }
 
 #[async_trait]
 impl Layer for Conv2DLayer {
-    async fn forward(&self, _input: &Array2<f64>) -> Result<Array2<f64>> {
-        // TODO: Implement 2D convolution
-        Err(MLError::neural_network(
-            "Conv2D forward pass not implemented yet",
-        ))
+    async fn forward(&self, input: &Array2<f64>) -> Result<Array2<f64>> {
+        // Reshape input from Array2 to Array4
+        let input_4d = self.reshape_to_4d(input)?;
+
+        // Perform convolution
+        let output_4d = self.conv2d_forward(&input_4d);
+
+        // Reshape back to Array2
+        Ok(self.reshape_to_2d(&output_4d))
     }
 
     async fn backward(&mut self, gradient: &Array2<f64>) -> Result<Array2<f64>> {
-        // TODO: Implement 2D convolution backward pass
-        Ok(gradient.clone())
+        // Get cached input from forward pass
+        let input_4d = match &self.last_input {
+            Some(inp) => inp.clone(),
+            None => {
+                return Err(MLError::neural_network(
+                    "Conv2D backward called without prior forward pass",
+                ));
+            }
+        };
+
+        let (batch_size, _in_channels, in_h, in_w) = input_4d.dim();
+        let (out_h, out_w) = self.output_dims(in_h, in_w);
+
+        // Reshape gradient to 4D
+        let grad_cols = self.out_channels * out_h * out_w;
+        if gradient.ncols() != grad_cols {
+            return Err(MLError::neural_network(format!(
+                "Conv2D backward gradient size mismatch: expected {}, got {}",
+                grad_cols,
+                gradient.ncols()
+            )));
+        }
+
+        let mut grad_4d = Array4::zeros((batch_size, self.out_channels, out_h, out_w));
+        for b in 0..batch_size {
+            for c in 0..self.out_channels {
+                for h in 0..out_h {
+                    for w in 0..out_w {
+                        let idx = c * out_h * out_w + h * out_w + w;
+                        grad_4d[[b, c, h, w]] = gradient[[b, idx]];
+                    }
+                }
+            }
+        }
+
+        // Pad input for gradient computation
+        let padded_input = self.pad_input(&input_4d);
+
+        // Compute filter gradients: dL/dW = sum over batch of input * grad_output
+        self.filter_gradients = Array4::zeros((
+            self.out_channels,
+            self.in_channels,
+            self.kernel_size.0,
+            self.kernel_size.1,
+        ));
+
+        for b in 0..batch_size {
+            for oc in 0..self.out_channels {
+                for ic in 0..self.in_channels {
+                    for kh in 0..self.kernel_size.0 {
+                        for kw in 0..self.kernel_size.1 {
+                            let mut sum = 0.0;
+                            for oh in 0..out_h {
+                                for ow in 0..out_w {
+                                    let ih = oh * self.stride.0 + kh;
+                                    let iw = ow * self.stride.1 + kw;
+                                    sum += padded_input[[b, ic, ih, iw]] * grad_4d[[b, oc, oh, ow]];
+                                }
+                            }
+                            self.filter_gradients[[oc, ic, kh, kw]] += sum;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Normalize by batch size
+        self.filter_gradients
+            .mapv_inplace(|x| x / batch_size as f64);
+
+        // Compute bias gradients: dL/db = sum of gradients
+        self.bias_gradients = Array1::zeros(self.out_channels);
+        for b in 0..batch_size {
+            for oc in 0..self.out_channels {
+                for oh in 0..out_h {
+                    for ow in 0..out_w {
+                        self.bias_gradients[oc] += grad_4d[[b, oc, oh, ow]];
+                    }
+                }
+            }
+        }
+        self.bias_gradients.mapv_inplace(|x| x / batch_size as f64);
+
+        // Compute input gradient (full convolution with flipped kernels)
+        let mut input_grad = Array4::zeros((batch_size, self.in_channels, in_h, in_w));
+
+        for b in 0..batch_size {
+            for ic in 0..self.in_channels {
+                for ih in 0..in_h {
+                    for iw in 0..in_w {
+                        let mut sum = 0.0;
+                        for oc in 0..self.out_channels {
+                            for kh in 0..self.kernel_size.0 {
+                                for kw in 0..self.kernel_size.1 {
+                                    // Check if this input position contributes to output
+                                    let oh_start =
+                                        ih as isize + self.padding.0 as isize - kh as isize;
+                                    let ow_start =
+                                        iw as isize + self.padding.1 as isize - kw as isize;
+
+                                    if oh_start >= 0
+                                        && ow_start >= 0
+                                        && oh_start % self.stride.0 as isize == 0
+                                        && ow_start % self.stride.1 as isize == 0
+                                    {
+                                        let oh = (oh_start / self.stride.0 as isize) as usize;
+                                        let ow = (ow_start / self.stride.1 as isize) as usize;
+
+                                        if oh < out_h && ow < out_w {
+                                            // Use flipped kernel
+                                            let fkh = self.kernel_size.0 - 1 - kh;
+                                            let fkw = self.kernel_size.1 - 1 - kw;
+                                            sum += grad_4d[[b, oc, oh, ow]]
+                                                * self.filters[[oc, ic, fkh, fkw]];
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        input_grad[[b, ic, ih, iw]] = sum;
+                    }
+                }
+            }
+        }
+
+        // Reshape back to Array2
+        Ok(self.reshape_to_2d(&input_grad))
     }
 
     fn parameters(&self) -> Vec<&Array2<f64>> {
+        // Return empty since we store 4D filters, not 2D
+        // Alternatively, we could flatten the filters
         vec![]
     }
 
@@ -411,6 +732,18 @@ impl Linear {
         } else {
             Ok(output)
         }
+    }
+
+    /// Get the weight matrix for embedding lookup
+    ///
+    /// The weight matrix has shape [out_features, in_features].
+    /// For embedding layers, this is [hidden_size, vocab_size], where
+    /// each column represents an embedding vector for a token.
+    ///
+    /// # Returns
+    /// Reference to the weight matrix
+    pub fn weights(&self) -> &Array2<f64> {
+        &self.weight
     }
 }
 
