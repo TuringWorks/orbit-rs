@@ -4,6 +4,24 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
 
+/// Get the best available device for ML operations
+#[cfg(feature = "candle-core")]
+pub fn get_device() -> candle_core::Device {
+    use candle_core::Device;
+
+    #[cfg(feature = "gpu-metal")]
+    if let Ok(device) = Device::new_metal(0) {
+        return device;
+    }
+
+    #[cfg(feature = "gpu")]
+    if let Ok(device) = Device::new_cuda(0) {
+        return device;
+    }
+
+    Device::Cpu
+}
+
 /// Result type for industry model operations
 pub type Result<T> = std::result::Result<T, IndustryModelError>;
 
@@ -255,7 +273,7 @@ mod tests {
 
     #[test]
     fn test_model_registry() {
-        let mut registry = ModelRegistry::new();
+        let registry = ModelRegistry::new();
         assert_eq!(registry.list_models().len(), 0);
     }
 }

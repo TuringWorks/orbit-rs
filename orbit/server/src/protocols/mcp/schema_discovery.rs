@@ -3,8 +3,6 @@
 //! This module provides real-time schema discovery and updates
 //! by connecting to Orbit-RS metadata system.
 
-#![cfg(feature = "storage-rocksdb")]
-
 use crate::protocols::mcp::integration::OrbitMcpIntegration;
 use crate::protocols::mcp::schema::{SchemaAnalyzer, TableSchema};
 use crate::protocols::mcp::types::McpError;

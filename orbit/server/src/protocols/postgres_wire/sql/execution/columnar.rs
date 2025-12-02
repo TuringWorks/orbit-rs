@@ -42,7 +42,7 @@ impl NullBitmap {
 
     /// Create a new null bitmap with all values non-null
     pub fn new_all_valid(len: usize) -> Self {
-        let num_words = (len + 63) / 64;
+        let num_words = len.div_ceil(64);
         Self {
             bits: vec![u64::MAX; num_words],
             len,
@@ -51,7 +51,7 @@ impl NullBitmap {
 
     /// Create a new null bitmap with all values null
     pub fn new_all_null(len: usize) -> Self {
-        let num_words = (len + 63) / 64;
+        let num_words = len.div_ceil(64);
         Self {
             bits: vec![0; num_words],
             len,

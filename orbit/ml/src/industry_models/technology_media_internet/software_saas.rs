@@ -238,7 +238,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_saas_pricing_optimizer() {
-        let mut model = SaaSPricingOptimizer::new(4);
+        let model = SaaSPricingOptimizer::new(4);
         assert_eq!(model.model_type(), "software_saas.pricing_optimization");
 
         let predictions = model.predict(&[]).await.unwrap();

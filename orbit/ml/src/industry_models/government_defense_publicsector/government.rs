@@ -305,7 +305,7 @@ mod tests {
     #[tokio::test]
     async fn test_policy_impact_predictor() {
         let domains = vec!["healthcare".to_string(), "education".to_string()];
-        let mut model = PolicyImpactPredictor::new(domains);
+        let model = PolicyImpactPredictor::new(domains);
         assert_eq!(model.model_type(), "government.policy_impact_prediction");
 
         let predictions = model.predict(&[]).await.unwrap();
@@ -314,7 +314,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_emergency_response_optimizer() {
-        let mut model = EmergencyResponseOptimizer::new(25);
+        let model = EmergencyResponseOptimizer::new(25);
         assert_eq!(model.model_type(), "government.emergency_response");
 
         let predictions = model.predict(&[]).await.unwrap();

@@ -178,7 +178,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_appliance_failure_predictor() {
-        let mut model = ApplianceFailurePredictor::new("hvac".to_string());
+        let model = ApplianceFailurePredictor::new("hvac".to_string());
         assert_eq!(model.model_type(), "smart_home.appliance_failure");
 
         let predictions = model.predict(&[]).await.unwrap();

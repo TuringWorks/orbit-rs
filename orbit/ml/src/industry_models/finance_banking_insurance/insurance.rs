@@ -229,7 +229,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_risk_assessment_model() {
-        let mut model = RiskAssessmentModel::new(20);
+        let model = RiskAssessmentModel::new(20);
         assert_eq!(model.model_type(), "insurance.risk_assessment");
 
         let predictions = model.predict(&[]).await.unwrap();
@@ -249,7 +249,7 @@ mod tests {
     #[tokio::test]
     async fn test_claims_severity_predictor() {
         let categories = vec!["auto_collision".to_string(), "property_damage".to_string()];
-        let mut model = ClaimsSeverityPredictor::new(categories);
+        let model = ClaimsSeverityPredictor::new(categories);
         assert_eq!(model.model_type(), "insurance.claims_severity");
 
         let predictions = model.predict(&[]).await.unwrap();

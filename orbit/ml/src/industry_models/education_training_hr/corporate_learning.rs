@@ -116,7 +116,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_skill_gap_analyzer() {
-        let mut model = SkillGapAnalyzer::new(100, 20);
+        let model = SkillGapAnalyzer::new(100, 20);
         assert_eq!(model.model_type(), "corporate_learning.skill_gap_analysis");
 
         let predictions = model.predict(&[]).await.unwrap();

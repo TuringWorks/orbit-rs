@@ -1646,12 +1646,8 @@ impl UnifiedStorage {
     /// Check if a record matches a filter expression
     fn matches_filter(&self, record: &UniversalRecord, filter: &FilterExpression) -> bool {
         match filter {
-            FilterExpression::Eq(field, value) => {
-                record.get_field(field).map_or(false, |v| v == value)
-            }
-            FilterExpression::Ne(field, value) => {
-                record.get_field(field).map_or(true, |v| v != value)
-            }
+            FilterExpression::Eq(field, value) => record.get_field(field) == Some(value),
+            FilterExpression::Ne(field, value) => record.get_field(field) != Some(value),
             FilterExpression::Gt(field, value) => {
                 self.compare_values(record.get_field(field), Some(value))
                     == Some(std::cmp::Ordering::Greater)
@@ -1672,12 +1668,12 @@ impl UnifiedStorage {
                     Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)
                 )
             }
-            FilterExpression::In(field, values) => record
-                .get_field(field)
-                .map_or(false, |v| values.contains(v)),
-            FilterExpression::NotIn(field, values) => record
-                .get_field(field)
-                .map_or(true, |v| !values.contains(v)),
+            FilterExpression::In(field, values) => {
+                record.get_field(field).is_some_and(|v| values.contains(v))
+            }
+            FilterExpression::NotIn(field, values) => {
+                record.get_field(field).is_none_or(|v| !values.contains(v))
+            }
             FilterExpression::Between(field, min, max) => {
                 if let Some(v) = record.get_field(field) {
                     matches!(
@@ -1694,30 +1690,28 @@ impl UnifiedStorage {
             FilterExpression::Like(field, pattern) => record
                 .get_field(field)
                 .and_then(|v| v.as_str())
-                .map_or(false, |s| self.matches_like_pattern(s, pattern)),
+                .is_some_and(|s| self.matches_like_pattern(s, pattern)),
             FilterExpression::ILike(field, pattern) => record
                 .get_field(field)
                 .and_then(|v| v.as_str())
-                .map_or(false, |s| {
+                .is_some_and(|s| {
                     self.matches_like_pattern(&s.to_lowercase(), &pattern.to_lowercase())
                 }),
             FilterExpression::StartsWith(field, prefix) => record
                 .get_field(field)
                 .and_then(|v| v.as_str())
-                .map_or(false, |s| s.starts_with(prefix)),
+                .is_some_and(|s| s.starts_with(prefix)),
             FilterExpression::EndsWith(field, suffix) => record
                 .get_field(field)
                 .and_then(|v| v.as_str())
-                .map_or(false, |s| s.ends_with(suffix)),
+                .is_some_and(|s| s.ends_with(suffix)),
             FilterExpression::Contains(field, substring) => record
                 .get_field(field)
                 .and_then(|v| v.as_str())
-                .map_or(false, |s| s.contains(substring)),
-            FilterExpression::IsNull(field) => {
-                record.get_field(field).map_or(true, |v| v.is_null())
-            }
+                .is_some_and(|s| s.contains(substring)),
+            FilterExpression::IsNull(field) => record.get_field(field).is_none_or(|v| v.is_null()),
             FilterExpression::IsNotNull(field) => {
-                record.get_field(field).map_or(false, |v| !v.is_null())
+                record.get_field(field).is_some_and(|v| !v.is_null())
             }
             FilterExpression::And(left, right) => {
                 self.matches_filter(record, left) && self.matches_filter(record, right)

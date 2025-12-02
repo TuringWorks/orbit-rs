@@ -95,7 +95,7 @@ pub enum UniversalOperation {
         filter: Option<FilterExpression>,
         group_by: Vec<String>,
         aggregations: Vec<AggregateOp>,
-        having: Option<FilterExpression>,
+        having: Option<Box<FilterExpression>>,
         order_by: Option<Vec<(String, SortOrder)>>,
         limit: Option<usize>,
     },
@@ -424,22 +424,17 @@ impl FilterExpression {
     }
 
     /// Create a NOT expression
-    pub fn not(self) -> FilterExpression {
+    pub fn negate(self) -> FilterExpression {
         FilterExpression::Not(Box::new(self))
     }
 }
 
 /// Sort order for ORDER BY clauses
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SortOrder {
+    #[default]
     Ascending,
     Descending,
-}
-
-impl Default for SortOrder {
-    fn default() -> Self {
-        SortOrder::Ascending
-    }
 }
 
 /// Aggregation operations
@@ -522,18 +517,13 @@ pub enum RelationshipDirection {
 }
 
 /// Transaction isolation level
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum IsolationLevel {
     ReadUncommitted,
+    #[default]
     ReadCommitted,
     RepeatableRead,
     Serializable,
-}
-
-impl Default for IsolationLevel {
-    fn default() -> Self {
-        IsolationLevel::ReadCommitted
-    }
 }
 
 /// Schema definition for a namespace

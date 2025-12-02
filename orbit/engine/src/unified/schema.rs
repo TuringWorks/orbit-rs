@@ -578,6 +578,7 @@ impl SchemaRegistry {
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn cql_type(&self, field_type: &FieldType) -> String {
         match field_type {
             FieldType::Bool => "boolean".to_string(),
@@ -663,7 +664,7 @@ impl SchemaRegistry {
                     .unwrap_or(FieldType::String);
                 FieldType::List(Box::new(inner_type))
             }
-            UniversalValue::Map(_, ..) => FieldType::Json,
+            UniversalValue::Map(..) => FieldType::Json,
             UniversalValue::Set(_) => FieldType::List(Box::new(FieldType::String)),
             UniversalValue::SortedSet(_) => FieldType::List(Box::new(FieldType::String)),
             UniversalValue::Timestamp(_) => FieldType::Timestamp,

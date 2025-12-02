@@ -177,7 +177,7 @@ mod tests {
     #[tokio::test]
     async fn test_shipping_eta_predictor() {
         let modes = vec!["ocean".to_string(), "air".to_string()];
-        let mut model = ShippingETAPredictor::new(modes);
+        let model = ShippingETAPredictor::new(modes);
         assert_eq!(model.model_type(), "fleet_logistics.shipping_eta");
 
         let predictions = model.predict(&[]).await.unwrap();
@@ -186,7 +186,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_freight_demand_forecaster() {
-        let mut model = FreightDemandForecaster::new(30);
+        let model = FreightDemandForecaster::new(30);
         assert_eq!(model.model_type(), "fleet_logistics.freight_demand");
 
         let predictions = model.predict(&[]).await.unwrap();

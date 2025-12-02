@@ -1083,7 +1083,7 @@ impl ProcedureInterpreter {
                 }
             }
             "TO_DATE" => {
-                if args.len() < 1 || args.len() > 2 {
+                if args.is_empty() || args.len() > 2 {
                     return Err(EngineError::ExecutionError(
                         "TO_DATE requires 1-2 arguments (string, [format])".to_string(),
                     ));
@@ -1116,7 +1116,7 @@ impl ProcedureInterpreter {
                     })
             }
             "TO_TIMESTAMP" => {
-                if args.len() < 1 || args.len() > 2 {
+                if args.is_empty() || args.len() > 2 {
                     return Err(EngineError::ExecutionError(
                         "TO_TIMESTAMP requires 1-2 arguments (string, [format])".to_string(),
                     ));
@@ -1128,7 +1128,7 @@ impl ProcedureInterpreter {
                         return Ok(Value::Timestamp(
                             chrono::DateTime::from_timestamp(*epoch, 0)
                                 .map(|dt| dt.naive_utc())
-                                .unwrap_or_else(|| NaiveDateTime::default()),
+                                .unwrap_or_else(NaiveDateTime::default),
                         ));
                     }
                     Value::Null => return Ok(Value::Null),

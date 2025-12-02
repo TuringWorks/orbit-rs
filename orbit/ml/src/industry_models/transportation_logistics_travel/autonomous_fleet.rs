@@ -181,11 +181,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_av_demand_predictor() {
-        let mut model = AVDemandPredictor::new(50, 60);
+        let model = AVDemandPredictor::new(50, 60);
         assert_eq!(model.model_type(), "autonomous_fleet.demand_prediction");
 
         let predictions = model.predict(&[]).await.unwrap();
-        assert!(predictions.len() > 0);
+        assert!(!predictions.is_empty());
     }
 
     #[tokio::test]

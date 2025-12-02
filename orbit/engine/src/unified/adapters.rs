@@ -51,7 +51,7 @@ pub trait ProtocolAdapter: Send + Sync {
     fn to_universal(&self, data: &[u8]) -> UnifiedStorageResult<UniversalValue>;
 
     /// Translate UniversalValue to protocol-specific output
-    fn from_universal(&self, value: &UniversalValue) -> UnifiedStorageResult<Vec<u8>>;
+    fn convert_from_universal(&self, value: &UniversalValue) -> UnifiedStorageResult<Vec<u8>>;
 }
 
 /// Base adapter implementation with common functionality
@@ -1000,7 +1000,7 @@ impl ProtocolAdapter for RedisAdapter {
         Ok(UniversalValue::String(s))
     }
 
-    fn from_universal(&self, value: &UniversalValue) -> UnifiedStorageResult<Vec<u8>> {
+    fn convert_from_universal(&self, value: &UniversalValue) -> UnifiedStorageResult<Vec<u8>> {
         match value {
             UniversalValue::String(s) => Ok(s.as_bytes().to_vec()),
             UniversalValue::Int(i) => Ok(i.to_string().into_bytes()),
@@ -1234,7 +1234,7 @@ impl ProtocolAdapter for SqlAdapter {
             .map_err(|e| UnifiedStorageError::SerializationError(e.to_string()))
     }
 
-    fn from_universal(&self, value: &UniversalValue) -> UnifiedStorageResult<Vec<u8>> {
+    fn convert_from_universal(&self, value: &UniversalValue) -> UnifiedStorageResult<Vec<u8>> {
         serde_json::to_vec(value)
             .map_err(|e| UnifiedStorageError::SerializationError(e.to_string()))
     }
@@ -1382,7 +1382,7 @@ impl ProtocolAdapter for CqlAdapter {
             .map_err(|e| UnifiedStorageError::SerializationError(e.to_string()))
     }
 
-    fn from_universal(&self, value: &UniversalValue) -> UnifiedStorageResult<Vec<u8>> {
+    fn convert_from_universal(&self, value: &UniversalValue) -> UnifiedStorageResult<Vec<u8>> {
         serde_json::to_vec(value)
             .map_err(|e| UnifiedStorageError::SerializationError(e.to_string()))
     }
@@ -1583,7 +1583,7 @@ impl ProtocolAdapter for GraphAdapter {
             .map_err(|e| UnifiedStorageError::SerializationError(e.to_string()))
     }
 
-    fn from_universal(&self, value: &UniversalValue) -> UnifiedStorageResult<Vec<u8>> {
+    fn convert_from_universal(&self, value: &UniversalValue) -> UnifiedStorageResult<Vec<u8>> {
         serde_json::to_vec(value)
             .map_err(|e| UnifiedStorageError::SerializationError(e.to_string()))
     }
@@ -1741,7 +1741,7 @@ impl ProtocolAdapter for RestAdapter {
             .map_err(|e| UnifiedStorageError::SerializationError(e.to_string()))
     }
 
-    fn from_universal(&self, value: &UniversalValue) -> UnifiedStorageResult<Vec<u8>> {
+    fn convert_from_universal(&self, value: &UniversalValue) -> UnifiedStorageResult<Vec<u8>> {
         serde_json::to_vec(value)
             .map_err(|e| UnifiedStorageError::SerializationError(e.to_string()))
     }

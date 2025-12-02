@@ -172,7 +172,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_savings_recommender() {
-        let mut model = SavingsRecommender::new(5);
+        let model = SavingsRecommender::new(5);
         assert_eq!(
             model.model_type(),
             "personal_finance.savings_recommendation"

@@ -178,7 +178,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_dynamic_difficulty_adjuster() {
-        let mut model = DynamicDifficultyAdjuster::new(10);
+        let model = DynamicDifficultyAdjuster::new(10);
         assert_eq!(model.model_type(), "gaming.dynamic_difficulty");
 
         let predictions = model.predict(&[]).await.unwrap();

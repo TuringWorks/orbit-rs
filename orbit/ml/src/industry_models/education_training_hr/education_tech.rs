@@ -180,7 +180,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_adaptive_learning_engine() {
-        let mut model = AdaptiveLearningEngine::new(50);
+        let model = AdaptiveLearningEngine::new(50);
         assert_eq!(model.model_type(), "education.adaptive_learning");
 
         let predictions = model.predict(&[]).await.unwrap();

@@ -890,10 +890,8 @@ impl ClusterNodeProvider for S3ClusterNodeProvider {
                 true // Nodes without leases are considered expired
             };
 
-            if is_expired {
-                if self.remove_node(&node.id).await? {
-                    expired_count += 1;
-                }
+            if is_expired && self.remove_node(&node.id).await? {
+                expired_count += 1;
             }
         }
 

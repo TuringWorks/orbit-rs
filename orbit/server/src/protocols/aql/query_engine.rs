@@ -171,14 +171,11 @@ impl AqlQueryEngine {
                 AqlClause::Filter { condition } => {
                     // Apply filter to documents from FOR clause
                     if let Some(ref var) = for_variable {
-                        for_documents = for_documents
-                            .into_iter()
-                            .filter(|doc| {
-                                let mut ctx = context.clone();
-                                ctx.insert(var.clone(), self.document_to_value(doc));
-                                self.evaluate_condition(condition, &ctx).unwrap_or(false)
-                            })
-                            .collect();
+                        for_documents.retain(|doc| {
+                            let mut ctx = context.clone();
+                            ctx.insert(var.clone(), self.document_to_value(doc));
+                            self.evaluate_condition(condition, &ctx).unwrap_or(false)
+                        });
                     }
                 }
                 AqlClause::Return {
@@ -252,6 +249,7 @@ impl AqlQueryEngine {
     }
 
     /// Evaluate an AQL expression
+    #[allow(clippy::only_used_in_recursion)]
     fn evaluate_expression(
         &self,
         expression: &AqlExpression,

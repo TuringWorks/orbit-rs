@@ -300,7 +300,7 @@ impl ColumnCompression {
                         dictionary
                             .get(idx as usize)
                             .cloned()
-                            .unwrap_or_else(|| String::new())
+                            .unwrap_or_else(String::new)
                     })
                     .collect();
                 Ok(result)

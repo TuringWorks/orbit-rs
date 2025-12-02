@@ -127,7 +127,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_market_regime_detector() {
-        let mut model = MarketRegimeDetector::new(4);
+        let model = MarketRegimeDetector::new(4);
         assert_eq!(model.model_type(), "hedge_fund.regime_detection");
 
         let predictions = model.predict(&[]).await.unwrap();

@@ -21,7 +21,7 @@
 
 use crate::protocols::cypher::cypher_parser::CypherParser;
 #[cfg(feature = "storage-rocksdb")]
-use crate::protocols::cypher::storage::CypherGraphStorage;
+use crate::protocols::cypher::storage::CypherStorageProvider;
 use crate::protocols::cypher::types::{GraphNode, GraphRelationship};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -513,7 +513,7 @@ pub enum BoltMessage {
 pub struct BoltProtocolHandler {
     version: Option<BoltVersion>,
     #[cfg(feature = "storage-rocksdb")]
-    storage: Arc<CypherGraphStorage>,
+    storage: Arc<dyn CypherStorageProvider>,
     parser: CypherParser,
     /// Authentication state
     auth_state: AuthState,
@@ -534,7 +534,7 @@ pub struct BoltProtocolHandler {
 impl BoltProtocolHandler {
     /// Create a new Bolt protocol handler
     #[cfg(feature = "storage-rocksdb")]
-    pub fn new(storage: Arc<CypherGraphStorage>) -> Self {
+    pub fn new(storage: Arc<dyn CypherStorageProvider>) -> Self {
         Self {
             version: None,
             storage,
@@ -898,20 +898,21 @@ impl BoltProtocolHandler {
     }
 
     /// Decode RUN message using PackStream decoder
+    #[allow(clippy::type_complexity)]
     fn decode_run(
         &mut self,
-        bytes: &Bytes,
+        data: &Bytes,
     ) -> ProtocolResult<(String, HashMap<String, Value>, HashMap<String, Value>)> {
         // RUN is a structure with signature 0x10 containing: query (string), params (map), extra (map)
         // Format: 0xB3 0x10 <string> <map> <map>
-        if bytes.len() < 4 {
+        if data.len() < 4 {
             return Err(ProtocolError::CypherError(
                 "RUN message too short".to_string(),
             ));
         }
 
         // Skip structure header
-        let skip_offset = if bytes[0] >= 0xB0 && bytes[0] <= 0xBF {
+        let skip_offset = if data[0] >= 0xB0 && data[0] <= 0xBF {
             2
         } else {
             1
@@ -921,12 +922,12 @@ impl BoltProtocolHandler {
         self.decoder.position = skip_offset;
 
         // Decode query string
-        let query = match self.decoder.decode_value(&bytes[..])? {
+        let query = match self.decoder.decode_value(&data[..])? {
             Value::String(s) => s,
             v => {
                 // Fallback: try to extract query from remaining bytes
                 let start = skip_offset;
-                let query_bytes = &bytes[start..];
+                let query_bytes = &data[start..];
                 // Find the query string (skip marker byte and length)
                 if !query_bytes.is_empty() {
                     let marker = query_bytes[0];
@@ -948,13 +949,13 @@ impl BoltProtocolHandler {
         };
 
         // Decode parameters map
-        let params = match self.decoder.decode_value(&bytes[..]) {
+        let params = match self.decoder.decode_value(&data[..]) {
             Ok(Value::Object(map)) => map.into_iter().collect(),
             _ => HashMap::new(),
         };
 
         // Decode extra map (optional)
-        let extra = match self.decoder.decode_value(&bytes[..]) {
+        let extra = match self.decoder.decode_value(&data[..]) {
             Ok(Value::Object(map)) => map.into_iter().collect(),
             _ => HashMap::new(),
         };
@@ -1576,6 +1577,7 @@ impl BoltProtocolHandler {
     }
 
     /// Encode a JSON value as PackStream
+    #[allow(clippy::only_used_in_recursion)]
     fn encode_packstream_value(&self, value: &Value, buf: &mut BytesMut) {
         match value {
             Value::Null => {
@@ -1586,7 +1588,7 @@ impl BoltProtocolHandler {
             }
             Value::Number(n) => {
                 if let Some(i) = n.as_i64() {
-                    if i >= -16 && i <= 127 {
+                    if (-16..=127).contains(&i) {
                         buf.put_u8(i as u8); // Tiny int
                     } else if i >= i8::MIN as i64 && i <= i8::MAX as i64 {
                         buf.put_u8(0xC8); // INT_8

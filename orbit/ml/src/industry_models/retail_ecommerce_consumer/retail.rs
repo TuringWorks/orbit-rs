@@ -115,7 +115,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_demand_forecasting_model() {
-        let mut model = DemandForecastingModel::new(7);
+        let model = DemandForecastingModel::new(7);
         assert_eq!(model.model_type(), "retail.demand_forecasting");
 
         let predictions = model.predict(&[]).await.unwrap();

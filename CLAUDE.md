@@ -204,7 +204,7 @@ cargo bench --bench actor_benchmarks
 ```
 
 ### Custom SQLx Fork
-The project uses a patched SQLx from `github.com/ravituringworks/sqlx-no-rsa` to fix RSA vulnerability (RUSTSEC-2023-0071).
+The project uses a patched SQLx from `github.com/TuringWorks/sqlx-no-rsa` to fix RSA vulnerability (RUSTSEC-2023-0071).
 
 ### Pre-commit Hooks
 Install hooks for automatic quality checks:

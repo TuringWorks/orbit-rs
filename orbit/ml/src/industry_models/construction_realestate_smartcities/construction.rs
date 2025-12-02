@@ -122,7 +122,7 @@ mod tests {
     #[tokio::test]
     async fn test_project_risk_assessor() {
         let risks = vec!["weather".to_string(), "supply_chain".to_string()];
-        let mut model = ProjectRiskAssessor::new(risks);
+        let model = ProjectRiskAssessor::new(risks);
         assert_eq!(model.model_type(), "construction.project_risk");
 
         let predictions = model.predict(&[]).await.unwrap();

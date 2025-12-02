@@ -123,7 +123,7 @@ impl UserStore {
 
         // Compute stored key: H(client_key)
         let mut hasher = Sha256::new();
-        hasher.update(&client_key);
+        hasher.update(client_key);
         let stored_key = hasher.finalize().to_vec();
 
         // Compute server key: HMAC(salted_password, "Server Key")
@@ -398,7 +398,7 @@ impl ScramAuth {
         let server_signature = server_sig_mac.finalize().into_bytes();
 
         // Build server-final-message: v=serversignature
-        Ok(format!("v={}", BASE64.encode(&server_signature)))
+        Ok(format!("v={}", BASE64.encode(server_signature)))
     }
 }
 

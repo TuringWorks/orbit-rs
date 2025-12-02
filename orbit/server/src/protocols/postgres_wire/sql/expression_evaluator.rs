@@ -1144,15 +1144,15 @@ impl ExpressionEvaluator {
         }
 
         match &args[0] {
-            SqlValue::Date(date) => Ok(SqlValue::Integer(date.year() as i32)),
+            SqlValue::Date(date) => Ok(SqlValue::Integer(date.year())),
             SqlValue::TimestampWithTimezone(ts) => {
                 let date = ts.date_naive();
-                Ok(SqlValue::Integer(date.year() as i32))
+                Ok(SqlValue::Integer(date.year()))
             }
             SqlValue::Text(s) => {
                 // Try to parse as date
                 if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-                    Ok(SqlValue::Integer(date.year() as i32))
+                    Ok(SqlValue::Integer(date.year()))
                 } else {
                     Err(ProtocolError::PostgresError(format!(
                         "YEAR requires date argument, got: {}",
@@ -1502,10 +1502,10 @@ impl ExpressionEvaluator {
         _case_insensitive: bool,
     ) -> String {
         let mut result = String::new();
-        let mut chars = pattern.chars().peekable();
+        let chars = pattern.chars().peekable();
         let mut escaped = false;
 
-        while let Some(c) = chars.next() {
+        for c in chars {
             if escaped {
                 // Previous character was escape, so this character is literal
                 result.push(c);
@@ -1575,13 +1575,14 @@ impl ExpressionEvaluator {
         let pattern_chars = pattern.chars().peekable();
 
         self.like_match_recursive(
-            &mut text_chars.collect::<Vec<_>>(),
-            &mut pattern_chars.collect::<Vec<_>>(),
+            &text_chars.collect::<Vec<_>>(),
+            &pattern_chars.collect::<Vec<_>>(),
             0,
             0,
         )
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn like_match_recursive(&self, text: &[char], pattern: &[char], ti: usize, pi: usize) -> bool {
         // Base cases
         if pi >= pattern.len() {
@@ -2281,12 +2282,9 @@ impl ExpressionEvaluator {
             // Check if row values <= current values
             let mut is_le = true;
             for (rv, cv) in row_order_values.iter().zip(current_order_values.iter()) {
-                match self.compare_values(rv, cv)? {
-                    Ordering::Greater => {
-                        is_le = false;
-                        break;
-                    }
-                    _ => {}
+                if self.compare_values(rv, cv)? == Ordering::Greater {
+                    is_le = false;
+                    break;
                 }
             }
 
@@ -2466,12 +2464,10 @@ impl ExpressionEvaluator {
             FrameBound::Preceding(expr) => {
                 if let Ok(SqlValue::Integer(n)) = self.evaluate(expr, context) {
                     pos.saturating_sub(n as usize)
+                } else if is_start {
+                    0
                 } else {
-                    if is_start {
-                        0
-                    } else {
-                        pos
-                    }
+                    pos
                 }
             }
             FrameBound::CurrentRow => pos,

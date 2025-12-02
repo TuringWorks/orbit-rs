@@ -245,7 +245,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_spatio_temporal_yield_predictor() {
-        let mut model = SpatioTemporalYieldPredictor::new(10.0);
+        let model = SpatioTemporalYieldPredictor::new(10.0);
         assert_eq!(model.model_type(), "agritech.spatio_temporal_yield");
 
         let predictions = model.predict(&[]).await.unwrap();

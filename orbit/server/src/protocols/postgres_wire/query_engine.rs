@@ -1,7 +1,5 @@
 //! SQL query engine for actor operations
 
-#![cfg(feature = "storage-rocksdb")]
-
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -374,35 +372,35 @@ impl QueryEngine {
             }
             UnifiedExecutionResult::CreateExtension { .. } => QueryResult::Select {
                 columns: vec!["message".to_string()],
-                rows: vec![vec![Some(format!("CREATE EXTENSION"))]],
+                rows: vec![vec![Some("CREATE EXTENSION".to_string())]],
             },
             UnifiedExecutionResult::CreateSchema { .. } => QueryResult::Select {
                 columns: vec!["message".to_string()],
-                rows: vec![vec![Some(format!("CREATE SCHEMA"))]],
+                rows: vec![vec![Some("CREATE SCHEMA".to_string())]],
             },
             UnifiedExecutionResult::CreateView { .. } => QueryResult::Select {
                 columns: vec!["message".to_string()],
-                rows: vec![vec![Some(format!("CREATE VIEW"))]],
+                rows: vec![vec![Some("CREATE VIEW".to_string())]],
             },
             UnifiedExecutionResult::DropTable { .. } => QueryResult::Select {
                 columns: vec!["message".to_string()],
-                rows: vec![vec![Some(format!("DROP TABLE"))]],
+                rows: vec![vec![Some("DROP TABLE".to_string())]],
             },
             UnifiedExecutionResult::DropIndex { .. } => QueryResult::Select {
                 columns: vec!["message".to_string()],
-                rows: vec![vec![Some(format!("DROP INDEX"))]],
+                rows: vec![vec![Some("DROP INDEX".to_string())]],
             },
             UnifiedExecutionResult::DropExtension { .. } => QueryResult::Select {
                 columns: vec!["message".to_string()],
-                rows: vec![vec![Some(format!("DROP EXTENSION"))]],
+                rows: vec![vec![Some("DROP EXTENSION".to_string())]],
             },
             UnifiedExecutionResult::DropSchema { .. } => QueryResult::Select {
                 columns: vec!["message".to_string()],
-                rows: vec![vec![Some(format!("DROP SCHEMA"))]],
+                rows: vec![vec![Some("DROP SCHEMA".to_string())]],
             },
             UnifiedExecutionResult::DropView { .. } => QueryResult::Select {
                 columns: vec!["message".to_string()],
-                rows: vec![vec![Some(format!("DROP VIEW"))]],
+                rows: vec![vec![Some("DROP VIEW".to_string())]],
             },
             UnifiedExecutionResult::Other { message, .. } => {
                 // Return the message from the operation

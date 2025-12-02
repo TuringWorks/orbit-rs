@@ -3,8 +3,6 @@
 //! This module provides adapters that implement GraphStorage trait using
 //! persistent storage backends like CypherGraphStorage.
 
-#![cfg(feature = "storage-rocksdb")]
-
 use crate::protocols::cypher::storage::CypherGraphStorage;
 use orbit_shared::graph::{
     Direction, GraphNode, GraphRelationship, GraphStorage, NodeId, RelationshipId,

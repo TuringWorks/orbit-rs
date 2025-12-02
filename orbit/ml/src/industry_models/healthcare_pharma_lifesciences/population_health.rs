@@ -259,7 +259,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_vaccination_coverage_optimizer() {
-        let mut model = VaccinationCoverageOptimizer::new(50);
+        let model = VaccinationCoverageOptimizer::new(50);
         assert_eq!(
             model.model_type(),
             "population_health.vaccination_optimization"

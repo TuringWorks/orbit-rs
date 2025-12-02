@@ -192,11 +192,11 @@ impl IndustryModel for SepsisRiskPredictor {
 
     async fn train(&mut self, _data: &[u8]) -> Result<ModelMetrics> {
         // Candle Integration: DeepSurv (MLP for Survival Analysis)
-        use candle_core::{DType, Device, Module, Tensor};
+        use candle_core::{DType, Module, Tensor};
         use candle_nn::{Optimizer, VarBuilder, VarMap};
 
         // 1. Setup Device
-        let device = Device::Cpu;
+        let device = super::super::common::get_device();
 
         // 2. Define Model (MLP)
         let varmap = VarMap::new();
@@ -365,7 +365,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ed_wait_time_predictor() {
-        let mut model = EDWaitTimePredictor::new(5);
+        let model = EDWaitTimePredictor::new(5);
         assert_eq!(model.model_type(), "hospital_systems.ed_wait_time");
 
         let predictions = model.predict(&[]).await.unwrap();
@@ -385,7 +385,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_medical_image_segmentation() {
-        let mut model = MedicalImageSegmentation::new("liver".to_string());
+        let model = MedicalImageSegmentation::new("liver".to_string());
         assert_eq!(model.model_type(), "hospital_systems.image_segmentation");
 
         let predictions = model.predict(&[]).await.unwrap();

@@ -167,7 +167,7 @@ mod tests {
     #[tokio::test]
     async fn test_pollution_monitor() {
         let pollutants = vec!["pm2.5".to_string(), "no2".to_string()];
-        let mut model = PollutionMonitor::new(pollutants);
+        let model = PollutionMonitor::new(pollutants);
         assert_eq!(model.model_type(), "environmental.pollution_monitoring");
 
         let predictions = model.predict(&[]).await.unwrap();

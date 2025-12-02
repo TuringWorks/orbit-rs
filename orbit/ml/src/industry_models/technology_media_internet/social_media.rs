@@ -188,7 +188,7 @@ mod tests {
     #[tokio::test]
     async fn test_creator_analytics_engine() {
         let dimensions = vec!["growth".to_string(), "engagement".to_string()];
-        let mut model = CreatorAnalyticsEngine::new(dimensions);
+        let model = CreatorAnalyticsEngine::new(dimensions);
         assert_eq!(model.model_type(), "social_media.creator_analytics");
 
         let predictions = model.predict(&[]).await.unwrap();

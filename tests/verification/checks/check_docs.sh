@@ -10,11 +10,12 @@ echo "🔍 Building documentation..."
 # Set Cargo color output
 export CARGO_TERM_COLOR=always
 
-FEATURES="resp,postgres-wire,cypher,rest"
+# Build documentation with default features
+# Note: The features resp, postgres-wire, cypher, rest don't exist as top-level features
+# The server uses protocol-redis, protocol-postgres, query-cypher, protocol-rest instead
+echo "Running: cargo doc --no-deps"
 
-echo "Running: cargo doc --no-deps --features=\"$FEATURES\""
-
-if cargo doc --no-deps --features="$FEATURES"; then
+if cargo doc --no-deps; then
     echo "✅ Documentation build successful"
     
     # Check if documentation was generated

@@ -129,7 +129,7 @@ mod tests {
     #[tokio::test]
     async fn test_aircraft_maintenance_predictor() {
         let components = vec!["engine".to_string(), "landing_gear".to_string()];
-        let mut model = AircraftMaintenancePredictor::new(components);
+        let model = AircraftMaintenancePredictor::new(components);
         assert_eq!(model.model_type(), "aerospace.predictive_maintenance");
 
         let predictions = model.predict(&[]).await.unwrap();

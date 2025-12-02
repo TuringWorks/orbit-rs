@@ -1137,7 +1137,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         &self,
         assignments: &[PropertyAssignment],
         context: &mut ExecutionContext,
-        result_nodes: &mut Vec<GraphNode>,
+        result_nodes: &mut [GraphNode],
     ) -> ProtocolResult<()> {
         for assignment in assignments {
             // Parse target: variable.property
@@ -1245,7 +1245,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         &self,
         items: &[RemoveItem],
         context: &mut ExecutionContext,
-        result_nodes: &mut Vec<GraphNode>,
+        result_nodes: &mut [GraphNode],
     ) -> ProtocolResult<()> {
         for item in items {
             match item {
@@ -1360,7 +1360,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 let prop_name = item
                     .expression
                     .split('.')
-                    .last()
+                    .next_back()
                     .unwrap_or(&item.expression);
 
                 let val_a = a.properties.get(prop_name);
@@ -1374,11 +1374,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 };
 
                 if cmp != 0 {
-                    let ordering = match cmp.cmp(&0) {
-                        std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
-                        std::cmp::Ordering::Less => std::cmp::Ordering::Less,
-                        std::cmp::Ordering::Equal => std::cmp::Ordering::Equal,
-                    };
+                    let ordering = cmp.cmp(&0);
                     return if item.descending {
                         ordering.reverse()
                     } else {

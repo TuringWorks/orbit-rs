@@ -209,7 +209,7 @@ impl VectorizedExecutor {
     /// per executor instance, avoiding repeated checks on every query.
     fn get_gpu_device_manager(&self) -> &orbit_compute::gpu_backend::GpuDeviceManager {
         self.gpu_device_manager
-            .get_or_init(|| orbit_compute::gpu_backend::GpuDeviceManager::new())
+            .get_or_init(orbit_compute::gpu_backend::GpuDeviceManager::new)
     }
 
     /// Get executor configuration
@@ -1248,9 +1248,9 @@ impl VectorizedExecutor {
                 .execute_filter_f64(data, *val, op)
                 .map_err(|e| EngineError::Internal(format!("GPU filter f64 failed: {}", e)))?,
             _ => {
-                return Err(EngineError::storage(format!(
-                    "Unsupported column type or value mismatch for GPU filtering"
-                )));
+                return Err(EngineError::storage(
+                    "Unsupported column type or value mismatch for GPU filtering".to_string(),
+                ));
             }
         };
 

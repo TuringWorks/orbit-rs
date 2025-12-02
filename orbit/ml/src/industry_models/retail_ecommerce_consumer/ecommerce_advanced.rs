@@ -183,12 +183,12 @@ impl IndustryModel for DemandForecaster {
     }
 
     async fn train(&mut self, _data: &[u8]) -> Result<ModelMetrics> {
-        use candle_core::{DType, Device, IndexOp, Module, Tensor};
+        use candle_core::{DType, IndexOp, Module, Tensor};
         use candle_nn::rnn::LSTMState;
         use candle_nn::{Optimizer, VarBuilder, VarMap, RNN};
 
         // 1. Setup Device
-        let device = Device::Cpu;
+        let device = super::super::common::get_device();
 
         // 2. Define Model (Simple RNN for demand forecasting)
         let varmap = VarMap::new();
@@ -308,7 +308,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_dynamic_pricing_engine() {
-        let mut model = DynamicPricingEngine::new(5000);
+        let model = DynamicPricingEngine::new(5000);
         assert_eq!(model.model_type(), "ecommerce.dynamic_pricing");
 
         let predictions = model.predict(&[]).await.unwrap();

@@ -67,6 +67,12 @@ pub struct TieringCostAnalyzer {
     migration_costs: HashMap<(StorageTier, StorageTier), f64>,
 }
 
+impl Default for TieringCostAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TieringCostAnalyzer {
     pub fn new() -> Self {
         let mut tier_costs = HashMap::new();

@@ -865,17 +865,13 @@ impl CqlAdapter {
                         #[cfg(test)]
                         println!("[CQL] DELETE result: {:?}", result);
                         // Check if DELETE actually deleted rows
-                        match result {
-                            crate::protocols::postgres_wire::QueryResult::Delete { count } => {
-                                #[cfg(test)]
-                                println!("[CQL] DELETE affected {} rows", count);
-                                #[cfg(not(test))]
-                                let _ = count; // Suppress unused variable warning in non-test builds
-                            }
-                            _ => {
-                                #[cfg(test)]
-                                println!("[CQL] DELETE returned unexpected result type");
-                            }
+                        if let crate::protocols::postgres_wire::QueryResult::Delete { count } =
+                            result
+                        {
+                            #[cfg(test)]
+                            println!("[CQL] DELETE affected {} rows", count);
+                            #[cfg(not(test))]
+                            let _ = count; // Suppress unused variable warning in non-test builds
                         }
                         Ok(build_void_result(stream))
                     }

@@ -387,6 +387,7 @@ impl OrbitQLAdapter {
     }
 
     /// Extract field name from expression
+    #[allow(clippy::only_used_in_recursion)]
     fn extract_field_name(&self, expr: &Expression) -> EngineResult<String> {
         match expr {
             Expression::Identifier(name) => Ok(name.clone()),

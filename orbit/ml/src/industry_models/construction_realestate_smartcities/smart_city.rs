@@ -234,7 +234,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_waste_collection_optimizer() {
-        let mut model = WasteCollectionOptimizer::new(500);
+        let model = WasteCollectionOptimizer::new(500);
         assert_eq!(model.model_type(), "smart_city.waste_management");
 
         let predictions = model.predict(&[]).await.unwrap();

@@ -440,7 +440,7 @@ impl TimeSeriesCommands {
         if let Some(dp) = ts.last() {
             Ok(RespValue::Array(vec![
                 RespValue::Integer(dp.timestamp),
-                RespValue::bulk_string_from_str(&dp.value.to_string()),
+                RespValue::bulk_string_from_str(dp.value.to_string()),
             ]))
         } else {
             Ok(RespValue::Array(vec![]))
@@ -518,7 +518,7 @@ impl TimeSeriesCommands {
                         let agg_value = agg.aggregate(values);
                         RespValue::Array(vec![
                             RespValue::Integer(bucket_ts),
-                            RespValue::bulk_string_from_str(&agg_value.to_string()),
+                            RespValue::bulk_string_from_str(agg_value.to_string()),
                         ])
                     })
                     .collect();
@@ -534,7 +534,7 @@ impl TimeSeriesCommands {
                     .map(|dp| {
                         RespValue::Array(vec![
                             RespValue::Integer(dp.timestamp),
-                            RespValue::bulk_string_from_str(&dp.value.to_string()),
+                            RespValue::bulk_string_from_str(dp.value.to_string()),
                         ])
                     })
                     .collect();
@@ -608,7 +608,7 @@ impl TimeSeriesCommands {
                     .map(|dp| {
                         RespValue::Array(vec![
                             RespValue::Integer(dp.timestamp),
-                            RespValue::bulk_string_from_str(&dp.value.to_string()),
+                            RespValue::bulk_string_from_str(dp.value.to_string()),
                         ])
                     })
                     .collect();
@@ -717,7 +717,7 @@ impl TimeSeriesCommands {
 
     /// TS.MADD key timestamp value [key timestamp value ...]
     async fn cmd_ts_madd(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
-        if args.len() < 3 || args.len() % 3 != 0 {
+        if args.len() < 3 || !args.len().is_multiple_of(3) {
             return Err(crate::protocols::error::ProtocolError::RespError(
                 "ERR wrong number of arguments for 'ts.madd' command".to_string(),
             ));

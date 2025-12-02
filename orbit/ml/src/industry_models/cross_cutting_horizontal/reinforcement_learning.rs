@@ -281,7 +281,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ddpg_agent() {
-        let mut model = DDPGAgent::new(12, 3, vec![400, 300], vec![400, 300]);
+        let model = DDPGAgent::new(12, 3, vec![400, 300], vec![400, 300]);
         assert_eq!(model.model_type(), "reinforcement_learning.ddpg");
 
         let predictions = model.predict(&[]).await.unwrap();

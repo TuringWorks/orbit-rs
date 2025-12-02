@@ -14,9 +14,10 @@ use std::collections::HashMap;
 use crate::protocols::postgres_wire::sql::types::SqlValue;
 
 /// Output format for query results
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum OutputFormat {
     /// Pretty table with borders (default)
+    #[default]
     Table,
     /// JSON array of objects
     Json,
@@ -24,12 +25,6 @@ pub enum OutputFormat {
     Csv,
     /// Plain text (tab-separated)
     Plain,
-}
-
-impl Default for OutputFormat {
-    fn default() -> Self {
-        OutputFormat::Table
-    }
 }
 
 /// Format query results as a pretty table
@@ -246,7 +241,7 @@ fn format_as_csv(columns: &[String], rows: &[HashMap<String, SqlValue>]) -> Stri
             .map(|col| {
                 row.get(col)
                     .map(|v| escape_csv_value(&v.to_postgres_string()))
-                    .unwrap_or_else(|| String::new())
+                    .unwrap_or_else(String::new)
             })
             .collect();
         output.push_str(&values.join(","));

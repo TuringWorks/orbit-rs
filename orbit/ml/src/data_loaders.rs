@@ -229,7 +229,7 @@ mod tests {
     fn test_image_data_loader() {
         let paths = vec!["img1.jpg".to_string(), "img2.jpg".to_string()];
         let labels = vec![0, 1];
-        let mut loader = ImageDataLoader::new(paths, labels, 1, false, false);
+        let loader = ImageDataLoader::new(paths, labels, 1, false, false);
 
         assert_eq!(loader.len(), 2);
         assert!(!loader.is_empty());
@@ -238,7 +238,7 @@ mod tests {
     #[test]
     fn test_time_series_data_loader() {
         let data = Array::from_shape_fn((100, 10), |(i, j)| (i + j) as f32);
-        let mut loader = TimeSeriesDataLoader::new(data, 10, 5);
+        let loader = TimeSeriesDataLoader::new(data, 10, 5);
 
         assert!(loader.len() > 0);
     }

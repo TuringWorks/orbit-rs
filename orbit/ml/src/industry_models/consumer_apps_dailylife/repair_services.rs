@@ -167,7 +167,7 @@ mod tests {
     #[tokio::test]
     async fn test_service_demand_forecaster() {
         let services = vec!["hvac".to_string(), "plumbing".to_string()];
-        let mut model = ServiceDemandForecaster::new(services, 30);
+        let model = ServiceDemandForecaster::new(services, 30);
         assert_eq!(model.model_type(), "repair_services.demand_forecasting");
 
         let predictions = model.predict(&[]).await.unwrap();
@@ -186,7 +186,7 @@ mod tests {
     #[tokio::test]
     async fn test_repair_time_estimator() {
         let equipment = vec!["refrigerator".to_string(), "washing_machine".to_string()];
-        let mut model = RepairTimeEstimator::new(equipment);
+        let model = RepairTimeEstimator::new(equipment);
         assert_eq!(model.model_type(), "repair_services.time_estimation");
 
         let predictions = model.predict(&[]).await.unwrap();

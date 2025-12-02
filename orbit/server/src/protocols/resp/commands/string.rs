@@ -154,7 +154,7 @@ impl StringCommands {
                             "ERR invalid expire time in set".to_string(),
                         ));
                     }
-                    ttl_seconds = Some((milliseconds as u64 + 999) / 1000); // Round up to seconds
+                    ttl_seconds = Some((milliseconds as u64).div_ceil(1000)); // Round up to seconds
                     i += 2;
                 }
                 "NX" => {
@@ -310,7 +310,7 @@ impl StringCommands {
         let mut deleted_count = 0i64;
 
         for arg in args {
-            let key = self.get_string_arg(&[arg.clone()], 0, "DEL")?;
+            let key = self.get_string_arg(std::slice::from_ref(arg), 0, "DEL")?;
 
             // Use delete_value method which returns whether the key existed
             match self
@@ -379,7 +379,7 @@ impl StringCommands {
         let mut exists_count = 0i64;
 
         for arg in args {
-            let key = self.get_string_arg(&[arg.clone()], 0, "EXISTS")?;
+            let key = self.get_string_arg(std::slice::from_ref(arg), 0, "EXISTS")?;
 
             let mut found = false;
             match self
@@ -468,7 +468,7 @@ impl StringCommands {
         let mut results = Vec::new();
 
         for arg in args {
-            let key = self.get_string_arg(&[arg.clone()], 0, "MGET")?;
+            let key = self.get_string_arg(std::slice::from_ref(arg), 0, "MGET")?;
 
             match self
                 .base
@@ -495,15 +495,15 @@ impl StringCommands {
     }
 
     async fn cmd_mset(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
-        if args.len() % 2 != 0 {
+        if !args.len().is_multiple_of(2) {
             return Err(ProtocolError::RespError(
                 "ERR wrong number of arguments for 'mset' command".to_string(),
             ));
         }
 
         for chunk in args.chunks(2) {
-            let key = self.get_string_arg(&chunk, 0, "MSET")?;
-            let value = self.get_string_arg(&chunk, 1, "MSET")?;
+            let key = self.get_string_arg(chunk, 0, "MSET")?;
+            let value = self.get_string_arg(chunk, 1, "MSET")?;
 
             let _result = self
                 .base

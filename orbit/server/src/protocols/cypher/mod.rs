@@ -43,7 +43,7 @@ pub use graph_engine::GraphEngine;
 pub use graphrag_procedures::BoltGraphRAGProcedures;
 pub use server::CypherServer;
 #[cfg(feature = "storage-rocksdb")]
-pub use storage::CypherGraphStorage;
+pub use storage::{CypherGraphStorage, CypherStorageProvider};
 pub use types::{GraphNode, GraphRelationship};
 
 // Bolt Protocol v4.4 Implementation Status (see bolt_protocol.rs):

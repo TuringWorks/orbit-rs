@@ -31,13 +31,14 @@ use tokio::task::JoinHandle;
 use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use orbit_server::protocols::aql::{AqlServer, AqlStorage};
+use orbit_server::protocols::aql::{AqlServer, AqlStorage, AqlStorageProvider};
 use orbit_server::protocols::common::storage::tiered::TieredTableStorage;
 use orbit_server::protocols::common::storage::unified::UnifiedTableStorage;
 use orbit_server::protocols::common::storage::TableStorage;
 use orbit_server::protocols::cql::CqlConfig;
-use orbit_server::protocols::cypher::{CypherGraphStorage, CypherServer};
+use orbit_server::protocols::cypher::{CypherGraphStorage, CypherServer, CypherStorageProvider};
 use orbit_server::protocols::mysql::MySqlConfig;
+use orbit_server::protocols::persistence::redis_data::RedisDataProvider;
 use orbit_server::protocols::postgres_wire::sql::execution::hybrid::HybridStorageConfig;
 use orbit_server::protocols::postgres_wire::{QueryEngine, RocksDbTableStorage};
 use orbit_server::protocols::{CqlServer, MySqlServer, PostgresServer, RespServer};
@@ -67,6 +68,15 @@ enum StorageMode {
         /// UnifiedTableStorage adapters for protocol servers that need TableStorage
         postgres_unified: Arc<UnifiedTableStorage>,
         mysql_unified: Arc<UnifiedTableStorage>,
+        cql_unified: Arc<UnifiedTableStorage>,
+        /// UnifiedRedisDataProvider for Redis protocol to share storage with other protocols
+        redis_unified:
+            Arc<orbit_server::protocols::common::storage::unified::UnifiedRedisDataProvider>,
+        /// UnifiedAqlStorage for AQL/ArangoDB protocol to share storage with other protocols
+        aql_unified: Arc<orbit_server::protocols::common::storage::unified::UnifiedAqlStorage>,
+        /// UnifiedCypherStorage for Cypher/Neo4j protocol to share storage with other protocols
+        cypher_unified:
+            Arc<orbit_server::protocols::common::storage::unified::UnifiedCypherStorage>,
     },
 }
 
@@ -334,7 +344,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let unified_storage_enabled = toml_config
         .unified_storage
         .as_ref()
-        .map_or(false, |c| c.enabled);
+        .is_some_and(|c| c.enabled);
 
     let storage_mode = if unified_storage_enabled {
         // Create unified cross-protocol storage
@@ -357,10 +367,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let integration = UnifiedStorageIntegration::with_config(integration_config)
             .await
             .map_err(|e| {
-                Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to initialize unified storage: {}", e),
-                )) as Box<dyn Error>
+                Box::new(std::io::Error::other(format!(
+                    "Failed to initialize unified storage: {}",
+                    e
+                ))) as Box<dyn Error>
             })?;
 
         let integration = Arc::new(integration);
@@ -368,10 +378,39 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // Create UnifiedTableStorage adapters for each SQL protocol
         let postgres_unified = Arc::new(UnifiedTableStorage::postgres(integration.clone()));
         let mysql_unified = Arc::new(UnifiedTableStorage::mysql(integration.clone()));
+        let cql_unified = Arc::new(UnifiedTableStorage::cql(integration.clone()));
+
+        // Create UnifiedRedisDataProvider for Redis protocol
+        let redis_unified_storage = UnifiedTableStorage::redis(integration.clone());
+        let redis_unified = Arc::new(
+            orbit_server::protocols::common::storage::unified::UnifiedRedisDataProvider::new(
+                Arc::new(redis_unified_storage),
+            ),
+        );
+
+        // Create UnifiedAqlStorage for AQL/ArangoDB protocol
+        let aql_unified_storage = UnifiedTableStorage::aql(integration.clone());
+        let aql_unified = Arc::new(
+            orbit_server::protocols::common::storage::unified::UnifiedAqlStorage::new(Arc::new(
+                aql_unified_storage,
+            )),
+        );
+
+        // Create UnifiedCypherStorage for Cypher/Neo4j protocol
+        let cypher_unified_storage = UnifiedTableStorage::cypher(integration.clone());
+        let cypher_unified = Arc::new(
+            orbit_server::protocols::common::storage::unified::UnifiedCypherStorage::new(Arc::new(
+                cypher_unified_storage,
+            )),
+        );
 
         // Initialize the unified storage adapters
         postgres_unified.initialize().await?;
         mysql_unified.initialize().await?;
+        cql_unified.initialize().await?;
+        redis_unified.initialize().await?;
+        aql_unified.initialize().await?;
+        cypher_unified.initialize().await?;
 
         info!("[Storage] Unified storage initialized - cross-protocol data sharing ENABLED");
         info!(
@@ -383,6 +422,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             integration,
             postgres_unified,
             mysql_unified,
+            cql_unified,
+            redis_unified,
+            aql_unified,
+            cypher_unified,
         }
     } else {
         // Create independent tiered storage for each protocol with protocol-specific data directories
@@ -445,29 +488,39 @@ async fn main() -> Result<(), Box<dyn Error>> {
             integration: _,
             postgres_unified,
             mysql_unified,
+            cql_unified,
+            redis_unified: _,
+            aql_unified: _,
+            cypher_unified: _,
         } => {
-            // UnifiedTableStorage adapters are available for TableStorage trait usage
-            // Log that they are ready for use
-            info!("[Storage] UnifiedTableStorage adapters ready:");
-            info!("[Storage]   - PostgreSQL adapter: {} metrics tracked", postgres_unified.dialect());
-            info!("[Storage]   - MySQL adapter: {} metrics tracked", mysql_unified.dialect());
+            // UnifiedTableStorage adapters are available for protocol servers
+            info!("[Storage] Unified storage mode ENABLED - cross-protocol data sharing active:");
+            info!(
+                "[Storage]   - PostgreSQL: using UnifiedTableStorage ({})",
+                postgres_unified.dialect()
+            );
+            info!(
+                "[Storage]   - MySQL: using UnifiedTableStorage ({})",
+                mysql_unified.dialect()
+            );
+            info!(
+                "[Storage]   - CQL: using UnifiedTableStorage ({})",
+                cql_unified.dialect()
+            );
+            info!("[Storage]   - Redis: using UnifiedRedisDataProvider (cross-protocol)");
+            info!("[Storage]   - AQL: using UnifiedAqlStorage (cross-protocol)");
+            info!("[Storage]   - Cypher: using UnifiedCypherStorage (cross-protocol)");
 
-            // However, protocol servers currently expect Arc<TieredTableStorage>
-            // Until refactored to use Arc<dyn TableStorage>, we create TieredTableStorage
-            // instances that operate alongside unified storage
-            // NOTE: This means some operations use unified storage (via UnifiedTableStorage)
-            // while others still use per-protocol storage (via TieredTableStorage)
-            warn!("[Storage] Protocol servers require TieredTableStorage - creating hybrid mode");
-            info!("[Storage] Full unified mode requires protocol server refactoring to use Arc<dyn TableStorage>");
+            // PostgreSQL, MySQL, and CQL use UnifiedTableStorage directly
+            // Redis still uses TieredTableStorage due to different data model (key-value with TTL)
 
-            // Create isolated storage as compatibility layer for protocol servers
-            let postgres_data_dir = args.data_dir.join("postgresql");
             let redis_data_dir = args.data_dir.join("redis");
-            let mysql_data_dir = args.data_dir.join("mysql");
-            let cql_data_dir = args.data_dir.join("cql");
 
             let fallback_tiered_config = HybridStorageConfig::default();
 
+            // PostgreSQL uses UnifiedTableStorage via QueryEngine, but we still need
+            // TieredTableStorage for compatibility with some internal interfaces
+            let postgres_data_dir = args.data_dir.join("postgresql");
             let postgres_storage = Arc::new(TieredTableStorage::with_data_dir(
                 postgres_data_dir,
                 fallback_tiered_config.clone(),
@@ -476,10 +529,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 redis_data_dir,
                 fallback_tiered_config.clone(),
             ));
+            // MySQL and CQL use unified storage directly - these are dummy fallbacks for interfaces
+            let mysql_data_dir = args.data_dir.join("mysql");
             let mysql_storage = Arc::new(TieredTableStorage::with_data_dir(
                 mysql_data_dir,
                 fallback_tiered_config.clone(),
             ));
+            let cql_data_dir = args.data_dir.join("cql");
             let cql_storage = Arc::new(TieredTableStorage::with_data_dir(
                 cql_data_dir,
                 fallback_tiered_config,
@@ -505,11 +561,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .protocols
         .postgresql
         .as_ref()
-        .map_or(true, |c| c.enabled)
+        .is_none_or(|c| c.enabled)
     {
-        let postgres_handle =
-            start_postgresql_server(&args, postgres_storage.clone(), rocksdb_storage.clone())
-                .await?;
+        // Pass unified storage if available for cross-protocol data sharing
+        let unified_postgres = match &storage_mode {
+            StorageMode::Unified {
+                postgres_unified, ..
+            } => Some(postgres_unified.clone()),
+            StorageMode::Isolated { .. } => None,
+        };
+        let postgres_handle = start_postgresql_server(
+            &args,
+            postgres_storage.clone(),
+            rocksdb_storage.clone(),
+            unified_postgres,
+        )
+        .await?;
         protocol_handles.push(postgres_handle);
         info!(
             "[PostgreSQL] PostgreSQL wire protocol server started on port {}",
@@ -522,7 +589,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .protocols
         .redis
         .as_ref()
-        .map_or(true, |c| c.enabled)
+        .is_none_or(|c| c.enabled)
     {
         // Actually, let's just create a new client for Redis specifically.
         // It's cleaner than sharing one if Clone is hard.
@@ -532,10 +599,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
             ..Default::default()
         };
 
+        // Use unified storage if available for cross-protocol data sharing
+        let unified_redis = match &storage_mode {
+            StorageMode::Unified { redis_unified, .. } => Some(redis_unified.clone()),
+            StorageMode::Isolated { .. } => None,
+        };
+
         // We need to create it inside the spawn or before?
         // start_redis_server is async.
-        let redis_handle =
-            start_redis_server(&args, redis_storage.clone(), redis_client_config).await?;
+        let redis_handle = start_redis_server(
+            &args,
+            redis_storage.clone(),
+            redis_client_config,
+            unified_redis,
+        )
+        .await?;
         protocol_handles.push(redis_handle);
         info!(
             "[Redis] Redis RESP protocol server started on port {}",
@@ -548,7 +626,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .protocols
         .mysql
         .as_ref()
-        .map_or(true, |c| c.enabled)
+        .is_none_or(|c| c.enabled)
     {
         let mysql_config = MySqlConfig {
             listen_addr: format!("{}:{}", args.bind, args.mysql_port).parse()?,
@@ -559,7 +637,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
             password: None,
         };
 
-        let mysql_server = MySqlServer::new_with_storage(mysql_config, mysql_storage).await?;
+        // Use unified storage if available for cross-protocol data sharing
+        let unified_mysql = match &storage_mode {
+            StorageMode::Unified { mysql_unified, .. } => Some(mysql_unified.clone()),
+            StorageMode::Isolated { .. } => None,
+        };
+
+        let mysql_server = if let Some(unified) = unified_mysql {
+            info!("[MySQL] Using unified storage for cross-protocol data sharing");
+            MySqlServer::new_with_storage(mysql_config, unified).await?
+        } else {
+            MySqlServer::new_with_storage(mysql_config, mysql_storage).await?
+        };
+
         let mysql_handle = tokio::spawn(async move {
             mysql_server
                 .start()
@@ -574,12 +664,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // Start CQL protocol adapter (port 9042)
-    if toml_config
-        .protocols
-        .cql
-        .as_ref()
-        .map_or(true, |c| c.enabled)
-    {
+    if toml_config.protocols.cql.as_ref().is_none_or(|c| c.enabled) {
         let cql_config = CqlConfig {
             listen_addr: format!("{}:{}", args.bind, args.cql_port).parse()?,
             max_connections: 1000,
@@ -589,7 +674,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
             password: None,
         };
 
-        let cql_server = CqlServer::new_with_storage(cql_config, cql_storage).await?;
+        // Use unified storage if available for cross-protocol data sharing
+        let unified_cql = match &storage_mode {
+            StorageMode::Unified { cql_unified, .. } => Some(cql_unified.clone()),
+            StorageMode::Isolated { .. } => None,
+        };
+
+        let cql_server = if let Some(unified) = unified_cql {
+            info!("[CQL] Using unified storage for cross-protocol data sharing");
+            CqlServer::new_with_storage(cql_config, unified).await?
+        } else {
+            CqlServer::new_with_storage(cql_config, cql_storage).await?
+        };
+
         let cql_handle = tokio::spawn(async move {
             cql_server
                 .start()
@@ -604,11 +701,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // Start Cypher/Neo4j protocol adapter (port 7687)
-    let cypher_data_dir = args.data_dir.join("cypher");
-    let cypher_storage = Arc::new(CypherGraphStorage::new(cypher_data_dir));
-    cypher_storage.initialize().await?;
-
     let cypher_bind_addr = format!("{}:7687", args.bind);
+    let cypher_storage: Arc<dyn CypherStorageProvider> = if unified_storage_enabled {
+        // Use unified storage for cross-protocol data access
+        if let StorageMode::Unified { cypher_unified, .. } = &storage_mode {
+            info!("[Cypher] Using unified storage for cross-protocol data access");
+            cypher_unified.clone()
+        } else {
+            // Fallback to isolated storage
+            let cypher_data_dir = args.data_dir.join("cypher");
+            let storage = Arc::new(CypherGraphStorage::new(cypher_data_dir));
+            storage.initialize().await?;
+            storage
+        }
+    } else {
+        // Use isolated per-protocol storage
+        let cypher_data_dir = args.data_dir.join("cypher");
+        let storage = Arc::new(CypherGraphStorage::new(cypher_data_dir));
+        storage.initialize().await?;
+        storage
+    };
+
     let cypher_server = CypherServer::new_with_storage(cypher_bind_addr, cypher_storage);
     let cypher_handle = tokio::spawn(async move {
         cypher_server
@@ -620,11 +733,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("[Cypher] Cypher/Neo4j protocol adapter started on port 7687");
 
     // Start AQL/ArangoDB protocol adapter (port 8529)
-    let aql_data_dir = args.data_dir.join("aql");
-    let aql_storage = Arc::new(AqlStorage::new(aql_data_dir));
-    aql_storage.initialize().await?;
-
     let aql_bind_addr = format!("{}:8529", args.bind);
+    let aql_storage: Arc<dyn AqlStorageProvider> = if unified_storage_enabled {
+        // Use unified storage for cross-protocol data access
+        if let StorageMode::Unified { aql_unified, .. } = &storage_mode {
+            info!("[AQL] Using unified storage for cross-protocol data access");
+            aql_unified.clone()
+        } else {
+            // Fallback to isolated storage
+            let aql_data_dir = args.data_dir.join("aql");
+            let storage = Arc::new(AqlStorage::new(aql_data_dir));
+            storage.initialize().await?;
+            storage
+        }
+    } else {
+        // Use isolated per-protocol storage
+        let aql_data_dir = args.data_dir.join("aql");
+        let storage = Arc::new(AqlStorage::new(aql_data_dir));
+        storage.initialize().await?;
+        storage
+    };
+
     let aql_server = AqlServer::new_with_storage(aql_bind_addr, aql_storage);
     let aql_handle = tokio::spawn(async move {
         aql_server
@@ -652,7 +781,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .protocols
         .mcp
         .as_ref()
-        .map_or(false, |c| c.enabled)
+        .is_some_and(|c| c.enabled)
     {
         let mcp_handle =
             start_mcp_server(&args, postgres_storage.clone(), rocksdb_storage.clone()).await?;
@@ -802,7 +931,7 @@ async fn initialize_data_directories(data_dir: &PathBuf) -> Result<(), Box<dyn E
 
 /// Initialize RocksDB storage with WAL enabled
 async fn initialize_rocksdb_storage(
-    data_dir: &PathBuf,
+    data_dir: &std::path::Path,
     config: &orbit_server::config::OrbitServerConfig,
 ) -> Result<Arc<RocksDbTableStorage>, Box<dyn Error>> {
     let rocksdb_path = data_dir.join("rocksdb");
@@ -837,7 +966,7 @@ fn configure_tiered_storage(
     use std::time::Duration;
 
     let storage_config = config.storage.as_ref();
-    let tiered_config = storage_config.and_then(|s| Some(&s.tiered));
+    let tiered_config = storage_config.map(|s| &s.tiered);
 
     let hot_to_warm_hours = tiered_config
         .map(|t| t.hot_to_warm_threshold_hours)
@@ -1094,10 +1223,10 @@ async fn initialize_cluster(args: &Args) -> Result<(), Box<dyn Error>> {
 
     // Start the cluster manager (this starts Raft consensus)
     cluster_manager.start(transport).await.map_err(|e| {
-        Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to start cluster manager: {}", e),
-        ))
+        Box::new(std::io::Error::other(format!(
+            "Failed to start cluster manager: {}",
+            e
+        )))
     })?;
 
     info!("[Cluster] Cluster manager started successfully with Raft consensus");
@@ -1115,11 +1244,19 @@ async fn start_postgresql_server(
     args: &Args,
     _storage: Arc<TieredTableStorage>,
     rocksdb: Arc<RocksDbTableStorage>,
+    unified_storage: Option<Arc<UnifiedTableStorage>>,
 ) -> Result<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>, Box<dyn Error>> {
+    use orbit_server::protocols::postgres_wire::persistent_storage::PersistentTableStorage;
+
     let bind_addr = format!("{}:{}", args.bind, args.postgres_port);
 
-    // Create QueryEngine with RocksDB persistence
-    let query_engine = QueryEngine::new_with_persistent_storage(rocksdb);
+    // Create QueryEngine with either unified storage or RocksDB persistence
+    let query_engine = if let Some(unified) = unified_storage {
+        info!("[PostgreSQL] Using unified storage for cross-protocol data sharing");
+        QueryEngine::new_with_persistent_storage(unified as Arc<dyn PersistentTableStorage>)
+    } else {
+        QueryEngine::new_with_persistent_storage(rocksdb)
+    };
 
     // Create PostgreSQL server with query engine
     let postgres_server = PostgresServer::new_with_query_engine(bind_addr, query_engine);
@@ -1203,19 +1340,35 @@ async fn start_redis_server(
     args: &Args,
     _storage: Arc<TieredTableStorage>,
     client_config: orbit_client::OrbitClientConfig,
+    unified_provider: Option<
+        Arc<orbit_server::protocols::common::storage::unified::UnifiedRedisDataProvider>,
+    >,
 ) -> Result<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>, Box<dyn Error>> {
     let bind_addr = format!("{}:{}", args.bind, args.redis_port);
 
-    // Create RocksDB storage for Redis persistence
-    let redis_data_path = args.data_dir.join("redis").join("rocksdb");
-    let redis_provider: Option<Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider>> =
+    // Use unified storage if available, otherwise fall back to RocksDB
+    let redis_provider: Option<
+        Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider>,
+    > = if let Some(unified) = unified_provider {
+        info!("[Redis] Using unified storage for cross-protocol data sharing");
+        Some(
+            unified as Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider>,
+        )
+    } else {
+        // Create RocksDB storage for Redis persistence
+        let redis_data_path = args.data_dir.join("redis").join("rocksdb");
         match orbit_server::protocols::persistence::rocksdb_redis_provider::RocksDbRedisDataProvider::new(
             redis_data_path.to_str().unwrap(),
             orbit_server::protocols::persistence::redis_data::RedisDataConfig::default(),
         ) {
             Ok(provider) => {
-                info!("[Redis] Using persistent RocksDB storage at: {}", redis_data_path.display());
-                let provider_arc: Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider> = Arc::new(provider);
+                info!(
+                    "[Redis] Using persistent RocksDB storage at: {}",
+                    redis_data_path.display()
+                );
+                let provider_arc: Arc<
+                    dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider,
+                > = Arc::new(provider);
                 // Initialize the provider
                 if let Err(e) = orbit_server::protocols::persistence::redis_data::RedisDataProvider::initialize(&*provider_arc).await {
                     warn!("[Redis] Failed to initialize Redis persistent storage: {}. Using in-memory storage.", e);
@@ -1225,10 +1378,14 @@ async fn start_redis_server(
                 }
             }
             Err(e) => {
-                warn!("[Redis] Failed to create Redis persistent storage: {}. Using in-memory storage.", e);
+                warn!(
+                    "[Redis] Failed to create Redis persistent storage: {}. Using in-memory storage.",
+                    e
+                );
                 None
             }
-        };
+        }
+    };
 
     // Create OrbitClient in offline mode - no network connection needed
     // The orbit_client is reserved for future use in CommandHandler but not currently used

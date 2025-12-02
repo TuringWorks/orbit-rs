@@ -44,8 +44,10 @@
 //! - **Write-through**: Writes go to Hot + Warm for durability
 //! - **Read-through**: Misses in Hot tier fetch from Warm/Cold
 
+use super::s3_backend::{S3Backend, S3BackendConfig};
 use super::storage::{
-    MemoryBackend, UnifiedStorageBackend, UnifiedStorageMetrics, UnifiedStorageResult,
+    MemoryBackend, UnifiedStorageBackend, UnifiedStorageError, UnifiedStorageMetrics,
+    UnifiedStorageResult,
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -77,9 +79,10 @@ impl std::fmt::Display for StorageTier {
 }
 
 /// Eviction policy for hot tier
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum EvictionPolicy {
     /// Least Recently Used
+    #[default]
     Lru,
     /// Least Frequently Used
     Lfu,
@@ -89,27 +92,16 @@ pub enum EvictionPolicy {
     Adaptive,
 }
 
-impl Default for EvictionPolicy {
-    fn default() -> Self {
-        Self::Lru
-    }
-}
-
 /// Write policy for tiered storage
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum WritePolicy {
     /// Write to hot tier and warm tier simultaneously (best durability)
+    #[default]
     WriteThrough,
     /// Write to hot tier, asynchronously sync to warm tier (best performance)
     WriteBack,
     /// Write only to warm tier, populate hot tier on read
     WriteAround,
-}
-
-impl Default for WritePolicy {
-    fn default() -> Self {
-        Self::WriteThrough
-    }
 }
 
 /// Configuration for hot tier (memory)
@@ -227,9 +219,10 @@ impl Default for ColdTierConfig {
 }
 
 /// Cold storage backend types
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ColdBackendType {
     /// Amazon S3
+    #[default]
     S3,
     /// Azure Blob Storage
     Azure,
@@ -241,16 +234,11 @@ pub enum ColdBackendType {
     Local,
 }
 
-impl Default for ColdBackendType {
-    fn default() -> Self {
-        Self::S3
-    }
-}
-
 /// Data format for cold storage
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ColdDataFormat {
     /// Apache Parquet columnar format
+    #[default]
     Parquet,
     /// Apache Iceberg table format
     Iceberg,
@@ -258,12 +246,6 @@ pub enum ColdDataFormat {
     JsonLines,
     /// MessagePack binary format
     MessagePack,
-}
-
-impl Default for ColdDataFormat {
-    fn default() -> Self {
-        Self::Parquet
-    }
 }
 
 /// Configuration for automatic tier migration
@@ -405,8 +387,8 @@ pub struct TieredStorageBackend {
     hot_tier: Arc<RwLock<HashMap<String, Vec<u8>>>>,
     /// Warm tier (RocksDB-backed, using memory for now)
     warm_tier: Arc<MemoryBackend>,
-    /// Cold tier (cloud-backed, using memory for now)
-    cold_tier: Arc<MemoryBackend>,
+    /// Cold tier (cloud-backed, can be S3Backend or MemoryBackend)
+    cold_tier: Arc<dyn UnifiedStorageBackend + Send + Sync>,
     /// Entry metadata for tier management
     metadata: Arc<RwLock<HashMap<String, EntryMetadata>>>,
     /// Tiered metrics
@@ -423,11 +405,58 @@ impl TieredStorageBackend {
             config.hot_tier.enabled, config.warm_tier.enabled, config.cold_tier.enabled
         );
 
+        // Create cold tier backend based on configuration
+        let cold_tier: Arc<dyn UnifiedStorageBackend + Send + Sync> = if config.cold_tier.enabled {
+            match config.cold_tier.backend {
+                ColdBackendType::S3 | ColdBackendType::MinIO => {
+                    // Create S3Backend configuration
+                    let s3_config = S3BackendConfig {
+                        endpoint: config.cold_tier.endpoint.clone().unwrap_or_else(|| {
+                            if config.cold_tier.backend == ColdBackendType::MinIO {
+                                "http://localhost:9000".to_string()
+                            } else {
+                                format!(
+                                    "https://s3.{}.amazonaws.com",
+                                    config
+                                        .cold_tier
+                                        .region
+                                        .as_ref()
+                                        .unwrap_or(&"us-east-1".to_string())
+                                )
+                            }
+                        }),
+                        access_key_id: config.cold_tier.access_key.clone().unwrap_or_default(),
+                        secret_access_key: config.cold_tier.secret_key.clone().unwrap_or_default(),
+                        region: config
+                            .cold_tier
+                            .region
+                            .clone()
+                            .unwrap_or_else(|| "us-east-1".to_string()),
+                        bucket: config.cold_tier.bucket.clone(),
+                        prefix: config.cold_tier.prefix.clone(),
+                        path_style_access: config.cold_tier.backend == ColdBackendType::MinIO,
+                    };
+                    info!(
+                        "[TieredStorage] Creating S3/MinIO cold tier backend: bucket={}",
+                        s3_config.bucket
+                    );
+                    Arc::new(S3Backend::new(s3_config))
+                }
+                _ => {
+                    info!("[TieredStorage] Using memory backend for cold tier (not S3/MinIO)");
+                    Arc::new(MemoryBackend::new())
+                }
+            }
+        } else {
+            info!("[TieredStorage] Cold tier disabled, using memory backend");
+            Arc::new(MemoryBackend::new())
+        };
+
         Self {
             config,
             hot_tier: Arc::new(RwLock::new(HashMap::new())),
             warm_tier: Arc::new(MemoryBackend::new()),
-            cold_tier: Arc::new(MemoryBackend::new()),
+            cold_tier,
             metadata: Arc::new(RwLock::new(HashMap::new())),
             tiered_metrics: Arc::new(RwLock::new(TieredStorageMetrics::default())),
             hot_tier_size: Arc::new(RwLock::new(0)),
@@ -627,6 +656,67 @@ impl TieredStorageBackend {
     /// Try to get from cold tier
     async fn get_from_cold(&self, key: &str) -> UnifiedStorageResult<Option<Vec<u8>>> {
         self.cold_tier.get(key).await
+    }
+
+    /// Archive an entry from warm tier to cold tier
+    ///
+    /// This moves data from the warm tier to the cold tier for long-term storage.
+    /// The entry is removed from warm tier after successful archival to cold tier.
+    pub async fn archive_to_cold(&self, key: &str) -> UnifiedStorageResult<()> {
+        if !self.config.cold_tier.enabled {
+            return Err(UnifiedStorageError::InvalidOperation(
+                "Cold tier is not enabled".to_string(),
+            ));
+        }
+
+        // Get from warm tier
+        let value = self.warm_tier.get(key).await?;
+        let value = match value {
+            Some(v) => v,
+            None => {
+                // Try hot tier as fallback
+                if let Some(v) = self.get_from_hot(key).await {
+                    v
+                } else {
+                    return Err(UnifiedStorageError::NotFound {
+                        namespace: "tiered".to_string(),
+                        key: key.to_string(),
+                    });
+                }
+            }
+        };
+
+        // Write to cold tier
+        self.cold_tier.put(key, &value).await?;
+
+        // Remove from warm tier
+        self.warm_tier.delete(key).await?;
+
+        // Remove from hot tier if present
+        {
+            let mut hot = self.hot_tier.write().await;
+            if let Some(old_value) = hot.remove(key) {
+                let mut size = self.hot_tier_size.write().await;
+                *size = size.saturating_sub(old_value.len());
+            }
+        }
+
+        // Update metadata
+        {
+            let mut metadata = self.metadata.write().await;
+            if let Some(meta) = metadata.get_mut(key) {
+                meta.tier = StorageTier::Cold;
+            }
+        }
+
+        // Update metrics
+        {
+            let mut metrics = self.tiered_metrics.write().await;
+            metrics.archivals += 1;
+        }
+
+        debug!("[TieredStorage] Archived key {} to cold tier", key);
+        Ok(())
     }
 }
 
@@ -863,16 +953,12 @@ impl UnifiedStorageBackend for TieredStorageBackend {
             }
         }
 
-        if self.config.warm_tier.enabled {
-            if self.warm_tier.delete(key).await? {
-                deleted = true;
-            }
+        if self.config.warm_tier.enabled && self.warm_tier.delete(key).await? {
+            deleted = true;
         }
 
-        if self.config.cold_tier.enabled {
-            if self.cold_tier.delete(key).await? {
-                deleted = true;
-            }
+        if self.config.cold_tier.enabled && self.cold_tier.delete(key).await? {
+            deleted = true;
         }
 
         // Remove metadata
@@ -1078,8 +1164,10 @@ mod tests {
     #[tokio::test]
     async fn test_write_policies() {
         // Test write-through
-        let mut config = TieredStorageConfig::default();
-        config.write_policy = WritePolicy::WriteThrough;
+        let config = TieredStorageConfig {
+            write_policy: WritePolicy::WriteThrough,
+            ..Default::default()
+        };
         let backend = TieredStorageBackend::new(config);
         backend.initialize().await.unwrap();
 
@@ -1091,8 +1179,10 @@ mod tests {
         backend.shutdown().await.unwrap();
 
         // Test write-around
-        let mut config = TieredStorageConfig::default();
-        config.write_policy = WritePolicy::WriteAround;
+        let config = TieredStorageConfig {
+            write_policy: WritePolicy::WriteAround,
+            ..Default::default()
+        };
         config.hot_tier.enabled = false; // Disable hot tier for write-around test
         let backend = TieredStorageBackend::new(config);
         backend.initialize().await.unwrap();

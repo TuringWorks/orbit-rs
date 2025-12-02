@@ -3,7 +3,7 @@
 //! Comprehensive ML models for technology and media including:
 //! - Software & SaaS
 //! - Internet Platforms & Marketplaces
-//! Technology, Media & Internet industry models
+//!   Technology, Media & Internet industry models
 //!
 //! Comprehensive ML models for technology and media including:
 //! - Consumer Electronics

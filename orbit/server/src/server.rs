@@ -274,7 +274,7 @@ impl OrbitServer {
                             // Use the same data directory structure as the server but with postgresql subdirectory
                             let pg_data_path = "./orbit_integrated_data/postgresql";
 
-                            match RocksDbTableStorage::new(&pg_data_path) {
+                            match RocksDbTableStorage::new(pg_data_path) {
                                 Ok(storage) => {
                                     tracing::info!(
                                         "PostgreSQL using persistent RocksDB storage at: {}",
