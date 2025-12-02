@@ -30,7 +30,7 @@ async fn test_ai_master_controller_initialization() {
     let _controller = AIMasterController::initialize(config).await.unwrap();
 
     // Controller should be initialized
-    assert!(true); // Basic initialization test
+    // Basic initialization test
 }
 
 #[tokio::test]

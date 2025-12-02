@@ -452,7 +452,7 @@ async fn test_data_type_preservation() {
         UniversalValue::String("types_test".to_string()),
     );
     row.insert("int_val".to_string(), UniversalValue::Int(42));
-    row.insert("float_val".to_string(), UniversalValue::Float(3.14159));
+    row.insert("float_val".to_string(), UniversalValue::Float(1.23));
     row.insert("bool_val".to_string(), UniversalValue::Bool(true));
     row.insert("null_val".to_string(), UniversalValue::Null);
     row.insert(
@@ -470,10 +470,7 @@ async fn test_data_type_preservation() {
         .unwrap();
 
     assert_eq!(fields.get("int_val"), Some(&UniversalValue::Int(42)));
-    assert_eq!(
-        fields.get("float_val"),
-        Some(&UniversalValue::Float(3.14159))
-    );
+    assert_eq!(fields.get("float_val"), Some(&UniversalValue::Float(1.23)));
     assert_eq!(fields.get("bool_val"), Some(&UniversalValue::Bool(true)));
     assert_eq!(fields.get("null_val"), Some(&UniversalValue::Null));
     assert_eq!(

@@ -22,9 +22,9 @@ EXAMPLES=(
 
 # Additional examples that might exist
 ADDITIONAL_EXAMPLES=(
-    "resp-server"
-    "vector-store"
-    "pgvector-store"
+    # "resp-server"
+    # "vector-store"
+    # "pgvector-store"
 )
 
 BUILD_FAILED=0

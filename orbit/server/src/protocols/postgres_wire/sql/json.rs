@@ -19,7 +19,7 @@ pub enum JsonPathElement {
     Key(String),
     /// Array element access by index
     Index(usize),
-    /// Array slice [start:end]
+    /// Array slice \[start:end\]
     Slice {
         start: Option<usize>,
         end: Option<usize>,
@@ -38,7 +38,7 @@ pub struct JsonPath {
 
 impl JsonPath {
     /// Create a new JSON path from a string array
-    /// Example: ["key1", "0", "key2"] for $.key1[0].key2
+    /// Example: ["key1", "0", "key2"] for $.key1\[0\].key2
     pub fn from_text_array(path: &[String]) -> ProtocolResult<Self> {
         let mut elements = Vec::new();
 

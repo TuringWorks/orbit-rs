@@ -285,7 +285,7 @@ mod tests {
     fn test_auth_plugin_conversion() {
         assert_eq!(AuthPlugin::NativePassword.as_str(), "mysql_native_password");
         assert_eq!(
-            AuthPlugin::from_str("mysql_native_password"),
+            AuthPlugin::parse_str("mysql_native_password"),
             Some(AuthPlugin::NativePassword)
         );
     }

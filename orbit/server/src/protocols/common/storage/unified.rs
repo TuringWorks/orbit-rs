@@ -984,8 +984,8 @@ mod tests {
             UniversalValue::Int(42)
         );
         assert_eq!(
-            UnifiedTableStorage::sql_to_universal(&SqlValue::DoublePrecision(3.14)),
-            UniversalValue::Float(3.14)
+            UnifiedTableStorage::sql_to_universal(&SqlValue::DoublePrecision(std::f64::consts::PI)),
+            UniversalValue::Float(std::f64::consts::PI)
         );
         assert_eq!(
             UnifiedTableStorage::sql_to_universal(&SqlValue::Text("hello".to_string())),
@@ -1009,8 +1009,8 @@ mod tests {
             SqlValue::BigInt(42)
         );
         assert_eq!(
-            UnifiedTableStorage::universal_to_sql(&UniversalValue::Float(3.14)),
-            SqlValue::DoublePrecision(3.14)
+            UnifiedTableStorage::universal_to_sql(&UniversalValue::Float(std::f64::consts::PI)),
+            SqlValue::DoublePrecision(std::f64::consts::PI)
         );
         assert_eq!(
             UnifiedTableStorage::universal_to_sql(&UniversalValue::String("hello".to_string())),

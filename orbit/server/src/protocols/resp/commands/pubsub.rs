@@ -6,7 +6,7 @@
 //! - UNSUBSCRIBE [channel ...] - Unsubscribe from channels
 //! - PSUBSCRIBE pattern [pattern ...] - Subscribe to channels matching patterns
 //! - PUNSUBSCRIBE [pattern ...] - Unsubscribe from pattern subscriptions
-//! - PUBSUB subcommand [args] - Introspection commands
+//! - PUBSUB subcommand \[args\] - Introspection commands
 
 use super::traits::{BaseCommandHandler, CommandHandler};
 use crate::protocols::{error::ProtocolResult, resp::RespValue};

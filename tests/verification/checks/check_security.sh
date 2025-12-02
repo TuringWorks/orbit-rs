@@ -42,7 +42,7 @@ echo ""
 
 # Run cargo deny check with timeout
 print_info "Running: cargo deny check"
-if deny_output=$(run_with_timeout "$TIMEOUT_SECONDS" cargo deny check 2>&1); then
+if deny_output=$(run_with_timeout "$TIMEOUT_SECONDS" cargo deny check --config config/deny.toml 2>&1); then
     print_success "Cargo deny check passed"
 else
     exit_code=$?

@@ -1181,9 +1181,12 @@ mod tests {
         // Test write-around
         let config = TieredStorageConfig {
             write_policy: WritePolicy::WriteAround,
+            hot_tier: HotTierConfig {
+                enabled: false,
+                ..Default::default()
+            },
             ..Default::default()
         };
-        config.hot_tier.enabled = false; // Disable hot tier for write-around test
         let backend = TieredStorageBackend::new(config);
         backend.initialize().await.unwrap();
 

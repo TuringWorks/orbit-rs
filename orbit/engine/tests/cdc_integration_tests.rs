@@ -754,11 +754,8 @@ async fn test_cdc_high_throughput() {
 
     // Verify we can receive all events
     let mut received_count = 0;
-    loop {
-        match tokio::time::timeout(Duration::from_millis(50), stream.next()).await {
-            Ok(Some(_)) => received_count += 1,
-            _ => break,
-        }
+    while let Ok(Some(_)) = tokio::time::timeout(Duration::from_millis(50), stream.next()).await {
+        received_count += 1;
     }
 
     assert_eq!(received_count, event_count);

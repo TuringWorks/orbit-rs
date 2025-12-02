@@ -54,7 +54,7 @@ pub struct TieredTableStorage {
     /// Configuration for hot/warm/cold tiers
     config: HybridStorageConfig,
 
-    /// RocksDB instance for persistent storage (wrapped in Arc<RwLock> for async access)
+    /// RocksDB instance for persistent storage (wrapped in `Arc<RwLock>` for async access)
     db: Arc<RwLock<Option<Arc<DB>>>>,
 
     /// Data directory path

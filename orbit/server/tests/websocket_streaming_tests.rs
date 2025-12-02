@@ -24,7 +24,7 @@ fn test_websocket_handler_creation() {
     // We can verify it's properly initialized by creating a default one
     let _default_handler = WebSocketHandler::default();
 
-    assert!(true, "WebSocketHandler created successfully");
+    // WebSocketHandler created successfully
 }
 
 #[test]
@@ -36,7 +36,7 @@ fn test_websocket_handler_default() {
     // (We can't compare internal state, but we verify they construct properly)
     drop(handler1);
     drop(handler2);
-    assert!(true, "Both new() and default() create valid handlers");
+    // Both new() and default() create valid handlers
 }
 
 // ============================================================================
@@ -344,7 +344,7 @@ async fn test_event_broadcaster_creation() {
 
     // Broadcaster should be created successfully
     drop(broadcaster);
-    assert!(true, "EventBroadcaster created successfully");
+    // EventBroadcaster created successfully
 }
 
 #[tokio::test]

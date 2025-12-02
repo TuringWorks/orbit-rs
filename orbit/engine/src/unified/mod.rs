@@ -25,10 +25,10 @@
 //!
 //! # Key Components
 //!
-//! - [`UniversalValue`]: A canonical data type that all protocols map to/from
-//! - [`UniversalOperation`]: Protocol-agnostic operations (CRUD, queries, etc.)
-//! - [`UnifiedStorage`]: Single storage backend shared by all protocols
-//! - [`SchemaRegistry`]: Manages namespace schemas and cross-protocol projections
+//! - [`types::UniversalValue`]: A canonical data type that all protocols map to/from
+//! - [`operations::UniversalOperation`]: Protocol-agnostic operations (CRUD, queries, etc.)
+//! - [`storage::UnifiedStorage`]: Single storage backend shared by all protocols
+//! - [`schema::SchemaRegistry`]: Manages namespace schemas and cross-protocol projections
 //! - Protocol Adapters: Translate between protocol-specific and universal formats
 //!
 //! # Example

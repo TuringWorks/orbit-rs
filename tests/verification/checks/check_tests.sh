@@ -12,7 +12,7 @@ export CARGO_TERM_COLOR=always
 export RUST_BACKTRACE=1
 
 TEST_TYPE="${1:-workspace}"
-FEATURES="resp,postgres-wire,cypher,rest"
+FEATURES="protocol-redis,protocol-postgres,query-cypher,protocol-rest"
 
 if [ "$TEST_TYPE" = "workspace" ]; then
     echo "Running: cargo test --workspace --verbose"
@@ -23,8 +23,8 @@ if [ "$TEST_TYPE" = "workspace" ]; then
         exit 1
     fi
 elif [ "$TEST_TYPE" = "features" ]; then
-    echo "Running: cargo test --verbose --features=\"$FEATURES\""
-    if cargo test --verbose --features="$FEATURES"; then
+    echo "Running: cargo test -p orbit-server --verbose --features=\"$FEATURES\""
+    if cargo test -p orbit-server --verbose --features="$FEATURES"; then
         echo "✅ Feature tests passed"
     else
         echo "❌ Feature tests failed"
@@ -37,8 +37,8 @@ elif [ "$TEST_TYPE" = "all" ]; then
         exit 1
     fi
     
-    echo "Running: cargo test --verbose --features=\"$FEATURES\""
-    if ! cargo test --verbose --features="$FEATURES"; then
+    echo "Running: cargo test -p orbit-server --verbose --features=\"$FEATURES\""
+    if ! cargo test -p orbit-server --verbose --features="$FEATURES"; then
         echo "❌ Feature tests failed"
         exit 1
     fi

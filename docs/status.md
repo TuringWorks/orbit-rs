@@ -20,9 +20,9 @@ permalink: /status/
 ##  Navigation
 
 - [ **Documentation Home**](index.md)
-- [ **Development Roadmap**](roadmap.md)
+- [ **Development Roadmap**](content/roadmap/roadmap.md)
 - [ **Quick Start**](quick_start.md)
-- [ **Architecture**](architecture/ORBIT_ARCHITECTURE.md)
+- [ **Architecture**](content/architecture/ORBIT_ARCHITECTURE.md)
 
 ---
 
@@ -323,7 +323,7 @@ Access real-time development metrics:
 <div class="footer-nav" markdown="1">
 
 ** Navigation:**  
-[ Home](index.md) | [ Roadmap](roadmap.md) | [ Architecture](architecture/ORBIT_ARCHITECTURE.md) | [ Quick Start](quick_start.md)
+[ Home](index.md) | [ Roadmap](content/roadmap/roadmap.md) | [ Architecture](content/architecture/ORBIT_ARCHITECTURE.md) | [ Quick Start](quick_start.md)
 
 ** Quick Links:**  
 [GitHub](https://github.com/TuringWorks/orbit-rs) | [Discord](https://discord.gg/orbit-rs) | [Documentation](index.md)

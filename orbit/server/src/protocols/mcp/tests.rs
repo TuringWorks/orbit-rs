@@ -1,7 +1,7 @@
 //! Comprehensive test suite for MCP protocol
 
 #[cfg(test)]
-mod tests {
+mod mcp_tests {
     use super::super::handlers;
     use super::super::server::McpServer;
     use super::super::types::{McpError, McpRequest, McpResponse};
@@ -62,7 +62,7 @@ mod tests {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("resources").is_some());
                 let resources = result.get("resources").and_then(|v| v.as_array()).unwrap();
-                assert!(resources.len() > 0);
+                assert!(!resources.is_empty());
             }
             _ => panic!("Expected success response"),
         }
@@ -160,7 +160,7 @@ mod tests {
             McpResponse::Success { result, .. } => {
                 assert!(result.get("prompts").is_some());
                 let prompts = result.get("prompts").and_then(|v| v.as_array()).unwrap();
-                assert!(prompts.len() > 0);
+                assert!(!prompts.is_empty());
             }
             _ => panic!("Expected success response"),
         }
@@ -302,7 +302,7 @@ mod tests {
         let _server = McpServer::new(config, capabilities);
 
         // Server should be created successfully
-        assert!(true); // Just verify it doesn't panic
+        // Just verify it doesn't panic
     }
 
     #[tokio::test]

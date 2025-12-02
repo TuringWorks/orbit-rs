@@ -770,6 +770,7 @@ impl TokenParser {
         let mut assignments = Vec::new();
 
         // Parse comma-separated list of property assignments
+        #[allow(clippy::while_let_loop)]
         loop {
             if let Some(Token::Identifier(var)) = self.current_token() {
                 let var = var.clone();
