@@ -94,16 +94,16 @@ async fn cleanup_lingering_instances() {
     // Wait for processes to terminate with retry loop (up to 5 seconds)
     let start = std::time::Instant::now();
     let timeout = Duration::from_secs(5);
-    
+
     while start.elapsed() < timeout {
         let orbit_processes = get_matching_processes("orbit-server");
         let multi_processes = get_matching_processes("multi-protocol-server");
         let count = orbit_processes.len() + multi_processes.len();
-        
+
         if count == 0 {
             return;
         }
-        
+
         // Retry kill if still running
         kill_process_by_name("orbit-server");
         kill_process_by_name("multi-protocol-server");
