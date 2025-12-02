@@ -15,6 +15,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **ML Protocol Integration Documentation & Examples** (2025-12-02): Comprehensive guide for using ML capabilities across all protocols
+  - **Documentation** (`docs/content/ml/ML_PROTOCOL_INTEGRATION.md`)
+    - PostgreSQL ML SQL functions: `ML_TRAIN_MODEL`, `ML_PREDICT`, `ML_KMEANS`, `ML_EMBED_TEXT`, `ML_CORRELATION`
+    - Redis ML commands: `ML.CREATE`, `ML.TRAIN`, `ML.PREDICT`, `ML.EMBED`, `ML.SEARCH.SEMANTIC`
+    - MySQL ML functions with stored procedure syntax
+    - CQL ML UDFs for Cassandra-compatible queries
+    - HTTP REST API endpoints for model management and inference
+    - gRPC service definitions for ML operations
+    - Industry models across 28 verticals (healthcare, finance, retail, etc.)
+  - **Examples** (`orbit-examples/ml-protocol-examples/`)
+    - Python: `postgresql_ml.py`, `redis_ml.py`, `rest_ml.py`
+    - JavaScript: `redis_ml.js` (Node.js with redis client)
+    - SQL: `ml_training.sql`, `ml_inference.sql`, `ml_vectors.sql`
+  - **BDD Tests** (`tests/bdd/features/ml_protocol_integration.feature`)
+    - 40+ Gherkin scenarios covering all protocols
+    - Model management, predictions, vector operations
+    - Cross-protocol consistency verification
+    - Error handling and performance scenarios
+
 - **S3/MinIO Cold Storage Backend** (2025-12-01): Production-ready S3-compatible storage for tiered architecture
   - **S3Backend Implementation** (`orbit-engine/src/unified/s3_backend.rs`)
     - Full `UnifiedStorageBackend` trait implementation using OpenDAL
