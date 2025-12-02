@@ -47,7 +47,7 @@ impl ServerConnectionService {
 
                 tokio::spawn(async move {
                     while let Some(msg) = bridge_rx.recv().await {
-                        if let Err(_) = tx_clone.send(msg).await {
+                        if (tx_clone.send(msg).await).is_err() {
                             break;
                         }
                     }

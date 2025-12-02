@@ -310,7 +310,7 @@ impl StringCommands {
         let mut deleted_count = 0i64;
 
         for arg in args {
-            let key = self.get_string_arg(&[arg.clone()], 0, "DEL")?;
+            let key = self.get_string_arg(std::slice::from_ref(arg), 0, "DEL")?;
 
             // Use delete_value method which returns whether the key existed
             match self
@@ -379,7 +379,7 @@ impl StringCommands {
         let mut exists_count = 0i64;
 
         for arg in args {
-            let key = self.get_string_arg(&[arg.clone()], 0, "EXISTS")?;
+            let key = self.get_string_arg(std::slice::from_ref(arg), 0, "EXISTS")?;
 
             let mut found = false;
             match self
@@ -468,7 +468,7 @@ impl StringCommands {
         let mut results = Vec::new();
 
         for arg in args {
-            let key = self.get_string_arg(&[arg.clone()], 0, "MGET")?;
+            let key = self.get_string_arg(std::slice::from_ref(arg), 0, "MGET")?;
 
             match self
                 .base

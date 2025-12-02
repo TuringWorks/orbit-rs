@@ -1293,10 +1293,8 @@ impl CypherFunctions {
         match &args[0] {
             Value::Object(obj) => {
                 // If path, return number of relationships
-                if let Some(rels) = obj.get("_relationships") {
-                    if let Value::Array(arr) = rels {
-                        return Ok(json!(arr.len()));
-                    }
+                if let Some(Value::Array(arr)) = obj.get("_relationships") {
+                    return Ok(json!(arr.len()));
                 }
                 Ok(json!(0))
             }
@@ -1315,10 +1313,8 @@ impl CypherFunctions {
                 if let Some(node) = obj.get("_startNode") {
                     return Ok(node.clone());
                 }
-                if let Some(nodes) = obj.get("_nodes") {
-                    if let Value::Array(arr) = nodes {
-                        return Ok(arr.first().cloned().unwrap_or(Value::Null));
-                    }
+                if let Some(Value::Array(arr)) = obj.get("_nodes") {
+                    return Ok(arr.first().cloned().unwrap_or(Value::Null));
                 }
                 Ok(Value::Null)
             }
@@ -1335,10 +1331,8 @@ impl CypherFunctions {
                 if let Some(node) = obj.get("_endNode") {
                     return Ok(node.clone());
                 }
-                if let Some(nodes) = obj.get("_nodes") {
-                    if let Value::Array(arr) = nodes {
-                        return Ok(arr.last().cloned().unwrap_or(Value::Null));
-                    }
+                if let Some(Value::Array(arr)) = obj.get("_nodes") {
+                    return Ok(arr.last().cloned().unwrap_or(Value::Null));
                 }
                 Ok(Value::Null)
             }
@@ -1596,8 +1590,9 @@ pub struct FunctionContext {
     /// Current variable bindings
     pub variables: HashMap<String, Value>,
     /// Node lookup function (if available)
+    #[allow(clippy::type_complexity)]
     pub node_lookup: Option<Box<dyn Fn(&str) -> Option<Value> + Send + Sync>>,
-    /// Relationship lookup function (if available)
+    #[allow(clippy::type_complexity)]
     pub relationship_lookup: Option<Box<dyn Fn(&str) -> Option<Value> + Send + Sync>>,
 }
 

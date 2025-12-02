@@ -24,7 +24,7 @@ impl AuthPlugin {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_str(s: &str) -> Option<Self> {
         match s {
             "mysql_native_password" => Some(AuthPlugin::NativePassword),
             "mysql_clear_password" => Some(AuthPlugin::ClearPassword),

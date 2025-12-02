@@ -898,9 +898,11 @@ impl BoltProtocolHandler {
     }
 
     /// Decode RUN message using PackStream decoder
-    fn decode_run(
+    #[allow(clippy::type_complexity)]
+    fn process_cypher_query(
         &mut self,
-        bytes: &Bytes,
+        query: &str,
+        params: HashMap<String, Value>,
     ) -> ProtocolResult<(String, HashMap<String, Value>, HashMap<String, Value>)> {
         // RUN is a structure with signature 0x10 containing: query (string), params (map), extra (map)
         // Format: 0xB3 0x10 <string> <map> <map>
@@ -1576,6 +1578,7 @@ impl BoltProtocolHandler {
     }
 
     /// Encode a JSON value as PackStream
+    #[allow(clippy::only_used_in_recursion)]
     fn encode_packstream_value(&self, value: &Value, buf: &mut BytesMut) {
         match value {
             Value::Null => {

@@ -1137,7 +1137,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         &self,
         assignments: &[PropertyAssignment],
         context: &mut ExecutionContext,
-        result_nodes: &mut Vec<GraphNode>,
+        result_nodes: &mut [GraphNode],
     ) -> ProtocolResult<()> {
         for assignment in assignments {
             // Parse target: variable.property
@@ -1245,7 +1245,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         &self,
         items: &[RemoveItem],
         context: &mut ExecutionContext,
-        result_nodes: &mut Vec<GraphNode>,
+        result_nodes: &mut [GraphNode],
     ) -> ProtocolResult<()> {
         for item in items {
             match item {

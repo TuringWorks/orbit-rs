@@ -95,7 +95,7 @@ pub enum UniversalOperation {
         filter: Option<FilterExpression>,
         group_by: Vec<String>,
         aggregations: Vec<AggregateOp>,
-        having: Option<FilterExpression>,
+        having: Option<Box<FilterExpression>>,
         order_by: Option<Vec<(String, SortOrder)>>,
         limit: Option<usize>,
     },
@@ -424,7 +424,7 @@ impl FilterExpression {
     }
 
     /// Create a NOT expression
-    pub fn not(self) -> FilterExpression {
+    pub fn negate(self) -> FilterExpression {
         FilterExpression::Not(Box::new(self))
     }
 }

@@ -249,6 +249,7 @@ impl AqlQueryEngine {
     }
 
     /// Evaluate an AQL expression
+    #[allow(clippy::only_used_in_recursion)]
     fn evaluate_expression(
         &self,
         expression: &AqlExpression,

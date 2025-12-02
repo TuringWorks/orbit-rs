@@ -3,7 +3,7 @@
 //! This module provides integration between the MCP server and Orbit-RS's
 //! PostgreSQL wire protocol and query engine.
 
-#![cfg(feature = "storage-rocksdb")]
+
 
 use crate::protocols::mcp::result_processor::{QueryResult as McpQueryResult, Row};
 use crate::protocols::mcp::sql_generator::GeneratedQuery;

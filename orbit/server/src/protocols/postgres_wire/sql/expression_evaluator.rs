@@ -1582,6 +1582,7 @@ impl ExpressionEvaluator {
         )
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn like_match_recursive(&self, text: &[char], pattern: &[char], ti: usize, pi: usize) -> bool {
         // Base cases
         if pi >= pattern.len() {

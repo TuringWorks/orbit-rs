@@ -238,7 +238,7 @@ impl PersistentStringCommands {
         let mut deleted_count = 0i64;
 
         for arg in args {
-            let key = self.get_string_arg(&[arg.clone()], 0, "DEL")?;
+            let key = self.get_string_arg(std::slice::from_ref(arg), 0, "DEL")?;
 
             match self.redis_provider.delete(&key).await {
                 Ok(true) => deleted_count += 1,
@@ -261,7 +261,7 @@ impl PersistentStringCommands {
         let mut exists_count = 0i64;
 
         for arg in args {
-            let key = self.get_string_arg(&[arg.clone()], 0, "EXISTS")?;
+            let key = self.get_string_arg(std::slice::from_ref(arg), 0, "EXISTS")?;
 
             match self.redis_provider.exists(&key).await {
                 Ok(true) => exists_count += 1,
@@ -297,7 +297,7 @@ impl PersistentStringCommands {
 
         let keys: Result<Vec<String>, _> = args
             .iter()
-            .map(|arg| self.get_string_arg(&[arg.clone()], 0, "MGET"))
+            .map(|arg| self.get_string_arg(std::slice::from_ref(arg), 0, "MGET"))
             .collect();
         let keys = keys?;
 

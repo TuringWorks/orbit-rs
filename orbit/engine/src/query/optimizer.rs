@@ -283,6 +283,7 @@ impl QueryOptimizer {
     }
 
     /// Check if filter uses numeric comparison
+    #[allow(clippy::only_used_in_recursion)]
     fn filter_uses_numeric_comparison(&self, filter: &FilterPredicate) -> bool {
         match filter {
             FilterPredicate::Eq(_, val)
@@ -316,6 +317,7 @@ impl QueryOptimizer {
     }
 
     /// Estimate filter selectivity (fraction of rows that pass filter)
+    #[allow(clippy::only_used_in_recursion)]
     fn estimate_selectivity(&self, filter: &FilterPredicate) -> f64 {
         match filter {
             // Equality is typically very selective

@@ -745,17 +745,12 @@ impl TokenParser {
         let mut variables = Vec::new();
 
         // Parse comma-separated list of variables to delete
-        loop {
-            if let Some(Token::Identifier(var)) = self.current_token() {
-                variables.push(var.clone());
-                self.advance();
+        while let Some(Token::Identifier(var)) = self.current_token() {
+            variables.push(var.clone());
+            self.advance();
 
-                // Check for comma
-                if matches!(self.current_token(), Some(Token::Comma)) {
-                    self.advance();
-                } else {
-                    break;
-                }
+            if let Some(Token::Comma) = self.current_token() {
+                self.advance();
             } else {
                 break;
             }
@@ -871,55 +866,46 @@ impl TokenParser {
         let mut items = Vec::new();
 
         // Parse comma-separated list of items to remove
-        loop {
-            if let Some(Token::Identifier(var)) = self.current_token() {
-                let var = var.clone();
+        while let Some(Token::Identifier(var)) = self.current_token() {
+            let var = var.clone();
+            self.advance();
+
+            if let Some(Token::Dot) = self.current_token() {
                 self.advance();
-
-                match self.current_token() {
-                    Some(Token::Dot) => {
-                        // Remove property: var.property
-                        self.advance();
-                        if let Some(Token::Identifier(prop)) = self.current_token() {
-                            items.push(RemoveItem::Property {
-                                variable: var,
-                                property: prop.clone(),
-                            });
-                            self.advance();
-                        } else {
-                            return Err(ProtocolError::CypherError(
-                                "Expected property name after '.'".to_string(),
-                            ));
-                        }
-                    }
-                    Some(Token::Colon) => {
-                        // Remove label: var:Label
-                        self.advance();
-                        if let Some(Token::Identifier(label)) = self.current_token() {
-                            items.push(RemoveItem::Label {
-                                variable: var,
-                                label: label.clone(),
-                            });
-                            self.advance();
-                        } else {
-                            return Err(ProtocolError::CypherError(
-                                "Expected label name after ':'".to_string(),
-                            ));
-                        }
-                    }
-                    _ => {
-                        return Err(ProtocolError::CypherError(
-                            "Expected '.' or ':' after variable in REMOVE clause".to_string(),
-                        ));
-                    }
-                }
-
-                // Check for comma
-                if matches!(self.current_token(), Some(Token::Comma)) {
+                if let Some(Token::Identifier(prop)) = self.current_token() {
+                    let prop = prop.clone();
                     self.advance();
+                    items.push(RemoveItem::Property {
+                        variable: var,
+                        property: prop,
+                    });
                 } else {
-                    break;
+                    return Err(ProtocolError::ParsingError(
+                        "Expected property name after dot".to_string(),
+                    ));
                 }
+            } else if let Some(Token::Colon) = self.current_token() {
+                self.advance();
+                if let Some(Token::Identifier(label)) = self.current_token() {
+                    let label = label.clone();
+                    self.advance();
+                    items.push(RemoveItem::Label {
+                        variable: var,
+                        label,
+                    });
+                } else {
+                    return Err(ProtocolError::ParsingError(
+                        "Expected label name after colon".to_string(),
+                    ));
+                }
+            } else {
+                return Err(ProtocolError::ParsingError(
+                    "Expected . or : after variable in REMOVE clause".to_string(),
+                ));
+            }
+
+            if let Some(Token::Comma) = self.current_token() {
+                self.advance();
             } else {
                 break;
             }
@@ -941,44 +927,40 @@ impl TokenParser {
         let mut items = Vec::new();
 
         // Parse comma-separated list of order by items
-        loop {
-            if let Some(Token::Identifier(expr)) = self.current_token() {
-                let mut expression = expr.clone();
+        while let Some(Token::Identifier(expr)) = self.current_token() {
+            let mut expression = expr.clone();
+            self.advance();
+
+            // Check for property access (var.property)
+            if matches!(self.current_token(), Some(Token::Dot)) {
                 self.advance();
-
-                // Check for property access (var.property)
-                if matches!(self.current_token(), Some(Token::Dot)) {
+                if let Some(Token::Identifier(prop)) = self.current_token() {
+                    expression = format!("{}.{}", expression, prop);
                     self.advance();
-                    if let Some(Token::Identifier(prop)) = self.current_token() {
-                        expression = format!("{}.{}", expression, prop);
-                        self.advance();
-                    }
                 }
+            }
 
-                // Check for direction
-                let descending = match self.current_token() {
-                    Some(Token::Desc) => {
-                        self.advance();
-                        true
-                    }
-                    Some(Token::Asc) => {
-                        self.advance();
-                        false
-                    }
-                    _ => false,
-                };
-
-                items.push(OrderByItem {
-                    expression,
-                    descending,
-                });
-
-                // Check for comma
-                if matches!(self.current_token(), Some(Token::Comma)) {
+            // Check for direction
+            let descending = match self.current_token() {
+                Some(Token::Desc) => {
                     self.advance();
-                } else {
-                    break;
+                    true
                 }
+                Some(Token::Asc) => {
+                    self.advance();
+                    false
+                }
+                _ => false,
+            };
+
+            items.push(OrderByItem {
+                expression,
+                descending,
+            });
+
+            // Check for comma
+            if matches!(self.current_token(), Some(Token::Comma)) {
+                self.advance();
             } else {
                 break;
             }
@@ -1041,16 +1023,11 @@ impl TokenParser {
 
         // Parse procedure name (may have dots, e.g., orbit.graph.pagerank)
         let mut procedure = String::new();
-        loop {
-            match self.current_token() {
-                Some(Token::Identifier(name)) => {
-                    procedure.push_str(name);
-                    self.advance();
-                }
-                _ => break,
-            }
-            // Check for dot continuation
-            if matches!(self.current_token(), Some(Token::Dot)) {
+        while let Some(Token::Identifier(name)) = self.current_token() {
+            procedure.push_str(name);
+            self.advance();
+
+            if let Some(Token::Dot) = self.current_token() {
                 procedure.push('.');
                 self.advance();
             } else {
@@ -1096,15 +1073,11 @@ impl TokenParser {
         let yield_items = if matches!(self.current_token(), Some(Token::Yield)) {
             self.advance();
             let mut items = Vec::new();
-            loop {
-                match self.current_token() {
-                    Some(Token::Identifier(name)) => {
-                        items.push(name.clone());
-                        self.advance();
-                    }
-                    _ => break,
-                }
-                if matches!(self.current_token(), Some(Token::Comma)) {
+            while let Some(Token::Identifier(name)) = self.current_token() {
+                items.push(name.clone());
+                self.advance();
+
+                if let Some(Token::Comma) = self.current_token() {
                     self.advance();
                 } else {
                     break;

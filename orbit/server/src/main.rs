@@ -935,7 +935,7 @@ async fn initialize_data_directories(data_dir: &PathBuf) -> Result<(), Box<dyn E
 
 /// Initialize RocksDB storage with WAL enabled
 async fn initialize_rocksdb_storage(
-    data_dir: &PathBuf,
+    data_dir: &std::path::Path,
     config: &orbit_server::config::OrbitServerConfig,
 ) -> Result<Arc<RocksDbTableStorage>, Box<dyn Error>> {
     let rocksdb_path = data_dir.join("rocksdb");

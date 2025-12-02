@@ -1,6 +1,6 @@
 //! SQL query engine for actor operations
 
-#![cfg(feature = "storage-rocksdb")]
+
 
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;

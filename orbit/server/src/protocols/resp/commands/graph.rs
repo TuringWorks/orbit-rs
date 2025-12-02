@@ -508,10 +508,10 @@ impl GraphCommands {
         let query = self.get_string_arg(args, 1, "GRAPH.EXPLAIN")?;
 
         // Return a simplified execution plan
-        let plan = [format!("Results"),
-            format!("    Project"),
-            format!("        Filter"),
-            format!("            Node By Label Scan | (n:*)")];
+        let plan = ["Results".to_string(),
+            "    Project".to_string(),
+            "        Filter".to_string(),
+            "            Node By Label Scan | (n:*)".to_string()];
 
         let plan_resp: Vec<RespValue> = plan
             .iter()

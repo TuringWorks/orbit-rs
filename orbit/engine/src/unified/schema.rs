@@ -578,6 +578,7 @@ impl SchemaRegistry {
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn cql_type(&self, field_type: &FieldType) -> String {
         match field_type {
             FieldType::Bool => "boolean".to_string(),

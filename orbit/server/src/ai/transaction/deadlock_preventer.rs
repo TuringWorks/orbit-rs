@@ -235,6 +235,7 @@ impl DeadlockPreventer {
     }
 
     /// DFS for cycle detection
+    #[allow(clippy::only_used_in_recursion)]
     fn dfs_cycle_detection(
         &self,
         tx_id: TransactionId,
