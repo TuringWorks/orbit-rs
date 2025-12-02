@@ -23,6 +23,7 @@ pub mod postgres_wire;
 pub mod resp;
 pub mod rest;
 pub mod time_series;
+pub mod vector_index;
 pub mod vector_store;
 
 // Server wrappers (these use the protocol implementations above)

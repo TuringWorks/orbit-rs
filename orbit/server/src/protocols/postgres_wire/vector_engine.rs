@@ -2,6 +2,8 @@
 //!
 //! This module extends the PostgreSQL query engine with pgvector compatibility,
 //! supporting vector data types, similarity operators, and vector functions.
+//!
+//! Supports HNSW and IVFFlat indexes for efficient approximate nearest neighbor search.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -9,11 +11,9 @@ use tokio::sync::RwLock;
 
 use super::query_engine::QueryResult;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
-use crate::protocols::vector_store::{
-    SimilarityMetric, Vector, VectorActor, VectorIndexConfig, VectorSearchParams,
-};
+use crate::protocols::vector_index::VectorIndex;
+use crate::protocols::vector_store::{SimilarityMetric, Vector};
 use orbit_client::OrbitClient;
-use orbit_shared::Key;
 
 /// Vector table schema definition
 #[derive(Debug, Clone)]
@@ -41,9 +41,14 @@ pub enum VectorColumnType {
 
 /// pgvector-compatible query engine
 pub struct VectorQueryEngine {
+    #[allow(dead_code)] // Reserved for future actor-based operations
     orbit_client: OrbitClient,
     tables: Arc<RwLock<HashMap<String, VectorTable>>>,
     extensions: Arc<RwLock<HashMap<String, bool>>>, // installed extensions
+    /// Vector indexes keyed by "table_column" name
+    indexes: Arc<RwLock<HashMap<String, VectorIndex>>>,
+    /// Stored vectors for tables without explicit indexes (table_name -> vectors)
+    table_vectors: Arc<RwLock<HashMap<String, HashMap<String, Vector>>>>,
 }
 
 impl VectorQueryEngine {
@@ -53,6 +58,8 @@ impl VectorQueryEngine {
             orbit_client,
             tables: Arc::new(RwLock::new(HashMap::new())),
             extensions: Arc::new(RwLock::new(HashMap::new())),
+            indexes: Arc::new(RwLock::new(HashMap::new())),
+            table_vectors: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -206,6 +213,7 @@ impl VectorQueryEngine {
     async fn handle_create_vector_index(&self, sql: &str) -> ProtocolResult<QueryResult> {
         // Example: CREATE INDEX ON documents USING ivfflat (embedding vector_cosine_ops);
         // Example: CREATE INDEX ON documents USING hnsw (embedding vector_l2_ops);
+        // Example: CREATE INDEX idx_name ON documents USING hnsw (embedding vector_l2_ops) WITH (m = 16, ef_construction = 64);
 
         let sql_upper = sql.to_uppercase();
 
@@ -225,7 +233,7 @@ impl VectorQueryEngine {
             ProtocolError::PostgresError("Missing column specification".to_string())
         })?;
 
-        let _index_method = using_part[..paren_idx].trim();
+        let index_method = using_part[..paren_idx].trim().to_lowercase();
 
         // Extract column and operator class
         let close_paren = using_part.rfind(')').ok_or_else(|| {
@@ -234,14 +242,18 @@ impl VectorQueryEngine {
         let column_spec = &using_part[paren_idx + 1..close_paren];
 
         let column_parts: Vec<&str> = column_spec.split_whitespace().collect();
-        if column_parts.len() < 2 {
+        if column_parts.is_empty() {
             return Err(ProtocolError::PostgresError(
                 "Invalid column specification".to_string(),
             ));
         }
 
         let column_name = column_parts[0];
-        let operator_class = column_parts[1];
+        let operator_class = if column_parts.len() > 1 {
+            column_parts[1]
+        } else {
+            "vector_cosine_ops"
+        };
 
         // Map pgvector operator classes to similarity metrics
         let similarity_metric = match operator_class.to_lowercase().as_str() {
@@ -251,30 +263,67 @@ impl VectorQueryEngine {
             _ => SimilarityMetric::Cosine, // Default
         };
 
-        // Get vector actor for the table
-        let vector_actor_ref = self
-            .orbit_client
-            .actor_reference::<VectorActor>(Key::StringKey {
-                key: format!("table_{table_name}"),
-            })
-            .await
-            .map_err(ProtocolError::failed_to_get_actor)?;
+        // Get dimension from table schema
+        let tables = self.tables.read().await;
+        let dimension = if let Some(table) = tables.get(&table_name) {
+            table
+                .columns
+                .iter()
+                .find(|c| c.name.to_lowercase() == column_name.to_lowercase())
+                .and_then(|c| c.dimension)
+                .unwrap_or(384)
+        } else {
+            384 // Default dimension
+        };
+        drop(tables);
 
-        // Create vector index
-        let index_name = format!("{table_name}_{column_name}_idx");
-        let index_config = VectorIndexConfig::new(
-            index_name,
-            384, // Default dimension - should be extracted from table schema
-            similarity_metric,
-        );
+        // Create the actual vector index
+        let index_name = format!("{}_{}", table_name, column_name);
+        let index = match index_method.as_str() {
+            "hnsw" => {
+                // Parse WITH options if present (m, ef_construction)
+                let m = 16; // Default
+                let ef_construction = 64; // Default
+                VectorIndex::hnsw(
+                    index_name.clone(),
+                    dimension,
+                    similarity_metric,
+                    m,
+                    ef_construction,
+                )
+            }
+            "ivfflat" => {
+                // Parse WITH options if present (lists)
+                let n_lists = 100; // Default
+                VectorIndex::ivfflat(index_name.clone(), dimension, similarity_metric, n_lists)
+            }
+            _ => {
+                // Default to brute force for unknown index types
+                VectorIndex::brute_force(index_name.clone(), dimension, similarity_metric)
+            }
+        };
 
-        let config_value =
-            serde_json::to_value(index_config).map_err(ProtocolError::serialization_error)?;
+        // Store the index
+        let mut indexes = self.indexes.write().await;
+        indexes.insert(index_name.clone(), index);
+        drop(indexes);
 
-        vector_actor_ref
-            .invoke::<()>("create_index", vec![config_value])
-            .await
-            .map_err(|e| ProtocolError::actor_error(format!("Index creation failed: {e}")))?;
+        // Also add any existing vectors from table_vectors to the index
+        let table_vectors = self.table_vectors.read().await;
+        let existing_vectors: Vec<Vector> = table_vectors
+            .get(&table_name)
+            .map(|v| v.values().cloned().collect())
+            .unwrap_or_default();
+        drop(table_vectors);
+
+        if !existing_vectors.is_empty() {
+            let mut indexes = self.indexes.write().await;
+            if let Some(idx) = indexes.get_mut(&index_name) {
+                for vector in existing_vectors {
+                    let _ = idx.insert(vector);
+                }
+            }
+        }
 
         Ok(QueryResult::Select {
             columns: vec!["message".to_string()],
@@ -304,17 +353,8 @@ impl VectorQueryEngine {
             table_part.trim().to_string()
         };
 
-        // Get vector actor for the table
-        let vector_actor_ref = self
-            .orbit_client
-            .actor_reference::<VectorActor>(Key::StringKey {
-                key: format!("table_{table_name}"),
-            })
-            .await
-            .map_err(ProtocolError::failed_to_get_actor)?;
-
         // Parse column names and values
-        let columns = if let Some(idx) = paren_idx {
+        let columns: Vec<String> = if let Some(idx) = paren_idx {
             let close_paren = table_part.find(')').ok_or_else(|| {
                 ProtocolError::PostgresError("Missing closing parenthesis".to_string())
             })?;
@@ -341,6 +381,7 @@ impl VectorQueryEngine {
             let mut vector_data: Vec<f32> = Vec::new();
             let mut metadata = HashMap::new();
             let mut vector_id = uuid::Uuid::new_v4().to_string();
+            let mut vector_column_name: Option<String> = None;
 
             for (col, val) in columns.iter().zip(values.iter()) {
                 let col_lower = col.to_lowercase();
@@ -350,6 +391,7 @@ impl VectorQueryEngine {
                 } else if col_lower.contains("embedding") || col_lower.contains("vector") {
                     // Parse vector data
                     vector_data = self.parse_vector_literal(val)?;
+                    vector_column_name = Some(col.clone());
                 } else {
                     // Store as metadata
                     metadata.insert(col.clone(), val.clone());
@@ -357,16 +399,24 @@ impl VectorQueryEngine {
             }
 
             if !vector_data.is_empty() {
-                let vector = Vector::with_metadata(vector_id, vector_data, metadata);
-                let vector_value =
-                    serde_json::to_value(vector).map_err(ProtocolError::serialization_error)?;
+                let vector = Vector::with_metadata(vector_id.clone(), vector_data, metadata);
 
-                vector_actor_ref
-                    .invoke::<()>("add_vector", vec![vector_value])
-                    .await
-                    .map_err(|e| {
-                        ProtocolError::actor_error(format!("Vector insertion failed: {e}"))
-                    })?;
+                // Store in table_vectors
+                let mut table_vectors = self.table_vectors.write().await;
+                let vectors = table_vectors.entry(table_name.clone()).or_default();
+                vectors.insert(vector_id.clone(), vector.clone());
+                drop(table_vectors);
+
+                // Insert into any applicable index
+                if let Some(col_name) = vector_column_name {
+                    let index_name = format!("{}_{}", table_name, col_name);
+                    let mut indexes = self.indexes.write().await;
+                    if let Some(index) = indexes.get_mut(&index_name) {
+                        index.insert(vector.clone()).map_err(|e| {
+                            ProtocolError::PostgresError(format!("Index insert failed: {e}"))
+                        })?;
+                    }
+                }
             }
         }
 
@@ -404,10 +454,14 @@ impl VectorQueryEngine {
         let table_name = from_part
             .split_whitespace()
             .next()
-            .ok_or_else(|| ProtocolError::PostgresError("Missing table name".to_string()))?;
+            .ok_or_else(|| ProtocolError::PostgresError("Missing table name".to_string()))?
+            .to_string();
+
+        // Extract vector column name from the query (before the operator)
+        let vector_column = self.extract_vector_column_from_query(sql)?;
 
         // Extract similarity operator and query vector
-        let (similarity_metric, query_vector) = if sql.contains("<->") {
+        let (_similarity_metric, query_vector) = if sql.contains("<->") {
             let parts: Vec<&str> = sql.split("<->").collect();
             if parts.len() < 2 {
                 return Err(ProtocolError::PostgresError(
@@ -461,49 +515,98 @@ impl VectorQueryEngine {
             10
         };
 
-        // Get vector actor for the table
-        let vector_actor_ref = self
-            .orbit_client
-            .actor_reference::<VectorActor>(Key::StringKey {
-                key: format!("table_{table_name}"),
-            })
-            .await
-            .map_err(ProtocolError::failed_to_get_actor)?;
+        // Try to use an index if available
+        let index_name = format!("{}_{}", table_name, vector_column);
+        let indexes = self.indexes.read().await;
 
-        // Perform similarity search
-        let search_params = VectorSearchParams::new(query_vector, similarity_metric, limit);
-        let search_params_value =
-            serde_json::to_value(search_params).map_err(ProtocolError::serialization_error)?;
+        let results = if let Some(index) = indexes.get(&index_name) {
+            // Use index for efficient search
+            let search_results = index.search(&query_vector, limit);
+            drop(indexes);
 
-        let results: serde_json::Value = vector_actor_ref
-            .invoke("search_vectors", vec![search_params_value])
-            .await
-            .map_err(|e| ProtocolError::actor_error(format!("Search failed: {e}")))?;
+            // Get metadata from table_vectors for each result
+            let table_vectors = self.table_vectors.read().await;
+            let vectors = table_vectors.get(&table_name);
+
+            search_results
+                .into_iter()
+                .map(|(id, distance)| {
+                    let metadata = vectors
+                        .and_then(|v| v.get(&id))
+                        .map(|v| v.metadata.clone())
+                        .unwrap_or_default();
+                    (id, distance, metadata)
+                })
+                .collect::<Vec<_>>()
+        } else {
+            drop(indexes);
+
+            // Fall back to brute-force search on table_vectors
+            let table_vectors = self.table_vectors.read().await;
+            if let Some(vectors) = table_vectors.get(&table_name) {
+                let mut results: Vec<(String, f32, HashMap<String, String>)> = vectors
+                    .values()
+                    .map(|v| {
+                        let distance =
+                            crate::protocols::vector_store::VectorSimilarity::euclidean_distance(
+                                &query_vector,
+                                &v.data,
+                            );
+                        (v.id.clone(), distance, v.metadata.clone())
+                    })
+                    .collect();
+
+                results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+                results.truncate(limit);
+                results
+            } else {
+                Vec::new()
+            }
+        };
 
         // Convert results to QueryResult
         let mut rows = Vec::new();
-        if let Some(results_array) = results.as_array() {
-            for result in results_array {
-                if let Some(result_obj) = result.as_object() {
-                    let vector_id = result_obj
-                        .get("vector")
-                        .and_then(|v| v.get("id"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("unknown");
-                    let score = result_obj
-                        .get("score")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(0.0);
+        for (id, distance, metadata) in results {
+            // Build row with id, distance, and any requested metadata columns
+            let content = metadata.get("content").cloned().unwrap_or_default();
+            rows.push(vec![
+                Some(id),
+                Some(content),
+                Some(format!("{:.6}", distance)),
+            ]);
+        }
 
-                    rows.push(vec![Some(vector_id.to_string()), Some(score.to_string())]);
+        Ok(QueryResult::Select {
+            columns: vec![
+                "id".to_string(),
+                "content".to_string(),
+                "distance".to_string(),
+            ],
+            rows,
+        })
+    }
+
+    /// Extract vector column name from a query
+    fn extract_vector_column_from_query(&self, sql: &str) -> ProtocolResult<String> {
+        // Look for column name before similarity operators
+        for op in ["<->", "<=>", "<#>"] {
+            if let Some(idx) = sql.find(op) {
+                let before_op = &sql[..idx];
+                // Find the last word before the operator
+                let words: Vec<&str> = before_op.split_whitespace().collect();
+                if let Some(last_word) = words.last() {
+                    // Clean up the column name (remove any leading comma or punctuation)
+                    let col_name =
+                        last_word.trim_matches(|c: char| !c.is_alphanumeric() && c != '_');
+                    if !col_name.is_empty() {
+                        return Ok(col_name.to_lowercase());
+                    }
                 }
             }
         }
 
-        Ok(QueryResult::Select {
-            columns: vec!["id".to_string(), "distance".to_string()],
-            rows,
-        })
+        // Default to "embedding" if not found
+        Ok("embedding".to_string())
     }
 
     /// Handle vector functions like vector_dims()
