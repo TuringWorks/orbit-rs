@@ -30,15 +30,8 @@ python3 run_tests.py --protocols postgresql redis
 ```
 
 ### Prerequisites
-Make sure to install dependencies for the protocols you intend to test. Each subdirectory has its own `requirements.txt`.
-To install all dependencies:
+The script will automatically install necessary Python dependencies for the selected protocols.
+If you wish to skip automatic installation, use the `--skip-install` flag:
 ```bash
-pip install -r postgresql/requirements.txt
-pip install -r aql/requirements.txt
-pip install -r cql/requirements.txt
-pip install -r neo4j/requirements.txt
-pip install -r mongodb/requirements.txt
-pip install -r mysql/requirements.txt
-pip install -r redis/requirements.txt
-pip install -r orbitql/requirements.txt
+python3 run_tests.py --skip-install
 ```
