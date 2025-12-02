@@ -192,11 +192,11 @@ impl IndustryModel for SepsisRiskPredictor {
 
     async fn train(&mut self, _data: &[u8]) -> Result<ModelMetrics> {
         // Candle Integration: DeepSurv (MLP for Survival Analysis)
-        use candle_core::{DType, Device, Module, Tensor};
+        use candle_core::{DType, Module, Tensor};
         use candle_nn::{Optimizer, VarBuilder, VarMap};
 
         // 1. Setup Device
-        let device = Device::Cpu;
+        let device = super::super::common::get_device();
 
         // 2. Define Model (MLP)
         let varmap = VarMap::new();

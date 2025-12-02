@@ -183,12 +183,12 @@ impl IndustryModel for DemandForecaster {
     }
 
     async fn train(&mut self, _data: &[u8]) -> Result<ModelMetrics> {
-        use candle_core::{DType, Device, IndexOp, Module, Tensor};
+        use candle_core::{DType, IndexOp, Module, Tensor};
         use candle_nn::rnn::LSTMState;
         use candle_nn::{Optimizer, VarBuilder, VarMap, RNN};
 
         // 1. Setup Device
-        let device = Device::Cpu;
+        let device = super::super::common::get_device();
 
         // 2. Define Model (Simple RNN for demand forecasting)
         let varmap = VarMap::new();

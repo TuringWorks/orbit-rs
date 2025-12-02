@@ -4,6 +4,24 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
 
+/// Get the best available device for ML operations
+#[cfg(feature = "candle-core")]
+pub fn get_device() -> candle_core::Device {
+    use candle_core::Device;
+    
+    #[cfg(feature = "gpu-metal")]
+    if let Ok(device) = Device::new_metal(0) {
+        return device;
+    }
+    
+    #[cfg(feature = "gpu")]
+    if let Ok(device) = Device::new_cuda(0) {
+        return device;
+    }
+    
+    Device::Cpu
+}
+
 /// Result type for industry model operations
 pub type Result<T> = std::result::Result<T, IndustryModelError>;
 

@@ -39,11 +39,11 @@ impl IndustryModel for FraudDetectionModel {
 
     async fn train(&mut self, _data: &[u8]) -> Result<ModelMetrics> {
         // Candle Integration: Fraud Detection (GNN/GCN)
-        use candle_core::{DType, Device, Module, Tensor};
+        use candle_core::{DType, Module, Tensor};
         use candle_nn::{Optimizer, VarBuilder, VarMap};
 
         // 1. Setup Device
-        let device = Device::Cpu;
+        let device = super::super::common::get_device();
 
         // 2. Define Model (Simple GCN Layer)
         let varmap = VarMap::new();
