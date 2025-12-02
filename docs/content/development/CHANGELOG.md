@@ -11,9 +11,134 @@ All notable changes to the Orbit-RS project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-11-30
+## [Unreleased] - 2025-12-01
 
 ### Added
+
+- **S3/MinIO Cold Storage Backend** (2025-12-01): Production-ready S3-compatible storage for tiered architecture
+  - **S3Backend Implementation** (`orbit-engine/src/unified/s3_backend.rs`)
+    - Full `UnifiedStorageBackend` trait implementation using OpenDAL
+    - Support for MinIO (on-premises) and AWS S3 (cloud) configurations
+    - Path-style access for MinIO compatibility
+    - Complete CRUD operations: `get`, `put`, `delete`, `exists`
+    - Prefix scanning with `scan_prefix` for efficient range queries
+    - Batch operations: `put_batch`, `delete_batch` for bulk data movement
+    - Operational metrics tracking (read/write/delete/error counts)
+  - **TieredStorageBackend Enhancements**
+    - New `archive_to_cold()` method for explicit cold tier archival
+    - Integration with S3Backend for cold tier storage
+    - Seamless tier migration: Hot → Warm → Cold
+    - Cold tier recall with automatic promotion to hot tier
+  - **Comprehensive Integration Tests** (`orbit-engine/tests/tiered_storage_minio_tests.rs`)
+    - S3 basic operations (put, get, delete, exists)
+    - Scan prefix operations across cold storage
+    - Hot → Warm propagation with eviction
+    - Warm → Cold archival workflow
+    - Cold tier recall and automatic promotion
+    - Multi-tier consistency verification
+    - Batch operations across tiers
+    - Cross-tier scan functionality
+    - Metrics accuracy validation
+    - Graceful shutdown handling
+  - **Configuration Options**
+    - `S3BackendConfig` with endpoint, access key, secret key, region, bucket
+    - Convenience constructors: `minio()`, `aws_s3()`, `minio_default()`
+    - Configurable path prefix for data organization
+
+  **Usage Example:**
+  ```bash
+  # Start MinIO
+  docker run -p 9000:9000 -p 9001:9001 minio/minio server /data --console-address ":9001"
+
+  # Create bucket
+  docker exec -it <container> mc mb /data/orbit-cold-storage
+
+  # Run tests
+  cargo test -p orbit-engine tiered_storage_minio -- --ignored
+  ```
+
+  **Files Added:**
+  - `orbit/engine/src/unified/s3_backend.rs` - S3 backend implementation (410 lines)
+  - `orbit/engine/tests/tiered_storage_minio_tests.rs` - Integration tests (450 lines)
+
+  **Files Modified:**
+  - `orbit/engine/Cargo.toml` - Added `services-s3` feature to opendal
+  - `orbit/engine/src/unified/mod.rs` - Added s3_backend module exports
+  - `orbit/engine/src/unified/tiered.rs` - Added `archive_to_cold()` method
+
+- **Unified Cross-Protocol Storage Layer** (2025-12-01): True data sharing across all protocols
+  - **UnifiedTableStorage Integration**
+    - PostgreSQL, MySQL, CQL adapters wired to unified storage
+    - AQL and Cypher servers integrated with unified storage
+    - Cross-protocol data visibility (write via Redis, read via PostgreSQL)
+  - **Storage Provider Traits**
+    - `AqlStorageProvider` trait for ArangoDB-compatible operations
+    - `CypherStorageProvider` trait for graph operations
+    - Redis, PostgreSQL, MySQL unified adapters
+  - **Secondary Index Manager**
+    - Efficient field-based queries across protocols
+    - Index creation and maintenance
+    - Query optimization with index hints
+
+- **Tiered Storage Backend** (2025-11-25): Hot/Warm/Cold tier architecture
+  - **Three-Tier Storage System**
+    - Hot tier: In-memory for frequently accessed data
+    - Warm tier: RocksDB for balanced read/write performance
+    - Cold tier: S3/MinIO for archival storage
+  - **Actor-Tier Placement Integration**
+    - Tier-aware actor storage with automatic data movement
+    - Access pattern-based tier migration
+    - Configurable eviction policies (LRU, LFU, TTL)
+  - **Feature Flags**
+    - `tiered-storage` feature for enabling tier support
+    - Configurable via `UnifiedStorageConfig`
+  - **TOML Configuration Support**
+    - Cluster-aware unified storage configuration
+    - Tiered storage settings in `orbit-server.toml`
+    - Environment-specific configuration profiles
+
+- **Metal GPU Acceleration** (2025-12-01): Apple Silicon optimization for ML workloads
+  - Dynamic device selection at runtime
+  - Metal Performance Shaders integration
+  - Build-time device capability detection
+  - Opt-in CUDA support to fix non-CUDA system builds
+
+- **Comprehensive ML Framework Expansion** (2025-11-25 to 2025-12-01): 100+ industry-specific models
+  - **Foundational Models** (Phase 1): 18 cross-cutting architectures
+    - Candle framework integration for all models
+    - Graph Neural Network (GNN) comprehensive models
+    - Dynamic device selection and Metal GPU acceleration
+  - **Industry Verticals** (reorganized into 15 major categories):
+    - **Healthcare**: 10+ models (medical imaging, clinical NLP, drug discovery, population health, hospital systems)
+    - **Retail & E-Commerce**: 9 models (recommendation, demand forecasting, inventory optimization)
+    - **Consumer Apps**: 9 models (personalization, content moderation, engagement prediction)
+    - **Agriculture & Environment**: 9 models (crop analysis, climate prediction, soil health)
+    - **Construction & Real Estate**: 8 models (property valuation, project risk, site analysis)
+    - **Technology, Media & Internet**: 12 models (ad targeting, content recommendation, fraud detection)
+    - **Financial Services**: Insurance, banking, trading models
+    - **Energy & Utilities**: Oil & gas exploration, solar, offshore, smart grid
+    - **Transportation & Logistics**: Autonomous fleet, rail systems, marine exploration
+    - **Government & Public Sector**: 5 models (fraud detection, resource allocation)
+    - **Education, Training & HR**: 8 models (learning analytics, talent management)
+    - **Telecom**: Network optimization, churn prediction
+    - **Legal & Compliance**: Contract analysis, regulatory monitoring
+    - **Arts & Design**: Creative generation, style transfer
+    - **Smart City & Infrastructure**: Building management, urban planning, venue management
+    - **Ticketing Systems**: 5 comprehensive models (dynamic pricing, fraud detection)
+
+### Changed
+
+- Updated `sqlx-no-rsa` git URL to TuringWorks organization
+- Removed unnecessary `mut` keywords and unused variables for cleaner code
+- Updated CI/CD verification scripts for pipeline reliability
+
+### Fixed
+
+- Build compilation warnings resolved across workspace
+- CUDA support made opt-in to fix builds on non-CUDA systems
+- Code formatting applied via `cargo fmt`
+
+### Added (Previous - 2025-11-30)
 
 - **Neo4j/Cypher Protocol Enhancements**: Complete Bolt v4.4 protocol and comprehensive Cypher support
   - **Bolt Protocol v4.4**:

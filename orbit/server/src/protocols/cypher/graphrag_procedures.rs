@@ -918,11 +918,11 @@ impl BoltGraphRAGProcedures {
         for rel in &relationships {
             adjacency
                 .entry(rel.from_entity_id.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(rel.to_entity_id.clone());
             adjacency
                 .entry(rel.to_entity_id.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(rel.from_entity_id.clone());
         }
 

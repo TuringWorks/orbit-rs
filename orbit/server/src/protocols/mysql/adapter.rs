@@ -645,7 +645,7 @@ impl MySqlAdapter {
 
         match param_type {
             MySqlType::Tiny => {
-                if payload.len() < 1 {
+                if payload.is_empty() {
                     return Err(ProtocolError::IncompleteFrame);
                 }
                 Ok(payload.get_i8().to_string())
@@ -771,7 +771,7 @@ impl MySqlAdapter {
         }
 
         // Read NULL bitmap
-        let null_bitmap_len = ((num_params + 7) / 8) as usize;
+        let null_bitmap_len = num_params.div_ceil(8) as usize;
         if payload.len() < null_bitmap_len {
             return Err(ProtocolError::IncompleteFrame);
         }

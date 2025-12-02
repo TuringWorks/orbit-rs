@@ -256,7 +256,7 @@ impl ReplState {
                             .load_preset(UTF8_FULL)
                             .apply_modifier(UTF8_ROUND_CORNERS);
                         table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
-                        table.add_row(values.iter().map(|v| Cell::new(v)));
+                        table.add_row(values.iter().map(Cell::new));
                         println!("\n{}", table);
                     }
                 }
@@ -328,7 +328,7 @@ impl ReplState {
                 };
                 values.push(value);
             }
-            table.add_row(values.iter().map(|v| Cell::new(v)));
+            table.add_row(values.iter().map(Cell::new));
         }
 
         println!("\n{}", table);

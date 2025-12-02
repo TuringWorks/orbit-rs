@@ -177,8 +177,8 @@ async fn handle_cursor_request(
     query_engine: Arc<AqlQueryEngine>,
     cursors: Arc<RwLock<HashMap<String, AqlCursor>>>,
 ) -> Response<Full<Bytes>> {
-    match method {
-        &Method::POST => {
+    match *method {
+        Method::POST => {
             // Create new cursor (execute query)
             match serde_json::from_slice::<AqlQueryRequest>(&body) {
                 Ok(query_req) => match query_engine.execute_query(&query_req.query).await {
@@ -199,7 +199,7 @@ async fn handle_cursor_request(
                             .data
                             .iter()
                             .take(batch_size)
-                            .map(|v| aql_value_to_json(v))
+                            .map(aql_value_to_json)
                             .collect();
 
                         let response = AqlCursorResponse {
@@ -232,7 +232,7 @@ async fn handle_cursor_request(
                 }
             }
         }
-        &Method::PUT => {
+        Method::PUT => {
             // Get more results from cursor
             let cursor_id = path.strip_prefix("/_api/cursor/").unwrap_or("");
             if cursor_id.is_empty() {
@@ -251,7 +251,7 @@ async fn handle_cursor_request(
                     .iter()
                     .skip(start)
                     .take(batch_size)
-                    .map(|v| aql_value_to_json(v))
+                    .map(aql_value_to_json)
                     .collect();
 
                 cursor.position = end;
@@ -271,7 +271,7 @@ async fn handle_cursor_request(
                 error_response(StatusCode::NOT_FOUND, "Cursor not found")
             }
         }
-        &Method::DELETE => {
+        Method::DELETE => {
             // Delete cursor
             let cursor_id = path.strip_prefix("/_api/cursor/").unwrap_or("");
             if cursor_id.is_empty() {
@@ -296,14 +296,14 @@ async fn handle_collection_request(
     _body: Bytes,
     _storage: Arc<dyn AqlStorageProvider>,
 ) -> Response<Full<Bytes>> {
-    match method {
-        &Method::GET => {
+    match *method {
+        Method::GET => {
             // List collections
             // Simplified: return empty list for now
             let collections: Vec<serde_json::Value> = vec![];
             json_response(StatusCode::OK, &collections)
         }
-        &Method::POST => {
+        Method::POST => {
             // Create collection
             // Simplified: return success
             json_response(
@@ -333,8 +333,8 @@ async fn handle_document_request(
         .split('/')
         .collect();
 
-    match method {
-        &Method::GET => {
+    match *method {
+        Method::GET => {
             // Get document
             if parts.len() >= 2 {
                 let collection = parts[0];
@@ -348,9 +348,9 @@ async fn handle_document_request(
                 error_response(StatusCode::BAD_REQUEST, "Invalid document path")
             }
         }
-        &Method::POST => {
+        Method::POST => {
             // Create document
-            if parts.len() >= 1 {
+            if !parts.is_empty() {
                 let collection = parts[0];
                 match serde_json::from_slice::<serde_json::Value>(&body) {
                     Ok(_doc) => json_response(
@@ -370,7 +370,7 @@ async fn handle_document_request(
                 error_response(StatusCode::BAD_REQUEST, "Invalid collection path")
             }
         }
-        &Method::PUT => {
+        Method::PUT => {
             // Update document
             if parts.len() >= 2 {
                 json_response(StatusCode::OK, &serde_json::json!({"error": false}))
@@ -378,7 +378,7 @@ async fn handle_document_request(
                 error_response(StatusCode::BAD_REQUEST, "Invalid document path")
             }
         }
-        &Method::DELETE => {
+        Method::DELETE => {
             // Delete document
             if parts.len() >= 2 {
                 json_response(StatusCode::OK, &serde_json::json!({"error": false}))

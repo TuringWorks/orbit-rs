@@ -119,6 +119,12 @@ pub struct AISystemMetrics {
     pub energy_saved_percent: f64,
 }
 
+impl Default for AIMetricsCollector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AIMetricsCollector {
     pub fn new() -> Self {
         Self {

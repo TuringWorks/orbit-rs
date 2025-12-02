@@ -1360,7 +1360,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 let prop_name = item
                     .expression
                     .split('.')
-                    .last()
+                    .next_back()
                     .unwrap_or(&item.expression);
 
                 let val_a = a.properties.get(prop_name);
@@ -1374,11 +1374,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 };
 
                 if cmp != 0 {
-                    let ordering = match cmp.cmp(&0) {
-                        std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
-                        std::cmp::Ordering::Less => std::cmp::Ordering::Less,
-                        std::cmp::Ordering::Equal => std::cmp::Ordering::Equal,
-                    };
+                    let ordering = cmp.cmp(&0);
                     return if item.descending {
                         ordering.reverse()
                     } else {

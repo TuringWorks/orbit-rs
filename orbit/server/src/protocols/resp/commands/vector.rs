@@ -226,7 +226,7 @@ impl VectorCommands {
 
         // Parse vector from comma-separated or space-separated values
         let vector: Vec<f32> = vector_str
-            .split(|c| c == ',' || c == ' ')
+            .split([',', ' '])
             .filter(|s| !s.is_empty())
             .map(|s| {
                 s.trim().parse::<f32>().map_err(|_| {
@@ -365,7 +365,7 @@ impl VectorCommands {
 
         // Parse query vector
         let query: Vec<f32> = query_str
-            .split(|c| c == ',' || c == ' ')
+            .split([',', ' '])
             .filter(|s| !s.is_empty())
             .map(|s| {
                 s.trim().parse::<f32>().map_err(|_| {
@@ -443,7 +443,7 @@ impl VectorCommands {
 
             let mut doc_result = vec![
                 RespValue::bulk_string_from_str("__vector_score"),
-                RespValue::bulk_string_from_str(&distance.to_string()),
+                RespValue::bulk_string_from_str(distance.to_string()),
             ];
 
             // Add requested fields

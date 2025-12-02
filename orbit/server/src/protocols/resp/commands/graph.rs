@@ -82,7 +82,7 @@ impl Graph {
         for label in &labels {
             self.label_index
                 .entry(label.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(id);
         }
 
@@ -117,17 +117,17 @@ impl Graph {
         // Update relationship type index
         self.rel_type_index
             .entry(rel_type.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(id);
 
         // Update adjacency lists
         self.outgoing_rels
             .entry(src_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(id);
         self.incoming_rels
             .entry(dest_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(id);
 
         self.relationships.insert(
@@ -149,7 +149,7 @@ impl Graph {
         self.label_index
             .get(label)
             .map(|ids| ids.iter().filter_map(|id| self.nodes.get(id)).collect())
-            .unwrap_or_else(Vec::new)
+            .unwrap_or_default()
     }
 
     /// Get outgoing relationships for a node
@@ -161,7 +161,7 @@ impl Graph {
                     .filter_map(|id| self.relationships.get(id))
                     .collect()
             })
-            .unwrap_or_else(Vec::new)
+            .unwrap_or_default()
     }
 
     /// Get incoming relationships for a node
@@ -173,7 +173,7 @@ impl Graph {
                     .filter_map(|id| self.relationships.get(id))
                     .collect()
             })
-            .unwrap_or_else(Vec::new)
+            .unwrap_or_default()
     }
 
     /// Delete a node and its relationships
@@ -357,12 +357,12 @@ impl GraphCommands {
             RespValue::Array(vec![]), // Empty header
             RespValue::Array(vec![]), // Empty results
             RespValue::Array(vec![
-                RespValue::bulk_string_from_str(&format!("Nodes created: {}", nodes_created)),
-                RespValue::bulk_string_from_str(&format!(
+                RespValue::bulk_string_from_str(format!("Nodes created: {}", nodes_created)),
+                RespValue::bulk_string_from_str(format!(
                     "Relationships created: {}",
                     rels_created
                 )),
-                RespValue::bulk_string_from_str(&format!("Properties set: {}", properties_set)),
+                RespValue::bulk_string_from_str(format!("Properties set: {}", properties_set)),
             ]),
         ]))
     }
@@ -442,7 +442,7 @@ impl GraphCommands {
         if let Some(colon_pos) = query.find(':') {
             let after_colon = &query[colon_pos + 1..];
             let label_end = after_colon
-                .find(|c: char| c == ')' || c == ' ' || c == '{')
+                .find([')', ' ', '{'])
                 .unwrap_or(after_colon.len());
             let label = &after_colon[..label_end];
 
@@ -474,7 +474,7 @@ impl GraphCommands {
         Ok(RespValue::Array(vec![
             RespValue::Array(header),
             RespValue::Array(results.clone()),
-            RespValue::Array(vec![RespValue::bulk_string_from_str(&format!(
+            RespValue::Array(vec![RespValue::bulk_string_from_str(format!(
                 "Query internal execution time: 0.1 ms, {} results",
                 results.len()
             ))]),
@@ -508,16 +508,14 @@ impl GraphCommands {
         let query = self.get_string_arg(args, 1, "GRAPH.EXPLAIN")?;
 
         // Return a simplified execution plan
-        let plan = vec![
-            format!("Results"),
+        let plan = [format!("Results"),
             format!("    Project"),
             format!("        Filter"),
-            format!("            Node By Label Scan | (n:*)"),
-        ];
+            format!("            Node By Label Scan | (n:*)")];
 
         let plan_resp: Vec<RespValue> = plan
             .iter()
-            .map(|s| RespValue::bulk_string_from_str(s))
+            .map(RespValue::bulk_string_from_str)
             .collect();
 
         debug!("GRAPH.EXPLAIN {} {}", graph_key, query);
@@ -590,7 +588,7 @@ impl GraphCommands {
 
         let graph_names: Vec<RespValue> = graphs_guard
             .keys()
-            .map(|k| RespValue::bulk_string_from_str(k))
+            .map(RespValue::bulk_string_from_str)
             .collect();
 
         debug!("GRAPH.LIST -> {} graphs", graph_names.len());

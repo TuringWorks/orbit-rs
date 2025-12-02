@@ -792,7 +792,7 @@ impl CypherFunctions {
     fn asin(args: &[Value]) -> ProtocolResult<Value> {
         Self::require_args(args, 1, "asin")?;
         let f = Self::get_float(&args[0])?;
-        if f < -1.0 || f > 1.0 {
+        if !(-1.0..=1.0).contains(&f) {
             Ok(Value::Null)
         } else {
             Ok(json!(f.asin()))
@@ -802,7 +802,7 @@ impl CypherFunctions {
     fn acos(args: &[Value]) -> ProtocolResult<Value> {
         Self::require_args(args, 1, "acos")?;
         let f = Self::get_float(&args[0])?;
-        if f < -1.0 || f > 1.0 {
+        if !(-1.0..=1.0).contains(&f) {
             Ok(Value::Null)
         } else {
             Ok(json!(f.acos()))
@@ -1591,6 +1591,7 @@ impl CypherFunctions {
 }
 
 /// Context for function evaluation
+#[derive(Default)]
 pub struct FunctionContext {
     /// Current variable bindings
     pub variables: HashMap<String, Value>,
@@ -1600,15 +1601,6 @@ pub struct FunctionContext {
     pub relationship_lookup: Option<Box<dyn Fn(&str) -> Option<Value> + Send + Sync>>,
 }
 
-impl Default for FunctionContext {
-    fn default() -> Self {
-        Self {
-            variables: HashMap::new(),
-            node_lookup: None,
-            relationship_lookup: None,
-        }
-    }
-}
 
 impl FunctionContext {
     pub fn new() -> Self {

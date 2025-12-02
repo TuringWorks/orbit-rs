@@ -9,6 +9,9 @@ repository = "https://github.com/TuringWorks/orbit-rs"
 keywords = ["distributed", "actor", "database", "simd", "gpu", "acceleration"]
 categories = ["database-implementations", "concurrency", "hardware-support"]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(has_cuda)', 'cfg(has_metal)'] }
+
 [features]
 default = ["cpu-simd", "runtime-detection"]
 

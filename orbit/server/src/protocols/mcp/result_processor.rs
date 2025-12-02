@@ -333,7 +333,7 @@ impl DataSummarizer {
         let variance = sorted.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n;
         let std_dev = variance.sqrt();
 
-        let median = if sorted.len() % 2 == 0 {
+        let median = if sorted.len().is_multiple_of(2) {
             (sorted[sorted.len() / 2 - 1] + sorted[sorted.len() / 2]) / 2.0
         } else {
             sorted[sorted.len() / 2]

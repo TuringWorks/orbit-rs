@@ -715,6 +715,7 @@ pub struct RateLimitConfig {
 
 /// Security configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct SecurityConfig {
     /// Authentication configuration
     pub authentication: AuthenticationConfig,
@@ -790,6 +791,7 @@ pub struct AuthorizationConfig {
 
 /// Encryption configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct EncryptionConfig {
     /// Encryption at rest
     pub at_rest: Option<EncryptionAtRestConfig>,
@@ -839,6 +841,7 @@ pub struct KmsConfig {
 
 /// Performance configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct PerformanceConfig {
     /// Memory configuration
     pub memory: MemoryConfig,
@@ -984,6 +987,7 @@ pub struct LogRotationConfig {
 
 /// Monitoring configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct MonitoringConfig {
     /// Metrics configuration
     pub metrics: MetricsConfig,
@@ -1108,6 +1112,7 @@ pub struct RocksDbConfig {
 
 /// Storage configuration for tiered and cold storage
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct StorageConfig {
     /// Tiered storage configuration
     pub tiered: TieredStorageConfig,
@@ -1496,6 +1501,7 @@ pub struct ActorTierPlacementConfig {
 
 /// Cluster configuration for distributed unified storage
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct UnifiedClusterConfig {
     /// Enable cluster mode for unified storage
     pub enabled: bool,
@@ -1682,18 +1688,6 @@ pub struct NodeEvictionConfig {
     pub blacklist_duration_secs: u64,
 }
 
-impl Default for UnifiedClusterConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            replication: ReplicationConfig::default(),
-            sharding: ShardingConfig::default(),
-            failure_detection: FailureDetectionConfig::default(),
-            consistency: ConsistencyConfig::default(),
-            eviction: NodeEvictionConfig::default(),
-        }
-    }
-}
 
 impl Default for ReplicationConfig {
     fn default() -> Self {
@@ -1997,14 +1991,6 @@ impl Default for RocksDbConfig {
     }
 }
 
-impl Default for StorageConfig {
-    fn default() -> Self {
-        Self {
-            tiered: TieredStorageConfig::default(),
-            cold_tier: None,
-        }
-    }
-}
 
 impl Default for TieredStorageConfig {
     fn default() -> Self {
@@ -2266,15 +2252,6 @@ impl Default for RedisCommandConfig {
     }
 }
 
-impl Default for SecurityConfig {
-    fn default() -> Self {
-        Self {
-            authentication: AuthenticationConfig::default(),
-            authorization: AuthorizationConfig::default(),
-            encryption: EncryptionConfig::default(),
-        }
-    }
-}
 
 impl Default for AuthenticationConfig {
     fn default() -> Self {
@@ -2297,25 +2274,7 @@ impl Default for AuthorizationConfig {
     }
 }
 
-impl Default for EncryptionConfig {
-    fn default() -> Self {
-        Self {
-            at_rest: None,
-            in_transit: None,
-        }
-    }
-}
 
-impl Default for PerformanceConfig {
-    fn default() -> Self {
-        Self {
-            memory: MemoryConfig::default(),
-            io: IoConfig::default(),
-            network: NetworkConfig::default(),
-            cpu: CpuConfig::default(),
-        }
-    }
-}
 
 impl Default for MemoryConfig {
     fn default() -> Self {
@@ -2394,15 +2353,6 @@ impl Default for LoggingConfig {
     }
 }
 
-impl Default for MonitoringConfig {
-    fn default() -> Self {
-        Self {
-            metrics: MetricsConfig::default(),
-            health_checks: HealthCheckConfig::default(),
-            tracing: TracingConfig::default(),
-        }
-    }
-}
 
 impl Default for MetricsConfig {
     fn default() -> Self {
@@ -2557,33 +2507,33 @@ impl OrbitServerConfig {
     pub fn enabled_protocols(&self) -> Vec<&str> {
         let mut protocols = Vec::new();
 
-        if self.protocols.grpc.as_ref().map_or(false, |c| c.enabled) {
+        if self.protocols.grpc.as_ref().is_some_and(|c| c.enabled) {
             protocols.push("grpc");
         }
         if self
             .protocols
             .postgresql
             .as_ref()
-            .map_or(false, |c| c.enabled)
+            .is_some_and(|c| c.enabled)
         {
             protocols.push("postgresql");
         }
-        if self.protocols.redis.as_ref().map_or(false, |c| c.enabled) {
+        if self.protocols.redis.as_ref().is_some_and(|c| c.enabled) {
             protocols.push("redis");
         }
-        if self.protocols.rest.as_ref().map_or(false, |c| c.enabled) {
+        if self.protocols.rest.as_ref().is_some_and(|c| c.enabled) {
             protocols.push("rest");
         }
-        if self.protocols.cypher.as_ref().map_or(false, |c| c.enabled) {
+        if self.protocols.cypher.as_ref().is_some_and(|c| c.enabled) {
             protocols.push("cypher");
         }
-        if self.protocols.mcp.as_ref().map_or(false, |c| c.enabled) {
+        if self.protocols.mcp.as_ref().is_some_and(|c| c.enabled) {
             protocols.push("mcp");
         }
-        if self.protocols.cql.as_ref().map_or(false, |c| c.enabled) {
+        if self.protocols.cql.as_ref().is_some_and(|c| c.enabled) {
             protocols.push("cql");
         }
-        if self.protocols.mysql.as_ref().map_or(false, |c| c.enabled) {
+        if self.protocols.mysql.as_ref().is_some_and(|c| c.enabled) {
             protocols.push("mysql");
         }
 

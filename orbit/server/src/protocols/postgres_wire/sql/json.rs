@@ -366,7 +366,7 @@ impl JsonOperations {
 
     /// Build JSON object from arrays (json_build_object)
     pub fn json_build_object(args: Vec<SqlValue>) -> ProtocolResult<SqlValue> {
-        if args.len() % 2 != 0 {
+        if !args.len().is_multiple_of(2) {
             return Err(ProtocolError::PostgresError(
                 "json_build_object requires an even number of arguments".to_string(),
             ));

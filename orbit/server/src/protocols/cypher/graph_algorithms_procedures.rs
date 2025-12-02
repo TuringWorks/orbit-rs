@@ -922,10 +922,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         let mut adj: HashMap<String, Vec<String>> = HashMap::new();
         for rel in &relationships {
             adj.entry(rel.start_node.to_string().clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(rel.end_node.to_string().clone());
             adj.entry(rel.end_node.to_string().clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(rel.start_node.to_string().clone());
         }
 
@@ -2306,7 +2306,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         for k in 0..=max_degree {
             loop {
                 // Find a node with degree <= k that hasn't been removed
-                let node_to_remove = (0..n).filter(|&i| !removed[i] && degree[i] <= k).next();
+                let node_to_remove = (0..n).find(|&i| !removed[i] && degree[i] <= k);
 
                 match node_to_remove {
                     Some(v) => {

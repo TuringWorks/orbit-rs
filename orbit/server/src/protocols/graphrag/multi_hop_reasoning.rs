@@ -527,7 +527,7 @@ impl MultiHopReasoningEngine {
                 Ok(neighbors) => {
                     let neighbor_list = adjacency_map
                         .entry(current_node.clone())
-                        .or_insert_with(Vec::new);
+                        .or_default();
 
                     for (neighbor_id, _rel_id, _rel_type, confidence) in neighbors {
                         neighbor_list.push((neighbor_id.clone(), confidence));
@@ -679,7 +679,7 @@ impl MultiHopReasoningEngine {
                 Ok(neighbors) => {
                     let neighbor_list = adjacency_map
                         .entry(current_node.clone())
-                        .or_insert_with(Vec::new);
+                        .or_default();
 
                     for (neighbor_id, _rel_id, _rel_type, confidence) in neighbors {
                         neighbor_list.push((neighbor_id.clone(), confidence));

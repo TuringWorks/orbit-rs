@@ -745,11 +745,8 @@ impl RedisSpatialCommands {
 
         if let Some(dataset) = indexes.get(&key) {
             for (member, geometry) in &dataset.geometries {
-                match SpatialOperations::within(geometry, &query_geometry) {
-                    Ok(true) => {
-                        results.push(RedisValue::String(member.clone()));
-                    }
-                    Ok(false) | Err(_) => {}
+                if let Ok(true) = SpatialOperations::within(geometry, &query_geometry) {
+                    results.push(RedisValue::String(member.clone()));
                 }
             }
         }
@@ -778,11 +775,8 @@ impl RedisSpatialCommands {
 
         if let Some(dataset) = indexes.get(&key) {
             for (member, geometry) in &dataset.geometries {
-                match SpatialOperations::intersects(geometry, &query_geometry) {
-                    Ok(true) => {
-                        results.push(RedisValue::String(member.clone()));
-                    }
-                    Ok(false) | Err(_) => {}
+                if let Ok(true) = SpatialOperations::intersects(geometry, &query_geometry) {
+                    results.push(RedisValue::String(member.clone()));
                 }
             }
         }
@@ -811,11 +805,8 @@ impl RedisSpatialCommands {
 
         if let Some(dataset) = indexes.get(&key) {
             for (member, geometry) in &dataset.geometries {
-                match SpatialOperations::contains(geometry, &query_geometry) {
-                    Ok(true) => {
-                        results.push(RedisValue::String(member.clone()));
-                    }
-                    Ok(false) | Err(_) => {}
+                if let Ok(true) = SpatialOperations::contains(geometry, &query_geometry) {
+                    results.push(RedisValue::String(member.clone()));
                 }
             }
         }
@@ -844,11 +835,8 @@ impl RedisSpatialCommands {
 
         if let Some(dataset) = indexes.get(&key) {
             for (member, geometry) in &dataset.geometries {
-                match SpatialOperations::overlaps(geometry, &query_geometry) {
-                    Ok(true) => {
-                        results.push(RedisValue::String(member.clone()));
-                    }
-                    Ok(false) | Err(_) => {}
+                if let Ok(true) = SpatialOperations::overlaps(geometry, &query_geometry) {
+                    results.push(RedisValue::String(member.clone()));
                 }
             }
         }

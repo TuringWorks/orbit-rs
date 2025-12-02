@@ -1586,7 +1586,7 @@ impl BoltProtocolHandler {
             }
             Value::Number(n) => {
                 if let Some(i) = n.as_i64() {
-                    if i >= -16 && i <= 127 {
+                    if (-16..=127).contains(&i) {
                         buf.put_u8(i as u8); // Tiny int
                     } else if i >= i8::MIN as i64 && i <= i8::MAX as i64 {
                         buf.put_u8(0xC8); // INT_8

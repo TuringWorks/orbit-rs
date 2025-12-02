@@ -344,7 +344,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let unified_storage_enabled = toml_config
         .unified_storage
         .as_ref()
-        .map_or(false, |c| c.enabled);
+        .is_some_and(|c| c.enabled);
 
     let storage_mode = if unified_storage_enabled {
         // Create unified cross-protocol storage
@@ -367,8 +367,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let integration = UnifiedStorageIntegration::with_config(integration_config)
             .await
             .map_err(|e| {
-                Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                Box::new(std::io::Error::other(
                     format!("Failed to initialize unified storage: {}", e),
                 )) as Box<dyn Error>
             })?;
@@ -561,7 +560,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .protocols
         .postgresql
         .as_ref()
-        .map_or(true, |c| c.enabled)
+        .is_none_or(|c| c.enabled)
     {
         // Pass unified storage if available for cross-protocol data sharing
         let unified_postgres = match &storage_mode {
@@ -589,7 +588,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .protocols
         .redis
         .as_ref()
-        .map_or(true, |c| c.enabled)
+        .is_none_or(|c| c.enabled)
     {
         // Actually, let's just create a new client for Redis specifically.
         // It's cleaner than sharing one if Clone is hard.
@@ -626,7 +625,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .protocols
         .mysql
         .as_ref()
-        .map_or(true, |c| c.enabled)
+        .is_none_or(|c| c.enabled)
     {
         let mysql_config = MySqlConfig {
             listen_addr: format!("{}:{}", args.bind, args.mysql_port).parse()?,
@@ -668,7 +667,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .protocols
         .cql
         .as_ref()
-        .map_or(true, |c| c.enabled)
+        .is_none_or(|c| c.enabled)
     {
         let cql_config = CqlConfig {
             listen_addr: format!("{}:{}", args.bind, args.cql_port).parse()?,
@@ -786,7 +785,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .protocols
         .mcp
         .as_ref()
-        .map_or(false, |c| c.enabled)
+        .is_some_and(|c| c.enabled)
     {
         let mcp_handle =
             start_mcp_server(&args, postgres_storage.clone(), rocksdb_storage.clone()).await?;
@@ -971,7 +970,7 @@ fn configure_tiered_storage(
     use std::time::Duration;
 
     let storage_config = config.storage.as_ref();
-    let tiered_config = storage_config.and_then(|s| Some(&s.tiered));
+    let tiered_config = storage_config.map(|s| &s.tiered);
 
     let hot_to_warm_hours = tiered_config
         .map(|t| t.hot_to_warm_threshold_hours)
@@ -1228,8 +1227,7 @@ async fn initialize_cluster(args: &Args) -> Result<(), Box<dyn Error>> {
 
     // Start the cluster manager (this starts Raft consensus)
     cluster_manager.start(transport).await.map_err(|e| {
-        Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        Box::new(std::io::Error::other(
             format!("Failed to start cluster manager: {}", e),
         ))
     })?;

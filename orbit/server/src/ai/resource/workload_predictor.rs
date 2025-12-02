@@ -244,8 +244,8 @@ impl WorkloadPredictor {
         let mut patterns = self.seasonal_patterns.write().await;
 
         // Calculate hourly patterns
-        let mut hourly_sums = vec![0.0; 24];
-        let mut hourly_counts = vec![0; 24];
+        let mut hourly_sums = [0.0; 24];
+        let mut hourly_counts = [0; 24];
 
         for measurement in history.iter() {
             let duration = measurement

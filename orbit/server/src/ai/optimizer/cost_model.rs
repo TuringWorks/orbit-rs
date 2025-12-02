@@ -44,6 +44,7 @@ impl FeatureExtractor {
 
 /// Query plan structure for feature extraction
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct QueryPlan {
     pub operation_count: usize,
     pub table_count: usize,
@@ -62,27 +63,6 @@ pub struct QueryPlan {
     pub full_scan_count: usize,
 }
 
-impl Default for QueryPlan {
-    fn default() -> Self {
-        Self {
-            operation_count: 0,
-            table_count: 0,
-            join_count: 0,
-            filter_count: 0,
-            aggregation_count: 0,
-            sort_count: 0,
-            estimated_input_rows: 0,
-            estimated_output_rows: 0,
-            estimated_memory_bytes: 0,
-            max_depth: 0,
-            has_subquery: false,
-            has_window_function: false,
-            has_cte: false,
-            index_usage_count: 0,
-            full_scan_count: 0,
-        }
-    }
-}
 
 /// Neural network model for cost estimation
 pub struct CostEstimationModel {
@@ -117,6 +97,12 @@ impl ModelWeights {
             weights: vec![0.1; feature_count],
             bias: 0.0,
         }
+    }
+}
+
+impl Default for CostEstimationModel {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -250,7 +236,7 @@ impl CostEstimationModel {
                 }
 
                 // The primary target is execution time (first element of targets)
-                let target = example.targets.get(0).copied().unwrap_or(0.0);
+                let target = example.targets.first().copied().unwrap_or(0.0);
                 let error = prediction - target;
 
                 // Apply example weight to the error

@@ -82,7 +82,7 @@ impl ServerConnectionService {
 
                                 // Deserialize arguments
                                 let args: Vec<serde_json::Value> = serde_json::from_str(&req.arguments)
-                                    .map_err(|e| OrbitError::SerializationError(e))?;
+                                    .map_err(OrbitError::SerializationError)?;
 
                                 // Get actor instance
                                 let instance = registry.get_or_create_instance(reference).await?;

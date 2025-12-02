@@ -38,10 +38,9 @@ fn has_cuda() -> bool {
     }
 
     // Check common locations
-    if cfg!(target_os = "linux")
-        && std::path::Path::new("/usr/local/cuda/bin/nvcc").exists() {
-            return true;
-        }
+    if cfg!(target_os = "linux") && std::path::Path::new("/usr/local/cuda/bin/nvcc").exists() {
+        return true;
+    }
 
     false
 }
