@@ -45,9 +45,10 @@
 //!
 //! ## Core Abstractions
 //!
-//! - **StorageEngine**: Base trait for all storage operations
-//! - **TableStorage**: Table-level CRUD operations
-//! - **TieredStorage**: Hot/warm/cold tier management with automatic migration
+//! - [`crate::unified::UniversalValue`]: A canonical data type that all protocols map to/from
+//! - [`crate::unified::UniversalOperation`]: Protocol-agnostic operations (CRUD, queries, etc.)
+//! - [`crate::unified::UnifiedStorage`]: Single storage backend shared by all protocols
+//! - [`crate::unified::SchemaRegistry`]: Manages namespace schemas and cross-protocol projections
 //! - **TransactionManager**: MVCC transaction lifecycle management
 //! - **ClusterCoordinator**: Distributed system coordination via Raft
 //! - **QueryExecutor**: Vectorized query execution with SIMD optimization

@@ -29,7 +29,7 @@ pub enum PathComponent {
     Key(String),
     /// Array index access
     Index(usize),
-    /// Array slice [start:end]
+    /// Array slice \[start:end\]
     Slice {
         start: Option<usize>,
         end: Option<usize>,

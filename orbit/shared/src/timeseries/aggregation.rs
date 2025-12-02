@@ -121,7 +121,7 @@ impl TimeSeriesAggregator {
 
     /// Calculate rate of change between consecutive points
     ///
-    /// Rate is computed as (value[i] - value[i-1]) / time_delta_seconds
+    /// Rate is computed as (value\[i\] - value\[i-1\]) / time_delta_seconds
     /// This is useful for counter metrics to convert cumulative values to rates.
     ///
     /// # Arguments

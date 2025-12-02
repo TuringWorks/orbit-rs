@@ -508,11 +508,11 @@ pub struct RelationshipPattern {
 /// Direction of a relationship
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RelationshipDirection {
-    /// Outgoing: (a)-[r]->(b)
+    /// Outgoing: (a)-\[r\]->(b)
     Outgoing,
-    /// Incoming: (a)<-[r]-(b)
+    /// Incoming: (a)<-\[r\]-(b)
     Incoming,
-    /// Both directions: (a)-[r]-(b)
+    /// Both directions: (a)-\[r\]-(b)
     Both,
 }
 

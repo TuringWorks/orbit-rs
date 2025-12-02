@@ -29,7 +29,7 @@ pub enum Statement {
 }
 
 /// TRAVERSE statement for graph traversal
-/// Syntax: TRAVERSE <edge_type> FROM <node_id> [MAX_DEPTH <n>] [WHERE <condition>]
+/// Syntax: TRAVERSE <edge_type> FROM <node_id> [MAX_DEPTH \<n\>] [WHERE \<condition\>]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TraverseStatement {
     /// Edge type/relationship to traverse
