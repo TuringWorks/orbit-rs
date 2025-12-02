@@ -663,7 +663,7 @@ impl SchemaRegistry {
                     .unwrap_or(FieldType::String);
                 FieldType::List(Box::new(inner_type))
             }
-            UniversalValue::Map(_, ..) => FieldType::Json,
+            UniversalValue::Map(..) => FieldType::Json,
             UniversalValue::Set(_) => FieldType::List(Box::new(FieldType::String)),
             UniversalValue::SortedSet(_) => FieldType::List(Box::new(FieldType::String)),
             UniversalValue::Timestamp(_) => FieldType::Timestamp,

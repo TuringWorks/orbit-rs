@@ -101,7 +101,7 @@ impl RestAdapter {
             crate::storage::QueryResult::Rows(rows) => {
                 let json_rows: Vec<_> = rows
                     .into_iter()
-                    .map(|row| row_to_json(row))
+                    .map(row_to_json)
                     .collect::<Result<_, _>>()?;
                 Ok(RestResponse::data(serde_json::json!({ "rows": json_rows })))
             }
@@ -121,7 +121,7 @@ impl RestAdapter {
         let rows = request
             .rows
             .into_iter()
-            .map(|json_row| json_to_row(json_row))
+            .map(json_to_row)
             .collect::<Result<Vec<_>, _>>()?;
 
         self.context.storage.insert_rows(table_name, rows).await?;
@@ -462,12 +462,14 @@ pub struct BeginTransactionRequest {
 
 /// REST isolation level
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum RestIsolationLevel {
     /// Read uncommitted (dirty reads allowed)
     #[serde(rename = "read_uncommitted")]
     ReadUncommitted,
     /// Read committed (no dirty reads)
     #[serde(rename = "read_committed")]
+    #[default]
     ReadCommitted,
     /// Repeatable read (consistent snapshots)
     #[serde(rename = "repeatable_read")]
@@ -477,11 +479,6 @@ pub enum RestIsolationLevel {
     Serializable,
 }
 
-impl Default for RestIsolationLevel {
-    fn default() -> Self {
-        RestIsolationLevel::ReadCommitted
-    }
-}
 
 impl RestIsolationLevel {
     /// Convert to engine IsolationLevel

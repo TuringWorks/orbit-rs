@@ -3,6 +3,10 @@ fn main() {
     println!("cargo:rerun-if-env-changed=CUDA_ROOT");
     println!("cargo:rerun-if-env-changed=CUDA_TOOLKIT_ROOT_DIR");
 
+    // Declare custom configuration flags
+    println!("cargo::rustc-check-cfg=cfg(has_cuda)");
+    println!("cargo::rustc-check-cfg=cfg(has_metal)");
+
     // Check for CUDA
     if has_cuda() {
         println!("cargo:rustc-cfg=has_cuda");
@@ -16,9 +20,10 @@ fn main() {
 
 fn has_cuda() -> bool {
     // Check environment variables first
-    if std::env::var("CUDA_PATH").is_ok() 
-        || std::env::var("CUDA_ROOT").is_ok() 
-        || std::env::var("CUDA_TOOLKIT_ROOT_DIR").is_ok() {
+    if std::env::var("CUDA_PATH").is_ok()
+        || std::env::var("CUDA_ROOT").is_ok()
+        || std::env::var("CUDA_TOOLKIT_ROOT_DIR").is_ok()
+    {
         return true;
     }
 
@@ -31,13 +36,12 @@ fn has_cuda() -> bool {
             }
         }
     }
-    
+
     // Check common locations
-    if cfg!(target_os = "linux") {
-        if std::path::Path::new("/usr/local/cuda/bin/nvcc").exists() {
+    if cfg!(target_os = "linux")
+        && std::path::Path::new("/usr/local/cuda/bin/nvcc").exists() {
             return true;
         }
-    }
 
     false
 }

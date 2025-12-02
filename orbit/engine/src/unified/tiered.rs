@@ -80,8 +80,10 @@ impl std::fmt::Display for StorageTier {
 
 /// Eviction policy for hot tier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum EvictionPolicy {
     /// Least Recently Used
+    #[default]
     Lru,
     /// Least Frequently Used
     Lfu,
@@ -91,16 +93,13 @@ pub enum EvictionPolicy {
     Adaptive,
 }
 
-impl Default for EvictionPolicy {
-    fn default() -> Self {
-        Self::Lru
-    }
-}
 
 /// Write policy for tiered storage
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum WritePolicy {
     /// Write to hot tier and warm tier simultaneously (best durability)
+    #[default]
     WriteThrough,
     /// Write to hot tier, asynchronously sync to warm tier (best performance)
     WriteBack,
@@ -108,11 +107,6 @@ pub enum WritePolicy {
     WriteAround,
 }
 
-impl Default for WritePolicy {
-    fn default() -> Self {
-        Self::WriteThrough
-    }
-}
 
 /// Configuration for hot tier (memory)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -230,8 +224,10 @@ impl Default for ColdTierConfig {
 
 /// Cold storage backend types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum ColdBackendType {
     /// Amazon S3
+    #[default]
     S3,
     /// Azure Blob Storage
     Azure,
@@ -243,16 +239,13 @@ pub enum ColdBackendType {
     Local,
 }
 
-impl Default for ColdBackendType {
-    fn default() -> Self {
-        Self::S3
-    }
-}
 
 /// Data format for cold storage
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum ColdDataFormat {
     /// Apache Parquet columnar format
+    #[default]
     Parquet,
     /// Apache Iceberg table format
     Iceberg,
@@ -262,11 +255,6 @@ pub enum ColdDataFormat {
     MessagePack,
 }
 
-impl Default for ColdDataFormat {
-    fn default() -> Self {
-        Self::Parquet
-    }
-}
 
 /// Configuration for automatic tier migration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -973,17 +961,15 @@ impl UnifiedStorageBackend for TieredStorageBackend {
             }
         }
 
-        if self.config.warm_tier.enabled {
-            if self.warm_tier.delete(key).await? {
+        if self.config.warm_tier.enabled
+            && self.warm_tier.delete(key).await? {
                 deleted = true;
             }
-        }
 
-        if self.config.cold_tier.enabled {
-            if self.cold_tier.delete(key).await? {
+        if self.config.cold_tier.enabled
+            && self.cold_tier.delete(key).await? {
                 deleted = true;
             }
-        }
 
         // Remove metadata
         {

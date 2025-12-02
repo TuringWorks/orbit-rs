@@ -431,16 +431,13 @@ impl FilterExpression {
 
 /// Sort order for ORDER BY clauses
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum SortOrder {
+    #[default]
     Ascending,
     Descending,
 }
 
-impl Default for SortOrder {
-    fn default() -> Self {
-        SortOrder::Ascending
-    }
-}
 
 /// Aggregation operations
 #[derive(Debug, Clone)]
@@ -523,18 +520,15 @@ pub enum RelationshipDirection {
 
 /// Transaction isolation level
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum IsolationLevel {
     ReadUncommitted,
+    #[default]
     ReadCommitted,
     RepeatableRead,
     Serializable,
 }
 
-impl Default for IsolationLevel {
-    fn default() -> Self {
-        IsolationLevel::ReadCommitted
-    }
-}
 
 /// Schema definition for a namespace
 #[derive(Debug, Clone, Serialize, Deserialize)]

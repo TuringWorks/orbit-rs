@@ -60,9 +60,11 @@ impl fmt::Display for RecordId {
 /// - Graph (Cypher, AQL): Nodes, Relationships, Paths
 /// - Document (REST): Nested JSON structures
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum UniversalValue {
     // Primitive types
     /// Null/None value
+    #[default]
     Null,
     /// Boolean value
     Bool(bool),
@@ -248,11 +250,6 @@ impl UniversalValue {
     }
 }
 
-impl Default for UniversalValue {
-    fn default() -> Self {
-        UniversalValue::Null
-    }
-}
 
 impl From<bool> for UniversalValue {
     fn from(v: bool) -> Self {

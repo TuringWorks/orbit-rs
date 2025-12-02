@@ -8,17 +8,17 @@ use std::fmt;
 #[cfg(feature = "candle-core")]
 pub fn get_device() -> candle_core::Device {
     use candle_core::Device;
-    
+
     #[cfg(feature = "gpu-metal")]
     if let Ok(device) = Device::new_metal(0) {
         return device;
     }
-    
+
     #[cfg(feature = "gpu")]
     if let Ok(device) = Device::new_cuda(0) {
         return device;
     }
-    
+
     Device::Cpu
 }
 
