@@ -79,8 +79,7 @@ impl std::fmt::Display for StorageTier {
 }
 
 /// Eviction policy for hot tier
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum EvictionPolicy {
     /// Least Recently Used
     #[default]
@@ -93,10 +92,8 @@ pub enum EvictionPolicy {
     Adaptive,
 }
 
-
 /// Write policy for tiered storage
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum WritePolicy {
     /// Write to hot tier and warm tier simultaneously (best durability)
     #[default]
@@ -106,7 +103,6 @@ pub enum WritePolicy {
     /// Write only to warm tier, populate hot tier on read
     WriteAround,
 }
-
 
 /// Configuration for hot tier (memory)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -223,8 +219,7 @@ impl Default for ColdTierConfig {
 }
 
 /// Cold storage backend types
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ColdBackendType {
     /// Amazon S3
     #[default]
@@ -239,10 +234,8 @@ pub enum ColdBackendType {
     Local,
 }
 
-
 /// Data format for cold storage
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ColdDataFormat {
     /// Apache Parquet columnar format
     #[default]
@@ -254,7 +247,6 @@ pub enum ColdDataFormat {
     /// MessagePack binary format
     MessagePack,
 }
-
 
 /// Configuration for automatic tier migration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -961,15 +953,13 @@ impl UnifiedStorageBackend for TieredStorageBackend {
             }
         }
 
-        if self.config.warm_tier.enabled
-            && self.warm_tier.delete(key).await? {
-                deleted = true;
-            }
+        if self.config.warm_tier.enabled && self.warm_tier.delete(key).await? {
+            deleted = true;
+        }
 
-        if self.config.cold_tier.enabled
-            && self.cold_tier.delete(key).await? {
-                deleted = true;
-            }
+        if self.config.cold_tier.enabled && self.cold_tier.delete(key).await? {
+            deleted = true;
+        }
 
         // Remove metadata
         {
@@ -1174,8 +1164,10 @@ mod tests {
     #[tokio::test]
     async fn test_write_policies() {
         // Test write-through
-        let mut config = TieredStorageConfig::default();
-        config.write_policy = WritePolicy::WriteThrough;
+        let config = TieredStorageConfig {
+            write_policy: WritePolicy::WriteThrough,
+            ..Default::default()
+        };
         let backend = TieredStorageBackend::new(config);
         backend.initialize().await.unwrap();
 
@@ -1187,8 +1179,10 @@ mod tests {
         backend.shutdown().await.unwrap();
 
         // Test write-around
-        let mut config = TieredStorageConfig::default();
-        config.write_policy = WritePolicy::WriteAround;
+        let config = TieredStorageConfig {
+            write_policy: WritePolicy::WriteAround,
+            ..Default::default()
+        };
         config.hot_tier.enabled = false; // Disable hot tier for write-around test
         let backend = TieredStorageBackend::new(config);
         backend.initialize().await.unwrap();

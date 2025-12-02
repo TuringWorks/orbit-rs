@@ -865,7 +865,9 @@ impl CqlAdapter {
                         #[cfg(test)]
                         println!("[CQL] DELETE result: {:?}", result);
                         // Check if DELETE actually deleted rows
-                        if let crate::protocols::postgres_wire::QueryResult::Delete { count } = result {
+                        if let crate::protocols::postgres_wire::QueryResult::Delete { count } =
+                            result
+                        {
                             #[cfg(test)]
                             println!("[CQL] DELETE affected {} rows", count);
                             #[cfg(not(test))]

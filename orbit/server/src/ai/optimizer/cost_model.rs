@@ -13,7 +13,7 @@ pub struct FeatureExtractor;
 impl FeatureExtractor {
     /// Extract features from a query plan for cost estimation
     pub fn extract_features(&self, plan: &QueryPlan) -> OrbitResult<Vec<f64>> {
-        let mut features = vec![
+        let features = vec![
             // Basic plan features
             plan.operation_count as f64,
             plan.estimated_rows as f64,
@@ -45,8 +45,7 @@ impl FeatureExtractor {
 }
 
 /// Query plan structure for feature extraction
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct QueryPlan {
     pub operation_count: usize,
     pub table_count: usize,
@@ -63,8 +62,24 @@ pub struct QueryPlan {
     pub has_cte: bool,
     pub index_usage_count: usize,
     pub full_scan_count: usize,
+    // Additional fields for feature extraction
+    pub estimated_rows: u64,
+    pub estimated_io_cost: f64,
+    pub estimated_cpu_cost: f64,
+    pub projection_count: usize,
+    pub limit_count: usize,
+    pub distinct_count: usize,
+    pub window_count: usize,
+    pub set_op_count: usize,
+    pub cte_count: usize,
+    pub recursive_cte_count: usize,
+    pub subquery_count: usize,
+    pub correlated_subquery_count: usize,
+    pub materialized_view_count: usize,
+    pub foreign_key_check_count: usize,
+    pub check_constraint_count: usize,
+    pub trigger_count: usize,
 }
-
 
 /// Neural network model for cost estimation
 pub struct CostEstimationModel {

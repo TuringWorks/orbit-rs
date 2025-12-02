@@ -3,8 +3,6 @@
 //! This module provides integration between the MCP server and Orbit-RS's
 //! PostgreSQL wire protocol and query engine.
 
-
-
 use crate::protocols::mcp::result_processor::{QueryResult as McpQueryResult, Row};
 use crate::protocols::mcp::sql_generator::GeneratedQuery;
 use crate::protocols::mcp::types::McpError;

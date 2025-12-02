@@ -185,7 +185,7 @@ mod tests {
         assert_eq!(model.model_type(), "autonomous_fleet.demand_prediction");
 
         let predictions = model.predict(&[]).await.unwrap();
-        assert!(predictions.len() > 0);
+        assert!(!predictions.is_empty());
     }
 
     #[tokio::test]

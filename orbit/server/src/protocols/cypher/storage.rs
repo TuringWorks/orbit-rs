@@ -2,8 +2,6 @@
 //!
 //! This module provides persistent storage for Cypher/Neo4j graph data using RocksDB.
 
-
-
 use crate::protocols::cypher::types::{GraphNode, GraphRelationship};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use async_trait::async_trait;

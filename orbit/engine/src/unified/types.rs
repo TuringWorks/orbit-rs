@@ -59,8 +59,7 @@ impl fmt::Display for RecordId {
 /// - Wide-column (CQL): Same as relational with collections
 /// - Graph (Cypher, AQL): Nodes, Relationships, Paths
 /// - Document (REST): Nested JSON structures
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum UniversalValue {
     // Primitive types
     /// Null/None value
@@ -249,7 +248,6 @@ impl UniversalValue {
         }
     }
 }
-
 
 impl From<bool> for UniversalValue {
     fn from(v: bool) -> Self {

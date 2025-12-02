@@ -172,10 +172,10 @@ impl AqlQueryEngine {
                     // Apply filter to documents from FOR clause
                     if let Some(ref var) = for_variable {
                         for_documents.retain(|doc| {
-                                let mut ctx = context.clone();
-                                ctx.insert(var.clone(), self.document_to_value(doc));
-                                self.evaluate_condition(condition, &ctx).unwrap_or(false)
-                            });
+                            let mut ctx = context.clone();
+                            ctx.insert(var.clone(), self.document_to_value(doc));
+                            self.evaluate_condition(condition, &ctx).unwrap_or(false)
+                        });
                     }
                 }
                 AqlClause::Return {

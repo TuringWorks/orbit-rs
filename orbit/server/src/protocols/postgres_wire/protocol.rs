@@ -1,7 +1,5 @@
 //! PostgreSQL wire protocol handler
 
-
-
 use bytes::{BufMut, BytesMut};
 use std::collections::HashMap;
 use std::sync::Arc;

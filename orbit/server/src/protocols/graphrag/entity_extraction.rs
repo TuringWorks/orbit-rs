@@ -815,10 +815,10 @@ impl EntityExtractionActor {
 
         let mut matrix = vec![vec![0; s2_len + 1]; s1_len + 1];
 
-        for (i, row) in matrix.iter_mut().enumerate().take(s1_len + 1) {
+        for i in 0..=s1_len {
             matrix[i][0] = i;
         }
-        for (j, col) in matrix[0].iter_mut().enumerate().take(s2_len + 1) {
+        for j in 0..=s2_len {
             matrix[0][j] = j;
         }
 

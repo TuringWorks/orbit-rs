@@ -1,6 +1,5 @@
 //! RocksDB-backed persistent storage for PostgreSQL query engine
 
-
 //! This module provides a persistent storage backend for PostgreSQL tables using RocksDB.
 //! It stores table schemas, data, and supports basic CRUD operations.
 

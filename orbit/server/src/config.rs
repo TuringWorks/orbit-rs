@@ -714,8 +714,7 @@ pub struct RateLimitConfig {
 }
 
 /// Security configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SecurityConfig {
     /// Authentication configuration
     pub authentication: AuthenticationConfig,
@@ -790,8 +789,7 @@ pub struct AuthorizationConfig {
 }
 
 /// Encryption configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EncryptionConfig {
     /// Encryption at rest
     pub at_rest: Option<EncryptionAtRestConfig>,
@@ -840,8 +838,7 @@ pub struct KmsConfig {
 }
 
 /// Performance configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PerformanceConfig {
     /// Memory configuration
     pub memory: MemoryConfig,
@@ -986,8 +983,7 @@ pub struct LogRotationConfig {
 }
 
 /// Monitoring configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MonitoringConfig {
     /// Metrics configuration
     pub metrics: MetricsConfig,
@@ -1111,8 +1107,7 @@ pub struct RocksDbConfig {
 }
 
 /// Storage configuration for tiered and cold storage
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct StorageConfig {
     /// Tiered storage configuration
     pub tiered: TieredStorageConfig,
@@ -1500,8 +1495,7 @@ pub struct ActorTierPlacementConfig {
 }
 
 /// Cluster configuration for distributed unified storage
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UnifiedClusterConfig {
     /// Enable cluster mode for unified storage
     pub enabled: bool,
@@ -1687,7 +1681,6 @@ pub struct NodeEvictionConfig {
     /// Blacklist duration for evicted nodes in seconds
     pub blacklist_duration_secs: u64,
 }
-
 
 impl Default for ReplicationConfig {
     fn default() -> Self {
@@ -1991,7 +1984,6 @@ impl Default for RocksDbConfig {
     }
 }
 
-
 impl Default for TieredStorageConfig {
     fn default() -> Self {
         Self {
@@ -2252,7 +2244,6 @@ impl Default for RedisCommandConfig {
     }
 }
 
-
 impl Default for AuthenticationConfig {
     fn default() -> Self {
         Self {
@@ -2273,8 +2264,6 @@ impl Default for AuthorizationConfig {
         }
     }
 }
-
-
 
 impl Default for MemoryConfig {
     fn default() -> Self {
@@ -2352,7 +2341,6 @@ impl Default for LoggingConfig {
         }
     }
 }
-
 
 impl Default for MetricsConfig {
     fn default() -> Self {

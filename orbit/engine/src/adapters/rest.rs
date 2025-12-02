@@ -461,8 +461,7 @@ pub struct BeginTransactionRequest {
 }
 
 /// REST isolation level
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum RestIsolationLevel {
     /// Read uncommitted (dirty reads allowed)
     #[serde(rename = "read_uncommitted")]
@@ -478,7 +477,6 @@ pub enum RestIsolationLevel {
     #[serde(rename = "serializable")]
     Serializable,
 }
-
 
 impl RestIsolationLevel {
     /// Convert to engine IsolationLevel

@@ -219,7 +219,6 @@ impl ConsistencyLevel {
     }
 }
 
-
 /// Query parameters
 #[derive(Debug, Clone)]
 pub struct QueryParameters {

@@ -1144,12 +1144,7 @@ impl AqlGraphRAGEngine {
                 );
                 comm_obj.insert(
                     "entity_ids".to_string(),
-                    AqlValue::Array(
-                        community
-                            .into_iter()
-                            .map(AqlValue::String)
-                            .collect(),
-                    ),
+                    AqlValue::Array(community.into_iter().map(AqlValue::String).collect()),
                 );
                 AqlValue::Object(comm_obj)
             })

@@ -880,7 +880,7 @@ impl TokenParser {
                         property: prop,
                     });
                 } else {
-                    return Err(ProtocolError::ParsingError(
+                    return Err(ProtocolError::CypherError(
                         "Expected property name after dot".to_string(),
                     ));
                 }
@@ -894,12 +894,12 @@ impl TokenParser {
                         label,
                     });
                 } else {
-                    return Err(ProtocolError::ParsingError(
+                    return Err(ProtocolError::CypherError(
                         "Expected label name after colon".to_string(),
                     ));
                 }
             } else {
-                return Err(ProtocolError::ParsingError(
+                return Err(ProtocolError::CypherError(
                     "Expected . or : after variable in REMOVE clause".to_string(),
                 ));
             }

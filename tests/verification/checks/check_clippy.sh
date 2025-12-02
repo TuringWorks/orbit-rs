@@ -35,8 +35,11 @@ print_info "Using: $CLIPPY_VERSION"
 FEATURES="resp,postgres-wire,cypher,rest"
 
 # Run clippy checks with all targets and treat warnings as errors
-print_info "Running: cargo clippy --all-targets --all-features -- -D warnings"
-if cargo clippy --all-targets --all-features -- -D warnings; then
+# Note: We use --all-targets but NOT --all-features because some features (like gpu-cuda)
+# require specific build-time dependencies (CUDA toolkit with specific version features).
+# The CI/CD pipeline handles feature-specific testing separately.
+print_info "Running: cargo clippy --all-targets -- -D warnings"
+if cargo clippy --all-targets -- -D warnings; then
     print_success "Clippy linting check passed - no warnings found"
     exit 0
 else

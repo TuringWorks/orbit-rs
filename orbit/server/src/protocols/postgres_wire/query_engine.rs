@@ -1,7 +1,5 @@
 //! SQL query engine for actor operations
 
-
-
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::Arc;

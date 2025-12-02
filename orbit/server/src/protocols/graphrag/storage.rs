@@ -3,8 +3,6 @@
 //! This module provides persistent storage for GraphRAG knowledge graphs using RocksDB.
 //! It stores entities, relationships, embeddings, and metadata with full persistence support.
 
-
-
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use orbit_shared::graphrag::EntityType;
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};

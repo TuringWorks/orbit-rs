@@ -430,14 +430,12 @@ impl FilterExpression {
 }
 
 /// Sort order for ORDER BY clauses
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SortOrder {
     #[default]
     Ascending,
     Descending,
 }
-
 
 /// Aggregation operations
 #[derive(Debug, Clone)]
@@ -519,8 +517,7 @@ pub enum RelationshipDirection {
 }
 
 /// Transaction isolation level
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum IsolationLevel {
     ReadUncommitted,
     #[default]
@@ -528,7 +525,6 @@ pub enum IsolationLevel {
     RepeatableRead,
     Serializable,
 }
-
 
 /// Schema definition for a namespace
 #[derive(Debug, Clone, Serialize, Deserialize)]

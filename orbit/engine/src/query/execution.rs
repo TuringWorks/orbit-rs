@@ -1248,7 +1248,9 @@ impl VectorizedExecutor {
                 .execute_filter_f64(data, *val, op)
                 .map_err(|e| EngineError::Internal(format!("GPU filter f64 failed: {}", e)))?,
             _ => {
-                return Err(EngineError::storage("Unsupported column type or value mismatch for GPU filtering".to_string()));
+                return Err(EngineError::storage(
+                    "Unsupported column type or value mismatch for GPU filtering".to_string(),
+                ));
             }
         };
 

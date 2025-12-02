@@ -14,8 +14,7 @@ use std::collections::HashMap;
 use crate::protocols::postgres_wire::sql::types::SqlValue;
 
 /// Output format for query results
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum OutputFormat {
     /// Pretty table with borders (default)
     #[default]
@@ -27,7 +26,6 @@ pub enum OutputFormat {
     /// Plain text (tab-separated)
     Plain,
 }
-
 
 /// Format query results as a pretty table
 pub fn format_table(

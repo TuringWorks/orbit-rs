@@ -367,9 +367,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let integration = UnifiedStorageIntegration::with_config(integration_config)
             .await
             .map_err(|e| {
-                Box::new(std::io::Error::other(
-                    format!("Failed to initialize unified storage: {}", e),
-                )) as Box<dyn Error>
+                Box::new(std::io::Error::other(format!(
+                    "Failed to initialize unified storage: {}",
+                    e
+                ))) as Box<dyn Error>
             })?;
 
         let integration = Arc::new(integration);
@@ -663,12 +664,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // Start CQL protocol adapter (port 9042)
-    if toml_config
-        .protocols
-        .cql
-        .as_ref()
-        .is_none_or(|c| c.enabled)
-    {
+    if toml_config.protocols.cql.as_ref().is_none_or(|c| c.enabled) {
         let cql_config = CqlConfig {
             listen_addr: format!("{}:{}", args.bind, args.cql_port).parse()?,
             max_connections: 1000,
@@ -1227,9 +1223,10 @@ async fn initialize_cluster(args: &Args) -> Result<(), Box<dyn Error>> {
 
     // Start the cluster manager (this starts Raft consensus)
     cluster_manager.start(transport).await.map_err(|e| {
-        Box::new(std::io::Error::other(
-            format!("Failed to start cluster manager: {}", e),
-        ))
+        Box::new(std::io::Error::other(format!(
+            "Failed to start cluster manager: {}",
+            e
+        )))
     })?;
 
     info!("[Cluster] Cluster manager started successfully with Raft consensus");

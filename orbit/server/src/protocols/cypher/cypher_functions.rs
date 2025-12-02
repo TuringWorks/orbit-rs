@@ -1596,7 +1596,6 @@ pub struct FunctionContext {
     pub relationship_lookup: Option<Box<dyn Fn(&str) -> Option<Value> + Send + Sync>>,
 }
 
-
 impl FunctionContext {
     pub fn new() -> Self {
         Self::default()

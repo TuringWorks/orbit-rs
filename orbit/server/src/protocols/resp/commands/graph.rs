@@ -80,10 +80,7 @@ impl Graph {
 
         // Update label index
         for label in &labels {
-            self.label_index
-                .entry(label.clone())
-                .or_default()
-                .push(id);
+            self.label_index.entry(label.clone()).or_default().push(id);
         }
 
         self.nodes.insert(
@@ -121,14 +118,8 @@ impl Graph {
             .push(id);
 
         // Update adjacency lists
-        self.outgoing_rels
-            .entry(src_id)
-            .or_default()
-            .push(id);
-        self.incoming_rels
-            .entry(dest_id)
-            .or_default()
-            .push(id);
+        self.outgoing_rels.entry(src_id).or_default().push(id);
+        self.incoming_rels.entry(dest_id).or_default().push(id);
 
         self.relationships.insert(
             id,
@@ -358,10 +349,7 @@ impl GraphCommands {
             RespValue::Array(vec![]), // Empty results
             RespValue::Array(vec![
                 RespValue::bulk_string_from_str(format!("Nodes created: {}", nodes_created)),
-                RespValue::bulk_string_from_str(format!(
-                    "Relationships created: {}",
-                    rels_created
-                )),
+                RespValue::bulk_string_from_str(format!("Relationships created: {}", rels_created)),
                 RespValue::bulk_string_from_str(format!("Properties set: {}", properties_set)),
             ]),
         ]))
@@ -508,15 +496,14 @@ impl GraphCommands {
         let query = self.get_string_arg(args, 1, "GRAPH.EXPLAIN")?;
 
         // Return a simplified execution plan
-        let plan = ["Results".to_string(),
+        let plan = [
+            "Results".to_string(),
             "    Project".to_string(),
             "        Filter".to_string(),
-            "            Node By Label Scan | (n:*)".to_string()];
+            "            Node By Label Scan | (n:*)".to_string(),
+        ];
 
-        let plan_resp: Vec<RespValue> = plan
-            .iter()
-            .map(RespValue::bulk_string_from_str)
-            .collect();
+        let plan_resp: Vec<RespValue> = plan.iter().map(RespValue::bulk_string_from_str).collect();
 
         debug!("GRAPH.EXPLAIN {} {}", graph_key, query);
         Ok(RespValue::Array(plan_resp))
