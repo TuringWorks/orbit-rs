@@ -118,5 +118,5 @@ skip = [
 unknown-registry = "warn"
 unknown-git = "warn"
 allow-git = [
-    "https://github.com/ravituringworks/sqlx-no-rsa.git",
+    "https://github.com/TuringWorks/sqlx-no-rsa.git",
 ]
