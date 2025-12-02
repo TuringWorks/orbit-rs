@@ -1503,14 +1503,16 @@ mod tests {
             .unwrap();
 
         // Verify dimension was auto-detected
-        let tables = engine.tables.read().await;
-        let table = tables.get("FLEXIBLE").unwrap();
-        let emb_col = table
-            .columns
-            .iter()
-            .find(|c| c.name == "embedding")
-            .unwrap();
-        assert_eq!(emb_col.dimension, Some(4));
+        {
+            let tables = engine.tables.read().await;
+            let table = tables.get("FLEXIBLE").unwrap();
+            let emb_col = table
+                .columns
+                .iter()
+                .find(|c| c.name == "embedding")
+                .unwrap();
+            assert_eq!(emb_col.dimension, Some(4));
+        } // Drop the read lock before next INSERT
 
         // Second insert with same dimension should succeed
         let result = engine
