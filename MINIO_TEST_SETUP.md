@@ -57,9 +57,11 @@ python3 create_bucket.py  # Script provided in repo root
 
 ## Running the Tests
 
+The MinIO tests have been moved to the `orbit-integration-tests` package and require the `minio-tests` feature flag to run.
+
 ### Run Setup Test First
 ```bash
-cargo test --test tiered_storage_minio_tests setup_minio_bucket -- --exact --nocapture --ignored
+cargo test -p orbit-integration-tests --features minio-tests --test tiered_storage_minio_tests setup_minio_bucket -- --exact --nocapture --ignored
 ```
 
 This will verify the bucket exists and is accessible.
@@ -67,21 +69,24 @@ This will verify the bucket exists and is accessible.
 ### Run Individual Tests
 ```bash
 # Basic S3 operations
-cargo test --test tiered_storage_minio_tests test_s3_backend_basic_operations -- --exact --nocapture --ignored
+cargo test -p orbit-integration-tests --features minio-tests --test tiered_storage_minio_tests test_s3_backend_basic_operations -- --exact --nocapture --ignored
 
 # Scan prefix functionality
-cargo test --test tiered_storage_minio_tests test_s3_backend_scan_prefix -- --exact --nocapture --ignored
+cargo test -p orbit-integration-tests --features minio-tests --test tiered_storage_minio_tests test_s3_backend_scan_prefix -- --exact --nocapture --ignored
 
 # Hot to warm tier propagation
-cargo test --test tiered_storage_minio_tests test_hot_to_warm_propagation -- --exact --nocapture --ignored
+cargo test -p orbit-integration-tests --features minio-tests --test tiered_storage_minio_tests test_hot_to_warm_propagation -- --exact --nocapture --ignored
 ```
 
 ### Run All MinIO Tests
 ```bash
-cargo test --test tiered_storage_minio_tests -- --nocapture --test-threads=1 --ignored
+cargo test -p orbit-integration-tests --features minio-tests --test tiered_storage_minio_tests -- --nocapture --test-threads=1 --ignored
 ```
 
 **Note**: Use `--test-threads=1` to avoid race conditions when multiple tests access the same bucket.
+
+### Why Feature Flag?
+The MinIO tests require an external MinIO server to be running, so they are gated behind a feature flag to prevent them from cluttering regular test output. Without `--features minio-tests`, these tests won't even compile.
 
 ## Test Coverage
 

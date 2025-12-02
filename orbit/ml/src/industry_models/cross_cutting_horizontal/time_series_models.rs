@@ -337,8 +337,8 @@ impl IndustryModel for LSTMTimeSeriesForecaster {
                     // Use last hidden state approximation for gradient
                     // This is a simplified gradient: dL/dw_ij ≈ error_j * activation_i
                     let n = errors.len() as f64;
-                    for j in 0..proj.weights[0].len().min(errors.len()) {
-                        let grad = errors[j] * 2.0 / n;
+                    for (j, &err_val) in errors.iter().enumerate().take(proj.weights[0].len()) {
+                        let grad = err_val * 2.0 / n;
                         // Update weights (assume uniform activation contribution)
                         for i in 0..proj.weights.len() {
                             proj.weights[i][j] -= learning_rate * grad * 0.1;
@@ -369,8 +369,7 @@ impl IndustryModel for LSTMTimeSeriesForecaster {
         if !self.trained && self.lstm_layers.is_empty() {
             return Err(IndustryModelError::PredictionError(
                 "Model not trained. Call train() first.".to_string(),
-            )
-            .into());
+            ));
         }
 
         // Parse input sequence
@@ -388,8 +387,7 @@ impl IndustryModel for LSTMTimeSeriesForecaster {
                 "Expected sequence length {}, got {}",
                 self.input_sequence_length,
                 sequence.len()
-            ))
-            .into());
+            )));
         }
 
         let predictions = self.lstm_forward(&sequence);
@@ -400,8 +398,7 @@ impl IndustryModel for LSTMTimeSeriesForecaster {
         if !self.trained && self.lstm_layers.is_empty() {
             return Err(IndustryModelError::EvaluationError(
                 "Model not trained. Call train() first.".to_string(),
-            )
-            .into());
+            ));
         }
 
         // Parse test data
@@ -545,7 +542,7 @@ impl TransformerTimeSeriesModel {
 
         // Input projection: num_features -> d_model
         self.input_projection = (0..self.num_features)
-            .map(|_| (0..self.d_model).map(|_| rng.sample(&dist)).collect())
+            .map(|_| (0..self.d_model).map(|_| rng.sample(dist)).collect())
             .collect();
 
         // Positional encoding (sinusoidal)
@@ -587,7 +584,7 @@ impl TransformerTimeSeriesModel {
         self.output_projection = (0..self.d_model)
             .map(|_| {
                 (0..self.forecast_horizon)
-                    .map(|_| rng.sample(&dist))
+                    .map(|_| rng.sample(dist))
                     .collect()
             })
             .collect();
@@ -842,9 +839,9 @@ impl IndustryModel for TransformerTimeSeriesModel {
 
     async fn predict(&self, input: &[u8]) -> Result<Vec<f32>> {
         if !self.trained && self.encoder_layers.is_empty() {
-            return Err(
-                IndustryModelError::PredictionError("Model not trained".to_string()).into(),
-            );
+            return Err(IndustryModelError::PredictionError(
+                "Model not trained".to_string(),
+            ));
         }
 
         if input.is_empty() {
@@ -861,9 +858,9 @@ impl IndustryModel for TransformerTimeSeriesModel {
 
     async fn evaluate(&self, test_data: &[u8]) -> Result<ModelMetrics> {
         if !self.trained && self.encoder_layers.is_empty() {
-            return Err(
-                IndustryModelError::EvaluationError("Model not trained".to_string()).into(),
-            );
+            return Err(IndustryModelError::EvaluationError(
+                "Model not trained".to_string(),
+            ));
         }
 
         let test_samples: Vec<TrainingSample> = if test_data.is_empty() {
@@ -1037,7 +1034,7 @@ impl DeepARForecaster {
     }
 
     /// LSTM step for a single time point
-    fn lstm_step(&self, x: &[f64], h: &mut Vec<Vec<f64>>, c: &mut Vec<Vec<f64>>) -> Vec<f64> {
+    fn lstm_step(&self, x: &[f64], h: &mut [Vec<f64>], c: &mut [Vec<f64>]) -> Vec<f64> {
         let mut input = x.to_vec();
 
         for (layer_idx, layer) in self.lstm_weights.iter().enumerate() {
@@ -1295,9 +1292,9 @@ impl IndustryModel for DeepARForecaster {
 
     async fn predict(&self, input: &[u8]) -> Result<Vec<f32>> {
         if !self.trained && self.lstm_weights.is_empty() {
-            return Err(
-                IndustryModelError::PredictionError("Model not trained".to_string()).into(),
-            );
+            return Err(IndustryModelError::PredictionError(
+                "Model not trained".to_string(),
+            ));
         }
 
         if input.is_empty() {
@@ -1314,9 +1311,9 @@ impl IndustryModel for DeepARForecaster {
 
     async fn evaluate(&self, test_data: &[u8]) -> Result<ModelMetrics> {
         if !self.trained && self.lstm_weights.is_empty() {
-            return Err(
-                IndustryModelError::EvaluationError("Model not trained".to_string()).into(),
-            );
+            return Err(IndustryModelError::EvaluationError(
+                "Model not trained".to_string(),
+            ));
         }
 
         let test_samples: Vec<TrainingSample> = if test_data.is_empty() {
@@ -1528,7 +1525,7 @@ impl ProphetDecompositionModel {
         }
 
         // Detect changepoints (significant trend changes)
-        let n_changepoints = ((n as f64 * 0.1).max(2.0).min(10.0)) as usize;
+        let n_changepoints = ((n as f64 * 0.1).clamp(2.0, 10.0)) as usize;
         let step = n / (n_changepoints + 1);
 
         self.changepoints.clear();
@@ -1664,9 +1661,9 @@ impl IndustryModel for ProphetDecompositionModel {
 
     async fn predict(&self, input: &[u8]) -> Result<Vec<f32>> {
         if !self.trained {
-            return Err(
-                IndustryModelError::PredictionError("Model not trained".to_string()).into(),
-            );
+            return Err(IndustryModelError::PredictionError(
+                "Model not trained".to_string(),
+            ));
         }
 
         if input.is_empty() {
@@ -1699,9 +1696,9 @@ impl IndustryModel for ProphetDecompositionModel {
 
     async fn evaluate(&self, test_data: &[u8]) -> Result<ModelMetrics> {
         if !self.trained {
-            return Err(
-                IndustryModelError::EvaluationError("Model not trained".to_string()).into(),
-            );
+            return Err(IndustryModelError::EvaluationError(
+                "Model not trained".to_string(),
+            ));
         }
 
         let test_series: Vec<f64> = if test_data.is_empty() {

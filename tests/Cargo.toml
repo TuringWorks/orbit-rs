@@ -7,6 +7,7 @@ license = "MIT"
 [dependencies]
 orbit-client = { path = "../orbit/client" }
 orbit-server = { path = "../orbit/server" }
+orbit-engine = { path = "../orbit/engine" }
 orbit-shared = { path = "../orbit/shared" }
 orbit-proto = { path = "../orbit/proto" }
 orbit-util = { path = "../orbit/util" }
@@ -57,13 +58,15 @@ property-tests = ["proptest"]
 integration-tests = []
 performance-tests = []
 compatibility-tests = []
+minio-tests = []  # Run with: cargo test -p orbit-integration-tests --features minio-tests --test tiered_storage_minio_tests -- --ignored
 
 # Development and debugging flags
 test-logging = []
 test-metrics = []
 mock-services = []
 
-# Test binaries will be added as integration tests are implemented
-# [[test]]
-# name = "mock_simple"
-# path = "tests/mock_simple.rs"
+# Test binaries - MinIO tests are opt-in via feature flag
+[[test]]
+name = "tiered_storage_minio_tests"
+path = "integration/tiered_storage_minio_tests.rs"
+required-features = ["minio-tests"]

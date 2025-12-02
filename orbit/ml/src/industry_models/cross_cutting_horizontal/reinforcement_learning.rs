@@ -124,7 +124,8 @@ impl ReplayBuffer {
             indices.swap(i, j);
         }
 
-        indices.into_iter()
+        indices
+            .into_iter()
             .take(batch_size.min(self.experiences.len()))
             .map(|i| &self.experiences[i])
             .collect()
@@ -173,8 +174,8 @@ pub struct PPOAgent {
     #[serde(skip)]
     log_std: Vec<f64>,
     trained: bool,
-    gamma: f64,       // Discount factor
-    gae_lambda: f64,  // GAE parameter
+    gamma: f64,      // Discount factor
+    gae_lambda: f64, // GAE parameter
 }
 
 impl PPOAgent {
@@ -243,7 +244,8 @@ impl PPOAgent {
     }
 
     fn compute_log_prob(&self, action: &[f64], mean: &[f64], std: &[f64]) -> f64 {
-        action.iter()
+        action
+            .iter()
             .zip(mean.iter())
             .zip(std.iter())
             .map(|((&a, &m), &s)| {
@@ -301,17 +303,27 @@ impl IndustryModel for PPOAgent {
                 .map(|_| {
                     let episode_len = 50;
                     let states: Vec<Vec<f64>> = (0..episode_len)
-                        .map(|_| (0..self.state_dim).map(|_| rng.gen_range(-1.0..1.0)).collect())
+                        .map(|_| {
+                            (0..self.state_dim)
+                                .map(|_| rng.gen_range(-1.0..1.0))
+                                .collect()
+                        })
                         .collect();
-                    let actions: Vec<Vec<f64>> = states.iter()
-                        .map(|s| self.sample_action(s))
-                        .collect();
+                    let actions: Vec<Vec<f64>> =
+                        states.iter().map(|s| self.sample_action(s)).collect();
                     let rewards: Vec<f64> = (0..episode_len)
-                        .map(|t| 1.0 - (t as f64 / episode_len as f64) * 0.5 + rng.gen_range(-0.1..0.1))
+                        .map(|t| {
+                            1.0 - (t as f64 / episode_len as f64) * 0.5 + rng.gen_range(-0.1..0.1)
+                        })
                         .collect();
                     let mut dones = vec![false; episode_len];
                     dones[episode_len - 1] = true;
-                    Trajectory { states, actions, rewards, dones }
+                    Trajectory {
+                        states,
+                        actions,
+                        rewards,
+                        dones,
+                    }
                 })
                 .collect();
             RLTrainingSample { trajectories }
@@ -331,19 +343,24 @@ impl IndustryModel for PPOAgent {
             total_reward += trajectory.rewards.iter().sum::<f64>();
 
             // Compute values for all states
-            let values: Vec<f64> = trajectory.states.iter()
+            let values: Vec<f64> = trajectory
+                .states
+                .iter()
                 .map(|s| self.get_value(s))
                 .collect();
 
             // Compute advantages using GAE
             let advantages = self.compute_gae(&trajectory.rewards, &values, &trajectory.dones);
-            let returns: Vec<f64> = advantages.iter()
+            let returns: Vec<f64> = advantages
+                .iter()
                 .zip(values.iter())
                 .map(|(a, v)| a + v)
                 .collect();
 
             // Compute old log probs
-            let old_log_probs: Vec<f64> = trajectory.states.iter()
+            let old_log_probs: Vec<f64> = trajectory
+                .states
+                .iter()
                 .zip(trajectory.actions.iter())
                 .map(|(s, a)| {
                     let (mean, std) = self.get_action_distribution(s);
@@ -353,7 +370,9 @@ impl IndustryModel for PPOAgent {
 
             // PPO update
             for _epoch in 0..epochs {
-                for (i, (state, action)) in trajectory.states.iter()
+                for (i, (state, action)) in trajectory
+                    .states
+                    .iter()
                     .zip(trajectory.actions.iter())
                     .enumerate()
                 {
@@ -417,17 +436,26 @@ impl IndustryModel for PPOAgent {
         let mut metrics = ModelMetrics::new();
         metrics.add_custom_metric("avg_episode_reward".to_string(), avg_reward);
         metrics.add_custom_metric("success_rate".to_string(), 0.87);
-        metrics.add_custom_metric("policy_loss".to_string(), total_policy_loss / (n_samples * 150.0));
-        metrics.add_custom_metric("value_loss".to_string(), total_value_loss / (n_samples * 150.0));
-        metrics.add_custom_metric("policy_entropy".to_string(), self.log_std.iter().map(|ls| ls.exp()).sum::<f64>() / self.action_dim as f64);
+        metrics.add_custom_metric(
+            "policy_loss".to_string(),
+            total_policy_loss / (n_samples * 150.0),
+        );
+        metrics.add_custom_metric(
+            "value_loss".to_string(),
+            total_value_loss / (n_samples * 150.0),
+        );
+        metrics.add_custom_metric(
+            "policy_entropy".to_string(),
+            self.log_std.iter().map(|ls| ls.exp()).sum::<f64>() / self.action_dim as f64,
+        );
         Ok(metrics)
     }
 
     async fn predict(&self, input: &[u8]) -> Result<Vec<f32>> {
         if !self.trained && self.actor_network.is_none() {
-            return Err(
-                IndustryModelError::PredictionError("Model not trained".to_string()).into(),
-            );
+            return Err(IndustryModelError::PredictionError(
+                "Model not trained".to_string(),
+            ));
         }
 
         let state: Vec<f64> = if input.is_empty() {
@@ -444,9 +472,9 @@ impl IndustryModel for PPOAgent {
 
     async fn evaluate(&self, test_data: &[u8]) -> Result<ModelMetrics> {
         if !self.trained && self.actor_network.is_none() {
-            return Err(
-                IndustryModelError::EvaluationError("Model not trained".to_string()).into(),
-            );
+            return Err(IndustryModelError::EvaluationError(
+                "Model not trained".to_string(),
+            ));
         }
 
         let eval_data: RLTrainingSample = if test_data.is_empty() {
@@ -455,17 +483,25 @@ impl IndustryModel for PPOAgent {
                 .map(|_| {
                     let episode_len = 50;
                     let states: Vec<Vec<f64>> = (0..episode_len)
-                        .map(|_| (0..self.state_dim).map(|_| rng.gen_range(-1.0..1.0)).collect())
+                        .map(|_| {
+                            (0..self.state_dim)
+                                .map(|_| rng.gen_range(-1.0..1.0))
+                                .collect()
+                        })
                         .collect();
-                    let actions: Vec<Vec<f64>> = states.iter()
-                        .map(|s| self.sample_action(s))
-                        .collect();
+                    let actions: Vec<Vec<f64>> =
+                        states.iter().map(|s| self.sample_action(s)).collect();
                     let rewards: Vec<f64> = (0..episode_len)
                         .map(|t| 1.0 - (t as f64 / episode_len as f64) * 0.3)
                         .collect();
                     let mut dones = vec![false; episode_len];
                     dones[episode_len - 1] = true;
-                    Trajectory { states, actions, rewards, dones }
+                    Trajectory {
+                        states,
+                        actions,
+                        rewards,
+                        dones,
+                    }
                 })
                 .collect();
             RLTrainingSample { trajectories }
@@ -475,7 +511,9 @@ impl IndustryModel for PPOAgent {
             })?
         };
 
-        let total_reward: f64 = eval_data.trajectories.iter()
+        let total_reward: f64 = eval_data
+            .trajectories
+            .iter()
             .map(|t| t.rewards.iter().sum::<f64>())
             .sum();
         let avg_reward = total_reward / eval_data.trajectories.len() as f64;
@@ -519,7 +557,7 @@ pub struct SACAgent {
     replay_buffer: ReplayBuffer,
     trained: bool,
     gamma: f64,
-    tau: f64,  // Soft update coefficient
+    tau: f64, // Soft update coefficient
 }
 
 impl SACAgent {
@@ -604,14 +642,22 @@ impl SACAgent {
             (&self.critic_network_1, &self.critic_network_2)
         };
 
-        let q1 = critic1.as_ref().map(|c| c.forward(&input, false)[0]).unwrap_or(0.0);
-        let q2 = critic2.as_ref().map(|c| c.forward(&input, false)[0]).unwrap_or(0.0);
+        let q1 = critic1
+            .as_ref()
+            .map(|c| c.forward(&input, false)[0])
+            .unwrap_or(0.0);
+        let q2 = critic2
+            .as_ref()
+            .map(|c| c.forward(&input, false)[0])
+            .unwrap_or(0.0);
         (q1, q2)
     }
 
     fn soft_update_targets(&mut self) {
         // Soft update target networks
-        if let (Some(ref critic1), Some(ref mut target1)) = (&self.critic_network_1, &mut self.target_critic_1) {
+        if let (Some(ref critic1), Some(ref mut target1)) =
+            (&self.critic_network_1, &mut self.target_critic_1)
+        {
             for (layer, target_layer) in critic1.layers.iter().zip(target1.layers.iter_mut()) {
                 for (row, target_row) in layer.weights.iter().zip(target_layer.weights.iter_mut()) {
                     for (w, tw) in row.iter().zip(target_row.iter_mut()) {
@@ -623,7 +669,9 @@ impl SACAgent {
                 }
             }
         }
-        if let (Some(ref critic2), Some(ref mut target2)) = (&self.critic_network_2, &mut self.target_critic_2) {
+        if let (Some(ref critic2), Some(ref mut target2)) =
+            (&self.critic_network_2, &mut self.target_critic_2)
+        {
             for (layer, target_layer) in critic2.layers.iter().zip(target2.layers.iter_mut()) {
                 for (row, target_row) in layer.weights.iter().zip(target_layer.weights.iter_mut()) {
                     for (w, tw) in row.iter().zip(target_row.iter_mut()) {
@@ -658,17 +706,24 @@ impl IndustryModel for SACAgent {
                 .map(|_| {
                     let episode_len = 50;
                     let states: Vec<Vec<f64>> = (0..episode_len)
-                        .map(|_| (0..self.state_dim).map(|_| rng.gen_range(-1.0..1.0)).collect())
+                        .map(|_| {
+                            (0..self.state_dim)
+                                .map(|_| rng.gen_range(-1.0..1.0))
+                                .collect()
+                        })
                         .collect();
-                    let actions: Vec<Vec<f64>> = states.iter()
-                        .map(|s| self.get_action(s, false))
-                        .collect();
-                    let rewards: Vec<f64> = (0..episode_len)
-                        .map(|_| rng.gen_range(-0.5..1.0))
-                        .collect();
+                    let actions: Vec<Vec<f64>> =
+                        states.iter().map(|s| self.get_action(s, false)).collect();
+                    let rewards: Vec<f64> =
+                        (0..episode_len).map(|_| rng.gen_range(-0.5..1.0)).collect();
                     let mut dones = vec![false; episode_len];
                     dones[episode_len - 1] = true;
-                    Trajectory { states, actions, rewards, dones }
+                    Trajectory {
+                        states,
+                        actions,
+                        rewards,
+                        dones,
+                    }
                 })
                 .collect();
             RLTrainingSample { trajectories }
@@ -719,9 +774,16 @@ impl IndustryModel for SACAgent {
                 let min_q_target = q1_target.min(q2_target);
 
                 // Entropy bonus (simplified)
-                let entropy_bonus = alpha * self.log_std.iter().map(|ls| -ls.exp()).sum::<f64>() / self.action_dim as f64;
+                let entropy_bonus = alpha * self.log_std.iter().map(|ls| -ls.exp()).sum::<f64>()
+                    / self.action_dim as f64;
 
-                let target = exp.reward + self.gamma * (if exp.done { 0.0 } else { min_q_target + entropy_bonus });
+                let target = exp.reward
+                    + self.gamma
+                        * (if exp.done {
+                            0.0
+                        } else {
+                            min_q_target + entropy_bonus
+                        });
 
                 // Current Q-values
                 let (q1, q2) = self.get_q_value(&exp.state, &exp.action, false);
@@ -780,16 +842,22 @@ impl IndustryModel for SACAgent {
         let mut metrics = ModelMetrics::new();
         metrics.add_custom_metric("avg_episode_reward".to_string(), total_reward / n_samples);
         metrics.add_custom_metric("success_rate".to_string(), 0.91);
-        metrics.add_custom_metric("q_loss".to_string(), total_q_loss / (num_updates as f64 * batch_size as f64));
-        metrics.add_custom_metric("policy_loss".to_string(), total_policy_loss / (num_updates as f64 * batch_size as f64));
+        metrics.add_custom_metric(
+            "q_loss".to_string(),
+            total_q_loss / (num_updates as f64 * batch_size as f64),
+        );
+        metrics.add_custom_metric(
+            "policy_loss".to_string(),
+            total_policy_loss / (num_updates as f64 * batch_size as f64),
+        );
         Ok(metrics)
     }
 
     async fn predict(&self, input: &[u8]) -> Result<Vec<f32>> {
         if !self.trained && self.actor_network.is_none() {
-            return Err(
-                IndustryModelError::PredictionError("Model not trained".to_string()).into(),
-            );
+            return Err(IndustryModelError::PredictionError(
+                "Model not trained".to_string(),
+            ));
         }
 
         let state: Vec<f64> = if input.is_empty() {
@@ -806,9 +874,9 @@ impl IndustryModel for SACAgent {
 
     async fn evaluate(&self, test_data: &[u8]) -> Result<ModelMetrics> {
         if !self.trained && self.actor_network.is_none() {
-            return Err(
-                IndustryModelError::EvaluationError("Model not trained".to_string()).into(),
-            );
+            return Err(IndustryModelError::EvaluationError(
+                "Model not trained".to_string(),
+            ));
         }
 
         let eval_data: RLTrainingSample = if test_data.is_empty() {
@@ -817,17 +885,24 @@ impl IndustryModel for SACAgent {
                 .map(|_| {
                     let episode_len = 50;
                     let states: Vec<Vec<f64>> = (0..episode_len)
-                        .map(|_| (0..self.state_dim).map(|_| rng.gen_range(-1.0..1.0)).collect())
+                        .map(|_| {
+                            (0..self.state_dim)
+                                .map(|_| rng.gen_range(-1.0..1.0))
+                                .collect()
+                        })
                         .collect();
-                    let actions: Vec<Vec<f64>> = states.iter()
-                        .map(|s| self.get_action(s, true))
-                        .collect();
-                    let rewards: Vec<f64> = (0..episode_len)
-                        .map(|_| rng.gen_range(-0.2..1.2))
-                        .collect();
+                    let actions: Vec<Vec<f64>> =
+                        states.iter().map(|s| self.get_action(s, true)).collect();
+                    let rewards: Vec<f64> =
+                        (0..episode_len).map(|_| rng.gen_range(-0.2..1.2)).collect();
                     let mut dones = vec![false; episode_len];
                     dones[episode_len - 1] = true;
-                    Trajectory { states, actions, rewards, dones }
+                    Trajectory {
+                        states,
+                        actions,
+                        rewards,
+                        dones,
+                    }
                 })
                 .collect();
             RLTrainingSample { trajectories }
@@ -837,7 +912,9 @@ impl IndustryModel for SACAgent {
             })?
         };
 
-        let total_reward: f64 = eval_data.trajectories.iter()
+        let total_reward: f64 = eval_data
+            .trajectories
+            .iter()
             .map(|t| t.rewards.iter().sum::<f64>())
             .sum();
         let avg_reward = total_reward / eval_data.trajectories.len() as f64;
@@ -931,11 +1008,14 @@ impl DDPGAgent {
 
         if add_noise {
             let mut rng = rand::thread_rng();
-            action.iter()
+            action
+                .iter()
                 .map(|&a| {
                     let u1: f64 = rng.gen();
                     let u2: f64 = rng.gen();
-                    let noise = self.noise_std * (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
+                    let noise = self.noise_std
+                        * (-2.0 * u1.ln()).sqrt()
+                        * (2.0 * std::f64::consts::PI * u2).cos();
                     (a + noise).clamp(-1.0, 1.0)
                 })
                 .collect()
@@ -948,13 +1028,22 @@ impl DDPGAgent {
         let mut input = state.to_vec();
         input.extend(action);
 
-        let critic = if use_target { &self.target_critic } else { &self.critic_network };
-        critic.as_ref().map(|c| c.forward(&input, false)[0]).unwrap_or(0.0)
+        let critic = if use_target {
+            &self.target_critic
+        } else {
+            &self.critic_network
+        };
+        critic
+            .as_ref()
+            .map(|c| c.forward(&input, false)[0])
+            .unwrap_or(0.0)
     }
 
     fn soft_update_targets(&mut self) {
         // Update target actor
-        if let (Some(ref actor), Some(ref mut target_actor)) = (&self.actor_network, &mut self.target_actor) {
+        if let (Some(ref actor), Some(ref mut target_actor)) =
+            (&self.actor_network, &mut self.target_actor)
+        {
             for (layer, target_layer) in actor.layers.iter().zip(target_actor.layers.iter_mut()) {
                 for (row, target_row) in layer.weights.iter().zip(target_layer.weights.iter_mut()) {
                     for (w, tw) in row.iter().zip(target_row.iter_mut()) {
@@ -967,7 +1056,9 @@ impl DDPGAgent {
             }
         }
         // Update target critic
-        if let (Some(ref critic), Some(ref mut target_critic)) = (&self.critic_network, &mut self.target_critic) {
+        if let (Some(ref critic), Some(ref mut target_critic)) =
+            (&self.critic_network, &mut self.target_critic)
+        {
             for (layer, target_layer) in critic.layers.iter().zip(target_critic.layers.iter_mut()) {
                 for (row, target_row) in layer.weights.iter().zip(target_layer.weights.iter_mut()) {
                     for (w, tw) in row.iter().zip(target_row.iter_mut()) {
@@ -1001,17 +1092,24 @@ impl IndustryModel for DDPGAgent {
                 .map(|_| {
                     let episode_len = 50;
                     let states: Vec<Vec<f64>> = (0..episode_len)
-                        .map(|_| (0..self.state_dim).map(|_| rng.gen_range(-1.0..1.0)).collect())
+                        .map(|_| {
+                            (0..self.state_dim)
+                                .map(|_| rng.gen_range(-1.0..1.0))
+                                .collect()
+                        })
                         .collect();
-                    let actions: Vec<Vec<f64>> = states.iter()
-                        .map(|s| self.get_action(s, true))
-                        .collect();
-                    let rewards: Vec<f64> = (0..episode_len)
-                        .map(|_| rng.gen_range(-0.3..1.0))
-                        .collect();
+                    let actions: Vec<Vec<f64>> =
+                        states.iter().map(|s| self.get_action(s, true)).collect();
+                    let rewards: Vec<f64> =
+                        (0..episode_len).map(|_| rng.gen_range(-0.3..1.0)).collect();
                     let mut dones = vec![false; episode_len];
                     dones[episode_len - 1] = true;
-                    Trajectory { states, actions, rewards, dones }
+                    Trajectory {
+                        states,
+                        actions,
+                        rewards,
+                        dones,
+                    }
                 })
                 .collect();
             RLTrainingSample { trajectories }
@@ -1107,15 +1205,18 @@ impl IndustryModel for DDPGAgent {
         let mut metrics = ModelMetrics::new();
         metrics.add_custom_metric("avg_episode_reward".to_string(), total_reward / n_samples);
         metrics.add_custom_metric("success_rate".to_string(), 0.84);
-        metrics.add_custom_metric("critic_loss".to_string(), total_critic_loss / (num_updates as f64 * batch_size as f64));
+        metrics.add_custom_metric(
+            "critic_loss".to_string(),
+            total_critic_loss / (num_updates as f64 * batch_size as f64),
+        );
         Ok(metrics)
     }
 
     async fn predict(&self, input: &[u8]) -> Result<Vec<f32>> {
         if !self.trained && self.actor_network.is_none() {
-            return Err(
-                IndustryModelError::PredictionError("Model not trained".to_string()).into(),
-            );
+            return Err(IndustryModelError::PredictionError(
+                "Model not trained".to_string(),
+            ));
         }
 
         let state: Vec<f64> = if input.is_empty() {
@@ -1132,9 +1233,9 @@ impl IndustryModel for DDPGAgent {
 
     async fn evaluate(&self, test_data: &[u8]) -> Result<ModelMetrics> {
         if !self.trained && self.actor_network.is_none() {
-            return Err(
-                IndustryModelError::EvaluationError("Model not trained".to_string()).into(),
-            );
+            return Err(IndustryModelError::EvaluationError(
+                "Model not trained".to_string(),
+            ));
         }
 
         let eval_data: RLTrainingSample = if test_data.is_empty() {
@@ -1143,17 +1244,24 @@ impl IndustryModel for DDPGAgent {
                 .map(|_| {
                     let episode_len = 50;
                     let states: Vec<Vec<f64>> = (0..episode_len)
-                        .map(|_| (0..self.state_dim).map(|_| rng.gen_range(-1.0..1.0)).collect())
+                        .map(|_| {
+                            (0..self.state_dim)
+                                .map(|_| rng.gen_range(-1.0..1.0))
+                                .collect()
+                        })
                         .collect();
-                    let actions: Vec<Vec<f64>> = states.iter()
-                        .map(|s| self.get_action(s, false))
-                        .collect();
-                    let rewards: Vec<f64> = (0..episode_len)
-                        .map(|_| rng.gen_range(-0.1..1.0))
-                        .collect();
+                    let actions: Vec<Vec<f64>> =
+                        states.iter().map(|s| self.get_action(s, false)).collect();
+                    let rewards: Vec<f64> =
+                        (0..episode_len).map(|_| rng.gen_range(-0.1..1.0)).collect();
                     let mut dones = vec![false; episode_len];
                     dones[episode_len - 1] = true;
-                    Trajectory { states, actions, rewards, dones }
+                    Trajectory {
+                        states,
+                        actions,
+                        rewards,
+                        dones,
+                    }
                 })
                 .collect();
             RLTrainingSample { trajectories }
@@ -1163,7 +1271,9 @@ impl IndustryModel for DDPGAgent {
             })?
         };
 
-        let total_reward: f64 = eval_data.trajectories.iter()
+        let total_reward: f64 = eval_data
+            .trajectories
+            .iter()
             .map(|t| t.rewards.iter().sum::<f64>())
             .sum();
         let avg_reward = total_reward / eval_data.trajectories.len() as f64;
@@ -1191,12 +1301,12 @@ pub struct ContextualBanditAgent {
     exploration_rate: f32,
     // LinUCB parameters per arm
     #[serde(skip)]
-    a_matrices: Vec<Vec<Vec<f64>>>,  // A_a = d x d matrix per arm
+    a_matrices: Vec<Vec<Vec<f64>>>, // A_a = d x d matrix per arm
     #[serde(skip)]
-    b_vectors: Vec<Vec<f64>>,        // b_a = d vector per arm
+    b_vectors: Vec<Vec<f64>>, // b_a = d vector per arm
     #[serde(skip)]
-    theta_vectors: Vec<Vec<f64>>,    // theta_a = A^-1 * b per arm
-    alpha: f64,                       // UCB exploration parameter
+    theta_vectors: Vec<Vec<f64>>, // theta_a = A^-1 * b per arm
+    alpha: f64, // UCB exploration parameter
     trained: bool,
     total_pulls: Vec<usize>,
     total_rewards: Vec<f64>,
@@ -1225,8 +1335,8 @@ impl ContextualBanditAgent {
         self.a_matrices = (0..self.num_arms)
             .map(|_| {
                 let mut matrix = vec![vec![0.0; self.context_dim]; self.context_dim];
-                for i in 0..self.context_dim {
-                    matrix[i][i] = 1.0;
+                for (i, row) in matrix.iter_mut().enumerate() {
+                    row[i] = 1.0;
                 }
                 matrix
             })
@@ -1262,14 +1372,16 @@ impl ContextualBanditAgent {
 
         for arm in 0..self.num_arms {
             // Compute expected reward: theta^T * context
-            let expected = self.theta_vectors[arm].iter()
+            let expected = self.theta_vectors[arm]
+                .iter()
                 .zip(context.iter())
                 .map(|(&t, &c)| t * c)
                 .sum::<f64>();
 
             // Compute uncertainty (simplified): sqrt(context^T * A^-1 * context)
             let a = &self.a_matrices[arm];
-            let uncertainty: f64 = context.iter()
+            let uncertainty: f64 = context
+                .iter()
                 .enumerate()
                 .map(|(i, &c)| {
                     if a[i][i].abs() > 1e-10 {
@@ -1300,8 +1412,8 @@ impl ContextualBanditAgent {
         }
 
         // Update b_a = b_a + reward * context
-        for i in 0..self.context_dim {
-            self.b_vectors[arm][i] += reward * context[i];
+        for (i, &ctx_val) in context.iter().enumerate() {
+            self.b_vectors[arm][i] += reward * ctx_val;
         }
 
         // Recompute theta
@@ -1351,14 +1463,22 @@ impl IndustryModel for ContextualBanditAgent {
                     let arm = rng.gen_range(0..self.num_arms);
                     // Reward depends on arm and context alignment
                     let arm_preference: Vec<f64> = (0..self.context_dim)
-                        .map(|i| (arm as f64 / self.num_arms as f64) * (i as f64 / self.context_dim as f64))
+                        .map(|i| {
+                            (arm as f64 / self.num_arms as f64)
+                                * (i as f64 / self.context_dim as f64)
+                        })
                         .collect();
-                    let alignment: f64 = context.iter()
+                    let alignment: f64 = context
+                        .iter()
                         .zip(arm_preference.iter())
                         .map(|(c, p)| c * p)
                         .sum();
                     let reward = (alignment + rng.gen_range(-0.1..0.1)).clamp(0.0, 1.0);
-                    BanditInteraction { context, arm, reward }
+                    BanditInteraction {
+                        context,
+                        arm,
+                        reward,
+                    }
                 })
                 .collect();
             BanditTrainingSample { interactions }
@@ -1394,9 +1514,9 @@ impl IndustryModel for ContextualBanditAgent {
 
     async fn predict(&self, input: &[u8]) -> Result<Vec<f32>> {
         if !self.trained && self.theta_vectors.is_empty() {
-            return Err(
-                IndustryModelError::PredictionError("Model not trained".to_string()).into(),
-            );
+            return Err(IndustryModelError::PredictionError(
+                "Model not trained".to_string(),
+            ));
         }
 
         let context: Vec<f64> = if input.is_empty() {
@@ -1408,24 +1528,31 @@ impl IndustryModel for ContextualBanditAgent {
         };
 
         // Compute UCB scores for all arms
-        let mut scores = vec![0.0f32; self.num_arms];
-        for arm in 0..self.num_arms {
-            let expected: f64 = self.theta_vectors[arm].iter()
-                .zip(context.iter())
-                .map(|(&t, &c)| t * c)
-                .sum();
+        let scores: Vec<f32> = (0..self.num_arms)
+            .map(|arm| {
+                let expected: f64 = self.theta_vectors[arm]
+                    .iter()
+                    .zip(context.iter())
+                    .map(|(&t, &c)| t * c)
+                    .sum();
 
-            let a = &self.a_matrices[arm];
-            let uncertainty: f64 = context.iter()
-                .enumerate()
-                .map(|(i, &c)| {
-                    if a[i][i].abs() > 1e-10 { c * c / a[i][i] } else { c * c }
-                })
-                .sum::<f64>()
-                .sqrt();
+                let a = &self.a_matrices[arm];
+                let uncertainty: f64 = context
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &c)| {
+                        if a[i][i].abs() > 1e-10 {
+                            c * c / a[i][i]
+                        } else {
+                            c * c
+                        }
+                    })
+                    .sum::<f64>()
+                    .sqrt();
 
-            scores[arm] = (expected + self.alpha * uncertainty) as f32;
-        }
+                (expected + self.alpha * uncertainty) as f32
+            })
+            .collect();
 
         // Softmax to get probabilities
         let max_score = scores.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
@@ -1438,9 +1565,9 @@ impl IndustryModel for ContextualBanditAgent {
 
     async fn evaluate(&self, test_data: &[u8]) -> Result<ModelMetrics> {
         if !self.trained && self.theta_vectors.is_empty() {
-            return Err(
-                IndustryModelError::EvaluationError("Model not trained".to_string()).into(),
-            );
+            return Err(IndustryModelError::EvaluationError(
+                "Model not trained".to_string(),
+            ));
         }
 
         let eval_data: BanditTrainingSample = if test_data.is_empty() {
@@ -1452,7 +1579,11 @@ impl IndustryModel for ContextualBanditAgent {
                         .collect();
                     let arm = self.select_arm(&context);
                     let reward = rng.gen_range(0.3..0.9);
-                    BanditInteraction { context, arm, reward }
+                    BanditInteraction {
+                        context,
+                        arm,
+                        reward,
+                    }
                 })
                 .collect();
             BanditTrainingSample { interactions }
@@ -1462,9 +1593,7 @@ impl IndustryModel for ContextualBanditAgent {
             })?
         };
 
-        let total_reward: f64 = eval_data.interactions.iter()
-            .map(|i| i.reward)
-            .sum();
+        let total_reward: f64 = eval_data.interactions.iter().map(|i| i.reward).sum();
         let avg_reward = total_reward / eval_data.interactions.len() as f64;
 
         let mut metrics = ModelMetrics::new();
