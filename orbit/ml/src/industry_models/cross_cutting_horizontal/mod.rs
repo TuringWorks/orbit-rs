@@ -10,6 +10,7 @@
 //! - Generative AI
 //! - Graph Neural Networks
 //! - Survival Analysis
+//! - Tree Ensembles (XGBoost, Random Forest)
 
 pub mod anomaly_detection;
 pub mod generative_models;
@@ -19,6 +20,7 @@ pub mod recommender_systems;
 pub mod reinforcement_learning;
 pub mod survival_analysis;
 pub mod time_series_models;
+pub mod tree_ensembles;
 
 // Re-export commonly used types
 pub use anomaly_detection::*;
@@ -29,6 +31,7 @@ pub use recommender_systems::*;
 pub use reinforcement_learning::*;
 pub use survival_analysis::*;
 pub use time_series_models::*;
+pub use tree_ensembles::*;
 
 // Reference to shared infrastructure:
 // - ../data_loaders.rs - Image, time-series, graph data loaders
