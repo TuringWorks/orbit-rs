@@ -15,6 +15,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **ML Protocol Integration Documentation & Examples** (2025-12-02): Unified ML capabilities across all protocols
+  - **Protocol Integration Guide** (`docs/content/ml/ML_PROTOCOL_INTEGRATION.md`)
+    - Redis (RESP) ML commands: ML.CREATE, ML.TRAIN, ML.PREDICT, ML.EMBED, etc.
+    - PostgreSQL ML SQL functions: ML_TRAIN_MODEL, ML_PREDICT, ML_KMEANS, etc.
+    - MySQL ML functions via stored procedures
+    - CQL (Cassandra) ML via User-Defined Functions
+    - HTTP REST API endpoints: /ml/models, /ml/predict, /ml/industry/*
+    - gRPC MLService for high-performance operations
+  - **Example Code** (`orbit-examples/ml-protocol-examples/`)
+    - Python examples: postgresql_ml.py, redis_ml.py, rest_ml.py
+    - JavaScript examples: redis_ml.js
+    - SQL examples: ml_training.sql, ml_inference.sql, ml_vectors.sql
+    - README with quick start guides
+  - **BDD Test Scenarios** (`tests/bdd/features/ml_protocol_integration.feature`)
+    - 40+ Gherkin scenarios covering all protocols
+    - Model management (create, train, delete, list)
+    - Inference (single, batch, streaming)
+    - Vector operations with ML embeddings
+    - Industry model scenarios (healthcare, finance, retail)
+    - Cross-protocol consistency tests
+    - Error handling scenarios
+    - Performance test scenarios
+  - **Industry Model Coverage**: 28 verticals, 140+ specialized models
+    - Healthcare: disease_risk, readmission, drug_interaction
+    - Finance: fraud_detection, credit_risk, aml
+    - Retail: demand_forecast, price_optimization, recommendation
+    - And more: Adtech, Defense, Logistics, IoT, etc.
+
 - **pgvector PostgreSQL Extension Compatibility** (2025-12-02): Full pgvector support for vector similarity search
   - **Vector Index Implementation** (`orbit/server/src/protocols/vector_index.rs`)
     - HNSW (Hierarchical Navigable Small World) index implementation
