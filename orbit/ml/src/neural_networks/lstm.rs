@@ -333,11 +333,11 @@ impl NeuralNetwork for LSTMNetwork {
         Ok(())
     }
 
-    async fn update_weights(&mut self, _optimizer: &dyn Optimizer) -> Result<()> {
+    async fn update_weights(&mut self, optimizer: &dyn Optimizer) -> Result<()> {
         if self.gradients.is_empty() {
             return Ok(());
         }
-        let lr = 0.01; // TODO: Use optimizer
+        let lr = optimizer.learning_rate();
 
         for (i, layer) in self.layers.iter_mut().enumerate() {
             let g = &self.gradients[i];
