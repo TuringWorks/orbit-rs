@@ -78,14 +78,13 @@ impl ControllerContext {
         Self { client }
     }
 
-    fn recorder(&self, object_ref: k8s_openapi::api::core::v1::ObjectReference) -> Recorder {
+    fn recorder(&self, _object_ref: k8s_openapi::api::core::v1::ObjectReference) -> Recorder {
         Recorder::new(
             self.client.clone(),
             Reporter {
                 controller: "orbit-cluster-controller".into(),
                 instance: std::env::var("POD_NAME").ok(),
             },
-            object_ref,
         )
     }
 }
@@ -155,14 +154,17 @@ async fn cluster_reconcile(cluster: &OrbitCluster, ctx: Arc<ControllerContext>) 
 
     // Publish successful event
     let object_ref = cluster.object_ref(&());
-    ctx.recorder(object_ref)
-        .publish(Event {
-            type_: EventType::Normal,
-            reason: "Created".into(),
-            note: Some("OrbitCluster resources created successfully".into()),
-            action: "Reconciling".into(),
-            secondary: None,
-        })
+    ctx.recorder(object_ref.clone())
+        .publish(
+            &Event {
+                type_: EventType::Normal,
+                reason: "Created".into(),
+                note: Some("OrbitCluster resources created successfully".into()),
+                action: "Reconciling".into(),
+                secondary: None,
+            },
+            &object_ref,
+        )
         .await
         .map_err(|e| ControllerError::Generic(format!("Failed to publish event: {}", e)))?;
 
