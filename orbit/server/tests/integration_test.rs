@@ -16,11 +16,7 @@ use tokio::time::sleep;
 /// - Prometheus metrics endpoint
 /// - MinIO cold storage configuration
 /// - Cluster configuration
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
+///
 ///   Kill processes by name - cross-platform implementation
 fn kill_process_by_name(name: &str) {
     #[cfg(unix)]
@@ -108,7 +104,9 @@ async fn is_port_listening(port: u16) -> bool {
     use tokio::net::TcpListener;
 
     // Try to bind to the port - if it fails, the port is already in use (listening)
-    TcpListener::bind(format!("127.0.0.1:{}", port)).await.is_err()
+    TcpListener::bind(format!("127.0.0.1:{}", port))
+        .await
+        .is_err()
 }
 
 /// Wait for a port to start listening (max timeout in seconds)
