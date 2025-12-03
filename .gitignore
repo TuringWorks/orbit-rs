@@ -242,3 +242,5 @@ cluster-data/
 
 # Compatibility testing data
 orbit-compatibility/data/
+test-data/
+tests/orbit-compatibility/data/

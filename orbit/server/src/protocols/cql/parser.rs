@@ -116,6 +116,41 @@ pub enum CqlStatement {
         /// Table name
         table: String,
     },
+    /// CREATE INDEX statement
+    CreateIndex {
+        /// Index name
+        name: String,
+        /// IF NOT EXISTS
+        if_not_exists: bool,
+        /// Table name
+        table: String,
+        /// Column to index
+        column: String,
+    },
+    /// CREATE TYPE (UDT) statement
+    CreateType {
+        /// Type name
+        name: String,
+        /// IF NOT EXISTS
+        if_not_exists: bool,
+        /// Fields of the UDT
+        fields: Vec<(String, CqlType)>,
+    },
+    /// CREATE MATERIALIZED VIEW statement
+    CreateMaterializedView {
+        /// View name
+        name: String,
+        /// IF NOT EXISTS
+        if_not_exists: bool,
+        /// Source table
+        source_table: String,
+        /// Selected columns
+        columns: Vec<String>,
+        /// WHERE clause for the view
+        where_clause: Option<String>,
+        /// Primary key columns
+        primary_key: Vec<String>,
+    },
 }
 
 /// WHERE clause condition
@@ -224,6 +259,12 @@ impl CqlParser {
             self.parse_create_keyspace(query)
         } else if query_upper.starts_with("CREATE TABLE") {
             self.parse_create_table(query)
+        } else if query_upper.starts_with("CREATE INDEX") {
+            self.parse_create_index(query)
+        } else if query_upper.starts_with("CREATE TYPE") {
+            self.parse_create_type(query)
+        } else if query_upper.starts_with("CREATE MATERIALIZED VIEW") {
+            self.parse_create_materialized_view(query)
         } else if query_upper.starts_with("DROP KEYSPACE") {
             self.parse_drop_keyspace(query)
         } else if query_upper.starts_with("DROP TABLE") {
@@ -380,6 +421,7 @@ impl CqlParser {
         let mut current = String::new();
         let mut in_quotes = false;
         let mut quote_char = '\0';
+        let mut brace_depth = 0;
 
         for ch in val_str.chars() {
             match ch {
@@ -393,7 +435,15 @@ impl CqlParser {
                     quote_char = '\0';
                     current.push(ch);
                 }
-                ',' if !in_quotes => {
+                '{' if !in_quotes => {
+                    brace_depth += 1;
+                    current.push(ch);
+                }
+                '}' if !in_quotes => {
+                    brace_depth -= 1;
+                    current.push(ch);
+                }
+                ',' if !in_quotes && brace_depth == 0 => {
                     if !current.trim().is_empty() {
                         values.push(self.parse_value(current.trim())?);
                     }
@@ -587,17 +637,229 @@ impl CqlParser {
     }
 
     /// Parse CREATE TABLE statement
+    /// Example: CREATE TABLE IF NOT EXISTS users (user_id UUID PRIMARY KEY, first_name text)
     fn parse_create_table(&self, query: &str) -> ProtocolResult<CqlStatement> {
-        let if_not_exists = query.to_uppercase().contains("IF NOT EXISTS");
+        let query_upper = query.to_uppercase();
+        let if_not_exists = query_upper.contains("IF NOT EXISTS");
 
-        // Simplified implementation
+        // Parse table name - format: CREATE TABLE [IF NOT EXISTS] table_name (columns...)
+        let parts: Vec<&str> = query.split_whitespace().collect();
+
+        // Find table name (after CREATE TABLE or CREATE TABLE IF NOT EXISTS)
+        let name_index = if if_not_exists { 5 } else { 2 };
+        let raw_table_name = parts
+            .get(name_index)
+            .map(|s| {
+                // Remove trailing parenthesis if present
+                if let Some(idx) = s.find('(') {
+                    &s[..idx]
+                } else {
+                    *s
+                }
+            })
+            .unwrap_or("unknown_table");
+
+        // Resolve table name with current keyspace
+        let table_name = self.resolve_table_name(raw_table_name);
+
         Ok(CqlStatement::CreateTable {
-            name: "temp_table".to_string(),
+            name: table_name,
             if_not_exists,
             columns: vec![],
             primary_key: vec![],
             clustering_key: vec![],
             options: HashMap::new(),
+        })
+    }
+
+    /// Parse CREATE INDEX statement
+    /// Example: CREATE INDEX IF NOT EXISTS user_last_name ON users (last_name)
+    fn parse_create_index(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let query_upper = query.to_uppercase();
+        let if_not_exists = query_upper.contains("IF NOT EXISTS");
+
+        // Parse index name and table/column
+        // Format: CREATE INDEX [IF NOT EXISTS] index_name ON table_name (column_name)
+        let parts: Vec<&str> = query.split_whitespace().collect();
+
+        // Find the index name (after CREATE INDEX or CREATE INDEX IF NOT EXISTS)
+        let name_index = if if_not_exists { 5 } else { 2 };
+        let name = parts
+            .get(name_index)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "unnamed_index".to_string());
+
+        // Find ON keyword to get table name
+        let on_index = parts
+            .iter()
+            .position(|&p| p.to_uppercase() == "ON")
+            .unwrap_or(parts.len());
+
+        let table = parts
+            .get(on_index + 1)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "unknown_table".to_string());
+
+        // Extract column name from parentheses
+        let column = if let Some(start) = query.find('(') {
+            if let Some(end) = query.find(')') {
+                query[start + 1..end].trim().to_string()
+            } else {
+                "unknown_column".to_string()
+            }
+        } else {
+            "unknown_column".to_string()
+        };
+
+        Ok(CqlStatement::CreateIndex {
+            name,
+            if_not_exists,
+            table: self.resolve_table_name(&table),
+            column,
+        })
+    }
+
+    /// Parse CREATE TYPE statement (User-Defined Types)
+    /// Example: CREATE TYPE IF NOT EXISTS address (street text, city text, zip int)
+    fn parse_create_type(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let query_upper = query.to_uppercase();
+        let if_not_exists = query_upper.contains("IF NOT EXISTS");
+
+        let parts: Vec<&str> = query.split_whitespace().collect();
+
+        // Find the type name
+        let name_index = if if_not_exists { 5 } else { 2 };
+        let name = parts
+            .get(name_index)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "unnamed_type".to_string());
+
+        // Parse fields from parentheses - simplified parsing
+        let fields = if let Some(start) = query.find('(') {
+            if let Some(end) = query.rfind(')') {
+                let fields_str = &query[start + 1..end];
+                self.parse_type_fields(fields_str)
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        };
+
+        Ok(CqlStatement::CreateType {
+            name: self.resolve_table_name(&name),
+            if_not_exists,
+            fields,
+        })
+    }
+
+    /// Parse type fields for CREATE TYPE
+    fn parse_type_fields(&self, fields_str: &str) -> Vec<(String, CqlType)> {
+        let mut fields = Vec::new();
+        for field in fields_str.split(',') {
+            let parts: Vec<&str> = field.trim().split_whitespace().collect();
+            if parts.len() >= 2 {
+                let name = parts[0].to_string();
+                let type_str = parts[1].to_uppercase();
+                let cql_type = match type_str.as_str() {
+                    "TEXT" | "VARCHAR" => CqlType::Text,
+                    "INT" => CqlType::Int,
+                    "BIGINT" => CqlType::Bigint,
+                    "BOOLEAN" => CqlType::Boolean,
+                    "FLOAT" => CqlType::Float,
+                    "DOUBLE" => CqlType::Double,
+                    "TIMESTAMP" => CqlType::Timestamp,
+                    "UUID" => CqlType::Uuid,
+                    _ => CqlType::Text, // Default to text
+                };
+                fields.push((name, cql_type));
+            }
+        }
+        fields
+    }
+
+    /// Parse CREATE MATERIALIZED VIEW statement
+    /// Example: CREATE MATERIALIZED VIEW IF NOT EXISTS users_by_email AS
+    ///          SELECT * FROM users WHERE emails IS NOT NULL AND user_id IS NOT NULL
+    ///          PRIMARY KEY (emails, user_id)
+    fn parse_create_materialized_view(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let query_upper = query.to_uppercase();
+        let if_not_exists = query_upper.contains("IF NOT EXISTS");
+
+        let parts: Vec<&str> = query.split_whitespace().collect();
+
+        // Find view name (after CREATE MATERIALIZED VIEW or CREATE MATERIALIZED VIEW IF NOT EXISTS)
+        let name_index = if if_not_exists { 6 } else { 3 };
+        let name = parts
+            .get(name_index)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "unnamed_view".to_string());
+
+        // Find AS keyword to get SELECT clause
+        let as_index = parts
+            .iter()
+            .position(|&p| p.to_uppercase() == "AS")
+            .unwrap_or(parts.len());
+
+        // Find FROM keyword to get source table
+        let from_index = parts
+            .iter()
+            .position(|&p| p.to_uppercase() == "FROM")
+            .unwrap_or(parts.len());
+
+        let source_table = parts
+            .get(from_index + 1)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "unknown_table".to_string());
+
+        // Extract columns (simplified - just support * for now)
+        let columns = if as_index + 2 < from_index {
+            parts[as_index + 2..from_index]
+                .iter()
+                .map(|s| s.replace(',', "").to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        } else {
+            vec!["*".to_string()]
+        };
+
+        // Extract WHERE clause (simplified)
+        let where_clause = if let Some(where_pos) = query_upper.find(" WHERE ") {
+            if let Some(pk_pos) = query_upper.find("PRIMARY KEY") {
+                Some(query[where_pos + 7..pk_pos].trim().to_string())
+            } else {
+                Some(query[where_pos + 7..].trim().to_string())
+            }
+        } else {
+            None
+        };
+
+        // Extract PRIMARY KEY
+        let primary_key = if let Some(pk_start) = query.find("PRIMARY KEY") {
+            let pk_part = &query[pk_start..];
+            if let Some(start) = pk_part.find('(') {
+                if let Some(end) = pk_part.find(')') {
+                    pk_part[start + 1..end]
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .collect()
+                } else {
+                    vec![]
+                }
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        };
+
+        Ok(CqlStatement::CreateMaterializedView {
+            name: self.resolve_table_name(&name),
+            if_not_exists,
+            source_table: self.resolve_table_name(&source_table),
+            columns,
+            where_clause,
+            primary_key,
         })
     }
 
@@ -633,9 +895,14 @@ impl CqlParser {
     /// Parse USE statement
     fn parse_use(&self, query: &str) -> ProtocolResult<CqlStatement> {
         let parts: Vec<&str> = query.split_whitespace().collect();
-        let keyspace = parts
+        let raw_keyspace = parts
             .get(1)
-            .ok_or_else(|| ProtocolError::ParseError("Missing keyspace name".to_string()))?
+            .ok_or_else(|| ProtocolError::ParseError("Missing keyspace name".to_string()))?;
+
+        // Strip surrounding quotes if present
+        let keyspace = raw_keyspace
+            .trim_matches('"')
+            .trim_matches('\'')
             .to_string();
 
         Ok(CqlStatement::Use { keyspace })
@@ -798,6 +1065,46 @@ impl CqlParser {
         }
         if trimmed.to_uppercase() == "FALSE" {
             return Ok(CqlValue::Boolean(false));
+        }
+
+        // Handle set/list literals like {'value1', 'value2'} or ['value1', 'value2']
+        if trimmed.starts_with('{') && trimmed.ends_with('}') {
+            let inner = &trimmed[1..trimmed.len() - 1];
+            if inner.is_empty() {
+                return Ok(CqlValue::Set(vec![]));
+            }
+            let items = self.parse_value_list(inner)?;
+            return Ok(CqlValue::Set(items));
+        }
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            let inner = &trimmed[1..trimmed.len() - 1];
+            if inner.is_empty() {
+                return Ok(CqlValue::List(vec![]));
+            }
+            let items = self.parse_value_list(inner)?;
+            return Ok(CqlValue::List(items));
+        }
+
+        // Handle CQL functions like uuid(), now(), etc.
+        let trimmed_lower = trimmed.to_lowercase();
+        if trimmed_lower == "uuid()" {
+            // Generate a new UUID
+            let uuid = uuid::Uuid::new_v4();
+            return Ok(CqlValue::Uuid(uuid.to_string()));
+        }
+        if trimmed_lower == "now()" || trimmed_lower == "currenttimestamp()" {
+            // Return current timestamp in milliseconds
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as i64;
+            return Ok(CqlValue::Timestamp(now));
+        }
+        if trimmed_lower == "timeuuid()" || trimmed_lower == "currenttimeuuid()" {
+            // For timeuuid, we'll generate a regular UUID for now
+            // A proper implementation would use time-based UUID (v1)
+            let uuid = uuid::Uuid::new_v4();
+            return Ok(CqlValue::Uuid(uuid.to_string()));
         }
 
         // Handle quoted strings

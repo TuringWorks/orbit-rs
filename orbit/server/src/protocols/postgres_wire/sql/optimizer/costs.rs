@@ -850,6 +850,7 @@ mod tests {
             limit: None,
             offset: None,
             for_clause: None,
+            traverse: None,
         };
 
         let tables = optimizer.extract_tables(&select);

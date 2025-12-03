@@ -543,12 +543,6 @@ impl OrbitServer {
         if self.config.protocols.mongodb_enabled {
             tracing::info!(
                 "  - MongoDB: {}:{}",
-                self.config.protocols.aql_bind_address, self.config.protocols.aql_port
-            );
-        }
-        if self.config.protocols.mongodb_enabled {
-            tracing::info!(
-                "  - MongoDB: {}:{}",
                 self.config.protocols.mongodb_bind_address,
                 self.config.protocols.mongodb_port
             );

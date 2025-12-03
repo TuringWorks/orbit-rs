@@ -49,6 +49,7 @@ pub enum CqlValue {
     Double(f64),
     Float(f32),
     Timestamp(i64), // milliseconds since epoch
+    Uuid(String),   // UUID as string representation
     List(Vec<CqlValue>),
     Map(Vec<(CqlValue, CqlValue)>),
     Set(Vec<CqlValue>),
@@ -66,6 +67,7 @@ impl CqlType {
             CqlType::Boolean => Ok(SqlType::Boolean),
             CqlType::Double => Ok(SqlType::DoublePrecision),
             CqlType::Float => Ok(SqlType::Real),
+            CqlType::Uuid => Ok(SqlType::Uuid),
             _ => Ok(SqlType::Text),
         }
     }
@@ -83,6 +85,11 @@ impl CqlValue {
             CqlValue::Smallint(i) => Ok(SqlValue::SmallInt(*i)),
             CqlValue::Tinyint(i) => Ok(SqlValue::SmallInt(*i as i16)),
             CqlValue::Text(s) => Ok(SqlValue::Text(s.clone())),
+            CqlValue::Uuid(s) => {
+                let uuid = uuid::Uuid::parse_str(s)
+                    .map_err(|e| ProtocolError::ConversionError(e.to_string()))?;
+                Ok(SqlValue::Uuid(uuid))
+            }
             CqlValue::Double(f) => Ok(SqlValue::DoublePrecision(*f)),
             CqlValue::Float(f) => Ok(SqlValue::Real(*f)),
             CqlValue::Timestamp(ts) => {
@@ -155,6 +162,13 @@ impl CqlValue {
                 buf.put_f64(*f);
             }
             CqlValue::Text(s) => {
+                let bytes = s.as_bytes();
+                buf.put_i32(bytes.len() as i32);
+                buf.put(bytes);
+            }
+            CqlValue::Uuid(s) => {
+                // UUID is 16 bytes when encoded as binary
+                // For now, we'll encode the string representation
                 let bytes = s.as_bytes();
                 buf.put_i32(bytes.len() as i32);
                 buf.put(bytes);
