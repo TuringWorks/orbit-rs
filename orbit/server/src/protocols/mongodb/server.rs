@@ -1,5 +1,5 @@
 use super::protocol::{
-    MongoCodec, MongoHeader, MongoMessage, MsgSection, KIND_BODY, OP_MSG, OP_REPLY,
+    MongoCodec, MongoHeader, MongoMessage, MsgSection, OP_MSG, OP_REPLY,
 };
 use bson::doc;
 use futures::{SinkExt, StreamExt};
@@ -108,7 +108,7 @@ async fn handle_connection(socket: TcpStream) -> OrbitResult<()> {
                             }
                         } else {
                             // Regular query
-                            let response_doc = doc! { "ok": 1.0 };
+                            let _response_doc = doc! { "ok": 1.0 };
                             let reply = MongoMessage::Reply {
                                 header: MongoHeader {
                                     message_length: 0,

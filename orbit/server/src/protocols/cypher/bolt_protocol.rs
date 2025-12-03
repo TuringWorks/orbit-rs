@@ -1203,8 +1203,7 @@ impl BoltProtocolHandler {
                                 crate::protocols::cypher::cypher_parser::PatternElement::Node(node_pattern) => {
                                     // Check if variable is already bound
                                     let mut node_id = None;
-                                    let mut is_new = true;
-                                    
+
                                     if let Some(var) = &node_pattern.variable {
                                         if let Some(idx) = columns.iter().position(|c| c == var) {
                                             if idx < current_row.len() {
@@ -1213,10 +1212,8 @@ impl BoltProtocolHandler {
                                                 if let Value::Object(map) = val {
                                                     if let Some(Value::String(id)) = map.get("elementId") {
                                                         node_id = Some(id.clone());
-                                                        is_new = false;
                                                     } else if let Some(Value::Number(id)) = map.get("id") {
                                                         node_id = Some(id.to_string());
-                                                        is_new = false;
                                                     }
                                                 }
                                             }

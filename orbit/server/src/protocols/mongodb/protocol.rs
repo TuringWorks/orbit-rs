@@ -1,8 +1,7 @@
 use bytes::{Buf, BufMut, BytesMut};
-use orbit_shared::{OrbitError, OrbitResult};
+use orbit_shared::OrbitError;
 use std::io::Cursor;
 use tokio_util::codec::{Decoder, Encoder};
-use tracing::{debug, error, trace};
 
 // MongoDB Wire Protocol Constants
 pub const OP_REPLY: i32 = 1;
@@ -168,7 +167,7 @@ impl Decoder for MongoCodec {
                 let flag_bits = body_cursor.get_u32_le();
                 
                 let mut sections = Vec::new();
-                let mut checksum = None;
+                let _checksum: Option<u32> = None;
 
                 while body_cursor.position() < body_cursor.get_ref().len() as u64 {
                     let kind = body_cursor.get_u8();

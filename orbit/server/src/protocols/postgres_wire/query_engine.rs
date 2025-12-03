@@ -320,8 +320,7 @@ impl QueryEngine {
     /// Execute multiple SQL queries (separated by semicolons)
     pub async fn execute_multiple_queries(&self, sql: &str) -> ProtocolResult<Vec<QueryResult>> {
         use crate::protocols::postgres_wire::sql::parser::SqlParser;
-        use crate::protocols::postgres_wire::sql::ast::Statement as AstStatement;
-        
+
         let mut parser = SqlParser::new();
         let statements = match parser.parse_multiple(sql) {
             Ok(stmts) => stmts,
@@ -341,7 +340,6 @@ impl QueryEngine {
     /// Execute a single AST statement
     async fn execute_ast_statement(&self, stmt: crate::protocols::postgres_wire::sql::ast::Statement) -> ProtocolResult<QueryResult> {
         use crate::protocols::postgres_wire::sql::ast::Statement as AstStatement;
-        use crate::protocols::postgres_wire::sql::types::SqlType;
         use crate::protocols::postgres_wire::persistent_storage::ColumnType;
 
         // Check if we can execute this persistently
