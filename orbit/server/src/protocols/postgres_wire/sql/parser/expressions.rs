@@ -1308,12 +1308,78 @@ impl ExpressionParser {
                 Ok(SqlType::Date)
             }
             Token::Time => {
+            *pos += 1;
+            Ok(SqlType::Time {
+                with_timezone: false,
+            })
+        }
+        Token::Vector => {
+            *pos += 1;
+            // Check for optional dimension specification
+            if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
                 *pos += 1;
-                Ok(SqlType::Time {
-                    with_timezone: false,
-                })
+                if let Some(Token::NumericLiteral(dim_str)) = tokens.get(*pos) {
+                    if let Ok(dimensions) = dim_str.parse::<u32>() {
+                        *pos += 1;
+                        if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                            *pos += 1;
+                            return Ok(SqlType::Vector {
+                                dimensions: Some(dimensions),
+                            });
+                        }
+                    }
+                }
+                return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Invalid VECTOR dimension specification".to_string(),
+                ));
             }
-            Token::Identifier(type_name) => {
+            Ok(SqlType::Vector { dimensions: None })
+        }
+        Token::HalfVec => {
+            *pos += 1;
+            // Check for optional dimension specification
+            if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
+                *pos += 1;
+                if let Some(Token::NumericLiteral(dim_str)) = tokens.get(*pos) {
+                    if let Ok(dimensions) = dim_str.parse::<u32>() {
+                        *pos += 1;
+                        if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                            *pos += 1;
+                            return Ok(SqlType::HalfVec {
+                                dimensions: Some(dimensions),
+                            });
+                        }
+                    }
+                }
+                return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Invalid HALFVEC dimension specification".to_string(),
+                ));
+            }
+            Ok(SqlType::HalfVec { dimensions: None })
+        }
+        Token::SparseVec => {
+            *pos += 1;
+            // Check for optional dimension specification
+            if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
+                *pos += 1;
+                if let Some(Token::NumericLiteral(dim_str)) = tokens.get(*pos) {
+                    if let Ok(dimensions) = dim_str.parse::<u32>() {
+                        *pos += 1;
+                        if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                            *pos += 1;
+                            return Ok(SqlType::SparseVec {
+                                dimensions: Some(dimensions),
+                            });
+                        }
+                    }
+                }
+                return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Invalid SPARSEVEC dimension specification".to_string(),
+                ));
+            }
+            Ok(SqlType::SparseVec { dimensions: None })
+        }
+        Token::Identifier(type_name) => {
                 *pos += 1;
                 Ok(SqlType::Custom {
                     type_name: type_name.clone(),
