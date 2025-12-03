@@ -1,10 +1,9 @@
 use super::protocol::{
     MongoCodec, MongoHeader, MongoMessage, MsgSection, KIND_BODY, OP_MSG, OP_REPLY,
 };
-use bson::{doc, Document};
+use bson::doc;
 use futures::{SinkExt, StreamExt};
 use orbit_shared::OrbitResult;
-use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
 use tracing::{debug, error, info};
@@ -41,6 +40,8 @@ impl MongoDbServer {
 }
 
 async fn handle_connection(socket: TcpStream) -> OrbitResult<()> {
+    info!("MongoDB: Starting connection handler");
+
     let mut framed = Framed::new(socket, MongoCodec::new());
 
     while let Some(result) = framed.next().await {
@@ -55,10 +56,10 @@ async fn handle_connection(socket: TcpStream) -> OrbitResult<()> {
                     } => {
                         debug!("Received OP_QUERY: {} {:?}", full_collection_name, query);
                         
-                        // Handle handshake (isMaster / hello)
+                        // Handle handshake (isMaster / hello / ismaster)
                         // Older clients use OP_QUERY for isMaster
                         if full_collection_name.ends_with(".$cmd") {
-                            if query.contains_key("isMaster") || query.contains_key("hello") {
+                            if query.contains_key("isMaster") || query.contains_key("ismaster") || query.contains_key("hello") {
                                 let response_doc = doc! {
                                     "ismaster": true,
                                     "maxBsonObjectSize": 16777216,
@@ -140,7 +141,7 @@ async fn handle_connection(socket: TcpStream) -> OrbitResult<()> {
 
                         let mut response_doc = doc! { "ok": 1.0 };
 
-                        if command_doc.contains_key("isMaster") || command_doc.contains_key("hello") {
+                        if command_doc.contains_key("isMaster") || command_doc.contains_key("ismaster") || command_doc.contains_key("hello") {
                              response_doc = doc! {
                                 "ismaster": true,
                                 "maxBsonObjectSize": 16777216,
