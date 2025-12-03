@@ -67,7 +67,7 @@ cognitive-complexity-threshold = 15
 [workspace.dependencies]
 pyo3 = "0.24.1"
 # Kubernetes operator dependencies  
-kube = "0.95"
+kube = "0.99"
 k8s-openapi = "0.22"
 controller-rs = "0.1"
 serde_yaml = "0.9"
@@ -110,7 +110,7 @@ async-trait = "0.1"
 
 # Metrics
 metrics = "0.23"
-metrics-exporter-prometheus = "0.15"
+metrics-exporter-prometheus = "0.18"
 
 # Code quality and patterns
 regex = "1.10"

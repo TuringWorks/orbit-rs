@@ -50,11 +50,7 @@ def start_server():
     
     if not os.path.exists(startup_script):
         print(f"  [ERROR] Startup script not found: {startup_script}")
-        return False
-        # This check is for the old startup script. The new command uses cargo run.
-        # We might want to add a check for cargo or the project structure if needed.
-        # For now, we'll proceed with the new command regardless of the old script's presence.
-        pass 
+        return False 
 
     try:
         # Open log file (this log file will not be used by subprocess.Popen if stdout/stderr are None)
@@ -62,6 +58,10 @@ def start_server():
         
         # Start the server in a separate process group so we can kill it and its children
         SERVER_PROCESS = subprocess.Popen(
+            [startup_script],
+            cwd=root_dir,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
             ["cargo", "run", "--bin", "orbit-server"],
             stdout=None,
             stderr=None,
@@ -169,6 +169,35 @@ def main():
         if not start_server():
             print("Failed to start server. Aborting tests.")
             sys.exit(1)
+
+    try:
+        selected_protocols = args.protocols
+        if "all" in selected_protocols:
+            selected_protocols = list(PROTOCOLS.keys())
+
+        print(f"Starting Orbit Compatibility Tests for: {', '.join(selected_protocols)}")
+        print("=" * 60)
+
+        results = {}
+        total_scripts = 0
+        passed_scripts = 0
+
+        for protocol in selected_protocols:
+            print(f"\nTesting Protocol: {protocol.upper()}")
+            print("-" * 30)
+            
+            scripts = PROTOCOLS[protocol]
+            protocol_passed = True
+            
+            for script in scripts:
+                total_scripts += 1
+                if run_script(script):
+                    passed_scripts += 1
+                else:
+                    protocol_passed = False
+            
+            results[protocol] = "PASS" if protocol_passed else "FAIL"
+
 
     try:
         selected_protocols = args.protocols

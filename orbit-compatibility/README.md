@@ -29,6 +29,12 @@ python3 run_tests.py
 python3 run_tests.py --protocols postgresql redis
 ```
 
+### Start Server Automatically
+You can use the `--start-server` flag to automatically start the Orbit server before running tests and shut it down afterwards:
+```bash
+python3 run_tests.py --start-server
+```
+
 ### Prerequisites
 The script will automatically install necessary Python dependencies for the selected protocols.
 If you wish to skip automatic installation, use the `--skip-install` flag:

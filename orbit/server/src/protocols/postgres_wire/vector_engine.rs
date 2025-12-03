@@ -1256,7 +1256,9 @@ mod tests {
             .await
             .unwrap();
         engine
-            .execute_vector_query("INSERT INTO docs (id, emb) VALUES ('d1', '[0.1,0.2,0.3,0.4,0.5]')")
+            .execute_vector_query(
+                "INSERT INTO docs (id, emb) VALUES ('d1', '[0.1,0.2,0.3,0.4,0.5]')",
+            )
             .await
             .unwrap();
 
@@ -1274,7 +1276,9 @@ mod tests {
 
         // Setup table with test data
         engine
-            .execute_vector_query("CREATE TABLE items (id SERIAL, content TEXT, embedding vector(3))")
+            .execute_vector_query(
+                "CREATE TABLE items (id SERIAL, content TEXT, embedding vector(3))",
+            )
             .await
             .unwrap();
 
@@ -1323,7 +1327,9 @@ mod tests {
         let engine = create_test_engine().await;
 
         engine
-            .execute_vector_query("CREATE TABLE items (id SERIAL, content TEXT, embedding vector(3))")
+            .execute_vector_query(
+                "CREATE TABLE items (id SERIAL, content TEXT, embedding vector(3))",
+            )
             .await
             .unwrap();
 
@@ -1356,7 +1362,9 @@ mod tests {
         let engine = create_test_engine().await;
 
         engine
-            .execute_vector_query("CREATE TABLE items (id SERIAL, content TEXT, embedding vector(3))")
+            .execute_vector_query(
+                "CREATE TABLE items (id SERIAL, content TEXT, embedding vector(3))",
+            )
             .await
             .unwrap();
 
@@ -1599,7 +1607,9 @@ mod tests {
         let engine = create_test_engine().await;
 
         engine
-            .execute_vector_query("CREATE TABLE items (id SERIAL, content TEXT, embedding vector(3))")
+            .execute_vector_query(
+                "CREATE TABLE items (id SERIAL, content TEXT, embedding vector(3))",
+            )
             .await
             .unwrap();
 
@@ -1670,9 +1680,7 @@ mod tests {
         let engine = create_test_engine().await;
 
         let result = engine
-            .execute_vector_query(
-                "CREATE TABLE half_vectors (id SERIAL, embedding halfvec(256))",
-            )
+            .execute_vector_query("CREATE TABLE half_vectors (id SERIAL, embedding halfvec(256))")
             .await;
         assert!(result.is_ok());
 
@@ -1701,12 +1709,12 @@ mod tests {
 
         // Test various valid vector literal formats
         let test_cases = vec![
-            "[1, 2, 3]",      // Spaces after comma
-            "[1,2,3]",        // No spaces
-            "[ 1, 2, 3 ]",    // Spaces around brackets
-            "[1.0, 2.0, 3.0]", // Explicit decimals
+            "[1, 2, 3]",             // Spaces after comma
+            "[1,2,3]",               // No spaces
+            "[ 1, 2, 3 ]",           // Spaces around brackets
+            "[1.0, 2.0, 3.0]",       // Explicit decimals
             "[0.001, 0.002, 0.003]", // Small floats
-            "[-1, -2, -3]",   // Negative values
+            "[-1, -2, -3]",          // Negative values
         ];
 
         for (i, vector_literal) in test_cases.iter().enumerate() {

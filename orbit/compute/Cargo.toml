@@ -71,7 +71,7 @@ anyhow = "1.0"
 thiserror = "1.0"
 
 # Mathematics and algorithms
-nalgebra = "0.33"
+nalgebra = "0.34"
 ndarray = "0.15"
 num-traits = "0.2"
 num-complex = "0.4"
@@ -90,7 +90,7 @@ bytemuck = "1.14"
 cudarc = { version = "0.12", features = ["std"], optional = true }
 
 # Cross-platform Vulkan compute
-vulkano = { version = "0.34", optional = true }
+vulkano = { version = "0.35", optional = true }
 
 # Logging and metrics
 tracing = "0.1"
