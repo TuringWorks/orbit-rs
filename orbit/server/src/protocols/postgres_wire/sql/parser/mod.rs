@@ -54,14 +54,38 @@ impl SqlParser {
 
     /// Parse a SQL statement from string input
     pub fn parse(&mut self, input: &str) -> ProtocolResult<Statement> {
+        let statements = self.parse_multiple(input)?;
+        statements.into_iter().next().ok_or_else(|| {
+            ProtocolError::PostgresError("Empty SQL statement".to_string())
+        })
+    }
+
+    /// Parse multiple SQL statements from string input
+    pub fn parse_multiple(&mut self, input: &str) -> ProtocolResult<Vec<Statement>> {
         // Tokenize the input
         let mut lexer = Lexer::new(input);
         self.tokens = lexer.tokenize();
         self.position = 0;
         self.current_token = self.tokens.first().cloned();
 
-        // Parse the statement
-        self.parse_statement().map_err(|e| e.into())
+        let mut statements = Vec::new();
+        
+        while self.current_token.is_some() && self.current_token != Some(Token::Eof) {
+            // Skip semicolons
+            while self.matches(&[Token::Semicolon]) {
+                self.advance()?;
+            }
+            
+            if self.current_token.is_none() || self.current_token == Some(Token::Eof) {
+                break;
+            }
+
+            // Parse the statement
+            let stmt = self.parse_statement().map_err(crate::protocols::error::ProtocolError::from)?;
+            statements.push(stmt);
+        }
+        
+        Ok(statements)
     }
 
     /// Parse a top-level SQL statement
@@ -88,6 +112,28 @@ impl SqlParser {
             Some(Token::Rollback) => self.parse_rollback_statement(),
             Some(Token::Savepoint) => self.parse_savepoint_statement(),
 
+            // Session Management
+            Some(Token::Set) => self.parse_set_statement(),
+
+            // Handle EXPLAIN as identifier (not a keyword yet)
+            Some(Token::Identifier(name)) if name.to_uppercase() == "EXPLAIN" => {
+                self.advance()?; // consume EXPLAIN
+                
+                // Parse the statement to explain
+                let statement = self.parse_statement()?;
+                
+                // Return an EXPLAIN statement
+                Ok(Statement::Explain(crate::protocols::postgres_wire::sql::ast::ExplainStatement {
+                    analyze: false,
+                    verbose: false,
+                    costs: true,
+                    buffers: false,
+                    timing: false,
+                    format: crate::protocols::postgres_wire::sql::ast::ExplainFormat::Text,
+                    statement: Box::new(statement),
+                }))
+            }
+
             Some(token) => Err(ParseError {
                 message: format!("Unexpected token at start of statement: {token:?}"),
                 position: self.position,
@@ -104,6 +150,7 @@ impl SqlParser {
                     "BEGIN".to_string(),
                     "COMMIT".to_string(),
                     "ROLLBACK".to_string(),
+                    "SET".to_string(),
                 ],
                 found: Some(token.clone()),
             }),
@@ -325,6 +372,47 @@ impl SqlParser {
 
     fn parse_savepoint_statement(&mut self) -> ParseResult<Statement> {
         tcl::parse_savepoint(self)
+    }
+
+    fn parse_set_statement(&mut self) -> ParseResult<Statement> {
+        self.expect(Token::Set)?;
+
+        // Parse variable name
+        let variable = if let Some(Token::Identifier(name)) = &self.current_token {
+            let var_name = name.clone();
+            self.advance()?;
+            var_name
+        } else {
+            return Err(ParseError {
+                message: "Expected variable name after SET".to_string(),
+                position: self.position,
+                expected: vec!["variable name".to_string()],
+                found: self.current_token.clone(),
+            });
+        };
+
+        // Optional TO or =
+        if self.matches(&[Token::To, Token::Equal]) {
+            self.advance()?;
+        }
+
+        // Parse value(s)
+        let mut values = Vec::new();
+        loop {
+            let expr = utilities::parse_expression(self)?;
+            values.push(expr);
+
+            if self.matches(&[Token::Comma]) {
+                self.advance()?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(Statement::Set(crate::protocols::postgres_wire::sql::ast::SetStatement {
+            variable,
+            value: values,
+        }))
     }
 }
 

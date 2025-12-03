@@ -206,6 +206,9 @@ enum Token {
     LessThanOrEqual,    // <=
     Star,               // * for variable-length paths and COUNT(*)
     Pipe,               // | for relationship type alternatives
+    Plus,               // +
+    Minus,              // -
+    Divide,             // /
 }
 
 /// Specialized tokenizer for Cypher queries with reduced complexity
@@ -276,7 +279,7 @@ impl CypherTokenizer {
         match ch {
             '"' | '\'' => self.start_string_literal(ch),
             ' ' | '\t' | '\n' | '\r' => self.handle_whitespace(),
-            '(' | ')' | '{' | '}' | '[' | ']' | ',' | ':' | '*' | '|' => {
+            '(' | ')' | '{' | '}' | '[' | ']' | ',' | ':' | '*' | '|' | '+' | '-' | '/' => {
                 self.handle_single_char_token(ch)
             }
             '.' => self.handle_dot(),
@@ -406,6 +409,9 @@ impl CypherTokenizer {
                     Token::LessThan
                 }
             }
+            '+' => Token::Plus,
+            '-' => Token::Minus,
+            '/' => Token::Divide,
             _ => unreachable!("Invalid single char token: {}", ch),
         };
         self.tokens.push(token);
@@ -612,8 +618,49 @@ impl TokenParser {
         Ok(CypherClause::Return { items })
     }
 
-    /// Parse an expression for RETURN, WITH, ORDER BY clauses
     fn parse_return_expression(&mut self) -> ProtocolResult<(Expression, String)> {
+        // Parse left operand
+        let (left_expr, left_str) = self.parse_primary_expression()?;
+
+        // Check for binary operator
+        if let Some(token) = self.current_token() {
+            let op_str = match token {
+                Token::Plus => Some("+"),
+                Token::Minus => Some("-"),
+                Token::Star => Some("*"),
+                Token::Divide => Some("/"),
+                _ => None,
+            };
+
+            if let Some(op) = op_str {
+                self.advance();
+                let (right_expr, right_str) = self.parse_return_expression()?;
+                
+                let expr_str = format!("{} {} {}", left_str, op, right_str);
+                
+                let binary_op = match op {
+                    "+" => BinaryOperator::Add,
+                    "-" => BinaryOperator::Subtract,
+                    "*" => BinaryOperator::Multiply,
+                    "/" => BinaryOperator::Divide,
+                    _ => unreachable!(),
+                };
+
+                return Ok((
+                    Expression::BinaryOp {
+                        left: Box::new(left_expr),
+                        operator: binary_op,
+                        right: Box::new(right_expr),
+                    },
+                    expr_str,
+                ));
+            }
+        }
+
+        Ok((left_expr, left_str))
+    }
+
+    fn parse_primary_expression(&mut self) -> ProtocolResult<(Expression, String)> {
         // Check for aggregation functions first
         let agg_func = match self.current_token() {
             Some(Token::Count) => Some(AggregationFunction::Count),
@@ -1504,6 +1551,7 @@ impl TokenParser {
             // Check for relationship start: `-` identifier or tokenized form
             let is_relationship_start = match self.current_token() {
                 Some(Token::Identifier(s)) => s == "-" || s.starts_with('-'),
+                Some(Token::Minus) => true,
                 _ => false,
             };
 
@@ -1617,6 +1665,8 @@ impl TokenParser {
                 if s == "-" {
                     self.advance();
                 }
+            } else if let Some(Token::Minus) = self.current_token() {
+                self.advance();
             }
         }
 
@@ -1630,6 +1680,8 @@ impl TokenParser {
                 self.advance();
                 return self.parse_relationship_pattern_from_string(&s);
             }
+        } else if let Some(Token::Minus) = self.current_token() {
+            self.advance();
         }
 
         // Check for `[` - bracket-enclosed relationship details

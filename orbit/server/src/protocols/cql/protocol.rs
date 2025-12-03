@@ -255,15 +255,31 @@ impl Default for QueryParameters {
 impl QueryParameters {
     /// Decode query parameters from bytes
     pub fn decode(mut buf: Bytes) -> ProtocolResult<Self> {
+        if buf.remaining() < 2 {
+            return Err(ProtocolError::IncompleteFrame);
+        }
         let consistency = ConsistencyLevel::from_u16(buf.get_u16())?;
+        
+        if buf.remaining() < 1 {
+            return Err(ProtocolError::IncompleteFrame);
+        }
         let flags = buf.get_u8();
 
         let values = if flags & 0x01 != 0 {
+            if buf.remaining() < 2 {
+                return Err(ProtocolError::IncompleteFrame);
+            }
             let count = buf.get_u16();
             let mut vals = Vec::with_capacity(count as usize);
             for _ in 0..count {
+                if buf.remaining() < 4 {
+                    return Err(ProtocolError::IncompleteFrame);
+                }
                 let len = buf.get_i32();
                 if len >= 0 {
+                    if buf.remaining() < len as usize {
+                        return Err(ProtocolError::IncompleteFrame);
+                    }
                     let value = buf.copy_to_bytes(len as usize);
                     vals.push(value);
                 } else {
@@ -278,25 +294,43 @@ impl QueryParameters {
         let skip_metadata = flags & 0x02 != 0;
 
         let page_size = if flags & 0x04 != 0 {
+            if buf.remaining() < 4 {
+                return Err(ProtocolError::IncompleteFrame);
+            }
             Some(buf.get_i32())
         } else {
             None
         };
 
         let paging_state = if flags & 0x08 != 0 {
+            if buf.remaining() < 4 {
+                return Err(ProtocolError::IncompleteFrame);
+            }
             let len = buf.get_i32();
+            if len < 0 {
+                 return Err(ProtocolError::IncompleteFrame);
+            }
+            if buf.remaining() < len as usize {
+                return Err(ProtocolError::IncompleteFrame);
+            }
             Some(buf.copy_to_bytes(len as usize))
         } else {
             None
         };
 
         let serial_consistency = if flags & 0x10 != 0 {
+            if buf.remaining() < 2 {
+                return Err(ProtocolError::IncompleteFrame);
+            }
             Some(ConsistencyLevel::from_u16(buf.get_u16())?)
         } else {
             None
         };
 
         let default_timestamp = if flags & 0x20 != 0 {
+            if buf.remaining() < 8 {
+                return Err(ProtocolError::IncompleteFrame);
+            }
             Some(buf.get_i64())
         } else {
             None
@@ -368,6 +402,224 @@ pub fn build_supported_response(stream: i16) -> CqlFrame {
 pub fn build_void_result(stream: i16) -> CqlFrame {
     let mut body = BytesMut::new();
     body.put_i32(ResultKind::Void as i32);
+    CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+}
+
+/// Build a RESULT response with empty ROWS
+pub fn build_empty_rows_result(stream: i16) -> CqlFrame {
+    let mut body = BytesMut::new();
+    body.put_i32(ResultKind::Rows as i32);
+    // Metadata: flags=0, columns_count=0
+    body.put_i32(0); // flags
+    body.put_i32(0); // columns_count
+    // Row count: 0
+    body.put_i32(0);
+    CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+}
+
+/// Build a RESULT response with system.local data
+pub fn build_system_local_response(stream: i16) -> CqlFrame {
+    let mut body = BytesMut::new();
+    body.put_i32(ResultKind::Rows as i32);
+    
+    // Metadata
+    // Flags: 0x0001 (Global_tables_spec)
+    body.put_i32(0x0001); 
+    // Column count: 10
+    body.put_i32(10);
+    
+    // Global table spec
+    write_string(&mut body, "system"); // keyspace
+    write_string(&mut body, "local");  // table
+    
+    // Column specs (name, type)
+    write_string(&mut body, "key");
+    body.put_u16(0x000D); // text
+    
+    write_string(&mut body, "cluster_name");
+    body.put_u16(0x000D); // text
+    
+    write_string(&mut body, "partitioner");
+    body.put_u16(0x000D); // text
+    
+    write_string(&mut body, "cql_version");
+    body.put_u16(0x000D); // text
+    
+    write_string(&mut body, "release_version");
+    body.put_u16(0x000D); // text
+
+    write_string(&mut body, "data_center");
+    body.put_u16(0x000D); // text
+
+    write_string(&mut body, "rack");
+    body.put_u16(0x000D); // text
+
+    write_string(&mut body, "tokens");
+    body.put_u16(0x0022); // set
+    body.put_u16(0x000D); // <text>
+
+    write_string(&mut body, "schema_version");
+    body.put_u16(0x000C); // uuid
+
+    write_string(&mut body, "host_id");
+    body.put_u16(0x000C); // uuid
+    
+    // Row count: 1
+    body.put_i32(1);
+    
+    // Row 1 values
+    // key: 'local'
+    body.put_i32(5); // len
+    body.put(&b"local"[..]);
+    
+    // cluster_name: 'orbit'
+    body.put_i32(5); // len
+    body.put(&b"orbit"[..]);
+    
+    // partitioner
+    let part = "org.apache.cassandra.dht.Murmur3Partitioner";
+    body.put_i32(part.len() as i32);
+    body.put(part.as_bytes());
+    
+    // cql_version: '3.4.4'
+    let cql_ver = "3.4.4";
+    body.put_i32(cql_ver.len() as i32);
+    body.put(cql_ver.as_bytes());
+    
+    // release_version: '4.0.0'
+    let rel_ver = "4.0.0";
+    body.put_i32(rel_ver.len() as i32);
+    body.put(rel_ver.as_bytes());
+
+    // data_center: 'datacenter1'
+    let dc = "datacenter1";
+    body.put_i32(dc.len() as i32);
+    body.put(dc.as_bytes());
+
+    // rack: 'rack1'
+    let rack = "rack1";
+    body.put_i32(rack.len() as i32);
+    body.put(rack.as_bytes());
+
+    // tokens: {'0'}
+    // set<text> is encoded as: [n][len][bytes]...
+    // But wait, value encoding is: [len][bytes].
+    // bytes for set is: [n][len][bytes]...
+    // So: [total_len][n][len][bytes]...
+    // total_len = 4 (n) + 4 (len) + 1 (byte) = 9 bytes.
+    body.put_i32(9); // total value len
+    body.put_i32(1); // 1 element
+    body.put_i32(1); // len of element
+    body.put(&b"0"[..]);
+
+    // schema_version: uuid (16 bytes)
+    body.put_i32(16); // len
+    // random uuid
+    body.put(&b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"[..]);
+
+    // host_id: uuid (16 bytes)
+    body.put_i32(16); // len
+    // random uuid (different from schema_version just in case)
+    body.put(&b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01"[..]);
+    
+    CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+}
+
+/// Build a RESULT response with system.peers_v2 data (empty)
+pub fn build_system_peers_v2_response(stream: i16) -> CqlFrame {
+    let mut body = BytesMut::new();
+    body.put_i32(ResultKind::Rows as i32);
+    
+    // Metadata
+    // Flags: 0x0001 (Global_tables_spec)
+    body.put_i32(0x0001); 
+    // Column count: 7
+    body.put_i32(7);
+    
+    // Global table spec
+    write_string(&mut body, "system"); // keyspace
+    write_string(&mut body, "peers_v2");  // table
+    
+    // Column specs (name, type)
+    write_string(&mut body, "peer");
+    body.put_u16(0x0010); // inet
+    
+    write_string(&mut body, "peer_port");
+    body.put_u16(0x0009); // int
+    
+    write_string(&mut body, "data_center");
+    body.put_u16(0x000D); // text
+    
+    write_string(&mut body, "rack");
+    body.put_u16(0x000D); // text
+    
+    write_string(&mut body, "tokens");
+    body.put_u16(0x0022); // set
+    body.put_u16(0x000D); // <text>
+    
+    write_string(&mut body, "schema_version");
+    body.put_u16(0x000C); // uuid
+
+    write_string(&mut body, "host_id");
+    body.put_u16(0x000C); // uuid
+    
+    // Row count: 0
+    body.put_i32(0);
+
+    CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+}
+
+/// Build a RESULT response with system_schema.keyspaces data (empty or with system keyspaces)
+pub fn build_system_schema_keyspaces_response(stream: i16) -> CqlFrame {
+    let mut body = BytesMut::new();
+    body.put_i32(ResultKind::Rows as i32);
+
+    // Metadata flags: 0x0001 (Global_tables_spec)
+    body.put_i32(0x0001);
+    // Column count: 2 (keyspace_name, durable_writes)
+    body.put_i32(2);
+
+    // Global table spec
+    write_string(&mut body, "system_schema");
+    write_string(&mut body, "keyspaces");
+
+    // Column specs
+    write_string(&mut body, "keyspace_name");
+    body.put_u16(0x000D); // text
+
+    write_string(&mut body, "durable_writes");
+    body.put_u16(0x0004); // boolean
+
+    // Row count: 0 (empty - no keyspaces defined yet)
+    body.put_i32(0);
+
+    CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+}
+
+/// Build a RESULT response with system_schema.tables data (empty)
+pub fn build_system_schema_tables_response(stream: i16) -> CqlFrame {
+    let mut body = BytesMut::new();
+    body.put_i32(ResultKind::Rows as i32);
+
+    // Metadata flags: 0x0001 (Global_tables_spec)
+    body.put_i32(0x0001);
+    // Column count: 2 (keyspace_name, table_name)
+    body.put_i32(2);
+
+    // Global table spec
+    write_string(&mut body, "system_schema");
+    write_string(&mut body, "tables");
+
+    // Column specs
+    write_string(&mut body, "keyspace_name");
+    body.put_u16(0x000D); // text
+
+    write_string(&mut body, "table_name");
+    body.put_u16(0x000D); // text
+
+    // Row count: 0 (empty - no tables defined yet)
+    body.put_i32(0);
+
     CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
 }
 
@@ -473,13 +725,22 @@ fn write_string(buf: &mut BytesMut, s: &str) {
 
 /// Read a CQL string
 pub fn read_string(buf: &mut Bytes) -> ProtocolResult<String> {
+    if buf.remaining() < 2 {
+        return Err(ProtocolError::IncompleteFrame);
+    }
     let len = buf.get_u16();
+    if buf.remaining() < len as usize {
+        return Err(ProtocolError::IncompleteFrame);
+    }
     let bytes = buf.copy_to_bytes(len as usize);
     String::from_utf8(bytes.to_vec()).map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))
 }
 
 /// Read a CQL string map
 pub fn read_string_map(buf: &mut Bytes) -> ProtocolResult<HashMap<String, String>> {
+    if buf.remaining() < 2 {
+        return Err(ProtocolError::IncompleteFrame);
+    }
     let count = buf.get_u16();
     let mut map = HashMap::new();
     for _ in 0..count {
@@ -488,6 +749,20 @@ pub fn read_string_map(buf: &mut Bytes) -> ProtocolResult<HashMap<String, String
         map.insert(key, value);
     }
     Ok(map)
+}
+
+/// Read a CQL string list
+pub fn read_string_list(buf: &mut Bytes) -> ProtocolResult<Vec<String>> {
+    if buf.remaining() < 2 {
+        return Err(ProtocolError::IncompleteFrame);
+    }
+    let count = buf.get_u16();
+    let mut list = Vec::with_capacity(count as usize);
+    for _ in 0..count {
+        let value = read_string(buf)?;
+        list.push(value);
+    }
+    Ok(list)
 }
 
 #[cfg(test)]

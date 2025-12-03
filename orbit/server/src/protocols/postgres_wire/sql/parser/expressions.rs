@@ -238,6 +238,7 @@ impl ExpressionParser {
                 Token::Plus => BinaryOperator::Plus,
                 Token::Minus => BinaryOperator::Minus,
                 Token::Concat => BinaryOperator::Concat,
+                Token::JsonExtractText => BinaryOperator::JsonExtractText, // ->> operator
                 _ => break,
             };
 
@@ -412,8 +413,85 @@ impl ExpressionParser {
             | Token::LastValue
             | Token::NthValue => self.parse_window_function(tokens, pos),
 
+            // Handle ARRAY constructor
+            Token::Array => {
+                *pos += 1; // consume 'ARRAY'
+                
+                if *pos >= tokens.len() || !matches!(tokens[*pos], Token::LeftBracket) {
+                    return Err(crate::protocols::error::ProtocolError::ParseError(
+                        "Expected '[' after ARRAY".to_string(),
+                    ));
+                }
+                *pos += 1; // consume '['
+                
+                let mut elements = Vec::new();
+                while *pos < tokens.len() && !matches!(tokens[*pos], Token::RightBracket) {
+                    elements.push(self.parse_expression(tokens, pos)?);
+                    
+                    if *pos < tokens.len() && matches!(tokens[*pos], Token::Comma) {
+                        *pos += 1; // consume ','
+                    } else {
+                        break;
+                    }
+                }
+                
+                if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightBracket) {
+                    return Err(crate::protocols::error::ProtocolError::ParseError(
+                        "Expected ']' after ARRAY elements".to_string(),
+                    ));
+                }
+                *pos += 1; // consume ']'
+                
+                Ok(Expression::Array(elements))
+            }
+
             // Handle CASE expressions
             Token::Case => self.parse_case_expression(tokens, pos),
+
+            // Handle typed literals (INTERVAL '...', TIMESTAMP '...', DATE '...')
+            Token::Interval => {
+                *pos += 1; // consume INTERVAL
+                if let Some(Token::StringLiteral(s)) = tokens.get(*pos) {
+                    *pos += 1;
+                    match crate::protocols::postgres_wire::sql::types::SqlValue::parse_interval(s) {
+                        Ok(val) => Ok(Expression::Literal(val)),
+                        Err(e) => Err(crate::protocols::error::ProtocolError::ParseError(e)),
+                    }
+                } else {
+                    Err(crate::protocols::error::ProtocolError::ParseError(
+                        "Expected string literal after INTERVAL".to_string(),
+                    ))
+                }
+            }
+            Token::Timestamp => {
+                *pos += 1; // consume TIMESTAMP
+                if let Some(Token::StringLiteral(s)) = tokens.get(*pos) {
+                    *pos += 1;
+                    // Default to no timezone for generic TIMESTAMP literal
+                    match crate::protocols::postgres_wire::sql::types::SqlValue::parse_timestamp(s, false) {
+                        Ok(val) => Ok(Expression::Literal(val)),
+                        Err(e) => Err(crate::protocols::error::ProtocolError::ParseError(e)),
+                    }
+                } else {
+                    Err(crate::protocols::error::ProtocolError::ParseError(
+                        "Expected string literal after TIMESTAMP".to_string(),
+                    ))
+                }
+            }
+            Token::Date => {
+                *pos += 1; // consume DATE
+                if let Some(Token::StringLiteral(s)) = tokens.get(*pos) {
+                    *pos += 1;
+                    match crate::protocols::postgres_wire::sql::types::SqlValue::parse_date(s) {
+                        Ok(val) => Ok(Expression::Literal(val)),
+                        Err(e) => Err(crate::protocols::error::ProtocolError::ParseError(e)),
+                    }
+                } else {
+                    Err(crate::protocols::error::ProtocolError::ParseError(
+                        "Expected string literal after DATE".to_string(),
+                    ))
+                }
+            }
 
             // Handle CAST expressions
             Token::Cast => self.parse_cast_expression(tokens, pos),
@@ -431,10 +509,60 @@ impl ExpressionParser {
 
                 Ok(expr)
             }
-            _ => Err(crate::protocols::error::ProtocolError::ParseError(format!(
-                "Unexpected token in expression: {:?}",
-                tokens[*pos]
-            ))),
+            
+            // Handle keywords that can be used as identifiers (like 'time', 'date', etc.)
+            token => {
+                // Try to convert keyword to identifier name
+                if let Some(name) = self.token_to_identifier_name(token) {
+                    // Check for function call
+                    if *pos + 1 < tokens.len() && matches!(tokens[*pos + 1], Token::LeftParen) {
+                        self.parse_function_call(tokens, pos, name)
+                    } else {
+                        *pos += 1;
+                        // Regular column reference
+                        Ok(Expression::Column(
+                            crate::protocols::postgres_wire::sql::ast::ColumnRef {
+                                table: None,
+                                name,
+                            },
+                        ))
+                    }
+                } else {
+                    Err(crate::protocols::error::ProtocolError::ParseError(format!(
+                        "Unexpected token in expression: {:?}",
+                        tokens[*pos]
+                    )))
+                }
+            }
+        }
+    }
+    
+    /// Extract identifier string from token (handles both Identifier and keyword tokens used as names)
+    fn token_to_identifier_name(&self, token: &Token) -> Option<String> {
+        match token {
+            Token::Identifier(name) => Some(name.clone()),
+            // Data type keywords that can be used as identifiers
+            Token::Text => Some("text".to_string()),
+            Token::Integer => Some("integer".to_string()),
+            Token::Boolean => Some("boolean".to_string()),
+            Token::Date => Some("date".to_string()),
+            Token::Time => Some("time".to_string()),
+            Token::Timestamp => Some("timestamp".to_string()),
+            Token::Interval => Some("interval".to_string()),
+            Token::Decimal => Some("decimal".to_string()),
+            Token::Numeric => Some("numeric".to_string()),
+            Token::Real => Some("real".to_string()),
+            Token::Char => Some("char".to_string()),
+            Token::Varchar => Some("varchar".to_string()),
+            Token::Json => Some("json".to_string()),
+            Token::Jsonb => Some("jsonb".to_string()),
+            Token::Uuid => Some("uuid".to_string()),
+            Token::Bytea => Some("bytea".to_string()),
+            Token::Vector => Some("vector".to_string()),
+            // Other keywords that can be used as identifiers
+            Token::Sequence => Some("sequence".to_string()),
+            Token::Key => Some("key".to_string()),
+            _ => None,
         }
     }
 

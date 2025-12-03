@@ -99,6 +99,15 @@ impl From<&str> for OrbitError {
     }
 }
 
+impl From<std::io::Error> for OrbitError {
+    fn from(err: std::io::Error) -> Self {
+        OrbitError::IoError {
+            message: err.to_string(),
+            source_info: None,
+        }
+    }
+}
+
 impl OrbitError {
     /// Create a network error
     pub fn network<S: Into<String>>(msg: S) -> Self {

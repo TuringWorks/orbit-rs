@@ -154,6 +154,12 @@ pub enum UnifiedExecutionResult {
         transaction_id: TransactionId,
         operation: String,
     },
+    /// Set session variable result
+    Set {
+        variable: String,
+        value: String,
+        transaction_id: Option<TransactionId>,
+    },
     /// Other operations
     Other {
         message: String,
@@ -209,6 +215,9 @@ impl fmt::Display for UnifiedExecutionResult {
             UnifiedExecutionResult::Transaction { operation, .. } => {
                 write!(f, "{}", operation.to_uppercase())
             }
+            UnifiedExecutionResult::Set { .. } => {
+                write!(f, "SET")
+            }
             UnifiedExecutionResult::Other { message, .. } => {
                 write!(f, "{}", message)
             }
@@ -222,10 +231,16 @@ pub trait SqlExecutionStrategy: Send + Sync {
     /// Execute a SQL statement
     async fn execute(&mut self, sql: &str) -> ProtocolResult<UnifiedExecutionResult>;
 
-    /// Execute within an explicit transaction (MVCC only)
-    async fn execute_in_transaction(
+    /// Execute multiple SQL statements
+    async fn execute_multiple(&mut self, sql: &str) -> ProtocolResult<Vec<UnifiedExecutionResult>>;
+
+    /// Execute a parsed statement
+    async fn execute_statement(&mut self, statement: Statement) -> ProtocolResult<UnifiedExecutionResult>;
+
+    /// Execute a parsed statement within an explicit transaction (MVCC only)
+    async fn execute_statement_in_transaction(
         &mut self,
-        sql: &str,
+        statement: Statement,
         transaction_id: TransactionId,
     ) -> ProtocolResult<UnifiedExecutionResult>;
 
@@ -277,14 +292,46 @@ impl MvccExecutionStrategy {
 #[async_trait::async_trait]
 impl SqlExecutionStrategy for MvccExecutionStrategy {
     async fn execute(&mut self, sql: &str) -> ProtocolResult<UnifiedExecutionResult> {
+        let statement = self.parser.parse(sql)?;
+        self.execute_statement(statement).await
+    }
+
+    async fn execute_multiple(&mut self, sql: &str) -> ProtocolResult<Vec<UnifiedExecutionResult>> {
+        let statements = self.parser.parse_multiple(sql)?;
+        let mut results = Vec::new();
+        
         if self.config.auto_transaction {
-            // Use automatic transaction management
             let transaction_id = self
                 .executor
                 .begin_transaction(self.config.default_isolation_level.clone(), None)
                 .await?;
 
-            match self.execute_in_transaction(sql, transaction_id).await {
+            for stmt in statements {
+                match self.execute_statement_in_transaction(stmt, transaction_id).await {
+                    Ok(result) => results.push(result),
+                    Err(e) => {
+                        let _ = self.executor.rollback_transaction(transaction_id).await;
+                        return Err(e);
+                    }
+                }
+            }
+            self.executor.commit_transaction(transaction_id).await?;
+        } else {
+            for stmt in statements {
+                results.push(self.execute_statement_in_transaction(stmt, 1).await?);
+            }
+        }
+        Ok(results)
+    }
+
+    async fn execute_statement(&mut self, statement: Statement) -> ProtocolResult<UnifiedExecutionResult> {
+        if self.config.auto_transaction {
+            let transaction_id = self
+                .executor
+                .begin_transaction(self.config.default_isolation_level.clone(), None)
+                .await?;
+
+            match self.execute_statement_in_transaction(statement, transaction_id).await {
                 Ok(result) => {
                     self.executor.commit_transaction(transaction_id).await?;
                     Ok(result)
@@ -295,20 +342,55 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                 }
             }
         } else {
-            // Execute without transaction management
-            self.execute_in_transaction(sql, 1).await // Use dummy transaction ID
+            self.execute_statement_in_transaction(statement, 1).await
         }
     }
 
-    async fn execute_in_transaction(
+    async fn execute_statement_in_transaction(
         &mut self,
-        sql: &str,
+        statement: Statement,
         transaction_id: TransactionId,
     ) -> ProtocolResult<UnifiedExecutionResult> {
-        let statement = self.parser.parse(sql)?;
 
         match statement {
             Statement::Select(select_stmt) => {
+                // Check if we have a FROM clause
+                if select_stmt.from_clause.is_none() {
+                    // Evaluate expressions without a table context (e.g. SELECT 1, SELECT func())
+                    let mut columns = Vec::new();
+                    let mut row_values = Vec::new();
+                    
+                    use crate::protocols::postgres_wire::sql::expression_evaluator::{ExpressionEvaluator, EvaluationContext};
+                    let mut evaluator = ExpressionEvaluator::new();
+                    let context = EvaluationContext::empty(); // Empty context
+
+                    for item in &select_stmt.select_list {
+                        match item {
+                            SelectItem::Expression { expr, alias } => {
+                                let value = evaluator.evaluate(expr, &context).map_err(|e| {
+                                    ProtocolError::PostgresError(format!("Evaluation error: {}", e))
+                                })?;
+                                
+                                let col_name = alias.clone().unwrap_or_else(|| "expr".to_string());
+                                columns.push(col_name);
+                                row_values.push(Some(value.to_postgres_string()));
+                            }
+                            _ => {
+                                return Err(ProtocolError::PostgresError(
+                                    "Wildcards not allowed without FROM clause".to_string(),
+                                ));
+                            }
+                        }
+                    }
+                    
+                    return Ok(UnifiedExecutionResult::Select {
+                        columns,
+                        rows: vec![row_values],
+                        row_count: 1,
+                        transaction_id: Some(transaction_id),
+                    });
+                }
+
                 let table_name =
                     self.extract_table_name(&Statement::Select(select_stmt.clone()))?;
 
@@ -578,6 +660,24 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                     transaction_id: Some(transaction_id),
                 })
             }
+            Statement::Set(set_stmt) => {
+                let variable = set_stmt.variable;
+                // Evaluate the first value if present
+                let value = if let Some(expr) = set_stmt.value.first() {
+                    match self.evaluate_expression(expr) {
+                        Ok(val) => val.to_string(),
+                        Err(_) => "UNKNOWN".to_string(),
+                    }
+                } else {
+                    "DEFAULT".to_string()
+                };
+
+                Ok(UnifiedExecutionResult::Set {
+                    variable,
+                    value,
+                    transaction_id: Some(transaction_id),
+                })
+            }
             _ => Ok(UnifiedExecutionResult::Other {
                 message: "Command completed successfully".to_string(),
                 transaction_id: Some(transaction_id),
@@ -703,17 +803,33 @@ impl TraditionalExecutionStrategy {
 #[async_trait::async_trait]
 impl SqlExecutionStrategy for TraditionalExecutionStrategy {
     async fn execute(&mut self, sql: &str) -> ProtocolResult<UnifiedExecutionResult> {
-        let result = self.executor.execute(sql).await?;
+        let statement = self.parser.parse(sql)?;
+        self.execute_statement(statement).await
+    }
+
+    async fn execute_multiple(&mut self, sql: &str) -> ProtocolResult<Vec<UnifiedExecutionResult>> {
+        let statements = self.parser.parse_multiple(sql)?;
+        let mut results = Vec::new();
+        
+        for stmt in statements {
+            results.push(self.execute_statement(stmt).await?);
+        }
+        
+        Ok(results)
+    }
+
+    async fn execute_statement(&mut self, statement: Statement) -> ProtocolResult<UnifiedExecutionResult> {
+        let result = self.executor.execute_statement(statement).await?;
         Ok(self.convert_execution_result(result, None))
     }
 
-    async fn execute_in_transaction(
+    async fn execute_statement_in_transaction(
         &mut self,
-        sql: &str,
+        statement: Statement,
         _transaction_id: TransactionId,
     ) -> ProtocolResult<UnifiedExecutionResult> {
-        // Traditional executor doesn't support explicit transactions
-        self.execute(sql).await
+        // Traditional strategy ignores transaction ID
+        self.execute_statement(statement).await
     }
 
     async fn begin_transaction(
@@ -801,6 +917,12 @@ impl TraditionalExecutionStrategy {
                 table_name,
                 transaction_id,
             },
+            ExecutionResult::Set { variable, value } => UnifiedExecutionResult::Set {
+                variable,
+                value,
+                transaction_id,
+            },
+
             ExecutionResult::CreateExtension { extension_name } => {
                 UnifiedExecutionResult::CreateExtension {
                     extension_name,
@@ -912,14 +1034,26 @@ impl ConfigurableSqlEngine {
         self.strategy.execute(sql).await
     }
 
+    /// Execute multiple SQL statements
+    pub async fn execute_multiple(&mut self, sql: &str) -> ProtocolResult<Vec<UnifiedExecutionResult>> {
+        self.strategy.execute_multiple(sql).await
+    }
+
+    /// Execute a parsed statement
+    pub async fn execute_statement(&mut self, statement: Statement) -> ProtocolResult<UnifiedExecutionResult> {
+        self.strategy.execute_statement(statement).await
+    }
+
     /// Execute within a transaction (MVCC only)
     pub async fn execute_in_transaction(
         &mut self,
         sql: &str,
         transaction_id: TransactionId,
     ) -> ProtocolResult<UnifiedExecutionResult> {
+        let mut parser = crate::protocols::postgres_wire::sql::parser::SqlParser::new();
+        let statement = parser.parse(sql)?;
         self.strategy
-            .execute_in_transaction(sql, transaction_id)
+            .execute_statement_in_transaction(statement, transaction_id)
             .await
     }
 

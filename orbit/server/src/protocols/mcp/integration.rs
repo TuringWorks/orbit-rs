@@ -123,6 +123,16 @@ impl OrbitMcpIntegration {
                 }],
                 row_count: 1,
             }),
+            PgQueryResult::Set { variable, value } => Ok(McpQueryResult {
+                columns: vec!["variable".to_string(), "value".to_string()],
+                rows: vec![{
+                    let mut row = Row::new();
+                    row.insert("variable".to_string(), serde_json::Value::String(variable));
+                    row.insert("value".to_string(), serde_json::Value::String(value));
+                    row
+                }],
+                row_count: 1,
+            }),
         }
     }
 
@@ -209,6 +219,7 @@ impl OrbitMcpIntegration {
                     ColumnType::Varchar(n) => format!("VARCHAR({})", n),
                     ColumnType::Boolean => "BOOLEAN".to_string(),
                     ColumnType::Json => "JSON".to_string(),
+                    ColumnType::Double => "DOUBLE PRECISION".to_string(),
                     ColumnType::Timestamp => "TIMESTAMP".to_string(),
                 };
 

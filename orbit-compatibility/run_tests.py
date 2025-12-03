@@ -51,17 +51,20 @@ def start_server():
     if not os.path.exists(startup_script):
         print(f"  [ERROR] Startup script not found: {startup_script}")
         return False
+        # This check is for the old startup script. The new command uses cargo run.
+        # We might want to add a check for cargo or the project structure if needed.
+        # For now, we'll proceed with the new command regardless of the old script's presence.
+        pass 
 
     try:
-        # Open log file
+        # Open log file (this log file will not be used by subprocess.Popen if stdout/stderr are None)
         log_file = open(os.path.join(root_dir, "server_startup.log"), "w")
         
         # Start the server in a separate process group so we can kill it and its children
         SERVER_PROCESS = subprocess.Popen(
-            [startup_script],
-            cwd=root_dir,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
+            ["cargo", "run", "--bin", "orbit-server"],
+            stdout=None,
+            stderr=None,
             preexec_fn=os.setsid
         )
         

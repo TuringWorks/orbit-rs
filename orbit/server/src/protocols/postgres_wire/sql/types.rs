@@ -472,6 +472,23 @@ impl SqlValue {
 
     /// Attempt to cast this value to another SQL type
     pub fn cast_to(&self, target_type: &SqlType) -> Result<SqlValue, String> {
+        // Handle text to interval/timestamp casting
+        match (self, target_type) {
+            (SqlValue::Text(s), SqlType::Interval) | (SqlValue::Varchar(s), SqlType::Interval) | (SqlValue::Char(s), SqlType::Interval) => {
+                // Parse interval string (e.g., "1 hour", "30 minutes", "1 day")
+                return Self::parse_interval(s);
+            }
+            (SqlValue::Text(s), SqlType::Timestamp { with_timezone }) | (SqlValue::Varchar(s), SqlType::Timestamp { with_timezone }) | (SqlValue::Char(s), SqlType::Timestamp { with_timezone }) => {
+                // Parse timestamp string
+                return Self::parse_timestamp(s, *with_timezone);
+            }
+            (SqlValue::Text(s), SqlType::Date) | (SqlValue::Varchar(s), SqlType::Date) | (SqlValue::Char(s), SqlType::Date) => {
+                // Parse date string
+                return Self::parse_date(s);
+            }
+            _ => {}
+        }
+
         if self.sql_type().can_cast_to(target_type) {
             match (self, target_type) {
                 (SqlValue::SmallInt(i), SqlType::Integer) => Ok(SqlValue::Integer(*i as i32)),
@@ -494,6 +511,69 @@ impl SqlValue {
                 target_type
             ))
         }
+    }
+
+    /// Parse an interval string like "1 hour", "30 minutes", "1 day"
+    pub fn parse_interval(s: &str) -> Result<SqlValue, String> {
+        let s = s.trim();
+        let parts: Vec<&str> = s.split_whitespace().collect();
+        
+        if parts.len() != 2 {
+            return Err(format!("Invalid interval format: {}", s));
+        }
+        
+        let value: i32 = parts[0].parse().map_err(|_| format!("Invalid interval value: {}", parts[0]))?;
+        let unit = parts[1].to_lowercase();
+        
+        // Convert to PostgreSQL interval representation (months, days, microseconds)
+        let (months, days, microseconds) = match unit.as_str() {
+            "microsecond" | "microseconds" => (0, 0, value as i64),
+            "millisecond" | "milliseconds" => (0, 0, value as i64 * 1000),
+            "second" | "seconds" => (0, 0, value as i64 * 1_000_000),
+            "minute" | "minutes" => (0, 0, value as i64 * 60 * 1_000_000),
+            "hour" | "hours" => (0, 0, value as i64 * 3600 * 1_000_000),
+            "day" | "days" => (0, value, 0),
+            "week" | "weeks" => (0, value * 7, 0),
+            "month" | "months" => (value, 0, 0),
+            "year" | "years" => (value * 12, 0, 0),
+            _ => return Err(format!("Unknown interval unit: {}", unit)),
+        };
+        
+        Ok(SqlValue::Interval(PostgresInterval {
+            months,
+            days,
+            microseconds,
+        }))
+    }
+
+    /// Parse a timestamp string
+    pub fn parse_timestamp(s: &str, _with_timezone: bool) -> Result<SqlValue, String> {
+        use chrono::NaiveDateTime;
+        
+        // Try parsing common timestamp formats
+        let formats = vec![
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M:%S%.f",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S%.f",
+        ];
+        
+        for format in formats {
+            if let Ok(dt) = NaiveDateTime::parse_from_str(s, format) {
+                return Ok(SqlValue::Timestamp(dt));
+            }
+        }
+        
+        Err(format!("Invalid timestamp format: {}", s))
+    }
+
+    /// Parse a date string
+    pub fn parse_date(s: &str) -> Result<SqlValue, String> {
+        use chrono::NaiveDate;
+        
+        NaiveDate::parse_from_str(s, "%Y-%m-%d")
+            .map(SqlValue::Date)
+            .map_err(|_| format!("Invalid date format: {}", s))
     }
 
     /// Parse a string value into a SQL value of the specified type

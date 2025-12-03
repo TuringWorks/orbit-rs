@@ -6,7 +6,7 @@ use crate::persistence::PersistenceProviderRegistry;
 use crate::protocols::postgres_wire::QueryEngine;
 #[cfg(feature = "storage-rocksdb")]
 use crate::protocols::postgres_wire::RocksDbTableStorage;
-use crate::protocols::{PostgresServer, RespServer};
+use crate::protocols::{MongoDbServer, PostgresServer, RespServer};
 use crate::services::ServerConnectionService;
 use crate::LoadBalancer;
 use orbit_client::ActorRegistry;
@@ -41,6 +41,9 @@ pub struct ProtocolConfig {
     pub aql_enabled: bool,
     pub aql_port: u16,
     pub aql_bind_address: String,
+    pub mongodb_enabled: bool,
+    pub mongodb_port: u16,
+    pub mongodb_bind_address: String,
 }
 
 impl Default for ProtocolConfig {
@@ -64,6 +67,9 @@ impl Default for ProtocolConfig {
             aql_enabled: true,
             aql_port: 8529,
             aql_bind_address: "127.0.0.1".to_string(),
+            mongodb_enabled: true,
+            mongodb_port: 27017,
+            mongodb_bind_address: "127.0.0.1".to_string(),
         }
     }
 }
@@ -534,6 +540,34 @@ impl OrbitServer {
                 self.config.protocols.aql_port
             );
         }
+        if self.config.protocols.mongodb_enabled {
+            tracing::info!(
+                "  - MongoDB: {}:{}",
+                self.config.protocols.aql_bind_address, self.config.protocols.aql_port
+            );
+        }
+        if self.config.protocols.mongodb_enabled {
+            tracing::info!(
+                "  - MongoDB: {}:{}",
+                self.config.protocols.mongodb_bind_address,
+                self.config.protocols.mongodb_port
+            );
+        }
+
+        // Start MongoDB server if enabled
+        if self.config.protocols.mongodb_enabled {
+            let mongo_addr = format!(
+                "{}:{}",
+                self.config.protocols.mongodb_bind_address, self.config.protocols.mongodb_port
+            );
+            tracing::info!("Starting MongoDB server on {}", mongo_addr);
+            let mongo_server = MongoDbServer::new(mongo_addr);
+            server_tasks.push(tokio::spawn(async move {
+                if let Err(e) = mongo_server.run().await {
+                    tracing::error!("MongoDB server failed: {}", e);
+                }
+            }));
+        }
 
         // Wait for any server to finish (which likely means an error occurred)
         if !server_tasks.is_empty() {
@@ -634,6 +668,15 @@ impl OrbitServer {
             } else {
                 None
             },
+            mongodb_enabled: self.config.protocols.mongodb_enabled,
+            mongodb_address: if self.config.protocols.mongodb_enabled {
+                Some(format!(
+                    "{}:{}",
+                    self.config.protocols.mongodb_bind_address, self.config.protocols.mongodb_port
+                ))
+            } else {
+                None
+            },
         };
 
         Ok(ServerStats {
@@ -700,6 +743,8 @@ pub struct ProtocolStats {
     pub cypher_address: Option<String>,
     pub aql_enabled: bool,
     pub aql_address: Option<String>,
+    pub mongodb_enabled: bool,
+    pub mongodb_address: Option<String>,
 }
 
 /// Statistics about the Orbit server

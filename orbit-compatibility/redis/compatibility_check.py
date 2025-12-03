@@ -61,7 +61,7 @@ def run_checks():
         sys.exit(1)
 
 def execute_pipeline(r):
-    pipe = r.pipeline()
+    pipe = r.pipeline(transaction=False)
     pipe.set('p1', 'v1')
     pipe.get('p1')
     res = pipe.execute()

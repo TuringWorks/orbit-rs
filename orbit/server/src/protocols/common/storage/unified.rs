@@ -1059,14 +1059,19 @@ mod persistent_storage_impl {
                 .columns
                 .iter()
                 .map(|col| {
+                    let mut constraints = Vec::new();
                     let data_type = match col.data_type {
-                        ColumnType::Serial => SqlType::Integer, // Serial is auto-incrementing integer
+                        ColumnType::Serial => {
+                            constraints.push("SERIAL".to_string());
+                            SqlType::Integer
+                        } // Serial is auto-incrementing integer
                         ColumnType::Integer => SqlType::Integer,
                         ColumnType::BigInt => SqlType::BigInt,
                         ColumnType::Text => SqlType::Text,
                         ColumnType::Varchar(n) => SqlType::Varchar(Some(n as u32)),
                         ColumnType::Boolean => SqlType::Boolean,
                         ColumnType::Json => SqlType::Json,
+                        ColumnType::Double => SqlType::DoublePrecision,
                         ColumnType::Timestamp => SqlType::Timestamp {
                             with_timezone: false,
                         },
@@ -1076,7 +1081,7 @@ mod persistent_storage_impl {
                         data_type,
                         nullable: col.nullable,
                         default: None,
-                        constraints: Vec::new(),
+                        constraints,
                     }
                 })
                 .collect();
@@ -1095,16 +1100,20 @@ mod persistent_storage_impl {
                 .columns
                 .iter()
                 .map(|col| {
-                    let data_type = match &col.data_type {
-                        SqlType::Integer | SqlType::SmallInt => ColumnType::Integer,
-                        SqlType::BigInt => ColumnType::BigInt,
-                        SqlType::Text => ColumnType::Text,
-                        SqlType::Varchar(Some(n)) => ColumnType::Varchar(*n as i32),
-                        SqlType::Varchar(None) => ColumnType::Varchar(255),
-                        SqlType::Boolean => ColumnType::Boolean,
-                        SqlType::Json | SqlType::Jsonb => ColumnType::Json,
-                        SqlType::Timestamp { .. } => ColumnType::Timestamp,
-                        _ => ColumnType::Text, // Default fallback
+                    let data_type = if col.constraints.contains(&"SERIAL".to_string()) {
+                        ColumnType::Serial
+                    } else {
+                        match &col.data_type {
+                            SqlType::Integer | SqlType::SmallInt => ColumnType::Integer,
+                            SqlType::BigInt => ColumnType::BigInt,
+                            SqlType::Text => ColumnType::Text,
+                            SqlType::Varchar(Some(n)) => ColumnType::Varchar(*n as i32),
+                            SqlType::Varchar(None) => ColumnType::Varchar(255),
+                            SqlType::Boolean => ColumnType::Boolean,
+                            SqlType::Json | SqlType::Jsonb => ColumnType::Json,
+                            SqlType::Timestamp { .. } => ColumnType::Timestamp,
+                            _ => ColumnType::Text, // Default fallback
+                        }
                     };
 
                     ColumnDefinition {

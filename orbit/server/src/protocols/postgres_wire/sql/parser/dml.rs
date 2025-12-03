@@ -9,7 +9,7 @@ use crate::protocols::postgres_wire::sql::{
         Assignment, AssignmentTarget, ColumnRef, ConflictAction, ConflictTarget, DeleteStatement,
         DistinctClause, Expression, FromClause, InsertSource, InsertStatement, LimitClause,
         NullsOrder, OnConflictClause, OrderByItem, SelectItem, SelectStatement, SortDirection,
-        Statement, TableAlias, UpdateStatement,
+        Statement, TableAlias, TraverseClause, TraverseDirection, UpdateStatement,
     },
     lexer::Token,
     types::SqlValue,
@@ -55,61 +55,32 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
         let item = if parser.matches(&[Token::Multiply]) {
             parser.advance()?;
             SelectItem::Wildcard
-        } else if let Some(Token::Identifier(name)) = &parser.current_token {
-            let expr_name = name.clone();
-            parser.advance()?;
-
+        } else {
             // Check for table.* syntax
-            if parser.matches(&[Token::Dot]) {
-                parser.advance()?;
-                if parser.matches(&[Token::Multiply]) {
-                    parser.advance()?;
-                    SelectItem::QualifiedWildcard {
-                        qualifier: expr_name,
-                    }
-                } else if let Some(Token::Identifier(col_name)) = &parser.current_token {
-                    let column_name = col_name.clone();
-                    parser.advance()?;
-
-                    let expr = Expression::Column(ColumnRef {
-                        table: Some(expr_name),
-                        name: column_name,
-                    });
-
-                    // Check for alias
-                    let alias = if parser.matches(&[Token::As]) {
-                        parser.advance()?;
-                        if let Some(Token::Identifier(alias_name)) = &parser.current_token {
-                            let alias = alias_name.clone();
-                            parser.advance()?;
-                            Some(alias)
-                        } else {
-                            None
-                        }
-                    } else if let Some(Token::Identifier(alias_name)) = &parser.current_token {
-                        // Implicit alias
-                        let alias = alias_name.clone();
-                        parser.advance()?;
-                        Some(alias)
-                    } else {
-                        None
-                    };
-
-                    SelectItem::Expression { expr, alias }
+            let is_qualified_wildcard = if let Some(Token::Identifier(_)) = &parser.current_token {
+                if let Some(Token::Dot) = parser.tokens.get(parser.position + 1) {
+                    matches!(parser.tokens.get(parser.position + 2), Some(Token::Multiply))
                 } else {
-                    return Err(ParseError {
-                        message: "Expected column name after table.column reference".to_string(),
-                        position: parser.position,
-                        expected: vec!["column name".to_string()],
-                        found: parser.current_token.clone(),
-                    });
+                    false
                 }
             } else {
-                // Simple column reference
-                let expr = Expression::Column(ColumnRef {
-                    table: None,
-                    name: expr_name,
-                });
+                false
+            };
+
+            if is_qualified_wildcard {
+                if let Some(Token::Identifier(name)) = &parser.current_token {
+                    let qualifier = name.clone();
+                    parser.advance()?; // Identifier
+                    parser.advance()?; // Dot
+                    parser.advance()?; // Multiply
+                    SelectItem::QualifiedWildcard { qualifier }
+                } else {
+                    unreachable!()
+                }
+            } else {
+                // Parse as expression using proper expression parser
+                // This handles columns, functions, literals, etc.
+                let expr = parse_expression_with_parser(parser)?;
 
                 // Check for alias
                 let alias = if parser.matches(&[Token::As]) {
@@ -144,25 +115,6 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
 
                 SelectItem::Expression { expr, alias }
             }
-        } else {
-            // Try to parse as expression using proper expression parser
-            let expr = parse_expression_with_parser(parser)?;
-
-            // Check for alias
-            let alias = if parser.matches(&[Token::As]) {
-                parser.advance()?;
-                if let Some(Token::Identifier(alias_name)) = &parser.current_token {
-                    let alias = alias_name.clone();
-                    parser.advance()?;
-                    Some(alias)
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-
-            SelectItem::Expression { expr, alias }
         };
 
         select_list.push(item);
@@ -186,6 +138,35 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
     let where_clause = if parser.matches(&[Token::Where]) {
         parser.advance()?;
         Some(parse_where_expression(parser)?)
+    } else {
+        None
+    };
+
+    // Parse GROUP BY clause
+    let group_by = if parser.matches(&[Token::Group]) {
+        parser.advance()?;
+        parser.expect(Token::By)?;
+        
+        let mut group_exprs = Vec::new();
+        loop {
+            group_exprs.push(parse_expression_with_parser(parser)?);
+            
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        
+        Some(group_exprs)
+    } else {
+        None
+    };
+
+    // Parse HAVING clause
+    let having = if parser.matches(&[Token::Having]) {
+        parser.advance()?;
+        Some(parse_expression_with_parser(parser)?)
     } else {
         None
     };
@@ -232,20 +213,170 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
         (None, None)
     };
 
-    // Create SELECT statement with ORDER BY and LIMIT
+    // Parse TRAVERSE clause (OrbitQL extension)
+    let traverse = if let Some(Token::Identifier(name)) = &parser.current_token {
+        if name.to_uppercase() == "TRAVERSE" {
+            Some(parse_traverse_clause(parser)?)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Create SELECT statement with ORDER BY, LIMIT, and TRAVERSE
     Ok(Statement::Select(Box::new(SelectStatement {
         with: None,
         select_list,
         distinct,
         from_clause,
         where_clause,
-        group_by: None,
-        having: None,
+        group_by,
+        having,
         order_by,
         limit,
         offset,
         for_clause: None,
+        traverse,
     })))
+}
+
+/// Parse a TRAVERSE clause: TRAVERSE <Direction> <Min>..<Max> STEPS ON <Edge> [TO <Alias>]
+fn parse_traverse_clause(parser: &mut SqlParser) -> ParseResult<TraverseClause> {
+    parser.advance()?; // consume TRAVERSE
+
+    // Parse Direction
+    let direction = if let Some(Token::Identifier(name)) = &parser.current_token {
+        match name.to_uppercase().as_str() {
+            "OUTBOUND" => TraverseDirection::Outbound,
+            "INBOUND" => TraverseDirection::Inbound,
+            "ANY" => TraverseDirection::Any,
+            _ => return Err(ParseError {
+                message: format!("Expected OUTBOUND, INBOUND, or ANY, found {}", name),
+                position: parser.position,
+                expected: vec!["OUTBOUND".to_string(), "INBOUND".to_string(), "ANY".to_string()],
+                found: parser.current_token.clone(),
+            }),
+        }
+    } else {
+        return Err(ParseError {
+            message: "Expected traversal direction".to_string(),
+            position: parser.position,
+            expected: vec!["direction".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+    parser.advance()?;
+
+    // Parse Min Steps
+    let min_steps = if let Some(Token::NumericLiteral(s)) = &parser.current_token {
+        s.parse::<u32>().map_err(|_| ParseError {
+            message: format!("Invalid integer for min steps: {}", s),
+            position: parser.position,
+            expected: vec!["integer".to_string()],
+            found: parser.current_token.clone(),
+        })?
+    } else {
+        return Err(ParseError {
+            message: "Expected minimum steps".to_string(),
+            position: parser.position,
+            expected: vec!["integer".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+    parser.advance()?;
+
+    // Parse .. (Range)
+    parser.expect(Token::RangeOperator)?;
+
+    // Parse Max Steps
+    let max_steps = if let Some(Token::NumericLiteral(s)) = &parser.current_token {
+        s.parse::<u32>().map_err(|_| ParseError {
+            message: format!("Invalid integer for max steps: {}", s),
+            position: parser.position,
+            expected: vec!["integer".to_string()],
+            found: parser.current_token.clone(),
+        })?
+    } else {
+        return Err(ParseError {
+            message: "Expected maximum steps".to_string(),
+            position: parser.position,
+            expected: vec!["integer".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+    parser.advance()?;
+
+    // Parse STEPS (optional or required? Query has it)
+    if let Some(Token::Identifier(name)) = &parser.current_token {
+        if name.to_uppercase() == "STEPS" {
+            parser.advance()?;
+        }
+    }
+
+    // Parse ON
+    if parser.matches(&[Token::On]) {
+        parser.advance()?;
+    } else {
+        // Check if ON is parsed as Identifier (if not a keyword)
+        if let Some(Token::Identifier(name)) = &parser.current_token {
+            if name.to_uppercase() == "ON" {
+                parser.advance()?;
+            } else {
+                return Err(ParseError {
+                    message: "Expected ON".to_string(),
+                    position: parser.position,
+                    expected: vec!["ON".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            }
+        } else {
+            // ON is likely a keyword in lexer, let's assume expect(Token::On) works if it is
+            // But if it's not in lexer, we need to handle it.
+            // Lexer has Token::On.
+            parser.expect(Token::On)?;
+        }
+    }
+
+    // Parse Edge Collection
+    let edge_collection = if let Some(Token::Identifier(name)) = &parser.current_token {
+        name.clone()
+    } else {
+        return Err(ParseError {
+            message: "Expected edge collection name".to_string(),
+            position: parser.position,
+            expected: vec!["identifier".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+    parser.advance()?;
+
+    // Parse TO (optional)
+    let target_alias = if parser.matches(&[Token::To]) {
+        parser.advance()?;
+        if let Some(Token::Identifier(name)) = &parser.current_token {
+            let alias = name.clone();
+            parser.advance()?;
+            Some(alias)
+        } else {
+            return Err(ParseError {
+                message: "Expected target alias after TO".to_string(),
+                position: parser.position,
+                expected: vec!["identifier".to_string()],
+                found: parser.current_token.clone(),
+            });
+        }
+    } else {
+        None
+    };
+
+    Ok(TraverseClause {
+        direction,
+        min_steps,
+        max_steps,
+        edge_collection,
+        target_alias,
+    })
 }
 
 /// Parse FROM clause
@@ -275,12 +406,17 @@ fn parse_from_clause(parser: &mut SqlParser) -> ParseResult<FromClause> {
             Token::Limit,
             Token::Join,
         ]) {
-            let alias = TableAlias {
-                name: alias_name.clone(),
-                columns: None,
-            };
-            parser.advance()?;
-            Some(alias)
+            // Check for TRAVERSE identifier (OrbitQL extension)
+            if alias_name.to_uppercase() == "TRAVERSE" {
+                None
+            } else {
+                let alias = TableAlias {
+                    name: alias_name.clone(),
+                    columns: None,
+                };
+                parser.advance()?;
+                Some(alias)
+            }
         } else {
             None
         }
@@ -307,20 +443,29 @@ fn parse_order_by_clause(parser: &mut SqlParser) -> ParseResult<Vec<OrderByItem>
         let expression = parse_expression_with_parser(parser)?;
 
         // Parse optional ASC/DESC
-        let direction = if let Some(Token::Identifier(dir)) = &parser.current_token {
-            match dir.to_uppercase().as_str() {
-                "ASC" => {
-                    parser.advance()?;
-                    Some(SortDirection::Ascending)
-                }
-                "DESC" => {
-                    parser.advance()?;
-                    Some(SortDirection::Descending)
-                }
-                _ => None,
+        let direction = match &parser.current_token {
+            Some(Token::Asc) => {
+                parser.advance()?;
+                Some(SortDirection::Ascending)
             }
-        } else {
-            None
+            Some(Token::Desc) => {
+                parser.advance()?;
+                Some(SortDirection::Descending)
+            }
+            Some(Token::Identifier(dir)) => {
+                match dir.to_uppercase().as_str() {
+                    "ASC" => {
+                        parser.advance()?;
+                        Some(SortDirection::Ascending)
+                    }
+                    "DESC" => {
+                        parser.advance()?;
+                        Some(SortDirection::Descending)
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
         };
 
         // Parse optional NULLS FIRST/LAST
@@ -379,8 +524,8 @@ pub fn parse_insert(parser: &mut SqlParser) -> ParseResult<Statement> {
         let mut cols = Vec::new();
 
         while !parser.matches(&[Token::RightParen]) {
-            if let Some(Token::Identifier(col_name)) = &parser.current_token {
-                cols.push(col_name.clone());
+            if let Some(col_name) = parser.current_token.as_ref().and_then(utilities::token_to_identifier_name) {
+                cols.push(col_name);
                 parser.advance()?;
 
                 if parser.matches(&[Token::Comma]) {

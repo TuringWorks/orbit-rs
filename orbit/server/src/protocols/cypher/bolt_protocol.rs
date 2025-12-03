@@ -24,7 +24,7 @@ use crate::protocols::cypher::cypher_parser::CypherParser;
 use crate::protocols::cypher::storage::CypherStorageProvider;
 use crate::protocols::cypher::types::{GraphNode, GraphRelationship};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -652,6 +652,10 @@ impl BoltProtocolHandler {
             // Read message chunk
             let chunk_size = match self.read_chunk(&mut stream, &mut read_buf).await {
                 Ok(size) => size,
+                Err(ProtocolError::ConnectionClosed) => {
+                    info!("Client disconnected");
+                    break;
+                }
                 Err(e) => {
                     error!("Error reading chunk: {}", e);
                     break;
@@ -659,33 +663,26 @@ impl BoltProtocolHandler {
             };
 
             if chunk_size == 0 {
-                info!("Client disconnected");
-                break;
-            }
+                // End of message marker (0x0000)
+                // Process the accumulated message
+                if !read_buf.is_empty() {
+                    let message_bytes = read_buf.freeze();
+                    read_buf = BytesMut::with_capacity(8192); // Reset buffer for next message
 
-            // Process messages in buffer
-            while read_buf.len() >= 2 {
-                let message_size = u16::from_be_bytes([read_buf[0], read_buf[1]]) as usize;
-
-                if read_buf.len() < 2 + message_size {
-                    break; // Need more data
-                }
-
-                read_buf.advance(2); // Skip size
-                let message_bytes = read_buf.split_to(message_size).freeze();
-
-                match self.process_message(&message_bytes, &mut stream).await {
-                    Ok(should_continue) => {
-                        if !should_continue {
-                            break;
+                    match self.process_message(&message_bytes, &mut stream).await {
+                        Ok(should_continue) => {
+                            if !should_continue {
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            error!("Error processing message: {}", e);
+                            self.send_failure(&mut stream, "Error", &e.to_string())
+                                .await?;
                         }
                     }
-                    Err(e) => {
-                        error!("Error processing message: {}", e);
-                        self.send_failure(&mut stream, "Error", &e.to_string())
-                            .await?;
-                    }
                 }
+                continue;
             }
         }
 
@@ -718,7 +715,7 @@ impl BoltProtocolHandler {
 
                 Ok(size)
             }
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => Ok(0),
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => Err(ProtocolError::ConnectionClosed),
             Err(e) => Err(ProtocolError::Other(format!("Read error: {}", e))),
         }
     }
@@ -734,44 +731,61 @@ impl BoltProtocolHandler {
         }
 
         let marker = message_bytes[0];
-        let message_type = marker & 0xF0;
+        
+        // Check if it's a structure (Bolt messages are always structures)
+        // Tiny structure: 0xB0 - 0xBF
+        let signature = if (marker & 0xF0) == 0xB0 {
+            if message_bytes.len() < 2 {
+                return Err(ProtocolError::CypherError("Message too short".to_string()));
+            }
+            message_bytes[1]
+        } else if marker == 0xDC { // Struct 8
+             if message_bytes.len() < 3 {
+                return Err(ProtocolError::CypherError("Message too short".to_string()));
+            }
+            message_bytes[2]
+        } else {
+             warn!("Invalid message format: marker 0x{:02X}", marker);
+             self.send_ignored(stream).await?;
+             return Ok(true);
+        };
 
-        match message_type {
-            0x10 => {
+        match signature {
+            0x01 => {
                 // HELLO message
                 let message = self.decode_hello(message_bytes)?;
                 self.handle_hello(message, stream).await?;
             }
-            0x11 => {
+            0x02 => {
                 // GOODBYE message
                 info!("Client sent GOODBYE");
                 return Ok(false);
             }
-            0x12 => {
+            0x10 => {
                 // RUN message
                 let (query, params, extra) = self.decode_run(message_bytes)?;
                 self.handle_run(query, params, extra, stream).await?;
             }
-            0x13 => {
+            0x3F => {
                 // PULL message
                 let (n, qid) = self.decode_pull(message_bytes)?;
                 self.handle_pull(n, qid, stream).await?;
             }
-            0x14 => {
+            0x2F => {
                 // DISCARD message
                 let (n, qid) = self.decode_discard(message_bytes)?;
                 self.handle_discard(n, qid, stream).await?;
             }
-            0x15 => {
+            0x11 => {
                 // BEGIN message
                 let extra = self.decode_begin(message_bytes)?;
                 self.handle_begin(extra, stream).await?;
             }
-            0x16 => {
+            0x12 => {
                 // COMMIT message
                 self.handle_commit(stream).await?;
             }
-            0x17 => {
+            0x13 => {
                 // ROLLBACK message
                 self.handle_rollback(stream).await?;
             }
@@ -779,8 +793,14 @@ impl BoltProtocolHandler {
                 // RESET message
                 self.handle_reset(stream).await?;
             }
+            0x66 => {
+                // ROUTE message (0x66)
+                 // Simplified: just ignore or send empty route
+                 warn!("Received ROUTE message (ignoring)");
+                 self.send_success(HashMap::new(), stream).await?;
+            }
             _ => {
-                warn!("Unknown message type: 0x{:02X}", message_type);
+                warn!("Unknown message signature: 0x{:02X}", signature);
                 self.send_ignored(stream).await?;
             }
         }
@@ -1023,6 +1043,78 @@ impl BoltProtocolHandler {
         Ok(())
     }
 
+    /// Evaluate a Cypher expression
+    fn evaluate_expression(
+        &self,
+        expr: &crate::protocols::cypher::cypher_parser::Expression,
+        row: &[Value],
+        columns: &[String],
+    ) -> Value {
+        match expr {
+            crate::protocols::cypher::cypher_parser::Expression::Literal(val) => {
+                match val {
+                    serde_json::Value::Number(n) => Value::Number(n.clone()),
+                    serde_json::Value::String(s) => Value::String(s.clone()),
+                    serde_json::Value::Bool(b) => Value::Bool(*b),
+                    serde_json::Value::Null => Value::Null,
+                    _ => Value::String(val.to_string()),
+                }
+            },
+            crate::protocols::cypher::cypher_parser::Expression::Variable(name) => {
+                if let Some(idx) = columns.iter().position(|c| c == name) {
+                    if idx < row.len() {
+                        row[idx].clone()
+                    } else {
+                        Value::Null
+                    }
+                } else {
+                    Value::Null
+                }
+            }
+            crate::protocols::cypher::cypher_parser::Expression::BinaryOp { left, operator, right } => {
+                let left_val = self.evaluate_expression(left, row, columns);
+                let right_val = self.evaluate_expression(right, row, columns);
+                
+                match operator {
+                    crate::protocols::cypher::cypher_parser::BinaryOperator::Add => {
+                        match (left_val, right_val) {
+                            (Value::Number(l), Value::Number(r)) => {
+                                if let (Some(l_i64), Some(r_i64)) = (l.as_i64(), r.as_i64()) {
+                                    Value::Number(serde_json::Number::from(l_i64 + r_i64))
+                                } else if let (Some(l_f64), Some(r_f64)) = (l.as_f64(), r.as_f64()) {
+                                    serde_json::Number::from_f64(l_f64 + r_f64).map(Value::Number).unwrap_or(Value::Null)
+                                } else {
+                                    Value::Null
+                                }
+                            }
+                            (Value::String(l), Value::String(r)) => {
+                                Value::String(format!("{}{}", l, r))
+                            }
+                            _ => Value::Null,
+                        }
+                    }
+                    crate::protocols::cypher::cypher_parser::BinaryOperator::Subtract => {
+                        match (left_val, right_val) {
+                            (Value::Number(l), Value::Number(r)) => {
+                                if let (Some(l_i64), Some(r_i64)) = (l.as_i64(), r.as_i64()) {
+                                    Value::Number(serde_json::Number::from(l_i64 - r_i64))
+                                } else if let (Some(l_f64), Some(r_f64)) = (l.as_f64(), r.as_f64()) {
+                                    serde_json::Number::from_f64(l_f64 - r_f64).map(Value::Number).unwrap_or(Value::Null)
+                                } else {
+                                    Value::Null
+                                }
+                            }
+                            _ => Value::Null,
+                        }
+                    }
+                    // Implement other operators as needed
+                    _ => Value::Null,
+                }
+            }
+            _ => Value::Null,
+        }
+    }
+
     /// Execute a Cypher query and return columns and result rows
     async fn execute_cypher_query(
         &self,
@@ -1091,39 +1183,162 @@ impl BoltProtocolHandler {
                 }
                 crate::protocols::cypher::cypher_parser::CypherClause::Create { pattern } => {
                     // Execute CREATE clause
-                    for element in &pattern.elements {
-                        match element {
-                            crate::protocols::cypher::cypher_parser::PatternElement::Node(node_pattern) => {
-                                let node = GraphNode {
-                                    id: uuid::Uuid::new_v4().to_string(),
-                                    labels: node_pattern.labels.clone(),
-                                    properties: node_pattern.properties.clone(),
-                                };
-                                self.storage.store_node(node.clone()).await?;
-                                let row = vec![self.node_to_value(&node)];
-                                results.push(row);
-
-                                if let Some(var) = &node_pattern.variable {
-                                    if !columns.contains(var) {
-                                        columns.push(var.clone());
+                    // We need to handle variable binding from previous clauses (MATCH)
+                    // And we need to link nodes with relationships
+                    
+                    // For each row in current results (or 1 run if empty), we execute the CREATE
+                    if results.is_empty() {
+                        results.push(vec![]);
+                    }
+                    
+                    let mut new_results = Vec::new();
+                    
+                    for row in &results {
+                        let mut current_row = row.clone();
+                        let mut last_node_id: Option<String> = None;
+                        let mut pending_rel: Option<crate::protocols::cypher::cypher_parser::RelationshipPattern> = None;
+                        
+                        for element in &pattern.elements {
+                            match element {
+                                crate::protocols::cypher::cypher_parser::PatternElement::Node(node_pattern) => {
+                                    // Check if variable is already bound
+                                    let mut node_id = None;
+                                    let mut is_new = true;
+                                    
+                                    if let Some(var) = &node_pattern.variable {
+                                        if let Some(idx) = columns.iter().position(|c| c == var) {
+                                            if idx < current_row.len() {
+                                                // Variable is bound, use existing node
+                                                let val = &current_row[idx];
+                                                if let Value::Object(map) = val {
+                                                    if let Some(Value::String(id)) = map.get("elementId") {
+                                                        node_id = Some(id.clone());
+                                                        is_new = false;
+                                                    } else if let Some(Value::Number(id)) = map.get("id") {
+                                                        node_id = Some(id.to_string());
+                                                        is_new = false;
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
+                                    
+                                    // If not bound, create new node
+                                    if node_id.is_none() {
+                                        let node = GraphNode {
+                                            id: uuid::Uuid::new_v4().to_string(),
+                                            labels: node_pattern.labels.clone(),
+                                            properties: node_pattern.properties.clone(),
+                                        };
+                                        self.storage.store_node(node.clone()).await?;
+                                        node_id = Some(node.id.clone());
+                                        info!("Created node: {:?}", node.id);
+                                        
+                                        // Update row/columns if variable present
+                                        if let Some(var) = &node_pattern.variable {
+                                            if !columns.contains(var) {
+                                                // This is tricky: we can't easily add columns in the middle of processing rows
+                                                // For now, we assume CREATE extends the row if variable is new
+                                                // But we need to update 'columns' outside the loop?
+                                                // Simplified: we just push to current_row, and we'll fix columns later
+                                                current_row.push(self.node_to_value(&node));
+                                            }
+                                        }
+                                    }
+                                    
+                                    let current_node_id = node_id.unwrap();
+                                    
+                                    // If we have a pending relationship, create it now
+                                    if let Some(rel_pattern) = pending_rel.take() {
+                                        if let Some(start_id) = last_node_id {
+                                            let rel = GraphRelationship {
+                                                id: uuid::Uuid::new_v4().to_string(),
+                                                start_node: start_id,
+                                                end_node: current_node_id.clone(),
+                                                rel_type: rel_pattern.rel_type.clone().unwrap_or_else(|| "RELATED".to_string()),
+                                                properties: rel_pattern.properties.clone(),
+                                            };
+                                            self.storage.store_relationship(rel.clone()).await?;
+                                            info!("Created relationship: {:?} -> {:?} -> {:?}", rel.start_node, rel.rel_type, rel.end_node);
+                                        }
+                                    }
+                                    
+                                    last_node_id = Some(current_node_id);
                                 }
-                                info!("Created node: {:?}", node.id);
-                            }
-                            crate::protocols::cypher::cypher_parser::PatternElement::Relationship(rel_pattern) => {
-                                // Relationships need start/end nodes - for now skip
-                                debug!("Relationship creation requires start/end nodes: {:?}", rel_pattern);
+                                crate::protocols::cypher::cypher_parser::PatternElement::Relationship(rel_pattern) => {
+                                    pending_rel = Some(rel_pattern.clone());
+                                }
                             }
                         }
+                        new_results.push(current_row);
                     }
+                    
+                    // Update columns if we added new variables
+                    // This is a bit hacky, we should track new variables properly
+                    for element in &pattern.elements {
+                         if let crate::protocols::cypher::cypher_parser::PatternElement::Node(node_pattern) = element {
+                             if let Some(var) = &node_pattern.variable {
+                                 if !columns.contains(var) {
+                                     columns.push(var.clone());
+                                 }
+                             }
+                         }
+                    }
+                    
+                    results = new_results;
                 }
                 crate::protocols::cypher::cypher_parser::CypherClause::Return { items } => {
-                    // RETURN clause updates columns
-                    for item in items {
-                        if !columns.contains(&item.expression) {
-                            columns.push(item.expression.clone());
-                        }
+                    // If results is empty and we haven't executed a MATCH, assume implicit single row
+                    // (This is a simplification; ideally we'd track if we have a stream of rows)
+                    if results.is_empty() && columns.is_empty() {
+                         results.push(vec![]);
                     }
+
+                    let mut new_columns = Vec::new();
+                    let mut new_results = Vec::new();
+
+                    for item in items {
+                        let col_name = item.alias.clone().unwrap_or_else(|| item.expression.clone());
+                        new_columns.push(col_name);
+                    }
+
+                    for row in results {
+                        let mut new_row = Vec::new();
+                        for item in items {
+                            let value = self.evaluate_expression(&item.expr, &row, &columns);
+                            new_row.push(value);
+                        }
+                        new_results.push(new_row);
+                    }
+                    
+                    columns = new_columns;
+                    results = new_results;
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::With { items, where_condition: _ } => {
+                    // WITH clause is similar to RETURN but for intermediate results
+                     if results.is_empty() && columns.is_empty() {
+                         results.push(vec![]);
+                    }
+
+                    let mut new_columns = Vec::new();
+                    let mut new_results = Vec::new();
+
+                    for item in items {
+                        let col_name = item.alias.clone().unwrap_or_else(|| "expr".to_string());
+                        new_columns.push(col_name);
+                    }
+
+                    for row in results {
+                        let mut new_row = Vec::new();
+                        for item in items {
+                            let value = self.evaluate_expression(&item.expression, &row, &columns);
+                            new_row.push(value);
+                        }
+                        new_results.push(new_row);
+                    }
+                    
+                    columns = new_columns;
+                    results = new_results;
                 }
                 crate::protocols::cypher::cypher_parser::CypherClause::Where { condition: _ } => {
                     // WHERE clause filters - would need to filter pending_results
@@ -1169,16 +1384,7 @@ impl BoltProtocolHandler {
                         yield_items
                     );
                 }
-                crate::protocols::cypher::cypher_parser::CypherClause::With {
-                    items,
-                    where_condition,
-                } => {
-                    debug!(
-                        "WITH clause processing: {} items, where={}",
-                        items.len(),
-                        where_condition.is_some()
-                    );
-                }
+
                 crate::protocols::cypher::cypher_parser::CypherClause::OptionalMatch {
                     pattern: _,
                 } => {
@@ -1520,13 +1726,16 @@ impl BoltProtocolHandler {
     /// Send SUCCESS message
     async fn send_success(
         &self,
-        _metadata: HashMap<String, Value>,
+        metadata: HashMap<String, Value>,
         stream: &mut TcpStream,
     ) -> ProtocolResult<()> {
         let mut buf = BytesMut::new();
-        buf.put_u8(0xB1); // SUCCESS marker
-                          // Simplified: would encode metadata as PackStream
-                          // For now, just send marker
+        buf.put_u8(0xB1); // Structure (size 1)
+        buf.put_u8(0x70); // SUCCESS signature
+        
+        // Encode metadata map
+        self.encode_packstream_value(&Value::Object(metadata.into_iter().collect()), &mut buf);
+        
         self.send_chunk(&buf, stream).await
     }
 
@@ -1664,13 +1873,15 @@ impl BoltProtocolHandler {
     /// Send a chunk to the client
     async fn send_chunk(&self, data: &BytesMut, stream: &mut TcpStream) -> ProtocolResult<()> {
         let size = data.len() as u16;
-        let mut chunk = BytesMut::with_capacity(2 + data.len());
+        let mut chunk = BytesMut::with_capacity(2 + data.len() + 2);
         chunk.put_u16(size);
         chunk.put_slice(data);
-        stream
-            .write_all(&chunk)
-            .await
-            .map_err(|e| ProtocolError::Other(format!("Write error: {}", e)))?;
-        Ok(())
+        chunk.put_u16(0); // End of message marker
+        
+        stream.write_all(&chunk).await.map_err(|e| {
+            error!("Failed to write chunk: {}", e);
+            ProtocolError::Other(format!("Write error: {}", e))
+        })
     }
+
 }

@@ -168,6 +168,7 @@ impl SelectParser {
             limit,
             offset,
             for_clause: None, // TODO: Parse FOR UPDATE/SHARE
+            traverse: None,
         })
     }
 

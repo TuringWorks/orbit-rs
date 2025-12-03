@@ -327,9 +327,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // Build and start gRPC server
+    // We disable internal protocol servers because we start them manually with specific storage configurations
     let mut server = OrbitServerBuilder::new()
         .with_bind_address(&args.bind)
         .with_port(args.grpc_port)
+        .with_postgres_enabled(false)
+        .with_redis_enabled(false)
         .build()
         .await?;
 

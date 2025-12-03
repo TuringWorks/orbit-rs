@@ -72,6 +72,7 @@ impl PostgresWireProtocol {
 
     /// Create a new PostgreSQL protocol handler with custom query engine
     pub fn new_with_query_engine(query_engine: Arc<QueryEngine>) -> Self {
+        println!("DEBUG: PostgresWireProtocol initialized with custom QueryEngine");
         Self {
             state: ConnectionState::Initial,
             username: None,
@@ -343,9 +344,11 @@ impl PostgresWireProtocol {
             self.query_engine.set_current_database(db).await;
         }
 
-        match self.query_engine.execute_query(query).await {
-            Ok(result) => {
-                self.send_query_result(&result, buf);
+        match self.query_engine.execute_multiple_queries(query).await {
+            Ok(results) => {
+                for result in results {
+                    self.send_query_result(&result, buf);
+                }
                 BackendMessage::ReadyForQuery {
                     status: TransactionStatus::Idle,
                 }
@@ -523,6 +526,12 @@ impl PostgresWireProtocol {
             QueryResult::Delete { count } => {
                 BackendMessage::CommandComplete {
                     tag: format!("DELETE {count}"),
+                }
+                .encode(buf);
+            }
+            QueryResult::Set { .. } => {
+                BackendMessage::CommandComplete {
+                    tag: "SET".to_string(),
                 }
                 .encode(buf);
             }

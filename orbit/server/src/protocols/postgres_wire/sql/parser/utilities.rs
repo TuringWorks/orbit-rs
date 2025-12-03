@@ -659,25 +659,96 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
             parser.advance()?;
             Ok(Expression::Literal(SqlValue::Null))
         }
-        Some(Token::Identifier(name)) => {
-            let col_name = name.clone();
-            parser.advance()?;
-            Ok(Expression::Column(ColumnRef {
-                table: None,
-                name: col_name,
-            }))
-        }
         Some(Token::LeftParen) => {
             parser.advance()?;
             let expr = parse_expression(parser)?;
             parser.expect(Token::RightParen)?;
             Ok(expr)
         }
-        _ => Err(ParseError {
-            message: "Expected expression".to_string(),
+        Some(token) => {
+            // Check for typed literal (e.g. INTERVAL '1 hour')
+            if matches!(token, Token::Interval | Token::Timestamp | Token::Date | Token::Time) {
+                let type_name = match token {
+                    Token::Interval => "interval",
+                    Token::Timestamp => "timestamp",
+                    Token::Date => "date",
+                    Token::Time => "time",
+                    _ => unreachable!(),
+                };
+                
+                // Check if next token is a string literal
+                let literal_string = if let Some(Token::StringLiteral(s)) = parser.tokens.get(parser.position + 1) {
+                    Some(s.clone())
+                } else {
+                    None
+                };
+
+                if let Some(s) = literal_string {
+                    parser.advance()?; // Consume type keyword
+                    parser.advance()?; // Consume string literal
+                    
+                    // Create a cast expression or specific literal
+                    // For now, treat as text cast to type
+                    return Ok(Expression::Cast {
+                        expr: Box::new(Expression::Literal(SqlValue::Text(s))),
+                        target_type: match type_name {
+                            "interval" => SqlType::Interval,
+                            "timestamp" => SqlType::Timestamp { with_timezone: false },
+                            "date" => SqlType::Date,
+                            "time" => SqlType::Time { with_timezone: false },
+                            _ => SqlType::Text,
+                        },
+                    });
+                }
+            }
+
+            // Try to parse as identifier (including keywords)
+            if let Some(name) = token_to_identifier_name(token) {
+                parser.advance()?;
+                
+                // Check for function call
+                if parser.matches(&[Token::LeftParen]) {
+                    parser.advance()?;
+                    let mut args = Vec::new();
+                    if !parser.matches(&[Token::RightParen]) {
+                        loop {
+                            args.push(parse_expression(parser)?);
+                            if parser.matches(&[Token::Comma]) {
+                                parser.advance()?;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    parser.expect(Token::RightParen)?;
+                    
+                    Ok(Expression::Function(Box::new(crate::protocols::postgres_wire::sql::ast::FunctionCall {
+                        name: crate::protocols::postgres_wire::sql::ast::FunctionName::Simple(name),
+                        args,
+                        distinct: false,
+                        order_by: None,
+                        filter: None,
+                    })))
+                } else {
+                    Ok(Expression::Column(ColumnRef {
+                        table: None,
+                        name,
+                    }))
+                }
+            } else {
+                Err(ParseError {
+                    message: "Expected expression".to_string(),
+                    position: parser.position,
+                    expected: vec!["literal, identifier, or parenthesized expression".to_string()],
+                    found: parser.current_token.clone(),
+                })
+            }
+        }
+        None => Err(ParseError {
+            message: "Unexpected end of input".to_string(),
             position: parser.position,
-            expected: vec!["literal, identifier, or parenthesized expression".to_string()],
-            found: parser.current_token.clone(),
+            expected: vec!["expression".to_string()],
+            found: None,
         }),
     }
 }

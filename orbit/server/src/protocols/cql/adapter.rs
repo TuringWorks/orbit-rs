@@ -6,7 +6,9 @@
 use super::parser::{ComparisonOperator, CqlParser, CqlStatement};
 use super::protocol::{
     build_error_from_protocol_error, build_error_response, build_ready_response,
-    build_supported_response, build_void_result, read_string, read_string_map, CqlFrame, CqlOpcode,
+    build_supported_response, build_void_result, build_empty_rows_result, build_system_local_response, build_system_peers_v2_response,
+    build_system_schema_keyspaces_response, build_system_schema_tables_response,
+    read_string, read_string_map, CqlFrame, CqlOpcode,
     QueryParameters,
 };
 use super::types::CqlValue;
@@ -20,6 +22,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tracing::{error, info, warn};
 use tokio::sync::RwLock;
 
 /// CQL adapter
@@ -156,6 +159,13 @@ impl CqlAdapter {
                     transaction_id: None,
                 },
             ),
+            crate::protocols::postgres_wire::QueryResult::Set { variable, value } => Ok(
+                crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Set {
+                    variable,
+                    value,
+                    transaction_id: None,
+                },
+            ),
         }
     }
 
@@ -234,9 +244,12 @@ impl CqlAdapter {
             // Parse frame
             let frame_bytes = buffer.split_to(9 + body_len).freeze();
             let frame = CqlFrame::decode(frame_bytes)?;
+            println!("DEBUG: Received frame version: {:x}, opcode: {:?}", frame.version, frame.opcode);
 
             // Handle frame
-            let response = self.handle_frame(&frame).await?;
+            let mut response = self.handle_frame(&frame).await?;
+            // Ensure response version matches request version (with response bit set)
+            response.version = frame.version | 0x80;
 
             // Send response
             let response_bytes = response.encode();
@@ -256,12 +269,16 @@ impl CqlAdapter {
             CqlOpcode::Prepare => self.handle_prepare(frame).await,
             CqlOpcode::Execute => self.handle_execute(frame).await,
             CqlOpcode::Batch => self.handle_batch(frame).await,
+            CqlOpcode::Register => self.handle_register(frame).await,
             CqlOpcode::AuthResponse => self.handle_auth_response(frame).await,
-            _ => Ok(build_error_response(
-                frame.stream,
-                super::protocol::error_codes::PROTOCOL_ERROR,
-                "Unsupported opcode",
-            )),
+            _ => {
+                warn!("Unsupported CQL opcode: {:?}", frame.opcode);
+                Ok(build_error_response(
+                    frame.stream,
+                    super::protocol::error_codes::PROTOCOL_ERROR,
+                    &format!("Unsupported opcode: {:?}", frame.opcode),
+                ))
+            }
         };
 
         // Convert ProtocolError to CQL error frame
@@ -288,6 +305,25 @@ impl CqlAdapter {
             ))
         } else {
             Ok(build_ready_response(frame.stream))
+        }
+    }
+
+    /// Handle REGISTER request
+    async fn handle_register(&self, frame: &CqlFrame) -> ProtocolResult<CqlFrame> {
+        println!("DEBUG: handle_register called. Body len: {}", frame.body.len());
+        // Just consume the body (list of event types) and return READY
+        // We don't currently support pushing events to clients
+        let mut body = frame.body.clone();
+        match super::protocol::read_string_list(&mut body) {
+            Ok(events) => {
+                println!("DEBUG: Client registered for events: {:?}", events);
+                info!("Client registered for events: {:?}", events);
+                Ok(build_ready_response(frame.stream))
+            }
+            Err(e) => {
+                println!("DEBUG: Failed to read event list: {}", e);
+                Err(e)
+            }
         }
     }
 
@@ -344,6 +380,7 @@ impl CqlAdapter {
 
     /// Handle QUERY request
     async fn handle_query(&self, frame: &CqlFrame) -> ProtocolResult<CqlFrame> {
+        println!("DEBUG: handle_query called. Body len: {}", frame.body.len());
         // Update metrics
         {
             let mut metrics = self.metrics.write().await;
@@ -353,10 +390,17 @@ impl CqlAdapter {
         let mut body = frame.body.clone();
 
         // Read query string
+        if body.remaining() < 4 {
+            return Err(ProtocolError::IncompleteFrame);
+        }
         let query_len = body.get_u32();
+        if body.remaining() < query_len as usize {
+            return Err(ProtocolError::IncompleteFrame);
+        }
         let query_bytes = body.copy_to_bytes(query_len as usize);
         let query = String::from_utf8(query_bytes.to_vec())
             .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
+        println!("DEBUG: Received query: {}", query);
 
         // Read query parameters
         let params = QueryParameters::decode(body)?;
@@ -587,8 +631,11 @@ impl CqlAdapter {
             ));
         }
 
-        // Return VOID result for successful batch
-        Ok(build_void_result(frame.stream))
+
+
+        // For now, return empty ROWS result instead of VOID
+        // This helps drivers that expect result metadata (e.g. for system tables)
+        Ok(build_empty_rows_result(frame.stream))
     }
 
     /// Execute a CQL statement
@@ -608,6 +655,29 @@ impl CqlAdapter {
                 limit,
                 ..
             } => {
+                println!("DEBUG: execute_statement SELECT table={}", table);
+                // Handle system tables (required for driver initialization)
+                let table_lower = table.to_lowercase();
+                println!("DEBUG: table_lower={}", table_lower);
+                if table_lower == "system.local" || table_lower == "local" {
+                    return Ok(build_system_local_response(stream));
+                }
+                if table_lower == "system.peers" || table_lower == "peers"
+                   || table_lower == "system.peers_v2" || table_lower == "peers_v2" {
+                    return Ok(build_system_peers_v2_response(stream));
+                }
+                // Handle system_schema tables (required for driver initialization)
+                if table_lower == "system_schema.keyspaces" || table_lower == "keyspaces" {
+                    return Ok(build_system_schema_keyspaces_response(stream));
+                }
+                if table_lower == "system_schema.tables" || table_lower == "tables" {
+                    return Ok(build_system_schema_tables_response(stream));
+                }
+                // Skip other system_schema tables (columns, types, etc.) with empty results
+                if table_lower.starts_with("system_schema.") || table_lower.starts_with("system.") {
+                    return Ok(build_empty_rows_result(stream));
+                }
+
                 // Convert CQL SELECT to SQL and execute
                 let sql_columns = if columns.contains(&"*".to_string()) {
                     "*".to_string()

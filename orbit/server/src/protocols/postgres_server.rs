@@ -24,6 +24,7 @@ impl PostgresServer {
 
     /// Create a new PostgreSQL server with custom query engine
     pub fn new_with_query_engine(bind_addr: impl Into<String>, query_engine: QueryEngine) -> Self {
+        println!("DEBUG: PostgresServer initialized with custom query engine");
         Self {
             bind_addr: bind_addr.into(),
             query_engine: Some(Arc::new(query_engine)),
@@ -44,8 +45,10 @@ impl PostgresServer {
 
                     tokio::spawn(async move {
                         let mut protocol = if let Some(engine) = query_engine {
+                            println!("DEBUG: PostgresServer using existing QueryEngine for connection");
                             PostgresWireProtocol::new_with_query_engine(engine)
                         } else {
+                            println!("DEBUG: PostgresServer creating NEW QueryEngine for connection (fallback)");
                             PostgresWireProtocol::new()
                         };
                         if let Err(e) = protocol.handle_connection(stream).await {
