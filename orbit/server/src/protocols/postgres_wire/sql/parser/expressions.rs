@@ -984,6 +984,11 @@ impl ExpressionParser {
         // Skip ROWS or RANGE for now, we'll just parse the bounds
         *pos += 1;
 
+        // Check for optional BETWEEN keyword
+        if self.matches_at(tokens, *pos, &Token::Between) {
+            *pos += 1;
+        }
+
         let start_bound = self.parse_frame_bound(tokens, pos)?;
 
         let end_bound = if self.matches_at(tokens, *pos, &Token::And) {
@@ -1020,7 +1025,16 @@ impl ExpressionParser {
                 .into())
             }
         } else if self.matches_at(tokens, *pos, &Token::CurrentRow) {
+            // Handle CURRENT ROW as single token (legacy)
             *pos += 1;
+            // Check if next token is ROW (identifier) and skip it
+            if *pos < tokens.len() {
+                if let Some(Token::Identifier(id)) = &tokens.get(*pos) {
+                    if id.to_uppercase() == "ROW" {
+                        *pos += 1;
+                    }
+                }
+            }
             Ok(FrameBound::CurrentRow)
         } else {
             let expr = Box::new(self.parse_expression(tokens, pos)?);
