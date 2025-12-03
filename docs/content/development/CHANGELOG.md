@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2025-12-01
 
+### Fixed
+
+- **Redis RESP Protocol Persistence** (2025-12-03): Fixed serialization errors for Redis key-value actor methods
+  - Added mock invocation handlers for all Redis data structure operations (lists, sets, hashes, sorted sets)
+  - Fixed `lpop`/`rpop` return type from integer to `Vec<String>` to match RESP command handler expectations
+  - Changed default mock fallback from "Hello from actor!" to "NO_IMPL" for clearer debugging
+  - Suppressed dead_code warnings for planned PostgreSQL actor CRUD methods
+
+- **Build Warnings Cleanup** (2025-12-03): Resolved unused import and variable warnings
+  - Fixed unused imports in CQL adapter, MongoDB protocol, and PostgreSQL query engine
+  - Resolved unused variable warnings in MongoDB server connection handler
+
 ### Added
 
 - **ML Protocol Integration Documentation & Examples** (2025-12-02): Comprehensive guide for using ML capabilities across all protocols
