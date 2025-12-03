@@ -1164,6 +1164,7 @@ impl QueryEngine {
     }
 
     /// Execute INSERT query on actors table
+    #[allow(dead_code)]
     async fn execute_actor_insert(
         &self,
         table: &str,
@@ -1221,6 +1222,7 @@ impl QueryEngine {
     }
 
     /// Execute UPDATE query on actors table
+    #[allow(dead_code)]
     async fn execute_actor_update(
         &self,
         table: &str,
@@ -1264,6 +1266,7 @@ impl QueryEngine {
     }
 
     /// Execute DELETE query on actors table
+    #[allow(dead_code)]
     async fn execute_actor_delete(
         &self,
         table: &str,
