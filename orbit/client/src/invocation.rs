@@ -186,8 +186,8 @@ impl InvocationSystem {
             ]),
             // Redis key-value actor methods (for persistence)
             "set_value" | "del" | "expire" | "persist" => serde_json::Value::Null,
-            "lpush" | "rpush" | "lpop" | "rpop" | "llen" => serde_json::Value::Number(serde_json::Number::from(1)),
-            "lrange" => serde_json::json!([]),
+            "lpush" | "rpush" | "llen" => serde_json::Value::Number(serde_json::Number::from(1)),
+            "lpop" | "rpop" | "lrange" => serde_json::json!([]),
             "sadd" | "srem" | "scard" => serde_json::Value::Number(serde_json::Number::from(1)),
             "smembers" | "sinter" | "sunion" => serde_json::json!([]),
             "sismember" => serde_json::Value::Bool(true),
