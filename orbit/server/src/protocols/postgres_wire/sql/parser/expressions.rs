@@ -238,7 +238,6 @@ impl ExpressionParser {
                 Token::Plus => BinaryOperator::Plus,
                 Token::Minus => BinaryOperator::Minus,
                 Token::Concat => BinaryOperator::Concat,
-                Token::JsonExtractText => BinaryOperator::JsonExtractText, // ->> operator
                 _ => break,
             };
 
@@ -319,8 +318,90 @@ impl ExpressionParser {
                     operand: Box::new(expr),
                 })
             }
-            _ => self.parse_primary_expression(tokens, pos),
+            _ => self.parse_postfix_expression(tokens, pos),
         }
+    }
+
+    /// Parse postfix expressions (JSONB operators, array indexing, type casting)
+    /// This handles: ->, ->>, #>, #>>, [], ::
+    fn parse_postfix_expression(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<Expression> {
+        let mut left = self.parse_primary_expression(tokens, pos)?;
+
+        while *pos < tokens.len() {
+            match &tokens[*pos] {
+                Token::Arrow => {
+                    // -> JSON field extraction
+                    *pos += 1;
+                    let right = self.parse_primary_expression(tokens, pos)?;
+                    left = Expression::Binary {
+                        left: Box::new(left),
+                        operator: BinaryOperator::JsonExtract,
+                        right: Box::new(right),
+                    };
+                }
+                Token::JsonExtractText => {
+                    // ->> JSON field extraction as text
+                    *pos += 1;
+                    let right = self.parse_primary_expression(tokens, pos)?;
+                    left = Expression::Binary {
+                        left: Box::new(left),
+                        operator: BinaryOperator::JsonExtractText,
+                        right: Box::new(right),
+                    };
+                }
+                Token::JsonPathExtract => {
+                    // #> JSON path extraction
+                    *pos += 1;
+                    let right = self.parse_primary_expression(tokens, pos)?;
+                    left = Expression::Binary {
+                        left: Box::new(left),
+                        operator: BinaryOperator::JsonPathExtract,
+                        right: Box::new(right),
+                    };
+                }
+                Token::JsonPathExtractText => {
+                    // #>> JSON path extraction as text
+                    *pos += 1;
+                    let right = self.parse_primary_expression(tokens, pos)?;
+                    left = Expression::Binary {
+                        left: Box::new(left),
+                        operator: BinaryOperator::JsonPathExtractText,
+                        right: Box::new(right),
+                    };
+                }
+                Token::LeftBracket => {
+                    // Array indexing
+                    *pos += 1;
+                    let index = self.parse_expression(tokens, pos)?;
+                    if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightBracket) {
+                        return Err(crate::protocols::error::ProtocolError::ParseError(
+                            "Expected ']' after array index".to_string(),
+                        ));
+                    }
+                    *pos += 1;
+                    left = Expression::ArrayIndex {
+                        array: Box::new(left),
+                        index: Box::new(index),
+                    };
+                }
+                Token::Colon if *pos + 1 < tokens.len() && matches!(tokens[*pos + 1], Token::Colon) => {
+                    // :: type cast (PostgreSQL style)
+                    *pos += 2;
+                    let target_type = self.parse_sql_type(tokens, pos)?;
+                    left = Expression::Cast {
+                        expr: Box::new(left),
+                        target_type,
+                    };
+                }
+                _ => break,
+            }
+        }
+
+        Ok(left)
     }
 
     /// Parse primary expressions (literals, identifiers, function calls, parenthesized expressions)
