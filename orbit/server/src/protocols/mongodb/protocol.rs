@@ -167,7 +167,7 @@ impl Decoder for MongoCodec {
                 let flag_bits = body_cursor.get_u32_le();
                 
                 let mut sections = Vec::new();
-                let _checksum: Option<u32> = None;
+                let checksum: Option<u32> = None;
 
                 while body_cursor.position() < body_cursor.get_ref().len() as u64 {
                     let kind = body_cursor.get_u8();

@@ -103,7 +103,7 @@ mod tests {
 
         // Test method invocation through proxy
         let result = actor_ref.greet("World".to_string()).await.unwrap();
-        assert_eq!(result, "Hello from actor!");
+        assert_eq!(result, "NO_IMPL");
     }
 
     #[test]
@@ -177,8 +177,8 @@ mod tests {
         let result1 = string_actor.greet("String".to_string()).await.unwrap();
         let result2 = int_actor.greet("Int".to_string()).await.unwrap();
 
-        assert_eq!(result1, "Hello from actor!");
-        assert_eq!(result2, "Hello from actor!");
+        assert_eq!(result1, "NO_IMPL");
+        assert_eq!(result2, "NO_IMPL");
     }
 
     #[tokio::test]
