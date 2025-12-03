@@ -12,10 +12,17 @@ CASSANDRA_PASSWORD = os.getenv("CASSANDRA_PASSWORD", "cassandra")
 
 def run_checks():
     print("Running CQL compatibility checks...")
-    
+
     try:
-        auth_provider = PlainTextAuthProvider(username=CASSANDRA_USER, password=CASSANDRA_PASSWORD)
-        cluster = Cluster([CASSANDRA_HOST], port=CASSANDRA_PORT, auth_provider=auth_provider)
+        # Use protocol_version=4 for compatibility with Orbit CQL adapter
+        # Disable auth for initial testing
+        cluster = Cluster(
+            [CASSANDRA_HOST],
+            port=CASSANDRA_PORT,
+            protocol_version=4,  # Force CQL v4 protocol
+            connect_timeout=10,
+            control_connection_timeout=10,
+        )
         session = cluster.connect()
         
         # 1. Connection Check

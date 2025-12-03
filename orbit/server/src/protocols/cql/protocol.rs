@@ -421,30 +421,30 @@ pub fn build_empty_rows_result(stream: i16) -> CqlFrame {
 pub fn build_system_local_response(stream: i16) -> CqlFrame {
     let mut body = BytesMut::new();
     body.put_i32(ResultKind::Rows as i32);
-    
+
     // Metadata
     // Flags: 0x0001 (Global_tables_spec)
-    body.put_i32(0x0001); 
-    // Column count: 10
-    body.put_i32(10);
-    
+    body.put_i32(0x0001);
+    // Column count: 13 (adding broadcast_address, listen_address, rpc_address)
+    body.put_i32(13);
+
     // Global table spec
     write_string(&mut body, "system"); // keyspace
     write_string(&mut body, "local");  // table
-    
+
     // Column specs (name, type)
     write_string(&mut body, "key");
     body.put_u16(0x000D); // text
-    
+
     write_string(&mut body, "cluster_name");
     body.put_u16(0x000D); // text
-    
+
     write_string(&mut body, "partitioner");
     body.put_u16(0x000D); // text
-    
+
     write_string(&mut body, "cql_version");
     body.put_u16(0x000D); // text
-    
+
     write_string(&mut body, "release_version");
     body.put_u16(0x000D); // text
 
@@ -463,29 +463,39 @@ pub fn build_system_local_response(stream: i16) -> CqlFrame {
 
     write_string(&mut body, "host_id");
     body.put_u16(0x000C); // uuid
-    
+
+    // Additional critical columns for cassandra-driver
+    write_string(&mut body, "broadcast_address");
+    body.put_u16(0x0010); // inet
+
+    write_string(&mut body, "listen_address");
+    body.put_u16(0x0010); // inet
+
+    write_string(&mut body, "rpc_address");
+    body.put_u16(0x0010); // inet
+
     // Row count: 1
     body.put_i32(1);
-    
+
     // Row 1 values
     // key: 'local'
     body.put_i32(5); // len
     body.put(&b"local"[..]);
-    
+
     // cluster_name: 'orbit'
     body.put_i32(5); // len
     body.put(&b"orbit"[..]);
-    
+
     // partitioner
     let part = "org.apache.cassandra.dht.Murmur3Partitioner";
     body.put_i32(part.len() as i32);
     body.put(part.as_bytes());
-    
+
     // cql_version: '3.4.4'
     let cql_ver = "3.4.4";
     body.put_i32(cql_ver.len() as i32);
     body.put(cql_ver.as_bytes());
-    
+
     // release_version: '4.0.0'
     let rel_ver = "4.0.0";
     body.put_i32(rel_ver.len() as i32);
@@ -521,7 +531,19 @@ pub fn build_system_local_response(stream: i16) -> CqlFrame {
     body.put_i32(16); // len
     // random uuid (different from schema_version just in case)
     body.put(&b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01"[..]);
-    
+
+    // broadcast_address: 127.0.0.1 (IPv4 = 4 bytes)
+    body.put_i32(4); // len
+    body.put(&[127, 0, 0, 1][..]);
+
+    // listen_address: 127.0.0.1 (IPv4 = 4 bytes)
+    body.put_i32(4); // len
+    body.put(&[127, 0, 0, 1][..]);
+
+    // rpc_address: 127.0.0.1 (IPv4 = 4 bytes)
+    body.put_i32(4); // len
+    body.put(&[127, 0, 0, 1][..]);
+
     CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
 }
 
@@ -569,15 +591,15 @@ pub fn build_system_peers_v2_response(stream: i16) -> CqlFrame {
     CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
 }
 
-/// Build a RESULT response with system_schema.keyspaces data (empty or with system keyspaces)
+/// Build a RESULT response with system_schema.keyspaces data
 pub fn build_system_schema_keyspaces_response(stream: i16) -> CqlFrame {
     let mut body = BytesMut::new();
     body.put_i32(ResultKind::Rows as i32);
 
     // Metadata flags: 0x0001 (Global_tables_spec)
     body.put_i32(0x0001);
-    // Column count: 2 (keyspace_name, durable_writes)
-    body.put_i32(2);
+    // Column count: 3 (keyspace_name, durable_writes, replication)
+    body.put_i32(3);
 
     // Global table spec
     write_string(&mut body, "system_schema");
@@ -590,8 +612,48 @@ pub fn build_system_schema_keyspaces_response(stream: i16) -> CqlFrame {
     write_string(&mut body, "durable_writes");
     body.put_u16(0x0004); // boolean
 
-    // Row count: 0 (empty - no keyspaces defined yet)
-    body.put_i32(0);
+    write_string(&mut body, "replication");
+    body.put_u16(0x0021); // map<text, text>
+    body.put_u16(0x000D); // key type: text
+    body.put_u16(0x000D); // value type: text
+
+    // Row count: 2 (system, system_schema)
+    body.put_i32(2);
+
+    // Helper function to write a CQL map<text, text> value
+    // Format: [total_len][n_pairs][key_len][key_bytes][val_len][val_bytes]...
+    fn write_map_value(body: &mut BytesMut, pairs: &[(&str, &str)]) {
+        let mut map_body = BytesMut::new();
+        map_body.put_i32(pairs.len() as i32);
+        for (key, val) in pairs {
+            map_body.put_i32(key.len() as i32);
+            map_body.put(key.as_bytes());
+            map_body.put_i32(val.len() as i32);
+            map_body.put(val.as_bytes());
+        }
+        body.put_i32(map_body.len() as i32);
+        body.put(map_body);
+    }
+
+    // Row 1: system keyspace
+    // keyspace_name: 'system'
+    body.put_i32(6);
+    body.put(&b"system"[..]);
+    // durable_writes: true (1 byte)
+    body.put_i32(1);
+    body.put_u8(1);
+    // replication: {'class': 'LocalStrategy'}
+    write_map_value(&mut body, &[("class", "LocalStrategy")]);
+
+    // Row 2: system_schema keyspace
+    // keyspace_name: 'system_schema'
+    body.put_i32(13);
+    body.put(&b"system_schema"[..]);
+    // durable_writes: true (1 byte)
+    body.put_i32(1);
+    body.put_u8(1);
+    // replication: {'class': 'LocalStrategy'}
+    write_map_value(&mut body, &[("class", "LocalStrategy")]);
 
     CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
 }
@@ -618,6 +680,286 @@ pub fn build_system_schema_tables_response(stream: i16) -> CqlFrame {
     body.put_u16(0x000D); // text
 
     // Row count: 0 (empty - no tables defined yet)
+    body.put_i32(0);
+
+    CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+}
+
+/// Build a RESULT response with system_schema.columns data (empty)
+pub fn build_system_schema_columns_response(stream: i16) -> CqlFrame {
+    let mut body = BytesMut::new();
+    body.put_i32(ResultKind::Rows as i32);
+
+    // Metadata flags: 0x0001 (Global_tables_spec)
+    body.put_i32(0x0001);
+    // Column count: 4 (keyspace_name, table_name, column_name, type)
+    body.put_i32(4);
+
+    // Global table spec
+    write_string(&mut body, "system_schema");
+    write_string(&mut body, "columns");
+
+    // Column specs
+    write_string(&mut body, "keyspace_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "table_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "column_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "type");
+    body.put_u16(0x000D); // text
+
+    // Row count: 0 (empty)
+    body.put_i32(0);
+
+    CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+}
+
+/// Build a RESULT response with system_schema.types data (empty)
+pub fn build_system_schema_types_response(stream: i16) -> CqlFrame {
+    let mut body = BytesMut::new();
+    body.put_i32(ResultKind::Rows as i32);
+
+    // Metadata flags: 0x0001 (Global_tables_spec)
+    body.put_i32(0x0001);
+    // Column count: 3 (keyspace_name, type_name, field_names)
+    body.put_i32(3);
+
+    // Global table spec
+    write_string(&mut body, "system_schema");
+    write_string(&mut body, "types");
+
+    // Column specs
+    write_string(&mut body, "keyspace_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "type_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "field_names");
+    body.put_u16(0x0020); // list<text>
+    body.put_u16(0x000D); // element type: text
+
+    // Row count: 0 (empty)
+    body.put_i32(0);
+
+    CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+}
+
+/// Build a RESULT response with system_schema.functions data (empty)
+pub fn build_system_schema_functions_response(stream: i16) -> CqlFrame {
+    let mut body = BytesMut::new();
+    body.put_i32(ResultKind::Rows as i32);
+
+    // Metadata flags: 0x0001 (Global_tables_spec)
+    body.put_i32(0x0001);
+    // Column count: 3 (keyspace_name, function_name, argument_types)
+    body.put_i32(3);
+
+    // Global table spec
+    write_string(&mut body, "system_schema");
+    write_string(&mut body, "functions");
+
+    // Column specs
+    write_string(&mut body, "keyspace_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "function_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "argument_types");
+    body.put_u16(0x0020); // list<text>
+    body.put_u16(0x000D); // element type: text
+
+    // Row count: 0 (empty)
+    body.put_i32(0);
+
+    CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+}
+
+/// Build a RESULT response with system_schema.aggregates data (empty)
+pub fn build_system_schema_aggregates_response(stream: i16) -> CqlFrame {
+    let mut body = BytesMut::new();
+    body.put_i32(ResultKind::Rows as i32);
+
+    // Metadata flags: 0x0001 (Global_tables_spec)
+    body.put_i32(0x0001);
+    // Column count: 3 (keyspace_name, aggregate_name, argument_types)
+    body.put_i32(3);
+
+    // Global table spec
+    write_string(&mut body, "system_schema");
+    write_string(&mut body, "aggregates");
+
+    // Column specs
+    write_string(&mut body, "keyspace_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "aggregate_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "argument_types");
+    body.put_u16(0x0020); // list<text>
+    body.put_u16(0x000D); // element type: text
+
+    // Row count: 0 (empty)
+    body.put_i32(0);
+
+    CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+}
+
+/// Build a RESULT response with system_schema.views data (empty)
+pub fn build_system_schema_views_response(stream: i16) -> CqlFrame {
+    let mut body = BytesMut::new();
+    body.put_i32(ResultKind::Rows as i32);
+
+    // Metadata flags: 0x0001 (Global_tables_spec)
+    body.put_i32(0x0001);
+    // Column count: 3 (keyspace_name, view_name, base_table_name)
+    body.put_i32(3);
+
+    // Global table spec
+    write_string(&mut body, "system_schema");
+    write_string(&mut body, "views");
+
+    // Column specs
+    write_string(&mut body, "keyspace_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "view_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "base_table_name");
+    body.put_u16(0x000D); // text
+
+    // Row count: 0 (empty)
+    body.put_i32(0);
+
+    CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+}
+
+/// Build a RESULT response with system_schema.indexes data (empty)
+pub fn build_system_schema_indexes_response(stream: i16) -> CqlFrame {
+    let mut body = BytesMut::new();
+    body.put_i32(ResultKind::Rows as i32);
+
+    // Metadata flags: 0x0001 (Global_tables_spec)
+    body.put_i32(0x0001);
+    // Column count: 4 (keyspace_name, table_name, index_name, kind)
+    body.put_i32(4);
+
+    // Global table spec
+    write_string(&mut body, "system_schema");
+    write_string(&mut body, "indexes");
+
+    // Column specs
+    write_string(&mut body, "keyspace_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "table_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "index_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "kind");
+    body.put_u16(0x000D); // text
+
+    // Row count: 0 (empty)
+    body.put_i32(0);
+
+    CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+}
+
+/// Build a RESULT response with system_schema.triggers data (empty)
+pub fn build_system_schema_triggers_response(stream: i16) -> CqlFrame {
+    let mut body = BytesMut::new();
+    body.put_i32(ResultKind::Rows as i32);
+
+    // Metadata flags: 0x0001 (Global_tables_spec)
+    body.put_i32(0x0001);
+    // Column count: 4 (keyspace_name, table_name, trigger_name, options)
+    body.put_i32(4);
+
+    // Global table spec
+    write_string(&mut body, "system_schema");
+    write_string(&mut body, "triggers");
+
+    // Column specs
+    write_string(&mut body, "keyspace_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "table_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "trigger_name");
+    body.put_u16(0x000D); // text
+    write_string(&mut body, "options");
+    body.put_u16(0x0021); // map<text, text>
+    body.put_u16(0x000D); // key type: text
+    body.put_u16(0x000D); // value type: text
+
+    // Row count: 0 (empty)
+    body.put_i32(0);
+
+    CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+}
+
+/// Build a RESULT response with system_virtual_schema tables (empty)
+/// These are Cassandra 4.0+ virtual tables for internal metrics
+pub fn build_system_virtual_schema_response(stream: i16, table_name: &str) -> CqlFrame {
+    let mut body = BytesMut::new();
+    body.put_i32(ResultKind::Rows as i32);
+
+    // Determine table type from full table name
+    let table_suffix = table_name
+        .strip_prefix("system_virtual_schema.")
+        .unwrap_or(table_name);
+
+    // Metadata flags: 0x0001 (Global_tables_spec)
+    body.put_i32(0x0001);
+
+    match table_suffix {
+        "keyspaces" => {
+            // Column count: 1 (keyspace_name)
+            body.put_i32(1);
+            // Global table spec
+            write_string(&mut body, "system_virtual_schema");
+            write_string(&mut body, "keyspaces");
+            // Column specs
+            write_string(&mut body, "keyspace_name");
+            body.put_u16(0x000D); // text
+        }
+        "tables" => {
+            // Column count: 3 (keyspace_name, table_name, comment)
+            body.put_i32(3);
+            // Global table spec
+            write_string(&mut body, "system_virtual_schema");
+            write_string(&mut body, "tables");
+            // Column specs
+            write_string(&mut body, "keyspace_name");
+            body.put_u16(0x000D); // text
+            write_string(&mut body, "table_name");
+            body.put_u16(0x000D); // text
+            write_string(&mut body, "comment");
+            body.put_u16(0x000D); // text
+        }
+        "columns" => {
+            // Column count: 5 (keyspace_name, table_name, column_name, clustering_order, type)
+            body.put_i32(5);
+            // Global table spec
+            write_string(&mut body, "system_virtual_schema");
+            write_string(&mut body, "columns");
+            // Column specs
+            write_string(&mut body, "keyspace_name");
+            body.put_u16(0x000D); // text
+            write_string(&mut body, "table_name");
+            body.put_u16(0x000D); // text
+            write_string(&mut body, "column_name");
+            body.put_u16(0x000D); // text
+            write_string(&mut body, "clustering_order");
+            body.put_u16(0x000D); // text
+            write_string(&mut body, "type");
+            body.put_u16(0x000D); // text
+        }
+        _ => {
+            // Generic empty response for unknown virtual schema tables
+            body.put_i32(1);
+            write_string(&mut body, "system_virtual_schema");
+            write_string(&mut body, table_suffix);
+            write_string(&mut body, "name");
+            body.put_u16(0x000D); // text
+        }
+    }
+
+    // Row count: 0 (empty for all virtual schema tables)
     body.put_i32(0);
 
     CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
@@ -671,17 +1013,16 @@ pub fn map_error_to_cql_code(error: &crate::protocols::error::ProtocolError) -> 
             if msg_lower.contains("does not exist") || msg_lower.contains("not found") {
                 INVALID
             } else if msg_lower.contains("already exists") || msg_lower.contains("duplicate") {
-                ALREADY_EXISTS
+                // ALREADY_EXISTS requires [keyspace, table] which we don't have here
+                // Map to INVALID to avoid client crash due to missing fields
+                INVALID
             } else if msg_lower.contains("syntax") || msg_lower.contains("parse") {
                 SYNTAX_ERROR
             } else if msg_lower.contains("unauthorized") || msg_lower.contains("permission") {
                 UNAUTHORIZED
             } else if msg_lower.contains("timeout") {
-                if msg_lower.contains("write") {
-                    WRITE_TIMEOUT
-                } else {
-                    READ_TIMEOUT
-                }
+                // Timeouts require extra fields, map to SERVER_ERROR for safety
+                SERVER_ERROR
             } else {
                 INVALID
             }
@@ -693,8 +1034,9 @@ pub fn map_error_to_cql_code(error: &crate::protocols::error::ProtocolError) -> 
         ProtocolError::IncompleteFrame => PROTOCOL_ERROR,
         ProtocolError::InvalidUtf8(_) => PROTOCOL_ERROR,
         ProtocolError::InvalidStatement(_) => SYNTAX_ERROR,
-        ProtocolError::ConnectionError(_) => UNAVAILABLE,
-        ProtocolError::ConnectionClosed => UNAVAILABLE,
+        // UNAVAILABLE requires extra fields, map to SERVER_ERROR
+        ProtocolError::ConnectionError(_) => SERVER_ERROR,
+        ProtocolError::ConnectionClosed => SERVER_ERROR,
         _ => SERVER_ERROR,
     }
 }

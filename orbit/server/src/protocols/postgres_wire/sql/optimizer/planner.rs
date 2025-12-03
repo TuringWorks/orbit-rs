@@ -584,6 +584,7 @@ mod tests {
             limit: None,
             offset: None,
             for_clause: None,
+            traverse: None,
         };
 
         let plan = planner.plan_select(select).unwrap();

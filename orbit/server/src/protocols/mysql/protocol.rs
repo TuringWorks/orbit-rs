@@ -273,10 +273,26 @@ impl MySqlPacket {
 }
 
 /// Server capabilities
+pub const CLIENT_LONG_PASSWORD: u32 = 0x00000001;
+pub const CLIENT_FOUND_ROWS: u32 = 0x00000002;
+pub const CLIENT_LONG_FLAG: u32 = 0x00000004;
+pub const CLIENT_CONNECT_WITH_DB: u32 = 0x00000008;
 pub const CLIENT_PROTOCOL_41: u32 = 0x00000200;
+pub const CLIENT_TRANSACTIONS: u32 = 0x00002000;
 pub const CLIENT_SECURE_CONNECTION: u32 = 0x00008000;
 pub const CLIENT_PLUGIN_AUTH: u32 = 0x00080000;
-pub const CLIENT_CONNECT_WITH_DB: u32 = 0x00000008;
+pub const CLIENT_PLUGIN_AUTH_LENENC_DATA: u32 = 0x00200000;
+
+/// Combined server capabilities for MySQL 8.0 compatibility
+pub const SERVER_CAPABILITIES: u32 = CLIENT_LONG_PASSWORD
+    | CLIENT_FOUND_ROWS
+    | CLIENT_LONG_FLAG
+    | CLIENT_CONNECT_WITH_DB
+    | CLIENT_PROTOCOL_41
+    | CLIENT_TRANSACTIONS
+    | CLIENT_SECURE_CONNECTION
+    | CLIENT_PLUGIN_AUTH
+    | CLIENT_PLUGIN_AUTH_LENENC_DATA;
 
 /// Build initial handshake packet
 pub fn build_handshake(connection_id: u32, server_version: &str) -> Bytes {
@@ -291,25 +307,23 @@ pub fn build_handshake(connection_id: u32, server_version: &str) -> Bytes {
     // Connection ID
     buf.put_u32_le(connection_id);
 
-    // Auth plugin data part 1 (8 bytes)
-    buf.put_u64(0x1122334455667788);
+    // Auth plugin data part 1 (8 bytes) - random scramble data
+    buf.put(&[0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88][..]);
 
     // Filler
     buf.put_u8(0);
 
     // Capability flags (lower 2 bytes)
-    buf.put_u16_le((CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION) as u16);
+    buf.put_u16_le((SERVER_CAPABILITIES & 0xFFFF) as u16);
 
-    // Character set (utf8mb4)
-    buf.put_u8(0x21);
+    // Character set (utf8mb4_general_ci = 45, 0x2d)
+    buf.put_u8(45);
 
-    // Status flags
+    // Status flags (SERVER_STATUS_AUTOCOMMIT = 0x0002)
     buf.put_u16_le(0x0002);
 
     // Capability flags (upper 2 bytes)
-    buf.put_u16_le(
-        ((CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH) >> 16) as u16,
-    );
+    buf.put_u16_le(((SERVER_CAPABILITIES >> 16) & 0xFFFF) as u16);
 
     // Auth plugin data length
     buf.put_u8(21);

@@ -635,7 +635,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             listen_addr: format!("{}:{}", args.bind, args.mysql_port).parse()?,
             max_connections: 1000,
             authentication_enabled: false,
-            server_version: format!("Orbit-DB {} (MySQL-compatible)", env!("CARGO_PKG_VERSION")),
+            server_version: format!("8.0.27-Orbit-DB-{}", env!("CARGO_PKG_VERSION")),
             username: None,
             password: None,
         };

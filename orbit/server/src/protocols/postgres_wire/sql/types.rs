@@ -472,7 +472,7 @@ impl SqlValue {
 
     /// Attempt to cast this value to another SQL type
     pub fn cast_to(&self, target_type: &SqlType) -> Result<SqlValue, String> {
-        // Handle text to interval/timestamp casting
+        // Handle text to interval/timestamp/vector casting
         match (self, target_type) {
             (SqlValue::Text(s), SqlType::Interval) | (SqlValue::Varchar(s), SqlType::Interval) | (SqlValue::Char(s), SqlType::Interval) => {
                 // Parse interval string (e.g., "1 hour", "30 minutes", "1 day")
@@ -485,6 +485,24 @@ impl SqlValue {
             (SqlValue::Text(s), SqlType::Date) | (SqlValue::Varchar(s), SqlType::Date) | (SqlValue::Char(s), SqlType::Date) => {
                 // Parse date string
                 return Self::parse_date(s);
+            }
+            (SqlValue::Text(s), SqlType::Vector { .. }) | (SqlValue::Varchar(s), SqlType::Vector { .. }) | (SqlValue::Char(s), SqlType::Vector { .. }) => {
+                // Parse vector string: [1.0, 2.0, 3.0] or 1.0,2.0,3.0
+                let cleaned = s.trim().trim_matches('[').trim_matches(']');
+                let values: Result<Vec<f32>, _> = cleaned
+                    .split(',')
+                    .map(|part| part.trim().parse::<f32>())
+                    .collect();
+                return values.map(SqlValue::Vector).map_err(|e| format!("Invalid vector format: {}", e));
+            }
+            (SqlValue::Text(s), SqlType::HalfVec { .. }) | (SqlValue::Varchar(s), SqlType::HalfVec { .. }) | (SqlValue::Char(s), SqlType::HalfVec { .. }) => {
+                // Parse halfvec string
+                let cleaned = s.trim().trim_matches('[').trim_matches(']');
+                let values: Result<Vec<f32>, _> = cleaned
+                    .split(',')
+                    .map(|part| part.trim().parse::<f32>())
+                    .collect();
+                return values.map(SqlValue::HalfVec).map_err(|e| format!("Invalid halfvec format: {}", e));
             }
             _ => {}
         }

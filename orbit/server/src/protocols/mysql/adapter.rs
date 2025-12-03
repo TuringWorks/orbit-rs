@@ -322,9 +322,44 @@ impl MySqlAdapter {
         }
     }
 
-    /// Handle MySQL-specific queries (SHOW commands, INFORMATION_SCHEMA queries)
+    /// Handle MySQL-specific queries (SHOW commands, INFORMATION_SCHEMA queries, SET commands)
     async fn handle_mysql_specific_query(&self, query: &str) -> Option<ProtocolResult<Vec<Bytes>>> {
         let query_upper = query.trim().to_uppercase();
+
+        // Handle SET NAMES with COLLATE (e.g., SET NAMES 'utf8mb4' COLLATE 'utf8mb4_general_ci')
+        if query_upper.starts_with("SET NAMES") {
+            println!("[MySQL] Handling SET NAMES command (ignoring)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // Handle SET with COLLATE (e.g., SET collation_connection = ...)
+        if query_upper.starts_with("SET ") && query_upper.contains("COLLAT") {
+            println!("[MySQL] Handling SET COLLATION command (ignoring)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // Handle SET @@SESSION or SET @@GLOBAL variables
+        if query_upper.starts_with("SET @@") {
+            println!("[MySQL] Handling SET @@variable command (ignoring)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // Handle SET SESSION or SET GLOBAL
+        if query_upper.starts_with("SET SESSION") || query_upper.starts_with("SET GLOBAL") {
+            println!("[MySQL] Handling SET SESSION/GLOBAL command (ignoring)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // Handle SET character_set_* commands
+        if query_upper.starts_with("SET CHARACTER_SET") || query_upper.contains("CHARACTER_SET") {
+            println!("[MySQL] Handling SET character_set command (ignoring)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // Handle SELECT @@version and similar system variables
+        if query_upper.starts_with("SELECT @@") {
+            return Some(self.handle_select_system_variable(&query_upper));
+        }
 
         // Handle SHOW DATABASES
         if query_upper.starts_with("SHOW DATABASES") {
@@ -336,6 +371,30 @@ impl MySqlAdapter {
         if query_upper.starts_with("SHOW TABLES") {
             println!("[MySQL] Handling SHOW TABLES");
             return Some(self.build_show_tables_result().await);
+        }
+
+        // Handle SHOW VARIABLES
+        if query_upper.starts_with("SHOW VARIABLES") || query_upper.starts_with("SHOW SESSION VARIABLES") {
+            println!("[MySQL] Handling SHOW VARIABLES");
+            return Some(self.build_show_variables_result());
+        }
+
+        // Handle SHOW STATUS
+        if query_upper.starts_with("SHOW STATUS") || query_upper.starts_with("SHOW SESSION STATUS") {
+            println!("[MySQL] Handling SHOW STATUS");
+            return Some(self.build_show_status_result());
+        }
+
+        // Handle SHOW COLLATION
+        if query_upper.starts_with("SHOW COLLATION") {
+            println!("[MySQL] Handling SHOW COLLATION");
+            return Some(self.build_show_collation_result());
+        }
+
+        // Handle SHOW CHARACTER SET
+        if query_upper.starts_with("SHOW CHARACTER SET") || query_upper.starts_with("SHOW CHARSET") {
+            println!("[MySQL] Handling SHOW CHARACTER SET");
+            return Some(self.build_show_charset_result());
         }
 
         // Handle INFORMATION_SCHEMA.TABLES queries
@@ -350,7 +409,197 @@ impl MySqlAdapter {
             return Some(self.build_information_schema_schemata_result());
         }
 
+        // Handle INFORMATION_SCHEMA.COLLATIONS queries
+        if query_upper.contains("INFORMATION_SCHEMA.COLLATIONS") {
+            println!("[MySQL] Handling INFORMATION_SCHEMA.COLLATIONS query");
+            return Some(self.build_show_collation_result());
+        }
+
         None // Not a MySQL-specific query, let SQL engine handle it
+    }
+
+    /// Handle SELECT @@variable queries
+    fn handle_select_system_variable(&self, query_upper: &str) -> ProtocolResult<Vec<Bytes>> {
+        use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
+
+        // Extract variable name
+        let var_name = query_upper
+            .trim_start_matches("SELECT ")
+            .trim_start_matches("@@")
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .trim_end_matches(',')
+            .to_lowercase();
+
+        let (column_name, value) = match var_name.as_str() {
+            "version" => ("@@version", "8.0.27-Orbit-DB"),
+            "version_comment" => ("@@version_comment", "Orbit-DB MySQL Protocol"),
+            "max_allowed_packet" => ("@@max_allowed_packet", "67108864"),
+            "character_set_client" => ("@@character_set_client", "utf8mb4"),
+            "character_set_connection" => ("@@character_set_connection", "utf8mb4"),
+            "character_set_results" => ("@@character_set_results", "utf8mb4"),
+            "character_set_server" => ("@@character_set_server", "utf8mb4"),
+            "collation_connection" => ("@@collation_connection", "utf8mb4_general_ci"),
+            "collation_server" => ("@@collation_server", "utf8mb4_general_ci"),
+            "sql_mode" => ("@@sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"),
+            "autocommit" => ("@@autocommit", "1"),
+            "tx_isolation" | "transaction_isolation" => ("@@transaction_isolation", "REPEATABLE-READ"),
+            "wait_timeout" => ("@@wait_timeout", "28800"),
+            "interactive_timeout" => ("@@interactive_timeout", "28800"),
+            "session.auto_increment_increment" => ("@@session.auto_increment_increment", "1"),
+            "auto_increment_increment" => ("@@auto_increment_increment", "1"),
+            _ => ("@@unknown", ""),
+        };
+
+        let result = UnifiedExecutionResult::Select {
+            columns: vec![column_name.to_string()],
+            rows: vec![vec![Some(value.to_string())]],
+            row_count: 1,
+            transaction_id: None,
+        };
+
+        self.build_result_set(result)
+    }
+
+    /// Build result for SHOW VARIABLES command
+    fn build_show_variables_result(&self) -> ProtocolResult<Vec<Bytes>> {
+        use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
+
+        let variables = vec![
+            ("character_set_client", "utf8mb4"),
+            ("character_set_connection", "utf8mb4"),
+            ("character_set_results", "utf8mb4"),
+            ("character_set_server", "utf8mb4"),
+            ("collation_connection", "utf8mb4_general_ci"),
+            ("collation_server", "utf8mb4_general_ci"),
+            ("version", "8.0.27-Orbit-DB"),
+            ("version_comment", "Orbit-DB MySQL Protocol"),
+            ("max_allowed_packet", "67108864"),
+            ("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES"),
+            ("autocommit", "ON"),
+        ];
+
+        let rows: Vec<Vec<Option<String>>> = variables
+            .iter()
+            .map(|(name, value)| vec![Some(name.to_string()), Some(value.to_string())])
+            .collect();
+
+        let result = UnifiedExecutionResult::Select {
+            columns: vec!["Variable_name".to_string(), "Value".to_string()],
+            rows: rows.clone(),
+            row_count: rows.len(),
+            transaction_id: None,
+        };
+
+        self.build_result_set(result)
+    }
+
+    /// Build result for SHOW STATUS command
+    fn build_show_status_result(&self) -> ProtocolResult<Vec<Bytes>> {
+        use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
+
+        let status = vec![
+            ("Uptime", "0"),
+            ("Threads_connected", "1"),
+            ("Connections", "1"),
+            ("Questions", "0"),
+        ];
+
+        let rows: Vec<Vec<Option<String>>> = status
+            .iter()
+            .map(|(name, value)| vec![Some(name.to_string()), Some(value.to_string())])
+            .collect();
+
+        let result = UnifiedExecutionResult::Select {
+            columns: vec!["Variable_name".to_string(), "Value".to_string()],
+            rows: rows.clone(),
+            row_count: rows.len(),
+            transaction_id: None,
+        };
+
+        self.build_result_set(result)
+    }
+
+    /// Build result for SHOW COLLATION command
+    fn build_show_collation_result(&self) -> ProtocolResult<Vec<Bytes>> {
+        use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
+
+        let collations = vec![
+            ("utf8mb4_general_ci", "utf8mb4", "45", "Yes", "Yes", "1"),
+            ("utf8mb4_bin", "utf8mb4", "46", "", "Yes", "1"),
+            ("utf8mb4_unicode_ci", "utf8mb4", "224", "", "Yes", "8"),
+            ("utf8_general_ci", "utf8", "33", "Yes", "Yes", "1"),
+            ("latin1_swedish_ci", "latin1", "8", "Yes", "Yes", "1"),
+        ];
+
+        let rows: Vec<Vec<Option<String>>> = collations
+            .iter()
+            .map(|(col, charset, id, default, compiled, sortlen)| {
+                vec![
+                    Some(col.to_string()),
+                    Some(charset.to_string()),
+                    Some(id.to_string()),
+                    Some(default.to_string()),
+                    Some(compiled.to_string()),
+                    Some(sortlen.to_string()),
+                ]
+            })
+            .collect();
+
+        let result = UnifiedExecutionResult::Select {
+            columns: vec![
+                "Collation".to_string(),
+                "Charset".to_string(),
+                "Id".to_string(),
+                "Default".to_string(),
+                "Compiled".to_string(),
+                "Sortlen".to_string(),
+            ],
+            rows: rows.clone(),
+            row_count: rows.len(),
+            transaction_id: None,
+        };
+
+        self.build_result_set(result)
+    }
+
+    /// Build result for SHOW CHARACTER SET command
+    fn build_show_charset_result(&self) -> ProtocolResult<Vec<Bytes>> {
+        use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
+
+        let charsets = vec![
+            ("utf8mb4", "UTF-8 Unicode", "utf8mb4_general_ci", "4"),
+            ("utf8", "UTF-8 Unicode", "utf8_general_ci", "3"),
+            ("latin1", "cp1252 West European", "latin1_swedish_ci", "1"),
+            ("ascii", "US ASCII", "ascii_general_ci", "1"),
+        ];
+
+        let rows: Vec<Vec<Option<String>>> = charsets
+            .iter()
+            .map(|(charset, desc, default_col, maxlen)| {
+                vec![
+                    Some(charset.to_string()),
+                    Some(desc.to_string()),
+                    Some(default_col.to_string()),
+                    Some(maxlen.to_string()),
+                ]
+            })
+            .collect();
+
+        let result = UnifiedExecutionResult::Select {
+            columns: vec![
+                "Charset".to_string(),
+                "Description".to_string(),
+                "Default collation".to_string(),
+                "Maxlen".to_string(),
+            ],
+            rows: rows.clone(),
+            row_count: rows.len(),
+            transaction_id: None,
+        };
+
+        self.build_result_set(result)
     }
 
     /// Build result for SHOW DATABASES command

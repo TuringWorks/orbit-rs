@@ -222,6 +222,12 @@ pub enum Token {
     VectorInnerProduct,   // <#>
     VectorCosineDistance, // <=>
 
+    // Operators - JSON/JSONB
+    Arrow,              // -> (JSON field extraction)
+    JsonExtractText,    // ->> (JSON field extraction as text)
+    JsonPathExtract,    // #> (JSON path extraction)
+    JsonPathExtractText, // #>> (JSON path extraction as text)
+
     // Operators - Other
     Concat,
     BitwiseAnd,
@@ -230,8 +236,6 @@ pub enum Token {
     BitwiseNot,
     LeftShift,
     RightShift,
-    Arrow,           // ->
-    JsonExtractText, // ->>
 
     // Punctuation
     LeftParen,
@@ -898,9 +902,30 @@ impl Lexer {
                             return Token::Semicolon;
                         }
 
+
                         ':' => {
                             self.advance();
                             return Token::Colon;
+                        }
+
+                        '#' => {
+                            self.advance();
+                            return match self.current_char {
+                                Some('>') => {
+                                    self.advance();
+                                    if self.current_char == Some('>') {
+                                        self.advance();
+                                        Token::JsonPathExtractText // #>>
+                                    } else {
+                                        Token::JsonPathExtract // #>
+                                    }
+                                }
+                                _ => {
+                                    // Standalone # - not a valid token in our SQL dialect
+                                    // Skip and continue
+                                    continue;
+                                }
+                            };
                         }
 
                         _ => {

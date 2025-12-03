@@ -8,6 +8,10 @@ use super::protocol::{
     build_error_from_protocol_error, build_error_response, build_ready_response,
     build_supported_response, build_void_result, build_empty_rows_result, build_system_local_response, build_system_peers_v2_response,
     build_system_schema_keyspaces_response, build_system_schema_tables_response,
+    build_system_schema_columns_response, build_system_schema_types_response,
+    build_system_schema_functions_response, build_system_schema_aggregates_response,
+    build_system_schema_views_response, build_system_schema_indexes_response,
+    build_system_schema_triggers_response, build_system_virtual_schema_response,
     read_string, read_string_map, CqlFrame, CqlOpcode,
     QueryParameters,
 };
@@ -169,6 +173,43 @@ impl CqlAdapter {
         }
     }
 
+    /// Convert a CqlValue to a SQL string representation for INSERT statements
+    fn cql_value_to_sql_string(v: &CqlValue) -> String {
+        match v {
+            CqlValue::Text(s) => format!("'{}'", s.replace('\'', "''")),
+            CqlValue::Int(i) => i.to_string(),
+            CqlValue::Bigint(i) => i.to_string(),
+            CqlValue::Smallint(i) => i.to_string(),
+            CqlValue::Tinyint(i) => i.to_string(),
+            CqlValue::Boolean(b) => b.to_string(),
+            CqlValue::Float(f) => f.to_string(),
+            CqlValue::Double(f) => f.to_string(),
+            CqlValue::Timestamp(ts) => (ts / 1000).to_string(),
+            CqlValue::Uuid(s) => format!("'{}'", s),
+            CqlValue::Null => "NULL".to_string(),
+            CqlValue::Set(items) => {
+                // Store as JSON string
+                let json = serde_json::to_string(items).unwrap_or_else(|_| "[]".to_string());
+                format!("'{}'", json.replace('\'', "''"))
+            }
+            CqlValue::List(items) => {
+                // Store as JSON string
+                let json = serde_json::to_string(items).unwrap_or_else(|_| "[]".to_string());
+                format!("'{}'", json.replace('\'', "''"))
+            }
+            CqlValue::Map(entries) => {
+                // Store as JSON string
+                let json = serde_json::to_string(entries).unwrap_or_else(|_| "{}".to_string());
+                format!("'{}'", json.replace('\'', "''"))
+            }
+            CqlValue::Tuple(items) => {
+                // Store as JSON string
+                let json = serde_json::to_string(items).unwrap_or_else(|_| "[]".to_string());
+                format!("'{}'", json.replace('\'', "''"))
+            }
+        }
+    }
+
     /// Start the CQL server
     pub async fn start(&self) -> ProtocolResult<()> {
         let listener = TcpListener::bind(self.config.listen_addr)
@@ -200,7 +241,7 @@ impl CqlAdapter {
         Self {
             config: self.config.clone(),
             storage: self.storage.clone(),
-            parser: self.parser.clone(),
+            parser: Arc::new(RwLock::new(CqlParser::new())), // New parser for each connection
             query_engine: self.query_engine.clone(),
             prepared_statements: self.prepared_statements.clone(),
             metrics: self.metrics.clone(),
@@ -212,7 +253,64 @@ impl CqlAdapter {
         let mut buffer = BytesMut::with_capacity(4096);
 
         loop {
-            // Read frame
+            // Process all complete frames in the buffer first
+            loop {
+                // Check if we have enough data for a frame header
+                if buffer.len() < 9 {
+                    break; // Need more data
+                }
+
+                // Check if we have the full frame
+                let body_len = {
+                    let mut buf = buffer.as_ref();
+                    buf.advance(5); // Skip to length field
+                    buf.get_u32() as usize
+                };
+
+                if buffer.len() < 9 + body_len {
+                    break; // Need more data
+                }
+
+                // Parse frame
+                let frame_bytes = buffer.split_to(9 + body_len).freeze();
+                let frame = CqlFrame::decode(frame_bytes)?;
+
+                // Extract protocol version (lower 7 bits, bit 7 is direction flag)
+                let protocol_version = frame.version & 0x7F;
+                println!("DEBUG: Received frame version: 0x{:02x} (protocol v{}), opcode: {:?}, stream: {}",
+                         frame.version, protocol_version, frame.opcode, frame.stream);
+
+                // Handle frame
+                let mut response = self.handle_frame(&frame).await?;
+
+                // Set response version: use protocol v4 with response bit (0x84)
+                // This ensures compatibility with clients expecting v4
+                // Preserve the protocol version from request but cap at v4
+                let response_version = if protocol_version > 4 {
+                    0x84 // v4 response
+                } else {
+                    (protocol_version & 0x7F) | 0x80
+                };
+                response.version = response_version;
+
+                println!("DEBUG: Sending response version: 0x{:02x}, opcode: {:?}, body_len: {}, stream: {}",
+                         response.version, response.opcode, response.body.len(), response.stream);
+
+                // Send response
+                let response_bytes = response.encode();
+                socket
+                    .write_all(&response_bytes)
+                    .await
+                    .map_err(|e| ProtocolError::IoError(e.to_string()))?;
+
+                // Flush to ensure data is sent
+                socket
+                    .flush()
+                    .await
+                    .map_err(|e| ProtocolError::IoError(e.to_string()))?;
+            }
+
+            // Read more data from socket
             let n = socket
                 .read_buf(&mut buffer)
                 .await
@@ -222,41 +320,6 @@ impl CqlAdapter {
                 // Connection closed
                 return Ok(());
             }
-
-            // Try to parse frame
-            if buffer.len() < 9 {
-                // Need more data for header
-                continue;
-            }
-
-            // Check if we have the full frame
-            let body_len = {
-                let mut buf = buffer.as_ref();
-                buf.advance(5); // Skip to length field
-                buf.get_u32() as usize
-            };
-
-            if buffer.len() < 9 + body_len {
-                // Need more data
-                continue;
-            }
-
-            // Parse frame
-            let frame_bytes = buffer.split_to(9 + body_len).freeze();
-            let frame = CqlFrame::decode(frame_bytes)?;
-            println!("DEBUG: Received frame version: {:x}, opcode: {:?}", frame.version, frame.opcode);
-
-            // Handle frame
-            let mut response = self.handle_frame(&frame).await?;
-            // Ensure response version matches request version (with response bit set)
-            response.version = frame.version | 0x80;
-
-            // Send response
-            let response_bytes = response.encode();
-            socket
-                .write_all(&response_bytes)
-                .await
-                .map_err(|e| ProtocolError::IoError(e.to_string()))?;
         }
     }
 
@@ -673,7 +736,33 @@ impl CqlAdapter {
                 if table_lower == "system_schema.tables" || table_lower == "tables" {
                     return Ok(build_system_schema_tables_response(stream));
                 }
-                // Skip other system_schema tables (columns, types, etc.) with empty results
+                if table_lower == "system_schema.columns" || table_lower == "columns" {
+                    return Ok(build_system_schema_columns_response(stream));
+                }
+                if table_lower == "system_schema.types" || table_lower == "types" {
+                    return Ok(build_system_schema_types_response(stream));
+                }
+                if table_lower == "system_schema.functions" || table_lower == "functions" {
+                    return Ok(build_system_schema_functions_response(stream));
+                }
+                if table_lower == "system_schema.aggregates" || table_lower == "aggregates" {
+                    return Ok(build_system_schema_aggregates_response(stream));
+                }
+                if table_lower == "system_schema.views" || table_lower == "views" {
+                    return Ok(build_system_schema_views_response(stream));
+                }
+                if table_lower == "system_schema.indexes" || table_lower == "indexes" {
+                    return Ok(build_system_schema_indexes_response(stream));
+                }
+                // Handle system_schema.triggers (required for driver initialization)
+                if table_lower == "system_schema.triggers" || table_lower == "triggers" {
+                    return Ok(build_system_schema_triggers_response(stream));
+                }
+                // Handle system_virtual_schema tables (required for driver initialization)
+                if table_lower.starts_with("system_virtual_schema.") {
+                    return Ok(build_system_virtual_schema_response(stream, &table_lower));
+                }
+                // Skip other system_schema tables with empty results
                 if table_lower.starts_with("system_schema.") || table_lower.starts_with("system.") {
                     return Ok(build_empty_rows_result(stream));
                 }
@@ -685,7 +774,19 @@ impl CqlAdapter {
                     columns.join(", ")
                 };
 
-                let mut sql = format!("SELECT {} FROM {}", sql_columns, table);
+                // Qualify table name with keyspace if not already qualified
+                let qualified_table = if table.contains('.') {
+                    table.clone()
+                } else {
+                    let parser = self.parser.read().await;
+                    if let Some(ks) = parser.current_keyspace() {
+                        format!("{}.{}", ks, table)
+                    } else {
+                        table.clone()
+                    }
+                };
+
+                let mut sql = format!("SELECT {} FROM {}", sql_columns, qualified_table);
 
                 // Add WHERE clause
                 if let Some(conditions) = where_clause {
@@ -791,6 +892,18 @@ impl CqlAdapter {
                 values,
                 ..
             } => {
+                // Qualify table name with keyspace if not already qualified
+                let qualified_table = if table.contains('.') {
+                    table.clone()
+                } else {
+                    let parser = self.parser.read().await;
+                    if let Some(ks) = parser.current_keyspace() {
+                        format!("{}.{}", ks, table)
+                    } else {
+                        table.clone()
+                    }
+                };
+
                 // Convert CQL INSERT to SQL and execute
                 let col_str = if columns.is_empty() {
                     "".to_string()
@@ -803,22 +916,12 @@ impl CqlAdapter {
                 } else {
                     let val_parts: Vec<String> = values
                         .iter()
-                        .map(|v| match v {
-                            CqlValue::Text(s) => format!("'{}'", s.replace('\'', "''")),
-                            CqlValue::Int(i) => i.to_string(),
-                            CqlValue::Bigint(i) => i.to_string(),
-                            CqlValue::Boolean(b) => b.to_string(),
-                            CqlValue::Float(f) => f.to_string(),
-                            CqlValue::Double(f) => f.to_string(),
-                            CqlValue::Timestamp(ts) => (ts / 1000).to_string(),
-                            CqlValue::Null => "NULL".to_string(),
-                            _ => format!("'{:?}'", v),
-                        })
+                        .map(|v| Self::cql_value_to_sql_string(v))
                         .collect();
                     format!(" VALUES ({})", val_parts.join(", "))
                 };
 
-                let sql = format!("INSERT INTO {}{}{}", table, col_str, val_str);
+                let sql = format!("INSERT INTO {}{}{}", qualified_table, col_str, val_str);
 
                 match self.query_engine.execute_sql_direct(&sql).await {
                     Ok(_) => Ok(build_void_result(stream)),
@@ -831,6 +934,18 @@ impl CqlAdapter {
                 where_clause,
                 ..
             } => {
+                // Qualify table name with keyspace if not already qualified
+                let qualified_table = if table.contains('.') {
+                    table.clone()
+                } else {
+                    let parser = self.parser.read().await;
+                    if let Some(ks) = parser.current_keyspace() {
+                        format!("{}.{}", ks, table)
+                    } else {
+                        table.clone()
+                    }
+                };
+
                 // Convert CQL UPDATE to SQL and execute
                 let set_parts: Vec<String> = assignments
                     .iter()
@@ -850,7 +965,7 @@ impl CqlAdapter {
                     })
                     .collect();
 
-                let mut sql = format!("UPDATE {} SET {}", table, set_parts.join(", "));
+                let mut sql = format!("UPDATE {} SET {}", qualified_table, set_parts.join(", "));
 
                 if !where_clause.is_empty() {
                     sql.push_str(" WHERE ");
@@ -893,8 +1008,20 @@ impl CqlAdapter {
                 where_clause,
                 ..
             } => {
+                // Qualify table name with keyspace if not already qualified
+                let qualified_table = if table.contains('.') {
+                    table.clone()
+                } else {
+                    let parser = self.parser.read().await;
+                    if let Some(ks) = parser.current_keyspace() {
+                        format!("{}.{}", ks, table)
+                    } else {
+                        table.clone()
+                    }
+                };
+
                 // Convert CQL DELETE to SQL and execute
-                let mut sql = format!("DELETE FROM {}", table);
+                let mut sql = format!("DELETE FROM {}", qualified_table);
 
                 if !where_clause.is_empty() {
                     sql.push_str(" WHERE ");
@@ -952,22 +1079,160 @@ impl CqlAdapter {
                     }
                 }
             }
-            CqlStatement::CreateKeyspace { name, .. } => {
-                let mut parser = self.parser.write().await;
-                parser.set_keyspace(name.clone());
+            CqlStatement::CreateKeyspace {
+                name,
+                if_not_exists,
+                ..
+            } => {
                 println!("[CQL] CREATE KEYSPACE {}", name);
-                Ok(self.build_schema_change_result(stream))
+                let sql = if *if_not_exists {
+                    format!("CREATE SCHEMA IF NOT EXISTS {}", name)
+                } else {
+                    format!("CREATE SCHEMA {}", name)
+                };
+                
+                match self.query_engine.execute_sql_direct(&sql).await {
+                    Ok(_) => Ok(self.build_schema_change_result(stream)),
+                    Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
+                }
             }
-            CqlStatement::CreateTable { name, .. } => {
+            CqlStatement::CreateTable {
+                name,
+                columns,
+                if_not_exists,
+                primary_key,
+                ..
+            } => {
                 println!("[CQL] CREATE TABLE {}", name);
-                Ok(self.build_schema_change_result(stream))
+                
+                // Qualify table name with keyspace if not already qualified
+                let qualified_table = if name.contains('.') {
+                    name.clone()
+                } else {
+                    let parser = self.parser.read().await;
+                    if let Some(ks) = parser.current_keyspace() {
+                        format!("{}.{}", ks, name)
+                    } else {
+                        name.clone()
+                    }
+                };
+
+                // Build column definitions
+                let mut col_defs = Vec::new();
+                for col in columns {
+                    let type_str = match &col.data_type {
+                        super::types::CqlType::Text | super::types::CqlType::Varchar | super::types::CqlType::Ascii => "TEXT",
+                        super::types::CqlType::Int => "INT",
+                        super::types::CqlType::Bigint | super::types::CqlType::Counter | super::types::CqlType::Varint => "BIGINT",
+                        super::types::CqlType::Boolean => "BOOLEAN",
+                        super::types::CqlType::Float => "REAL",
+                        super::types::CqlType::Double => "DOUBLE PRECISION",
+                        super::types::CqlType::Uuid | super::types::CqlType::Timeuuid => "TEXT", // Store UUID as TEXT
+                        super::types::CqlType::Timestamp => "TIMESTAMP",
+                        super::types::CqlType::Date => "DATE",
+                        super::types::CqlType::Time => "TIME",
+                        super::types::CqlType::Smallint => "SMALLINT",
+                        super::types::CqlType::Tinyint => "SMALLINT",
+                        _ => "TEXT", // Default to TEXT for collections etc (stored as JSON)
+                    };
+                    col_defs.push(format!("{} {}", col.name, type_str));
+                }
+
+                // Add primary key constraint if present
+                if !primary_key.is_empty() {
+                    col_defs.push(format!("PRIMARY KEY ({})", primary_key.join(", ")));
+                }
+
+                let sql = if *if_not_exists {
+                    format!("CREATE TABLE IF NOT EXISTS {} ({})", qualified_table, col_defs.join(", "))
+                } else {
+                    format!("CREATE TABLE {} ({})", qualified_table, col_defs.join(", "))
+                };
+
+                match self.query_engine.execute_sql_direct(&sql).await {
+                    Ok(_) => Ok(self.build_schema_change_result(stream)),
+                    Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
+                }
             }
-            CqlStatement::DropKeyspace { name, .. } => {
+            CqlStatement::DropKeyspace { name, if_exists } => {
                 println!("[CQL] DROP KEYSPACE {}", name);
+                let sql = if *if_exists {
+                    format!("DROP SCHEMA IF EXISTS {} CASCADE", name)
+                } else {
+                    format!("DROP SCHEMA {} CASCADE", name)
+                };
+                match self.query_engine.execute_sql_direct(&sql).await {
+                    Ok(_) => Ok(self.build_schema_change_result(stream)),
+                    Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
+                }
+            }
+            CqlStatement::DropTable { name, if_exists } => {
+                println!("[CQL] DROP TABLE {}", name);
+                 // Qualify table name with keyspace if not already qualified
+                let qualified_table = if name.contains('.') {
+                    name.clone()
+                } else {
+                    let parser = self.parser.read().await;
+                    if let Some(ks) = parser.current_keyspace() {
+                        format!("{}.{}", ks, name)
+                    } else {
+                        name.clone()
+                    }
+                };
+
+                let sql = if *if_exists {
+                    format!("DROP TABLE IF EXISTS {}", qualified_table)
+                } else {
+                    format!("DROP TABLE {}", qualified_table)
+                };
+                match self.query_engine.execute_sql_direct(&sql).await {
+                    Ok(_) => Ok(self.build_schema_change_result(stream)),
+                    Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
+                }
+            }
+            CqlStatement::CreateIndex {
+                name,
+                table,
+                column,
+                if_not_exists,
+                ..
+            } => {
+                println!("[CQL] CREATE INDEX {} ON {} ({})", name, table, column);
+                 // Qualify table name with keyspace if not already qualified
+                let qualified_table = if table.contains('.') {
+                    table.clone()
+                } else {
+                    let parser = self.parser.read().await;
+                    if let Some(ks) = parser.current_keyspace() {
+                        format!("{}.{}", ks, table)
+                    } else {
+                        table.clone()
+                    }
+                };
+
+                let sql = if *if_not_exists {
+                    format!("CREATE INDEX IF NOT EXISTS {} ON {} ({})", name, qualified_table, column)
+                } else {
+                    format!("CREATE INDEX {} ON {} ({})", name, qualified_table, column)
+                };
+                match self.query_engine.execute_sql_direct(&sql).await {
+                    Ok(_) => Ok(self.build_schema_change_result(stream)),
+                    Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
+                }
+            }
+            CqlStatement::CreateType { name, .. } => {
+                println!("[CQL] CREATE TYPE {}", name);
                 Ok(self.build_schema_change_result(stream))
             }
-            CqlStatement::DropTable { name, .. } => {
-                println!("[CQL] DROP TABLE {}", name);
+            CqlStatement::CreateMaterializedView {
+                name,
+                source_table,
+                ..
+            } => {
+                println!(
+                    "[CQL] CREATE MATERIALIZED VIEW {} FROM {}",
+                    name, source_table
+                );
                 Ok(self.build_schema_change_result(stream))
             }
             CqlStatement::Use { keyspace } => {

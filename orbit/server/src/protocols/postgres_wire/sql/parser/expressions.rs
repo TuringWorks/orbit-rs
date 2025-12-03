@@ -238,7 +238,6 @@ impl ExpressionParser {
                 Token::Plus => BinaryOperator::Plus,
                 Token::Minus => BinaryOperator::Minus,
                 Token::Concat => BinaryOperator::Concat,
-                Token::JsonExtractText => BinaryOperator::JsonExtractText, // ->> operator
                 _ => break,
             };
 
@@ -319,8 +318,90 @@ impl ExpressionParser {
                     operand: Box::new(expr),
                 })
             }
-            _ => self.parse_primary_expression(tokens, pos),
+            _ => self.parse_postfix_expression(tokens, pos),
         }
+    }
+
+    /// Parse postfix expressions (JSONB operators, array indexing, type casting)
+    /// This handles: ->, ->>, #>, #>>, [], ::
+    fn parse_postfix_expression(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<Expression> {
+        let mut left = self.parse_primary_expression(tokens, pos)?;
+
+        while *pos < tokens.len() {
+            match &tokens[*pos] {
+                Token::Arrow => {
+                    // -> JSON field extraction
+                    *pos += 1;
+                    let right = self.parse_primary_expression(tokens, pos)?;
+                    left = Expression::Binary {
+                        left: Box::new(left),
+                        operator: BinaryOperator::JsonExtract,
+                        right: Box::new(right),
+                    };
+                }
+                Token::JsonExtractText => {
+                    // ->> JSON field extraction as text
+                    *pos += 1;
+                    let right = self.parse_primary_expression(tokens, pos)?;
+                    left = Expression::Binary {
+                        left: Box::new(left),
+                        operator: BinaryOperator::JsonExtractText,
+                        right: Box::new(right),
+                    };
+                }
+                Token::JsonPathExtract => {
+                    // #> JSON path extraction
+                    *pos += 1;
+                    let right = self.parse_primary_expression(tokens, pos)?;
+                    left = Expression::Binary {
+                        left: Box::new(left),
+                        operator: BinaryOperator::JsonPathExtract,
+                        right: Box::new(right),
+                    };
+                }
+                Token::JsonPathExtractText => {
+                    // #>> JSON path extraction as text
+                    *pos += 1;
+                    let right = self.parse_primary_expression(tokens, pos)?;
+                    left = Expression::Binary {
+                        left: Box::new(left),
+                        operator: BinaryOperator::JsonPathExtractText,
+                        right: Box::new(right),
+                    };
+                }
+                Token::LeftBracket => {
+                    // Array indexing
+                    *pos += 1;
+                    let index = self.parse_expression(tokens, pos)?;
+                    if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightBracket) {
+                        return Err(crate::protocols::error::ProtocolError::ParseError(
+                            "Expected ']' after array index".to_string(),
+                        ));
+                    }
+                    *pos += 1;
+                    left = Expression::ArrayIndex {
+                        array: Box::new(left),
+                        index: Box::new(index),
+                    };
+                }
+                Token::Colon if *pos + 1 < tokens.len() && matches!(tokens[*pos + 1], Token::Colon) => {
+                    // :: type cast (PostgreSQL style)
+                    *pos += 2;
+                    let target_type = self.parse_sql_type(tokens, pos)?;
+                    left = Expression::Cast {
+                        expr: Box::new(left),
+                        target_type,
+                    };
+                }
+                _ => break,
+            }
+        }
+
+        Ok(left)
     }
 
     /// Parse primary expressions (literals, identifiers, function calls, parenthesized expressions)
@@ -903,6 +984,11 @@ impl ExpressionParser {
         // Skip ROWS or RANGE for now, we'll just parse the bounds
         *pos += 1;
 
+        // Check for optional BETWEEN keyword
+        if self.matches_at(tokens, *pos, &Token::Between) {
+            *pos += 1;
+        }
+
         let start_bound = self.parse_frame_bound(tokens, pos)?;
 
         let end_bound = if self.matches_at(tokens, *pos, &Token::And) {
@@ -939,7 +1025,16 @@ impl ExpressionParser {
                 .into())
             }
         } else if self.matches_at(tokens, *pos, &Token::CurrentRow) {
+            // Handle CURRENT ROW as single token (legacy)
             *pos += 1;
+            // Check if next token is ROW (identifier) and skip it
+            if *pos < tokens.len() {
+                if let Some(Token::Identifier(id)) = &tokens.get(*pos) {
+                    if id.to_uppercase() == "ROW" {
+                        *pos += 1;
+                    }
+                }
+            }
             Ok(FrameBound::CurrentRow)
         } else {
             let expr = Box::new(self.parse_expression(tokens, pos)?);
@@ -1227,12 +1322,78 @@ impl ExpressionParser {
                 Ok(SqlType::Date)
             }
             Token::Time => {
+            *pos += 1;
+            Ok(SqlType::Time {
+                with_timezone: false,
+            })
+        }
+        Token::Vector => {
+            *pos += 1;
+            // Check for optional dimension specification
+            if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
                 *pos += 1;
-                Ok(SqlType::Time {
-                    with_timezone: false,
-                })
+                if let Some(Token::NumericLiteral(dim_str)) = tokens.get(*pos) {
+                    if let Ok(dimensions) = dim_str.parse::<u32>() {
+                        *pos += 1;
+                        if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                            *pos += 1;
+                            return Ok(SqlType::Vector {
+                                dimensions: Some(dimensions),
+                            });
+                        }
+                    }
+                }
+                return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Invalid VECTOR dimension specification".to_string(),
+                ));
             }
-            Token::Identifier(type_name) => {
+            Ok(SqlType::Vector { dimensions: None })
+        }
+        Token::HalfVec => {
+            *pos += 1;
+            // Check for optional dimension specification
+            if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
+                *pos += 1;
+                if let Some(Token::NumericLiteral(dim_str)) = tokens.get(*pos) {
+                    if let Ok(dimensions) = dim_str.parse::<u32>() {
+                        *pos += 1;
+                        if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                            *pos += 1;
+                            return Ok(SqlType::HalfVec {
+                                dimensions: Some(dimensions),
+                            });
+                        }
+                    }
+                }
+                return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Invalid HALFVEC dimension specification".to_string(),
+                ));
+            }
+            Ok(SqlType::HalfVec { dimensions: None })
+        }
+        Token::SparseVec => {
+            *pos += 1;
+            // Check for optional dimension specification
+            if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
+                *pos += 1;
+                if let Some(Token::NumericLiteral(dim_str)) = tokens.get(*pos) {
+                    if let Ok(dimensions) = dim_str.parse::<u32>() {
+                        *pos += 1;
+                        if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                            *pos += 1;
+                            return Ok(SqlType::SparseVec {
+                                dimensions: Some(dimensions),
+                            });
+                        }
+                    }
+                }
+                return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Invalid SPARSEVEC dimension specification".to_string(),
+                ));
+            }
+            Ok(SqlType::SparseVec { dimensions: None })
+        }
+        Token::Identifier(type_name) => {
                 *pos += 1;
                 Ok(SqlType::Custom {
                     type_name: type_name.clone(),
