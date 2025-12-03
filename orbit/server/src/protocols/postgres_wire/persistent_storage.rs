@@ -49,6 +49,7 @@ pub enum ColumnType {
     Boolean,      // Boolean
     Json,         // JSON data
     Timestamp,    // Timestamp with timezone
+    Double,       // Double precision float
 }
 
 /// Row data for a table

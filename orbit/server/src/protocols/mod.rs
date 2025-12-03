@@ -10,6 +10,7 @@ pub mod bolt;
 pub mod common;
 pub mod cql;
 pub mod cypher;
+pub mod mongodb;
 pub mod error;
 pub mod graph_database;
 pub mod graphrag;
@@ -33,6 +34,7 @@ mod postgres_server;
 mod resp_server;
 
 pub use cql_server::CqlServer;
+pub use mongodb::MongoDbServer;
 pub use mysql_server::MySqlServer;
 pub use postgres_server::PostgresServer;
 pub use resp_server::RespServer;

@@ -230,6 +230,8 @@ pub enum Token {
     BitwiseNot,
     LeftShift,
     RightShift,
+    Arrow,           // ->
+    JsonExtractText, // ->>
 
     // Punctuation
     LeftParen,
@@ -241,6 +243,7 @@ pub enum Token {
     Comma,
     Semicolon,
     Dot,
+    RangeOperator, // ..
     Colon,
 
     // Special tokens
@@ -731,8 +734,17 @@ impl Lexer {
 
                         // Numeric literals
                         c if c.is_ascii_digit() => return self.read_numeric_literal(),
-                        '.' if self.peek().is_some_and(|c| c.is_ascii_digit()) => {
-                            return self.read_numeric_literal()
+                        '.' => {
+                            if self.peek() == Some('.') {
+                                self.advance();
+                                self.advance();
+                                return Token::RangeOperator;
+                            }
+                            if self.peek().is_some_and(|c| c.is_ascii_digit()) {
+                                return self.read_numeric_literal();
+                            }
+                            self.advance();
+                            return Token::Dot;
                         }
 
                         // Parameters
@@ -748,6 +760,15 @@ impl Lexer {
                         }
                         '-' => {
                             self.advance();
+                            if self.current_char == Some('>') {
+                                self.advance();
+                                if self.current_char == Some('>') {
+                                    self.advance();
+                                    return Token::JsonExtractText;
+                                } else {
+                                    return Token::Arrow;
+                                }
+                            }
                             return Token::Minus;
                         }
                         '*' => {
@@ -876,10 +897,7 @@ impl Lexer {
                             self.advance();
                             return Token::Semicolon;
                         }
-                        '.' => {
-                            self.advance();
-                            return Token::Dot;
-                        }
+
                         ':' => {
                             self.advance();
                             return Token::Colon;

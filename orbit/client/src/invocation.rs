@@ -184,6 +184,21 @@ impl InvocationSystem {
                 {"name": "counter-2", "value": 20, "operation_count": 4},
                 {"name": "counter-3", "value": 30, "operation_count": 6}
             ]),
+            // Redis key-value actor methods (for persistence)
+            "set_value" | "del" | "expire" | "persist" => serde_json::Value::Null,
+            "lpush" | "rpush" | "llen" => serde_json::Value::Number(serde_json::Number::from(1)),
+            "lpop" | "rpop" | "lrange" => serde_json::json!([]),
+            "sadd" | "srem" | "scard" => serde_json::Value::Number(serde_json::Number::from(1)),
+            "smembers" | "sinter" | "sunion" => serde_json::json!([]),
+            "sismember" => serde_json::Value::Bool(true),
+            "hset" | "hdel" | "hlen" => serde_json::Value::Number(serde_json::Number::from(1)),
+            "hget" => serde_json::Value::Null,
+            "hgetall" | "hkeys" | "hvals" => serde_json::json!({}),
+            "hexists" => serde_json::Value::Bool(true),
+            "zadd" | "zrem" | "zcard" => serde_json::Value::Number(serde_json::Number::from(1)),
+            "zrange" | "zrevrange" | "zrangebyscore" => serde_json::json!([]),
+            "zscore" => serde_json::Value::Null,
+            "zincrby" => serde_json::Value::Number(serde_json::Number::from_f64(1.0).unwrap()),
             // Vector Actor methods
             "add_vector" | "create_index" | "drop_index" => serde_json::Value::Null,
             "get_vector" => serde_json::json!({
@@ -216,7 +231,7 @@ impl InvocationSystem {
             ]),
             "list_vector_ids" => serde_json::json!(["doc1", "doc2", "doc3", "doc4", "doc5"]),
             "vector_count" => serde_json::Value::Number(serde_json::Number::from(5)),
-            _ => serde_json::Value::String("Hello from actor!".to_string()),
+            _ => serde_json::Value::String("NO_IMPL".to_string()),
         };
 
         // Complete the pending invocation
@@ -391,6 +406,6 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(result, "Hello from actor!");
+        assert_eq!(result, "NO_IMPL");
     }
 }

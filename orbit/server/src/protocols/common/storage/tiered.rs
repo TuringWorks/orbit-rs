@@ -166,18 +166,54 @@ impl TableStorage for TieredTableStorage {
             opts.create_if_missing(true);
             opts.create_missing_column_families(true);
 
-            // Define column families for metadata and data storage
-            let cf_descriptors = vec![
-                ColumnFamilyDescriptor::new("schemas", Options::default()),
-                ColumnFamilyDescriptor::new("data", Options::default()),
-                ColumnFamilyDescriptor::new("indexes", Options::default()),
-                ColumnFamilyDescriptor::new("views", Options::default()),
-                ColumnFamilyDescriptor::new("schema_defs", Options::default()),
-                ColumnFamilyDescriptor::new("extensions", Options::default()),
-                ColumnFamilyDescriptor::new("settings", Options::default()),
+            // Define required column families for metadata and data storage
+            let required_cfs = vec![
+                "schemas",
+                "data",
+                "indexes",
+                "views",
+                "schema_defs",
+                "extensions",
+                "settings",
             ];
 
             let db_path = data_dir.join("rocksdb");
+
+            // Get existing column families if database exists
+            let existing_cfs = if db_path.exists() {
+                match DB::list_cf(&opts, &db_path) {
+                    Ok(cfs) => cfs,
+                    Err(e) => {
+                        info!(
+                            "Could not list existing column families at {:?}: {}. Will create fresh database.",
+                            db_path, e
+                        );
+                        vec!["default".to_string()]
+                    }
+                }
+            } else {
+                vec!["default".to_string()]
+            };
+
+            // Merge existing CFs with required CFs (preserves existing data)
+            let mut all_cfs: Vec<String> = existing_cfs;
+            for cf in &required_cfs {
+                if !all_cfs.iter().any(|existing| existing == *cf) {
+                    all_cfs.push(cf.to_string());
+                }
+            }
+
+            // Create descriptors for all column families
+            let cf_descriptors: Vec<ColumnFamilyDescriptor> = all_cfs
+                .iter()
+                .map(|name| ColumnFamilyDescriptor::new(name, Options::default()))
+                .collect();
+
+            info!(
+                "Opening RocksDB with column families: {:?}",
+                all_cfs
+            );
+
             match DB::open_cf_descriptors(&opts, &db_path, cf_descriptors) {
                 Ok(db) => {
                     let db_arc = Arc::new(db);

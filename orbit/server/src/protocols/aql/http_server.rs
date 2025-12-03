@@ -133,7 +133,17 @@ async fn handle_request(
     query_engine: Arc<AqlQueryEngine>,
     cursors: Arc<RwLock<HashMap<String, AqlCursor>>>,
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
-    let path = req.uri().path().to_string();
+    let mut path = req.uri().path().to_string();
+    
+    // Handle database prefix (e.g., /_db/_system/...)
+    if path.starts_with("/_db/") {
+        let parts: Vec<&str> = path.split('/').collect();
+        if parts.len() >= 4 {
+            // parts[0] is empty, parts[1] is "_db", parts[2] is db_name
+            // Reconstruct path starting from parts[3]
+            path = format!("/{}", parts[3..].join("/"));
+        }
+    }
     let method = req.method().clone();
 
     info!("AQL HTTP request: {} {}", method, path);
@@ -157,6 +167,10 @@ async fn handle_request(
         handle_collection_request(&method, &path, body_bytes, storage).await
     } else if path.starts_with("/_api/document") {
         handle_document_request(&method, &path, body_bytes, storage).await
+    } else if path.starts_with("/_api/query") {
+        handle_query_validation_request(&method, &path, body_bytes).await
+    } else if path.starts_with("/_api/explain") {
+        handle_explain_request(&method, &path, body_bytes).await
     } else if path == "/_api/version" {
         handle_version_request().await
     } else if path == "/_api/database" {
@@ -300,8 +314,14 @@ async fn handle_collection_request(
         Method::GET => {
             // List collections
             // Simplified: return empty list for now
-            let collections: Vec<serde_json::Value> = vec![];
-            json_response(StatusCode::OK, &collections)
+            json_response(
+                StatusCode::OK,
+                &serde_json::json!({
+                    "error": false,
+                    "code": 200,
+                    "result": []
+                }),
+            )
         }
         Method::POST => {
             // Create collection
@@ -310,8 +330,14 @@ async fn handle_collection_request(
                 StatusCode::OK,
                 &serde_json::json!({
                     "error": false,
+                    "code": 200,
                     "id": "collection_1",
-                    "name": "new_collection"
+                    "name": "new_collection",
+                    "waitForSync": false,
+                    "isVolatile": false,
+                    "isSystem": false,
+                    "status": 3,
+                    "type": 2
                 }),
             )
         }
@@ -473,4 +499,62 @@ fn error_response(status: StatusCode, message: &str) -> Response<Full<Bytes>> {
     });
 
     json_response(status, &error_json)
+}
+
+/// Handle query validation request
+async fn handle_query_validation_request(
+    method: &Method,
+    _path: &str,
+    _body: Bytes,
+) -> Response<Full<Bytes>> {
+    match *method {
+        Method::POST => {
+            // Validate query
+            // Simplified: return success
+            json_response(
+                StatusCode::OK,
+                &serde_json::json!({
+                    "error": false,
+                    "code": 200,
+                    "validation": true,
+                    "parsed": true,
+                    "collections": [],
+                    "bindVars": [],
+                    "ast": []
+                }),
+            )
+        }
+        _ => error_response(StatusCode::METHOD_NOT_ALLOWED, "Method not allowed"),
+    }
+}
+
+/// Handle explain request
+async fn handle_explain_request(
+    method: &Method,
+    _path: &str,
+    _body: Bytes,
+) -> Response<Full<Bytes>> {
+    match *method {
+        Method::POST => {
+            // Explain query
+            // Simplified: return success
+            json_response(
+                StatusCode::OK,
+                &serde_json::json!({
+                    "error": false,
+                    "code": 200,
+                    "plan": {
+                        "nodes": [],
+                        "rules": [],
+                        "collections": [],
+                        "variables": [],
+                        "estimatedCost": 1.0,
+                        "estimatedNrItems": 1
+                    },
+                    "cacheable": true
+                }),
+            )
+        }
+        _ => error_response(StatusCode::METHOD_NOT_ALLOWED, "Method not allowed"),
+    }
 }

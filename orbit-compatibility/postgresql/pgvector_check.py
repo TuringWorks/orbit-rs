@@ -32,7 +32,8 @@ def run_checks():
     
     checks = [
         ("Create Extension", "CREATE EXTENSION IF NOT EXISTS vector;"),
-        ("Create Table", "DROP TABLE IF EXISTS items; CREATE TABLE items (id bigserial PRIMARY KEY, embedding vector(3));"),
+        ("Drop Table", "DROP TABLE IF EXISTS items;"),
+        ("Create Table", "CREATE TABLE items (id bigserial PRIMARY KEY, embedding vector(3));"),
         ("Insert Data", "INSERT INTO items (embedding) VALUES ('[1,2,3]'), ('[4,5,6]');"),
         ("L2 Distance Query", "SELECT * FROM items ORDER BY embedding <-> '[3,1,2]' LIMIT 1;"),
         ("Cosine Distance Query", "SELECT * FROM items ORDER BY embedding <=> '[3,1,2]' LIMIT 1;"),

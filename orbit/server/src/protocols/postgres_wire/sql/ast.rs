@@ -47,6 +47,9 @@ pub enum Statement {
     // Extensions
     CreateExtension(CreateExtensionStatement),
     DropExtension(DropExtensionStatement),
+
+    // Session Management
+    Set(SetStatement),
 }
 
 // ===== DDL Statements =====
@@ -282,6 +285,23 @@ pub struct SelectStatement {
     pub limit: Option<LimitClause>,
     pub offset: Option<u64>,
     pub for_clause: Option<ForClause>,
+    pub traverse: Option<TraverseClause>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraverseClause {
+    pub direction: TraverseDirection,
+    pub min_steps: u32,
+    pub max_steps: u32,
+    pub edge_collection: String,
+    pub target_alias: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TraverseDirection {
+    Outbound,
+    Inbound,
+    Any,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -953,4 +973,9 @@ impl From<String> for TableName {
     fn from(name: String) -> Self {
         name.as_str().into()
     }
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetStatement {
+    pub variable: String,
+    pub value: Vec<Expression>,
 }

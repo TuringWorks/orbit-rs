@@ -16,8 +16,9 @@ use crate::protocols::postgres_wire::sql::{
         DropSchemaStatement, DropTableStatement, DropViewStatement, ExplainStatement, Expression,
         FromClause, GrantStatement, IndexType, InsertSource, InsertStatement, IsolationLevel,
         JoinCondition, JoinType, Privilege, ReleaseSavepointStatement, RevokeStatement,
-        RollbackStatement, SavepointStatement, SelectItem, SelectStatement, ShowStatement,
-        ShowVariable, Statement, TableConstraint, TableName, UpdateStatement, UseStatement,
+        RollbackStatement, SavepointStatement, SelectItem, SelectStatement, SetStatement,
+        ShowStatement, ShowVariable, Statement, TableConstraint, TableName, UpdateStatement,
+        UseStatement,
     },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator},
     parser::SqlParser,
@@ -121,6 +122,10 @@ pub enum ExecutionResult {
         object_type: String,
         object_name: String,
         description: Vec<(String, String)>,
+    },
+    Set {
+        variable: String,
+        value: String,
     },
 }
 
@@ -497,6 +502,7 @@ impl SqlExecutor {
             Statement::Show(stmt) => self.execute_show(stmt).await,
             Statement::Use(stmt) => self.execute_use(stmt).await,
             Statement::Describe(stmt) => self.execute_describe(stmt).await,
+            Statement::Set(stmt) => self.execute_set(stmt).await,
         }
     }
 
@@ -2663,6 +2669,27 @@ impl SqlExecutor {
             object_name: stmt.name,
             description,
         })
+    }
+
+    async fn execute_set(&self, stmt: SetStatement) -> ProtocolResult<ExecutionResult> {
+        // For now, we just log the SET command and return success
+        // This allows clients like psycopg2 to connect even if we don't fully support all SET options
+        let variable = stmt.variable;
+        let value = if stmt.value.is_empty() {
+            "DEFAULT".to_string()
+        } else {
+            // Simple string representation of the first value
+            match &stmt.value[0] {
+                Expression::Literal(val) => format!("{:?}", val),
+                _ => "COMPLEX_VALUE".to_string(),
+            }
+        };
+
+        // TODO: Actually implement session variable storage
+        // let mut settings = self.settings.write().await;
+        // settings.insert(variable.clone(), value.clone());
+
+        Ok(ExecutionResult::Set { variable, value })
     }
 }
 

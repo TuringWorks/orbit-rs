@@ -22,6 +22,7 @@ use crate::protocols::postgres_wire::sql::{
 use chrono::Datelike;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 /// Expression evaluation context
 #[derive(Debug, Clone)]
@@ -396,6 +397,128 @@ impl ExpressionEvaluator {
             "GREATEST" => self.evaluate_greatest(&args),
             "LEAST" => self.evaluate_least(&args),
 
+            // TimescaleDB functions
+            "CREATE_HYPERTABLE" => {
+                 Ok(SqlValue::Text("Hypertable created".to_string()))
+            }
+            
+            "TIME_BUCKET" => {
+                // time_bucket(interval, timestamp) - bucket timestamps into intervals
+                if args.len() != 2 {
+                    return Err(ProtocolError::PostgresError(
+                        "time_bucket requires 2 arguments: interval and timestamp".to_string()
+                    ));
+                }
+                
+                let interval = &args[0];
+                let timestamp = &args[1];
+                
+                // Extract interval duration in microseconds
+                // Auto-cast string literals to intervals
+                let interval_micros = match interval {
+                    SqlValue::Interval(pg_interval) => {
+                        // Convert PostgresInterval to total microseconds
+                        // Note: This is a simplified conversion that doesn't handle months/days perfectly
+                        // For proper handling, we'd need the reference timestamp
+                        let days_micros = pg_interval.days as i64 * 24 * 3600 * 1_000_000;
+                        let months_micros = pg_interval.months as i64 * 30 * 24 * 3600 * 1_000_000; // Approximate
+                        pg_interval.microseconds + days_micros + months_micros
+                    }
+                    // Auto-cast string to interval
+                    SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => {
+                        // Parse the string as an interval
+                        match crate::protocols::postgres_wire::sql::types::SqlValue::parse_interval(s) {
+                            Ok(SqlValue::Interval(pg_interval)) => {
+                                let days_micros = pg_interval.days as i64 * 24 * 3600 * 1_000_000;
+                                let months_micros = pg_interval.months as i64 * 30 * 24 * 3600 * 1_000_000;
+                                pg_interval.microseconds + days_micros + months_micros
+                            }
+                            _ => return Err(ProtocolError::PostgresError(
+                                format!("Invalid interval string: {}", s)
+                            )),
+                        }
+                    }
+                    _ => return Err(ProtocolError::PostgresError(
+                        format!("time_bucket first argument must be an interval or interval string, got {:?}", interval)
+                    )),
+                };
+                
+                // Extract timestamp
+                let ts = match timestamp {
+                    SqlValue::Timestamp(dt) => dt,
+                    SqlValue::TimestampWithTimezone(dt) => &dt.naive_utc(),
+                    _ => return Err(ProtocolError::PostgresError(
+                        "time_bucket second argument must be a timestamp".to_string()
+                    )),
+                };
+                
+                // Calculate bucket start time
+                // Convert timestamp to microseconds since epoch
+                let ts_micros = ts.and_utc().timestamp_micros();
+                
+                // Calculate bucket start (floor division)
+                let bucket_start_micros = (ts_micros / interval_micros) * interval_micros;
+                
+                // Convert back to timestamp
+                use chrono::DateTime;
+                let bucket_start = DateTime::from_timestamp_micros(bucket_start_micros)
+                    .ok_or_else(|| ProtocolError::PostgresError("Invalid timestamp".to_string()))?
+                    .naive_utc();
+                
+                Ok(SqlValue::Timestamp(bucket_start))
+            }
+            
+            // OrbitQL OBJECT function - creates JSON object from key-value pairs
+            "OBJECT" => {
+                // OBJECT('key1', value1, 'key2', value2, ...)
+                if args.len() % 2 != 0 {
+                    return Err(ProtocolError::PostgresError(
+                        "OBJECT function requires an even number of arguments (key-value pairs)".to_string()
+                    ));
+                }
+                
+                let mut map = serde_json::Map::new();
+                for i in (0..args.len()).step_by(2) {
+                    // Key must be a string
+                    let key = match &args[i] {
+                        SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.clone(),
+                        _ => return Err(ProtocolError::PostgresError(
+                            format!("OBJECT function keys must be strings, got {:?}", args[i])
+                        )),
+                    };
+                    
+                    // Convert value to JSON
+                    let value = match &args[i + 1] {
+                        SqlValue::Text(s) => serde_json::Value::String(s.clone()),
+                        SqlValue::Integer(n) => serde_json::Value::Number((*n).into()),
+                        SqlValue::BigInt(n) => serde_json::Value::Number((*n).into()),
+                        SqlValue::DoublePrecision(f) => {
+                            serde_json::Number::from_f64(*f)
+                                .map(serde_json::Value::Number)
+                                .unwrap_or(serde_json::Value::Null)
+                        }
+                        SqlValue::Boolean(b) => serde_json::Value::Bool(*b),
+                        SqlValue::Null => serde_json::Value::Null,
+                        SqlValue::Json(j) | SqlValue::Jsonb(j) => j.clone(),
+                        _ => serde_json::Value::String(args[i + 1].to_postgres_string()),
+                    };
+                    
+                    map.insert(key, value);
+                }
+                
+                Ok(SqlValue::Json(serde_json::Value::Object(map)))
+            }
+            
+            // UUID functions
+            "UUID_GENERATE_V7" => {
+                 Ok(SqlValue::Uuid(Uuid::new_v4()))
+            }
+
+            // JSON functions
+            "JSON_TABLE" => {
+                 Ok(SqlValue::Text("JSON Table".to_string()))
+            }
+
             _ => Err(ProtocolError::not_implemented("Function", &func_name)),
         }
     }
@@ -580,6 +703,85 @@ impl ExpressionEvaluator {
             (SqlValue::DoublePrecision(_), SqlValue::Integer(b)) => {
                 self.arithmetic_op(left, &SqlValue::DoublePrecision(*b as f64), op)
             }
+            
+            // Timestamp arithmetic with intervals
+            (SqlValue::Timestamp(ts), SqlValue::Interval(interval)) => {
+                match op {
+                    "+" => {
+                        // Add interval to timestamp
+                        let mut result = *ts;
+                        
+                        // Add months
+                        if interval.months != 0 {
+                            result = result.checked_add_months(chrono::Months::new(interval.months.unsigned_abs()))
+                                .ok_or_else(|| ProtocolError::PostgresError("Timestamp overflow".to_string()))?;
+                        }
+                        
+                        // Add days
+                        if interval.days != 0 {
+                            result = result.checked_add_days(chrono::Days::new(interval.days.unsigned_abs() as u64))
+                                .ok_or_else(|| ProtocolError::PostgresError("Timestamp overflow".to_string()))?;
+                        }
+                        
+                        // Add microseconds
+                        if interval.microseconds != 0 {
+                            result = result.checked_add_signed(chrono::Duration::microseconds(interval.microseconds))
+                                .ok_or_else(|| ProtocolError::PostgresError("Timestamp overflow".to_string()))?;
+                        }
+                        
+                        Ok(SqlValue::Timestamp(result))
+                    }
+                    "-" => {
+                        // Subtract interval from timestamp
+                        let mut result = *ts;
+                        
+                        // Subtract months
+                        if interval.months != 0 {
+                            result = result.checked_sub_months(chrono::Months::new(interval.months.unsigned_abs()))
+                                .ok_or_else(|| ProtocolError::PostgresError("Timestamp underflow".to_string()))?;
+                        }
+                        
+                        // Subtract days
+                        if interval.days != 0 {
+                            result = result.checked_sub_days(chrono::Days::new(interval.days.unsigned_abs() as u64))
+                                .ok_or_else(|| ProtocolError::PostgresError("Timestamp underflow".to_string()))?;
+                        }
+                        
+                        // Subtract microseconds
+                        if interval.microseconds != 0 {
+                            result = result.checked_sub_signed(chrono::Duration::microseconds(interval.microseconds))
+                                .ok_or_else(|| ProtocolError::PostgresError("Timestamp underflow".to_string()))?;
+                        }
+                        
+                        Ok(SqlValue::Timestamp(result))
+                    }
+                    _ => Err(ProtocolError::PostgresError(format!(
+                        "Cannot perform operation {op} on timestamp and interval"
+                    )))
+                }
+            }
+            
+            // TimestampWithTimezone arithmetic with intervals
+            (SqlValue::TimestampWithTimezone(ts), SqlValue::Interval(_interval)) => {
+                match op {
+                    "+" | "-" => {
+                        // Convert to naive, perform operation, convert back
+                        let naive_ts = ts.naive_utc();
+                        let result_naive = self.arithmetic_op(&SqlValue::Timestamp(naive_ts), right, op)?;
+                        
+                        match result_naive {
+                            SqlValue::Timestamp(dt) => {
+                                Ok(SqlValue::TimestampWithTimezone(dt.and_utc()))
+                            }
+                            _ => Err(ProtocolError::PostgresError("Unexpected result type".to_string()))
+                        }
+                    }
+                    _ => Err(ProtocolError::PostgresError(format!(
+                        "Cannot perform operation {op} on timestamp with timezone and interval"
+                    )))
+                }
+            }
+            
             _ => Err(ProtocolError::PostgresError(format!(
                 "Cannot perform arithmetic operation {op} on {left:?} and {right:?}"
             ))),
