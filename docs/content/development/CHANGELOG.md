@@ -11,7 +11,7 @@ All notable changes to the Orbit-RS project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-12-01
+## [Unreleased] - 2025-12-02
 
 ### Fixed
 
@@ -27,6 +27,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **ML Protocol Integration Documentation & Examples** (2025-12-02): Unified ML capabilities across all protocols
+  - **Protocol Integration Guide** (`docs/content/ml/ML_PROTOCOL_INTEGRATION.md`)
+    - Redis (RESP) ML commands: ML.CREATE, ML.TRAIN, ML.PREDICT, ML.EMBED, etc.
+    - PostgreSQL ML SQL functions: ML_TRAIN_MODEL, ML_PREDICT, ML_KMEANS, etc.
+    - MySQL ML functions via stored procedures
+    - CQL (Cassandra) ML via User-Defined Functions
+    - HTTP REST API endpoints: /ml/models, /ml/predict, /ml/industry/*
+    - gRPC MLService for high-performance operations
+  - **Example Code** (`orbit-examples/ml-protocol-examples/`)
+    - Python examples: postgresql_ml.py, redis_ml.py, rest_ml.py
+    - JavaScript examples: redis_ml.js
+    - SQL examples: ml_training.sql, ml_inference.sql, ml_vectors.sql
+    - README with quick start guides
+  - **BDD Test Scenarios** (`tests/bdd/features/ml_protocol_integration.feature`)
+    - 40+ Gherkin scenarios covering all protocols
+    - Model management (create, train, delete, list)
+    - Inference (single, batch, streaming)
+    - Vector operations with ML embeddings
+    - Industry model scenarios (healthcare, finance, retail)
+    - Cross-protocol consistency tests
+    - Error handling scenarios
+    - Performance test scenarios
+  - **Industry Model Coverage**: 28 verticals, 140+ specialized models
+    - Healthcare: disease_risk, readmission, drug_interaction
+    - Finance: fraud_detection, credit_risk, aml
+    - Retail: demand_forecast, price_optimization, recommendation
+    - And more: Adtech, Defense, Logistics, IoT, etc.
+
+- **pgvector PostgreSQL Extension Compatibility** (2025-12-02): Full pgvector support for vector similarity search
+  - **Vector Index Implementation** (`orbit/server/src/protocols/vector_index.rs`)
+    - HNSW (Hierarchical Navigable Small World) index implementation
+    - IVFFlat (Inverted File with Flat quantization) index implementation
+    - Configurable index parameters (m, ef_construction, lists)
+    - Support for all pgvector distance operators: `<->` (L2), `<=>` (Cosine), `<#>` (Inner Product)
+  - **pgvector SQL Query Engine** (`orbit/server/src/protocols/postgres_wire/vector_engine.rs`)
+    - CREATE EXTENSION vector support (including IF NOT EXISTS)
+    - CREATE TABLE with VECTOR(dim), HALFVEC(dim) column types
+    - Auto-dimension detection for unspecified VECTOR columns
+    - Vector literal parsing: `'[1.0, 2.0, 3.0]'` format
+    - Dimension validation and mismatch error handling
+    - Support for common embedding dimensions (384, 1536, 3072)
+  - **BDD Test Scenarios** (`tests/bdd/features/pgvector_compatibility.feature`)
+    - 30+ Gherkin scenarios covering full pgvector workflow
+    - Extension management, table creation, vector insertion
+    - Index creation (HNSW/IVFFlat with operator classes)
+    - Similarity search operations with distance operators
+    - RAG (Retrieval Augmented Generation) workflow
+    - Error handling and dimension validation scenarios
+  - **Unit Tests**: 20 comprehensive pgvector tests
+    - Extension creation, table creation, vector operations
+    - Index creation (HNSW with cosine/L2, IVFFlat)
+    - Similarity search (L2, cosine, inner product)
+    - Workflow tests for OpenAI, Sentence-Transformers embedding dimensions
+
+- **Protocol Compatibility Test Suite** (2025-12-02): Comprehensive multi-protocol compatibility testing
+  - **orbit-compatibility/** directory with tests for all protocols:
+    - PostgreSQL: pg18_check.py, pgvector_check.py, timescale_check.py
+    - Redis: compatibility_check.py
+    - MySQL: compatibility_check.py
+    - CQL (Cassandra): compatibility_check.py
+    - Neo4j/Cypher: compatibility_check.py
+    - AQL (ArangoDB): compatibility_check.py
+    - MongoDB: compatibility_check.py
+    - OrbitQL: compatibility_check.py
+  - **Unified Test Runner** (`orbit-compatibility/run_tests.py`)
+    - Run all protocol tests with single command
+    - Protocol selection via command-line arguments
+    - Clear pass/fail reporting per protocol
+
+### Fixed
+
+- **pgvector Test Deadlock** (2025-12-02): Fixed RwLock deadlock in auto_dimension_detection test
+  - Wrapped tables.read().await lock in block scope to release before subsequent write operations
+  - All 20 pgvector tests now pass
+
+### Added (Previous)
 - **ML Protocol Integration Documentation & Examples** (2025-12-02): Comprehensive guide for using ML capabilities across all protocols
   - **Documentation** (`docs/content/ml/ML_PROTOCOL_INTEGRATION.md`)
     - PostgreSQL ML SQL functions: `ML_TRAIN_MODEL`, `ML_PREDICT`, `ML_KMEANS`, `ML_EMBED_TEXT`, `ML_CORRELATION`

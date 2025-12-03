@@ -5,6 +5,7 @@ This directory contains comprehensive SQL examples demonstrating machine learnin
 ## Overview
 
 These examples showcase Orbit-RS's AI-native features including:
+
 - **Vector Search** - Similarity search with embeddings for recommendations, fraud detection, and pattern matching
 - **Time Series Analysis** - Real-time monitoring, forecasting, and anomaly detection
 - **Spatial Functions** - Geographic queries and distance calculations
@@ -15,6 +16,7 @@ These examples showcase Orbit-RS's AI-native features including:
 ### 1. Healthcare (`01_healthcare_ml.sql`)
 
 **Use Cases:**
+
 - Patient risk stratification and prediction
 - Medical image similarity search with CNN embeddings
 - Real-time vital signs monitoring with time series
@@ -23,12 +25,14 @@ These examples showcase Orbit-RS's AI-native features including:
 - Hospital readmission risk prediction
 
 **Key Features:**
+
 - Vector embeddings for medical images (512-dimensional)
 - JSONB for flexible vital signs storage
 - Time series for continuous patient monitoring
 - ML-based risk scoring functions
 
 **Example Queries:**
+
 ```sql
 -- Find similar medical images
 SELECT image_id, diagnosis, similarity_score
@@ -46,6 +50,7 @@ FROM patients;
 ### 2. Finance & Banking (`02_finance_ml.sql`)
 
 **Use Cases:**
+
 - Real-time fraud detection with ML scoring
 - Credit scoring and risk assessment
 - Algorithmic trading with time series analysis
@@ -54,6 +59,7 @@ FROM patients;
 - Anti-money laundering (AML) pattern detection
 
 **Key Features:**
+
 - Transaction fraud scoring with anomaly detection
 - Credit profile embeddings (128-dimensional)
 - Stock price time series with moving averages
@@ -61,6 +67,7 @@ FROM patients;
 - AML structuring and geographic anomaly detection
 
 **Example Queries:**
+
 ```sql
 -- Detect fraudulent transactions
 SELECT transaction_id, amount, merchant_name, fraud_score
@@ -80,6 +87,7 @@ LIMIT 5;
 ### 3. Retail & E-Commerce (`03_retail_ecommerce_ml.sql`)
 
 **Use Cases:**
+
 - Product recommendations using vector similarity
 - Customer segmentation with behavioral embeddings
 - Demand forecasting with time series
@@ -89,6 +97,7 @@ LIMIT 5;
 - Product review sentiment analysis
 
 **Key Features:**
+
 - Product embeddings (256-dimensional) for recommendations
 - Customer behavioral embeddings (128-dimensional)
 - Time series sales data with trend detection
@@ -96,6 +105,7 @@ LIMIT 5;
 - Collaborative filtering for recommendations
 
 **Example Queries:**
+
 ```sql
 -- Recommend similar products
 SELECT product_id, product_name, price, similarity_score
@@ -115,6 +125,7 @@ ORDER BY abandonment_probability DESC;
 ### 4. Manufacturing & IoT (`04_manufacturing_iot_ml.sql`)
 
 **Use Cases:**
+
 - Predictive maintenance with sensor data
 - Quality control with defect detection
 - Supply chain optimization
@@ -123,6 +134,7 @@ ORDER BY abandonment_probability DESC;
 - Sensor-quality correlation analysis
 
 **Key Features:**
+
 - IoT sensor time series (temperature, vibration, pressure)
 - Visual inspection embeddings (512-dimensional)
 - Anomaly detection with 3-sigma rule
@@ -130,6 +142,7 @@ ORDER BY abandonment_probability DESC;
 - ML-based supplier selection
 
 **Example Queries:**
+
 ```sql
 -- Predict equipment failure
 SELECT equipment_name, failure_probability, maintenance_priority
@@ -149,6 +162,7 @@ LIMIT 5;
 ### 5. Telecommunications (`05_telecommunications_ml.sql`)
 
 **Use Cases:**
+
 - Network performance monitoring and optimization
 - Customer churn prediction with retention strategies
 - Fraud detection in call detail records (CDR)
@@ -157,6 +171,7 @@ LIMIT 5;
 - Data usage prediction and plan recommendations
 
 **Key Features:**
+
 - Network metrics time series (latency, throughput, packet loss)
 - Call detail record (CDR) fraud scoring
 - Equipment health monitoring
@@ -164,6 +179,7 @@ LIMIT 5;
 - Usage pattern analysis
 
 **Example Queries:**
+
 ```sql
 -- Detect network anomalies
 SELECT tower_name, latency_ms, packet_loss_pct, alert_status
@@ -182,6 +198,7 @@ ORDER BY churn_probability DESC;
 ### 6. Logistics & Transportation (`06_logistics_transportation_ml.sql`)
 
 **Use Cases:**
+
 - Route optimization with delivery time prediction
 - Fleet management with vehicle tracking
 - Demand forecasting using time series
@@ -190,6 +207,7 @@ ORDER BY churn_probability DESC;
 - Delivery cost optimization
 
 **Key Features:**
+
 - Spatial functions (Haversine distance calculation)
 - Location embeddings (64-dimensional)
 - Vehicle telemetry time series
@@ -197,6 +215,7 @@ ORDER BY churn_probability DESC;
 - ML-based delivery time prediction
 
 **Example Queries:**
+
 ```sql
 -- Predict delivery time
 SELECT order_id, destination, predict_delivery_time(distance_km, traffic_level, weight_kg, hour)
@@ -216,11 +235,13 @@ ORDER BY picking_frequency DESC;
 ### Prerequisites
 
 1. **Start Orbit-RS Server:**
+
 ```bash
 cargo run --bin orbit-server
 ```
 
 2. **Connect via PostgreSQL Protocol:**
+
 ```bash
 psql -h localhost -p 5432 -U orbit -d postgres
 ```
@@ -282,6 +303,7 @@ for row in results:
 ### 1. Vector Similarity Search
 
 All examples use vector embeddings for similarity search:
+
 - **Cosine Similarity:** `embedding1 <=> embedding2`
 - **Use Cases:** Product recommendations, fraud detection, similar patient cases
 
@@ -296,6 +318,7 @@ LIMIT 10;
 ### 2. Time Series Analysis
 
 Real-time monitoring and forecasting:
+
 - **Moving Averages:** Window functions for trend detection
 - **Anomaly Detection:** Statistical methods (3-sigma rule)
 - **Forecasting:** Historical pattern analysis
@@ -310,6 +333,7 @@ FROM sensor_readings;
 ### 3. Predictive Scoring
 
 ML-based scoring functions:
+
 - **Risk Scores:** Patient risk, credit risk, fraud risk
 - **Churn Probability:** Customer retention prediction
 - **Failure Probability:** Equipment maintenance prediction
@@ -324,6 +348,7 @@ $$ LANGUAGE plpgsql;
 ### 4. Spatial Analysis
 
 Geographic queries and distance calculations:
+
 - **Haversine Distance:** Calculate distance between coordinates
 - **Nearest Neighbor:** Find closest locations
 - **Route Optimization:** Delivery route planning
@@ -405,4 +430,150 @@ These examples are part of the Orbit-RS project and follow the same licensing te
 
 ---
 
-**Orbit-RS: One Server, All Protocols, AI-Native Intelligence**
+## Orbit ML Protocol Examples
+
+This directory contains examples demonstrating how to use Orbit's ML capabilities across different protocols.
+
+## Directory Structure
+
+```text
+ml-protocol-examples/
+├── rust/           # Rust examples using orbit-client
+├── python/         # Python examples (psycopg2, redis-py, requests)
+├── javascript/     # JavaScript/Node.js examples
+└── sql/            # Pure SQL examples for PostgreSQL protocol
+```
+
+## Setup Requirements
+
+1. **Orbit Server Running**: Start the Orbit server with ML enabled:
+
+   ```bash
+   cargo run --bin orbit-server -- --config config/orbit-server.toml
+   ```
+
+2. **Protocol-specific clients**:
+   - **Python**: `pip install psycopg2-binary redis requests`
+   - **JavaScript**: `npm install pg redis axios`
+   - **Rust**: Add `orbit-client` to your Cargo.toml
+
+## Quick Start
+
+### Python - PostgreSQL ML Functions
+
+```python
+import psycopg2
+
+conn = psycopg2.connect(host="localhost", port=5432, database="orbit")
+cur = conn.cursor()
+
+# Train a model
+cur.execute("""
+    SELECT ML_TRAIN_MODEL(
+        'churn_model',
+        'random_forest',
+        ARRAY[tenure, monthly_charges],
+        churned
+    ) FROM customers
+""")
+
+# Run predictions
+cur.execute("""
+    SELECT customer_id,
+           ML_PREDICT('churn_model', ARRAY[tenure, monthly_charges]) as churn_risk
+    FROM customers
+""")
+```
+
+### Python - Redis ML Commands
+
+```python
+import redis
+
+r = redis.Redis(host='localhost', port=6379)
+
+# Create and train model
+r.execute_command('ML.CREATE', 'fraud_model', 'xgboost',
+                  'FEATURES', 'amount,merchant,hour', 'LABEL', 'is_fraud')
+r.execute_command('ML.TRAIN', 'fraud_model', 'transactions:train')
+
+# Predict
+result = r.execute_command('ML.PREDICT', 'fraud_model', '[100.50, "electronics", 14]')
+```
+
+### SQL - Vector Similarity with ML
+
+```sql
+-- Create documents table with embeddings
+CREATE TABLE documents (
+    id SERIAL PRIMARY KEY,
+    content TEXT,
+    embedding vector(384)
+);
+
+-- Generate embeddings using ML
+INSERT INTO documents (content, embedding)
+SELECT content, ML_EMBED_TEXT(content, 'sentence-transformers')
+FROM raw_documents;
+
+-- Semantic search
+SELECT content,
+       embedding <=> ML_EMBED_TEXT('machine learning tutorial', 'sentence-transformers') AS distance
+FROM documents
+ORDER BY distance
+LIMIT 10;
+```
+
+## Examples by Protocol
+
+### PostgreSQL (Port 5432)
+
+- `sql/ml_training.sql` - Model training examples
+- `sql/ml_inference.sql` - Prediction and inference
+- `sql/ml_vectors.sql` - Vector operations with ML
+- `python/postgresql_ml.py` - Python client example
+
+### Redis (Port 6379)
+
+- `python/redis_ml.py` - Redis ML commands
+- `javascript/redis_ml.js` - Node.js Redis example
+
+### HTTP REST (Port 8080)
+
+- `python/rest_ml.py` - REST API examples
+- `javascript/rest_ml.js` - JavaScript fetch examples
+
+### gRPC (Port 50051)
+
+- `rust/grpc_ml.rs` - Rust gRPC client
+- `python/grpc_ml.py` - Python gRPC example
+
+## Industry Models
+
+Examples for industry-specific models:
+
+- `python/healthcare_ml.py` - Healthcare risk prediction
+- `python/finance_ml.py` - Fraud detection, credit risk
+- `python/retail_ml.py` - Demand forecasting, recommendations
+
+## Running Examples
+
+```bash
+# Python examples
+cd python
+python postgresql_ml.py
+
+# JavaScript examples
+cd javascript
+node redis_ml.js
+
+# SQL examples (requires psql)
+cd sql
+psql -h localhost -p 5432 -d orbit -f ml_training.sql
+```
+
+## See Also
+
+- [ML Protocol Integration Guide](../../docs/content/ml/ML_PROTOCOL_INTEGRATION.md)
+- [ML SQL Functions Design](../../docs/content/ml/ML_SQL_FUNCTIONS_DESIGN.md)
+- [Industry Models Plan](../../docs/content/ml/INDUSTRY_MODELS_PLAN.md)

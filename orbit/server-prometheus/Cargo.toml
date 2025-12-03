@@ -11,7 +11,7 @@ orbit-util = { path = "../util" }
 orbit-shared = { path = "../shared" }
 orbit-server = { path = "../server" }
 metrics = "0.23"
-metrics-exporter-prometheus = "0.15"
+metrics-exporter-prometheus = "0.18"
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
 anyhow.workspace = true
