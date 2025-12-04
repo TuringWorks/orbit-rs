@@ -6,7 +6,7 @@ use super::expressions::ExpressionParser;
 use super::{utilities, ParseError, ParseResult, SqlParser};
 use crate::protocols::postgres_wire::sql::{
     ast::{
-        Assignment, AssignmentTarget, ColumnRef, ConflictAction, ConflictTarget, DeleteStatement,
+        Assignment, AssignmentTarget, ConflictAction, ConflictTarget, DeleteStatement,
         DistinctClause, Expression, FromClause, InsertSource, InsertStatement, LimitClause,
         NullsOrder, OnConflictClause, OrderByItem, SelectItem, SelectStatement, SortDirection,
         Statement, TableAlias, TraverseClause, TraverseDirection, UpdateStatement, JsonTable,

@@ -15,7 +15,7 @@ use crate::protocols::postgres_wire::sql::{
         FunctionParameter, FunctionVolatility, ParameterMode, FunctionName,
     },
     lexer::Token,
-    types::{SqlType, SqlValue},
+    types::SqlValue,
 };
 
 /// Parse CREATE DATABASE statement

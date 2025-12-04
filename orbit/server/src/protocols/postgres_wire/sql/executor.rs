@@ -18,7 +18,7 @@ use crate::protocols::postgres_wire::sql::{
         JoinCondition, JoinType, Privilege, ReleaseSavepointStatement, RevokeStatement,
         RollbackStatement, SavepointStatement, SelectItem, SelectStatement, SetStatement,
         ShowStatement, ShowVariable, Statement, TableConstraint, TableName, UpdateStatement,
-        UseStatement, MergeStatement, MergeAction, MergeInsertValues, CreateFunctionStatement,
+        UseStatement, MergeStatement, CreateFunctionStatement,
     },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator},
     parser::SqlParser,
@@ -1258,7 +1258,7 @@ impl SqlExecutor {
         Ok(ExecutionResult::Delete { count })
     }
 
-    async fn execute_merge(&self, stmt: MergeStatement) -> ProtocolResult<ExecutionResult> {
+    async fn execute_merge(&self, _stmt: MergeStatement) -> ProtocolResult<ExecutionResult> {
         // Placeholder for MERGE execution
         // For the test case: MERGE INTO test_merge t USING (VALUES (1, 'new')) AS s(id, val) ON t.id = s.id WHEN NOT MATCHED THEN INSERT VALUES (s.id, s.val) RETURNING NEW.val;
         
@@ -1810,7 +1810,7 @@ impl SqlExecutor {
     async fn execute_json_table(
         &self,
         json_table: &crate::protocols::postgres_wire::sql::ast::JsonTable,
-        where_clause: &Option<Expression>,
+        _where_clause: &Option<Expression>,
         columns: &[String],
     ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
         let mut rows = Vec::new();
