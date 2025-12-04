@@ -8,10 +8,10 @@ use crate::protocols::postgres_wire::sql::{
     ast::{
         Assignment, AssignmentTarget, ConflictAction, ConflictTarget, DeleteStatement,
         DistinctClause, Expression, FromClause, InsertSource, InsertStatement, LimitClause,
-        NullsOrder, OnConflictClause, OrderByItem, SelectItem, SelectStatement, SortDirection,
-        Statement, TableAlias, TraverseClause, TraverseDirection, UpdateStatement, JsonTable,
-        JsonTableColumn, MergeStatement, MergeWhenClause, MergeAction, MergeUpdate, MergeInsert,
-        MergeInsertValues,
+        NullsOrder, OnConflictClause, OrderByItem, SelectItem, SelectStatement, SetOperation,
+        SetOperator, SortDirection, Statement, TableAlias, TraverseClause, TraverseDirection,
+        UpdateStatement, JsonTable, JsonTableColumn, MergeStatement, MergeWhenClause, MergeAction,
+        MergeUpdate, MergeInsert, MergeInsertValues,
     },
     lexer::Token,
     types::SqlValue,
@@ -226,7 +226,14 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
         None
     };
 
-    // Create SELECT statement with ORDER BY, LIMIT, and TRAVERSE
+    // Check for set operations (UNION, INTERSECT, EXCEPT)
+    let set_operation = if parser.matches(&[Token::Union, Token::Intersect, Token::Except]) {
+        Some(parse_set_operation(parser)?)
+    } else {
+        None
+    };
+
+    // Create SELECT statement with ORDER BY, LIMIT, TRAVERSE, and set operation
     Ok(Statement::Select(Box::new(SelectStatement {
         with: None,
         select_list,
@@ -240,6 +247,7 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
         offset,
         for_clause: None,
         traverse,
+        set_operation,
     })))
 }
 
@@ -381,6 +389,270 @@ fn parse_traverse_clause(parser: &mut SqlParser) -> ParseResult<TraverseClause> 
     })
 }
 
+/// Parse set operation (UNION, INTERSECT, EXCEPT) and the right-hand SELECT
+fn parse_set_operation(parser: &mut SqlParser) -> ParseResult<SetOperation> {
+    // Determine the operator
+    let operator = match &parser.current_token {
+        Some(Token::Union) => {
+            parser.advance()?;
+            // Check for ALL
+            if parser.matches(&[Token::All]) {
+                parser.advance()?;
+                SetOperator::UnionAll
+            } else if parser.matches(&[Token::Distinct]) {
+                parser.advance()?;
+                SetOperator::Union
+            } else {
+                SetOperator::Union
+            }
+        }
+        Some(Token::Intersect) => {
+            parser.advance()?;
+            // Check for ALL
+            if parser.matches(&[Token::All]) {
+                parser.advance()?;
+                SetOperator::IntersectAll
+            } else if parser.matches(&[Token::Distinct]) {
+                parser.advance()?;
+                SetOperator::Intersect
+            } else {
+                SetOperator::Intersect
+            }
+        }
+        Some(Token::Except) => {
+            parser.advance()?;
+            // Check for ALL
+            if parser.matches(&[Token::All]) {
+                parser.advance()?;
+                SetOperator::ExceptAll
+            } else if parser.matches(&[Token::Distinct]) {
+                parser.advance()?;
+                SetOperator::Except
+            } else {
+                SetOperator::Except
+            }
+        }
+        _ => {
+            return Err(ParseError {
+                message: "Expected UNION, INTERSECT, or EXCEPT".to_string(),
+                position: parser.position,
+                expected: vec!["UNION".to_string(), "INTERSECT".to_string(), "EXCEPT".to_string()],
+                found: parser.current_token.clone(),
+            });
+        }
+    };
+
+    // Now parse the right-hand SELECT statement
+    // We need to parse a SELECT statement recursively
+    parser.expect(Token::Select)?;
+
+    // Parse the inner SELECT (without calling parse_select to avoid returning Statement)
+    let right_stmt = parse_select_inner(parser)?;
+
+    Ok(SetOperation {
+        operator,
+        right: Box::new(right_stmt),
+    })
+}
+
+/// Parse the inner SELECT statement (returns SelectStatement directly, not Statement)
+fn parse_select_inner(parser: &mut SqlParser) -> ParseResult<SelectStatement> {
+    // Parse DISTINCT clause
+    let distinct = if parser.matches(&[Token::Distinct]) {
+        parser.advance()?;
+        Some(DistinctClause::Distinct)
+    } else {
+        None
+    };
+
+    // Parse select list (columns)
+    let mut select_list = Vec::new();
+
+    loop {
+        let item = if parser.matches(&[Token::Multiply]) {
+            parser.advance()?;
+            SelectItem::Wildcard
+        } else {
+            // Check for table.* syntax
+            let is_qualified_wildcard = if let Some(Token::Identifier(_)) = &parser.current_token {
+                if let Some(Token::Dot) = parser.tokens.get(parser.position + 1) {
+                    matches!(parser.tokens.get(parser.position + 2), Some(Token::Multiply))
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            if is_qualified_wildcard {
+                if let Some(Token::Identifier(name)) = &parser.current_token {
+                    let qualifier = name.clone();
+                    parser.advance()?; // Identifier
+                    parser.advance()?; // Dot
+                    parser.advance()?; // Multiply
+                    SelectItem::QualifiedWildcard { qualifier }
+                } else {
+                    unreachable!()
+                }
+            } else {
+                let expr = parse_expression_with_parser(parser)?;
+
+                // Check for alias
+                let alias = if parser.matches(&[Token::As]) {
+                    parser.advance()?;
+                    if let Some(Token::Identifier(alias_name)) = &parser.current_token {
+                        let alias = alias_name.clone();
+                        parser.advance()?;
+                        Some(alias)
+                    } else {
+                        None
+                    }
+                } else if let Some(Token::Identifier(alias_name)) = &parser.current_token {
+                    if !parser.matches(&[
+                        Token::From,
+                        Token::Where,
+                        Token::Group,
+                        Token::Order,
+                        Token::Limit,
+                        Token::Comma,
+                        Token::Union,
+                        Token::Intersect,
+                        Token::Except,
+                    ]) {
+                        let alias = alias_name.clone();
+                        parser.advance()?;
+                        Some(alias)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                SelectItem::Expression { expr, alias }
+            }
+        };
+
+        select_list.push(item);
+
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    // Parse FROM clause
+    let from_clause = if parser.matches(&[Token::From]) {
+        parser.advance()?;
+        Some(parse_from_clause(parser)?)
+    } else {
+        None
+    };
+
+    // Parse WHERE clause
+    let where_clause = if parser.matches(&[Token::Where]) {
+        parser.advance()?;
+        Some(parse_where_expression(parser)?)
+    } else {
+        None
+    };
+
+    // Parse GROUP BY clause
+    let group_by = if parser.matches(&[Token::Group]) {
+        parser.advance()?;
+        parser.expect(Token::By)?;
+
+        let mut group_exprs = Vec::new();
+        loop {
+            group_exprs.push(parse_expression_with_parser(parser)?);
+
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+
+        Some(group_exprs)
+    } else {
+        None
+    };
+
+    // Parse HAVING clause
+    let having = if parser.matches(&[Token::Having]) {
+        parser.advance()?;
+        Some(parse_expression_with_parser(parser)?)
+    } else {
+        None
+    };
+
+    // Parse ORDER BY clause
+    let order_by = if parser.matches(&[Token::Order]) {
+        parser.advance()?;
+        parser.expect(Token::By)?;
+        Some(parse_order_by_clause(parser)?)
+    } else {
+        None
+    };
+
+    // Parse LIMIT clause
+    let (limit, offset) = if parser.matches(&[Token::Limit]) {
+        parser.advance()?;
+        let limit_expr = parse_expression_with_parser(parser)?;
+
+        let offset = if parser.matches(&[Token::Offset]) {
+            parser.advance()?;
+            let offset_expr = parse_expression_with_parser(parser)?;
+            if let Expression::Literal(SqlValue::Integer(n)) = offset_expr {
+                Some(n as u64)
+            } else {
+                return Err(ParseError {
+                    message: "OFFSET must be a non-negative integer".to_string(),
+                    position: parser.position,
+                    expected: vec!["integer".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            }
+        } else {
+            None
+        };
+
+        (
+            Some(LimitClause {
+                count: Some(limit_expr),
+                with_ties: false,
+            }),
+            offset,
+        )
+    } else {
+        (None, None)
+    };
+
+    // Check for chained set operations
+    let set_operation = if parser.matches(&[Token::Union, Token::Intersect, Token::Except]) {
+        Some(parse_set_operation(parser)?)
+    } else {
+        None
+    };
+
+    Ok(SelectStatement {
+        with: None,
+        select_list,
+        distinct,
+        from_clause,
+        where_clause,
+        group_by,
+        having,
+        order_by,
+        limit,
+        offset,
+        for_clause: None,
+        traverse: None,
+        set_operation,
+    })
+}
+
 /// Parse FROM clause
 fn parse_from_clause(parser: &mut SqlParser) -> ParseResult<FromClause> {
     // Check for JSON_TABLE
@@ -449,15 +721,147 @@ fn parse_from_clause(parser: &mut SqlParser) -> ParseResult<FromClause> {
         }
     }
 
-    // For now, just parse simple table references
+    // Parse the first table reference
     let table_name = utilities::parse_table_name(parser)?;
 
     // Check for table alias
     let alias = parse_alias_clause(parser)?;
 
-    Ok(FromClause::Table {
+    let mut left = FromClause::Table {
         name: table_name,
         alias,
+    };
+
+    // Check for JOINs and parse them recursively
+    while is_join_keyword(parser) {
+        left = parse_join(parser, left)?;
+    }
+
+    Ok(left)
+}
+
+/// Check if current token is a JOIN keyword
+fn is_join_keyword(parser: &SqlParser) -> bool {
+    matches!(
+        &parser.current_token,
+        Some(Token::Join)
+            | Some(Token::Inner)
+            | Some(Token::Left)
+            | Some(Token::Right)
+            | Some(Token::Full)
+            | Some(Token::Cross)
+    )
+}
+
+/// Parse a JOIN clause
+fn parse_join(parser: &mut SqlParser, left: FromClause) -> ParseResult<FromClause> {
+    use crate::protocols::postgres_wire::sql::ast::{JoinCondition, JoinType};
+
+    // Determine join type
+    let join_type = match &parser.current_token {
+        Some(Token::Join) => {
+            parser.advance()?;
+            JoinType::Inner
+        }
+        Some(Token::Inner) => {
+            parser.advance()?;
+            parser.expect(Token::Join)?;
+            JoinType::Inner
+        }
+        Some(Token::Left) => {
+            parser.advance()?;
+            // OUTER is optional
+            if parser.matches(&[Token::Outer]) {
+                parser.advance()?;
+            }
+            parser.expect(Token::Join)?;
+            JoinType::LeftOuter
+        }
+        Some(Token::Right) => {
+            parser.advance()?;
+            // OUTER is optional
+            if parser.matches(&[Token::Outer]) {
+                parser.advance()?;
+            }
+            parser.expect(Token::Join)?;
+            JoinType::RightOuter
+        }
+        Some(Token::Full) => {
+            parser.advance()?;
+            // OUTER is optional
+            if parser.matches(&[Token::Outer]) {
+                parser.advance()?;
+            }
+            parser.expect(Token::Join)?;
+            JoinType::FullOuter
+        }
+        Some(Token::Cross) => {
+            parser.advance()?;
+            parser.expect(Token::Join)?;
+            JoinType::Cross
+        }
+        _ => {
+            return Err(ParseError {
+                message: "Expected JOIN keyword".to_string(),
+                position: parser.position,
+                expected: vec![
+                    "JOIN".to_string(),
+                    "INNER JOIN".to_string(),
+                    "LEFT JOIN".to_string(),
+                    "RIGHT JOIN".to_string(),
+                    "FULL JOIN".to_string(),
+                    "CROSS JOIN".to_string(),
+                ],
+                found: parser.current_token.clone(),
+            });
+        }
+    };
+
+    // Parse the right table
+    let right_table_name = utilities::parse_table_name(parser)?;
+    let right_alias = parse_alias_clause(parser)?;
+    let right = FromClause::Table {
+        name: right_table_name,
+        alias: right_alias,
+    };
+
+    // Parse join condition (ON or USING)
+    let condition = if join_type == JoinType::Cross {
+        // CROSS JOIN has no condition
+        JoinCondition::Natural // Use Natural as a placeholder for no condition
+    } else if parser.matches(&[Token::On]) {
+        parser.advance()?;
+        let expr = parse_expression_with_parser(parser)?;
+        JoinCondition::On(expr)
+    } else if parser.matches(&[Token::Using]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        let mut columns = Vec::new();
+        loop {
+            if let Some(Token::Identifier(col)) = &parser.current_token {
+                columns.push(col.clone());
+                parser.advance()?;
+            } else {
+                break;
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+        JoinCondition::Using(columns)
+    } else {
+        // Natural join
+        JoinCondition::Natural
+    };
+
+    Ok(FromClause::Join {
+        left: Box::new(left),
+        join_type,
+        right: Box::new(right),
+        condition,
     })
 }
 
@@ -914,7 +1318,55 @@ fn parse_on_conflict_clause(parser: &mut SqlParser) -> ParseResult<OnConflictCla
     // Parse conflict action
     let action = if parser.matches(&[Token::Do]) {
         parser.advance()?;
-        if let Some(Token::Identifier(action_kw)) = &parser.current_token {
+        // Check for NOTHING or UPDATE (can be either keywords or identifiers)
+        if parser.matches(&[Token::Nothing]) {
+            parser.advance()?;
+            ConflictAction::DoNothing
+        } else if parser.matches(&[Token::Update]) {
+            parser.advance()?;
+            parser.expect(Token::Set)?;
+
+            let mut set_clauses = Vec::new();
+            loop {
+                // Get column name (may be identifier or keyword used as name)
+                let column = if let Some(col_name) = parser
+                    .current_token
+                    .as_ref()
+                    .and_then(utilities::token_to_identifier_name)
+                {
+                    col_name
+                } else {
+                    break;
+                };
+                parser.advance()?;
+                parser.expect(Token::Equal)?;
+                let value = utilities::parse_expression(parser)?;
+
+                set_clauses.push(Assignment {
+                    target: AssignmentTarget::Column(column),
+                    value,
+                });
+
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+
+            let where_clause = if parser.matches(&[Token::Where]) {
+                parser.advance()?;
+                Some(parse_where_expression(parser)?)
+            } else {
+                None
+            };
+
+            ConflictAction::DoUpdate {
+                set: set_clauses,
+                where_clause,
+            }
+        } else if let Some(Token::Identifier(action_kw)) = &parser.current_token {
+            // Fallback for identifiers (in case NOTHING/UPDATE aren't keywords in some contexts)
             match action_kw.to_uppercase().as_str() {
                 "NOTHING" => {
                     parser.advance()?;
@@ -925,8 +1377,16 @@ fn parse_on_conflict_clause(parser: &mut SqlParser) -> ParseResult<OnConflictCla
                     parser.expect(Token::Set)?;
 
                     let mut set_clauses = Vec::new();
-                    while let Some(Token::Identifier(col_name)) = &parser.current_token {
-                        let column = col_name.clone();
+                    loop {
+                        let column = if let Some(col_name) = parser
+                            .current_token
+                            .as_ref()
+                            .and_then(utilities::token_to_identifier_name)
+                        {
+                            col_name
+                        } else {
+                            break;
+                        };
                         parser.advance()?;
                         parser.expect(Token::Equal)?;
                         let value = utilities::parse_expression(parser)?;

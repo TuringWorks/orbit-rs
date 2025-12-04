@@ -331,6 +331,8 @@ pub struct SelectStatement {
     pub offset: Option<u64>,
     pub for_clause: Option<ForClause>,
     pub traverse: Option<TraverseClause>,
+    /// Compound query operation (UNION, INTERSECT, EXCEPT)
+    pub set_operation: Option<SetOperation>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -347,6 +349,24 @@ pub enum TraverseDirection {
     Outbound,
     Inbound,
     Any,
+}
+
+/// Set operations for compound SELECT statements (UNION, INTERSECT, EXCEPT)
+#[derive(Debug, Clone, PartialEq)]
+pub enum SetOperator {
+    Union,
+    UnionAll,
+    Intersect,
+    IntersectAll,
+    Except,
+    ExceptAll,
+}
+
+/// A compound SELECT with a set operation
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetOperation {
+    pub operator: SetOperator,
+    pub right: Box<SelectStatement>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

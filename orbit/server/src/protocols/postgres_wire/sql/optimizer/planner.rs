@@ -605,6 +605,7 @@ mod tests {
             offset: None,
             for_clause: None,
             traverse: None,
+            set_operation: None,
         };
 
         let plan = planner.plan_select(select).unwrap();

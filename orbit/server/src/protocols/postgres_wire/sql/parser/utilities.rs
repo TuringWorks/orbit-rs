@@ -654,8 +654,50 @@ fn parse_unary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
                 operand: Box::new(expr),
             })
         }
-        _ => parse_primary_expression(parser),
+        _ => {
+            let expr = parse_primary_expression(parser)?;
+            // Check for postfix operators like :: cast
+            parse_postfix_expression(parser, expr)
+        }
     }
+}
+
+/// Parse postfix expressions (:: type cast, array indexing, etc.)
+fn parse_postfix_expression(
+    parser: &mut SqlParser,
+    mut left: Expression,
+) -> ParseResult<Expression> {
+    loop {
+        match &parser.current_token {
+            // Handle :: type cast (PostgreSQL style)
+            Some(Token::Colon) => {
+                // Check if next token is also a colon (::)
+                if let Some(Token::Colon) = parser.tokens.get(parser.position + 1) {
+                    parser.advance()?; // consume first :
+                    parser.advance()?; // consume second :
+                    let target_type = parse_data_type(parser)?;
+                    left = Expression::Cast {
+                        expr: Box::new(left),
+                        target_type,
+                    };
+                } else {
+                    break;
+                }
+            }
+            // Handle array indexing [n]
+            Some(Token::LeftBracket) => {
+                parser.advance()?;
+                let index = parse_expression(parser)?;
+                parser.expect(Token::RightBracket)?;
+                left = Expression::ArrayIndex {
+                    array: Box::new(left),
+                    index: Box::new(index),
+                };
+            }
+            _ => break,
+        }
+    }
+    Ok(left)
 }
 
 /// Parse primary expressions (literals, identifiers, parenthesized expressions)
@@ -739,13 +781,9 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
             }
 
             // Check for ARRAY literal (ARRAY[...])
-            eprintln!("DEBUG: Checking for ARRAY literal, token = {:?}", token);
             if let Token::Identifier(name) = token {
-                eprintln!("DEBUG: Token is identifier: {}", name);
                 if name.to_uppercase() == "ARRAY" {
-                    eprintln!("DEBUG: Found ARRAY keyword, advancing...");
                     parser.advance()?;
-                    eprintln!("DEBUG: After advance, current_token = {:?}", parser.current_token);
                     parser.expect(Token::LeftBracket)?;
                     
                     let mut elements = Vec::new();

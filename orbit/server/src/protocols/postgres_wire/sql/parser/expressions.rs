@@ -613,6 +613,17 @@ impl ExpressionParser {
             // Handle CAST expressions
             Token::Cast => self.parse_cast_expression(tokens, pos),
 
+            // Handle ANY/ALL/SOME (array comparison functions)
+            Token::Any | Token::All | Token::Some => {
+                let func_name = match &tokens[*pos] {
+                    Token::Any => "ANY".to_string(),
+                    Token::All => "ALL".to_string(),
+                    Token::Some => "SOME".to_string(),
+                    _ => unreachable!(),
+                };
+                self.parse_function_call(tokens, pos, func_name)
+            }
+
             Token::LeftParen => {
                 *pos += 1; // consume '('
                 let expr = self.parse_expression(tokens, pos)?;
@@ -1318,6 +1329,15 @@ impl ExpressionParser {
             ));
         }
 
+        // Parse the base type first
+        let base_type = self.parse_base_sql_type(tokens, pos)?;
+
+        // Check for array suffix []
+        self.check_array_suffix(tokens, pos, base_type)
+    }
+
+    /// Parse the base SQL type (without array suffix)
+    fn parse_base_sql_type(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<SqlType> {
         match &tokens[*pos] {
             Token::Integer => {
                 *pos += 1;
@@ -1459,6 +1479,28 @@ impl ExpressionParser {
                 "Unexpected token in data type: {:?}",
                 tokens[*pos]
             ))),
+        }
+    }
+
+    /// Check for array suffix [] and wrap base type in Array if present
+    fn check_array_suffix(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+        base_type: SqlType,
+    ) -> ProtocolResult<SqlType> {
+        // Check for [] array suffix
+        if *pos + 1 < tokens.len()
+            && matches!(tokens[*pos], Token::LeftBracket)
+            && matches!(tokens[*pos + 1], Token::RightBracket)
+        {
+            *pos += 2; // consume []
+            Ok(SqlType::Array {
+                element_type: Box::new(base_type),
+                dimensions: None,
+            })
+        } else {
+            Ok(base_type)
         }
     }
 }

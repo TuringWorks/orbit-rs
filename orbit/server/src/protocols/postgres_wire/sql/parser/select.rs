@@ -169,6 +169,7 @@ impl SelectParser {
             offset,
             for_clause: None, // TODO: Parse FOR UPDATE/SHARE
             traverse: None,
+            set_operation: None,
         })
     }
 
