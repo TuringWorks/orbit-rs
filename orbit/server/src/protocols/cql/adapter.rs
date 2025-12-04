@@ -19,7 +19,7 @@ use super::types::CqlValue;
 use super::CqlConfig;
 use crate::protocols::common::storage::memory::MemoryTableStorage;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
-use crate::protocols::postgres_wire::sql::types::SqlValue;
+use crate::protocols::postgres_wire::sql::types::{SqlType, SqlValue};
 use crate::protocols::postgres_wire::QueryEngine;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
@@ -167,6 +167,14 @@ impl CqlAdapter {
                 crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Set {
                     variable,
                     value,
+                    transaction_id: None,
+                },
+            ),
+            crate::protocols::postgres_wire::QueryResult::Merge { count, rows, columns } => Ok(
+                crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Merge {
+                    count,
+                    rows,
+                    columns,
                     transaction_id: None,
                 },
             ),
@@ -876,11 +884,12 @@ impl CqlAdapter {
                                 Ok(self.build_rows_result(
                                     stream,
                                     cql_rows,
+                                    columns,
                                     page_size,
                                     paging_state,
                                 ))
                             }
-                            _ => Ok(self.build_rows_result(stream, vec![], None, None)),
+                            _ => Ok(self.build_rows_result(stream, vec![], vec![], None, None)),
                         }
                     }
                     Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
@@ -1254,6 +1263,7 @@ impl CqlAdapter {
         &self,
         stream: i16,
         all_rows: Vec<HashMap<String, SqlValue>>,
+        columns: Vec<String>,
         page_size: Option<i32>,
         paging_state: Option<Bytes>,
     ) -> CqlFrame {
@@ -1290,36 +1300,25 @@ impl CqlAdapter {
             }
         };
 
-        if rows.is_empty() && !has_more_pages {
-            // No rows - return empty result
+        if rows.is_empty() && !has_more_pages && columns.is_empty() {
+            // No rows and no columns - return empty result
             body.put_i32(0x0001); // Global tables spec
             body.put_i32(0); // Column count
             body.put_i32(0); // Row count
             return CqlFrame::response(stream, CqlOpcode::Result, body.freeze());
         }
 
-        // Extract column names from first row (or use empty if no rows but we have metadata from previous page?)
-        // For simplicity, we assume we have at least one row or we can't easily determine columns without schema
-        // In a real implementation, we should get columns from schema, not rows.
-        let column_names: Vec<String> = if !rows.is_empty() {
-            rows[0].keys().cloned().collect()
-        } else if !all_rows.is_empty() {
-            all_rows[0].keys().cloned().collect()
-        } else {
-            Vec::new()
-        };
-
-        let column_count = column_names.len() as i32;
-
         // Metadata flags (0x0001 = global tables spec)
-        let mut flags = 0x0001;
+        // We don't use global table spec because we don't know the table name for sure
+        // So we unset 0x0001 and provide keyspace/table for each column (even if empty)
+        let mut flags = 0x0000;
         if has_more_pages {
             flags |= 0x0002;
         }
         body.put_i32(flags);
 
         // Column count
-        body.put_i32(column_count);
+        body.put_i32(columns.len() as i32);
 
         // Paging state (if has_more_pages)
         if has_more_pages {
@@ -1330,8 +1329,8 @@ impl CqlAdapter {
             body.put(state_bytes);
         }
 
-        // Column metadata (simplified - all as TEXT for now)
-        for col_name in &column_names {
+        // Column metadata
+        for col_name in &columns {
             // Keyspace name (empty string)
             body.put_u16(0);
             // Table name (empty string)
@@ -1339,8 +1338,18 @@ impl CqlAdapter {
             // Column name
             body.put_u16(col_name.len() as u16);
             body.put(col_name.as_bytes());
-            // Column type (0x0003 = VARCHAR/TEXT)
-            body.put_i32(0x0003);
+            
+            // Infer column type from rows
+            let mut cql_type_code = 0x000D; // Default Varchar
+            for row in &rows {
+                if let Some(val) = row.get(col_name) {
+                    if !val.is_null() {
+                        cql_type_code = self.sql_type_to_cql_code(&val.sql_type());
+                        break;
+                    }
+                }
+            }
+            body.put_u16(cql_type_code);
         }
 
         // Row count
@@ -1348,7 +1357,7 @@ impl CqlAdapter {
 
         // Encode rows
         for row in &rows {
-            for col_name in &column_names {
+            for col_name in &columns {
                 if let Some(value) = row.get(col_name) {
                     // Convert SqlValue to bytes
                     let value_bytes = self.sql_value_to_bytes(value);
@@ -1381,8 +1390,25 @@ impl CqlAdapter {
             SqlValue::Boolean(b) => b.to_string().as_bytes().to_vec(),
             SqlValue::DoublePrecision(f) => f.to_string().as_bytes().to_vec(),
             SqlValue::Real(f) => f.to_string().as_bytes().to_vec(),
+            SqlValue::Uuid(u) => u.as_bytes().to_vec(),
             SqlValue::Null => vec![],
             _ => format!("{}", value).as_bytes().to_vec(),
+        }
+    }
+
+    /// Convert SqlType to CQL type code
+    fn sql_type_to_cql_code(&self, t: &SqlType) -> u16 {
+        match t {
+            SqlType::Text | SqlType::Varchar(_) | SqlType::Char(_) => 0x000D, // Varchar
+            SqlType::Integer => 0x0009, // Int
+            SqlType::BigInt => 0x0002, // Bigint
+            SqlType::Boolean => 0x0004, // Boolean
+            SqlType::Real => 0x0008, // Float
+            SqlType::DoublePrecision => 0x0007, // Double
+            SqlType::Timestamp { .. } => 0x000B, // Timestamp
+            SqlType::Uuid => 0x000C, // Uuid
+            SqlType::SmallInt => 0x0013, // Smallint
+            _ => 0x000D, // Default to Varchar
         }
     }
 

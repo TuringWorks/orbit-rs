@@ -458,13 +458,49 @@ impl ExpressionParser {
                     self.parse_function_call(tokens, pos, name.clone())
                 } else {
                     *pos += 1;
-                    // Regular column reference
-                    Ok(Expression::Column(
-                        crate::protocols::postgres_wire::sql::ast::ColumnRef {
-                            table: None,
-                            name: name.clone(),
-                        },
-                    ))
+                    
+                    // Check for Dot (qualified name)
+                    if *pos < tokens.len() && matches!(tokens[*pos], Token::Dot) {
+                        *pos += 1; // consume Dot
+                        // Check for wildcard
+                        if *pos < tokens.len() && matches!(tokens[*pos], Token::Multiply) {
+                             // This is table.*, which is usually handled in SELECT list, but could be an expression?
+                             // Actually Expression::Column doesn't support wildcard.
+                             // But wait, parse_select_list handles QualifiedWildcard separately.
+                             // If we are here, we are parsing an expression.
+                             // Maybe we should just return ColumnRef with name="*"?
+                             // Or maybe we shouldn't handle wildcard here?
+                             // Let's assume for now it's a column.
+                             // But wait, if it IS table.*, parse_select_list checks for it explicitly BEFORE calling parse_expression.
+                             // So we don't need to handle it here?
+                             // Let's check parse_select_list in select.rs.
+                             // It checks: if matches(Dot) && matches(Multiply) -> QualifiedWildcard.
+                             // So we are safe.
+                        }
+
+                        if let Some(Token::Identifier(col_name)) = tokens.get(*pos) {
+                            let col = col_name.clone();
+                            *pos += 1;
+                            Ok(Expression::Column(
+                                crate::protocols::postgres_wire::sql::ast::ColumnRef {
+                                    table: Some(name.clone()),
+                                    name: col,
+                                },
+                            ))
+                        } else {
+                             return Err(crate::protocols::error::ProtocolError::ParseError(
+                                "Expected identifier after dot".to_string(),
+                            ));
+                        }
+                    } else {
+                        // Regular column reference
+                        Ok(Expression::Column(
+                            crate::protocols::postgres_wire::sql::ast::ColumnRef {
+                                table: None,
+                                name: name.clone(),
+                            },
+                        ))
+                    }
                 }
             }
 
@@ -600,13 +636,33 @@ impl ExpressionParser {
                         self.parse_function_call(tokens, pos, name)
                     } else {
                         *pos += 1;
-                        // Regular column reference
-                        Ok(Expression::Column(
-                            crate::protocols::postgres_wire::sql::ast::ColumnRef {
-                                table: None,
-                                name,
-                            },
-                        ))
+                        
+                        // Check for Dot (qualified name)
+                        if *pos < tokens.len() && matches!(tokens[*pos], Token::Dot) {
+                            *pos += 1; // consume Dot
+                            if let Some(Token::Identifier(col_name)) = tokens.get(*pos) {
+                                let col = col_name.clone();
+                                *pos += 1;
+                                Ok(Expression::Column(
+                                    crate::protocols::postgres_wire::sql::ast::ColumnRef {
+                                        table: Some(name),
+                                        name: col,
+                                    },
+                                ))
+                            } else {
+                                 return Err(crate::protocols::error::ProtocolError::ParseError(
+                                    "Expected identifier after dot".to_string(),
+                                ));
+                            }
+                        } else {
+                            // Regular column reference
+                            Ok(Expression::Column(
+                                crate::protocols::postgres_wire::sql::ast::ColumnRef {
+                                    table: None,
+                                    name,
+                                },
+                            ))
+                        }
                     }
                 } else {
                     Err(crate::protocols::error::ProtocolError::ParseError(format!(
@@ -1255,7 +1311,7 @@ impl ExpressionParser {
     }
 
     /// Parse a SQL type for CAST expressions
-    fn parse_sql_type(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<SqlType> {
+    pub fn parse_sql_type(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<SqlType> {
         if *pos >= tokens.len() {
             return Err(crate::protocols::error::ProtocolError::ParseError(
                 "Expected data type".to_string(),

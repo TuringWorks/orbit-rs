@@ -127,6 +127,15 @@ pub enum ExecutionPlan {
         condition: Expression,
         estimated_rows: usize,
     },
+
+    /// JSON_TABLE scan operation
+    JsonTableScan {
+        context_item: Expression,
+        path_expression: Expression,
+        columns: Vec<crate::protocols::postgres_wire::sql::ast::JsonTableColumn>,
+        alias: Option<String>,
+        estimated_rows: usize,
+    },
 }
 
 /// Join type for execution plans
@@ -324,6 +333,15 @@ impl ExecutionPlanner {
                     estimated_rows: 100,
                 })
             }
+            FromClause::JsonTable(json_table) => {
+                Ok(ExecutionPlan::JsonTableScan {
+                    context_item: json_table.context_item,
+                    path_expression: json_table.path_expression,
+                    columns: json_table.columns,
+                    alias: json_table.alias.map(|a| a.name),
+                    estimated_rows: 10, // Default estimate
+                })
+            }
         }
     }
 
@@ -502,7 +520,8 @@ impl ExecutionPlan {
             | ExecutionPlan::Delete { estimated_rows, .. }
             | ExecutionPlan::Values { estimated_rows, .. }
             | ExecutionPlan::Projection { estimated_rows, .. }
-            | ExecutionPlan::Filter { estimated_rows, .. } => *estimated_rows,
+            | ExecutionPlan::Filter { estimated_rows, .. }
+            | ExecutionPlan::JsonTableScan { estimated_rows, .. } => *estimated_rows,
         }
     }
 
@@ -537,6 +556,7 @@ impl ExecutionPlan {
             ExecutionPlan::Values { .. } => "Values".to_string(),
             ExecutionPlan::Projection { .. } => "Projection".to_string(),
             ExecutionPlan::Filter { .. } => "Filter".to_string(),
+            ExecutionPlan::JsonTableScan { .. } => "JSON_TABLE Scan".to_string(),
         }
     }
 }

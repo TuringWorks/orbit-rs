@@ -133,6 +133,46 @@ impl OrbitMcpIntegration {
                 }],
                 row_count: 1,
             }),
+            PgQueryResult::Merge { count, rows, columns } => {
+                // If rows are present, treat as select-like result
+                if !rows.is_empty() {
+                    let mcp_rows: Vec<Row> = rows
+                        .into_iter()
+                        .map(|row| {
+                            let mut mcp_row = Row::new();
+                            for (col_idx, col_name) in columns.iter().enumerate() {
+                                if let Some(Some(value)) = row.get(col_idx) {
+                                    let json_value = self.convert_value_to_json(value);
+                                    mcp_row.insert(col_name.clone(), json_value);
+                                } else {
+                                    mcp_row.insert(col_name.clone(), serde_json::Value::Null);
+                                }
+                            }
+                            mcp_row
+                        })
+                        .collect();
+                    
+                    Ok(McpQueryResult {
+                        columns: columns.clone(),
+                        rows: mcp_rows,
+                        row_count: count,
+                    })
+                } else {
+                    // Otherwise treat as rows affected
+                    Ok(McpQueryResult {
+                        columns: vec!["rows_affected".to_string()],
+                        rows: vec![{
+                            let mut row = Row::new();
+                            row.insert(
+                                "rows_affected".to_string(),
+                                serde_json::Value::Number(count.into()),
+                            );
+                            row
+                        }],
+                        row_count: 1,
+                    })
+                }
+            }
         }
     }
 

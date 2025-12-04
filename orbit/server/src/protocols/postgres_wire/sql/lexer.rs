@@ -39,6 +39,7 @@ pub enum Token {
     Insert,
     Update,
     Delete,
+    Merge,
     From,
     Into,
     Values,
@@ -107,6 +108,15 @@ pub enum Token {
     Chain,
     Release,
     Do,
+    Matched,
+    Nothing,
+    Returning,
+    Procedure,
+    Language,
+    Returns,
+    Out,
+    InOut,
+    Variadic,
 
     // Keywords - Functions and operators
     Case,
@@ -198,6 +208,7 @@ pub enum Token {
     Identifier(String),
     QuotedIdentifier(String),
     StringLiteral(String),
+    DollarQuotedString(String),
     NumericLiteral(String),
     BooleanLiteral(bool),
 
@@ -314,6 +325,7 @@ impl Lexer {
             ("INSERT", Token::Insert),
             ("UPDATE", Token::Update),
             ("DELETE", Token::Delete),
+            ("MERGE", Token::Merge),
             ("FROM", Token::From),
             ("INTO", Token::Into),
             ("VALUES", Token::Values),
@@ -381,6 +393,15 @@ impl Lexer {
             ("CHAIN", Token::Chain),
             ("RELEASE", Token::Release),
             ("DO", Token::Do),
+            ("MATCHED", Token::Matched),
+            ("NOTHING", Token::Nothing),
+            ("RETURNING", Token::Returning),
+            ("PROCEDURE", Token::Procedure),
+            ("LANGUAGE", Token::Language),
+            ("RETURNS", Token::Returns),
+            ("OUT", Token::Out),
+            ("INOUT", Token::InOut),
+            ("VARIADIC", Token::Variadic),
             // Expression Keywords
             ("CASE", Token::Case),
             ("WHEN", Token::When),
@@ -612,6 +633,50 @@ impl Lexer {
         Token::QuotedIdentifier(identifier)
     }
 
+    /// Read a dollar-quoted string ($tag$string$tag$)
+    fn read_dollar_quoted_string(&mut self) -> Token {
+        let mut tag = String::new();
+        self.advance(); // Skip first '$'
+
+        // Read tag
+        while let Some(ch) = self.current_char {
+            if ch == '$' {
+                self.advance();
+                break;
+            }
+            tag.push(ch);
+            self.advance();
+        }
+
+        let mut content = String::new();
+        while let Some(ch) = self.current_char {
+            if ch == '$' {
+                // Check if it matches the closing tag
+                let mut is_closing = true;
+                // Peek ahead to see if we have the tag + '$'
+                for (i, tag_char) in tag.chars().enumerate() {
+                    if self.peek_offset(i + 1) != Some(tag_char) {
+                        is_closing = false;
+                        break;
+                    }
+                }
+                if is_closing && self.peek_offset(tag.len() + 1) == Some('$') {
+                    // Found closing tag
+                    self.advance(); // Skip '$'
+                    for _ in 0..tag.len() {
+                        self.advance(); // Skip tag chars
+                    }
+                    self.advance(); // Skip closing '$'
+                    break;
+                }
+            }
+            content.push(ch);
+            self.advance();
+        }
+
+        Token::DollarQuotedString(content)
+    }
+
     /// Read a numeric literal
     fn read_numeric_literal(&mut self) -> Token {
         let mut number = String::new();
@@ -751,8 +816,18 @@ impl Lexer {
                             return Token::Dot;
                         }
 
-                        // Parameters
-                        '$' => return self.read_parameter(),
+                        // Parameters or Dollar-quoted strings
+                        '$' => {
+                            // Check if it's a dollar-quoted string ($...$)
+                            // It is a dollar quote if the next char is '$' or an identifier char
+                            // But parameters are $<digits>
+                            if let Some(next) = self.peek() {
+                                if next.is_ascii_digit() {
+                                    return self.read_parameter();
+                                }
+                            }
+                            return self.read_dollar_quoted_string();
+                        }
 
                         // Identifiers and keywords
                         c if c.is_alphabetic() || c == '_' => return self.read_identifier(),

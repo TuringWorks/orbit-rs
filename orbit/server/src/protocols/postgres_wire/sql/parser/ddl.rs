@@ -11,10 +11,11 @@ use crate::protocols::postgres_wire::sql::{
         CreateSchemaStatement, CreateTableStatement, CreateViewStatement, DropDatabaseStatement,
         DropExtensionStatement, DropIndexStatement, DropSchemaStatement, DropTableStatement,
         DropViewStatement, IndexColumn, IndexOption, IndexType, NullsOrder, SortDirection,
-        Statement, TableConstraint, TableOption,
+        Statement, TableConstraint, TableOption, CreateFunctionStatement, FunctionLanguage,
+        FunctionParameter, FunctionVolatility, ParameterMode, FunctionName,
     },
     lexer::Token,
-    types::SqlValue,
+    types::{SqlType, SqlValue},
 };
 
 /// Parse CREATE DATABASE statement
@@ -896,6 +897,158 @@ pub fn parse_drop_extension(parser: &mut SqlParser) -> ParseResult<Statement> {
         if_exists,
         names,
         cascade,
+    }))
+}
+
+/// Parse CREATE FUNCTION statement
+pub fn parse_create_function(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Function)?;
+
+    // Parse function name
+    let name = if let Some(func_name) = parser.current_token.as_ref().and_then(utilities::token_to_identifier_name) {
+        parser.advance()?;
+        FunctionName::Simple(func_name)
+    } else {
+        return Err(ParseError {
+            message: "Expected function name".to_string(),
+            position: parser.position,
+            expected: vec!["function name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse parameters
+    parser.expect(Token::LeftParen)?;
+    let mut args = Vec::new();
+    if !parser.matches(&[Token::RightParen]) {
+        loop {
+            // Parse parameter mode (optional)
+            let mode = if parser.matches(&[Token::In]) {
+                parser.advance()?;
+                Some(ParameterMode::In)
+            } else if parser.matches(&[Token::Out]) {
+                parser.advance()?;
+                Some(ParameterMode::Out)
+            } else if parser.matches(&[Token::InOut]) {
+                parser.advance()?;
+                Some(ParameterMode::InOut)
+            } else if parser.matches(&[Token::Variadic]) {
+                parser.advance()?;
+                Some(ParameterMode::Variadic)
+            } else {
+                None
+            };
+
+            // Parse parameter name (optional)
+            let name = if let Some(param_name) = parser.current_token.as_ref().and_then(utilities::token_to_identifier_name) {
+                // Check if it's a type name
+                if utilities::is_type_name(&parser.current_token) {
+                    None
+                } else {
+                    parser.advance()?;
+                    Some(param_name)
+                }
+            } else {
+                None
+            };
+
+            // Parse parameter type
+            let data_type = utilities::parse_data_type(parser)?;
+
+            // Parse default value (optional)
+            let default = if parser.matches(&[Token::Default]) || parser.matches(&[Token::Equal]) {
+                parser.advance()?;
+                Some(utilities::parse_expression(parser)?)
+            } else {
+                None
+            };
+
+            args.push(FunctionParameter {
+                name,
+                data_type,
+                mode,
+                default,
+            });
+
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+    }
+    parser.expect(Token::RightParen)?;
+
+    // Parse RETURNS clause
+    let return_type = if parser.matches(&[Token::Returns]) {
+        parser.advance()?;
+        Some(utilities::parse_data_type(parser)?)
+    } else {
+        None
+    };
+
+    // Parse options (LANGUAGE, AS, etc.)
+    let mut language = None;
+    let mut body = String::new();
+    let mut volatility = None;
+
+    while parser.matches(&[Token::Language, Token::As, Token::Identifier("IMMUTABLE".to_string()), Token::Identifier("STABLE".to_string()), Token::Identifier("VOLATILE".to_string())]) {
+        if parser.matches(&[Token::Language]) {
+            parser.advance()?;
+            if let Some(Token::Identifier(lang)) = &parser.current_token {
+                language = match lang.to_uppercase().as_str() {
+                    "SQL" => Some(FunctionLanguage::Sql),
+                    "PLPGSQL" => Some(FunctionLanguage::PlPgSql),
+                    _ => Some(FunctionLanguage::Other(lang.clone())),
+                };
+                parser.advance()?;
+            }
+        } else if parser.matches(&[Token::As]) {
+            parser.advance()?;
+            // Expect string literal or dollar-quoted string
+            if let Some(Token::StringLiteral(s)) = &parser.current_token {
+                body = s.clone();
+                parser.advance()?;
+            } else if let Some(Token::DollarQuotedString(s)) = &parser.current_token {
+                body = s.clone();
+                parser.advance()?;
+            } else {
+                return Err(ParseError {
+                    message: "Expected function body as string literal".to_string(),
+                    position: parser.position,
+                    expected: vec!["string literal".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            }
+        } else if let Some(Token::Identifier(v)) = &parser.current_token {
+            match v.to_uppercase().as_str() {
+                "IMMUTABLE" => {
+                    volatility = Some(FunctionVolatility::Immutable);
+                    parser.advance()?;
+                }
+                "STABLE" => {
+                    volatility = Some(FunctionVolatility::Stable);
+                    parser.advance()?;
+                }
+                "VOLATILE" => {
+                    volatility = Some(FunctionVolatility::Volatile);
+                    parser.advance()?;
+                }
+                _ => break,
+            }
+        } else {
+            break;
+        }
+    }
+
+    Ok(Statement::CreateFunction(CreateFunctionStatement {
+        or_replace: false, // Set by caller in mod.rs
+        name,
+        args: Some(args),
+        return_type,
+        language,
+        body,
+        volatility,
     }))
 }
 

@@ -425,6 +425,13 @@ impl SelectParser {
         } else if let Token::Identifier(table_name) = tokens.get(*pos).ok_or_else(|| {
             crate::protocols::error::ProtocolError::ParseError("Expected table name".to_string())
         })? {
+            // Check for JSON_TABLE
+            if table_name.to_uppercase() == "JSON_TABLE"
+                && self.matches_at(tokens, *pos + 1, &Token::LeftParen)
+            {
+                return self.parse_json_table(tokens, pos);
+            }
+
             let mut schema = None;
             let mut name = table_name.clone();
             *pos += 1;
@@ -453,6 +460,100 @@ impl SelectParser {
             )
             .into())
         }
+    }
+
+    fn parse_json_table(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<FromClause> {
+        *pos += 1; // consume JSON_TABLE
+        self.expect_token(tokens, pos, &Token::LeftParen)?;
+
+        // Parse context item (JSON document)
+        let context_item = self.expression_parser.parse_expression(tokens, pos)?;
+        self.expect_token(tokens, pos, &Token::Comma)?;
+
+        // Parse path expression
+        let path_expression = self.expression_parser.parse_expression(tokens, pos)?;
+
+        // Parse COLUMNS clause
+        // Expected syntax: COLUMNS ( name type [PATH path] ... )
+        // Note: The test query has 'COLUMNS' directly after path expression without comma
+        // SELECT ... json_table(..., '$[*]' COLUMNS ...)
+        
+        // Check for optional comma before COLUMNS (standard SQL might require it, but test query doesn't seem to use it?)
+        // Actually standard SQL is: JSON_TABLE(context, path COLUMNS ...)
+        // But let's handle optional comma just in case
+        if self.matches_at(tokens, *pos, &Token::Comma) {
+            *pos += 1;
+        }
+
+        let mut columns = Vec::new();
+        if let Token::Identifier(s) = tokens.get(*pos).ok_or_else(|| {
+            crate::protocols::error::ProtocolError::ParseError("Expected COLUMNS keyword".to_string())
+        })? {
+            if s.to_uppercase() == "COLUMNS" {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::LeftParen)?;
+
+                loop {
+                    // Parse column definition: name type [PATH path]
+                    let name = if let Token::Identifier(n) = tokens.get(*pos).ok_or_else(|| {
+                        crate::protocols::error::ProtocolError::ParseError(
+                            "Expected column name".to_string(),
+                        )
+                    })? {
+                        n.clone()
+                    } else {
+                        break;
+                    };
+                    *pos += 1;
+
+                    let data_type = self.expression_parser.parse_sql_type(tokens, pos)?;
+
+                    let mut path = None;
+                    if let Token::Identifier(p) = tokens.get(*pos).unwrap_or(&Token::Eof) {
+                        if p.to_uppercase() == "PATH" {
+                            *pos += 1;
+                            if let Token::StringLiteral(path_str) = tokens.get(*pos).ok_or_else(|| {
+                                crate::protocols::error::ProtocolError::ParseError(
+                                    "Expected path string literal".to_string(),
+                                )
+                            })? {
+                                path = Some(path_str.clone());
+                                *pos += 1;
+                            }
+                        }
+                    }
+
+                    columns.push(crate::protocols::postgres_wire::sql::ast::JsonTableColumn {
+                        name,
+                        data_type,
+                        path,
+                    });
+
+                    if self.matches_at(tokens, *pos, &Token::Comma) {
+                        *pos += 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+            }
+        }
+
+        self.expect_token(tokens, pos, &Token::RightParen)?;
+
+        let alias = self.parse_table_alias(tokens, pos)?;
+
+        Ok(FromClause::JsonTable(crate::protocols::postgres_wire::sql::ast::JsonTable {
+            context_item,
+            path_expression,
+            columns,
+            alias,
+        }))
     }
 
     fn parse_table_alias(

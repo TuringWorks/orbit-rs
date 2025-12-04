@@ -223,6 +223,11 @@ impl CostBasedOptimizer {
             FromClause::TableFunction { .. } => {
                 // Table functions handled separately
             }
+            FromClause::JsonTable(json_table) => {
+                if let Some(alias) = &json_table.alias {
+                    tables.push(alias.name.clone());
+                }
+            }
         }
     }
 

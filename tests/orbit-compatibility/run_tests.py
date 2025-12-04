@@ -62,9 +62,6 @@ def start_server():
             cwd=root_dir,
             stdout=log_file,
             stderr=subprocess.STDOUT,
-            ["cargo", "run", "--bin", "orbit-server"],
-            stdout=None,
-            stderr=None,
             preexec_fn=os.setsid
         )
         
@@ -170,33 +167,7 @@ def main():
             print("Failed to start server. Aborting tests.")
             sys.exit(1)
 
-    try:
-        selected_protocols = args.protocols
-        if "all" in selected_protocols:
-            selected_protocols = list(PROTOCOLS.keys())
 
-        print(f"Starting Orbit Compatibility Tests for: {', '.join(selected_protocols)}")
-        print("=" * 60)
-
-        results = {}
-        total_scripts = 0
-        passed_scripts = 0
-
-        for protocol in selected_protocols:
-            print(f"\nTesting Protocol: {protocol.upper()}")
-            print("-" * 30)
-            
-            scripts = PROTOCOLS[protocol]
-            protocol_passed = True
-            
-            for script in scripts:
-                total_scripts += 1
-                if run_script(script):
-                    passed_scripts += 1
-                else:
-                    protocol_passed = False
-            
-            results[protocol] = "PASS" if protocol_passed else "FAIL"
 
 
     try:
