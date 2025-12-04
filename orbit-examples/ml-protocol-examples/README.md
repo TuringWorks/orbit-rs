@@ -405,7 +405,7 @@ These examples leverage Orbit-RS's 8 AI-native subsystems:
 
 ## Additional Resources
 
-- **Orbit-RS Documentation:** `docs/PRD.md`
+- **Orbit-RS Documentation:** `specifications/PRD.md`
 - **Architecture Details:** `docs/content/architecture/ORBIT_ARCHITECTURE.md`
 - **Python Client Examples:** `orbit-python-client/examples/`
 - **VS Code Extension:** `orbit-vscode-extension/`

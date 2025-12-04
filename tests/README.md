@@ -192,4 +192,4 @@ When adding new tests:
 - [Graph Commands Documentation](../docs/content/graph_commands.md)
 - [Time Series Commands Documentation](../docs/content/timeseries_commands.md)
 - [Vector Commands Documentation](../docs/content/vector_commands.md)
-- [PRD (Product Requirements Document)](../docs/PRD.md)
+- [PRD (Product Requirements Document)](../specifications/PRD.md)

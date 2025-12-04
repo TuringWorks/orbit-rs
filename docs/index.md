@@ -37,7 +37,7 @@ cargo build --release
 # MySQL: mysql -h localhost -P 3306 -u orbit
 ```
 
-[**Full Quick Start Guide**](quick_start.md) | [**See Project Overview**](project_overview.md) | [**Architecture (PRD)**](PRD.md)
+[**Full Quick Start Guide**](quick_start.md) | [**See Project Overview**](project_overview.md) | [**Architecture (PRD)**](../specifications/PRD.md)
 
 ---
 
@@ -49,7 +49,7 @@ Perfect for developers new to Orbit-RS or distributed databases.
 
 - [**Quick Start Guide**](quick_start.md) - Get running in 30 seconds
 - [**Project Overview**](project_overview.md) - Architecture, features, and use cases
-- [**Product Requirements Document (PRD)**](PRD.md) - Complete architecture and module reference
+- [**Product Requirements Document (PRD)**](../specifications/PRD.md) - Complete architecture and module reference
 - [**Architecture Details**](overview.md) - Understanding Orbit-RS design
 - [**Development Guide**](contributing.md) - Setup and configuration
 
@@ -69,7 +69,7 @@ For system administrators and DevOps engineers.
 
 - [**Kubernetes Deployment**](content/server/KUBERNETES_COMPLETE_DOCUMENTATION.md) - Production Kubernetes setup
 - [**Configuration Reference**](content/deployment/CONFIGURATION.md) - Complete configuration guide
-- [**Storage Architecture**](PRD.md#storage-architecture) - Storage backends and tiering
+- [**Storage Architecture**](../specifications/PRD.md#storage-architecture) - Storage backends and tiering
 - [**Security**](content/server/SECURITY_COMPLETE_DOCUMENTATION.md) - Security policies and practices
 - [**Operations Runbook**](content/operations/OPERATIONS_RUNBOOK.md) - Monitoring and troubleshooting
 - [**Performance Tuning**](content/server/PETABYTE_SCALE_PERFORMANCE.md) - Optimization guide
@@ -124,7 +124,7 @@ Orbit-RS has delivered a **comprehensive multi-protocol database platform**:
 - **Protocols:** 7 complete protocols with RocksDB persistence
 - **Zero Warnings:** Strict code quality policy enforced
 
-[**View Detailed Status**](features.md) | [**See Full PRD**](PRD.md)
+[**View Detailed Status**](features.md) | [**See Full PRD**](../specifications/PRD.md)
 
 ---
 
@@ -200,9 +200,9 @@ Powerful heterogeneous compute engine for maximum performance.
 ### **Documentation**
 
 - [**Architecture Overview**](project_overview.md) - Understanding Orbit-RS design principles
-- [**Product Requirements Document**](PRD.md) - Complete architecture and module reference
+- [**Product Requirements Document**](../specifications/PRD.md) - Complete architecture and module reference
 - [**Performance Guide**](content/server/PETABYTE_SCALE_PERFORMANCE.md) - Optimization and tuning  
-- [**Storage Architecture**](PRD.md#storage-architecture) - Storage backends and tiering
+- [**Storage Architecture**](../specifications/PRD.md#storage-architecture) - Storage backends and tiering
 
 ### **Development Resources**
 
@@ -228,7 +228,7 @@ Powerful heterogeneous compute engine for maximum performance.
 ### **Contributing**
 
 - [**Contribution Guide**](contributing.md) - How to contribute code
-- [**Documentation**](PRD.md#document-maintenance) - Documentation structure and guides
+- [**Documentation**](../specifications/PRD.md#document-maintenance) - Documentation structure and guides
 - [**Testing**](contributing.md) - Adding tests and benchmarks
 - [**Development**](content/DEVELOPMENT.md) - Development workflow
 
@@ -262,7 +262,7 @@ Orbit-RS is released under **dual license: MIT or BSD-3-Clause**.
 **For Decision Makers:**
 
 - [Project Overview](project_overview.md)
-- [Product Requirements Document](PRD.md)
+- [Product Requirements Document](../specifications/PRD.md)
 - [Features](features.md)
 - [Architecture Overview](overview.md)
 

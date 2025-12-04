@@ -54,7 +54,7 @@ permalink: /PRD.html
 
 ## Workspace Architecture
 
-```
+```text
 orbit-rs/
 ├── orbit/                           # Main source code (Rust workspace)
 │   ├── server/                      # Main server binary (orbit-server)
@@ -91,9 +91,9 @@ orbit-rs/
 **Binary**: `orbit-server`
 **Purpose**: Multi-protocol database server
 
-#### Directory Structure
+#### Server Module Structure
 
-```
+```text
 orbit/server/src/
 ├── main.rs                          # Entry point, CLI parsing
 ├── server.rs                        # OrbitServer struct, protocol orchestration
@@ -234,7 +234,7 @@ orbit/server/src/
 **Path**: `orbit/client/`
 **Purpose**: Client library for connecting to Orbit servers
 
-```
+```text
 orbit/client/src/
 ├── lib.rs                           # OrbitClient, actor references
 ├── invocation.rs                    # Remote invocation system
@@ -243,6 +243,7 @@ orbit/client/src/
 ```
 
 **Key Types**:
+
 - `OrbitClient` - Main client interface
 - `ActorReference<T>` - Typed actor proxy
 - `InvocationSystem` - Async invocation handling
@@ -252,7 +253,7 @@ orbit/client/src/
 **Path**: `orbit/shared/`
 **Purpose**: Shared types, traits, and distributed systems primitives
 
-```
+```text
 orbit/shared/src/
 ├── lib.rs                           # Core exports (Actor, Key, etc.)
 ├── actor_communication.rs           # Actor messaging
@@ -287,6 +288,7 @@ orbit/shared/src/
 ```
 
 **Key Traits**:
+
 - `Actor` - Base actor trait
 - `ActorWithStringKey` - Actor with string identity
 - `Addressable` - Location-transparent addressing
@@ -297,7 +299,7 @@ orbit/shared/src/
 **Path**: `orbit/engine/`
 **Purpose**: Storage engine with OrbitQL support
 
-```
+```text
 orbit/engine/src/
 ├── lib.rs                           # Engine exports
 ├── adapters/                        # Storage adapters
@@ -319,7 +321,7 @@ orbit/engine/src/
 **Path**: `orbit/compute/`
 **Purpose**: Hardware acceleration (SIMD, GPU, Neural)
 
-```
+```text
 orbit/compute/src/
 ├── lib.rs                           # Compute exports
 ├── engine.rs                        # Compute engine abstraction
@@ -356,7 +358,7 @@ orbit/compute/src/
 **Path**: `orbit/ml/`
 **Purpose**: Machine learning inference
 
-```
+```text
 orbit/ml/src/
 ├── lib.rs                           # ML exports
 ├── config.rs                        # Model configuration
@@ -380,7 +382,7 @@ orbit/ml/src/
 **Path**: `orbit/operator/`
 **Purpose**: Kubernetes operator for Orbit clusters
 
-```
+```text
 orbit/operator/src/
 ├── main.rs                          # Operator entry point
 ├── crd.rs                           # Custom Resource Definitions
@@ -396,7 +398,7 @@ orbit/operator/src/
 **Path**: `orbit/proto/`
 **Purpose**: Protocol Buffer definitions
 
-```
+```text
 orbit/proto/
 ├── src/
 │   ├── lib.rs                       # Generated code exports
@@ -416,9 +418,9 @@ orbit/proto/
 **Language**: Python
 **Purpose**: Python client library for Orbit-RS
 
-#### Directory Structure
+#### Python SDK Structure
 
-```
+```text
 orbit-python-client/
 ├── orbit_client/
 │   ├── __init__.py              # Package exports
@@ -434,7 +436,7 @@ orbit-python-client/
 └── README.md                    # Usage documentation
 ```
 
-#### Features
+#### Python SDK Features
 
 - PostgreSQL, MySQL, Redis, CQL protocol support
 - Async and sync APIs
@@ -463,9 +465,9 @@ pip install -e .
 **Language**: TypeScript
 **Purpose**: VS Code extension for Orbit-RS development
 
-#### Directory Structure
+#### VS Code Extension Structure
 
-```
+```text
 orbit-vscode-extension/
 ├── src/
 │   ├── extension.ts             # Extension entry point
@@ -545,7 +547,7 @@ npm run compile
 
 ### Time Series Commands
 
-```
+```text
 TS.CREATE key [RETENTION ms] [LABELS label value ...]
 TS.ADD key timestamp value
 TS.GET key
@@ -576,7 +578,7 @@ TS.DELETERULE sourceKey destKey
 
 ### Storage Tiering
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │                Hot Tier                     │
 │           (In-Memory / Redis)               │
@@ -615,7 +617,7 @@ The tiered storage system operates at the storage layer, providing automatic dat
 
 #### Architecture Diagram
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │                     Protocol Layer                           │
 │   ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
@@ -663,7 +665,7 @@ The following enhancements would integrate the actor system with tiered storage 
 
 Actors exist at multiple levels of the data hierarchy, each responsible for managing lifecycle and tier placement at their scope:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        Actor Granularity Hierarchy                          │
 │                                                                             │
@@ -711,7 +713,7 @@ Actors exist at multiple levels of the data hierarchy, each responsible for mana
 
 #### Tier-Aware Actor Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        Orbit Cluster - Tiered Actor System                  │
 │                                                                             │
@@ -759,7 +761,7 @@ Actors exist at multiple levels of the data hierarchy, each responsible for mana
 
 Queries transparently span all tiers with minimal performance impact:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                     Cross-Tier Query Flow                                   │
 │                                                                             │
@@ -801,7 +803,7 @@ Queries transparently span all tiers with minimal performance impact:
 
 Actors move between tiers based on age and access patterns:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                     Actor Tier Migration                                    │
 │                                                                             │
@@ -922,7 +924,7 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 
 ### Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   AI Master Controller                      │
 │              (10-second control loop)                       │
@@ -1097,6 +1099,7 @@ control_loop_interval_ms = 10000
 ### AI Agent Instructions
 
 This document must be read and maintained by all AI coding assistants:
+
 - **Claude Code / Anthropic Claude** - See `CLAUDE.md`
 - **Cursor AI** - See `.cursorrules`
 - **Gemini, Copilot, Warp, Antigravity, others** - See `AGENTS.md`
@@ -1132,7 +1135,7 @@ Update this PRD.md when you:
 
 #### Breaking Change Checklist
 
-```
+```text
 [ ] Identify if change affects external clients
 [ ] Update orbit-python-client if protocol/API changed
 [ ] Update orbit-vscode-extension if syntax/connections affected
@@ -1144,11 +1147,13 @@ Update this PRD.md when you:
 #### Files to Check for Breaking Changes
 
 **Python Client (`orbit-python-client/`):**
+
 - `orbit_client/client.py` - Main client class, command methods
 - `orbit_client/protocols.py` - Protocol adapters
 - `examples/*.py` - Usage examples
 
 **VS Code Extension (`orbit-vscode-extension/`):**
+
 - `src/connections/*.ts` - Protocol connections
 - `src/queryExecutor.ts` - Query execution logic
 - `syntaxes/*.tmLanguage.json` - Syntax highlighting
@@ -1156,7 +1161,7 @@ Update this PRD.md when you:
 
 ### Update Checklist
 
-```
+```text
 [ ] Read current PRD.md before making changes
 [ ] Make code changes
 [ ] Update relevant PRD.md sections
@@ -1170,7 +1175,8 @@ Update this PRD.md when you:
 ### Commit Message Format
 
 When updating this document along with code changes:
-```
+
+```text
 type(scope): description
 
 - code changes summary
@@ -1193,5 +1199,3 @@ type(scope): description
 | Development Guidelines | Process changes |
 
 ---
-
-**Orbit-RS: One Server, All Protocols**

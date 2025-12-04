@@ -586,7 +586,7 @@ Now that you have Orbit-RS multi-protocol server running, explore these guides:
 
 ### **Core Documentation**
 
-- 📋 **[Product Requirements Document](PRD.md)** - Complete architecture and module reference
+- 📋 **[Product Requirements Document](../specifications/PRD.md)** - Complete architecture and module reference
 - 🏗️ **[Project Overview](project_overview.md)** - System architecture and design
 - ⚡ **[Features Guide](features.md)** - Complete feature list
 

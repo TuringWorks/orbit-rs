@@ -3,7 +3,7 @@
 This document provides essential context for AI assistants working with the Orbit-RS codebase.
 
 > **Architecture References**: 
-> - [`docs/PRD.md`](docs/PRD.md) - Single source of truth for modules, directory structures, and feature status
+> - [`specifications/PRD.md`](specifications/PRD.md) - Single source of truth for modules, directory structures, and feature status
 > - [`docs/content/architecture/ORBIT_ARCHITECTURE.md`](docs/content/architecture/ORBIT_ARCHITECTURE.md) - Detailed architecture patterns, transaction layer, query execution, network layer, and storage architecture
 
 ## Project Overview
@@ -14,7 +14,7 @@ This document provides essential context for AI assistants working with the Orbi
 - **License**: BSD-3-Clause OR MIT
 - **Rust Edition**: 2021
 - **Minimum Rust Version**: 1.70+
-- **Architecture**: See [`docs/PRD.md`](docs/PRD.md) for complete module reference
+- **Architecture**: See [`specifications/PRD.md`](specifications/PRD.md) for complete module reference
 
 ## Quick Reference Commands
 
@@ -127,7 +127,7 @@ orbit-rs/
 
 ## Architecture Patterns
 
-> **Detailed Reference**: See [`docs/PRD.md`](docs/PRD.md) for complete module structures and directory layouts.
+> **Detailed Reference**: See [`specifications/PRD.md`](specifications/PRD.md) for complete module structures and directory layouts.
 > **Implementation Details**: See [`docs/content/architecture/ORBIT_ARCHITECTURE.md`](docs/content/architecture/ORBIT_ARCHITECTURE.md) for:
 > - Transaction layer architecture (MVCC, 2PC, deadlock detection, Saga pattern)
 > - Query execution (vectorized, SIMD optimization, columnar format)
@@ -223,11 +223,11 @@ Never commit database files (RocksDB manifests, WAL files, etc.) to the reposito
 
 ## Documentation
 
-- **Architecture Reference**: [`docs/PRD.md`](docs/PRD.md) - Single source of truth for modules and architecture
+- **Architecture Reference**: [`specifications/PRD.md`](specifications/PRD.md) - Single source of truth for modules and architecture
 - **Main docs**: `docs/` directory (258 files)
 - **API docs**: `cargo doc --workspace --open`
 - **Key documents**:
-  - `docs/PRD.md` - **Complete architecture, modules, and feature status**
+  - `specifications/PRD.md` - **Complete architecture, modules, and feature status**
   - `docs/ORBITQL_COMPLETE_DOCUMENTATION.md` - SQL engine
   - `docs/GPU_ACCELERATION_COMPLETE.md` - Hardware acceleration
   - `docs/PERSISTENCE_COMPLETE_DOCUMENTATION.md` - Storage backends
@@ -287,7 +287,7 @@ Update **ORBIT_ARCHITECTURE.md** when you:
 ### Update Workflow
 ```bash
 # After making code changes:
-1. Update relevant sections in docs/PRD.md
+1. Update relevant sections in specifications/PRD.md
 2. Run tests: cargo test --workspace
 3. Commit both code and PRD.md changes together
 4. Include "docs: update PRD.md" in commit message if PRD changes are significant
@@ -299,7 +299,7 @@ Update **ORBIT_ARCHITECTURE.md** when you:
 1. Create feature branch
 2. Implement in appropriate crate
 3. Add tests
-4. **Update `docs/PRD.md`** if architecture changed
+4. **Update `specifications/PRD.md`** if architecture changed
 5. Run `make commit-ready`
 6. Submit PR
 
