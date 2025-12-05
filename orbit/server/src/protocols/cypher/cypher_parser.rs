@@ -2,6 +2,10 @@
 //!
 //! This module provides parsing for basic Cypher query language constructs,
 //! supporting MATCH, CREATE, RETURN, WHERE, and other common operations.
+//!
+//! ## References
+//! - Neo4j Cypher Spec: `specifications/protocols/neo4j_cypher_protocol_reference.md`
+//! - ANTLR4 Grammar: <https://github.com/TuringWorks/grammars-v4/tree/master/cypher>
 
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use serde::{Deserialize, Serialize};

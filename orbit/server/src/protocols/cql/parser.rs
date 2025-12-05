@@ -151,6 +151,175 @@ pub enum CqlStatement {
         /// Primary key columns
         primary_key: Vec<String>,
     },
+    /// ALTER TABLE statement
+    AlterTable {
+        /// Table name
+        name: String,
+        /// Alteration to perform
+        alteration: TableAlteration,
+    },
+    /// ALTER KEYSPACE statement
+    AlterKeyspace {
+        /// Keyspace name
+        name: String,
+        /// Replication strategy updates
+        replication: Option<HashMap<String, String>>,
+        /// Durable writes option
+        durable_writes: Option<bool>,
+    },
+    /// ALTER TYPE statement (UDT modification)
+    AlterType {
+        /// Type name
+        name: String,
+        /// Alteration to perform
+        alteration: TypeAlteration,
+    },
+    /// DROP INDEX statement
+    DropIndex {
+        /// Index name
+        name: String,
+        /// IF EXISTS
+        if_exists: bool,
+    },
+    /// DROP TYPE statement
+    DropType {
+        /// Type name
+        name: String,
+        /// IF EXISTS
+        if_exists: bool,
+    },
+    /// DROP MATERIALIZED VIEW statement
+    DropMaterializedView {
+        /// View name
+        name: String,
+        /// IF EXISTS
+        if_exists: bool,
+    },
+    /// CREATE FUNCTION statement (UDF)
+    CreateFunction {
+        /// Function name
+        name: String,
+        /// IF NOT EXISTS
+        if_not_exists: bool,
+        /// OR REPLACE
+        or_replace: bool,
+        /// Parameter definitions
+        parameters: Vec<(String, CqlType)>,
+        /// Return type
+        return_type: CqlType,
+        /// RETURNS NULL ON NULL INPUT
+        returns_null_on_null: bool,
+        /// CALLED ON NULL INPUT
+        called_on_null: bool,
+        /// Language (e.g., java, javascript)
+        language: String,
+        /// Function body
+        body: String,
+    },
+    /// DROP FUNCTION statement
+    DropFunction {
+        /// Function name
+        name: String,
+        /// IF EXISTS
+        if_exists: bool,
+        /// Parameter types for signature matching
+        parameter_types: Vec<CqlType>,
+    },
+    /// CREATE AGGREGATE statement
+    CreateAggregate {
+        /// Aggregate name
+        name: String,
+        /// IF NOT EXISTS
+        if_not_exists: bool,
+        /// OR REPLACE
+        or_replace: bool,
+        /// State function name
+        sfunc: String,
+        /// State type
+        stype: CqlType,
+        /// Final function (optional)
+        finalfunc: Option<String>,
+        /// Initial state value (optional)
+        initcond: Option<CqlValue>,
+    },
+    /// DROP AGGREGATE statement
+    DropAggregate {
+        /// Aggregate name
+        name: String,
+        /// IF EXISTS
+        if_exists: bool,
+        /// Parameter types for signature matching
+        parameter_types: Vec<CqlType>,
+    },
+    /// CREATE ROLE statement (RBAC)
+    CreateRole {
+        /// Role name
+        name: String,
+        /// IF NOT EXISTS
+        if_not_exists: bool,
+        /// Superuser privilege
+        superuser: bool,
+        /// Login allowed
+        login: bool,
+        /// Password
+        password: Option<String>,
+        /// Role options
+        options: HashMap<String, String>,
+    },
+    /// ALTER ROLE statement
+    AlterRole {
+        /// Role name
+        name: String,
+        /// Superuser privilege (if changed)
+        superuser: Option<bool>,
+        /// Login allowed (if changed)
+        login: Option<bool>,
+        /// Password (if changed)
+        password: Option<String>,
+        /// Role options
+        options: HashMap<String, String>,
+    },
+    /// DROP ROLE statement
+    DropRole {
+        /// Role name
+        name: String,
+        /// IF EXISTS
+        if_exists: bool,
+    },
+    /// GRANT statement
+    Grant {
+        /// Permission(s) to grant
+        permissions: Vec<Permission>,
+        /// Resource to grant on (ALL KEYSPACES, KEYSPACE x, TABLE x.y)
+        resource: Resource,
+        /// Role to grant to
+        role: String,
+    },
+    /// REVOKE statement
+    Revoke {
+        /// Permission(s) to revoke
+        permissions: Vec<Permission>,
+        /// Resource to revoke from
+        resource: Resource,
+        /// Role to revoke from
+        role: String,
+    },
+    /// LIST ROLES statement
+    ListRoles {
+        /// Filter by role (OF role_name)
+        of_role: Option<String>,
+        /// Show system roles
+        no_recursive: bool,
+    },
+    /// LIST PERMISSIONS statement
+    ListPermissions {
+        /// Filter by permission type
+        permissions: Option<Vec<Permission>>,
+        /// Filter by resource
+        resource: Option<Resource>,
+        /// Filter by role
+        of_role: Option<String>,
+    },
 }
 
 /// WHERE clause condition
@@ -218,6 +387,78 @@ pub enum BatchType {
     Counter,
 }
 
+/// Table alteration types for ALTER TABLE
+#[derive(Debug, Clone, PartialEq)]
+pub enum TableAlteration {
+    /// Add a new column
+    AddColumn { name: String, data_type: CqlType },
+    /// Drop a column
+    DropColumn { name: String },
+    /// Rename a column
+    RenameColumn { from: String, to: String },
+    /// Alter column type
+    AlterColumnType { name: String, new_type: CqlType },
+    /// Set table properties
+    SetOptions { options: HashMap<String, String> },
+    /// Drop compact storage (for upgrade scenarios)
+    DropCompactStorage,
+}
+
+/// Type alteration for ALTER TYPE (UDT)
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypeAlteration {
+    /// Add a new field
+    AddField { name: String, data_type: CqlType },
+    /// Rename a field
+    RenameField { from: String, to: String },
+}
+
+/// CQL Permission types
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Permission {
+    /// All permissions
+    All,
+    /// ALTER permission
+    Alter,
+    /// AUTHORIZE permission
+    Authorize,
+    /// CREATE permission
+    Create,
+    /// DESCRIBE permission
+    Describe,
+    /// DROP permission
+    Drop,
+    /// EXECUTE permission (for functions)
+    Execute,
+    /// MODIFY permission (INSERT, UPDATE, DELETE)
+    Modify,
+    /// SELECT permission
+    Select,
+}
+
+/// Resource for permissions
+#[derive(Debug, Clone, PartialEq)]
+pub enum Resource {
+    /// All keyspaces
+    AllKeyspaces,
+    /// Specific keyspace
+    Keyspace(String),
+    /// Specific table (keyspace.table)
+    Table { keyspace: Option<String>, table: String },
+    /// All roles
+    AllRoles,
+    /// Specific role
+    Role(String),
+    /// All functions in keyspace
+    AllFunctions(Option<String>),
+    /// Specific function
+    Function { keyspace: Option<String>, name: String },
+    /// All MBeans (JMX, optional support)
+    AllMBeans,
+    /// Specific MBean
+    MBean(String),
+}
+
 /// CQL parser
 pub struct CqlParser {
     /// Current keyspace
@@ -275,6 +516,46 @@ impl CqlParser {
             self.parse_batch(query)
         } else if query_upper.starts_with("TRUNCATE") {
             self.parse_truncate(query)
+        } else if query_upper.starts_with("ALTER TABLE") {
+            self.parse_alter_table(query)
+        } else if query_upper.starts_with("ALTER KEYSPACE") {
+            self.parse_alter_keyspace(query)
+        } else if query_upper.starts_with("ALTER TYPE") {
+            self.parse_alter_type(query)
+        } else if query_upper.starts_with("DROP INDEX") {
+            self.parse_drop_index(query)
+        } else if query_upper.starts_with("DROP TYPE") {
+            self.parse_drop_type(query)
+        } else if query_upper.starts_with("DROP MATERIALIZED VIEW") {
+            self.parse_drop_materialized_view(query)
+        } else if query_upper.starts_with("CREATE FUNCTION")
+            || query_upper.starts_with("CREATE OR REPLACE FUNCTION")
+        {
+            self.parse_create_function(query)
+        } else if query_upper.starts_with("DROP FUNCTION") {
+            self.parse_drop_function(query)
+        } else if query_upper.starts_with("CREATE AGGREGATE")
+            || query_upper.starts_with("CREATE OR REPLACE AGGREGATE")
+        {
+            self.parse_create_aggregate(query)
+        } else if query_upper.starts_with("DROP AGGREGATE") {
+            self.parse_drop_aggregate(query)
+        } else if query_upper.starts_with("CREATE ROLE") {
+            self.parse_create_role(query)
+        } else if query_upper.starts_with("ALTER ROLE") {
+            self.parse_alter_role(query)
+        } else if query_upper.starts_with("DROP ROLE") {
+            self.parse_drop_role(query)
+        } else if query_upper.starts_with("GRANT") {
+            self.parse_grant(query)
+        } else if query_upper.starts_with("REVOKE") {
+            self.parse_revoke(query)
+        } else if query_upper.starts_with("LIST ROLES") {
+            self.parse_list_roles(query)
+        } else if query_upper.starts_with("LIST PERMISSIONS")
+            || query_upper.starts_with("LIST ALL PERMISSIONS")
+        {
+            self.parse_list_permissions(query)
         } else {
             Err(ProtocolError::ParseError(format!(
                 "Unsupported CQL statement: {}",
@@ -1143,6 +1424,785 @@ impl CqlParser {
             table.to_string()
         }
     }
+
+    /// Parse ALTER TABLE statement
+    /// Example: ALTER TABLE users ADD email text
+    /// Example: ALTER TABLE users DROP email
+    /// Example: ALTER TABLE users RENAME old_name TO new_name
+    fn parse_alter_table(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let query_upper = query.to_uppercase();
+        let parts: Vec<&str> = query.split_whitespace().collect();
+
+        // Get table name (after ALTER TABLE)
+        let table_name = parts
+            .get(2)
+            .ok_or_else(|| ProtocolError::ParseError("Missing table name".to_string()))?
+            .to_string();
+
+        // Determine alteration type
+        let alteration = if query_upper.contains(" ADD ") {
+            // ALTER TABLE x ADD column type
+            let add_index = parts
+                .iter()
+                .position(|&p| p.to_uppercase() == "ADD")
+                .unwrap();
+            let col_name = parts
+                .get(add_index + 1)
+                .ok_or_else(|| ProtocolError::ParseError("Missing column name".to_string()))?
+                .to_string();
+            let col_type = parts
+                .get(add_index + 2)
+                .map(|s| self.parse_cql_type(s))
+                .unwrap_or(CqlType::Text);
+            TableAlteration::AddColumn {
+                name: col_name,
+                data_type: col_type,
+            }
+        } else if query_upper.contains(" DROP ") && !query_upper.contains("DROP COMPACT STORAGE") {
+            // ALTER TABLE x DROP column
+            let drop_index = parts
+                .iter()
+                .position(|&p| p.to_uppercase() == "DROP")
+                .unwrap();
+            let col_name = parts
+                .get(drop_index + 1)
+                .ok_or_else(|| ProtocolError::ParseError("Missing column name".to_string()))?
+                .to_string();
+            TableAlteration::DropColumn { name: col_name }
+        } else if query_upper.contains(" RENAME ") {
+            // ALTER TABLE x RENAME old TO new
+            let rename_index = parts
+                .iter()
+                .position(|&p| p.to_uppercase() == "RENAME")
+                .unwrap();
+            let from = parts
+                .get(rename_index + 1)
+                .ok_or_else(|| ProtocolError::ParseError("Missing old column name".to_string()))?
+                .to_string();
+            let to_index = parts
+                .iter()
+                .position(|&p| p.to_uppercase() == "TO")
+                .ok_or_else(|| ProtocolError::ParseError("Missing TO keyword".to_string()))?;
+            let to = parts
+                .get(to_index + 1)
+                .ok_or_else(|| ProtocolError::ParseError("Missing new column name".to_string()))?
+                .to_string();
+            TableAlteration::RenameColumn { from, to }
+        } else if query_upper.contains("DROP COMPACT STORAGE") {
+            TableAlteration::DropCompactStorage
+        } else if query_upper.contains(" WITH ") {
+            // ALTER TABLE x WITH option = value
+            TableAlteration::SetOptions {
+                options: HashMap::new(),
+            }
+        } else {
+            return Err(ProtocolError::ParseError(
+                "Unknown ALTER TABLE operation".to_string(),
+            ));
+        };
+
+        Ok(CqlStatement::AlterTable {
+            name: self.resolve_table_name(&table_name),
+            alteration,
+        })
+    }
+
+    /// Parse ALTER KEYSPACE statement
+    fn parse_alter_keyspace(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let parts: Vec<&str> = query.split_whitespace().collect();
+        let name = parts
+            .get(2)
+            .ok_or_else(|| ProtocolError::ParseError("Missing keyspace name".to_string()))?
+            .to_string();
+
+        Ok(CqlStatement::AlterKeyspace {
+            name,
+            replication: None,
+            durable_writes: None,
+        })
+    }
+
+    /// Parse ALTER TYPE statement
+    fn parse_alter_type(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let query_upper = query.to_uppercase();
+        let parts: Vec<&str> = query.split_whitespace().collect();
+
+        let type_name = parts
+            .get(2)
+            .ok_or_else(|| ProtocolError::ParseError("Missing type name".to_string()))?
+            .to_string();
+
+        let alteration = if query_upper.contains(" ADD ") {
+            let add_index = parts
+                .iter()
+                .position(|&p| p.to_uppercase() == "ADD")
+                .unwrap();
+            let field_name = parts
+                .get(add_index + 1)
+                .ok_or_else(|| ProtocolError::ParseError("Missing field name".to_string()))?
+                .to_string();
+            let field_type = parts
+                .get(add_index + 2)
+                .map(|s| self.parse_cql_type(s))
+                .unwrap_or(CqlType::Text);
+            TypeAlteration::AddField {
+                name: field_name,
+                data_type: field_type,
+            }
+        } else if query_upper.contains(" RENAME ") {
+            let rename_index = parts
+                .iter()
+                .position(|&p| p.to_uppercase() == "RENAME")
+                .unwrap();
+            let from = parts
+                .get(rename_index + 1)
+                .ok_or_else(|| ProtocolError::ParseError("Missing old field name".to_string()))?
+                .to_string();
+            let to_index = parts
+                .iter()
+                .position(|&p| p.to_uppercase() == "TO")
+                .ok_or_else(|| ProtocolError::ParseError("Missing TO keyword".to_string()))?;
+            let to = parts
+                .get(to_index + 1)
+                .ok_or_else(|| ProtocolError::ParseError("Missing new field name".to_string()))?
+                .to_string();
+            TypeAlteration::RenameField { from, to }
+        } else {
+            return Err(ProtocolError::ParseError(
+                "Unknown ALTER TYPE operation".to_string(),
+            ));
+        };
+
+        Ok(CqlStatement::AlterType {
+            name: self.resolve_table_name(&type_name),
+            alteration,
+        })
+    }
+
+    /// Parse DROP INDEX statement
+    fn parse_drop_index(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let if_exists = query.to_uppercase().contains("IF EXISTS");
+        let parts: Vec<&str> = query.split_whitespace().collect();
+        let name_index = if if_exists { 4 } else { 2 };
+        let name = parts
+            .get(name_index)
+            .ok_or_else(|| ProtocolError::ParseError("Missing index name".to_string()))?
+            .to_string();
+
+        Ok(CqlStatement::DropIndex {
+            name: self.resolve_table_name(&name),
+            if_exists,
+        })
+    }
+
+    /// Parse DROP TYPE statement
+    fn parse_drop_type(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let if_exists = query.to_uppercase().contains("IF EXISTS");
+        let parts: Vec<&str> = query.split_whitespace().collect();
+        let name_index = if if_exists { 4 } else { 2 };
+        let name = parts
+            .get(name_index)
+            .ok_or_else(|| ProtocolError::ParseError("Missing type name".to_string()))?
+            .to_string();
+
+        Ok(CqlStatement::DropType {
+            name: self.resolve_table_name(&name),
+            if_exists,
+        })
+    }
+
+    /// Parse DROP MATERIALIZED VIEW statement
+    fn parse_drop_materialized_view(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let if_exists = query.to_uppercase().contains("IF EXISTS");
+        let parts: Vec<&str> = query.split_whitespace().collect();
+        let name_index = if if_exists { 5 } else { 3 };
+        let name = parts
+            .get(name_index)
+            .ok_or_else(|| ProtocolError::ParseError("Missing view name".to_string()))?
+            .to_string();
+
+        Ok(CqlStatement::DropMaterializedView {
+            name: self.resolve_table_name(&name),
+            if_exists,
+        })
+    }
+
+    /// Parse CREATE FUNCTION statement
+    fn parse_create_function(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let query_upper = query.to_uppercase();
+        let or_replace = query_upper.contains("OR REPLACE");
+        let if_not_exists = query_upper.contains("IF NOT EXISTS");
+
+        // Extract function name - find first '(' after FUNCTION keyword
+        let func_keyword_pos = query_upper.find("FUNCTION").unwrap();
+        let after_func = &query[func_keyword_pos + 8..].trim_start();
+
+        // Handle IF NOT EXISTS
+        let name_start = if if_not_exists {
+            after_func.find("EXISTS").map(|p| p + 6).unwrap_or(0)
+        } else {
+            0
+        };
+        let name_part = after_func[name_start..].trim_start();
+
+        let paren_pos = name_part
+            .find('(')
+            .ok_or_else(|| ProtocolError::ParseError("Missing parameter list".to_string()))?;
+        let name = name_part[..paren_pos].trim().to_string();
+
+        // Extract return type
+        let returns_null_on_null = query_upper.contains("RETURNS NULL ON NULL INPUT");
+        let called_on_null = query_upper.contains("CALLED ON NULL INPUT");
+
+        // Extract language
+        let language = if query_upper.contains("LANGUAGE JAVA") {
+            "java".to_string()
+        } else if query_upper.contains("LANGUAGE JAVASCRIPT") {
+            "javascript".to_string()
+        } else if query_upper.contains("LANGUAGE LUA") {
+            "lua".to_string()
+        } else {
+            "java".to_string()
+        };
+
+        // Extract body (between AS $$ and $$)
+        let body = if let Some(as_pos) = query.find("AS $$") {
+            if let Some(end_pos) = query[as_pos + 5..].find("$$") {
+                query[as_pos + 5..as_pos + 5 + end_pos].trim().to_string()
+            } else {
+                String::new()
+            }
+        } else if let Some(as_pos) = query.find("AS '") {
+            if let Some(end_pos) = query[as_pos + 4..].find('\'') {
+                query[as_pos + 4..as_pos + 4 + end_pos].to_string()
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
+        Ok(CqlStatement::CreateFunction {
+            name: self.resolve_table_name(&name),
+            if_not_exists,
+            or_replace,
+            parameters: vec![],
+            return_type: CqlType::Text,
+            returns_null_on_null,
+            called_on_null,
+            language,
+            body,
+        })
+    }
+
+    /// Parse DROP FUNCTION statement
+    fn parse_drop_function(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let if_exists = query.to_uppercase().contains("IF EXISTS");
+        let parts: Vec<&str> = query.split_whitespace().collect();
+        let name_index = if if_exists { 4 } else { 2 };
+
+        let name_with_params = parts
+            .get(name_index)
+            .ok_or_else(|| ProtocolError::ParseError("Missing function name".to_string()))?;
+
+        // Extract just the function name (before any parenthesis)
+        let name = if let Some(paren_pos) = name_with_params.find('(') {
+            name_with_params[..paren_pos].to_string()
+        } else {
+            name_with_params.to_string()
+        };
+
+        Ok(CqlStatement::DropFunction {
+            name: self.resolve_table_name(&name),
+            if_exists,
+            parameter_types: vec![],
+        })
+    }
+
+    /// Parse CREATE AGGREGATE statement
+    fn parse_create_aggregate(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let query_upper = query.to_uppercase();
+        let or_replace = query_upper.contains("OR REPLACE");
+        let if_not_exists = query_upper.contains("IF NOT EXISTS");
+
+        // Extract aggregate name
+        let agg_keyword_pos = query_upper.find("AGGREGATE").unwrap();
+        let after_agg = &query[agg_keyword_pos + 9..].trim_start();
+
+        let name_start = if if_not_exists {
+            after_agg.find("EXISTS").map(|p| p + 6).unwrap_or(0)
+        } else {
+            0
+        };
+        let name_part = after_agg[name_start..].trim_start();
+
+        let paren_pos = name_part.find('(').unwrap_or(name_part.len());
+        let name = name_part[..paren_pos].trim().to_string();
+
+        // Extract SFUNC
+        let sfunc = if let Some(sfunc_pos) = query_upper.find("SFUNC") {
+            let after_sfunc = &query[sfunc_pos + 5..].trim_start();
+            after_sfunc
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .to_string()
+        } else {
+            String::new()
+        };
+
+        // Extract STYPE
+        let stype = if let Some(stype_pos) = query_upper.find("STYPE") {
+            let after_stype = &query[stype_pos + 5..].trim_start();
+            let type_str = after_stype.split_whitespace().next().unwrap_or("text");
+            self.parse_cql_type(type_str)
+        } else {
+            CqlType::Text
+        };
+
+        // Extract FINALFUNC if present
+        let finalfunc = if let Some(ff_pos) = query_upper.find("FINALFUNC") {
+            let after_ff = &query[ff_pos + 9..].trim_start();
+            Some(
+                after_ff
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .to_string(),
+            )
+        } else {
+            None
+        };
+
+        Ok(CqlStatement::CreateAggregate {
+            name: self.resolve_table_name(&name),
+            if_not_exists,
+            or_replace,
+            sfunc,
+            stype,
+            finalfunc,
+            initcond: None,
+        })
+    }
+
+    /// Parse DROP AGGREGATE statement
+    fn parse_drop_aggregate(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let if_exists = query.to_uppercase().contains("IF EXISTS");
+        let parts: Vec<&str> = query.split_whitespace().collect();
+        let name_index = if if_exists { 4 } else { 2 };
+
+        let name_with_params = parts
+            .get(name_index)
+            .ok_or_else(|| ProtocolError::ParseError("Missing aggregate name".to_string()))?;
+
+        let name = if let Some(paren_pos) = name_with_params.find('(') {
+            name_with_params[..paren_pos].to_string()
+        } else {
+            name_with_params.to_string()
+        };
+
+        Ok(CqlStatement::DropAggregate {
+            name: self.resolve_table_name(&name),
+            if_exists,
+            parameter_types: vec![],
+        })
+    }
+
+    /// Parse CREATE ROLE statement
+    fn parse_create_role(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let query_upper = query.to_uppercase();
+        let if_not_exists = query_upper.contains("IF NOT EXISTS");
+        let parts: Vec<&str> = query.split_whitespace().collect();
+
+        let name_index = if if_not_exists { 5 } else { 2 };
+        let name = parts
+            .get(name_index)
+            .ok_or_else(|| ProtocolError::ParseError("Missing role name".to_string()))?
+            .to_string();
+
+        // Parse options
+        let superuser = query_upper.contains("SUPERUSER = TRUE")
+            || query_upper.contains("SUPERUSER=TRUE");
+        let login =
+            query_upper.contains("LOGIN = TRUE") || query_upper.contains("LOGIN=TRUE");
+
+        // Extract password if present
+        let password = if let Some(pwd_pos) = query_upper.find("PASSWORD") {
+            let after_pwd = &query[pwd_pos + 8..].trim_start();
+            // Skip '=' if present
+            let pwd_start = if after_pwd.starts_with('=') {
+                &after_pwd[1..].trim_start()
+            } else {
+                after_pwd
+            };
+            // Extract quoted password
+            if pwd_start.starts_with('\'') {
+                if let Some(end_pos) = pwd_start[1..].find('\'') {
+                    Some(pwd_start[1..end_pos + 1].to_string())
+                } else {
+                    None
+                }
+            } else {
+                pwd_start
+                    .split_whitespace()
+                    .next()
+                    .map(|s| s.to_string())
+            }
+        } else {
+            None
+        };
+
+        Ok(CqlStatement::CreateRole {
+            name,
+            if_not_exists,
+            superuser,
+            login,
+            password,
+            options: HashMap::new(),
+        })
+    }
+
+    /// Parse ALTER ROLE statement
+    fn parse_alter_role(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let query_upper = query.to_uppercase();
+        let parts: Vec<&str> = query.split_whitespace().collect();
+
+        let name = parts
+            .get(2)
+            .ok_or_else(|| ProtocolError::ParseError("Missing role name".to_string()))?
+            .to_string();
+
+        let superuser = if query_upper.contains("SUPERUSER = TRUE")
+            || query_upper.contains("SUPERUSER=TRUE")
+        {
+            Some(true)
+        } else if query_upper.contains("SUPERUSER = FALSE")
+            || query_upper.contains("SUPERUSER=FALSE")
+        {
+            Some(false)
+        } else {
+            None
+        };
+
+        let login = if query_upper.contains("LOGIN = TRUE") || query_upper.contains("LOGIN=TRUE") {
+            Some(true)
+        } else if query_upper.contains("LOGIN = FALSE") || query_upper.contains("LOGIN=FALSE") {
+            Some(false)
+        } else {
+            None
+        };
+
+        let password = if let Some(pwd_pos) = query_upper.find("PASSWORD") {
+            let after_pwd = &query[pwd_pos + 8..].trim_start();
+            let pwd_start = if after_pwd.starts_with('=') {
+                &after_pwd[1..].trim_start()
+            } else {
+                after_pwd
+            };
+            if pwd_start.starts_with('\'') {
+                if let Some(end_pos) = pwd_start[1..].find('\'') {
+                    Some(pwd_start[1..end_pos + 1].to_string())
+                } else {
+                    None
+                }
+            } else {
+                pwd_start
+                    .split_whitespace()
+                    .next()
+                    .map(|s| s.to_string())
+            }
+        } else {
+            None
+        };
+
+        Ok(CqlStatement::AlterRole {
+            name,
+            superuser,
+            login,
+            password,
+            options: HashMap::new(),
+        })
+    }
+
+    /// Parse DROP ROLE statement
+    fn parse_drop_role(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let if_exists = query.to_uppercase().contains("IF EXISTS");
+        let parts: Vec<&str> = query.split_whitespace().collect();
+        let name_index = if if_exists { 4 } else { 2 };
+        let name = parts
+            .get(name_index)
+            .ok_or_else(|| ProtocolError::ParseError("Missing role name".to_string()))?
+            .to_string();
+
+        Ok(CqlStatement::DropRole { name, if_exists })
+    }
+
+    /// Parse GRANT statement
+    fn parse_grant(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let query_upper = query.to_uppercase();
+        let parts: Vec<&str> = query.split_whitespace().collect();
+
+        // Parse permissions (GRANT perm1, perm2 ON resource TO role)
+        let on_index = parts
+            .iter()
+            .position(|&p| p.to_uppercase() == "ON")
+            .ok_or_else(|| ProtocolError::ParseError("Missing ON keyword".to_string()))?;
+
+        let perm_str = parts[1..on_index].join(" ");
+        let permissions = self.parse_permissions(&perm_str)?;
+
+        // Parse resource
+        let to_index = parts
+            .iter()
+            .position(|&p| p.to_uppercase() == "TO")
+            .ok_or_else(|| ProtocolError::ParseError("Missing TO keyword".to_string()))?;
+
+        let resource_str = parts[on_index + 1..to_index].join(" ");
+        let resource = self.parse_resource(&resource_str, &query_upper)?;
+
+        // Parse role
+        let role = parts
+            .get(to_index + 1)
+            .ok_or_else(|| ProtocolError::ParseError("Missing role name".to_string()))?
+            .to_string();
+
+        Ok(CqlStatement::Grant {
+            permissions,
+            resource,
+            role,
+        })
+    }
+
+    /// Parse REVOKE statement
+    fn parse_revoke(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let query_upper = query.to_uppercase();
+        let parts: Vec<&str> = query.split_whitespace().collect();
+
+        // Parse permissions (REVOKE perm1, perm2 ON resource FROM role)
+        let on_index = parts
+            .iter()
+            .position(|&p| p.to_uppercase() == "ON")
+            .ok_or_else(|| ProtocolError::ParseError("Missing ON keyword".to_string()))?;
+
+        let perm_str = parts[1..on_index].join(" ");
+        let permissions = self.parse_permissions(&perm_str)?;
+
+        // Parse resource
+        let from_index = parts
+            .iter()
+            .position(|&p| p.to_uppercase() == "FROM")
+            .ok_or_else(|| ProtocolError::ParseError("Missing FROM keyword".to_string()))?;
+
+        let resource_str = parts[on_index + 1..from_index].join(" ");
+        let resource = self.parse_resource(&resource_str, &query_upper)?;
+
+        // Parse role
+        let role = parts
+            .get(from_index + 1)
+            .ok_or_else(|| ProtocolError::ParseError("Missing role name".to_string()))?
+            .to_string();
+
+        Ok(CqlStatement::Revoke {
+            permissions,
+            resource,
+            role,
+        })
+    }
+
+    /// Parse LIST ROLES statement
+    fn parse_list_roles(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let query_upper = query.to_uppercase();
+
+        let of_role = if query_upper.contains(" OF ") {
+            let parts: Vec<&str> = query.split_whitespace().collect();
+            let of_index = parts.iter().position(|&p| p.to_uppercase() == "OF").unwrap();
+            parts.get(of_index + 1).map(|s| s.to_string())
+        } else {
+            None
+        };
+
+        let no_recursive = query_upper.contains("NORECURSIVE");
+
+        Ok(CqlStatement::ListRoles {
+            of_role,
+            no_recursive,
+        })
+    }
+
+    /// Parse LIST PERMISSIONS statement
+    fn parse_list_permissions(&self, query: &str) -> ProtocolResult<CqlStatement> {
+        let query_upper = query.to_uppercase();
+
+        // Check for specific permission type
+        let permissions = if query_upper.contains("ALL PERMISSIONS") {
+            None
+        } else {
+            // Extract permission type if specified
+            None // Simplified - return all
+        };
+
+        // Check for ON resource
+        let resource = if query_upper.contains(" ON ") {
+            let parts: Vec<&str> = query.split_whitespace().collect();
+            let on_index = parts.iter().position(|&p| p.to_uppercase() == "ON").unwrap();
+            let of_index = parts
+                .iter()
+                .position(|&p| p.to_uppercase() == "OF")
+                .unwrap_or(parts.len());
+            let resource_str = parts[on_index + 1..of_index].join(" ");
+            Some(self.parse_resource(&resource_str, &query_upper)?)
+        } else {
+            None
+        };
+
+        // Check for OF role
+        let of_role = if query_upper.contains(" OF ") {
+            let parts: Vec<&str> = query.split_whitespace().collect();
+            let of_index = parts.iter().position(|&p| p.to_uppercase() == "OF").unwrap();
+            parts.get(of_index + 1).map(|s| s.to_string())
+        } else {
+            None
+        };
+
+        Ok(CqlStatement::ListPermissions {
+            permissions,
+            resource,
+            of_role,
+        })
+    }
+
+    /// Parse permission list from string
+    fn parse_permissions(&self, perm_str: &str) -> ProtocolResult<Vec<Permission>> {
+        let perm_upper = perm_str.to_uppercase();
+        let mut permissions = Vec::new();
+
+        if perm_upper.contains("ALL") {
+            permissions.push(Permission::All);
+        } else {
+            for perm in perm_str.split(',') {
+                let p = perm.trim().to_uppercase();
+                match p.as_str() {
+                    "ALTER" => permissions.push(Permission::Alter),
+                    "AUTHORIZE" => permissions.push(Permission::Authorize),
+                    "CREATE" => permissions.push(Permission::Create),
+                    "DESCRIBE" => permissions.push(Permission::Describe),
+                    "DROP" => permissions.push(Permission::Drop),
+                    "EXECUTE" => permissions.push(Permission::Execute),
+                    "MODIFY" => permissions.push(Permission::Modify),
+                    "SELECT" => permissions.push(Permission::Select),
+                    _ => {}
+                }
+            }
+        }
+
+        if permissions.is_empty() {
+            permissions.push(Permission::All);
+        }
+
+        Ok(permissions)
+    }
+
+    /// Parse resource from string
+    fn parse_resource(&self, resource_str: &str, query_upper: &str) -> ProtocolResult<Resource> {
+        let resource_upper = resource_str.to_uppercase();
+
+        if resource_upper.contains("ALL KEYSPACES") {
+            Ok(Resource::AllKeyspaces)
+        } else if resource_upper.contains("ALL ROLES") {
+            Ok(Resource::AllRoles)
+        } else if resource_upper.contains("ALL FUNCTIONS") {
+            let keyspace = if query_upper.contains(" IN KEYSPACE ") {
+                // Extract keyspace name
+                None // Simplified
+            } else {
+                None
+            };
+            Ok(Resource::AllFunctions(keyspace))
+        } else if resource_upper.starts_with("KEYSPACE") {
+            let name = resource_str
+                .split_whitespace()
+                .nth(1)
+                .unwrap_or("")
+                .to_string();
+            Ok(Resource::Keyspace(name))
+        } else if resource_upper.starts_with("TABLE") {
+            let table_name = resource_str
+                .split_whitespace()
+                .nth(1)
+                .unwrap_or("")
+                .to_string();
+            if table_name.contains('.') {
+                let parts: Vec<&str> = table_name.split('.').collect();
+                Ok(Resource::Table {
+                    keyspace: Some(parts[0].to_string()),
+                    table: parts[1].to_string(),
+                })
+            } else {
+                Ok(Resource::Table {
+                    keyspace: None,
+                    table: table_name,
+                })
+            }
+        } else if resource_upper.starts_with("ROLE") {
+            let name = resource_str
+                .split_whitespace()
+                .nth(1)
+                .unwrap_or("")
+                .to_string();
+            Ok(Resource::Role(name))
+        } else if resource_upper.starts_with("FUNCTION") {
+            let name = resource_str
+                .split_whitespace()
+                .nth(1)
+                .unwrap_or("")
+                .to_string();
+            Ok(Resource::Function {
+                keyspace: None,
+                name,
+            })
+        } else {
+            // Default to table
+            if resource_str.contains('.') {
+                let parts: Vec<&str> = resource_str.split('.').collect();
+                Ok(Resource::Table {
+                    keyspace: Some(parts[0].to_string()),
+                    table: parts[1].to_string(),
+                })
+            } else {
+                Ok(Resource::Table {
+                    keyspace: None,
+                    table: resource_str.to_string(),
+                })
+            }
+        }
+    }
+
+    /// Parse CQL type from string
+    fn parse_cql_type(&self, type_str: &str) -> CqlType {
+        match type_str.to_uppercase().as_str() {
+            "TEXT" | "VARCHAR" => CqlType::Text,
+            "ASCII" => CqlType::Ascii,
+            "INT" => CqlType::Int,
+            "BIGINT" => CqlType::Bigint,
+            "SMALLINT" => CqlType::Smallint,
+            "TINYINT" => CqlType::Tinyint,
+            "VARINT" => CqlType::Varint,
+            "BOOLEAN" => CqlType::Boolean,
+            "FLOAT" => CqlType::Float,
+            "DOUBLE" => CqlType::Double,
+            "DECIMAL" => CqlType::Decimal,
+            "TIMESTAMP" => CqlType::Timestamp,
+            "DATE" => CqlType::Date,
+            "TIME" => CqlType::Time,
+            "DURATION" => CqlType::Duration,
+            "UUID" => CqlType::Uuid,
+            "TIMEUUID" => CqlType::Timeuuid,
+            "INET" => CqlType::Inet,
+            "BLOB" => CqlType::Blob,
+            "COUNTER" => CqlType::Counter,
+            _ => CqlType::Text,
+        }
+    }
 }
 
 impl Default for CqlParser {
@@ -1199,6 +2259,192 @@ mod tests {
                 assert!(if_not_exists);
             }
             _ => panic!("Expected CREATE KEYSPACE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_alter_table_add() {
+        let parser = CqlParser::new();
+        let stmt = parser
+            .parse("ALTER TABLE users ADD email text")
+            .unwrap();
+
+        match stmt {
+            CqlStatement::AlterTable { name, alteration } => {
+                assert_eq!(name, "users");
+                match alteration {
+                    TableAlteration::AddColumn { name, data_type } => {
+                        assert_eq!(name, "email");
+                        assert_eq!(data_type, CqlType::Text);
+                    }
+                    _ => panic!("Expected AddColumn alteration"),
+                }
+            }
+            _ => panic!("Expected ALTER TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_alter_table_drop() {
+        let parser = CqlParser::new();
+        let stmt = parser
+            .parse("ALTER TABLE users DROP email")
+            .unwrap();
+
+        match stmt {
+            CqlStatement::AlterTable { name, alteration } => {
+                assert_eq!(name, "users");
+                match alteration {
+                    TableAlteration::DropColumn { name } => {
+                        assert_eq!(name, "email");
+                    }
+                    _ => panic!("Expected DropColumn alteration"),
+                }
+            }
+            _ => panic!("Expected ALTER TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_alter_table_rename() {
+        let parser = CqlParser::new();
+        let stmt = parser
+            .parse("ALTER TABLE users RENAME old_col TO new_col")
+            .unwrap();
+
+        match stmt {
+            CqlStatement::AlterTable { name, alteration } => {
+                assert_eq!(name, "users");
+                match alteration {
+                    TableAlteration::RenameColumn { from, to } => {
+                        assert_eq!(from, "old_col");
+                        assert_eq!(to, "new_col");
+                    }
+                    _ => panic!("Expected RenameColumn alteration"),
+                }
+            }
+            _ => panic!("Expected ALTER TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_drop_index() {
+        let parser = CqlParser::new();
+        let stmt = parser
+            .parse("DROP INDEX IF EXISTS user_email_idx")
+            .unwrap();
+
+        match stmt {
+            CqlStatement::DropIndex { name, if_exists } => {
+                assert_eq!(name, "user_email_idx");
+                assert!(if_exists);
+            }
+            _ => panic!("Expected DROP INDEX statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_drop_type() {
+        let parser = CqlParser::new();
+        let stmt = parser.parse("DROP TYPE address").unwrap();
+
+        match stmt {
+            CqlStatement::DropType { name, if_exists } => {
+                assert_eq!(name, "address");
+                assert!(!if_exists);
+            }
+            _ => panic!("Expected DROP TYPE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_role() {
+        let parser = CqlParser::new();
+        let stmt = parser
+            .parse("CREATE ROLE admin WITH SUPERUSER = TRUE AND LOGIN = TRUE")
+            .unwrap();
+
+        match stmt {
+            CqlStatement::CreateRole {
+                name,
+                superuser,
+                login,
+                ..
+            } => {
+                assert_eq!(name, "admin");
+                assert!(superuser);
+                assert!(login);
+            }
+            _ => panic!("Expected CREATE ROLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_grant() {
+        let parser = CqlParser::new();
+        let stmt = parser
+            .parse("GRANT SELECT ON TABLE users TO reader_role")
+            .unwrap();
+
+        match stmt {
+            CqlStatement::Grant {
+                permissions,
+                resource,
+                role,
+            } => {
+                assert_eq!(permissions, vec![Permission::Select]);
+                match resource {
+                    Resource::Table { table, .. } => {
+                        assert_eq!(table, "users");
+                    }
+                    _ => panic!("Expected Table resource"),
+                }
+                assert_eq!(role, "reader_role");
+            }
+            _ => panic!("Expected GRANT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_revoke() {
+        let parser = CqlParser::new();
+        let stmt = parser
+            .parse("REVOKE MODIFY ON KEYSPACE test_ks FROM writer_role")
+            .unwrap();
+
+        match stmt {
+            CqlStatement::Revoke {
+                permissions,
+                resource,
+                role,
+            } => {
+                assert_eq!(permissions, vec![Permission::Modify]);
+                match resource {
+                    Resource::Keyspace(name) => {
+                        assert_eq!(name, "test_ks");
+                    }
+                    _ => panic!("Expected Keyspace resource"),
+                }
+                assert_eq!(role, "writer_role");
+            }
+            _ => panic!("Expected REVOKE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_list_roles() {
+        let parser = CqlParser::new();
+        let stmt = parser.parse("LIST ROLES").unwrap();
+
+        match stmt {
+            CqlStatement::ListRoles {
+                of_role,
+                no_recursive,
+            } => {
+                assert!(of_role.is_none());
+                assert!(!no_recursive);
+            }
+            _ => panic!("Expected LIST ROLES statement"),
         }
     }
 }

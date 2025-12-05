@@ -26,6 +26,8 @@ struct PreparedStatement {
     #[allow(dead_code)]
     num_columns: u16,
     param_types: Vec<super::types::MySqlType>, // Parameter types
+    /// Long data sent via COM_STMT_SEND_LONG_DATA (param_id -> accumulated data)
+    long_data: HashMap<u16, Vec<u8>>,
 }
 
 /// MySQL metrics
@@ -303,8 +305,10 @@ impl MySqlAdapter {
             }
             MySqlCommand::StmtPrepare => self.handle_prepare(payload).await,
             MySqlCommand::StmtExecute => self.handle_execute(payload).await,
+            MySqlCommand::StmtSendLongData => self.handle_stmt_send_long_data(payload).await,
             MySqlCommand::StmtClose => self.handle_stmt_close(payload).await,
             MySqlCommand::StmtReset => self.handle_stmt_reset(payload).await,
+            MySqlCommand::StmtFetch => self.handle_stmt_fetch(payload).await,
             MySqlCommand::FieldList => self.handle_field_list(payload).await,
             MySqlCommand::Statistics => self.handle_statistics().await,
             MySqlCommand::CreateDb => self.handle_create_db(payload).await,
@@ -827,6 +831,7 @@ impl MySqlAdapter {
             num_params,
             num_columns: 0, // Will be determined when we know the result set
             param_types: param_types.clone(),
+            long_data: HashMap::new(),
         };
 
         self.prepared_statements
@@ -1002,6 +1007,7 @@ impl MySqlAdapter {
         let num_params = stmt.num_params;
         let query_template = stmt.query.clone();
         let param_types = stmt.param_types.clone();
+        let long_data = stmt.long_data.clone();
         drop(statements);
 
         // If no parameters, execute directly
@@ -1057,13 +1063,28 @@ impl MySqlAdapter {
             let bit_idx = param_idx % 8;
             let is_null = (null_bitmap[byte_idx] & (1 << bit_idx)) != 0;
 
-            let param_type = param_types_to_use
-                .get(param_idx)
-                .copied()
-                .unwrap_or(super::types::MySqlType::VarString);
+            // Check if this parameter has long data sent via COM_STMT_SEND_LONG_DATA
+            if let Some(data) = long_data.get(&i) {
+                // Use long data instead of inline data
+                // Convert to string with proper escaping for SQL
+                let value = if let Ok(s) = String::from_utf8(data.clone()) {
+                    format!("'{}'", s.replace('\'', "''"))
+                } else {
+                    // Binary data - encode as hex literal
+                    format!("X'{}'", hex::encode(data))
+                };
+                param_values.push(value);
+            } else if is_null {
+                param_values.push("NULL".to_string());
+            } else {
+                let param_type = param_types_to_use
+                    .get(param_idx)
+                    .copied()
+                    .unwrap_or(super::types::MySqlType::VarString);
 
-            let value = self.decode_parameter_value(&mut payload, param_type, is_null)?;
-            param_values.push(value);
+                let value = self.decode_parameter_value(&mut payload, param_type, false)?;
+                param_values.push(value);
+            }
         }
 
         // Bind parameters to query (replace `?` with values)
@@ -1120,10 +1141,96 @@ impl MySqlAdapter {
 
         println!("[MySQL] Reset statement: {}", statement_id);
 
-        // Reset doesn't clear the statement, just resets parameter bindings
-        // For our implementation, we just return OK since we don't maintain
-        // separate parameter state between executions
+        // Reset clears long data and resets parameter state
+        let mut statements = self.prepared_statements.write().await;
+        if let Some(stmt) = statements.get_mut(&statement_id) {
+            stmt.long_data.clear();
+        }
+        drop(statements);
+
         Ok(vec![MySqlPacketBuilder::ok(0, 0)])
+    }
+
+    /// Handle COM_STMT_SEND_LONG_DATA
+    /// Used to send binary data for a parameter in chunks before execution
+    async fn handle_stmt_send_long_data(&self, mut payload: Bytes) -> ProtocolResult<Vec<Bytes>> {
+        // COM_STMT_SEND_LONG_DATA format:
+        // - statement_id: 4 bytes
+        // - param_id: 2 bytes
+        // - data: remaining bytes
+
+        if payload.len() < 6 {
+            return Err(ProtocolError::IncompleteFrame);
+        }
+
+        let statement_id = payload.get_u32_le();
+        let param_id = payload.get_u16_le();
+        let data = payload.to_vec();
+
+        println!(
+            "[MySQL] Send long data: stmt={}, param={}, len={}",
+            statement_id,
+            param_id,
+            data.len()
+        );
+
+        // Accumulate long data for this parameter
+        let mut statements = self.prepared_statements.write().await;
+        if let Some(stmt) = statements.get_mut(&statement_id) {
+            stmt.long_data
+                .entry(param_id)
+                .or_insert_with(Vec::new)
+                .extend(data);
+        } else {
+            // Statement not found, but per MySQL protocol, no response is sent
+            println!("[MySQL] Warning: Long data for unknown statement {}", statement_id);
+        }
+        drop(statements);
+
+        // COM_STMT_SEND_LONG_DATA does not send any response
+        Ok(vec![])
+    }
+
+    /// Handle COM_STMT_FETCH
+    /// Used to fetch rows from a cursor in batches (requires SERVER_STATUS_CURSOR_EXISTS)
+    async fn handle_stmt_fetch(&self, mut payload: Bytes) -> ProtocolResult<Vec<Bytes>> {
+        // COM_STMT_FETCH format:
+        // - statement_id: 4 bytes
+        // - num_rows: 4 bytes (number of rows to fetch)
+
+        if payload.len() < 8 {
+            return Err(ProtocolError::IncompleteFrame);
+        }
+
+        let statement_id = payload.get_u32_le();
+        let num_rows = payload.get_u32_le();
+
+        println!(
+            "[MySQL] Fetch: stmt={}, rows={}",
+            statement_id, num_rows
+        );
+
+        // Note: Full cursor support would require:
+        // 1. Storing the result set from COM_STMT_EXECUTE when CURSOR_TYPE_READ_ONLY is set
+        // 2. Tracking cursor position for each statement
+        // 3. Returning rows in batches
+        //
+        // For now, we return an error indicating cursor is not available
+        // since we don't set SERVER_STATUS_CURSOR_EXISTS in execute responses
+
+        // Check if statement exists
+        let statements = self.prepared_statements.read().await;
+        if !statements.contains_key(&statement_id) {
+            return Ok(vec![MySqlPacketBuilder::error(
+                super::protocol::error_codes::ER_UNKNOWN_ERROR,
+                &format!("Statement {} not found", statement_id),
+            )]);
+        }
+        drop(statements);
+
+        // Return EOF indicating no more rows (cursor exhausted)
+        // This is the expected response when there are no more rows to fetch
+        Ok(vec![MySqlPacketBuilder::eof()])
     }
 
     /// Handle COM_FIELD_LIST
@@ -1523,5 +1630,160 @@ mod tests {
             .handle_mysql_specific_query("SELECT * FROM users")
             .await;
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_stmt_send_long_data() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Create a prepared statement first
+        let prepare_payload = Bytes::from("INSERT INTO test_table (id, data) VALUES (?, ?)");
+        let prepare_result = adapter.handle_prepare(prepare_payload).await;
+        assert!(prepare_result.is_ok());
+        let packets = prepare_result.unwrap();
+        assert!(!packets.is_empty());
+
+        // Extract statement_id from response (first 4 bytes after status byte)
+        let first_packet = &packets[0];
+        assert_eq!(first_packet[0], 0x00); // OK status
+        let statement_id = u32::from_le_bytes([first_packet[1], first_packet[2], first_packet[3], first_packet[4]]);
+
+        // Send long data for param 1 (the data column)
+        let mut long_data_payload = BytesMut::new();
+        long_data_payload.put_u32_le(statement_id); // statement_id
+        long_data_payload.put_u16_le(1); // param_id (0-indexed)
+        long_data_payload.put(&b"This is some long text data for the test"[..]);
+
+        let result = adapter.handle_stmt_send_long_data(long_data_payload.freeze()).await;
+        assert!(result.is_ok());
+        // COM_STMT_SEND_LONG_DATA returns no response
+        assert!(result.unwrap().is_empty());
+
+        // Verify long data was stored
+        let statements = adapter.prepared_statements.read().await;
+        let stmt = statements.get(&statement_id).unwrap();
+        assert!(stmt.long_data.contains_key(&1));
+        assert_eq!(stmt.long_data[&1], b"This is some long text data for the test");
+    }
+
+    #[tokio::test]
+    async fn test_stmt_send_long_data_multiple_chunks() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Create a prepared statement
+        let prepare_payload = Bytes::from("INSERT INTO test (data) VALUES (?)");
+        let prepare_result = adapter.handle_prepare(prepare_payload).await.unwrap();
+        let first_packet = &prepare_result[0];
+        let statement_id = u32::from_le_bytes([first_packet[1], first_packet[2], first_packet[3], first_packet[4]]);
+
+        // Send first chunk
+        let mut chunk1 = BytesMut::new();
+        chunk1.put_u32_le(statement_id);
+        chunk1.put_u16_le(0); // param_id
+        chunk1.put(&b"First chunk "[..]);
+        adapter.handle_stmt_send_long_data(chunk1.freeze()).await.unwrap();
+
+        // Send second chunk
+        let mut chunk2 = BytesMut::new();
+        chunk2.put_u32_le(statement_id);
+        chunk2.put_u16_le(0); // same param_id
+        chunk2.put(&b"Second chunk"[..]);
+        adapter.handle_stmt_send_long_data(chunk2.freeze()).await.unwrap();
+
+        // Verify chunks were concatenated
+        let statements = adapter.prepared_statements.read().await;
+        let stmt = statements.get(&statement_id).unwrap();
+        assert_eq!(stmt.long_data[&0], b"First chunk Second chunk");
+    }
+
+    #[tokio::test]
+    async fn test_stmt_reset_clears_long_data() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Create and prepare statement
+        let prepare_payload = Bytes::from("INSERT INTO test (data) VALUES (?)");
+        let prepare_result = adapter.handle_prepare(prepare_payload).await.unwrap();
+        let first_packet = &prepare_result[0];
+        let statement_id = u32::from_le_bytes([first_packet[1], first_packet[2], first_packet[3], first_packet[4]]);
+
+        // Send long data
+        let mut long_data = BytesMut::new();
+        long_data.put_u32_le(statement_id);
+        long_data.put_u16_le(0);
+        long_data.put(&b"Some data"[..]);
+        adapter.handle_stmt_send_long_data(long_data.freeze()).await.unwrap();
+
+        // Reset statement
+        let mut reset_payload = BytesMut::new();
+        reset_payload.put_u32_le(statement_id);
+        let result = adapter.handle_stmt_reset(reset_payload.freeze()).await;
+        assert!(result.is_ok());
+
+        // Verify long data was cleared
+        let statements = adapter.prepared_statements.read().await;
+        let stmt = statements.get(&statement_id).unwrap();
+        assert!(stmt.long_data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_stmt_fetch() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Create a prepared statement
+        let prepare_payload = Bytes::from("SELECT * FROM test");
+        let prepare_result = adapter.handle_prepare(prepare_payload).await.unwrap();
+        let first_packet = &prepare_result[0];
+        let statement_id = u32::from_le_bytes([first_packet[1], first_packet[2], first_packet[3], first_packet[4]]);
+
+        // Try to fetch
+        let mut fetch_payload = BytesMut::new();
+        fetch_payload.put_u32_le(statement_id);
+        fetch_payload.put_u32_le(10); // num_rows
+
+        let result = adapter.handle_stmt_fetch(fetch_payload.freeze()).await;
+        assert!(result.is_ok());
+
+        // Should return EOF (no cursor support yet)
+        let packets = result.unwrap();
+        assert_eq!(packets.len(), 1);
+        assert_eq!(packets[0][0], 0xFE); // EOF packet
+    }
+
+    #[tokio::test]
+    async fn test_stmt_fetch_unknown_statement() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Try to fetch from non-existent statement
+        let mut fetch_payload = BytesMut::new();
+        fetch_payload.put_u32_le(99999); // non-existent statement_id
+        fetch_payload.put_u32_le(10);
+
+        let result = adapter.handle_stmt_fetch(fetch_payload.freeze()).await;
+        assert!(result.is_ok());
+
+        // Should return error
+        let packets = result.unwrap();
+        assert_eq!(packets.len(), 1);
+        assert_eq!(packets[0][0], 0xFF); // ERR packet
+    }
+
+    #[test]
+    fn test_mysql_command_send_long_data_parsing() {
+        use super::super::protocol::MySqlCommand;
+
+        // Test COM_STMT_SEND_LONG_DATA (0x18)
+        let cmd = MySqlCommand::from_u8(0x18);
+        assert!(cmd.is_ok());
+        assert_eq!(cmd.unwrap(), MySqlCommand::StmtSendLongData);
+
+        // Test COM_STMT_FETCH (0x1C)
+        let cmd = MySqlCommand::from_u8(0x1C);
+        assert!(cmd.is_ok());
+        assert_eq!(cmd.unwrap(), MySqlCommand::StmtFetch);
     }
 }

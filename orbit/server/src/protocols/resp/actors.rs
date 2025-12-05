@@ -870,6 +870,481 @@ impl SetActorMethods for SetActor {
     }
 }
 
+/// Entry in a Redis Stream
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamEntry {
+    /// Entry ID in format "timestamp-sequence"
+    pub id: String,
+    /// Fields and values for this entry
+    pub fields: HashMap<String, String>,
+}
+
+/// Consumer group for a Redis Stream
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsumerGroup {
+    /// Name of the consumer group
+    pub name: String,
+    /// Last delivered ID
+    pub last_delivered_id: String,
+    /// Pending entries per consumer (consumer_name -> entry_ids)
+    pub pending: HashMap<String, Vec<String>>,
+    /// Consumers in this group
+    pub consumers: HashMap<String, StreamConsumer>,
+}
+
+/// Consumer within a consumer group
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamConsumer {
+    /// Consumer name
+    pub name: String,
+    /// Pending entries for this consumer
+    pub pending_count: usize,
+    /// Last seen timestamp
+    pub last_seen: u64,
+}
+
+/// Actor for storing streams (Redis STREAM type)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamActor {
+    /// Stream entries in order
+    pub entries: Vec<StreamEntry>,
+    /// Last generated ID (timestamp, sequence)
+    pub last_id: (u64, u64),
+    /// Consumer groups
+    pub groups: HashMap<String, ConsumerGroup>,
+    /// Maximum length (0 = unlimited)
+    pub max_length: usize,
+}
+
+impl StreamActor {
+    pub fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+            last_id: (0, 0),
+            groups: HashMap::new(),
+            max_length: 0,
+        }
+    }
+
+    /// Generate a new entry ID
+    fn generate_id(&mut self, explicit_id: Option<&str>) -> Result<String, String> {
+        if let Some(id_str) = explicit_id {
+            if id_str == "*" {
+                // Auto-generate ID
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64;
+
+                if now > self.last_id.0 {
+                    self.last_id = (now, 0);
+                } else {
+                    self.last_id.1 += 1;
+                }
+                Ok(format!("{}-{}", self.last_id.0, self.last_id.1))
+            } else if id_str.contains('-') {
+                // Parse explicit ID
+                let parts: Vec<&str> = id_str.split('-').collect();
+                if parts.len() != 2 {
+                    return Err("ERR Invalid stream ID".to_string());
+                }
+                let timestamp: u64 = parts[0]
+                    .parse()
+                    .map_err(|_| "ERR Invalid stream ID".to_string())?;
+                let seq_str = parts[1];
+
+                let sequence: u64 = if seq_str == "*" {
+                    // Auto-generate sequence for given timestamp
+                    if timestamp == self.last_id.0 {
+                        self.last_id.1 + 1
+                    } else if timestamp > self.last_id.0 {
+                        0
+                    } else {
+                        return Err(
+                            "ERR The ID specified is equal or smaller than the target stream top item".to_string()
+                        );
+                    }
+                } else {
+                    seq_str
+                        .parse()
+                        .map_err(|_| "ERR Invalid stream ID".to_string())?
+                };
+
+                // Validate that new ID is greater than last
+                if timestamp < self.last_id.0
+                    || (timestamp == self.last_id.0 && sequence <= self.last_id.1)
+                {
+                    if !self.entries.is_empty() {
+                        return Err(
+                            "ERR The ID specified is equal or smaller than the target stream top item".to_string()
+                        );
+                    }
+                }
+
+                self.last_id = (timestamp, sequence);
+                Ok(format!("{}-{}", timestamp, sequence))
+            } else {
+                Err("ERR Invalid stream ID format".to_string())
+            }
+        } else {
+            // Default to auto-generate
+            self.generate_id(Some("*"))
+        }
+    }
+
+    /// XADD - Add entry to stream
+    pub fn xadd(
+        &mut self,
+        id: Option<&str>,
+        fields: Vec<(String, String)>,
+    ) -> Result<String, String> {
+        let entry_id = self.generate_id(id)?;
+
+        let entry = StreamEntry {
+            id: entry_id.clone(),
+            fields: fields.into_iter().collect(),
+        };
+
+        self.entries.push(entry);
+
+        // Trim if max_length is set
+        if self.max_length > 0 && self.entries.len() > self.max_length {
+            self.entries.drain(0..self.entries.len() - self.max_length);
+        }
+
+        Ok(entry_id)
+    }
+
+    /// XLEN - Get stream length
+    pub fn xlen(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Parse an ID string into (timestamp, sequence) for comparison
+    fn parse_id(id: &str) -> Option<(u64, u64)> {
+        if id == "-" {
+            return Some((0, 0));
+        }
+        if id == "+" {
+            return Some((u64::MAX, u64::MAX));
+        }
+        let parts: Vec<&str> = id.split('-').collect();
+        if parts.len() == 2 {
+            let ts = parts[0].parse().ok()?;
+            let seq = parts[1].parse().ok()?;
+            Some((ts, seq))
+        } else if parts.len() == 1 {
+            let ts = parts[0].parse().ok()?;
+            Some((ts, 0))
+        } else {
+            None
+        }
+    }
+
+    /// Compare two entry IDs
+    #[allow(dead_code)]
+    fn compare_ids(a: &str, b: &str) -> std::cmp::Ordering {
+        let a_parsed = Self::parse_id(a).unwrap_or((0, 0));
+        let b_parsed = Self::parse_id(b).unwrap_or((0, 0));
+        a_parsed.cmp(&b_parsed)
+    }
+
+    /// XRANGE - Get entries in a range
+    pub fn xrange(&self, start: &str, end: &str, count: Option<usize>) -> Vec<StreamEntry> {
+        let start_parsed = Self::parse_id(start).unwrap_or((0, 0));
+        let end_parsed = Self::parse_id(end).unwrap_or((u64::MAX, u64::MAX));
+
+        let mut result: Vec<StreamEntry> = self
+            .entries
+            .iter()
+            .filter(|entry| {
+                if let Some(entry_id) = Self::parse_id(&entry.id) {
+                    entry_id >= start_parsed && entry_id <= end_parsed
+                } else {
+                    false
+                }
+            })
+            .cloned()
+            .collect();
+
+        if let Some(c) = count {
+            result.truncate(c);
+        }
+
+        result
+    }
+
+    /// XREVRANGE - Get entries in reverse order
+    pub fn xrevrange(&self, end: &str, start: &str, count: Option<usize>) -> Vec<StreamEntry> {
+        let start_parsed = Self::parse_id(start).unwrap_or((0, 0));
+        let end_parsed = Self::parse_id(end).unwrap_or((u64::MAX, u64::MAX));
+
+        let mut result: Vec<StreamEntry> = self
+            .entries
+            .iter()
+            .rev()
+            .filter(|entry| {
+                if let Some(entry_id) = Self::parse_id(&entry.id) {
+                    entry_id >= start_parsed && entry_id <= end_parsed
+                } else {
+                    false
+                }
+            })
+            .cloned()
+            .collect();
+
+        if let Some(c) = count {
+            result.truncate(c);
+        }
+
+        result
+    }
+
+    /// XREAD - Read entries greater than given ID
+    pub fn xread(&self, id: &str, count: Option<usize>) -> Vec<StreamEntry> {
+        let start_parsed = Self::parse_id(id).unwrap_or((0, 0));
+
+        let mut result: Vec<StreamEntry> = self
+            .entries
+            .iter()
+            .filter(|entry| {
+                if let Some(entry_id) = Self::parse_id(&entry.id) {
+                    entry_id > start_parsed
+                } else {
+                    false
+                }
+            })
+            .cloned()
+            .collect();
+
+        if let Some(c) = count {
+            result.truncate(c);
+        }
+
+        result
+    }
+
+    /// XTRIM - Trim stream to specified length
+    pub fn xtrim(&mut self, max_len: usize, approximate: bool) -> usize {
+        let current_len = self.entries.len();
+        if current_len <= max_len {
+            return 0;
+        }
+
+        let to_remove = if approximate {
+            // For approximate, we can remove slightly fewer entries
+            (current_len - max_len).saturating_sub(100).max(current_len - max_len)
+        } else {
+            current_len - max_len
+        };
+
+        self.entries.drain(0..to_remove);
+        to_remove
+    }
+
+    /// XDEL - Delete specific entries
+    pub fn xdel(&mut self, ids: Vec<String>) -> usize {
+        let mut deleted = 0;
+        for id in ids {
+            if let Some(pos) = self.entries.iter().position(|e| e.id == id) {
+                self.entries.remove(pos);
+                deleted += 1;
+            }
+        }
+        deleted
+    }
+
+    /// XINFO STREAM - Get stream info
+    pub fn xinfo_stream(&self) -> HashMap<String, String> {
+        let mut info = HashMap::new();
+        info.insert("length".to_string(), self.entries.len().to_string());
+        info.insert(
+            "first-entry-id".to_string(),
+            self.entries.first().map(|e| e.id.clone()).unwrap_or_default(),
+        );
+        info.insert(
+            "last-entry-id".to_string(),
+            self.entries.last().map(|e| e.id.clone()).unwrap_or_default(),
+        );
+        info.insert("groups".to_string(), self.groups.len().to_string());
+        info
+    }
+
+    /// XGROUP CREATE - Create a consumer group
+    pub fn xgroup_create(&mut self, group_name: &str, start_id: &str) -> Result<(), String> {
+        if self.groups.contains_key(group_name) {
+            return Err("BUSYGROUP Consumer Group name already exists".to_string());
+        }
+
+        let last_delivered = if start_id == "$" {
+            self.entries.last().map(|e| e.id.clone()).unwrap_or_else(|| "0-0".to_string())
+        } else if start_id == "0" {
+            "0-0".to_string()
+        } else {
+            start_id.to_string()
+        };
+
+        self.groups.insert(
+            group_name.to_string(),
+            ConsumerGroup {
+                name: group_name.to_string(),
+                last_delivered_id: last_delivered,
+                pending: HashMap::new(),
+                consumers: HashMap::new(),
+            },
+        );
+
+        Ok(())
+    }
+
+    /// XGROUP DESTROY - Delete a consumer group
+    pub fn xgroup_destroy(&mut self, group_name: &str) -> bool {
+        self.groups.remove(group_name).is_some()
+    }
+
+    /// XREADGROUP - Read from stream as part of consumer group
+    pub fn xreadgroup(
+        &mut self,
+        group_name: &str,
+        consumer_name: &str,
+        id: &str,
+        count: Option<usize>,
+    ) -> Result<Vec<StreamEntry>, String> {
+        let group = self
+            .groups
+            .get_mut(group_name)
+            .ok_or_else(|| "NOGROUP No such consumer group".to_string())?;
+
+        // Ensure consumer exists
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        group.consumers.entry(consumer_name.to_string()).or_insert_with(|| StreamConsumer {
+            name: consumer_name.to_string(),
+            pending_count: 0,
+            last_seen: now,
+        });
+
+        if id == ">" {
+            // Read new messages
+            let last_delivered = Self::parse_id(&group.last_delivered_id).unwrap_or((0, 0));
+
+            let mut result: Vec<StreamEntry> = self
+                .entries
+                .iter()
+                .filter(|entry| {
+                    if let Some(entry_id) = Self::parse_id(&entry.id) {
+                        entry_id > last_delivered
+                    } else {
+                        false
+                    }
+                })
+                .cloned()
+                .collect();
+
+            if let Some(c) = count {
+                result.truncate(c);
+            }
+
+            // Update last delivered ID and pending
+            if let Some(last_entry) = result.last() {
+                group.last_delivered_id = last_entry.id.clone();
+            }
+
+            // Add to pending
+            let pending_list = group.pending.entry(consumer_name.to_string()).or_default();
+            for entry in &result {
+                pending_list.push(entry.id.clone());
+            }
+
+            if let Some(consumer) = group.consumers.get_mut(consumer_name) {
+                consumer.pending_count += result.len();
+                consumer.last_seen = now;
+            }
+
+            Ok(result)
+        } else {
+            // Read pending messages for this consumer
+            let pending = group.pending.get(consumer_name).cloned().unwrap_or_default();
+            let result: Vec<StreamEntry> = self
+                .entries
+                .iter()
+                .filter(|e| pending.contains(&e.id))
+                .cloned()
+                .collect();
+            Ok(result)
+        }
+    }
+
+    /// XACK - Acknowledge messages
+    pub fn xack(&mut self, group_name: &str, ids: Vec<String>) -> Result<usize, String> {
+        let group = self
+            .groups
+            .get_mut(group_name)
+            .ok_or_else(|| "NOGROUP No such consumer group".to_string())?;
+
+        let mut acked = 0;
+        for (consumer_name, pending_list) in group.pending.iter_mut() {
+            let before_len = pending_list.len();
+            pending_list.retain(|id| !ids.contains(id));
+            let removed = before_len - pending_list.len();
+            acked += removed;
+
+            if let Some(consumer) = group.consumers.get_mut(consumer_name) {
+                consumer.pending_count = consumer.pending_count.saturating_sub(removed);
+            }
+        }
+
+        Ok(acked)
+    }
+
+    /// XPENDING - Get pending entries info
+    pub fn xpending(&self, group_name: &str) -> Result<(usize, Option<String>, Option<String>, Vec<(String, usize)>), String> {
+        let group = self
+            .groups
+            .get(group_name)
+            .ok_or_else(|| "NOGROUP No such consumer group".to_string())?;
+
+        let mut all_pending: Vec<&String> = group.pending.values().flatten().collect();
+        all_pending.sort();
+
+        let min_id = all_pending.first().map(|s| (*s).clone());
+        let max_id = all_pending.last().map(|s| (*s).clone());
+
+        let consumers_summary: Vec<(String, usize)> = group
+            .pending
+            .iter()
+            .filter(|(_, v)| !v.is_empty())
+            .map(|(k, v)| (k.clone(), v.len()))
+            .collect();
+
+        Ok((all_pending.len(), min_id, max_id, consumers_summary))
+    }
+
+    /// XSETID - Set the last ID of the stream
+    pub fn xsetid(&mut self, id: &str) -> Result<(), String> {
+        let parsed = Self::parse_id(id).ok_or_else(|| "ERR Invalid stream ID".to_string())?;
+        self.last_id = parsed;
+        Ok(())
+    }
+}
+
+impl Default for StreamActor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Addressable for StreamActor {
+    fn addressable_type() -> &'static str {
+        "StreamActor"
+    }
+}
+
+impl ActorWithStringKey for StreamActor {}
+
 /// Actor for storing sorted sets (Redis ZSET type)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SortedSetActor {
@@ -1637,5 +2112,238 @@ mod tests {
         let pubsub = PubSubActor::new();
         let debug_str = format!("{:?}", pubsub);
         assert!(debug_str.contains("PubSubActor"));
+    }
+
+    #[test]
+    fn test_stream_actor_xadd_xlen() {
+        let mut actor = StreamActor::new();
+        assert_eq!(actor.xlen(), 0);
+
+        // Add entry with auto-generated ID
+        let result = actor.xadd(
+            Some("*"),
+            vec![("field1".to_string(), "value1".to_string())],
+        );
+        assert!(result.is_ok());
+        let id = result.unwrap();
+        assert!(id.contains('-'));
+
+        assert_eq!(actor.xlen(), 1);
+
+        // Add another entry
+        let result = actor.xadd(
+            Some("*"),
+            vec![
+                ("field2".to_string(), "value2".to_string()),
+                ("field3".to_string(), "value3".to_string()),
+            ],
+        );
+        assert!(result.is_ok());
+        assert_eq!(actor.xlen(), 2);
+    }
+
+    #[test]
+    fn test_stream_actor_xadd_explicit_id() {
+        let mut actor = StreamActor::new();
+
+        // Add entry with explicit ID
+        let result = actor.xadd(
+            Some("1000-0"),
+            vec![("field1".to_string(), "value1".to_string())],
+        );
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "1000-0");
+
+        // Adding with same ID should fail
+        let result = actor.xadd(
+            Some("1000-0"),
+            vec![("field1".to_string(), "value1".to_string())],
+        );
+        assert!(result.is_err());
+
+        // Adding with lower ID should fail
+        let result = actor.xadd(
+            Some("500-0"),
+            vec![("field1".to_string(), "value1".to_string())],
+        );
+        assert!(result.is_err());
+
+        // Adding with higher ID should succeed
+        let result = actor.xadd(
+            Some("2000-0"),
+            vec![("field1".to_string(), "value1".to_string())],
+        );
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "2000-0");
+    }
+
+    #[test]
+    fn test_stream_actor_xrange() {
+        let mut actor = StreamActor::new();
+
+        // Add entries with explicit IDs
+        actor.xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())]).unwrap();
+        actor.xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())]).unwrap();
+        actor.xadd(Some("3000-0"), vec![("c".to_string(), "3".to_string())]).unwrap();
+
+        // Get all entries
+        let entries = actor.xrange("-", "+", None);
+        assert_eq!(entries.len(), 3);
+
+        // Get range
+        let entries = actor.xrange("1500-0", "2500-0", None);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].id, "2000-0");
+
+        // Get with count limit
+        let entries = actor.xrange("-", "+", Some(2));
+        assert_eq!(entries.len(), 2);
+    }
+
+    #[test]
+    fn test_stream_actor_xrevrange() {
+        let mut actor = StreamActor::new();
+
+        actor.xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())]).unwrap();
+        actor.xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())]).unwrap();
+        actor.xadd(Some("3000-0"), vec![("c".to_string(), "3".to_string())]).unwrap();
+
+        // Get all entries in reverse
+        let entries = actor.xrevrange("+", "-", None);
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0].id, "3000-0");
+        assert_eq!(entries[2].id, "1000-0");
+    }
+
+    #[test]
+    fn test_stream_actor_xread() {
+        let mut actor = StreamActor::new();
+
+        actor.xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())]).unwrap();
+        actor.xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())]).unwrap();
+        actor.xadd(Some("3000-0"), vec![("c".to_string(), "3".to_string())]).unwrap();
+
+        // Read entries after 1000-0
+        let entries = actor.xread("1000-0", None);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].id, "2000-0");
+        assert_eq!(entries[1].id, "3000-0");
+
+        // Read with count
+        let entries = actor.xread("0-0", Some(2));
+        assert_eq!(entries.len(), 2);
+    }
+
+    #[test]
+    fn test_stream_actor_xtrim() {
+        let mut actor = StreamActor::new();
+
+        for i in 0..10 {
+            actor.xadd(Some(&format!("{}-0", i * 1000)), vec![("idx".to_string(), i.to_string())]).unwrap();
+        }
+        assert_eq!(actor.xlen(), 10);
+
+        // Trim to 5 entries
+        let removed = actor.xtrim(5, false);
+        assert_eq!(removed, 5);
+        assert_eq!(actor.xlen(), 5);
+
+        // First remaining entry should be 5000-0
+        let entries = actor.xrange("-", "+", None);
+        assert_eq!(entries[0].id, "5000-0");
+    }
+
+    #[test]
+    fn test_stream_actor_xdel() {
+        let mut actor = StreamActor::new();
+
+        actor.xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())]).unwrap();
+        actor.xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())]).unwrap();
+        actor.xadd(Some("3000-0"), vec![("c".to_string(), "3".to_string())]).unwrap();
+
+        // Delete one entry
+        let deleted = actor.xdel(vec!["2000-0".to_string()]);
+        assert_eq!(deleted, 1);
+        assert_eq!(actor.xlen(), 2);
+
+        // Delete non-existent entry
+        let deleted = actor.xdel(vec!["9999-0".to_string()]);
+        assert_eq!(deleted, 0);
+    }
+
+    #[test]
+    fn test_stream_actor_consumer_groups() {
+        let mut actor = StreamActor::new();
+
+        // Add some entries
+        actor.xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())]).unwrap();
+        actor.xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())]).unwrap();
+
+        // Create consumer group
+        let result = actor.xgroup_create("mygroup", "0");
+        assert!(result.is_ok());
+
+        // Creating same group again should fail
+        let result = actor.xgroup_create("mygroup", "0");
+        assert!(result.is_err());
+
+        // Read from group
+        let result = actor.xreadgroup("mygroup", "consumer1", ">", None);
+        assert!(result.is_ok());
+        let entries = result.unwrap();
+        assert_eq!(entries.len(), 2);
+
+        // Check pending
+        let (pending_count, min_id, max_id, _consumers) = actor.xpending("mygroup").unwrap();
+        assert_eq!(pending_count, 2);
+        assert!(min_id.is_some());
+        assert!(max_id.is_some());
+
+        // Acknowledge entries
+        let acked = actor.xack("mygroup", vec!["1000-0".to_string(), "2000-0".to_string()]).unwrap();
+        assert_eq!(acked, 2);
+
+        // Pending should be empty now
+        let (pending_count, _, _, _) = actor.xpending("mygroup").unwrap();
+        assert_eq!(pending_count, 0);
+
+        // Destroy group
+        let destroyed = actor.xgroup_destroy("mygroup");
+        assert!(destroyed);
+    }
+
+    #[test]
+    fn test_stream_actor_xsetid() {
+        let mut actor = StreamActor::new();
+
+        // First add an entry to establish a baseline
+        actor.xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())]).unwrap();
+
+        // Set ID higher than current
+        let result = actor.xsetid("5000-0");
+        assert!(result.is_ok());
+
+        // Adding entry with lower ID should fail (now we have entries)
+        let result = actor.xadd(Some("4000-0"), vec![("a".to_string(), "1".to_string())]);
+        assert!(result.is_err());
+
+        // Adding entry with higher ID should succeed
+        let result = actor.xadd(Some("6000-0"), vec![("a".to_string(), "1".to_string())]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_stream_actor_xinfo() {
+        let mut actor = StreamActor::new();
+
+        actor.xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())]).unwrap();
+        actor.xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())]).unwrap();
+        actor.xgroup_create("group1", "0").unwrap();
+
+        let info = actor.xinfo_stream();
+        assert_eq!(info.get("length").unwrap(), "2");
+        assert_eq!(info.get("first-entry-id").unwrap(), "1000-0");
+        assert_eq!(info.get("last-entry-id").unwrap(), "2000-0");
+        assert_eq!(info.get("groups").unwrap(), "1");
     }
 }

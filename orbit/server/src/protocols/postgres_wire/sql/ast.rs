@@ -27,6 +27,7 @@ pub enum Statement {
     Update(UpdateStatement),
     Delete(DeleteStatement),
     Merge(MergeStatement),
+    Copy(CopyStatement),
 
     // Data Control Language (DCL)
     Grant(GrantStatement),
@@ -605,6 +606,138 @@ pub struct MergeInsert {
 pub enum MergeInsertValues {
     Values(Vec<Expression>),
     DefaultValues,
+}
+
+// ===== COPY Statement =====
+
+/// PostgreSQL COPY statement for bulk data transfer
+#[derive(Debug, Clone, PartialEq)]
+pub struct CopyStatement {
+    /// Direction of the copy operation
+    pub direction: CopyDirection,
+    /// Target table or query
+    pub target: CopyTarget,
+    /// Specific columns (if not all)
+    pub columns: Option<Vec<String>>,
+    /// Source/destination specification
+    pub source: CopySource,
+    /// Copy options
+    pub options: Vec<CopyOption>,
+}
+
+/// Direction of COPY operation
+#[derive(Debug, Clone, PartialEq)]
+pub enum CopyDirection {
+    /// COPY TO (export data)
+    To,
+    /// COPY FROM (import data)
+    From,
+}
+
+/// Target of COPY operation
+#[derive(Debug, Clone, PartialEq)]
+pub enum CopyTarget {
+    /// Table name
+    Table(TableName),
+    /// Query (only for COPY TO)
+    Query(Box<SelectStatement>),
+}
+
+/// Source/destination for COPY data
+#[derive(Debug, Clone, PartialEq)]
+pub enum CopySource {
+    /// Standard input/output (STDIN/STDOUT)
+    Stdio,
+    /// Program to pipe through
+    Program(String),
+    /// File path
+    File(String),
+}
+
+/// COPY statement options
+#[derive(Debug, Clone, PartialEq)]
+pub enum CopyOption {
+    /// FORMAT (text, csv, binary)
+    Format(CopyFormat),
+    /// FREEZE (for initial data load)
+    Freeze(bool),
+    /// DELIMITER character
+    Delimiter(char),
+    /// NULL string representation
+    Null(String),
+    /// HEADER (first line contains headers)
+    Header(CopyHeaderOption),
+    /// QUOTE character (CSV)
+    Quote(char),
+    /// ESCAPE character (CSV)
+    Escape(char),
+    /// FORCE_QUOTE columns (CSV)
+    ForceQuote(Vec<String>),
+    /// FORCE_NOT_NULL columns (CSV)
+    ForceNotNull(Vec<String>),
+    /// FORCE_NULL columns (CSV)
+    ForceNull(Vec<String>),
+    /// ENCODING
+    Encoding(String),
+    /// Default value for missing columns
+    Default(String),
+    /// ON_ERROR behavior
+    OnError(CopyOnError),
+    /// LOG_VERBOSITY
+    LogVerbosity(CopyLogVerbosity),
+}
+
+/// COPY format types
+#[derive(Debug, Clone, PartialEq)]
+pub enum CopyFormat {
+    Text,
+    Csv,
+    Binary,
+}
+
+/// COPY HEADER option values
+#[derive(Debug, Clone, PartialEq)]
+pub enum CopyHeaderOption {
+    /// No header processing
+    Off,
+    /// First row is header (HEADER or HEADER true)
+    On,
+    /// Match header to column names (HEADER MATCH)
+    Match,
+}
+
+/// COPY ON_ERROR behavior
+#[derive(Debug, Clone, PartialEq)]
+pub enum CopyOnError {
+    /// Stop on error (default)
+    Stop,
+    /// Skip rows with errors
+    Ignore,
+}
+
+/// COPY LOG_VERBOSITY option
+#[derive(Debug, Clone, PartialEq)]
+pub enum CopyLogVerbosity {
+    Default,
+    Verbose,
+}
+
+impl Default for CopyFormat {
+    fn default() -> Self {
+        CopyFormat::Text
+    }
+}
+
+impl Default for CopyHeaderOption {
+    fn default() -> Self {
+        CopyHeaderOption::Off
+    }
+}
+
+impl Default for CopyOnError {
+    fn default() -> Self {
+        CopyOnError::Stop
+    }
 }
 
 // ===== Expressions =====

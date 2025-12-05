@@ -118,6 +118,13 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             }
             "orbit.graph.louvain" => self.execute_louvain(args).await,
             "orbit.graph.kcore" => self.execute_kcore(args).await,
+            // Advanced Path Algorithms
+            "orbit.graph.astar" => self.execute_astar(args).await,
+            "orbit.graph.dijkstra" => self.execute_dijkstra(args).await,
+            "orbit.graph.allshortestpaths" => self.execute_all_shortest_paths(args).await,
+            "orbit.graph.kshortestpaths" => self.execute_k_shortest_paths(args).await,
+            "orbit.graph.spanningtree" => self.execute_spanning_tree(args).await,
+            "orbit.graph.singlesourceshortestpath" => self.execute_single_source_shortest_path(args).await,
             _ => Err(ProtocolError::CypherError(format!(
                 "Unknown graph algorithm procedure: {procedure_name}"
             ))),
@@ -2529,6 +2536,797 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 "Config argument must be an object or null".to_string(),
             )),
         }
+    }
+
+    // ==================== Advanced Path Algorithms ====================
+
+    /// Execute orbit.graph.astar procedure
+    /// A* pathfinding with heuristic function
+    /// CALL orbit.graph.astar({startNode: 'n1', endNode: 'n2', weightProperty: 'distance'})
+    async fn execute_astar(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            return Err(ProtocolError::CypherError(
+                "A* requires startNode and endNode parameters".to_string(),
+            ));
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let start_id = config
+            .get("startNode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ProtocolError::CypherError("startNode parameter required".to_string()))?;
+        let end_id = config
+            .get("endNode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ProtocolError::CypherError("endNode parameter required".to_string()))?;
+        let weight_property = config
+            .get("weightProperty")
+            .and_then(|v| v.as_str())
+            .unwrap_or("weight");
+
+        // Build adjacency structure with weights
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        let node_index: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        let start_idx = node_index
+            .get(start_id)
+            .copied()
+            .ok_or_else(|| ProtocolError::CypherError("Start node not found".to_string()))?;
+        let end_idx = node_index
+            .get(end_id)
+            .copied()
+            .ok_or_else(|| ProtocolError::CypherError("End node not found".to_string()))?;
+
+        // Build weighted adjacency list
+        let mut adj: Vec<Vec<(usize, f64)>> = vec![Vec::new(); nodes.len()];
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_index.get(&rel.start_node.to_string()),
+                node_index.get(&rel.end_node.to_string()),
+            ) {
+                let weight = rel
+                    .properties
+                    .get(weight_property)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(1.0);
+                adj[from_idx].push((to_idx, weight));
+            }
+        }
+
+        // A* algorithm using index as heuristic (simplified)
+        let mut dist: Vec<f64> = vec![f64::INFINITY; nodes.len()];
+        let mut prev: Vec<Option<usize>> = vec![None; nodes.len()];
+        let mut open_set = std::collections::BinaryHeap::new();
+
+        dist[start_idx] = 0.0;
+        open_set.push(std::cmp::Reverse((
+            ordered_float::OrderedFloat(0.0),
+            start_idx,
+        )));
+
+        while let Some(std::cmp::Reverse((_, current))) = open_set.pop() {
+            if current == end_idx {
+                break;
+            }
+
+            for &(neighbor, weight) in &adj[current] {
+                let new_dist = dist[current] + weight;
+                if new_dist < dist[neighbor] {
+                    dist[neighbor] = new_dist;
+                    prev[neighbor] = Some(current);
+                    // Heuristic: simple difference in indices (works for ordered graphs)
+                    let heuristic = (neighbor as i64 - end_idx as i64).unsigned_abs() as f64 * 0.1;
+                    open_set.push(std::cmp::Reverse((
+                        ordered_float::OrderedFloat(new_dist + heuristic),
+                        neighbor,
+                    )));
+                }
+            }
+        }
+
+        // Reconstruct path
+        let mut path = Vec::new();
+        let mut current = end_idx;
+        while let Some(prev_node) = prev[current] {
+            path.push(nodes[current].id.to_string());
+            current = prev_node;
+        }
+        path.push(nodes[start_idx].id.to_string());
+        path.reverse();
+
+        let columns = vec![
+            "path".to_string(),
+            "cost".to_string(),
+            "nodeCount".to_string(),
+        ];
+
+        let cost = if dist[end_idx].is_infinite() {
+            -1.0 // No path found
+        } else {
+            dist[end_idx]
+        };
+
+        let rows = vec![vec![
+            Some(format!("[{}]", path.join(", "))),
+            Some(format!("{:.4}", cost)),
+            Some(path.len().to_string()),
+        ]];
+
+        Ok(QueryResult {
+            nodes: vec![],
+            relationships: vec![],
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute orbit.graph.dijkstra procedure
+    /// Single source/target Dijkstra shortest path
+    /// CALL orbit.graph.dijkstra({startNode: 'n1', endNode: 'n2', weightProperty: 'weight'})
+    async fn execute_dijkstra(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            return Err(ProtocolError::CypherError(
+                "Dijkstra requires startNode parameter".to_string(),
+            ));
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let start_id = config
+            .get("startNode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ProtocolError::CypherError("startNode parameter required".to_string()))?;
+        let end_id = config.get("endNode").and_then(|v| v.as_str());
+        let weight_property = config
+            .get("weightProperty")
+            .and_then(|v| v.as_str())
+            .unwrap_or("weight");
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        let node_index: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        let start_idx = node_index
+            .get(start_id)
+            .copied()
+            .ok_or_else(|| ProtocolError::CypherError("Start node not found".to_string()))?;
+
+        // Build weighted adjacency list
+        let mut adj: Vec<Vec<(usize, f64)>> = vec![Vec::new(); nodes.len()];
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_index.get(&rel.start_node.to_string()),
+                node_index.get(&rel.end_node.to_string()),
+            ) {
+                let weight = rel
+                    .properties
+                    .get(weight_property)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(1.0);
+                adj[from_idx].push((to_idx, weight));
+            }
+        }
+
+        // Dijkstra's algorithm
+        let mut dist: Vec<f64> = vec![f64::INFINITY; nodes.len()];
+        let mut prev: Vec<Option<usize>> = vec![None; nodes.len()];
+        let mut heap = std::collections::BinaryHeap::new();
+
+        dist[start_idx] = 0.0;
+        heap.push(std::cmp::Reverse((ordered_float::OrderedFloat(0.0), start_idx)));
+
+        while let Some(std::cmp::Reverse((d, u))) = heap.pop() {
+            if d.0 > dist[u] {
+                continue;
+            }
+
+            for &(v, weight) in &adj[u] {
+                let new_dist = dist[u] + weight;
+                if new_dist < dist[v] {
+                    dist[v] = new_dist;
+                    prev[v] = Some(u);
+                    heap.push(std::cmp::Reverse((ordered_float::OrderedFloat(new_dist), v)));
+                }
+            }
+        }
+
+        let columns = vec![
+            "node_id".to_string(),
+            "distance".to_string(),
+            "path".to_string(),
+        ];
+
+        // If end_id specified, return single path; otherwise return all reachable nodes
+        let rows: Vec<Vec<Option<String>>> = if let Some(end) = end_id {
+            if let Some(&end_idx) = node_index.get(end) {
+                let mut path = Vec::new();
+                let mut current = end_idx;
+                while let Some(p) = prev[current] {
+                    path.push(nodes[current].id.to_string());
+                    current = p;
+                }
+                path.push(nodes[start_idx].id.to_string());
+                path.reverse();
+
+                vec![vec![
+                    Some(end.to_string()),
+                    Some(format!("{:.4}", dist[end_idx])),
+                    Some(format!("[{}]", path.join(" -> "))),
+                ]]
+            } else {
+                vec![]
+            }
+        } else {
+            // Return distances to all reachable nodes
+            nodes
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| dist[*i] < f64::INFINITY)
+                .map(|(i, n)| {
+                    vec![
+                        Some(n.id.to_string()),
+                        Some(format!("{:.4}", dist[i])),
+                        None,
+                    ]
+                })
+                .collect()
+        };
+
+        Ok(QueryResult {
+            nodes: vec![],
+            relationships: vec![],
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute orbit.graph.allShortestPaths procedure
+    /// Find all shortest paths between two nodes
+    /// CALL orbit.graph.allShortestPaths({startNode: 'n1', endNode: 'n2'})
+    async fn execute_all_shortest_paths(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            return Err(ProtocolError::CypherError(
+                "allShortestPaths requires startNode and endNode parameters".to_string(),
+            ));
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let start_id = config
+            .get("startNode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ProtocolError::CypherError("startNode parameter required".to_string()))?;
+        let end_id = config
+            .get("endNode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ProtocolError::CypherError("endNode parameter required".to_string()))?;
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        let node_index: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        let start_idx = node_index
+            .get(start_id)
+            .copied()
+            .ok_or_else(|| ProtocolError::CypherError("Start node not found".to_string()))?;
+        let end_idx = node_index
+            .get(end_id)
+            .copied()
+            .ok_or_else(|| ProtocolError::CypherError("End node not found".to_string()))?;
+
+        // Build adjacency list
+        let mut adj: Vec<Vec<usize>> = vec![Vec::new(); nodes.len()];
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_index.get(&rel.start_node.to_string()),
+                node_index.get(&rel.end_node.to_string()),
+            ) {
+                adj[from_idx].push(to_idx);
+            }
+        }
+
+        // BFS to find shortest distance
+        let mut dist: Vec<i32> = vec![-1; nodes.len()];
+        let mut queue = VecDeque::new();
+        dist[start_idx] = 0;
+        queue.push_back(start_idx);
+
+        while let Some(u) = queue.pop_front() {
+            for &v in &adj[u] {
+                if dist[v] == -1 {
+                    dist[v] = dist[u] + 1;
+                    queue.push_back(v);
+                }
+            }
+        }
+
+        if dist[end_idx] == -1 {
+            return Ok(QueryResult {
+                nodes: vec![],
+                relationships: vec![],
+                columns: vec!["paths".to_string(), "pathCount".to_string()],
+                rows: vec![vec![Some("[]".to_string()), Some("0".to_string())]],
+            });
+        }
+
+        // Find all paths of shortest length using DFS
+        let target_dist = dist[end_idx];
+        let mut all_paths: Vec<Vec<String>> = Vec::new();
+        let mut current_path = vec![start_idx];
+
+        fn find_paths(
+            current: usize,
+            end: usize,
+            adj: &[Vec<usize>],
+            dist: &[i32],
+            current_path: &mut Vec<usize>,
+            all_paths: &mut Vec<Vec<String>>,
+            nodes: &[GraphNode],
+        ) {
+            if current == end {
+                all_paths.push(current_path.iter().map(|&i| nodes[i].id.to_string()).collect());
+                return;
+            }
+
+            for &next in &adj[current] {
+                if dist[next] == dist[current] + 1 {
+                    current_path.push(next);
+                    find_paths(next, end, adj, dist, current_path, all_paths, nodes);
+                    current_path.pop();
+                }
+            }
+        }
+
+        find_paths(
+            start_idx,
+            end_idx,
+            &adj,
+            &dist,
+            &mut current_path,
+            &mut all_paths,
+            &nodes,
+        );
+
+        let columns = vec![
+            "paths".to_string(),
+            "pathCount".to_string(),
+            "pathLength".to_string(),
+        ];
+
+        let paths_str = all_paths
+            .iter()
+            .map(|p| format!("[{}]", p.join(" -> ")))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let rows = vec![vec![
+            Some(format!("[{}]", paths_str)),
+            Some(all_paths.len().to_string()),
+            Some(target_dist.to_string()),
+        ]];
+
+        Ok(QueryResult {
+            nodes: vec![],
+            relationships: vec![],
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute orbit.graph.kShortestPaths procedure
+    /// Find k shortest paths using Yen's algorithm
+    /// CALL orbit.graph.kShortestPaths({startNode: 'n1', endNode: 'n2', k: 3})
+    async fn execute_k_shortest_paths(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            return Err(ProtocolError::CypherError(
+                "kShortestPaths requires startNode, endNode, and k parameters".to_string(),
+            ));
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let start_id = config
+            .get("startNode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ProtocolError::CypherError("startNode parameter required".to_string()))?;
+        let end_id = config
+            .get("endNode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ProtocolError::CypherError("endNode parameter required".to_string()))?;
+        let k = config
+            .get("k")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(3) as usize;
+        let weight_property = config
+            .get("weightProperty")
+            .and_then(|v| v.as_str())
+            .unwrap_or("weight");
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        let node_index: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        let start_idx = node_index
+            .get(start_id)
+            .copied()
+            .ok_or_else(|| ProtocolError::CypherError("Start node not found".to_string()))?;
+        let end_idx = node_index
+            .get(end_id)
+            .copied()
+            .ok_or_else(|| ProtocolError::CypherError("End node not found".to_string()))?;
+
+        // Build weighted adjacency list
+        let mut adj: Vec<Vec<(usize, f64)>> = vec![Vec::new(); nodes.len()];
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_index.get(&rel.start_node.to_string()),
+                node_index.get(&rel.end_node.to_string()),
+            ) {
+                let weight = rel
+                    .properties
+                    .get(weight_property)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(1.0);
+                adj[from_idx].push((to_idx, weight));
+            }
+        }
+
+        // Simplified k-shortest paths using modified Dijkstra
+        // (Full Yen's algorithm would be more complex)
+        let mut paths: Vec<(Vec<usize>, f64)> = Vec::new();
+        let mut heap = std::collections::BinaryHeap::new();
+
+        // (negative cost, path)
+        heap.push((ordered_float::OrderedFloat(0.0), vec![start_idx]));
+
+        while let Some((cost, path)) = heap.pop() {
+            let current = *path.last().unwrap();
+
+            if current == end_idx {
+                paths.push((path.clone(), -cost.0));
+                if paths.len() >= k {
+                    break;
+                }
+            }
+
+            if paths.len() < k {
+                for &(next, weight) in &adj[current] {
+                    if !path.contains(&next) {
+                        let mut new_path = path.clone();
+                        new_path.push(next);
+                        heap.push((ordered_float::OrderedFloat(cost.0 - weight), new_path));
+                    }
+                }
+            }
+        }
+
+        let columns = vec![
+            "pathIndex".to_string(),
+            "path".to_string(),
+            "cost".to_string(),
+        ];
+
+        let rows: Vec<Vec<Option<String>>> = paths
+            .iter()
+            .enumerate()
+            .map(|(i, (path, cost))| {
+                let path_str = path
+                    .iter()
+                    .map(|&idx| nodes[idx].id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" -> ");
+                vec![
+                    Some((i + 1).to_string()),
+                    Some(format!("[{}]", path_str)),
+                    Some(format!("{:.4}", cost)),
+                ]
+            })
+            .collect();
+
+        Ok(QueryResult {
+            nodes: vec![],
+            relationships: vec![],
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute orbit.graph.spanningTree procedure
+    /// Find minimum spanning tree using Prim's or Kruskal's algorithm
+    /// CALL orbit.graph.spanningTree({algorithm: 'prim', weightProperty: 'weight'})
+    async fn execute_spanning_tree(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            HashMap::new()
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let algorithm = config
+            .get("algorithm")
+            .and_then(|v| v.as_str())
+            .unwrap_or("prim");
+        let weight_property = config
+            .get("weightProperty")
+            .and_then(|v| v.as_str())
+            .unwrap_or("weight");
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: vec![],
+                relationships: vec![],
+                columns: vec!["source".to_string(), "target".to_string(), "weight".to_string()],
+                rows: vec![],
+            });
+        }
+
+        let node_index: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        // Build edge list with weights
+        let mut edges: Vec<(usize, usize, f64)> = Vec::new();
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_index.get(&rel.start_node.to_string()),
+                node_index.get(&rel.end_node.to_string()),
+            ) {
+                let weight = rel
+                    .properties
+                    .get(weight_property)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(1.0);
+                edges.push((from_idx, to_idx, weight));
+            }
+        }
+
+        let mst_edges: Vec<(usize, usize, f64)> = if algorithm == "kruskal" {
+            // Kruskal's algorithm
+            edges.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal));
+
+            let mut parent: Vec<usize> = (0..nodes.len()).collect();
+            let mut rank: Vec<usize> = vec![0; nodes.len()];
+
+            fn find(parent: &mut [usize], x: usize) -> usize {
+                if parent[x] != x {
+                    parent[x] = find(parent, parent[x]);
+                }
+                parent[x]
+            }
+
+            fn union(parent: &mut [usize], rank: &mut [usize], x: usize, y: usize) -> bool {
+                let px = find(parent, x);
+                let py = find(parent, y);
+                if px == py {
+                    return false;
+                }
+                if rank[px] < rank[py] {
+                    parent[px] = py;
+                } else if rank[px] > rank[py] {
+                    parent[py] = px;
+                } else {
+                    parent[py] = px;
+                    rank[px] += 1;
+                }
+                true
+            }
+
+            let mut result = Vec::new();
+            for (u, v, w) in edges {
+                if union(&mut parent, &mut rank, u, v) {
+                    result.push((u, v, w));
+                }
+            }
+            result
+        } else {
+            // Prim's algorithm
+            let mut adj: Vec<Vec<(usize, f64)>> = vec![Vec::new(); nodes.len()];
+            for (u, v, w) in &edges {
+                adj[*u].push((*v, *w));
+                adj[*v].push((*u, *w));
+            }
+
+            let mut in_mst = vec![false; nodes.len()];
+            let mut result = Vec::new();
+            let mut heap = std::collections::BinaryHeap::new();
+
+            in_mst[0] = true;
+            for &(v, w) in &adj[0] {
+                heap.push(std::cmp::Reverse((ordered_float::OrderedFloat(w), 0, v)));
+            }
+
+            while let Some(std::cmp::Reverse((w, u, v))) = heap.pop() {
+                if in_mst[v] {
+                    continue;
+                }
+                in_mst[v] = true;
+                result.push((u, v, w.0));
+
+                for &(next, weight) in &adj[v] {
+                    if !in_mst[next] {
+                        heap.push(std::cmp::Reverse((ordered_float::OrderedFloat(weight), v, next)));
+                    }
+                }
+            }
+            result
+        };
+
+        let columns = vec![
+            "source".to_string(),
+            "target".to_string(),
+            "weight".to_string(),
+        ];
+
+        let total_weight: f64 = mst_edges.iter().map(|(_, _, w)| w).sum();
+
+        let mut rows: Vec<Vec<Option<String>>> = mst_edges
+            .iter()
+            .map(|(u, v, w)| {
+                vec![
+                    Some(nodes[*u].id.to_string()),
+                    Some(nodes[*v].id.to_string()),
+                    Some(format!("{:.4}", w)),
+                ]
+            })
+            .collect();
+
+        // Add summary row
+        rows.push(vec![
+            Some("TOTAL".to_string()),
+            Some(format!("{} edges", mst_edges.len())),
+            Some(format!("{:.4}", total_weight)),
+        ]);
+
+        Ok(QueryResult {
+            nodes: vec![],
+            relationships: vec![],
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute orbit.graph.singleSourceShortestPath procedure
+    /// Find shortest paths from a single source to all reachable nodes
+    /// CALL orbit.graph.singleSourceShortestPath({startNode: 'n1', weightProperty: 'weight'})
+    async fn execute_single_source_shortest_path(
+        &self,
+        args: &[JsonValue],
+    ) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            return Err(ProtocolError::CypherError(
+                "singleSourceShortestPath requires startNode parameter".to_string(),
+            ));
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let start_id = config
+            .get("startNode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ProtocolError::CypherError("startNode parameter required".to_string()))?;
+        let weight_property = config
+            .get("weightProperty")
+            .and_then(|v| v.as_str())
+            .unwrap_or("weight");
+        let max_distance = config
+            .get("maxDistance")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(f64::INFINITY);
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        let node_index: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        let start_idx = node_index
+            .get(start_id)
+            .copied()
+            .ok_or_else(|| ProtocolError::CypherError("Start node not found".to_string()))?;
+
+        // Build weighted adjacency list
+        let mut adj: Vec<Vec<(usize, f64)>> = vec![Vec::new(); nodes.len()];
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_index.get(&rel.start_node.to_string()),
+                node_index.get(&rel.end_node.to_string()),
+            ) {
+                let weight = rel
+                    .properties
+                    .get(weight_property)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(1.0);
+                adj[from_idx].push((to_idx, weight));
+            }
+        }
+
+        // Dijkstra's algorithm
+        let mut dist: Vec<f64> = vec![f64::INFINITY; nodes.len()];
+        let mut heap = std::collections::BinaryHeap::new();
+
+        dist[start_idx] = 0.0;
+        heap.push(std::cmp::Reverse((ordered_float::OrderedFloat(0.0), start_idx)));
+
+        while let Some(std::cmp::Reverse((d, u))) = heap.pop() {
+            if d.0 > dist[u] || d.0 > max_distance {
+                continue;
+            }
+
+            for &(v, weight) in &adj[u] {
+                let new_dist = dist[u] + weight;
+                if new_dist < dist[v] && new_dist <= max_distance {
+                    dist[v] = new_dist;
+                    heap.push(std::cmp::Reverse((ordered_float::OrderedFloat(new_dist), v)));
+                }
+            }
+        }
+
+        let columns = vec![
+            "targetNode".to_string(),
+            "distance".to_string(),
+            "reachable".to_string(),
+        ];
+
+        let mut rows: Vec<Vec<Option<String>>> = nodes
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != start_idx)
+            .map(|(i, n)| {
+                let reachable = dist[i] < f64::INFINITY && dist[i] <= max_distance;
+                vec![
+                    Some(n.id.to_string()),
+                    Some(if reachable {
+                        format!("{:.4}", dist[i])
+                    } else {
+                        "Infinity".to_string()
+                    }),
+                    Some(reachable.to_string()),
+                ]
+            })
+            .collect();
+
+        // Sort by distance
+        rows.sort_by(|a, b| {
+            let da = a[1].as_ref().and_then(|s| s.parse::<f64>().ok()).unwrap_or(f64::INFINITY);
+            let db = b[1].as_ref().and_then(|s| s.parse::<f64>().ok()).unwrap_or(f64::INFINITY);
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        Ok(QueryResult {
+            nodes: vec![],
+            relationships: vec![],
+            columns,
+            rows,
+        })
     }
 }
 

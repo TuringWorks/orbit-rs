@@ -8,7 +8,7 @@ use tracing::debug;
 
 use crate::protocols::persistence::redis_data::{RedisDataProvider, RedisValue};
 use crate::protocols::resp::actors::{
-    HashActor, KeyValueActor, ListActor, SetActor, SortedSetActor,
+    HashActor, KeyValueActor, ListActor, SetActor, SortedSetActor, StreamActor,
 };
 use orbit_shared::{AddressableInvocation, Key, OrbitError, OrbitResult};
 
@@ -24,6 +24,8 @@ pub struct SimpleLocalRegistry {
     set_actors: Arc<RwLock<HashMap<String, SetActor>>>,
     /// Sorted set actors
     sorted_set_actors: Arc<RwLock<HashMap<String, SortedSetActor>>>,
+    /// Stream actors
+    stream_actors: Arc<RwLock<HashMap<String, StreamActor>>>,
     /// Optional persistent storage provider
     persistent_storage: Option<Arc<dyn RedisDataProvider>>,
 }
@@ -36,6 +38,7 @@ impl SimpleLocalRegistry {
             list_actors: Arc::new(RwLock::new(HashMap::new())),
             set_actors: Arc::new(RwLock::new(HashMap::new())),
             sorted_set_actors: Arc::new(RwLock::new(HashMap::new())),
+            stream_actors: Arc::new(RwLock::new(HashMap::new())),
             persistent_storage: None,
         }
     }
@@ -48,6 +51,7 @@ impl SimpleLocalRegistry {
             list_actors: Arc::new(RwLock::new(HashMap::new())),
             set_actors: Arc::new(RwLock::new(HashMap::new())),
             sorted_set_actors: Arc::new(RwLock::new(HashMap::new())),
+            stream_actors: Arc::new(RwLock::new(HashMap::new())),
             persistent_storage: Some(provider),
         }
     }
@@ -590,6 +594,252 @@ impl SimpleLocalRegistry {
         }
     }
 
+    /// Execute stream actor methods
+    pub async fn execute_stream(
+        &self,
+        key: &str,
+        method: &str,
+        args: &[Value],
+    ) -> OrbitResult<Value> {
+        let mut actors = self.stream_actors.write().await;
+        let actor = actors
+            .entry(key.to_string())
+            .or_insert_with(StreamActor::new);
+
+        debug!("Executing Stream method '{}' on key '{}'", method, key);
+
+        match method {
+            "xadd" => {
+                if args.len() < 2 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected at least 2 arguments (id, fields)".to_string(),
+                    });
+                }
+                let id: Option<String> = serde_json::from_value(args[0].clone())?;
+                let fields: Vec<(String, String)> = serde_json::from_value(args[1].clone())?;
+                let result = actor.xadd(id.as_deref(), fields);
+                match result {
+                    Ok(entry_id) => Ok(serde_json::to_value(entry_id)?),
+                    Err(e) => Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: e,
+                    }),
+                }
+            }
+            "xlen" => {
+                let result = actor.xlen();
+                Ok(serde_json::to_value(result)?)
+            }
+            "xrange" => {
+                if args.len() < 2 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected at least 2 arguments (start, end)".to_string(),
+                    });
+                }
+                let start: String = serde_json::from_value(args[0].clone())?;
+                let end: String = serde_json::from_value(args[1].clone())?;
+                let count: Option<usize> = if args.len() > 2 {
+                    serde_json::from_value(args[2].clone()).ok()
+                } else {
+                    None
+                };
+                let result = actor.xrange(&start, &end, count);
+                Ok(serde_json::to_value(result)?)
+            }
+            "xrevrange" => {
+                if args.len() < 2 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected at least 2 arguments (end, start)".to_string(),
+                    });
+                }
+                let end: String = serde_json::from_value(args[0].clone())?;
+                let start: String = serde_json::from_value(args[1].clone())?;
+                let count: Option<usize> = if args.len() > 2 {
+                    serde_json::from_value(args[2].clone()).ok()
+                } else {
+                    None
+                };
+                let result = actor.xrevrange(&end, &start, count);
+                Ok(serde_json::to_value(result)?)
+            }
+            "xread" => {
+                if args.is_empty() {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected at least 1 argument (id)".to_string(),
+                    });
+                }
+                let id: String = serde_json::from_value(args[0].clone())?;
+                let count: Option<usize> = if args.len() > 1 {
+                    serde_json::from_value(args[1].clone()).ok()
+                } else {
+                    None
+                };
+                let result = actor.xread(&id, count);
+                Ok(serde_json::to_value(result)?)
+            }
+            "xtrim" => {
+                if args.is_empty() {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected at least 1 argument (maxlen)".to_string(),
+                    });
+                }
+                let max_len: usize = serde_json::from_value(args[0].clone())?;
+                let approximate: bool = if args.len() > 1 {
+                    serde_json::from_value(args[1].clone()).unwrap_or(false)
+                } else {
+                    false
+                };
+                let result = actor.xtrim(max_len, approximate);
+                Ok(serde_json::to_value(result)?)
+            }
+            "xdel" => {
+                if args.is_empty() {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 1 argument (ids)".to_string(),
+                    });
+                }
+                let ids: Vec<String> = serde_json::from_value(args[0].clone())?;
+                let result = actor.xdel(ids);
+                Ok(serde_json::to_value(result)?)
+            }
+            "xinfo_stream" => {
+                let result = actor.xinfo_stream();
+                Ok(serde_json::to_value(result)?)
+            }
+            "xgroup_create" => {
+                if args.len() < 2 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 2 arguments (group_name, start_id)".to_string(),
+                    });
+                }
+                let group_name: String = serde_json::from_value(args[0].clone())?;
+                let start_id: String = serde_json::from_value(args[1].clone())?;
+                match actor.xgroup_create(&group_name, &start_id) {
+                    Ok(()) => Ok(serde_json::to_value("OK")?),
+                    Err(e) => Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: e,
+                    }),
+                }
+            }
+            "xgroup_destroy" => {
+                if args.is_empty() {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 1 argument (group_name)".to_string(),
+                    });
+                }
+                let group_name: String = serde_json::from_value(args[0].clone())?;
+                let result = actor.xgroup_destroy(&group_name);
+                Ok(serde_json::to_value(if result { 1 } else { 0 })?)
+            }
+            "xreadgroup" => {
+                if args.len() < 3 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected at least 3 arguments (group, consumer, id)".to_string(),
+                    });
+                }
+                let group_name: String = serde_json::from_value(args[0].clone())?;
+                let consumer_name: String = serde_json::from_value(args[1].clone())?;
+                let id: String = serde_json::from_value(args[2].clone())?;
+                let count: Option<usize> = if args.len() > 3 {
+                    serde_json::from_value(args[3].clone()).ok()
+                } else {
+                    None
+                };
+                match actor.xreadgroup(&group_name, &consumer_name, &id, count) {
+                    Ok(entries) => Ok(serde_json::to_value(entries)?),
+                    Err(e) => Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: e,
+                    }),
+                }
+            }
+            "xack" => {
+                if args.len() < 2 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 2 arguments (group_name, ids)".to_string(),
+                    });
+                }
+                let group_name: String = serde_json::from_value(args[0].clone())?;
+                let ids: Vec<String> = serde_json::from_value(args[1].clone())?;
+                match actor.xack(&group_name, ids) {
+                    Ok(count) => Ok(serde_json::to_value(count)?),
+                    Err(e) => Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: e,
+                    }),
+                }
+            }
+            "xpending" => {
+                if args.is_empty() {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 1 argument (group_name)".to_string(),
+                    });
+                }
+                let group_name: String = serde_json::from_value(args[0].clone())?;
+                match actor.xpending(&group_name) {
+                    Ok((count, min_id, max_id, consumers)) => {
+                        Ok(serde_json::to_value((count, min_id, max_id, consumers))?)
+                    }
+                    Err(e) => Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: e,
+                    }),
+                }
+            }
+            "xsetid" => {
+                if args.is_empty() {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 1 argument (id)".to_string(),
+                    });
+                }
+                let id: String = serde_json::from_value(args[0].clone())?;
+                match actor.xsetid(&id) {
+                    Ok(()) => Ok(serde_json::to_value("OK")?),
+                    Err(e) => Err(OrbitError::InvocationFailed {
+                        addressable_type: "StreamActor".to_string(),
+                        method: method.to_string(),
+                        reason: e,
+                    }),
+                }
+            }
+            _ => Err(OrbitError::InvocationFailed {
+                addressable_type: "StreamActor".to_string(),
+                method: method.to_string(),
+                reason: format!("Unknown method: {method}"),
+            }),
+        }
+    }
+
     /// Execute an invocation
     pub async fn execute_invocation(
         &self,
@@ -617,6 +867,7 @@ impl SimpleLocalRegistry {
                 self.execute_sorted_set(&key, &invocation.method, &args)
                     .await
             }
+            "StreamActor" => self.execute_stream(&key, &invocation.method, &args).await,
             _ => Err(OrbitError::InvocationFailed {
                 addressable_type: invocation.reference.addressable_type.clone(),
                 method: invocation.method.clone(),

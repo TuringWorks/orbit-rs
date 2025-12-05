@@ -2,6 +2,10 @@
 //!
 //! This module provides comprehensive AQL parsing capabilities supporting
 //! document queries, graph traversals, aggregations, and complex operations.
+//!
+//! ## References
+//! - AQL Spec: `specifications/protocols/arangodb_aql_reference.md`
+//! - ANTLR4 Grammar: <https://github.com/TuringWorks/grammars-v4/tree/master/aql>
 
 use crate::protocols::aql::data_model::AqlValue;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
@@ -60,6 +64,7 @@ impl AqlParser {
     /// Static token classification for use by tokenizer
     fn classify_token_static(token: &str) -> AqlToken {
         match token.to_uppercase().as_str() {
+            // Core query keywords
             "FOR" => AqlToken::For,
             "IN" => AqlToken::In,
             "RETURN" => AqlToken::Return,
@@ -68,6 +73,8 @@ impl AqlParser {
             "COLLECT" => AqlToken::Collect,
             "SORT" => AqlToken::Sort,
             "LIMIT" => AqlToken::Limit,
+
+            // Data modification keywords
             "INSERT" => AqlToken::Insert,
             "UPDATE" => AqlToken::Update,
             "REPLACE" => AqlToken::Replace,
@@ -75,22 +82,91 @@ impl AqlParser {
             "UPSERT" => AqlToken::Upsert,
             "WITH" => AqlToken::With,
             "INTO" => AqlToken::Into,
+
+            // Logical operators
             "AND" => AqlToken::And,
             "OR" => AqlToken::Or,
             "NOT" => AqlToken::Not,
+
+            // Literals
             "NULL" => AqlToken::Null,
             "TRUE" => AqlToken::Bool(true),
             "FALSE" => AqlToken::Bool(false),
+
+            // Sort order
             "ASC" | "ASCENDING" => AqlToken::Asc,
             "DESC" | "DESCENDING" => AqlToken::Desc,
+
+            // Collection operations
             "DISTINCT" => AqlToken::Distinct,
             "AGGREGATE" => AqlToken::Aggregate,
+
+            // Graph traversal keywords
             "OUTBOUND" => AqlToken::Outbound,
             "INBOUND" => AqlToken::Inbound,
             "ANY" => AqlToken::Any,
+            "ALL" => AqlToken::All,
+            "NONE" => AqlToken::None,
             "GRAPH" => AqlToken::Graph,
             "SHORTEST_PATH" => AqlToken::ShortestPath,
             "K_SHORTEST_PATHS" => AqlToken::KShortestPaths,
+            "ALL_SHORTEST_PATHS" => AqlToken::AllShortestPaths,
+            "K_PATHS" => AqlToken::KPaths,
+            "PRUNE" => AqlToken::Prune,
+
+            // Search and full-text
+            "SEARCH" => AqlToken::Search,
+            "LIKE" => AqlToken::Like,
+
+            // Window functions
+            "WINDOW" => AqlToken::Window,
+
+            // Frame keywords
+            "ROWS" => AqlToken::Rows,
+            "RANGE" => AqlToken::RangeKeyword,
+            "GROUPS" => AqlToken::Groups,
+            "PRECEDING" => AqlToken::Preceding,
+            "FOLLOWING" => AqlToken::Following,
+            "UNBOUNDED" => AqlToken::Unbounded,
+            "CURRENT" => AqlToken::Current,
+            "ROW" => AqlToken::Row,
+            "PARTITION" => AqlToken::Partition,
+            "BY" => AqlToken::By,
+            "OVER" => AqlToken::Over,
+
+            // Window function names
+            "ROW_NUMBER" => AqlToken::RowNumber,
+            "RANK" => AqlToken::RankFunc,
+            "DENSE_RANK" => AqlToken::DenseRank,
+            "PERCENT_RANK" => AqlToken::PercentRank,
+            "CUME_DIST" => AqlToken::CumeDist,
+            "NTILE" => AqlToken::Ntile,
+            "LAG" => AqlToken::LagFunc,
+            "LEAD" => AqlToken::LeadFunc,
+            "FIRST_VALUE" => AqlToken::FirstValue,
+            "LAST_VALUE" => AqlToken::LastValue,
+            "NTH_VALUE" => AqlToken::NthValue,
+
+            // Options and configuration
+            "OPTIONS" => AqlToken::Options,
+
+            // Additional keywords
+            "COUNT" => AqlToken::Count,
+            "KEEP" => AqlToken::Keep,
+
+            // Aggregate function names
+            "SUM" => AqlToken::Sum,
+            "AVG" => AqlToken::Avg,
+            "MIN" => AqlToken::MinFunc,
+            "MAX" => AqlToken::MaxFunc,
+            "COUNT_DISTINCT" => AqlToken::CountDistinct,
+            "COLLECT_ARRAY" | "PUSH" => AqlToken::CollectArray,
+            "COLLECT_UNIQUE" | "UNIQUE" => AqlToken::CollectUnique,
+            "STDDEV" | "STDDEV_POP" => AqlToken::Stddev,
+            "VARIANCE" | "VARIANCE_POP" => AqlToken::VarianceFunc,
+            "STDDEV_SAMPLE" => AqlToken::StddevSample,
+            "VARIANCE_SAMPLE" => AqlToken::VarianceSample,
+
             _ => {
                 // Check if it's a number
                 if let Ok(int_val) = token.parse::<i64>() {
@@ -116,9 +192,12 @@ impl AqlParser {
 }
 
 /// AQL token types
+///
+/// Represents all valid tokens in the AQL language, including
+/// keywords, operators, literals, and symbols.
 #[derive(Debug, Clone, PartialEq)]
 enum AqlToken {
-    // Keywords
+    // Core query keywords
     For,
     In,
     Return,
@@ -127,6 +206,8 @@ enum AqlToken {
     Collect,
     Sort,
     Limit,
+
+    // Data modification keywords
     Insert,
     Update,
     Replace,
@@ -134,23 +215,87 @@ enum AqlToken {
     Upsert,
     With,
     Into,
+
+    // Logical operators
     And,
     Or,
     Not,
+
+    // Literals
     Null,
     Bool(bool),
+
+    // Sort order
     Asc,
     Desc,
+
+    // Collection operations
     Distinct,
     Aggregate,
+    Count,
+    Keep,
 
     // Graph traversal keywords
     Outbound,
     Inbound,
     Any,
+    All,
+    None,
     Graph,
     ShortestPath,
     KShortestPaths,
+    AllShortestPaths,
+    KPaths,
+    Prune,
+
+    // Search and full-text
+    Search,
+    Like,
+
+    // Window functions
+    Window,
+
+    // Frame keywords
+    Rows,
+    RangeKeyword,
+    Groups,
+    Preceding,
+    Following,
+    Unbounded,
+    Current,
+    Row,
+    Partition,
+    By,
+    Over,
+
+    // Window function names
+    RowNumber,
+    RankFunc,
+    DenseRank,
+    PercentRank,
+    CumeDist,
+    Ntile,
+    LagFunc,
+    LeadFunc,
+    FirstValue,
+    LastValue,
+    NthValue,
+
+    // Aggregate functions
+    Sum,
+    Avg,
+    MinFunc,
+    MaxFunc,
+    CountDistinct,
+    CollectArray,
+    CollectUnique,
+    Stddev,
+    VarianceFunc,
+    StddevSample,
+    VarianceSample,
+
+    // Options and configuration
+    Options,
 
     // Literals
     Identifier(String),
@@ -422,6 +567,18 @@ impl AqlTokenParser {
                 Some(AqlToken::Remove) => {
                     clauses.push(self.parse_remove_clause()?);
                 }
+                Some(AqlToken::Window) => {
+                    clauses.push(self.parse_window_clause()?);
+                }
+                Some(AqlToken::Search) => {
+                    clauses.push(self.parse_search_clause()?);
+                }
+                Some(AqlToken::Upsert) => {
+                    clauses.push(self.parse_upsert_clause()?);
+                }
+                Some(AqlToken::Replace) => {
+                    clauses.push(self.parse_replace_clause()?);
+                }
                 Some(token) => {
                     return Err(ProtocolError::ParseError(format!(
                         "Unexpected token: {token:?}"
@@ -573,6 +730,39 @@ impl AqlTokenParser {
             None
         };
 
+        // Parse optional PRUNE clause
+        let prune = if matches!(self.current_token(), Some(AqlToken::Prune)) {
+            self.advance(); // consume PRUNE
+            let prune_var = if let Some(AqlToken::Identifier(name)) = self.current_token() {
+                let name = name.clone();
+                self.advance();
+                if matches!(self.current_token(), Some(AqlToken::Colon)) {
+                    self.advance(); // consume :
+                    Some(name)
+                } else {
+                    // Not a prune var, just the condition start - put back
+                    None
+                }
+            } else {
+                None
+            };
+            let condition = self.parse_condition()?;
+            Some(PruneClause {
+                condition,
+                prune_var,
+            })
+        } else {
+            None
+        };
+
+        // Parse optional OPTIONS clause
+        let options = if matches!(self.current_token(), Some(AqlToken::Options)) {
+            self.advance(); // consume OPTIONS
+            Some(self.parse_traversal_options()?)
+        } else {
+            None
+        };
+
         // Determine if this is a traversal or simple iteration
         if direction.is_some() || graph_name.is_some() || edge_var.is_some() {
             Ok(AqlClause::ForTraversal {
@@ -584,6 +774,8 @@ impl AqlTokenParser {
                 direction: direction.unwrap_or(TraversalDirection::Any),
                 start_vertex: data_source,
                 graph_name,
+                options,
+                prune,
             })
         } else {
             Ok(AqlClause::For {
@@ -591,6 +783,127 @@ impl AqlTokenParser {
                 data_source,
             })
         }
+    }
+
+    /// Parse traversal options object { bfs: true, uniqueVertices: "path", ... }
+    fn parse_traversal_options(&mut self) -> ProtocolResult<TraversalOptions> {
+        let mut options = TraversalOptions::default();
+
+        // Expect opening brace
+        if !matches!(self.current_token(), Some(AqlToken::LeftBrace)) {
+            return Err(ProtocolError::ParseError(
+                "Expected { for OPTIONS".to_string(),
+            ));
+        }
+        self.advance(); // consume {
+
+        while !matches!(self.current_token(), Some(AqlToken::RightBrace)) {
+            let key = match self.current_token() {
+                Some(AqlToken::Identifier(k)) | Some(AqlToken::String(k)) => {
+                    let k = k.clone();
+                    self.advance();
+                    k
+                }
+                _ => {
+                    return Err(ProtocolError::ParseError(
+                        "Expected option key".to_string(),
+                    ))
+                }
+            };
+
+            // Expect colon
+            if !matches!(self.current_token(), Some(AqlToken::Colon)) {
+                return Err(ProtocolError::ParseError(
+                    "Expected : after option key".to_string(),
+                ));
+            }
+            self.advance(); // consume :
+
+            match key.as_str() {
+                "bfs" | "order" => {
+                    match self.current_token() {
+                        Some(AqlToken::Bool(true)) => {
+                            options.order = TraversalOrder::Bfs;
+                            self.advance();
+                        }
+                        Some(AqlToken::Bool(false)) => {
+                            options.order = TraversalOrder::Dfs;
+                            self.advance();
+                        }
+                        Some(AqlToken::String(s)) => {
+                            options.order = match s.to_lowercase().as_str() {
+                                "bfs" => TraversalOrder::Bfs,
+                                "dfs" => TraversalOrder::Dfs,
+                                "weighted" => TraversalOrder::Weighted,
+                                _ => TraversalOrder::Bfs,
+                            };
+                            self.advance();
+                        }
+                        _ => {
+                            self.advance(); // skip unknown value
+                        }
+                    }
+                }
+                "uniqueVertices" => {
+                    if let Some(AqlToken::String(s)) = self.current_token() {
+                        options.unique_vertices = match s.to_lowercase().as_str() {
+                            "none" => UniquenessLevel::None,
+                            "path" => UniquenessLevel::Path,
+                            "global" => UniquenessLevel::Global,
+                            _ => UniquenessLevel::None,
+                        };
+                        self.advance();
+                    } else {
+                        self.advance();
+                    }
+                }
+                "uniqueEdges" => {
+                    if let Some(AqlToken::String(s)) = self.current_token() {
+                        options.unique_edges = match s.to_lowercase().as_str() {
+                            "none" => UniquenessLevel::None,
+                            "path" => UniquenessLevel::Path,
+                            "global" => UniquenessLevel::Global,
+                            _ => UniquenessLevel::None,
+                        };
+                        self.advance();
+                    } else {
+                        self.advance();
+                    }
+                }
+                "parallelism" => {
+                    if let Some(AqlToken::Number(n)) = self.current_token() {
+                        options.parallelism = Some(n.as_u64().unwrap_or(1) as u32);
+                        self.advance();
+                    } else {
+                        self.advance();
+                    }
+                }
+                "maxItemsPerLevel" => {
+                    if let Some(AqlToken::Number(n)) = self.current_token() {
+                        options.max_items_per_level = Some(n.as_u64().unwrap_or(1000));
+                        self.advance();
+                    } else {
+                        self.advance();
+                    }
+                }
+                _ => {
+                    // Skip unknown options
+                    self.advance();
+                }
+            }
+
+            // Skip comma if present
+            if matches!(self.current_token(), Some(AqlToken::Comma)) {
+                self.advance();
+            }
+        }
+
+        // Consume closing brace
+        if matches!(self.current_token(), Some(AqlToken::RightBrace)) {
+            self.advance();
+        }
+
+        Ok(options)
     }
 
     fn parse_let_clause(&mut self) -> ProtocolResult<AqlClause> {
@@ -638,8 +951,22 @@ impl AqlTokenParser {
         self.advance(); // consume COLLECT
 
         let mut groups = Vec::new();
+        let mut into = None;
+        let mut keep = None;
+        let mut aggregates = None;
+        let mut count_into = None;
 
+        // Parse grouping variables
         while let Some(AqlToken::Identifier(name)) = self.current_token() {
+            // Check for special keywords
+            if name.to_uppercase() == "INTO"
+                || name.to_uppercase() == "KEEP"
+                || name.to_uppercase() == "AGGREGATE"
+                || name.to_uppercase() == "WITH"
+            {
+                break;
+            }
+
             let variable = {
                 let name = name.clone();
                 self.advance();
@@ -666,7 +993,158 @@ impl AqlTokenParser {
             }
         }
 
-        Ok(AqlClause::Collect { groups })
+        // Parse optional INTO clause
+        if matches!(self.current_token(), Some(AqlToken::Into)) {
+            self.advance();
+            if let Some(AqlToken::Identifier(name)) = self.current_token() {
+                into = Some(name.clone());
+                self.advance();
+            }
+        }
+
+        // Parse optional KEEP clause
+        if matches!(self.current_token(), Some(AqlToken::Keep)) {
+            self.advance();
+            let mut keep_vars = Vec::new();
+            loop {
+                if let Some(AqlToken::Identifier(name)) = self.current_token() {
+                    keep_vars.push(name.clone());
+                    self.advance();
+                    if matches!(self.current_token(), Some(AqlToken::Comma)) {
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+            keep = Some(keep_vars);
+        }
+
+        // Parse optional AGGREGATE clause
+        if matches!(self.current_token(), Some(AqlToken::Aggregate)) {
+            self.advance();
+            let mut agg_list = Vec::new();
+            loop {
+                if let Some(AqlToken::Identifier(name)) = self.current_token() {
+                    let variable = name.clone();
+                    self.advance();
+
+                    // Expect =
+                    if !matches!(self.current_token(), Some(AqlToken::Assignment)) {
+                        break;
+                    }
+                    self.advance();
+
+                    // Parse aggregate function
+                    let (function, expression) = self.parse_collect_aggregate()?;
+                    agg_list.push(CollectAggregate {
+                        variable,
+                        function,
+                        expression,
+                    });
+
+                    if matches!(self.current_token(), Some(AqlToken::Comma)) {
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+            aggregates = Some(agg_list);
+        }
+
+        // Parse optional COUNT clause
+        if matches!(self.current_token(), Some(AqlToken::Count)) {
+            self.advance();
+            // Check for "INTO" after COUNT
+            if matches!(self.current_token(), Some(AqlToken::Into)) {
+                self.advance();
+            }
+            if let Some(AqlToken::Identifier(name)) = self.current_token() {
+                count_into = Some(name.clone());
+                self.advance();
+            }
+        }
+
+        Ok(AqlClause::Collect {
+            groups,
+            into,
+            keep,
+            aggregates,
+            count_into,
+        })
+    }
+
+    /// Parse aggregate function in COLLECT clause
+    fn parse_collect_aggregate(&mut self) -> ProtocolResult<(AggregateFunction, AqlExpression)> {
+        let func = match self.current_token() {
+            Some(AqlToken::Count) => {
+                self.advance();
+                AggregateFunction::Count
+            }
+            Some(AqlToken::Sum) => {
+                self.advance();
+                AggregateFunction::Sum
+            }
+            Some(AqlToken::Avg) => {
+                self.advance();
+                AggregateFunction::Avg
+            }
+            Some(AqlToken::MinFunc) => {
+                self.advance();
+                AggregateFunction::Min
+            }
+            Some(AqlToken::MaxFunc) => {
+                self.advance();
+                AggregateFunction::Max
+            }
+            Some(AqlToken::CollectArray) => {
+                self.advance();
+                AggregateFunction::CollectArray
+            }
+            Some(AqlToken::CollectUnique) => {
+                self.advance();
+                AggregateFunction::CollectUnique
+            }
+            Some(AqlToken::CountDistinct) => {
+                self.advance();
+                AggregateFunction::CountDistinct
+            }
+            Some(AqlToken::Stddev) => {
+                self.advance();
+                AggregateFunction::Stddev
+            }
+            Some(AqlToken::VarianceFunc) => {
+                self.advance();
+                AggregateFunction::Variance
+            }
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected aggregate function".to_string(),
+                ))
+            }
+        };
+
+        // Expect (
+        if !matches!(self.current_token(), Some(AqlToken::LeftParen)) {
+            return Err(ProtocolError::ParseError(
+                "Expected ( after aggregate function".to_string(),
+            ));
+        }
+        self.advance();
+
+        let expr = self.parse_expression()?;
+
+        // Expect )
+        if matches!(self.current_token(), Some(AqlToken::RightParen)) {
+            self.advance();
+        }
+
+        Ok((func, expr))
     }
 
     fn parse_sort_clause(&mut self) -> ProtocolResult<AqlClause> {
@@ -788,10 +1266,88 @@ impl AqlTokenParser {
             }
         };
 
+        // Parse optional OPTIONS
+        let options = if matches!(self.current_token(), Some(AqlToken::Options)) {
+            self.advance();
+            Some(self.parse_options_object()?)
+        } else {
+            None
+        };
+
         Ok(AqlClause::Insert {
             document,
             collection,
+            options,
         })
+    }
+
+    /// Parse an OPTIONS object { key: value, ... } into HashMap
+    fn parse_options_object(&mut self) -> ProtocolResult<HashMap<String, AqlValue>> {
+        let mut options = HashMap::new();
+
+        if !matches!(self.current_token(), Some(AqlToken::LeftBrace)) {
+            return Err(ProtocolError::ParseError(
+                "Expected { for OPTIONS".to_string(),
+            ));
+        }
+        self.advance();
+
+        while !matches!(self.current_token(), Some(AqlToken::RightBrace)) {
+            let key = match self.current_token() {
+                Some(AqlToken::Identifier(k)) | Some(AqlToken::String(k)) => {
+                    let k = k.clone();
+                    self.advance();
+                    k
+                }
+                _ => {
+                    return Err(ProtocolError::ParseError(
+                        "Expected option key".to_string(),
+                    ))
+                }
+            };
+
+            if matches!(self.current_token(), Some(AqlToken::Colon)) {
+                self.advance();
+            }
+
+            let value = match self.current_token() {
+                Some(AqlToken::Bool(b)) => {
+                    let b = *b;
+                    self.advance();
+                    AqlValue::Bool(b)
+                }
+                Some(AqlToken::Number(n)) => {
+                    let n = n.clone();
+                    self.advance();
+                    AqlValue::Number(n)
+                }
+                Some(AqlToken::String(s)) => {
+                    let s = s.clone();
+                    self.advance();
+                    AqlValue::String(s)
+                }
+                Some(AqlToken::Null) => {
+                    self.advance();
+                    AqlValue::Null
+                }
+                _ => {
+                    self.advance();
+                    AqlValue::Null
+                }
+            };
+
+            options.insert(key, value);
+
+            if matches!(self.current_token(), Some(AqlToken::Comma)) {
+                self.advance();
+            }
+        }
+
+        if matches!(self.current_token(), Some(AqlToken::RightBrace)) {
+            self.advance();
+        }
+
+        Ok(options)
     }
 
     fn parse_update_clause(&mut self) -> ProtocolResult<AqlClause> {
@@ -834,10 +1390,19 @@ impl AqlTokenParser {
             }
         };
 
+        // Parse optional OPTIONS
+        let options = if matches!(self.current_token(), Some(AqlToken::Options)) {
+            self.advance();
+            Some(self.parse_options_object()?)
+        } else {
+            None
+        };
+
         Ok(AqlClause::Update {
             key,
             document,
             collection,
+            options,
         })
     }
 
@@ -870,6 +1435,586 @@ impl AqlTokenParser {
         };
 
         Ok(AqlClause::Remove { key, collection })
+    }
+
+    /// Parse WINDOW clause for window functions
+    fn parse_window_clause(&mut self) -> ProtocolResult<AqlClause> {
+        self.advance(); // consume WINDOW
+
+        let mut windows = Vec::new();
+
+        // Parse window specifications
+        loop {
+            // Parse variable name
+            let variable = match self.current_token() {
+                Some(AqlToken::Identifier(name)) => {
+                    let name = name.clone();
+                    self.advance();
+                    name
+                }
+                _ => break,
+            };
+
+            // Expect assignment
+            if !matches!(self.current_token(), Some(AqlToken::Assignment)) {
+                return Err(ProtocolError::ParseError(
+                    "Expected = after window variable".to_string(),
+                ));
+            }
+            self.advance();
+
+            // Parse window function
+            let function = self.parse_window_function()?;
+
+            // Parse OVER clause
+            if !matches!(self.current_token(), Some(AqlToken::Over)) {
+                return Err(ProtocolError::ParseError(
+                    "Expected OVER after window function".to_string(),
+                ));
+            }
+            self.advance();
+
+            // Expect ( for window specification
+            if !matches!(self.current_token(), Some(AqlToken::LeftParen)) {
+                return Err(ProtocolError::ParseError(
+                    "Expected ( after OVER".to_string(),
+                ));
+            }
+            self.advance();
+
+            // Parse optional PARTITION BY
+            let partition_by = if matches!(self.current_token(), Some(AqlToken::Partition)) {
+                self.advance(); // PARTITION
+                if !matches!(self.current_token(), Some(AqlToken::By)) {
+                    return Err(ProtocolError::ParseError(
+                        "Expected BY after PARTITION".to_string(),
+                    ));
+                }
+                self.advance(); // BY
+
+                let mut partitions = Vec::new();
+                loop {
+                    let expr = self.parse_expression()?;
+                    partitions.push(expr);
+                    if !matches!(self.current_token(), Some(AqlToken::Comma)) {
+                        break;
+                    }
+                    self.advance();
+                }
+                Some(partitions)
+            } else {
+                None
+            };
+
+            // Parse optional ORDER BY
+            let order_by = if matches!(self.current_token(), Some(AqlToken::Sort)) {
+                self.advance(); // SORT (ORDER)
+                let mut items = Vec::new();
+                loop {
+                    let expression = self.parse_expression()?;
+                    let direction = match self.current_token() {
+                        Some(AqlToken::Asc) => {
+                            self.advance();
+                            SortDirection::Asc
+                        }
+                        Some(AqlToken::Desc) => {
+                            self.advance();
+                            SortDirection::Desc
+                        }
+                        _ => SortDirection::Asc,
+                    };
+                    items.push(SortItem {
+                        expression,
+                        direction,
+                    });
+                    if !matches!(self.current_token(), Some(AqlToken::Comma)) {
+                        break;
+                    }
+                    self.advance();
+                }
+                Some(items)
+            } else {
+                None
+            };
+
+            // Parse optional frame specification
+            let frame = self.parse_window_frame()?;
+
+            // Expect closing paren
+            if !matches!(self.current_token(), Some(AqlToken::RightParen)) {
+                return Err(ProtocolError::ParseError(
+                    "Expected ) to close OVER clause".to_string(),
+                ));
+            }
+            self.advance();
+
+            windows.push(WindowClause {
+                variable,
+                function,
+                partition_by,
+                order_by,
+                frame,
+            });
+
+            // Check for comma (multiple windows)
+            if !matches!(self.current_token(), Some(AqlToken::Comma)) {
+                break;
+            }
+            self.advance();
+        }
+
+        Ok(AqlClause::Window { windows })
+    }
+
+    /// Parse window function name and arguments
+    fn parse_window_function(&mut self) -> ProtocolResult<WindowFunction> {
+        let func = match self.current_token() {
+            Some(AqlToken::RowNumber) => {
+                self.advance();
+                self.expect_paren_pair()?;
+                WindowFunction::RowNumber
+            }
+            Some(AqlToken::RankFunc) => {
+                self.advance();
+                self.expect_paren_pair()?;
+                WindowFunction::Rank
+            }
+            Some(AqlToken::DenseRank) => {
+                self.advance();
+                self.expect_paren_pair()?;
+                WindowFunction::DenseRank
+            }
+            Some(AqlToken::PercentRank) => {
+                self.advance();
+                self.expect_paren_pair()?;
+                WindowFunction::PercentRank
+            }
+            Some(AqlToken::CumeDist) => {
+                self.advance();
+                self.expect_paren_pair()?;
+                WindowFunction::CumeDist
+            }
+            Some(AqlToken::Ntile) => {
+                self.advance();
+                if !matches!(self.current_token(), Some(AqlToken::LeftParen)) {
+                    return Err(ProtocolError::ParseError(
+                        "Expected ( after NTILE".to_string(),
+                    ));
+                }
+                self.advance();
+                let n = match self.current_token() {
+                    Some(AqlToken::Number(num)) => {
+                        let n = num.as_u64().unwrap_or(1) as u32;
+                        self.advance();
+                        n
+                    }
+                    _ => 1,
+                };
+                if matches!(self.current_token(), Some(AqlToken::RightParen)) {
+                    self.advance();
+                }
+                WindowFunction::Ntile(n)
+            }
+            Some(AqlToken::LagFunc) => {
+                self.advance();
+                self.parse_lag_lead_function(true)?
+            }
+            Some(AqlToken::LeadFunc) => {
+                self.advance();
+                self.parse_lag_lead_function(false)?
+            }
+            Some(AqlToken::FirstValue) => {
+                self.advance();
+                if !matches!(self.current_token(), Some(AqlToken::LeftParen)) {
+                    return Err(ProtocolError::ParseError(
+                        "Expected ( after FIRST_VALUE".to_string(),
+                    ));
+                }
+                self.advance();
+                let expr = self.parse_expression()?;
+                if matches!(self.current_token(), Some(AqlToken::RightParen)) {
+                    self.advance();
+                }
+                WindowFunction::FirstValue(Box::new(expr))
+            }
+            Some(AqlToken::LastValue) => {
+                self.advance();
+                if !matches!(self.current_token(), Some(AqlToken::LeftParen)) {
+                    return Err(ProtocolError::ParseError(
+                        "Expected ( after LAST_VALUE".to_string(),
+                    ));
+                }
+                self.advance();
+                let expr = self.parse_expression()?;
+                if matches!(self.current_token(), Some(AqlToken::RightParen)) {
+                    self.advance();
+                }
+                WindowFunction::LastValue(Box::new(expr))
+            }
+            Some(AqlToken::NthValue) => {
+                self.advance();
+                if !matches!(self.current_token(), Some(AqlToken::LeftParen)) {
+                    return Err(ProtocolError::ParseError(
+                        "Expected ( after NTH_VALUE".to_string(),
+                    ));
+                }
+                self.advance();
+                let expr = self.parse_expression()?;
+                if matches!(self.current_token(), Some(AqlToken::Comma)) {
+                    self.advance();
+                }
+                let n = match self.current_token() {
+                    Some(AqlToken::Number(num)) => {
+                        let n = num.as_u64().unwrap_or(1) as u32;
+                        self.advance();
+                        n
+                    }
+                    _ => 1,
+                };
+                if matches!(self.current_token(), Some(AqlToken::RightParen)) {
+                    self.advance();
+                }
+                WindowFunction::NthValue {
+                    expression: Box::new(expr),
+                    n,
+                }
+            }
+            // Aggregate functions
+            Some(AqlToken::Sum) => {
+                self.advance();
+                self.parse_aggregate_window_function(AggregateFunction::Sum)?
+            }
+            Some(AqlToken::Avg) => {
+                self.advance();
+                self.parse_aggregate_window_function(AggregateFunction::Avg)?
+            }
+            Some(AqlToken::MinFunc) => {
+                self.advance();
+                self.parse_aggregate_window_function(AggregateFunction::Min)?
+            }
+            Some(AqlToken::MaxFunc) => {
+                self.advance();
+                self.parse_aggregate_window_function(AggregateFunction::Max)?
+            }
+            Some(AqlToken::Count) => {
+                self.advance();
+                self.parse_aggregate_window_function(AggregateFunction::Count)?
+            }
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected window function".to_string(),
+                ))
+            }
+        };
+
+        Ok(func)
+    }
+
+    fn expect_paren_pair(&mut self) -> ProtocolResult<()> {
+        if matches!(self.current_token(), Some(AqlToken::LeftParen)) {
+            self.advance();
+            if matches!(self.current_token(), Some(AqlToken::RightParen)) {
+                self.advance();
+            }
+        }
+        Ok(())
+    }
+
+    fn parse_lag_lead_function(&mut self, is_lag: bool) -> ProtocolResult<WindowFunction> {
+        if !matches!(self.current_token(), Some(AqlToken::LeftParen)) {
+            return Err(ProtocolError::ParseError(
+                "Expected ( after LAG/LEAD".to_string(),
+            ));
+        }
+        self.advance();
+
+        let expr = self.parse_expression()?;
+
+        let mut offset = 1;
+        let mut default = None;
+
+        if matches!(self.current_token(), Some(AqlToken::Comma)) {
+            self.advance();
+            if let Some(AqlToken::Number(n)) = self.current_token() {
+                offset = n.as_u64().unwrap_or(1) as u32;
+                self.advance();
+            }
+
+            if matches!(self.current_token(), Some(AqlToken::Comma)) {
+                self.advance();
+                let default_expr = self.parse_expression()?;
+                default = Some(Box::new(default_expr));
+            }
+        }
+
+        if matches!(self.current_token(), Some(AqlToken::RightParen)) {
+            self.advance();
+        }
+
+        if is_lag {
+            Ok(WindowFunction::Lag {
+                expression: Box::new(expr),
+                offset,
+                default,
+            })
+        } else {
+            Ok(WindowFunction::Lead {
+                expression: Box::new(expr),
+                offset,
+                default,
+            })
+        }
+    }
+
+    fn parse_aggregate_window_function(
+        &mut self,
+        func: AggregateFunction,
+    ) -> ProtocolResult<WindowFunction> {
+        if !matches!(self.current_token(), Some(AqlToken::LeftParen)) {
+            return Err(ProtocolError::ParseError(
+                "Expected ( after aggregate function".to_string(),
+            ));
+        }
+        self.advance();
+
+        let expr = self.parse_expression()?;
+
+        if matches!(self.current_token(), Some(AqlToken::RightParen)) {
+            self.advance();
+        }
+
+        Ok(WindowFunction::Aggregate {
+            function: func,
+            expression: Box::new(expr),
+        })
+    }
+
+    fn parse_window_frame(&mut self) -> ProtocolResult<Option<WindowFrame>> {
+        let frame_type = match self.current_token() {
+            Some(AqlToken::Rows) => {
+                self.advance();
+                WindowFrameType::Rows
+            }
+            Some(AqlToken::RangeKeyword) => {
+                self.advance();
+                WindowFrameType::Range
+            }
+            Some(AqlToken::Groups) => {
+                self.advance();
+                WindowFrameType::Groups
+            }
+            _ => return Ok(None),
+        };
+
+        // Parse start bound
+        let start = self.parse_frame_bound()?;
+
+        // Check for AND (BETWEEN ... AND ...)
+        let end = if matches!(self.current_token(), Some(AqlToken::And)) {
+            self.advance();
+            self.parse_frame_bound()?
+        } else {
+            WindowFrameBound::CurrentRow
+        };
+
+        Ok(Some(WindowFrame {
+            frame_type,
+            start,
+            end,
+        }))
+    }
+
+    fn parse_frame_bound(&mut self) -> ProtocolResult<WindowFrameBound> {
+        match self.current_token() {
+            Some(AqlToken::Unbounded) => {
+                self.advance();
+                if matches!(self.current_token(), Some(AqlToken::Preceding)) {
+                    self.advance();
+                    Ok(WindowFrameBound::Unbounded)
+                } else if matches!(self.current_token(), Some(AqlToken::Following)) {
+                    self.advance();
+                    Ok(WindowFrameBound::Unbounded)
+                } else {
+                    Ok(WindowFrameBound::Unbounded)
+                }
+            }
+            Some(AqlToken::Current) => {
+                self.advance();
+                if matches!(self.current_token(), Some(AqlToken::Row)) {
+                    self.advance();
+                }
+                Ok(WindowFrameBound::CurrentRow)
+            }
+            Some(AqlToken::Number(n)) => {
+                let val = n.as_u64().unwrap_or(0) as u32;
+                self.advance();
+                if matches!(self.current_token(), Some(AqlToken::Preceding)) {
+                    self.advance();
+                    Ok(WindowFrameBound::Preceding(val))
+                } else if matches!(self.current_token(), Some(AqlToken::Following)) {
+                    self.advance();
+                    Ok(WindowFrameBound::Following(val))
+                } else {
+                    Ok(WindowFrameBound::Preceding(val))
+                }
+            }
+            _ => Ok(WindowFrameBound::CurrentRow),
+        }
+    }
+
+    /// Parse SEARCH clause for full-text search
+    fn parse_search_clause(&mut self) -> ProtocolResult<AqlClause> {
+        self.advance(); // consume SEARCH
+
+        let expression = self.parse_expression()?;
+
+        // Optional analyzer specification
+        let analyzer = if matches!(self.current_token(), Some(AqlToken::Options)) {
+            self.advance();
+            // Parse options object for analyzer
+            if matches!(self.current_token(), Some(AqlToken::LeftBrace)) {
+                self.advance();
+                let mut analyzer_name = None;
+                while !matches!(self.current_token(), Some(AqlToken::RightBrace)) {
+                    if let Some(AqlToken::Identifier(key)) = self.current_token() {
+                        if key == "analyzer" {
+                            self.advance();
+                            if matches!(self.current_token(), Some(AqlToken::Colon)) {
+                                self.advance();
+                            }
+                            if let Some(AqlToken::String(name)) = self.current_token() {
+                                analyzer_name = Some(name.clone());
+                                self.advance();
+                            }
+                        } else {
+                            self.advance();
+                        }
+                    } else {
+                        self.advance();
+                    }
+                    if matches!(self.current_token(), Some(AqlToken::Comma)) {
+                        self.advance();
+                    }
+                }
+                if matches!(self.current_token(), Some(AqlToken::RightBrace)) {
+                    self.advance();
+                }
+                analyzer_name
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Ok(AqlClause::Search {
+            expression,
+            analyzer,
+        })
+    }
+
+    /// Parse UPSERT clause
+    fn parse_upsert_clause(&mut self) -> ProtocolResult<AqlClause> {
+        self.advance(); // consume UPSERT
+
+        let search = self.parse_expression()?;
+
+        // Expect INSERT
+        if !matches!(self.current_token(), Some(AqlToken::Insert)) {
+            return Err(ProtocolError::ParseError(
+                "Expected INSERT in UPSERT clause".to_string(),
+            ));
+        }
+        self.advance();
+
+        let insert = self.parse_expression()?;
+
+        // Expect UPDATE or REPLACE
+        let update_or_replace = if matches!(self.current_token(), Some(AqlToken::Update)) {
+            self.advance();
+            let expr = self.parse_expression()?;
+            UpsertAction::Update(expr)
+        } else if matches!(self.current_token(), Some(AqlToken::Replace)) {
+            self.advance();
+            let expr = self.parse_expression()?;
+            UpsertAction::Replace(expr)
+        } else {
+            return Err(ProtocolError::ParseError(
+                "Expected UPDATE or REPLACE in UPSERT clause".to_string(),
+            ));
+        };
+
+        // Expect IN
+        if !matches!(self.current_token(), Some(AqlToken::In)) {
+            return Err(ProtocolError::ParseError(
+                "Expected IN in UPSERT clause".to_string(),
+            ));
+        }
+        self.advance();
+
+        let collection = match self.current_token() {
+            Some(AqlToken::Identifier(name)) => {
+                let name = name.clone();
+                self.advance();
+                name
+            }
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected collection name in UPSERT clause".to_string(),
+                ))
+            }
+        };
+
+        Ok(AqlClause::Upsert {
+            search,
+            insert,
+            update_or_replace,
+            collection,
+        })
+    }
+
+    /// Parse REPLACE clause
+    fn parse_replace_clause(&mut self) -> ProtocolResult<AqlClause> {
+        self.advance(); // consume REPLACE
+
+        let key = self.parse_expression()?;
+
+        // Expect WITH
+        if !matches!(self.current_token(), Some(AqlToken::With)) {
+            return Err(ProtocolError::ParseError(
+                "Expected WITH in REPLACE clause".to_string(),
+            ));
+        }
+        self.advance();
+
+        let document = self.parse_expression()?;
+
+        // Expect IN
+        if !matches!(self.current_token(), Some(AqlToken::In)) {
+            return Err(ProtocolError::ParseError(
+                "Expected IN in REPLACE clause".to_string(),
+            ));
+        }
+        self.advance();
+
+        let collection = match self.current_token() {
+            Some(AqlToken::Identifier(name)) => {
+                let name = name.clone();
+                self.advance();
+                name
+            }
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected collection name in REPLACE clause".to_string(),
+                ))
+            }
+        };
+
+        Ok(AqlClause::Replace {
+            key,
+            document,
+            collection,
+        })
     }
 
     fn parse_expression(&mut self) -> ProtocolResult<AqlExpression> {
@@ -1078,6 +2223,37 @@ pub enum AqlClause {
         direction: TraversalDirection,
         start_vertex: String,
         graph_name: Option<String>,
+        /// Traversal options (bfs/dfs, uniqueness constraints)
+        options: Option<TraversalOptions>,
+        /// Optional PRUNE condition
+        prune: Option<PruneClause>,
+    },
+    /// FOR clause for shortest path
+    ForShortestPath {
+        /// Variable to bind path result
+        path_var: String,
+        /// Shortest path query specification
+        query: ShortestPathQuery,
+    },
+    /// FOR clause for K shortest paths
+    ForKShortestPaths {
+        /// Variable to bind path result
+        path_var: String,
+        /// K shortest paths query specification
+        query: KShortestPathsQuery,
+    },
+    /// FOR clause for all shortest paths
+    ForAllShortestPaths {
+        /// Variable to bind path result
+        path_var: String,
+        /// Start vertex
+        start_vertex: AqlExpression,
+        /// Target vertex
+        target_vertex: AqlExpression,
+        /// Traversal direction
+        direction: TraversalDirection,
+        /// Graph source
+        graph_source: GraphSource,
     },
     /// LET clause for variable assignment
     Let {
@@ -1087,7 +2263,17 @@ pub enum AqlClause {
     /// FILTER clause for filtering
     Filter { condition: AqlCondition },
     /// COLLECT clause for grouping
-    Collect { groups: Vec<CollectGroup> },
+    Collect {
+        groups: Vec<CollectGroup>,
+        /// INTO clause for grouping into array
+        into: Option<String>,
+        /// KEEP clause for preserving variables
+        keep: Option<Vec<String>>,
+        /// AGGREGATE clause
+        aggregates: Option<Vec<CollectAggregate>>,
+        /// COUNT clause
+        count_into: Option<String>,
+    },
     /// SORT clause for ordering
     Sort { items: Vec<SortItem> },
     /// LIMIT clause for pagination
@@ -1101,9 +2287,19 @@ pub enum AqlClause {
     Insert {
         document: AqlExpression,
         collection: String,
+        /// Optional options
+        options: Option<HashMap<String, AqlValue>>,
     },
     /// UPDATE clause for modifying documents
     Update {
+        key: AqlExpression,
+        document: AqlExpression,
+        collection: String,
+        /// Optional options
+        options: Option<HashMap<String, AqlValue>>,
+    },
+    /// REPLACE clause for replacing documents
+    Replace {
         key: AqlExpression,
         document: AqlExpression,
         collection: String,
@@ -1113,6 +2309,45 @@ pub enum AqlClause {
         key: AqlExpression,
         collection: String,
     },
+    /// UPSERT clause for insert-or-update
+    Upsert {
+        search: AqlExpression,
+        insert: AqlExpression,
+        update_or_replace: UpsertAction,
+        collection: String,
+    },
+    /// WINDOW clause for window functions
+    Window {
+        /// Window specifications
+        windows: Vec<WindowClause>,
+    },
+    /// SEARCH clause for full-text search (ArangoSearch)
+    Search {
+        /// Search expression/condition
+        expression: AqlExpression,
+        /// Optional analyzer
+        analyzer: Option<String>,
+    },
+}
+
+/// COLLECT aggregate specification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CollectAggregate {
+    /// Variable to bind aggregate result
+    pub variable: String,
+    /// Aggregate function
+    pub function: AggregateFunction,
+    /// Expression to aggregate
+    pub expression: AqlExpression,
+}
+
+/// UPSERT action type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum UpsertAction {
+    /// UPDATE existing document
+    Update(AqlExpression),
+    /// REPLACE existing document
+    Replace(AqlExpression),
 }
 
 /// AQL expression types
@@ -1181,6 +2416,228 @@ pub struct SortItem {
 pub enum SortDirection {
     Asc,
     Desc,
+}
+
+/// Graph traversal options (ArangoDB-compatible)
+///
+/// Controls how graph traversals are executed including
+/// uniqueness constraints and traversal strategy.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TraversalOptions {
+    /// Traversal order strategy
+    pub order: TraversalOrder,
+    /// Uniqueness constraint for vertices
+    pub unique_vertices: UniquenessLevel,
+    /// Uniqueness constraint for edges
+    pub unique_edges: UniquenessLevel,
+    /// Edge collections to traverse (empty = all)
+    pub edge_collections: Vec<EdgeCollectionConfig>,
+    /// Maximum number of items per traversal level
+    pub max_items_per_level: Option<u64>,
+    /// Parallelism factor for traversal
+    pub parallelism: Option<u32>,
+}
+
+/// Traversal order strategy
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TraversalOrder {
+    /// Breadth-first search (default)
+    #[default]
+    Bfs,
+    /// Depth-first search
+    Dfs,
+    /// Weighted traversal (uses edge weights)
+    Weighted,
+}
+
+/// Uniqueness constraint levels for traversal
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum UniquenessLevel {
+    /// No uniqueness constraint
+    #[default]
+    None,
+    /// Unique within current path
+    Path,
+    /// Globally unique across all paths
+    Global,
+}
+
+/// Edge collection configuration for traversal
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EdgeCollectionConfig {
+    /// Collection name
+    pub collection: String,
+    /// Direction override for this collection
+    pub direction: Option<TraversalDirection>,
+}
+
+/// PRUNE clause for early traversal termination
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PruneClause {
+    /// Condition that triggers pruning
+    pub condition: AqlCondition,
+    /// Prune variable (optional vertex/edge/path reference)
+    pub prune_var: Option<String>,
+}
+
+/// WINDOW clause for window functions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindowClause {
+    /// Variable to bind window result
+    pub variable: String,
+    /// Window function to apply
+    pub function: WindowFunction,
+    /// Partition specification
+    pub partition_by: Option<Vec<AqlExpression>>,
+    /// Order specification within partition
+    pub order_by: Option<Vec<SortItem>>,
+    /// Window frame specification
+    pub frame: Option<WindowFrame>,
+}
+
+/// Supported window functions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WindowFunction {
+    /// Row number within partition (1-based)
+    RowNumber,
+    /// Rank with gaps for ties
+    Rank,
+    /// Rank without gaps
+    DenseRank,
+    /// Percent rank
+    PercentRank,
+    /// Cumulative distribution
+    CumeDist,
+    /// N-tile distribution
+    Ntile(u32),
+    /// Value from N rows before current
+    Lag {
+        expression: Box<AqlExpression>,
+        offset: u32,
+        default: Option<Box<AqlExpression>>,
+    },
+    /// Value from N rows after current
+    Lead {
+        expression: Box<AqlExpression>,
+        offset: u32,
+        default: Option<Box<AqlExpression>>,
+    },
+    /// First value in window
+    FirstValue(Box<AqlExpression>),
+    /// Last value in window
+    LastValue(Box<AqlExpression>),
+    /// Nth value in window
+    NthValue {
+        expression: Box<AqlExpression>,
+        n: u32,
+    },
+    /// Aggregate function over window
+    Aggregate {
+        function: AggregateFunction,
+        expression: Box<AqlExpression>,
+    },
+}
+
+/// Aggregate functions for COLLECT and WINDOW
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AggregateFunction {
+    Count,
+    Sum,
+    Avg,
+    Min,
+    Max,
+    CountDistinct,
+    CollectArray,
+    CollectUnique,
+    Stddev,
+    Variance,
+    StddevSample,
+    VarianceSample,
+}
+
+/// Window frame specification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindowFrame {
+    /// Frame type
+    pub frame_type: WindowFrameType,
+    /// Start bound
+    pub start: WindowFrameBound,
+    /// End bound (defaults to CURRENT ROW if not specified)
+    pub end: WindowFrameBound,
+}
+
+/// Window frame type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WindowFrameType {
+    /// Row-based frame
+    Rows,
+    /// Range-based frame (value-based)
+    Range,
+    /// Groups-based frame
+    Groups,
+}
+
+/// Window frame bound specification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WindowFrameBound {
+    /// No bound (beginning or end of partition)
+    Unbounded,
+    /// Current row
+    CurrentRow,
+    /// N rows/values preceding
+    Preceding(u32),
+    /// N rows/values following
+    Following(u32),
+}
+
+/// Shortest path query specification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShortestPathQuery {
+    /// Start vertex expression
+    pub start_vertex: AqlExpression,
+    /// Target vertex expression
+    pub target_vertex: AqlExpression,
+    /// Direction of traversal
+    pub direction: TraversalDirection,
+    /// Graph name or edge collections
+    pub graph_source: GraphSource,
+    /// Path options
+    pub options: ShortestPathOptions,
+}
+
+/// K shortest paths query specification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KShortestPathsQuery {
+    /// Start vertex expression
+    pub start_vertex: AqlExpression,
+    /// Target vertex expression
+    pub target_vertex: AqlExpression,
+    /// Direction of traversal
+    pub direction: TraversalDirection,
+    /// Graph name or edge collections
+    pub graph_source: GraphSource,
+    /// Number of paths to return
+    pub k: u32,
+    /// Path options
+    pub options: ShortestPathOptions,
+}
+
+/// Graph source (named graph or edge collections)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GraphSource {
+    /// Named graph
+    Graph(String),
+    /// Explicit edge collections
+    EdgeCollections(Vec<String>),
+}
+
+/// Options for shortest path algorithms
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ShortestPathOptions {
+    /// Weight attribute for edges
+    pub weight_attribute: Option<String>,
+    /// Default weight if attribute missing
+    pub default_weight: f64,
 }
 
 #[cfg(test)]

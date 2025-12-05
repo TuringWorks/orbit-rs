@@ -33,12 +33,16 @@ pub enum MySqlCommand {
     StmtPrepare = 0x16,
     /// COM_STMT_EXECUTE
     StmtExecute = 0x17,
+    /// COM_STMT_SEND_LONG_DATA
+    StmtSendLongData = 0x18,
     /// COM_STMT_CLOSE
     StmtClose = 0x19,
     /// COM_STMT_RESET
     StmtReset = 0x1A,
     /// COM_SET_OPTION
     SetOption = 0x1B,
+    /// COM_STMT_FETCH
+    StmtFetch = 0x1C,
     /// COM_RESET_CONNECTION
     ResetConnection = 0x1F,
 }
@@ -57,9 +61,11 @@ impl MySqlCommand {
             0x0E => Ok(MySqlCommand::Ping),
             0x16 => Ok(MySqlCommand::StmtPrepare),
             0x17 => Ok(MySqlCommand::StmtExecute),
+            0x18 => Ok(MySqlCommand::StmtSendLongData),
             0x19 => Ok(MySqlCommand::StmtClose),
             0x1A => Ok(MySqlCommand::StmtReset),
             0x1B => Ok(MySqlCommand::SetOption),
+            0x1C => Ok(MySqlCommand::StmtFetch),
             0x1F => Ok(MySqlCommand::ResetConnection),
             _ => Err(ProtocolError::InvalidOpcode(byte)),
         }
