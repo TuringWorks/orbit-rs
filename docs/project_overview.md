@@ -403,14 +403,14 @@ Recent refactoring eliminated gRPC overhead for local connections:
 ### **Getting Started**
 
 - [Quick Start Guide](quick_start.md) - Get up and running in 30 seconds
-- [Product Requirements Document](PRD.md) - Complete architecture and module reference
+- [Product Requirements Document](../specifications/PRD.md) - Complete architecture and module reference
 - [Features Guide](features.md) - Complete feature list
 
 ### **Architecture**
 
 - [System Architecture](overview.md) - Complete system design and components
 - [Protocol Adapters](content/protocols/protocol_adapters.md) - Multi-protocol support architecture
-- [Storage Architecture](PRD.md#storage-architecture) - Storage backends and tiering
+- [Storage Architecture](../specifications/PRD.md#storage-architecture) - Storage backends and tiering
 
 ### **Protocols**
 

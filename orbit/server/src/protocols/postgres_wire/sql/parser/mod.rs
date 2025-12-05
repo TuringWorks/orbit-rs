@@ -101,6 +101,7 @@ impl SqlParser {
             Some(Token::Insert) => self.parse_insert_statement(),
             Some(Token::Update) => self.parse_update_statement(),
             Some(Token::Delete) => self.parse_delete_statement(),
+            Some(Token::Merge) => self.parse_merge_statement(),
 
             // DCL Statements
             Some(Token::Grant) => self.parse_grant_statement(),
@@ -145,6 +146,7 @@ impl SqlParser {
                     "INSERT".to_string(),
                     "UPDATE".to_string(),
                     "DELETE".to_string(),
+                    "MERGE".to_string(),
                     "GRANT".to_string(),
                     "REVOKE".to_string(),
                     "BEGIN".to_string(),
@@ -216,6 +218,7 @@ impl SqlParser {
     fn parse_create_statement(&mut self) -> ParseResult<Statement> {
         self.expect(Token::Create)?;
 
+
         // Check for CREATE OR REPLACE VIEW
         let or_replace = if self.matches(&[Token::Or]) {
             self.advance()?;
@@ -249,6 +252,13 @@ impl SqlParser {
             },
             Some(Token::Schema) => ddl::parse_create_schema(self),
             Some(Token::Extension) => ddl::parse_create_extension(self),
+            Some(Token::Function) => {
+                let mut stmt = ddl::parse_create_function(self)?;
+                if let Statement::CreateFunction(ref mut func_stmt) = stmt {
+                    func_stmt.or_replace = or_replace;
+                }
+                Ok(stmt)
+            },
 
             Some(token) => Err(ParseError {
                 message: format!("Unexpected token after CREATE: {token:?}"),
@@ -262,6 +272,7 @@ impl SqlParser {
                     "VIEW".to_string(),
                     "SCHEMA".to_string(),
                     "EXTENSION".to_string(),
+                    "FUNCTION".to_string(),
                 ],
                 found: Some(token.clone()),
             }),
@@ -269,7 +280,7 @@ impl SqlParser {
             None => Err(ParseError {
                 message: "Expected object type after CREATE".to_string(),
                 position: self.position,
-                expected: vec!["DATABASE, TABLE, UNIQUE INDEX, INDEX, OR REPLACE VIEW, VIEW, SCHEMA, or EXTENSION".to_string()],
+                expected: vec!["DATABASE, TABLE, UNIQUE INDEX, INDEX, OR REPLACE VIEW, VIEW, SCHEMA, EXTENSION, or FUNCTION".to_string()],
                 found: None,
             }),
         }
@@ -348,6 +359,10 @@ impl SqlParser {
 
     fn parse_delete_statement(&mut self) -> ParseResult<Statement> {
         dml::parse_delete(self)
+    }
+
+    fn parse_merge_statement(&mut self) -> ParseResult<Statement> {
+        dml::parse_merge(self)
     }
 
     fn parse_grant_statement(&mut self) -> ParseResult<Statement> {

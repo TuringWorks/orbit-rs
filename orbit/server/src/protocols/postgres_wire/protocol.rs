@@ -529,6 +529,38 @@ impl PostgresWireProtocol {
                 }
                 .encode(buf);
             }
+            QueryResult::Merge { count, rows, columns } => {
+                // If rows are present (RETURNING clause), we need to send RowDescription and DataRow
+                if !rows.is_empty() {
+                    let fields: Vec<FieldDescription> = columns
+                        .iter()
+                        .map(|col| FieldDescription {
+                            name: col.clone(),
+                            table_oid: 0,
+                            column_id: 0,
+                            type_oid: type_oids::TEXT, // Default to TEXT
+                            type_size: -1,
+                            type_modifier: -1,
+                            format: 0,
+                        })
+                        .collect();
+
+                    BackendMessage::RowDescription { fields }.encode(buf);
+
+                    for row in rows {
+                        let values: Vec<Option<bytes::Bytes>> = row
+                            .iter()
+                            .map(|v| v.as_ref().map(|s| bytes::Bytes::from(s.clone())))
+                            .collect();
+                        BackendMessage::DataRow { values }.encode(buf);
+                    }
+                }
+
+                BackendMessage::CommandComplete {
+                    tag: format!("MERGE {count}"),
+                }
+                .encode(buf);
+            }
             QueryResult::Set { .. } => {
                 BackendMessage::CommandComplete {
                     tag: "SET".to_string(),

@@ -689,6 +689,7 @@ mod tests {
             offset: None,
             for_clause: None,
             traverse: None,
+            set_operation: None,
         };
 
         let stmt = Statement::Select(Box::new(select));
@@ -732,6 +733,7 @@ mod tests {
             offset: None,
             for_clause: None,
             traverse: None,
+            set_operation: None,
         };
 
         let stmt = Statement::Select(Box::new(select));
@@ -775,6 +777,7 @@ mod tests {
             offset: None,
             for_clause: None,
             traverse: None,
+            set_operation: None,
         };
 
         let stmt = Statement::Select(Box::new(select));
@@ -842,6 +845,7 @@ mod tests {
             offset: None,
             for_clause: None,
             traverse: None,
+            set_operation: None,
         };
 
         let stmt = Statement::Select(Box::new(select));
@@ -887,6 +891,7 @@ mod tests {
             offset: None,
             for_clause: None,
             traverse: None,
+            set_operation: None,
         };
 
         let stmt = Statement::Select(Box::new(select));

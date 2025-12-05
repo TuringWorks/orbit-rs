@@ -254,7 +254,7 @@ Orbit-RS is ideal for building:
 
 - [🏃 **Quick Start Guide**](quick_start.md) - Get up and running in 30 seconds
 - [📖 **Project Overview**](project_overview.md) - Complete project status and capabilities
-- [📋 **Product Requirements Document**](PRD.md) - Complete architecture and module reference
+- [📋 **Product Requirements Document**](../specifications/PRD.md) - Complete architecture and module reference
 - [🎯 **Feature Index**](features.md) - Comprehensive feature overview
 - [🤝 **Contributing Guide**](contributing.md) - How to contribute to the project
 
@@ -263,7 +263,7 @@ Orbit-RS is ideal for building:
 - [🎭 **Virtual Actor Persistence**](content/storage/virtual_actor_persistence.md) - Actor state management
 - [💳 **Advanced Transaction Features**](content/server/advanced_transaction_features.md) - Distributed transactions
 - [⚡ **Compute Acceleration Guide**](content/gpu-compute/COMPUTE_ACCELERATION_GUIDE.md) - GPU/Neural acceleration
-- [🧠 **AI-Native Subsystems**](PRD.md#ai-native-subsystems) - Intelligent database features
+- [🧠 **AI-Native Subsystems**](../specifications/PRD.md#ai-native-subsystems) - Intelligent database features
 
 ### 🔌 **Protocols & Features**
 

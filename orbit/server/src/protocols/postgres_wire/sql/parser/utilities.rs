@@ -34,6 +34,7 @@ pub fn token_to_identifier_name(token: &Token) -> Option<String> {
         // Other keywords that can be used as identifiers
         Token::Sequence => Some("sequence".to_string()),
         Token::Key => Some("key".to_string()),
+        Token::Add => Some("add".to_string()),
         _ => None,
     }
 }
@@ -81,7 +82,7 @@ pub fn parse_table_name(parser: &mut SqlParser) -> ParseResult<TableName> {
 
 /// Parse a SQL data type
 pub fn parse_data_type(parser: &mut SqlParser) -> ParseResult<SqlType> {
-    match &parser.current_token {
+    let base_type = match &parser.current_token {
         Some(Token::Boolean) => {
             parser.advance()?;
             Ok(SqlType::Boolean)
@@ -371,7 +372,19 @@ pub fn parse_data_type(parser: &mut SqlParser) -> ParseResult<SqlType> {
         Some(Token::Identifier(type_name)) => {
             let name = type_name.clone();
             parser.advance()?;
-            Ok(SqlType::Custom { type_name: name })
+            // Handle common PostgreSQL type aliases
+            match name.to_uppercase().as_str() {
+                "INT" | "INT4" => Ok(SqlType::Integer),
+                "INT2" => Ok(SqlType::SmallInt),
+                "INT8" => Ok(SqlType::BigInt),
+                "FLOAT4" => Ok(SqlType::Real),
+                "FLOAT8" => Ok(SqlType::DoublePrecision),
+                "BOOL" => Ok(SqlType::Boolean),
+                "SERIAL" => Ok(SqlType::Integer), // SERIAL is INT with AUTO_INCREMENT
+                "BIGSERIAL" => Ok(SqlType::BigInt),
+                "SMALLSERIAL" => Ok(SqlType::SmallInt),
+                _ => Ok(SqlType::Custom { type_name: name }),
+            }
         }
         _ => Err(ParseError {
             message: "Expected data type".to_string(),
@@ -379,6 +392,29 @@ pub fn parse_data_type(parser: &mut SqlParser) -> ParseResult<SqlType> {
             expected: vec!["data type".to_string()],
             found: parser.current_token.clone(),
         }),
+    }?;
+
+    // Check for array brackets (TYPE[])
+    if parser.matches(&[Token::LeftBracket]) {
+        parser.advance()?;
+        
+        // Optional dimension (e.g., INTEGER[10])
+        let dimensions = if let Some(Token::NumericLiteral(n)) = &parser.current_token {
+            let dim = n.parse::<u32>().ok();
+            parser.advance()?;
+            dim
+        } else {
+            None
+        };
+        
+        parser.expect(Token::RightBracket)?;
+        
+        Ok(SqlType::Array {
+            element_type: Box::new(base_type),
+            dimensions,
+        })
+    } else {
+        Ok(base_type)
     }
 }
 
@@ -618,8 +654,50 @@ fn parse_unary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
                 operand: Box::new(expr),
             })
         }
-        _ => parse_primary_expression(parser),
+        _ => {
+            let expr = parse_primary_expression(parser)?;
+            // Check for postfix operators like :: cast
+            parse_postfix_expression(parser, expr)
+        }
     }
+}
+
+/// Parse postfix expressions (:: type cast, array indexing, etc.)
+fn parse_postfix_expression(
+    parser: &mut SqlParser,
+    mut left: Expression,
+) -> ParseResult<Expression> {
+    loop {
+        match &parser.current_token {
+            // Handle :: type cast (PostgreSQL style)
+            Some(Token::Colon) => {
+                // Check if next token is also a colon (::)
+                if let Some(Token::Colon) = parser.tokens.get(parser.position + 1) {
+                    parser.advance()?; // consume first :
+                    parser.advance()?; // consume second :
+                    let target_type = parse_data_type(parser)?;
+                    left = Expression::Cast {
+                        expr: Box::new(left),
+                        target_type,
+                    };
+                } else {
+                    break;
+                }
+            }
+            // Handle array indexing [n]
+            Some(Token::LeftBracket) => {
+                parser.advance()?;
+                let index = parse_expression(parser)?;
+                parser.expect(Token::RightBracket)?;
+                left = Expression::ArrayIndex {
+                    array: Box::new(left),
+                    index: Box::new(index),
+                };
+            }
+            _ => break,
+        }
+    }
+    Ok(left)
 }
 
 /// Parse primary expressions (literals, identifiers, parenthesized expressions)
@@ -702,6 +780,29 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
                 }
             }
 
+            // Check for ARRAY literal (ARRAY[...])
+            if let Token::Identifier(name) = token {
+                if name.to_uppercase() == "ARRAY" {
+                    parser.advance()?;
+                    parser.expect(Token::LeftBracket)?;
+                    
+                    let mut elements = Vec::new();
+                    if !parser.matches(&[Token::RightBracket]) {
+                        loop {
+                            elements.push(parse_expression(parser)?);
+                            if parser.matches(&[Token::Comma]) {
+                                parser.advance()?;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    
+                    parser.expect(Token::RightBracket)?;
+                    return Ok(Expression::Array(elements));
+                }
+            }
+
             // Try to parse as identifier (including keywords)
             if let Some(name) = token_to_identifier_name(token) {
                 parser.advance()?;
@@ -730,10 +831,29 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
                         filter: None,
                     })))
                 } else {
-                    Ok(Expression::Column(ColumnRef {
-                        table: None,
-                        name,
-                    }))
+                    // Check for Dot (qualified name)
+                    if parser.matches(&[Token::Dot]) {
+                        parser.advance()?; // consume Dot
+                        if let Some(col_name) = parser.current_token.as_ref().and_then(token_to_identifier_name) {
+                             parser.advance()?;
+                             Ok(Expression::Column(ColumnRef {
+                                 table: Some(name),
+                                 name: col_name,
+                             }))
+                        } else {
+                             Err(ParseError {
+                                message: "Expected column name after dot".to_string(),
+                                position: parser.position,
+                                expected: vec!["identifier".to_string()],
+                                found: parser.current_token.clone(),
+                            })
+                        }
+                    } else {
+                        Ok(Expression::Column(ColumnRef {
+                            table: None,
+                            name,
+                        }))
+                    }
                 }
             } else {
                 Err(ParseError {
@@ -789,5 +909,41 @@ pub fn parse_select_statement(parser: &mut SqlParser) -> ParseResult<SelectState
             expected: vec!["SELECT".to_string()],
             found: parser.current_token.clone(),
         }),
+    }
+}
+
+/// Check if a token represents a data type name
+pub fn is_type_name(token: &Option<Token>) -> bool {
+    match token {
+        Some(Token::Boolean)
+        | Some(Token::SmallInt)
+        | Some(Token::Integer)
+        | Some(Token::BigInt)
+        | Some(Token::Real)
+        | Some(Token::DoublePrecision)
+        | Some(Token::Decimal)
+        | Some(Token::Numeric)
+        | Some(Token::Char)
+        | Some(Token::Varchar)
+        | Some(Token::Text)
+        | Some(Token::Bytea)
+        | Some(Token::Date)
+        | Some(Token::Time)
+        | Some(Token::Timestamp)
+        | Some(Token::Interval)
+        | Some(Token::Json)
+        | Some(Token::Jsonb)
+        | Some(Token::Uuid)
+        | Some(Token::Vector)
+        | Some(Token::HalfVec)
+        | Some(Token::SparseVec) => true,
+        // Check for common type aliases
+        Some(Token::Identifier(name)) => {
+            matches!(
+                name.to_uppercase().as_str(),
+                "INT" | "INT2" | "INT4" | "INT8" | "FLOAT4" | "FLOAT8" | "BOOL" | "SERIAL" | "BIGSERIAL" | "SMALLSERIAL"
+            )
+        }
+        _ => false,
     }
 }

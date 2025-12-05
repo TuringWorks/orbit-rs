@@ -301,7 +301,7 @@ client.disconnect()
 ## 📚 Learn More
 
 - **Full Documentation:** `README.md`
-- **Orbit-RS Architecture:** `../../docs/PRD.md`
+- **Orbit-RS Architecture:** `../../specifications/PRD.md`
 - **Python Client Examples:** `../../orbit-python-client/examples/`
 - **VS Code Extension:** `../../orbit-vscode-extension/`
 

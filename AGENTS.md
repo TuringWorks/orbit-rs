@@ -5,13 +5,13 @@ This document provides instructions for AI coding assistants (Gemini, Copilot, W
 ## Required Reading
 
 Before making any changes, read these files:
-1. **`docs/PRD.md`** - Single source of truth for architecture and modules
+1. **`specifications/PRD.md`** - Single source of truth for architecture and modules
 2. **`docs/content/architecture/ORBIT_ARCHITECTURE.md`** - Detailed architecture patterns and implementation details
 3. **`CLAUDE.md`** - Quick development reference and commands
 
 ## Architecture Reference
 
-**`docs/PRD.md` is the authoritative reference** for:
+**`specifications/PRD.md` is the authoritative reference** for:
 - Workspace structure and all 15 crates
 - Module directory layouts and file purposes
 - Protocol implementations (PostgreSQL, MySQL, CQL, Redis, REST, gRPC)
@@ -31,7 +31,7 @@ Before making any changes, read these files:
 
 ## PRD.md and ORBIT_ARCHITECTURE.md Maintenance (MANDATORY)
 
-**When making architectural changes, you MUST update both `docs/PRD.md` and `docs/content/architecture/ORBIT_ARCHITECTURE.md`.**
+**When making architectural changes, you MUST update both `specifications/PRD.md` and `docs/content/architecture/ORBIT_ARCHITECTURE.md`.**
 
 ### Triggers for Updates
 Update **PRD.md** when you:
@@ -79,9 +79,9 @@ Update **ORBIT_ARCHITECTURE.md** when you:
 
 ### Change Management Workflow
 ```
-1. Read docs/PRD.md to understand current architecture
+1. Read specifications/PRD.md to understand current architecture
 2. Make code changes
-3. Update docs/PRD.md to reflect changes
+3. Update specifications/PRD.md to reflect changes
 4. Run: cargo fmt --all
 5. Run: cargo clippy --workspace -- -D warnings
 6. Run: cargo test --workspace

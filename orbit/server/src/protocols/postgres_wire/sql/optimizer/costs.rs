@@ -223,6 +223,11 @@ impl CostBasedOptimizer {
             FromClause::TableFunction { .. } => {
                 // Table functions handled separately
             }
+            FromClause::JsonTable(json_table) => {
+                if let Some(alias) = &json_table.alias {
+                    tables.push(alias.name.clone());
+                }
+            }
         }
     }
 
@@ -851,6 +856,7 @@ mod tests {
             offset: None,
             for_clause: None,
             traverse: None,
+            set_operation: None,
         };
 
         let tables = optimizer.extract_tables(&select);

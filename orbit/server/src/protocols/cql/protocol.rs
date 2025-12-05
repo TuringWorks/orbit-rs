@@ -1042,9 +1042,10 @@ pub fn map_error_to_cql_code(error: &crate::protocols::error::ProtocolError) -> 
 }
 
 /// Build an ERROR response
-pub fn build_error_response(stream: i16, error_code: i32, message: &str) -> CqlFrame {
+pub fn build_error_response(stream: i16, code: i32, message: &str) -> CqlFrame {
+    tracing::error!("Building error response: stream={}, code={:#x}, message='{}'", stream, code, message);
     let mut body = BytesMut::new();
-    body.put_i32(error_code);
+    body.put_i32(code);
     write_string(&mut body, message);
     CqlFrame::response(stream, CqlOpcode::Error, body.freeze())
 }

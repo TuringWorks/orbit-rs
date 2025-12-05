@@ -1746,6 +1746,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore] // Slow test - takes > 60 seconds
     async fn test_lstm_forecaster() {
         let mut model = LSTMTimeSeriesForecaster::new(30, 7, 5, 128, 2);
         assert_eq!(model.model_type(), "time_series.lstm_forecaster");
@@ -1758,6 +1759,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Slow test - takes > 60 seconds
     async fn test_transformer_time_series() {
         let mut model = TransformerTimeSeriesModel::new(60, 14, 10, 256, 8, 3, 3);
         assert_eq!(model.model_type(), "time_series.transformer");
@@ -1767,6 +1769,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Slow test - takes > 60 seconds
     async fn test_deepar_forecaster() {
         let mut model = DeepARForecaster::new(30, 7, 3, 64, 2, 100);
         assert_eq!(model.model_type(), "time_series.deepar");

@@ -510,8 +510,8 @@ impl ExpressionEvaluator {
             }
             
             // UUID functions
-            "UUID_GENERATE_V7" => {
-                 Ok(SqlValue::Uuid(Uuid::new_v4()))
+            "UUID_GENERATE_V7" | "UUIDV7" => {
+                 Ok(SqlValue::Uuid(Uuid::now_v7()))
             }
 
             // JSON functions

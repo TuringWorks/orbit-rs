@@ -34,6 +34,11 @@ pub enum QueryResult {
         variable: String,
         value: String,
     },
+    Merge {
+        count: usize,
+        rows: Vec<Vec<Option<String>>>,
+        columns: Vec<String>,
+    },
 }
 
 /// Parsed SQL statement
@@ -534,6 +539,7 @@ impl QueryEngine {
             UnifiedExecutionResult::Insert { count, .. } => QueryResult::Insert { count },
             UnifiedExecutionResult::Update { count, .. } => QueryResult::Update { count },
             UnifiedExecutionResult::Delete { count, .. } => QueryResult::Delete { count },
+            UnifiedExecutionResult::Merge { count, rows, columns, .. } => QueryResult::Merge { count, rows, columns },
             UnifiedExecutionResult::CreateTable { table_name, .. } => {
                 // For DDL operations, return an empty select result with a message
                 QueryResult::Select {

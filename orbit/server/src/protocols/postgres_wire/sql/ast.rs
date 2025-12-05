@@ -26,6 +26,7 @@ pub enum Statement {
     Insert(InsertStatement),
     Update(UpdateStatement),
     Delete(DeleteStatement),
+    Merge(MergeStatement),
 
     // Data Control Language (DCL)
     Grant(GrantStatement),
@@ -50,6 +51,9 @@ pub enum Statement {
 
     // Session Management
     Set(SetStatement),
+
+    // Functions
+    CreateFunction(CreateFunctionStatement),
 }
 
 // ===== DDL Statements =====
@@ -180,6 +184,47 @@ pub struct DropSchemaStatement {
 // ===== Column and Constraint Definitions =====
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct CreateFunctionStatement {
+    pub or_replace: bool,
+    pub name: FunctionName,
+    pub args: Option<Vec<FunctionParameter>>,
+    pub return_type: Option<SqlType>,
+    pub language: Option<FunctionLanguage>,
+    pub body: String,
+    pub volatility: Option<FunctionVolatility>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionParameter {
+    pub name: Option<String>,
+    pub data_type: SqlType,
+    pub mode: Option<ParameterMode>,
+    pub default: Option<Expression>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParameterMode {
+    In,
+    Out,
+    InOut,
+    Variadic,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FunctionLanguage {
+    Sql,
+    PlPgSql,
+    Other(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FunctionVolatility {
+    Immutable,
+    Stable,
+    Volatile,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ColumnDefinition {
     pub name: String,
     pub data_type: SqlType,
@@ -286,6 +331,8 @@ pub struct SelectStatement {
     pub offset: Option<u64>,
     pub for_clause: Option<ForClause>,
     pub traverse: Option<TraverseClause>,
+    /// Compound query operation (UNION, INTERSECT, EXCEPT)
+    pub set_operation: Option<SetOperation>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -302,6 +349,24 @@ pub enum TraverseDirection {
     Outbound,
     Inbound,
     Any,
+}
+
+/// Set operations for compound SELECT statements (UNION, INTERSECT, EXCEPT)
+#[derive(Debug, Clone, PartialEq)]
+pub enum SetOperator {
+    Union,
+    UnionAll,
+    Intersect,
+    IntersectAll,
+    Except,
+    ExceptAll,
+}
+
+/// A compound SELECT with a set operation
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetOperation {
+    pub operator: SetOperator,
+    pub right: Box<SelectStatement>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -359,6 +424,22 @@ pub enum FromClause {
         function: FunctionCall,
         alias: Option<TableAlias>,
     },
+    JsonTable(JsonTable),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct JsonTable {
+    pub context_item: Expression,
+    pub path_expression: Expression,
+    pub columns: Vec<JsonTableColumn>,
+    pub alias: Option<TableAlias>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct JsonTableColumn {
+    pub name: String,
+    pub data_type: SqlType,
+    pub path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -482,6 +563,48 @@ pub struct DeleteStatement {
     pub using: Option<Vec<FromClause>>,
     pub where_clause: Option<Expression>,
     pub returning: Option<Vec<SelectItem>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeStatement {
+    pub table: TableName,
+    pub alias: Option<String>,
+    pub source: FromClause,
+    pub on: Expression,
+    pub when_clauses: Vec<MergeWhenClause>,
+    pub returning: Option<Vec<SelectItem>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeWhenClause {
+    pub matched: bool,
+    pub condition: Option<Expression>,
+    pub action: MergeAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MergeAction {
+    Update(MergeUpdate),
+    Delete,
+    Insert(MergeInsert),
+    DoNothing,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeUpdate {
+    pub assignments: Vec<Assignment>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeInsert {
+    pub columns: Option<Vec<String>>,
+    pub values: MergeInsertValues,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MergeInsertValues {
+    Values(Vec<Expression>),
+    DefaultValues,
 }
 
 // ===== Expressions =====

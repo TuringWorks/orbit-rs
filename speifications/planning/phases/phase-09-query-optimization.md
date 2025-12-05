@@ -20,21 +20,21 @@ permalink: /phases/phase-09-query-optimization/
 
 ---
 
-##  Table of Contents
+## Table of Contents
 
 1. [Overview](#overview)
-2. [Cost-Based Query Planner](#-cost-based-query-planner)
-3. [Automatic Index Usage & Recommendation](#-automatic-index-usage--recommendation)
-4. [Vectorized Execution Engine](#-vectorized-execution-engine)
-5. [Parallel Query Processing](#-parallel-query-processing)
-6. [Intelligent Query Caching](#-intelligent-query-caching)
+2. [Cost-Based Query Planner](#cost-based-query-planner)
+3. [Automatic Index Usage & Recommendation](#automatic-index-usage--recommendation)
+4. [Vectorized Execution Engine](#vectorized-execution-engine)
+5. [Parallel Query Processing](#parallel-query-processing)
+6. [Intelligent Query Caching](#intelligent-query-caching)
 7. [Performance Benchmarks](#performance-benchmarks)
-8. [Implementation Timeline](#-implementation-timeline)
-9. [Technical References](#-technical-references)
+8. [Implementation Timeline] (#-implementation-timeline)
+9. [Technical References] (#-technical-references)
 
 ---
 
-##  Overview
+## Overview
 
 Phase 9 transforms Orbit-RS from a functionally complete SQL engine to a high-performance database system capable of competing with enterprise solutions like PostgreSQL, Oracle, and SQL Server. This phase focuses on sophisticated query optimization techniques used in modern database systems.
 
@@ -55,7 +55,7 @@ Phase 9 transforms Orbit-RS from a functionally complete SQL engine to a high-pe
 
 ---
 
-##  Cost-Based Query Planner
+## Cost-Based Query Planner
 
 ### Cost-Based Planner Overview
 
@@ -152,7 +152,7 @@ impl QueryPlanner {
 
 ---
 
-##  Automatic Index Usage & Recommendation
+## Automatic Index Usage & Recommendation
 
 ### Index Intelligence Overview
 
@@ -227,7 +227,7 @@ impl AutoIndexManager {
 
 ---
 
-##  Vectorized Execution Engine
+## Vectorized Execution Engine
 
 ### Vectorized Execution Overview
 
@@ -301,7 +301,7 @@ impl ColumnBatch {
 
 ---
 
-##  Parallel Query Processing
+## Parallel Query Processing
 
 ### Parallel Processing Overview
 
@@ -371,9 +371,9 @@ impl WorkScheduler {
 
 ---
 
-##  Intelligent Query Caching
+## Intelligent Query Caching
 
-### Overview
+### Intelligent Query Caching Overview
 
 Multi-level caching system with automatic cache management, invalidation, and intelligent prefetching.
 
@@ -444,7 +444,7 @@ impl InvalidationTracker {
 
 ---
 
-##  Performance Benchmarks
+## Performance Benchmarks & Validation
 
 ### Target Performance Metrics
 
@@ -497,7 +497,7 @@ impl PerformanceTester {
 
 ---
 
-##  Implementation Timeline
+## Implementation Timeline
 
 ### Phase 9.1: Statistics & Cost Model (5-6 weeks)
 
@@ -567,7 +567,7 @@ impl PerformanceTester {
 
 ---
 
-##  Technical References
+## Technical References
 
 ### Academic Papers
 
@@ -597,7 +597,7 @@ impl PerformanceTester {
 
 ---
 
-##  Success Metrics
+## Success Metrics
 
 ### Performance Goals
 

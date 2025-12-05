@@ -7,7 +7,7 @@ Welcome to the comprehensive documentation hub for Orbit-RS, a high-performance 
 ```text
 docs/
 ├── README.md                    # This file
-├── PRD.md                       # Product Requirements Document
+├── ../specifications/PRD.md    # Product Requirements Document
 ├── index.md                     # Documentation site index
 ├── overview.md                  # Project overview
 ├── project_overview.md          # Detailed project overview

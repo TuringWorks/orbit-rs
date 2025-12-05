@@ -2,13 +2,13 @@
     "pci_score": 0,
     "details": {
         "data_types": {
-            "Primitive Types": "full",
+            "Primitive Types": "no",
             "Complex Types": "no",
-            "JSONB": "full",
-            "Geospatial Types": "full",
+            "JSONB": "no",
+            "Geospatial Types": "no",
             "Custom Types": "no",
-            "Full-Text Search": "full",
-            "Vector": "full"
+            "Full-Text Search": "no",
+            "Vector": "no"
         },
         "DDL_features": {
             "Schemas": "full",
@@ -35,9 +35,9 @@
         },
         "constraints": {
             "Foreign Key": "no",
-            "Check": "full",
-            "Not Null": "full",
-            "Unique": "full",
+            "Check": "no",
+            "Not Null": "no",
+            "Unique": "no",
             "Exclusion": "no"
         },
         "extensions": {
