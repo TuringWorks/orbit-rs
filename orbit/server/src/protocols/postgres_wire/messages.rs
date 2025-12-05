@@ -1,7 +1,11 @@
 //! PostgreSQL wire protocol message types
 //!
-//! This module implements all message types used in the PostgreSQL wire protocol.
-//! See: <https://www.postgresql.org/docs/current/protocol-message-formats.html>
+//! This module implements all message types used in the PostgreSQL wire protocol v3.
+//!
+//! ## References
+//! - PostgreSQL Protocol Spec: `specifications/protocols/postgresql18-reference-rust.md`
+//! - ANTLR4 Grammar: <https://github.com/TuringWorks/grammars-v4/tree/master/postgresql>
+//! - Official Docs: <https://www.postgresql.org/docs/current/protocol-message-formats.html>
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::collections::HashMap;

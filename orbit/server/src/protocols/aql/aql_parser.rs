@@ -2,6 +2,10 @@
 //!
 //! This module provides comprehensive AQL parsing capabilities supporting
 //! document queries, graph traversals, aggregations, and complex operations.
+//!
+//! ## References
+//! - AQL Spec: `specifications/protocols/arangodb_aql_reference.md`
+//! - ANTLR4 Grammar: <https://github.com/TuringWorks/grammars-v4/tree/master/aql>
 
 use crate::protocols::aql::data_model::AqlValue;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
@@ -60,6 +64,7 @@ impl AqlParser {
     /// Static token classification for use by tokenizer
     fn classify_token_static(token: &str) -> AqlToken {
         match token.to_uppercase().as_str() {
+            // Core query keywords
             "FOR" => AqlToken::For,
             "IN" => AqlToken::In,
             "RETURN" => AqlToken::Return,
@@ -68,6 +73,8 @@ impl AqlParser {
             "COLLECT" => AqlToken::Collect,
             "SORT" => AqlToken::Sort,
             "LIMIT" => AqlToken::Limit,
+
+            // Data modification keywords
             "INSERT" => AqlToken::Insert,
             "UPDATE" => AqlToken::Update,
             "REPLACE" => AqlToken::Replace,
@@ -75,22 +82,52 @@ impl AqlParser {
             "UPSERT" => AqlToken::Upsert,
             "WITH" => AqlToken::With,
             "INTO" => AqlToken::Into,
+
+            // Logical operators
             "AND" => AqlToken::And,
             "OR" => AqlToken::Or,
             "NOT" => AqlToken::Not,
+
+            // Literals
             "NULL" => AqlToken::Null,
             "TRUE" => AqlToken::Bool(true),
             "FALSE" => AqlToken::Bool(false),
+
+            // Sort order
             "ASC" | "ASCENDING" => AqlToken::Asc,
             "DESC" | "DESCENDING" => AqlToken::Desc,
+
+            // Collection operations
             "DISTINCT" => AqlToken::Distinct,
             "AGGREGATE" => AqlToken::Aggregate,
+
+            // Graph traversal keywords
             "OUTBOUND" => AqlToken::Outbound,
             "INBOUND" => AqlToken::Inbound,
             "ANY" => AqlToken::Any,
+            "ALL" => AqlToken::All,
+            "NONE" => AqlToken::None,
             "GRAPH" => AqlToken::Graph,
             "SHORTEST_PATH" => AqlToken::ShortestPath,
             "K_SHORTEST_PATHS" => AqlToken::KShortestPaths,
+            "ALL_SHORTEST_PATHS" => AqlToken::AllShortestPaths,
+            "K_PATHS" => AqlToken::KPaths,
+            "PRUNE" => AqlToken::Prune,
+
+            // Search and full-text
+            "SEARCH" => AqlToken::Search,
+            "LIKE" => AqlToken::Like,
+
+            // Window functions
+            "WINDOW" => AqlToken::Window,
+
+            // Options and configuration
+            "OPTIONS" => AqlToken::Options,
+
+            // Additional keywords
+            "COUNT" => AqlToken::Count,
+            "KEEP" => AqlToken::Keep,
+
             _ => {
                 // Check if it's a number
                 if let Ok(int_val) = token.parse::<i64>() {
@@ -116,9 +153,12 @@ impl AqlParser {
 }
 
 /// AQL token types
+///
+/// Represents all valid tokens in the AQL language, including
+/// keywords, operators, literals, and symbols.
 #[derive(Debug, Clone, PartialEq)]
 enum AqlToken {
-    // Keywords
+    // Core query keywords
     For,
     In,
     Return,
@@ -127,6 +167,8 @@ enum AqlToken {
     Collect,
     Sort,
     Limit,
+
+    // Data modification keywords
     Insert,
     Update,
     Replace,
@@ -134,23 +176,48 @@ enum AqlToken {
     Upsert,
     With,
     Into,
+
+    // Logical operators
     And,
     Or,
     Not,
+
+    // Literals
     Null,
     Bool(bool),
+
+    // Sort order
     Asc,
     Desc,
+
+    // Collection operations
     Distinct,
     Aggregate,
+    Count,
+    Keep,
 
     // Graph traversal keywords
     Outbound,
     Inbound,
     Any,
+    All,
+    None,
     Graph,
     ShortestPath,
     KShortestPaths,
+    AllShortestPaths,
+    KPaths,
+    Prune,
+
+    // Search and full-text
+    Search,
+    Like,
+
+    // Window functions
+    Window,
+
+    // Options and configuration
+    Options,
 
     // Literals
     Identifier(String),

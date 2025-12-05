@@ -1,29 +1,93 @@
 //! MySQL packet encoding and decoding
+//!
+//! Implements the MySQL wire protocol packet format.
+//!
+//! ## Packet Format
+//! ```text
+//! +-------------------+------------------+-------------------+
+//! | payload_length(3) | sequence_id(1)   | payload           |
+//! +-------------------+------------------+-------------------+
+//! ```
+//!
+//! ## References
+//! - MySQL Protocol Spec: `specifications/protocols/mysql-mariadb-reference-rust.md`
+//! - ANTLR4 Grammar: <https://github.com/TuringWorks/grammars-v4/tree/master/mysql>
 
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
+/// Maximum payload size for a single packet (16 MB - 1)
+///
+/// MySQL protocol limits each packet's payload to 2^24 - 1 bytes.
+/// Larger data must be split across multiple packets.
+pub const MAX_PACKET_SIZE: usize = 16_777_215; // 2^24 - 1 = 0xFFFFFF
+
+/// Packet header size (3 bytes length + 1 byte sequence ID)
+pub const PACKET_HEADER_SIZE: usize = 4;
+
+/// Maximum payload length that fits in the 3-byte length field
+pub const MAX_PAYLOAD_LENGTH: u32 = 0xFFFFFF;
+
 /// MySQL packet
+///
+/// Represents a single MySQL protocol packet with a sequence ID and payload.
+/// For payloads larger than [`MAX_PACKET_SIZE`], the data must be split
+/// across multiple packets with incrementing sequence IDs.
 #[derive(Debug, Clone)]
 pub struct MySqlPacket {
-    /// Sequence ID
+    /// Sequence ID (0-255, wraps around)
     pub sequence_id: u8,
-    /// Payload
+    /// Payload data (max [`MAX_PACKET_SIZE`] bytes)
     pub payload: Bytes,
 }
 
 impl MySqlPacket {
     /// Create a new packet
+    ///
+    /// # Panics
+    /// Panics if payload exceeds [`MAX_PACKET_SIZE`].
+    /// Use [`MySqlPacket::try_new`] for fallible construction.
     pub fn new(sequence_id: u8, payload: Bytes) -> Self {
+        assert!(
+            payload.len() <= MAX_PACKET_SIZE,
+            "Payload exceeds MAX_PACKET_SIZE"
+        );
         Self {
             sequence_id,
             payload,
         }
     }
 
+    /// Try to create a new packet, returning an error if payload is too large
+    pub fn try_new(sequence_id: u8, payload: Bytes) -> ProtocolResult<Self> {
+        if payload.len() > MAX_PACKET_SIZE {
+            return Err(ProtocolError::ParseError(format!(
+                "Payload size {} exceeds maximum {}",
+                payload.len(),
+                MAX_PACKET_SIZE
+            )));
+        }
+        Ok(Self {
+            sequence_id,
+            payload,
+        })
+    }
+
+    /// Check if this packet requires splitting for the MySQL protocol
+    pub fn requires_splitting(&self) -> bool {
+        self.payload.len() >= MAX_PACKET_SIZE
+    }
+
+    /// Get the total encoded size of this packet (header + payload)
+    pub fn encoded_size(&self) -> usize {
+        PACKET_HEADER_SIZE + self.payload.len()
+    }
+
     /// Encode packet to bytes
+    ///
+    /// Format: [length(3)][sequence_id(1)][payload]
     pub fn encode(&self) -> BytesMut {
-        let mut buf = BytesMut::with_capacity(4 + self.payload.len());
+        let mut buf = BytesMut::with_capacity(PACKET_HEADER_SIZE + self.payload.len());
 
         // Write payload length (3 bytes, little-endian)
         let len = self.payload.len() as u32;
@@ -41,8 +105,10 @@ impl MySqlPacket {
     }
 
     /// Decode packet from bytes
+    ///
+    /// Returns the decoded packet if sufficient data is available.
     pub fn decode(mut buf: Bytes) -> ProtocolResult<Self> {
-        if buf.len() < 4 {
+        if buf.len() < PACKET_HEADER_SIZE {
             return Err(ProtocolError::IncompleteFrame);
         }
 
@@ -51,6 +117,14 @@ impl MySqlPacket {
 
         // Read sequence ID
         let sequence_id = buf.get_u8();
+
+        // Validate length doesn't exceed protocol maximum
+        if len > MAX_PAYLOAD_LENGTH {
+            return Err(ProtocolError::ParseError(format!(
+                "Packet length {} exceeds maximum {}",
+                len, MAX_PAYLOAD_LENGTH
+            )));
+        }
 
         if buf.len() < len as usize {
             return Err(ProtocolError::IncompleteFrame);
@@ -163,6 +237,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_constants() {
+        assert_eq!(MAX_PACKET_SIZE, 16_777_215);
+        assert_eq!(MAX_PACKET_SIZE, 0xFFFFFF);
+        assert_eq!(PACKET_HEADER_SIZE, 4);
+        assert_eq!(MAX_PAYLOAD_LENGTH, 0xFFFFFF);
+    }
+
+    #[test]
     fn test_packet_encode_decode() {
         let packet = MySqlPacket::new(1, Bytes::from("hello"));
         let encoded = packet.encode();
@@ -173,19 +255,82 @@ mod tests {
     }
 
     #[test]
+    fn test_packet_try_new() {
+        // Valid packet
+        let packet = MySqlPacket::try_new(1, Bytes::from("hello")).unwrap();
+        assert_eq!(packet.sequence_id, 1);
+        assert_eq!(packet.payload, Bytes::from("hello"));
+
+        // We can't easily test the error case without creating a huge payload
+    }
+
+    #[test]
+    fn test_packet_encoded_size() {
+        let packet = MySqlPacket::new(1, Bytes::from("hello"));
+        assert_eq!(packet.encoded_size(), PACKET_HEADER_SIZE + 5); // 4 + 5 = 9
+    }
+
+    #[test]
+    fn test_packet_requires_splitting() {
+        let small_packet = MySqlPacket::new(1, Bytes::from("hello"));
+        assert!(!small_packet.requires_splitting());
+
+        // MAX_PACKET_SIZE exactly should require splitting
+        // (We can't test this easily without creating a 16MB payload)
+    }
+
+    #[test]
     fn test_lenenc_int() {
         let mut buf = BytesMut::new();
 
-        // Test small value
+        // Test small value (1 byte: 0-250)
         write_lenenc_int(&mut buf, 100);
         let mut read_buf = buf.clone().freeze();
         assert_eq!(read_lenenc_int(&mut read_buf).unwrap(), 100);
 
-        // Test 2-byte value
+        // Test 2-byte value (0xFC prefix: 251-65535)
         buf.clear();
         write_lenenc_int(&mut buf, 300);
         let mut read_buf = buf.clone().freeze();
         assert_eq!(read_lenenc_int(&mut read_buf).unwrap(), 300);
+
+        // Test 3-byte value (0xFD prefix: 65536-16777215)
+        buf.clear();
+        write_lenenc_int(&mut buf, 100_000);
+        let mut read_buf = buf.clone().freeze();
+        assert_eq!(read_lenenc_int(&mut read_buf).unwrap(), 100_000);
+
+        // Test 8-byte value (0xFE prefix: >16777215)
+        buf.clear();
+        write_lenenc_int(&mut buf, 20_000_000);
+        let mut read_buf = buf.clone().freeze();
+        assert_eq!(read_lenenc_int(&mut read_buf).unwrap(), 20_000_000);
+    }
+
+    #[test]
+    fn test_lenenc_int_edge_cases() {
+        let mut buf = BytesMut::new();
+
+        // Test boundary: 250 (1 byte)
+        write_lenenc_int(&mut buf, 250);
+        let mut read_buf = buf.clone().freeze();
+        assert_eq!(read_lenenc_int(&mut read_buf).unwrap(), 250);
+
+        // Test boundary: 251 (2 bytes)
+        buf.clear();
+        write_lenenc_int(&mut buf, 251);
+        assert_eq!(buf.len(), 3); // 0xFC + 2 bytes
+
+        // Test boundary: 65535 (2 bytes)
+        buf.clear();
+        write_lenenc_int(&mut buf, 65535);
+        let mut read_buf = buf.clone().freeze();
+        assert_eq!(read_lenenc_int(&mut read_buf).unwrap(), 65535);
+
+        // Test boundary: 65536 (3 bytes)
+        buf.clear();
+        write_lenenc_int(&mut buf, 65536);
+        assert_eq!(buf.len(), 4); // 0xFD + 3 bytes
     }
 
     #[test]
@@ -198,11 +343,43 @@ mod tests {
     }
 
     #[test]
+    fn test_lenenc_string_empty() {
+        let mut buf = BytesMut::new();
+        write_lenenc_string(&mut buf, "");
+
+        let mut read_buf = buf.freeze();
+        assert_eq!(read_lenenc_string(&mut read_buf).unwrap(), "");
+    }
+
+    #[test]
     fn test_null_string() {
         let mut buf = BytesMut::new();
         write_null_string(&mut buf, "test");
 
         let mut read_buf = buf.freeze();
         assert_eq!(read_null_string(&mut read_buf).unwrap(), "test");
+    }
+
+    #[test]
+    fn test_null_string_empty() {
+        let mut buf = BytesMut::new();
+        write_null_string(&mut buf, "");
+
+        let mut read_buf = buf.freeze();
+        assert_eq!(read_null_string(&mut read_buf).unwrap(), "");
+    }
+
+    #[test]
+    fn test_decode_incomplete_header() {
+        let buf = Bytes::from_static(&[0x05, 0x00]); // Only 2 bytes
+        let result = MySqlPacket::decode(buf);
+        assert!(matches!(result, Err(ProtocolError::IncompleteFrame)));
+    }
+
+    #[test]
+    fn test_decode_incomplete_payload() {
+        let buf = Bytes::from_static(&[0x05, 0x00, 0x00, 0x01, 0x68, 0x65]); // Length=5, but only 2 bytes payload
+        let result = MySqlPacket::decode(buf);
+        assert!(matches!(result, Err(ProtocolError::IncompleteFrame)));
     }
 }

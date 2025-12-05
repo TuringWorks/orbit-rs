@@ -6,12 +6,16 @@
 //!
 //! ## Features
 //!
-//! - Full CQL 3.x wire protocol support
+//! - Full CQL 3.x wire protocol support (v4 default)
 //! - Common CQL commands (SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, etc.)
 //! - Cassandra-style consistency levels
 //! - Type system mapping (CQL types ↔ Orbit SqlValue)
 //! - Prepared statements and batching
 //! - Authentication support
+//!
+//! ## References
+//! - CQL Protocol Spec: `specifications/protocols/cql-protocol-reference.md`
+//! - ANTLR4 Grammar: <https://github.com/TuringWorks/grammars-v4/tree/master/cql3>
 //!
 //! ## Example
 //!
