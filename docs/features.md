@@ -43,23 +43,31 @@ This document provides a comprehensive overview of all implemented features in O
 
 ### All Protocols with RocksDB Persistence
 
-All 7 protocols now have full RocksDB persistence, ensuring data durability across server restarts:
+All 9 protocols now have full RocksDB persistence, ensuring data durability across server restarts:
 
-- **Redis (RESP)** - Port 6379 - `data/redis/rocksdb/`
-- **PostgreSQL** - Port 5432 - `data/postgresql/rocksdb/`
-- **MySQL** - Port 3306 - `data/mysql/rocksdb/`
-- **CQL/Cassandra** - Port 9042 - `data/cql/rocksdb/`
-- **Cypher/Neo4j (Bolt)** - Port 7687 - `data/cypher/rocksdb/`
-- **AQL/ArangoDB** - Port 8529 - `data/aql/rocksdb/`
-- **GraphRAG** - Via RESP/PostgreSQL/Cypher/AQL - `data/graphrag/rocksdb/` (3 persistence options)
+| Protocol | Port | Storage Path |
+|----------|------|--------------|
+| **PostgreSQL** | 5432 | `data/postgresql/rocksdb/` |
+| **MySQL** | 3306 | `data/mysql/rocksdb/` |
+| **Redis (RESP)** | 6379 | `data/redis/rocksdb/` |
+| **CQL/Cassandra** | 9042 | `data/cql/rocksdb/` |
+| **Cypher/Neo4j (Bolt)** | 7687 | `data/cypher/rocksdb/` |
+| **AQL/ArangoDB** | 8529 | `data/aql/rocksdb/` |
+| **MongoDB** | 27017 | `data/mongodb/rocksdb/` |
+| **HTTP REST** | 8080 | Shared storage |
+| **gRPC** | 50051 | Actor state storage |
+| **GraphRAG** | Various | `data/graphrag/rocksdb/` |
 
 ### Redis Protocol (RESP)
 
-- **Status**: **Complete** - 124+ commands implemented
+- **Status**: **Production Ready** - 50+ command families, 292 tests
 - **Persistence**: ✅ RocksDB at `data/redis/rocksdb/`
 - **Coverage**:
   - Core data types (String, Hash, List, Set, Sorted Set)
-  - Pub/Sub messaging
+  - Pub/Sub messaging (PUBLISH, SUBSCRIBE, PSUBSCRIBE)
+  - **Streams** (XADD, XREAD, XRANGE, XGROUP, XREADGROUP, XACK, XCLAIM, XPENDING)
+  - **ACL** (ACL LIST, SETUSER, GETUSER, DELUSER, CAT, GENPASS, WHOAMI, LOG)
+  - **Functions** (FUNCTION LOAD, LIST, DELETE, DUMP, RESTORE, STATS, FCALL)
   - Vector operations (VECTOR.*, FT.*) for AI/ML
   - Time series (TS.*) - Full RedisTimeSeries compatibility
   - Graph database (GRAPH.*) - Cypher-like queries
@@ -90,26 +98,46 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
 
 ### Cypher/Neo4j (Bolt Protocol)
 
-- **Status**: **Production Ready** (38 tests)
+- **Status**: **Active Development** (60% complete, 18 tests)
 - **Persistence**: ✅ RocksDB at `data/cypher/rocksdb/`
 - **Features**:
+  - **Bolt Protocol**: v4/v5 handshake, HELLO, LOGON, RUN, PULL, DISCARD
   - **Core Cypher**: MATCH, CREATE, RETURN, WHERE with property filters
   - **Graph Mutations**: DELETE, DETACH DELETE, SET, MERGE, REMOVE
   - **Query Modifiers**: ORDER BY (ASC/DESC), LIMIT, SKIP
-  - **Graph Algorithms**: CALL procedures for PageRank, BFS, DFS, Dijkstra shortest path
-  - **Centrality Metrics**: Betweenness, Closeness, Degree centrality
-  - **Community Detection**: Connected components, Triangle counting
-  - **Pattern Matching**: Variable-length paths, relationship patterns
+  - **Transactions**: BEGIN, COMMIT, ROLLBACK
+  - **db.* Procedures**: db.labels, db.relationshipTypes, db.propertyKeys, db.indexes, db.constraints, db.schema.nodeTypeProperties, db.schema.relTypeProperties
+  - **Graph Algorithms**: gds.pageRank, gds.shortestPath, gds.bfs, gds.dfs, gds.betweenness, gds.closeness, gds.degree, gds.connectedComponents, gds.triangleCount
 - **Port**: 7687
 - **Documentation**: [Graph Database](content/graph/GRAPH_DATABASE.md)
 
 ### AQL/ArangoDB Protocol
 
-- **Status**: **Implemented**
+- **Status**: **Active Development** (65% complete, 61 tests)
 - **Persistence**: ✅ RocksDB at `data/aql/rocksdb/`
-- **Features**: Multi-model database operations, document and graph storage, AQL query language
+- **Features**:
+  - **Query Operations**: FOR, FILTER, RETURN, LET, SORT, LIMIT, COLLECT
+  - **Graph Traversals**: OUTBOUND, INBOUND, ANY with depth ranges (1..n)
+  - **Traversal Options**: bfs/dfs order, uniqueVertices, uniqueEdges levels
+  - **Path Queries**: SHORTEST_PATH, K_SHORTEST_PATHS
+  - **Window Functions**: ROW_NUMBER, RANK, DENSE_RANK, NTILE, LAG, LEAD, FIRST_VALUE, LAST_VALUE, NTH_VALUE
+  - **Window Aggregates**: SUM, AVG, MIN, MAX, COUNT over windows
+  - **Window Frames**: ROWS/RANGE with UNBOUNDED/CURRENT ROW/offset bounds
+  - **Mutations**: INSERT, UPDATE, REPLACE, REMOVE, UPSERT
+  - **Aggregations**: SUM, AVG, MIN, MAX, COUNT, LENGTH, CONCAT
 - **Port**: 8529
 - **Documentation**: [AQL Reference](content/aql/AQL_REFERENCE.md)
+
+### MongoDB Protocol
+
+- **Status**: **Active Development** (25% complete, 8 tests)
+- **Persistence**: ✅ RocksDB at `data/mongodb/rocksdb/`
+- **Features**:
+  - Basic wire protocol (OP_MSG)
+  - Connection handshake
+  - Simple document operations
+  - Collection listing
+- **Port**: 27017
 
 ### GraphRAG Protocol
 
@@ -358,7 +386,8 @@ All 7 protocols now have full RocksDB persistence, ensuring data durability acro
 ---
 
 **Total Features**: 50+ production-ready features
+**Protocols**: 9 native database protocols
 **Documentation**: 25,000+ lines of technical documentation
-**Test Coverage**: Comprehensive with 700+ tests passing across all modules
+**Test Coverage**: Comprehensive with 2187+ tests passing across all modules
 
-**Orbit-RS: Production-ready multi-model distributed database platform with heterogeneous compute acceleration**
+**Orbit-RS: Production-ready multi-model distributed database platform with 9 native protocols and heterogeneous compute acceleration**
