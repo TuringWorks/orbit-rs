@@ -21,3 +21,8 @@ for the target, run `python transformGrammar.py` from the command line to alter 
 (`non-fragment lexer rule AfterEscapeStringConstantMode_NotContinued can match the empty string` and `non-fragment lexer rule AfterEscapeStringConstantWithNewlineMode_NotContinued can match the empty string`).
 * The grammar is ambiguous.
 
+# Links
+
+- Grammar: https://github.com/TuringWorks/grammars-v4/tree/master/postgresql
+- PostgreSQL: https://github.com/postgres/postgres
+

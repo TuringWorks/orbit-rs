@@ -14,3 +14,8 @@ Licensed under the Apache 2.0
 
 * [wikipedia](https://en.wikipedia.org/wiki/Redis)
 * [pldb](https://pldb.io/concepts/redis.html)
+
+# Links
+
+- Grammar: https://github.com/TuringWorks/grammars-v4/tree/master/redis
+- Redis: https://github.com/redis/redis

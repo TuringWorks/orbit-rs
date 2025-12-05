@@ -12,6 +12,9 @@ In particular, efforts by Matt Hargett pushed for the refinement of the grammar.
 
 ## Links
 
+- Grammar: https://github.com/TuringWorks/grammars-v4/tree/master/lua
+- Lua: https://github.com/lua/lua
+
 ### Source
 
 [parser](https://github.com/lua/lua/blob/6baee9ef9d5657ab582c8a4b9f885ec58ed502d0/lparser.c) (mirror)
