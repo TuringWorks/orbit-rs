@@ -2,7 +2,9 @@
 //!
 //! Splits the large command handler into focused modules for better maintainability
 
+pub mod acl;
 pub mod connection;
+pub mod functions;
 pub mod graph;
 pub mod graphrag;
 pub mod hash;
@@ -11,6 +13,7 @@ pub mod pubsub;
 pub mod server;
 pub mod set;
 pub mod sorted_set;
+pub mod stream;
 pub mod string;
 pub mod string_persistent;
 // pub mod string_simple; // Replaced by full string implementation
@@ -27,9 +30,10 @@ mod handler {
     use tracing::{debug, warn};
 
     use super::{
-        connection::ConnectionCommands, graph::GraphCommands, graphrag::GraphRAGCommands,
-        hash::HashCommands, list::ListCommands, pubsub::PubSubCommands, server::ServerCommands,
-        set::SetCommands, sorted_set::SortedSetCommands, string::StringCommands,
+        acl::AclCommands, connection::ConnectionCommands, functions::FunctionCommands,
+        graph::GraphCommands, graphrag::GraphRAGCommands, hash::HashCommands,
+        list::ListCommands, pubsub::PubSubCommands, server::ServerCommands, set::SetCommands,
+        sorted_set::SortedSetCommands, stream::StreamCommands, string::StringCommands,
         time_series::TimeSeriesCommands, vector::VectorCommands,
     };
     use crate::protocols::error::ProtocolResult;
@@ -41,13 +45,16 @@ mod handler {
     /// Command categories for organizing command dispatch
     #[derive(Debug, Clone)]
     pub enum CommandCategory {
+        Acl,
         Connection,
+        Functions,
         String,
         Hash,
         List,
         PubSub,
         Set,
         SortedSet,
+        Stream,
         Vector,
         TimeSeries,
         Graph,
@@ -64,13 +71,16 @@ mod handler {
         local_registry: Arc<SimpleLocalRegistry>,
 
         // Specialized command handlers
+        acl: AclCommands,
         connection: ConnectionCommands,
+        functions: FunctionCommands,
         string: StringCommands,
         hash: HashCommands,
         list: ListCommands,
         pubsub: PubSubCommands,
         set: SetCommands,
         sorted_set: SortedSetCommands,
+        stream: StreamCommands,
         vector: VectorCommands,
         time_series: TimeSeriesCommands,
         graph: GraphCommands,
@@ -99,13 +109,16 @@ mod handler {
             };
 
             Self {
+                acl: AclCommands::new(orbit_client.clone(), local_registry.clone()),
                 connection: ConnectionCommands::new(orbit_client.clone(), local_registry.clone()),
+                functions: FunctionCommands::new(orbit_client.clone(), local_registry.clone()),
                 string: StringCommands::new(orbit_client.clone(), local_registry.clone()),
                 hash: HashCommands::new(orbit_client.clone(), local_registry.clone()),
                 list: ListCommands::new(orbit_client.clone(), local_registry.clone()),
                 pubsub: PubSubCommands::new(orbit_client.clone(), local_registry.clone()),
                 set: SetCommands::new(orbit_client.clone(), local_registry.clone()),
                 sorted_set: SortedSetCommands::new(orbit_client.clone(), local_registry.clone()),
+                stream: StreamCommands::new(orbit_client.clone(), local_registry.clone()),
                 vector: VectorCommands::new(orbit_client.clone(), local_registry.clone()),
                 time_series: TimeSeriesCommands::new(orbit_client.clone(), local_registry.clone()),
                 graph: GraphCommands::new(orbit_client.clone(), local_registry.clone()),
@@ -139,8 +152,14 @@ mod handler {
             );
 
             match category {
+                CommandCategory::Acl => {
+                    CommandHandlerTrait::handle(&self.acl, &command_name, &args).await
+                }
                 CommandCategory::Connection => {
                     CommandHandlerTrait::handle(&self.connection, &command_name, &args).await
+                }
+                CommandCategory::Functions => {
+                    CommandHandlerTrait::handle(&self.functions, &command_name, &args).await
                 }
                 CommandCategory::String => {
                     CommandHandlerTrait::handle(&self.string, &command_name, &args).await
@@ -159,6 +178,9 @@ mod handler {
                 }
                 CommandCategory::SortedSet => {
                     CommandHandlerTrait::handle(&self.sorted_set, &command_name, &args).await
+                }
+                CommandCategory::Stream => {
+                    CommandHandlerTrait::handle(&self.stream, &command_name, &args).await
                 }
                 CommandCategory::Vector => {
                     CommandHandlerTrait::handle(&self.vector, &command_name, &args).await
@@ -212,6 +234,12 @@ mod handler {
         /// Categorize command for dispatch
         fn get_command_category(&self, command_name: &str) -> CommandCategory {
             match command_name {
+                // ACL commands
+                "ACL" => CommandCategory::Acl,
+
+                // Functions commands
+                "FCALL" | "FCALL_RO" | "FUNCTION" => CommandCategory::Functions,
+
                 // Connection commands
                 "PING" | "ECHO" | "SELECT" | "AUTH" | "QUIT" => CommandCategory::Connection,
 
@@ -240,6 +268,11 @@ mod handler {
                 // Sorted Set commands
                 "ZADD" | "ZREM" | "ZCARD" | "ZSCORE" | "ZINCRBY" | "ZRANGE" | "ZRANGEBYSCORE"
                 | "ZCOUNT" | "ZRANK" => CommandCategory::SortedSet,
+
+                // Stream commands
+                "XADD" | "XREAD" | "XREADGROUP" | "XRANGE" | "XREVRANGE" | "XLEN" | "XINFO"
+                | "XGROUP" | "XACK" | "XCLAIM" | "XAUTOCLAIM" | "XPENDING" | "XTRIM" | "XDEL"
+                | "XSETID" => CommandCategory::Stream,
 
                 // Vector commands
                 cmd if cmd.starts_with("VECTOR.") || cmd.starts_with("FT.") => {

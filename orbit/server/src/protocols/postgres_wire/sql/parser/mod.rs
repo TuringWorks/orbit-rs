@@ -102,6 +102,7 @@ impl SqlParser {
             Some(Token::Update) => self.parse_update_statement(),
             Some(Token::Delete) => self.parse_delete_statement(),
             Some(Token::Merge) => self.parse_merge_statement(),
+            Some(Token::Copy) => self.parse_copy_statement(),
 
             // DCL Statements
             Some(Token::Grant) => self.parse_grant_statement(),
@@ -147,6 +148,7 @@ impl SqlParser {
                     "UPDATE".to_string(),
                     "DELETE".to_string(),
                     "MERGE".to_string(),
+                    "COPY".to_string(),
                     "GRANT".to_string(),
                     "REVOKE".to_string(),
                     "BEGIN".to_string(),
@@ -363,6 +365,10 @@ impl SqlParser {
 
     fn parse_merge_statement(&mut self) -> ParseResult<Statement> {
         dml::parse_merge(self)
+    }
+
+    fn parse_copy_statement(&mut self) -> ParseResult<Statement> {
+        dml::parse_copy(self)
     }
 
     fn parse_grant_statement(&mut self) -> ParseResult<Statement> {

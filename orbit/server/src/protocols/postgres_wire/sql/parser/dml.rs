@@ -6,12 +6,13 @@ use super::expressions::ExpressionParser;
 use super::{utilities, ParseError, ParseResult, SqlParser};
 use crate::protocols::postgres_wire::sql::{
     ast::{
-        Assignment, AssignmentTarget, ConflictAction, ConflictTarget, DeleteStatement,
-        DistinctClause, Expression, FromClause, InsertSource, InsertStatement, LimitClause,
-        NullsOrder, OnConflictClause, OrderByItem, SelectItem, SelectStatement, SetOperation,
-        SetOperator, SortDirection, Statement, TableAlias, TraverseClause, TraverseDirection,
-        UpdateStatement, JsonTable, JsonTableColumn, MergeStatement, MergeWhenClause, MergeAction,
-        MergeUpdate, MergeInsert, MergeInsertValues,
+        Assignment, AssignmentTarget, ConflictAction, ConflictTarget, CopyDirection,
+        CopyFormat, CopyHeaderOption, CopyOnError, CopyOption, CopySource, CopyStatement,
+        CopyTarget, DeleteStatement, DistinctClause, Expression, FromClause, InsertSource,
+        InsertStatement, JsonTable, JsonTableColumn, LimitClause, MergeAction, MergeInsert,
+        MergeInsertValues, MergeStatement, MergeUpdate, MergeWhenClause, NullsOrder,
+        OnConflictClause, OrderByItem, SelectItem, SelectStatement, SetOperation, SetOperator,
+        SortDirection, Statement, TableAlias, TraverseClause, TraverseDirection, UpdateStatement,
     },
     lexer::Token,
     types::SqlValue,
@@ -1823,4 +1824,341 @@ pub fn parse_merge(parser: &mut SqlParser) -> ParseResult<Statement> {
         when_clauses,
         returning,
     }))
+}
+
+/// Parse COPY statement
+/// COPY table_name [(column_list)] FROM/TO { 'filename' | STDIN | STDOUT | PROGRAM 'command' }
+/// [ WITH ] [ ( option [, ...] ) ]
+pub fn parse_copy(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Copy)?;
+
+    // Parse target (table name or query in parentheses)
+    let target = if parser.matches(&[Token::LeftParen]) {
+        // COPY (query) TO ...
+        parser.advance()?;
+        let stmt = parse_select(parser)?;
+        let select_stmt = if let Statement::Select(s) = stmt {
+            s
+        } else {
+            return Err(ParseError {
+                message: "Expected SELECT statement in COPY".to_string(),
+                position: parser.position,
+                expected: vec!["SELECT".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        parser.expect(Token::RightParen)?;
+        CopyTarget::Query(select_stmt)
+    } else {
+        // COPY table_name ...
+        let table = utilities::parse_table_name(parser)?;
+        CopyTarget::Table(table)
+    };
+
+    // Parse optional column list
+    let columns = if parser.matches(&[Token::LeftParen]) {
+        parser.advance()?;
+        let mut cols = Vec::new();
+        loop {
+            if let Some(Token::Identifier(name)) = &parser.current_token {
+                cols.push(name.clone());
+                parser.advance()?;
+            } else {
+                break;
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+        Some(cols)
+    } else {
+        None
+    };
+
+    // Parse direction (FROM or TO)
+    let direction = if parser.matches(&[Token::From]) {
+        parser.advance()?;
+        CopyDirection::From
+    } else if parser.matches(&[Token::To]) {
+        parser.advance()?;
+        CopyDirection::To
+    } else {
+        return Err(ParseError {
+            message: "Expected FROM or TO in COPY statement".to_string(),
+            position: parser.position,
+            expected: vec!["FROM".to_string(), "TO".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse source/destination
+    let source = if parser.matches(&[Token::Stdin]) {
+        parser.advance()?;
+        CopySource::Stdio
+    } else if parser.matches(&[Token::Stdout]) {
+        parser.advance()?;
+        CopySource::Stdio
+    } else if parser.matches(&[Token::Program]) {
+        parser.advance()?;
+        if let Some(Token::StringLiteral(cmd)) = &parser.current_token {
+            let program = cmd.clone();
+            parser.advance()?;
+            CopySource::Program(program)
+        } else {
+            return Err(ParseError {
+                message: "Expected string literal for PROGRAM".to_string(),
+                position: parser.position,
+                expected: vec!["string literal".to_string()],
+                found: parser.current_token.clone(),
+            });
+        }
+    } else if let Some(Token::StringLiteral(path)) = &parser.current_token {
+        let file_path = path.clone();
+        parser.advance()?;
+        CopySource::File(file_path)
+    } else {
+        return Err(ParseError {
+            message: "Expected STDIN, STDOUT, PROGRAM, or file path".to_string(),
+            position: parser.position,
+            expected: vec![
+                "STDIN".to_string(),
+                "STDOUT".to_string(),
+                "PROGRAM".to_string(),
+                "file path".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse optional WITH clause
+    if parser.matches(&[Token::With]) {
+        parser.advance()?;
+    }
+
+    // Parse options in parentheses
+    let mut options = Vec::new();
+    if parser.matches(&[Token::LeftParen]) {
+        parser.advance()?;
+        loop {
+            if parser.matches(&[Token::RightParen]) {
+                break;
+            }
+
+            let option = parse_copy_option(parser)?;
+            options.push(option);
+
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+    }
+
+    Ok(Statement::Copy(CopyStatement {
+        direction,
+        target,
+        columns,
+        source,
+        options,
+    }))
+}
+
+/// Parse a single COPY option
+fn parse_copy_option(parser: &mut SqlParser) -> ParseResult<CopyOption> {
+    match &parser.current_token {
+        Some(Token::Format) => {
+            parser.advance()?;
+            let format = if parser.matches(&[Token::Csv]) {
+                parser.advance()?;
+                CopyFormat::Csv
+            } else if parser.matches(&[Token::Binary]) {
+                parser.advance()?;
+                CopyFormat::Binary
+            } else if let Some(Token::Identifier(name)) = &parser.current_token {
+                let f = match name.to_uppercase().as_str() {
+                    "TEXT" => CopyFormat::Text,
+                    "CSV" => CopyFormat::Csv,
+                    "BINARY" => CopyFormat::Binary,
+                    _ => CopyFormat::Text,
+                };
+                parser.advance()?;
+                f
+            } else {
+                CopyFormat::Text
+            };
+            Ok(CopyOption::Format(format))
+        }
+        Some(Token::Freeze) => {
+            parser.advance()?;
+            let value = parse_boolean_option(parser)?;
+            Ok(CopyOption::Freeze(value))
+        }
+        Some(Token::Delimiter) => {
+            parser.advance()?;
+            if let Some(Token::StringLiteral(s)) = &parser.current_token {
+                let delim = s.chars().next().unwrap_or(',');
+                parser.advance()?;
+                Ok(CopyOption::Delimiter(delim))
+            } else {
+                Ok(CopyOption::Delimiter(','))
+            }
+        }
+        Some(Token::Null) => {
+            parser.advance()?;
+            if let Some(Token::StringLiteral(s)) = &parser.current_token {
+                let null_str = s.clone();
+                parser.advance()?;
+                Ok(CopyOption::Null(null_str))
+            } else {
+                Ok(CopyOption::Null("\\N".to_string()))
+            }
+        }
+        Some(Token::Header) => {
+            parser.advance()?;
+            let header = if parser.matches(&[Token::Match]) {
+                parser.advance()?;
+                CopyHeaderOption::Match
+            } else {
+                let value = parse_boolean_option(parser)?;
+                if value {
+                    CopyHeaderOption::On
+                } else {
+                    CopyHeaderOption::Off
+                }
+            };
+            Ok(CopyOption::Header(header))
+        }
+        Some(Token::Quote) => {
+            parser.advance()?;
+            if let Some(Token::StringLiteral(s)) = &parser.current_token {
+                let quote = s.chars().next().unwrap_or('"');
+                parser.advance()?;
+                Ok(CopyOption::Quote(quote))
+            } else {
+                Ok(CopyOption::Quote('"'))
+            }
+        }
+        Some(Token::Escape) => {
+            parser.advance()?;
+            if let Some(Token::StringLiteral(s)) = &parser.current_token {
+                let escape = s.chars().next().unwrap_or('"');
+                parser.advance()?;
+                Ok(CopyOption::Escape(escape))
+            } else {
+                Ok(CopyOption::Escape('"'))
+            }
+        }
+        Some(Token::Encoding) => {
+            parser.advance()?;
+            if let Some(Token::StringLiteral(s)) = &parser.current_token {
+                let encoding = s.clone();
+                parser.advance()?;
+                Ok(CopyOption::Encoding(encoding))
+            } else if let Some(Token::Identifier(s)) = &parser.current_token {
+                let encoding = s.clone();
+                parser.advance()?;
+                Ok(CopyOption::Encoding(encoding))
+            } else {
+                Ok(CopyOption::Encoding("UTF8".to_string()))
+            }
+        }
+        Some(Token::OnError) => {
+            parser.advance()?;
+            let on_error = if parser.matches(&[Token::Ignore]) {
+                parser.advance()?;
+                CopyOnError::Ignore
+            } else {
+                CopyOnError::Stop
+            };
+            Ok(CopyOption::OnError(on_error))
+        }
+        Some(Token::Identifier(name)) => {
+            let opt_name = name.to_uppercase();
+            parser.advance()?;
+            match opt_name.as_str() {
+                "FORCE_QUOTE" => {
+                    let cols = parse_column_list_option(parser)?;
+                    Ok(CopyOption::ForceQuote(cols))
+                }
+                "FORCE_NOT_NULL" => {
+                    let cols = parse_column_list_option(parser)?;
+                    Ok(CopyOption::ForceNotNull(cols))
+                }
+                "FORCE_NULL" => {
+                    let cols = parse_column_list_option(parser)?;
+                    Ok(CopyOption::ForceNull(cols))
+                }
+                "DEFAULT" => {
+                    if let Some(Token::StringLiteral(s)) = &parser.current_token {
+                        let default_val = s.clone();
+                        parser.advance()?;
+                        Ok(CopyOption::Default(default_val))
+                    } else {
+                        Ok(CopyOption::Default(String::new()))
+                    }
+                }
+                _ => Ok(CopyOption::Format(CopyFormat::Text)), // Default fallback
+            }
+        }
+        _ => Ok(CopyOption::Format(CopyFormat::Text)),
+    }
+}
+
+/// Parse a boolean option value (true, false, on, off, 1, 0)
+fn parse_boolean_option(parser: &mut SqlParser) -> ParseResult<bool> {
+    match &parser.current_token {
+        Some(Token::BooleanLiteral(b)) => {
+            let value = *b;
+            parser.advance()?;
+            Ok(value)
+        }
+        Some(Token::Identifier(name)) => {
+            let value = matches!(name.to_uppercase().as_str(), "TRUE" | "ON" | "YES" | "1");
+            parser.advance()?;
+            Ok(value)
+        }
+        Some(Token::NumericLiteral(n)) => {
+            let value = n != "0";
+            parser.advance()?;
+            Ok(value)
+        }
+        _ => Ok(true), // Default to true if no value specified
+    }
+}
+
+/// Parse a column list option like (col1, col2, ...)
+fn parse_column_list_option(parser: &mut SqlParser) -> ParseResult<Vec<String>> {
+    if parser.matches(&[Token::LeftParen]) {
+        parser.advance()?;
+        let mut cols = Vec::new();
+        loop {
+            if let Some(Token::Identifier(name)) = &parser.current_token {
+                cols.push(name.clone());
+                parser.advance()?;
+            } else {
+                break;
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+        Ok(cols)
+    } else if parser.matches(&[Token::Multiply]) {
+        parser.advance()?;
+        Ok(vec!["*".to_string()])
+    } else if let Some(Token::Identifier(name)) = &parser.current_token {
+        let col = name.clone();
+        parser.advance()?;
+        Ok(vec![col])
+    } else {
+        Ok(vec![])
+    }
 }

@@ -10,15 +10,16 @@ use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::{
     ast::{
         AccessMode, AlterTableStatement, AssignmentTarget, BeginStatement, ColumnConstraint,
-        CommitStatement, CreateDatabaseStatement, CreateExtensionStatement, CreateIndexStatement,
-        CreateSchemaStatement, CreateTableStatement, CreateViewStatement, DeleteStatement,
-        DescribeStatement, DropDatabaseStatement, DropExtensionStatement, DropIndexStatement,
-        DropSchemaStatement, DropTableStatement, DropViewStatement, ExplainStatement, Expression,
-        FromClause, GrantStatement, IndexType, InsertSource, InsertStatement, IsolationLevel,
-        JoinCondition, JoinType, Privilege, ReleaseSavepointStatement, RevokeStatement,
-        RollbackStatement, SavepointStatement, SelectItem, SelectStatement, SetStatement,
-        ShowStatement, ShowVariable, Statement, TableConstraint, TableName, UpdateStatement,
-        UseStatement, MergeStatement, CreateFunctionStatement,
+        CommitStatement, CopyDirection, CopySource, CopyStatement, CopyTarget,
+        CreateDatabaseStatement, CreateExtensionStatement, CreateFunctionStatement,
+        CreateIndexStatement, CreateSchemaStatement, CreateTableStatement, CreateViewStatement,
+        DeleteStatement, DescribeStatement, DropDatabaseStatement, DropExtensionStatement,
+        DropIndexStatement, DropSchemaStatement, DropTableStatement, DropViewStatement,
+        ExplainStatement, Expression, FromClause, GrantStatement, IndexType, InsertSource,
+        InsertStatement, IsolationLevel, JoinCondition, JoinType, MergeStatement, Privilege,
+        ReleaseSavepointStatement, RevokeStatement, RollbackStatement, SavepointStatement,
+        SelectItem, SelectStatement, SetStatement, ShowStatement, ShowVariable, Statement,
+        TableConstraint, TableName, UpdateStatement, UseStatement,
     },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator},
     parser::SqlParser,
@@ -103,6 +104,10 @@ pub enum ExecutionResult {
         count: usize,
         rows: Vec<Vec<Option<String>>>,
         columns: Vec<String>,
+    },
+    Copy {
+        direction: String,
+        count: usize,
     },
     Commit {
         transaction_id: String,
@@ -510,6 +515,9 @@ impl SqlExecutor {
             Statement::Use(stmt) => self.execute_use(stmt).await,
             Statement::Describe(stmt) => self.execute_describe(stmt).await,
             Statement::Set(stmt) => self.execute_set(stmt).await,
+
+            // COPY operations
+            Statement::Copy(stmt) => self.execute_copy(stmt).await,
         }
     }
 
@@ -1279,11 +1287,69 @@ impl SqlExecutor {
         // But here we return ExecutionResult.
         
         // Let's return a result that mimics a successful merge with returning.
-        Ok(ExecutionResult::Merge { 
-            count: 1, 
+        Ok(ExecutionResult::Merge {
+            count: 1,
             rows: vec![vec![Some("new".to_string())]],
             columns: vec!["val".to_string()],
         })
+    }
+
+    /// Execute COPY statement
+    async fn execute_copy(&self, stmt: CopyStatement) -> ProtocolResult<ExecutionResult> {
+        // Get table name from target
+        let table_name = match &stmt.target {
+            CopyTarget::Table(name) => {
+                // Format table name for logging
+                match (&name.schema, &name.name) {
+                    (Some(schema), name) => format!("{}.{}", schema, name),
+                    (None, name) => name.clone(),
+                }
+            }
+            CopyTarget::Query(_) => {
+                // For COPY (query) TO ..., we'd need to execute the query
+                // For now, return a placeholder
+                return Ok(ExecutionResult::Copy {
+                    direction: match stmt.direction {
+                        CopyDirection::To => "TO".to_string(),
+                        CopyDirection::From => "FROM".to_string(),
+                    },
+                    count: 0,
+                });
+            }
+        };
+
+        match stmt.direction {
+            CopyDirection::From => {
+                // COPY FROM - import data
+                let source_desc = match &stmt.source {
+                    CopySource::Stdio => "STDIN".to_string(),
+                    CopySource::File(path) => format!("file '{}'", path),
+                    CopySource::Program(cmd) => format!("PROGRAM '{}'", cmd),
+                };
+                tracing::info!("COPY {} FROM {}", table_name, source_desc);
+
+                // Return placeholder - actual data loading would happen at protocol level
+                Ok(ExecutionResult::Copy {
+                    direction: "FROM".to_string(),
+                    count: 0,
+                })
+            }
+            CopyDirection::To => {
+                // COPY TO - export data
+                let dest_desc = match &stmt.source {
+                    CopySource::Stdio => "STDOUT".to_string(),
+                    CopySource::File(path) => format!("file '{}'", path),
+                    CopySource::Program(cmd) => format!("PROGRAM '{}'", cmd),
+                };
+                tracing::info!("COPY {} TO {}", table_name, dest_desc);
+
+                // Return placeholder - actual data export would happen at protocol level
+                Ok(ExecutionResult::Copy {
+                    direction: "TO".to_string(),
+                    count: 0,
+                })
+            }
+        }
     }
 
     /// Helper method to evaluate WHERE conditions

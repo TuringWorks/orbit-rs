@@ -1796,4 +1796,92 @@ mod tests {
     //            result
     //        );
     //    }
+
+    // ===== COPY Statement Tests =====
+
+    #[test]
+    fn test_copy_from_stdin() {
+        let sql = "COPY users FROM STDIN";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "COPY FROM STDIN should parse successfully: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_copy_to_stdout() {
+        let sql = "COPY users TO STDOUT";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "COPY TO STDOUT should parse successfully: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_copy_from_file_with_options() {
+        let sql = "COPY users FROM '/tmp/data.csv' WITH (FORMAT CSV, HEADER true, DELIMITER ',')";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "COPY FROM file with options should parse successfully: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_copy_with_columns() {
+        let sql = "COPY users (id, name, email) FROM STDIN";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "COPY with column list should parse successfully: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_copy_to_program() {
+        let sql = "COPY users TO PROGRAM 'gzip > /tmp/data.csv.gz'";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "COPY TO PROGRAM should parse successfully: {:?}",
+            result
+        );
+    }
+
+    // ===== MERGE Statement Tests =====
+
+    #[test]
+    fn test_merge_basic() {
+        let sql = "MERGE INTO target_table t USING source_table s ON t.id = s.id WHEN MATCHED THEN UPDATE SET name = s.name WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.id, s.name)";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Basic MERGE should parse successfully: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_merge_with_delete() {
+        let sql = "MERGE INTO products p USING updates u ON p.id = u.id WHEN MATCHED AND u.deleted = true THEN DELETE WHEN MATCHED THEN UPDATE SET price = u.price";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "MERGE with DELETE should parse successfully: {:?}",
+            result
+        );
+    }
 }

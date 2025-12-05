@@ -1255,6 +1255,92 @@ impl CqlAdapter {
                 Ok(build_void_result(stream))
             }
             CqlStatement::Batch { .. } => Ok(build_void_result(stream)),
+            CqlStatement::AlterTable { name, alteration } => {
+                println!("[CQL] ALTER TABLE {} {:?}", name, alteration);
+                Ok(self.build_schema_change_result(stream))
+            }
+            CqlStatement::AlterKeyspace { name, .. } => {
+                println!("[CQL] ALTER KEYSPACE {}", name);
+                Ok(self.build_schema_change_result(stream))
+            }
+            CqlStatement::AlterType { name, alteration } => {
+                println!("[CQL] ALTER TYPE {} {:?}", name, alteration);
+                Ok(self.build_schema_change_result(stream))
+            }
+            CqlStatement::DropIndex { name, .. } => {
+                println!("[CQL] DROP INDEX {}", name);
+                Ok(self.build_schema_change_result(stream))
+            }
+            CqlStatement::DropType { name, .. } => {
+                println!("[CQL] DROP TYPE {}", name);
+                Ok(self.build_schema_change_result(stream))
+            }
+            CqlStatement::DropMaterializedView { name, .. } => {
+                println!("[CQL] DROP MATERIALIZED VIEW {}", name);
+                Ok(self.build_schema_change_result(stream))
+            }
+            CqlStatement::CreateFunction { name, .. } => {
+                println!("[CQL] CREATE FUNCTION {}", name);
+                Ok(self.build_schema_change_result(stream))
+            }
+            CqlStatement::DropFunction { name, .. } => {
+                println!("[CQL] DROP FUNCTION {}", name);
+                Ok(self.build_schema_change_result(stream))
+            }
+            CqlStatement::CreateAggregate { name, .. } => {
+                println!("[CQL] CREATE AGGREGATE {}", name);
+                Ok(self.build_schema_change_result(stream))
+            }
+            CqlStatement::DropAggregate { name, .. } => {
+                println!("[CQL] DROP AGGREGATE {}", name);
+                Ok(self.build_schema_change_result(stream))
+            }
+            CqlStatement::CreateRole { name, .. } => {
+                println!("[CQL] CREATE ROLE {}", name);
+                Ok(build_void_result(stream))
+            }
+            CqlStatement::AlterRole { name, .. } => {
+                println!("[CQL] ALTER ROLE {}", name);
+                Ok(build_void_result(stream))
+            }
+            CqlStatement::DropRole { name, .. } => {
+                println!("[CQL] DROP ROLE {}", name);
+                Ok(build_void_result(stream))
+            }
+            CqlStatement::Grant { role, .. } => {
+                println!("[CQL] GRANT TO {}", role);
+                Ok(build_void_result(stream))
+            }
+            CqlStatement::Revoke { role, .. } => {
+                println!("[CQL] REVOKE FROM {}", role);
+                Ok(build_void_result(stream))
+            }
+            CqlStatement::ListRoles { .. } => {
+                // Return empty result set for now
+                println!("[CQL] LIST ROLES");
+                Ok(self.build_rows_result(
+                    stream,
+                    vec![],
+                    vec!["role".to_string(), "super".to_string(), "login".to_string()],
+                    None,
+                    None,
+                ))
+            }
+            CqlStatement::ListPermissions { .. } => {
+                // Return empty result set for now
+                println!("[CQL] LIST PERMISSIONS");
+                Ok(self.build_rows_result(
+                    stream,
+                    vec![],
+                    vec![
+                        "role".to_string(),
+                        "resource".to_string(),
+                        "permission".to_string(),
+                    ],
+                    None,
+                    None,
+                ))
+            }
         }
     }
 
