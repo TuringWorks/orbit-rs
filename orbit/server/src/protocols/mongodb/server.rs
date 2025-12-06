@@ -381,46 +381,153 @@ async fn handle_command(
             }
         }
     }
-    // Aggregate (basic support)
+    // Aggregate (enhanced pipeline support)
     else if let Ok(collection) = command.get_str("aggregate") {
         let pipeline = command.get_array("pipeline").ok();
-        let cursor_batch_size = command
+        let _cursor_batch_size = command
             .get_document("cursor")
             .ok()
             .and_then(|c| c.get_i32("batchSize").ok());
 
-        // For now, only support simple pipelines
-        let mut docs = Vec::new();
-        let mut filter = doc! {};
+        // Start with all documents from collection
+        let (_, mut docs) = store.find(db, collection, &doc! {}, None, None, None).await;
 
         if let Some(stages) = pipeline {
             for stage in stages {
                 if let Some(stage_doc) = stage.as_document() {
-                    // $match stage
+                    // $match - filter documents
                     if let Ok(match_doc) = stage_doc.get_document("$match") {
-                        filter = match_doc.clone();
+                        docs = docs
+                            .into_iter()
+                            .filter(|d| matches_document_filter(d, match_doc))
+                            .collect();
                     }
-                    // $limit stage
+                    // $project - reshape documents
+                    else if let Ok(project_doc) = stage_doc.get_document("$project") {
+                        docs = docs
+                            .into_iter()
+                            .map(|d| apply_projection(&d, project_doc))
+                            .collect();
+                    }
+                    // $sort - order documents
+                    else if let Ok(sort_doc) = stage_doc.get_document("$sort") {
+                        docs = apply_sort(docs, sort_doc);
+                    }
+                    // $limit - limit result count
                     else if let Ok(limit) = stage_doc.get_i64("$limit") {
-                        let (_, found) = store
-                            .find(db, collection, &filter, Some(limit), None, None)
-                            .await;
-                        docs = found;
+                        docs = docs.into_iter().take(limit as usize).collect();
+                    } else if let Ok(limit) = stage_doc.get_i32("$limit") {
+                        docs = docs.into_iter().take(limit as usize).collect();
                     }
-                    // $count stage
+                    // $skip - skip documents
+                    else if let Ok(skip) = stage_doc.get_i64("$skip") {
+                        docs = docs.into_iter().skip(skip as usize).collect();
+                    } else if let Ok(skip) = stage_doc.get_i32("$skip") {
+                        docs = docs.into_iter().skip(skip as usize).collect();
+                    }
+                    // $count - count documents
                     else if let Ok(count_field) = stage_doc.get_str("$count") {
-                        let count = store.count(db, collection, &filter).await;
+                        let count = docs.len() as i64;
                         docs = vec![doc! { count_field: count }];
                     }
-                    // Other stages: just pass through for now
+                    // $group - group and aggregate
+                    else if let Ok(group_doc) = stage_doc.get_document("$group") {
+                        docs = apply_group(&docs, group_doc);
+                    }
+                    // $unwind - flatten arrays
+                    else if let Some(unwind_spec) = stage_doc.get("$unwind") {
+                        docs = apply_unwind(docs, unwind_spec);
+                    }
+                    // $addFields - add computed fields
+                    else if let Ok(add_fields_doc) = stage_doc.get_document("$addFields") {
+                        docs = docs
+                            .into_iter()
+                            .map(|mut d| {
+                                for (key, value) in add_fields_doc {
+                                    let computed = evaluate_expression(value, &d);
+                                    d.insert(key, computed);
+                                }
+                                d
+                            })
+                            .collect();
+                    }
+                    // $replaceRoot - replace document with subdocument
+                    else if let Ok(replace_doc) = stage_doc.get_document("$replaceRoot") {
+                        if let Some(new_root) = replace_doc.get("newRoot") {
+                            docs = docs
+                                .into_iter()
+                                .filter_map(|d| {
+                                    let result = evaluate_expression(new_root, &d);
+                                    if let Bson::Document(new_doc) = result {
+                                        Some(new_doc)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
+                        }
+                    }
+                    // $lookup - join with another collection
+                    else if let Ok(lookup_doc) = stage_doc.get_document("$lookup") {
+                        let from_collection = lookup_doc.get_str("from").unwrap_or("");
+                        let local_field = lookup_doc.get_str("localField").unwrap_or("");
+                        let foreign_field = lookup_doc.get_str("foreignField").unwrap_or("");
+                        let as_field = lookup_doc.get_str("as").unwrap_or("result");
+
+                        // Get documents from the foreign collection
+                        let (_, foreign_docs) = store
+                            .find(db, from_collection, &doc! {}, None, None, None)
+                            .await;
+
+                        docs = docs
+                            .into_iter()
+                            .map(|mut d| {
+                                let local_val = d.get(local_field).cloned();
+                                let matching: Vec<Bson> = foreign_docs
+                                    .iter()
+                                    .filter(|fd| {
+                                        if let Some(local) = &local_val {
+                                            fd.get(foreign_field) == Some(local)
+                                        } else {
+                                            false
+                                        }
+                                    })
+                                    .map(|fd| Bson::Document(fd.clone()))
+                                    .collect();
+                                d.insert(as_field, Bson::Array(matching));
+                                d
+                            })
+                            .collect();
+                    }
+                    // $out - write to collection (final stage)
+                    else if let Ok(out_collection) = stage_doc.get_str("$out") {
+                        // Drop and recreate collection with results
+                        store.drop_collection(db, out_collection).await;
+                        for d in &docs {
+                            let _ = store.insert_one(db, out_collection, d.clone()).await;
+                        }
+                    }
+                    // $sample - random sample
+                    else if let Ok(sample_doc) = stage_doc.get_document("$sample") {
+                        if let Ok(size) = sample_doc.get_i64("size") {
+                            use std::collections::HashSet;
+                            if (size as usize) < docs.len() {
+                                let mut indices = HashSet::new();
+                                let now = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_nanos() as usize;
+                                let mut seed = now;
+                                while indices.len() < size as usize {
+                                    seed = (seed * 1103515245 + 12345) % (1 << 31);
+                                    indices.insert(seed % docs.len());
+                                }
+                                docs = indices.into_iter().filter_map(|i| docs.get(i).cloned()).collect();
+                            }
+                        }
+                    }
                 }
             }
-        }
-
-        // If no special stage was processed, just run find
-        if docs.is_empty() {
-            let (_, found) = store.find(db, collection, &filter, None, None, cursor_batch_size).await;
-            docs = found;
         }
 
         doc! {
@@ -707,5 +814,528 @@ fn host_info_response() -> Document {
             "version": "Unknown",
         },
         "ok": 1.0,
+    }
+}
+
+// ============================================================================
+// Aggregation Pipeline Helper Functions
+// ============================================================================
+
+/// Check if a document matches a filter (for $match stage)
+fn matches_document_filter(doc: &Document, filter: &Document) -> bool {
+    use super::storage::matches_filter;
+    matches_filter(doc, filter)
+}
+
+/// Apply $project stage to reshape a document
+fn apply_projection(doc: &Document, project: &Document) -> Document {
+    let mut result = Document::new();
+
+    for (key, value) in project {
+        match value {
+            // Include field: { field: 1 }
+            Bson::Int32(1) | Bson::Int64(1) | Bson::Boolean(true) => {
+                if let Some(v) = doc.get(key) {
+                    result.insert(key, v.clone());
+                }
+            }
+            // Exclude field: { field: 0 } - skip
+            Bson::Int32(0) | Bson::Int64(0) | Bson::Boolean(false) => {
+                // Don't include this field
+            }
+            // Rename/compute: { newField: "$oldField" }
+            Bson::String(s) if s.starts_with('$') => {
+                let field_name = &s[1..];
+                if let Some(v) = get_nested_field(doc, field_name) {
+                    result.insert(key, v);
+                }
+            }
+            // Expression: { field: { $expr: ... } }
+            Bson::Document(expr_doc) => {
+                let computed = evaluate_expression(&Bson::Document(expr_doc.clone()), doc);
+                result.insert(key, computed);
+            }
+            // Literal value
+            other => {
+                result.insert(key, other.clone());
+            }
+        }
+    }
+
+    // If no explicit inclusions, include all except explicitly excluded
+    let has_inclusions = project.values().any(|v| matches!(v, Bson::Int32(1) | Bson::Int64(1) | Bson::Boolean(true)));
+    if !has_inclusions && result.is_empty() {
+        for (key, value) in doc {
+            let should_exclude = project.get(key).map_or(false, |v| {
+                matches!(v, Bson::Int32(0) | Bson::Int64(0) | Bson::Boolean(false))
+            });
+            if !should_exclude {
+                result.insert(key, value.clone());
+            }
+        }
+    }
+
+    // Always include _id unless explicitly excluded
+    if project.get("_id").map_or(true, |v| !matches!(v, Bson::Int32(0) | Bson::Int64(0) | Bson::Boolean(false))) {
+        if let Some(id) = doc.get("_id") {
+            result.insert("_id", id.clone());
+        }
+    }
+
+    result
+}
+
+/// Get a nested field value using dot notation
+fn get_nested_field(doc: &Document, path: &str) -> Option<Bson> {
+    let parts: Vec<&str> = path.split('.').collect();
+    let mut current = Bson::Document(doc.clone());
+
+    for part in parts {
+        match &current {
+            Bson::Document(d) => {
+                current = d.get(part)?.clone();
+            }
+            Bson::Array(arr) => {
+                if let Ok(idx) = part.parse::<usize>() {
+                    current = arr.get(idx)?.clone();
+                } else {
+                    return None;
+                }
+            }
+            _ => return None,
+        }
+    }
+
+    Some(current)
+}
+
+/// Apply $sort stage
+fn apply_sort(mut docs: Vec<Document>, sort_doc: &Document) -> Vec<Document> {
+    docs.sort_by(|a, b| {
+        for (key, order) in sort_doc {
+            let order_val = match order {
+                Bson::Int32(n) => *n,
+                Bson::Int64(n) => *n as i32,
+                _ => 1,
+            };
+
+            let a_val = a.get(key);
+            let b_val = b.get(key);
+
+            let cmp = compare_bson_values(a_val, b_val);
+            if cmp != std::cmp::Ordering::Equal {
+                return if order_val < 0 { cmp.reverse() } else { cmp };
+            }
+        }
+        std::cmp::Ordering::Equal
+    });
+    docs
+}
+
+/// Compare two BSON values for sorting
+fn compare_bson_values(a: Option<&Bson>, b: Option<&Bson>) -> std::cmp::Ordering {
+    match (a, b) {
+        (None, None) => std::cmp::Ordering::Equal,
+        (None, Some(_)) => std::cmp::Ordering::Less,
+        (Some(_), None) => std::cmp::Ordering::Greater,
+        (Some(Bson::Null), Some(Bson::Null)) => std::cmp::Ordering::Equal,
+        (Some(Bson::Null), _) => std::cmp::Ordering::Less,
+        (_, Some(Bson::Null)) => std::cmp::Ordering::Greater,
+        (Some(Bson::Int32(x)), Some(Bson::Int32(y))) => x.cmp(y),
+        (Some(Bson::Int64(x)), Some(Bson::Int64(y))) => x.cmp(y),
+        (Some(Bson::Int32(x)), Some(Bson::Int64(y))) => (*x as i64).cmp(y),
+        (Some(Bson::Int64(x)), Some(Bson::Int32(y))) => x.cmp(&(*y as i64)),
+        (Some(Bson::Double(x)), Some(Bson::Double(y))) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
+        (Some(Bson::String(x)), Some(Bson::String(y))) => x.cmp(y),
+        (Some(Bson::Boolean(x)), Some(Bson::Boolean(y))) => x.cmp(y),
+        (Some(Bson::DateTime(x)), Some(Bson::DateTime(y))) => x.cmp(y),
+        _ => std::cmp::Ordering::Equal,
+    }
+}
+
+/// Apply $group stage
+fn apply_group(docs: &[Document], group_doc: &Document) -> Vec<Document> {
+    use std::collections::HashMap;
+
+    let id_expr = group_doc.get("_id");
+
+    // Group documents by _id expression
+    let mut groups: HashMap<String, (Bson, Vec<&Document>)> = HashMap::new();
+
+    for doc in docs {
+        let group_key = if let Some(id) = id_expr {
+            evaluate_expression(id, doc)
+        } else {
+            Bson::Null
+        };
+        let key_str = format!("{:?}", group_key);
+        groups.entry(key_str).or_insert_with(|| (group_key.clone(), Vec::new())).1.push(doc);
+    }
+
+    // Apply accumulators to each group
+    groups
+        .into_values()
+        .map(|(group_id, group_docs)| {
+            let mut result = doc! { "_id": group_id };
+
+            for (key, value) in group_doc {
+                if key == "_id" {
+                    continue;
+                }
+
+                if let Bson::Document(acc_doc) = value {
+                    if let Some((acc_op, acc_expr)) = acc_doc.iter().next() {
+                        let accumulated = apply_accumulator(acc_op, acc_expr, &group_docs);
+                        result.insert(key, accumulated);
+                    }
+                }
+            }
+
+            result
+        })
+        .collect()
+}
+
+/// Apply an accumulator operator
+fn apply_accumulator(op: &str, expr: &Bson, docs: &[&Document]) -> Bson {
+    match op {
+        "$sum" => {
+            let mut sum = 0.0f64;
+            for doc in docs {
+                if let Some(val) = bson_to_f64(&evaluate_expression(expr, doc)) {
+                    sum += val;
+                }
+            }
+            if sum.fract() == 0.0 {
+                Bson::Int64(sum as i64)
+            } else {
+                Bson::Double(sum)
+            }
+        }
+        "$avg" => {
+            let mut sum = 0.0f64;
+            let mut count = 0;
+            for doc in docs {
+                if let Some(val) = bson_to_f64(&evaluate_expression(expr, doc)) {
+                    sum += val;
+                    count += 1;
+                }
+            }
+            if count > 0 {
+                Bson::Double(sum / count as f64)
+            } else {
+                Bson::Null
+            }
+        }
+        "$min" => {
+            let mut min: Option<Bson> = None;
+            for doc in docs {
+                let val = evaluate_expression(expr, doc);
+                if min.is_none() || compare_bson_values(Some(&val), min.as_ref()) == std::cmp::Ordering::Less {
+                    min = Some(val);
+                }
+            }
+            min.unwrap_or(Bson::Null)
+        }
+        "$max" => {
+            let mut max: Option<Bson> = None;
+            for doc in docs {
+                let val = evaluate_expression(expr, doc);
+                if max.is_none() || compare_bson_values(Some(&val), max.as_ref()) == std::cmp::Ordering::Greater {
+                    max = Some(val);
+                }
+            }
+            max.unwrap_or(Bson::Null)
+        }
+        "$count" => Bson::Int64(docs.len() as i64),
+        "$first" => docs.first().map(|d| evaluate_expression(expr, d)).unwrap_or(Bson::Null),
+        "$last" => docs.last().map(|d| evaluate_expression(expr, d)).unwrap_or(Bson::Null),
+        "$push" => {
+            let values: Vec<Bson> = docs.iter().map(|d| evaluate_expression(expr, d)).collect();
+            Bson::Array(values)
+        }
+        "$addToSet" => {
+            let mut seen = std::collections::HashSet::new();
+            let mut values = Vec::new();
+            for doc in docs {
+                let val = evaluate_expression(expr, doc);
+                let key = format!("{:?}", val);
+                if seen.insert(key) {
+                    values.push(val);
+                }
+            }
+            Bson::Array(values)
+        }
+        _ => Bson::Null,
+    }
+}
+
+/// Convert BSON to f64 for numeric operations
+fn bson_to_f64(bson: &Bson) -> Option<f64> {
+    match bson {
+        Bson::Int32(n) => Some(*n as f64),
+        Bson::Int64(n) => Some(*n as f64),
+        Bson::Double(n) => Some(*n),
+        _ => None,
+    }
+}
+
+/// Apply $unwind stage
+fn apply_unwind(docs: Vec<Document>, unwind_spec: &Bson) -> Vec<Document> {
+    let (path, preserve_null) = match unwind_spec {
+        Bson::String(s) => (s.trim_start_matches('$').to_string(), false),
+        Bson::Document(d) => {
+            let path = d.get_str("path").unwrap_or("").trim_start_matches('$').to_string();
+            let preserve = d.get_bool("preserveNullAndEmptyArrays").unwrap_or(false);
+            (path, preserve)
+        }
+        _ => return docs,
+    };
+
+    let mut result = Vec::new();
+
+    for doc in docs {
+        if let Some(Bson::Array(arr)) = doc.get(&path) {
+            if arr.is_empty() {
+                if preserve_null {
+                    let mut new_doc = doc.clone();
+                    new_doc.remove(&path);
+                    result.push(new_doc);
+                }
+            } else {
+                for item in arr {
+                    let mut new_doc = doc.clone();
+                    new_doc.insert(&path, item.clone());
+                    result.push(new_doc);
+                }
+            }
+        } else if preserve_null {
+            result.push(doc);
+        }
+    }
+
+    result
+}
+
+/// Evaluate an aggregation expression
+fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
+    match expr {
+        // Field reference: "$fieldName"
+        Bson::String(s) if s.starts_with('$') => {
+            let field_path = &s[1..];
+            get_nested_field(doc, field_path).unwrap_or(Bson::Null)
+        }
+        // Expression document
+        Bson::Document(expr_doc) => {
+            if let Some((op, args)) = expr_doc.iter().next() {
+                match op.as_str() {
+                    // Arithmetic
+                    "$add" => {
+                        if let Bson::Array(arr) = args {
+                            let sum: f64 = arr.iter()
+                                .filter_map(|v| bson_to_f64(&evaluate_expression(v, doc)))
+                                .sum();
+                            Bson::Double(sum)
+                        } else {
+                            Bson::Null
+                        }
+                    }
+                    "$subtract" => {
+                        if let Bson::Array(arr) = args {
+                            if arr.len() == 2 {
+                                let a = bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0);
+                                let b = bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(0.0);
+                                return Bson::Double(a - b);
+                            }
+                        }
+                        Bson::Null
+                    }
+                    "$multiply" => {
+                        if let Bson::Array(arr) = args {
+                            let product: f64 = arr.iter()
+                                .filter_map(|v| bson_to_f64(&evaluate_expression(v, doc)))
+                                .product();
+                            Bson::Double(product)
+                        } else {
+                            Bson::Null
+                        }
+                    }
+                    "$divide" => {
+                        if let Bson::Array(arr) = args {
+                            if arr.len() == 2 {
+                                let a = bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0);
+                                let b = bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(1.0);
+                                if b != 0.0 {
+                                    return Bson::Double(a / b);
+                                }
+                            }
+                        }
+                        Bson::Null
+                    }
+                    // Comparison
+                    "$eq" => {
+                        if let Bson::Array(arr) = args {
+                            if arr.len() == 2 {
+                                let a = evaluate_expression(&arr[0], doc);
+                                let b = evaluate_expression(&arr[1], doc);
+                                return Bson::Boolean(a == b);
+                            }
+                        }
+                        Bson::Boolean(false)
+                    }
+                    "$ne" => {
+                        if let Bson::Array(arr) = args {
+                            if arr.len() == 2 {
+                                let a = evaluate_expression(&arr[0], doc);
+                                let b = evaluate_expression(&arr[1], doc);
+                                return Bson::Boolean(a != b);
+                            }
+                        }
+                        Bson::Boolean(false)
+                    }
+                    "$gt" | "$gte" | "$lt" | "$lte" => {
+                        if let Bson::Array(arr) = args {
+                            if arr.len() == 2 {
+                                let a = evaluate_expression(&arr[0], doc);
+                                let b = evaluate_expression(&arr[1], doc);
+                                let cmp = compare_bson_values(Some(&a), Some(&b));
+                                let result = match op.as_str() {
+                                    "$gt" => cmp == std::cmp::Ordering::Greater,
+                                    "$gte" => cmp != std::cmp::Ordering::Less,
+                                    "$lt" => cmp == std::cmp::Ordering::Less,
+                                    "$lte" => cmp != std::cmp::Ordering::Greater,
+                                    _ => false,
+                                };
+                                return Bson::Boolean(result);
+                            }
+                        }
+                        Bson::Boolean(false)
+                    }
+                    // Conditional
+                    "$cond" => {
+                        if let Bson::Document(cond_doc) = args {
+                            let if_expr = cond_doc.get("if").unwrap_or(&Bson::Boolean(false));
+                            let then_expr = cond_doc.get("then").unwrap_or(&Bson::Null);
+                            let else_expr = cond_doc.get("else").unwrap_or(&Bson::Null);
+
+                            let condition = match evaluate_expression(if_expr, doc) {
+                                Bson::Boolean(b) => b,
+                                Bson::Null => false,
+                                _ => true,
+                            };
+
+                            if condition {
+                                evaluate_expression(then_expr, doc)
+                            } else {
+                                evaluate_expression(else_expr, doc)
+                            }
+                        } else if let Bson::Array(arr) = args {
+                            if arr.len() == 3 {
+                                let condition = match evaluate_expression(&arr[0], doc) {
+                                    Bson::Boolean(b) => b,
+                                    Bson::Null => false,
+                                    _ => true,
+                                };
+                                if condition {
+                                    return evaluate_expression(&arr[1], doc);
+                                } else {
+                                    return evaluate_expression(&arr[2], doc);
+                                }
+                            }
+                            Bson::Null
+                        } else {
+                            Bson::Null
+                        }
+                    }
+                    "$ifNull" => {
+                        if let Bson::Array(arr) = args {
+                            if arr.len() == 2 {
+                                let val = evaluate_expression(&arr[0], doc);
+                                if matches!(val, Bson::Null) {
+                                    return evaluate_expression(&arr[1], doc);
+                                }
+                                return val;
+                            }
+                        }
+                        Bson::Null
+                    }
+                    // String operations
+                    "$concat" => {
+                        if let Bson::Array(arr) = args {
+                            let parts: Vec<String> = arr.iter()
+                                .map(|v| {
+                                    match evaluate_expression(v, doc) {
+                                        Bson::String(s) => s,
+                                        other => format!("{:?}", other),
+                                    }
+                                })
+                                .collect();
+                            Bson::String(parts.join(""))
+                        } else {
+                            Bson::Null
+                        }
+                    }
+                    "$toUpper" => {
+                        let val = evaluate_expression(args, doc);
+                        if let Bson::String(s) = val {
+                            Bson::String(s.to_uppercase())
+                        } else {
+                            Bson::Null
+                        }
+                    }
+                    "$toLower" => {
+                        let val = evaluate_expression(args, doc);
+                        if let Bson::String(s) = val {
+                            Bson::String(s.to_lowercase())
+                        } else {
+                            Bson::Null
+                        }
+                    }
+                    // Array operations
+                    "$size" => {
+                        let val = evaluate_expression(args, doc);
+                        if let Bson::Array(arr) = val {
+                            Bson::Int32(arr.len() as i32)
+                        } else {
+                            Bson::Null
+                        }
+                    }
+                    "$arrayElemAt" => {
+                        if let Bson::Array(arr) = args {
+                            if arr.len() == 2 {
+                                let array = evaluate_expression(&arr[0], doc);
+                                let idx = evaluate_expression(&arr[1], doc);
+                                if let (Bson::Array(arr), Bson::Int32(i)) = (array, idx) {
+                                    let index = if i < 0 { arr.len() as i32 + i } else { i } as usize;
+                                    return arr.get(index).cloned().unwrap_or(Bson::Null);
+                                }
+                            }
+                        }
+                        Bson::Null
+                    }
+                    // Type conversion
+                    "$toString" => {
+                        let val = evaluate_expression(args, doc);
+                        Bson::String(format!("{:?}", val))
+                    }
+                    "$toInt" => {
+                        let val = evaluate_expression(args, doc);
+                        match val {
+                            Bson::Int32(n) => Bson::Int32(n),
+                            Bson::Int64(n) => Bson::Int32(n as i32),
+                            Bson::Double(n) => Bson::Int32(n as i32),
+                            Bson::String(s) => s.parse::<i32>().map(Bson::Int32).unwrap_or(Bson::Null),
+                            _ => Bson::Null,
+                        }
+                    }
+                    "$literal" => args.clone(),
+                    _ => Bson::Null,
+                }
+            } else {
+                Bson::Document(expr_doc.clone())
+            }
+        }
+        // Literal value
+        other => other.clone(),
     }
 }

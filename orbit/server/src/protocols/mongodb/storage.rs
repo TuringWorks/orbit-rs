@@ -236,8 +236,8 @@ impl Collection {
     }
 }
 
-/// Check if a document matches a filter
-fn matches_filter(doc: &Document, filter: &Document) -> bool {
+/// Check if a document matches a MongoDB filter
+pub fn matches_filter(doc: &Document, filter: &Document) -> bool {
     if filter.is_empty() {
         return true;
     }
