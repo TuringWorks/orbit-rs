@@ -3,17 +3,33 @@
 
 #[cfg(test)]
 mod aql_data_modification_tests {
-    use crate::protocols::aql::{AqlQueryEngine, AqlStorage, AqlValue};
+    use crate::protocols::aql::{AqlCollection, AqlQueryEngine, AqlStorage, AqlValue};
+    use crate::protocols::aql::data_model::{CollectionStatus, CollectionType};
     use std::sync::Arc;
+    use tempfile::TempDir;
+
+    async fn create_test_storage() -> (Arc<AqlStorage>, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let storage = Arc::new(AqlStorage::new(temp_dir.path()));
+        storage.initialize().await.unwrap();
+        (storage, temp_dir)
+    }
 
     #[tokio::test]
     async fn test_insert_document() {
-        let storage = Arc::new(AqlStorage::new());
+        let (storage, _temp_dir) = create_test_storage().await;
         let engine = AqlQueryEngine::with_storage(storage.clone());
 
         // Create a collection first
+        let collection = AqlCollection {
+            name: "users".to_string(),
+            collection_type: CollectionType::Document,
+            status: CollectionStatus::Loaded,
+            count: 0,
+            indexes: vec![],
+        };
         storage
-            .create_collection("users")
+            .store_collection(collection)
             .await
             .expect("Failed to create collection");
 
@@ -43,11 +59,18 @@ mod aql_data_modification_tests {
 
     #[tokio::test]
     async fn test_insert_auto_generated_key() {
-        let storage = Arc::new(AqlStorage::new());
+        let (storage, _temp_dir) = create_test_storage().await;
         let engine = AqlQueryEngine::with_storage(storage.clone());
 
+        let collection = AqlCollection {
+            name: "products".to_string(),
+            collection_type: CollectionType::Document,
+            status: CollectionStatus::Loaded,
+            count: 0,
+            indexes: vec![],
+        };
         storage
-            .create_collection("products")
+            .store_collection(collection)
             .await
             .expect("Failed to create collection");
 
@@ -70,11 +93,18 @@ mod aql_data_modification_tests {
 
     #[tokio::test]
     async fn test_update_document() {
-        let storage = Arc::new(AqlStorage::new());
+        let (storage, _temp_dir) = create_test_storage().await;
         let engine = AqlQueryEngine::with_storage(storage.clone());
 
+        let collection = AqlCollection {
+            name: "users".to_string(),
+            collection_type: CollectionType::Document,
+            status: CollectionStatus::Loaded,
+            count: 0,
+            indexes: vec![],
+        };
         storage
-            .create_collection("users")
+            .store_collection(collection)
             .await
             .expect("Failed to create collection");
 
@@ -116,11 +146,18 @@ mod aql_data_modification_tests {
 
     #[tokio::test]
     async fn test_replace_document() {
-        let storage = Arc::new(AqlStorage::new());
+        let (storage, _temp_dir) = create_test_storage().await;
         let engine = AqlQueryEngine::with_storage(storage.clone());
 
+        let collection = AqlCollection {
+            name: "users".to_string(),
+            collection_type: CollectionType::Document,
+            status: CollectionStatus::Loaded,
+            count: 0,
+            indexes: vec![],
+        };
         storage
-            .create_collection("users")
+            .store_collection(collection)
             .await
             .expect("Failed to create collection");
 
@@ -158,11 +195,18 @@ mod aql_data_modification_tests {
 
     #[tokio::test]
     async fn test_remove_document() {
-        let storage = Arc::new(AqlStorage::new());
+        let (storage, _temp_dir) = create_test_storage().await;
         let engine = AqlQueryEngine::with_storage(storage.clone());
 
+        let collection = AqlCollection {
+            name: "users".to_string(),
+            collection_type: CollectionType::Document,
+            status: CollectionStatus::Loaded,
+            count: 0,
+            indexes: vec![],
+        };
         storage
-            .create_collection("users")
+            .store_collection(collection)
             .await
             .expect("Failed to create collection");
 
@@ -200,11 +244,18 @@ mod aql_data_modification_tests {
 
     #[tokio::test]
     async fn test_upsert_insert() {
-        let storage = Arc::new(AqlStorage::new());
+        let (storage, _temp_dir) = create_test_storage().await;
         let engine = AqlQueryEngine::with_storage(storage.clone());
 
+        let collection = AqlCollection {
+            name: "users".to_string(),
+            collection_type: CollectionType::Document,
+            status: CollectionStatus::Loaded,
+            count: 0,
+            indexes: vec![],
+        };
         storage
-            .create_collection("users")
+            .store_collection(collection)
             .await
             .expect("Failed to create collection");
 
@@ -237,11 +288,18 @@ mod aql_data_modification_tests {
 
     #[tokio::test]
     async fn test_upsert_update() {
-        let storage = Arc::new(AqlStorage::new());
+        let (storage, _temp_dir) = create_test_storage().await;
         let engine = AqlQueryEngine::with_storage(storage.clone());
 
+        let collection = AqlCollection {
+            name: "users".to_string(),
+            collection_type: CollectionType::Document,
+            status: CollectionStatus::Loaded,
+            count: 0,
+            indexes: vec![],
+        };
         storage
-            .create_collection("users")
+            .store_collection(collection)
             .await
             .expect("Failed to create collection");
 
@@ -285,11 +343,18 @@ mod aql_data_modification_tests {
 
     #[tokio::test]
     async fn test_for_update_loop() {
-        let storage = Arc::new(AqlStorage::new());
+        let (storage, _temp_dir) = create_test_storage().await;
         let engine = AqlQueryEngine::with_storage(storage.clone());
 
+        let collection = AqlCollection {
+            name: "users".to_string(),
+            collection_type: CollectionType::Document,
+            status: CollectionStatus::Loaded,
+            count: 0,
+            indexes: vec![],
+        };
         storage
-            .create_collection("users")
+            .store_collection(collection)
             .await
             .expect("Failed to create collection");
 

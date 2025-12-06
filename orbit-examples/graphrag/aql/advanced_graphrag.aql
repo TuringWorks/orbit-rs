@@ -1,0 +1,89 @@
+// Build knowledge graph from multiple documents
+FOR result IN GRAPHRAG_BUILD_KNOWLEDGE("Transformers leverage attention for sequence modeling; attention fuses contextual information.", {
+  "knowledge_graph": "research_kg",
+  "document_id": "doc_dl",
+  "metadata": {"source": "paper", "category": "dl"},
+  "extractors": ["entity", "relationship"],
+  "build_graph": true,
+  "generate_embeddings": true
+})
+RETURN result
+
+FOR result IN GRAPHRAG_BUILD_KNOWLEDGE("Graph Neural Networks perform message passing over neighbors in a graph.", {
+  "knowledge_graph": "research_kg",
+  "document_id": "doc_gnn",
+  "metadata": {"source": "wiki", "category": "gnn"},
+  "extractors": ["entity", "relationship"],
+  "build_graph": true,
+  "generate_embeddings": true
+})
+RETURN result
+
+// RAG query with context and explanation
+FOR answer IN GRAPHRAG_QUERY("research_kg", "Compare attention in Transformers with message passing in GNNs.", {
+  "max_hops": 3,
+  "context_size": 4096,
+  "llm_provider": "ollama",
+  "include_explanation": true
+})
+RETURN {
+  "response": answer.response,
+  "confidence": answer.confidence,
+  "entities": answer.entities_involved,
+  "citations": answer.response.citations
+}
+
+// Multi-hop reasoning paths filtered by score
+FOR path IN GRAPHRAG_FIND_PATHS("research_kg", "Transformers", "Graph Neural Networks", {
+  "max_hops": 4,
+  "include_explanation": true,
+  "max_results": 10
+})
+FILTER path.score > 0.75
+RETURN {
+  "path_nodes": path.path_nodes,
+  "relationships": path.relationships,
+  "score": path.score,
+  "explanation": path.explanation
+}
+
+// Semantic search blended with RAG
+FOR result IN GRAPHRAG_SEMANTIC_SEARCH("research_kg", "sequence attention mechanisms", {
+  "max_results": 20,
+  "max_hops": 2,
+  "context_size": 2048
+})
+FILTER result.type == "entity" OR result.type == "path"
+RETURN {
+  "type": result.type,
+  "content": result.content,
+  "relevance": result.relevance_score
+}
+
+// Trend analysis across concepts
+FOR concept IN ["Transformers", "GNN", "Attention"]
+  FOR trend IN GRAPHRAG_ANALYZE_TRENDS("research_kg", concept, {
+    "time_window_days": 60
+  })
+  COLLECT period = trend.timestamp INTO trends = trend
+  RETURN {
+    "concept": concept,
+    "trends": trends,
+    "total_activity": SUM(trends[*].relationship_count)
+  }
+
+// Community detection and top entities
+FOR community IN GRAPHRAG_DETECT_COMMUNITIES("research_kg", {
+  "min_community_size": 3
+})
+LET entities = community.entity_ids
+FOR entity_id IN entities
+  FOR entity IN GRAPHRAG_LIST_ENTITIES("research_kg", {"limit": 1000})
+    FILTER entity.id == entity_id
+    COLLECT community_id = community.community_id INTO community_entities = entity
+    RETURN {
+      "community": community_id,
+      "size": LENGTH(community_entities),
+      "entity_types": UNIQUE(community_entities[*].entity_type),
+      "top_entities": community_entities[0..5].text
+    }
