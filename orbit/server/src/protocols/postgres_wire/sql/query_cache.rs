@@ -413,8 +413,8 @@ pub fn extract_table_names(sql: &str) -> Vec<String> {
     let mut i = 0;
     while i < words.len() {
         // Look for FROM, JOIN, INTO, UPDATE table references
-        if words[i] == "FROM" || words[i] == "JOIN" || words[i] == "INTO" || words[i] == "UPDATE" {
-            if i + 1 < words.len() {
+        if (words[i] == "FROM" || words[i] == "JOIN" || words[i] == "INTO" || words[i] == "UPDATE")
+            && i + 1 < words.len() {
                 let table = words[i + 1]
                     .trim_matches(|c: char| !c.is_alphanumeric() && c != '_' && c != '.')
                     .to_string();
@@ -422,7 +422,6 @@ pub fn extract_table_names(sql: &str) -> Vec<String> {
                     tables.push(table);
                 }
             }
-        }
         i += 1;
     }
 

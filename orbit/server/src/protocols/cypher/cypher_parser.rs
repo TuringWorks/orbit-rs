@@ -2296,11 +2296,7 @@ impl TokenParser {
         let (entity_type, label_or_type, variable) = self.parse_index_entity_pattern()?;
 
         // Expect REQUIRE (new syntax with FOR) or ASSERT (old syntax with ON)
-        let found_keyword = match self.current_token() {
-            Some(Token::Require) => true,
-            Some(Token::Assert) => true,
-            _ => false,
-        };
+        let found_keyword = matches!(self.current_token(), Some(Token::Require) | Some(Token::Assert));
 
         if !found_keyword {
             let expected = if has_for { "REQUIRE" } else { "ASSERT" };

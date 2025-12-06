@@ -145,6 +145,7 @@ impl Default for RecursiveCteEvaluator {
 mod tests {
     use super::*;
 
+    #[allow(dead_code)]
     struct MockExecutor;
 
     impl CteExecutor for MockExecutor {

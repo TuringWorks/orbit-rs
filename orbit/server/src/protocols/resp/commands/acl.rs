@@ -375,13 +375,13 @@ impl AclCommands {
             bits_str.parse::<usize>().unwrap_or(256).min(1024)
         };
 
-        let bytes_needed = (bits + 7) / 8;
+        let bytes_needed = bits.div_ceil(8);
         let password: String = (0..bytes_needed)
             .map(|_| format!("{:02x}", rand::random::<u8>()))
             .collect();
 
         // Truncate to exact bit length (4 bits per hex char)
-        let hex_chars = (bits + 3) / 4;
+        let hex_chars = bits.div_ceil(4);
         let password = password.chars().take(hex_chars).collect::<String>();
 
         debug!("ACL GENPASS {} -> {} chars", bits, password.len());
@@ -596,36 +596,36 @@ impl AclCommands {
                         user.categories.insert(rule.clone());
                     }
                     // Handle command rules
-                    else if rule.starts_with('+') {
-                        user.commands.insert(rule[1..].to_uppercase());
-                    } else if rule.starts_with('-') {
-                        user.denied_commands.insert(rule[1..].to_uppercase());
+                    else if let Some(cmd) = rule.strip_prefix('+') {
+                        user.commands.insert(cmd.to_uppercase());
+                    } else if let Some(cmd) = rule.strip_prefix('-') {
+                        user.denied_commands.insert(cmd.to_uppercase());
                     }
                     // Handle key patterns
-                    else if rule.starts_with('~') {
-                        user.keys.push(rule[1..].to_string());
+                    else if let Some(key) = rule.strip_prefix('~') {
+                        user.keys.push(key.to_string());
                     }
                     // Handle channel patterns
-                    else if rule.starts_with('&') {
-                        user.channels.push(rule[1..].to_string());
+                    else if let Some(channel) = rule.strip_prefix('&') {
+                        user.channels.push(channel.to_string());
                     }
                     // Handle password hash
-                    else if rule.starts_with('#') {
-                        user.passwords.push(rule[1..].to_string());
+                    else if let Some(hash) = rule.strip_prefix('#') {
+                        user.passwords.push(hash.to_string());
                     }
                     // Handle plaintext password (hash it)
-                    else if rule.starts_with('>') {
+                    else if let Some(pwd) = rule.strip_prefix('>') {
                         use sha2::{Digest, Sha256};
                         let mut hasher = Sha256::new();
-                        hasher.update(rule[1..].as_bytes());
+                        hasher.update(pwd.as_bytes());
                         let hash = format!("{:x}", hasher.finalize());
                         user.passwords.push(hash);
                     }
                     // Remove password
-                    else if rule.starts_with('<') {
+                    else if let Some(pwd) = rule.strip_prefix('<') {
                         use sha2::{Digest, Sha256};
                         let mut hasher = Sha256::new();
-                        hasher.update(rule[1..].as_bytes());
+                        hasher.update(pwd.as_bytes());
                         let hash = format!("{:x}", hasher.finalize());
                         user.passwords.retain(|p| p != &hash);
                     }
@@ -677,12 +677,11 @@ impl AclCommands {
                 }
 
                 // Check if command is allowed (simplified check)
-                if user.categories.contains(&"+@all".to_string()) {
-                    if !user.denied_commands.contains(&command) {
+                if user.categories.contains("+@all")
+                    && !user.denied_commands.contains(&command) {
                         debug!("ACL DRYRUN {} {} -> OK", username, command);
                         return Ok(RespValue::SimpleString("OK".to_string()));
                     }
-                }
 
                 if user.commands.contains(&command) {
                     debug!("ACL DRYRUN {} {} -> OK", username, command);

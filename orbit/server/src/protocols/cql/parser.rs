@@ -2,6 +2,9 @@
 //!
 //! This module provides a parser for CQL (Cassandra Query Language) statements.
 
+// Complex return types are intentional for parser completeness
+#![allow(clippy::type_complexity)]
+
 use super::types::{CqlType, CqlValue, SimilarityFunction};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use std::collections::HashMap;
@@ -846,7 +849,7 @@ impl CqlParser {
                 .join(" ");
 
             for item in order_part.split(',') {
-                let parts: Vec<&str> = item.trim().split_whitespace().collect();
+                let parts: Vec<&str> = item.split_whitespace().collect();
                 if let Some(col) = parts.first() {
                     let order = if parts.get(1).map(|s| s.to_uppercase()) == Some("DESC".to_string())
                     {
@@ -1499,7 +1502,7 @@ impl CqlParser {
     fn parse_type_fields(&self, fields_str: &str) -> Vec<(String, CqlType)> {
         let mut fields = Vec::new();
         for field in fields_str.split(',') {
-            let parts: Vec<&str> = field.trim().split_whitespace().collect();
+            let parts: Vec<&str> = field.split_whitespace().collect();
             if parts.len() >= 2 {
                 let name = parts[0].to_string();
                 let type_str = parts[1].to_uppercase();
@@ -2295,20 +2298,12 @@ impl CqlParser {
 
         // Extract password if present
         let password = if let Some(pwd_pos) = query_upper.find("PASSWORD") {
-            let after_pwd = &query[pwd_pos + 8..].trim_start();
+            let after_pwd = query[pwd_pos + 8..].trim_start();
             // Skip '=' if present
-            let pwd_start = if after_pwd.starts_with('=') {
-                &after_pwd[1..].trim_start()
-            } else {
-                after_pwd
-            };
+            let pwd_start = after_pwd.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(after_pwd);
             // Extract quoted password
-            if pwd_start.starts_with('\'') {
-                if let Some(end_pos) = pwd_start[1..].find('\'') {
-                    Some(pwd_start[1..end_pos + 1].to_string())
-                } else {
-                    None
-                }
+            if let Some(unquoted) = pwd_start.strip_prefix('\'') {
+                unquoted.find('\'').map(|end_pos| unquoted[..end_pos].to_string())
             } else {
                 pwd_start.split_whitespace().next().map(|s| s.to_string())
             }
@@ -2356,18 +2351,10 @@ impl CqlParser {
         };
 
         let password = if let Some(pwd_pos) = query_upper.find("PASSWORD") {
-            let after_pwd = &query[pwd_pos + 8..].trim_start();
-            let pwd_start = if after_pwd.starts_with('=') {
-                &after_pwd[1..].trim_start()
-            } else {
-                after_pwd
-            };
-            if pwd_start.starts_with('\'') {
-                if let Some(end_pos) = pwd_start[1..].find('\'') {
-                    Some(pwd_start[1..end_pos + 1].to_string())
-                } else {
-                    None
-                }
+            let after_pwd = query[pwd_pos + 8..].trim_start();
+            let pwd_start = after_pwd.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(after_pwd);
+            if let Some(unquoted) = pwd_start.strip_prefix('\'') {
+                unquoted.find('\'').map(|end_pos| unquoted[..end_pos].to_string())
             } else {
                 pwd_start.split_whitespace().next().map(|s| s.to_string())
             }

@@ -555,7 +555,7 @@ impl VectorCommands {
         let ids: Vec<RespValue> = index
             .vectors
             .keys()
-            .map(|id| RespValue::bulk_string_from_str(id))
+            .map(RespValue::bulk_string_from_str)
             .collect();
 
         Ok(RespValue::Array(ids))

@@ -156,7 +156,7 @@ impl ColumnarData {
         for row in rows {
             for col_name in column_order {
                 let value = row.get(col_name);
-                let is_null = value.map_or(true, |v| matches!(v, SqlValue::Null));
+                let is_null = value.is_none_or(|v| matches!(v, SqlValue::Null));
 
                 if let Some(nulls) = result.null_bitmaps.get_mut(col_name) {
                     nulls.push(is_null);
@@ -571,7 +571,7 @@ impl VectorizedExecutor {
                         let count = match indices {
                             Some(idx) => idx
                                 .iter()
-                                .filter(|&&i| str_col.get(i).map_or(false, |v| v.is_some()))
+                                .filter(|&&i| str_col.get(i).is_some_and(|v| v.is_some()))
                                 .count(),
                             None => str_col.iter().filter(|v| v.is_some()).count(),
                         };

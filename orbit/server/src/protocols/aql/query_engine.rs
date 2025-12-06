@@ -2,6 +2,9 @@
 //!
 //! This module provides a complete AQL query engine that includes GraphRAG function support.
 
+// Matrix operations use indexed loops for clarity
+#![allow(clippy::needless_range_loop)]
+
 use crate::protocols::aql::aql_parser::{
     AqlClause, AqlCondition, AqlExpression, ComparisonOperator, UpsertAction,
 };
@@ -957,7 +960,7 @@ impl AqlQueryEngine {
         match val {
             AqlValue::Bool(b) => *b,
             AqlValue::Null => false,
-            AqlValue::Number(n) => n.as_f64().map_or(false, |f| f != 0.0),
+            AqlValue::Number(n) => n.as_f64().is_some_and(|f| f != 0.0),
             AqlValue::String(s) => !s.is_empty(),
             AqlValue::Array(arr) => !arr.is_empty(),
             AqlValue::Object(obj) => !obj.is_empty(),
@@ -1194,13 +1197,13 @@ impl AqlQueryEngine {
                 let field_value = self.evaluate_expression(&args[0], context)?;
                 let min_val = self.evaluate_expression(&args[1], context)?;
                 let max_val = self.evaluate_expression(&args[2], context)?;
-                let include_min = args.get(3).map_or(true, |e| {
+                let include_min = args.get(3).is_none_or(|e| {
                     matches!(
                         self.evaluate_expression(e, context),
                         Ok(AqlValue::Bool(true))
                     )
                 });
-                let include_max = args.get(4).map_or(true, |e| {
+                let include_max = args.get(4).is_none_or(|e| {
                     matches!(
                         self.evaluate_expression(e, context),
                         Ok(AqlValue::Bool(true))

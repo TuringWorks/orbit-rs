@@ -3,6 +3,9 @@
 //! This module provides Cypher stored procedures for graph algorithms,
 //! leveraging GPU acceleration when available through orbit-compute.
 
+// &mut Vec parameter allows in-place modification for performance in graph traversal
+#![allow(clippy::ptr_arg)]
+
 use crate::protocols::cypher::graph_engine::QueryResult;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use orbit_shared::graph::{Direction, GraphNode, GraphRelationship, GraphStorage};

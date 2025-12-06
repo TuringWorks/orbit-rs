@@ -543,12 +543,10 @@ impl MySqlAdapter {
     fn build_show_status_result(&self) -> ProtocolResult<Vec<Bytes>> {
         use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
 
-        let status = vec![
-            ("Uptime", "0"),
+        let status = [("Uptime", "0"),
             ("Threads_connected", "1"),
             ("Connections", "1"),
-            ("Questions", "0"),
-        ];
+            ("Questions", "0")];
 
         let rows: Vec<Vec<Option<String>>> = status
             .iter()
@@ -569,13 +567,11 @@ impl MySqlAdapter {
     fn build_show_collation_result(&self) -> ProtocolResult<Vec<Bytes>> {
         use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
 
-        let collations = vec![
-            ("utf8mb4_general_ci", "utf8mb4", "45", "Yes", "Yes", "1"),
+        let collations = [("utf8mb4_general_ci", "utf8mb4", "45", "Yes", "Yes", "1"),
             ("utf8mb4_bin", "utf8mb4", "46", "", "Yes", "1"),
             ("utf8mb4_unicode_ci", "utf8mb4", "224", "", "Yes", "8"),
             ("utf8_general_ci", "utf8", "33", "Yes", "Yes", "1"),
-            ("latin1_swedish_ci", "latin1", "8", "Yes", "Yes", "1"),
-        ];
+            ("latin1_swedish_ci", "latin1", "8", "Yes", "Yes", "1")];
 
         let rows: Vec<Vec<Option<String>>> = collations
             .iter()
@@ -612,12 +608,10 @@ impl MySqlAdapter {
     fn build_show_charset_result(&self) -> ProtocolResult<Vec<Bytes>> {
         use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
 
-        let charsets = vec![
-            ("utf8mb4", "UTF-8 Unicode", "utf8mb4_general_ci", "4"),
+        let charsets = [("utf8mb4", "UTF-8 Unicode", "utf8mb4_general_ci", "4"),
             ("utf8", "UTF-8 Unicode", "utf8_general_ci", "3"),
             ("latin1", "cp1252 West European", "latin1_swedish_ci", "1"),
-            ("ascii", "US ASCII", "ascii_general_ci", "1"),
-        ];
+            ("ascii", "US ASCII", "ascii_general_ci", "1")];
 
         let rows: Vec<Vec<Option<String>>> = charsets
             .iter()

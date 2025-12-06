@@ -32,6 +32,12 @@ pub struct QueuedCommand {
     pub args: Vec<RespValue>,
 }
 
+impl Default for TransactionState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TransactionState {
     pub fn new() -> Self {
         Self {
@@ -125,6 +131,12 @@ impl TransactionState {
 pub struct TransactionManager {
     /// Map of connection ID to transaction state
     transactions: Arc<RwLock<HashMap<String, TransactionState>>>,
+}
+
+impl Default for TransactionManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TransactionManager {

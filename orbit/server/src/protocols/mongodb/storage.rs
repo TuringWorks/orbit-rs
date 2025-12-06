@@ -2,6 +2,9 @@
 //!
 //! Provides in-memory document storage with collection support for MongoDB protocol.
 
+// Many arguments required for full MongoDB operation support
+#![allow(clippy::too_many_arguments)]
+
 use bson::{doc, oid::ObjectId, Bson, Document};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -1192,7 +1195,7 @@ impl Database {
     pub fn get_or_create_collection(&mut self, name: &str) -> &mut Collection {
         self.collections
             .entry(name.to_string())
-            .or_insert_with(Collection::new)
+            .or_default()
     }
 
     pub fn get_collection(&self, name: &str) -> Option<&Collection> {
@@ -2222,7 +2225,7 @@ mod tests {
         let result = eval_expr(doc! { "$isoWeek": "$date" }, &doc);
         
         if let Bson::Int32(week) = result {
-            assert!(week >= 1 && week <= 53);
+            assert!((1..=53).contains(&week));
         } else {
             panic!("Expected Int32 result");
         }
@@ -2245,7 +2248,7 @@ mod tests {
         let result = eval_expr(doc! { "$isoDayOfWeek": "$date" }, &doc);
         
         if let Bson::Int32(day) = result {
-            assert!(day >= 1 && day <= 7);
+            assert!((1..=7).contains(&day));
         } else {
             panic!("Expected Int32 result");
         }
@@ -2259,7 +2262,7 @@ mod tests {
         let result = eval_expr(doc! { "$millisecond": "$date" }, &doc);
         
         if let Bson::Int32(ms) = result {
-            assert!(ms >= 0 && ms < 1000);
+            assert!((0..1000).contains(&ms));
         } else {
             panic!("Expected Int32 result");
         }
@@ -2273,7 +2276,7 @@ mod tests {
         let result = eval_expr(doc! { "$week": "$date" }, &doc);
         
         if let Bson::Int32(week) = result {
-            assert!(week >= 0 && week <= 53);
+            assert!((0..=53).contains(&week));
         } else {
             panic!("Expected Int32 result");
         }
@@ -2539,7 +2542,7 @@ mod tests {
         
         assert!(result.is_some());
         let doc = result.unwrap();
-        assert_eq!(doc.get_bool("processed").unwrap(), true);
+        assert!(doc.get_bool("processed").unwrap());
     }
 
     // distinct Tests (10 tests)
@@ -2859,7 +2862,7 @@ mod tests {
 
         let doc = doc! { "a": 1, "b": 2 };
 
-        let expr = Bson::Document(doc! {
+        let _expr = Bson::Document(doc! {
             "$setField": {
                 "field": "c",
                 "input": "$ROOT",
@@ -2937,7 +2940,7 @@ mod tests {
                 "to": "int"
             }
         });
-        let result = evaluate_expression(&expr, &doc);
+        let _result = evaluate_expression(&expr, &doc);
         // Note: This returns Null because string->int conversion needs bson_to_i64
 
         // Convert int to double
@@ -3003,7 +3006,7 @@ mod tests {
         let expr = Bson::Document(doc! { "$rand": {} });
         let result = evaluate_expression(&expr, &doc);
         if let Bson::Double(n) = result {
-            assert!(n >= 0.0 && n < 1.0);
+            assert!((0.0..1.0).contains(&n));
         } else {
             panic!("$rand should return a double");
         }

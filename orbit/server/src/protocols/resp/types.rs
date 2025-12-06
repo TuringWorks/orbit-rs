@@ -13,6 +13,9 @@
 //! - Null (_)
 //! - Boolean (#)
 //! - Double (,)
+
+// Complex return types are intentional for RESP protocol completeness
+#![allow(clippy::type_complexity)]
 //! - Big Number (()
 //! - Bulk Error (!)
 //! - Verbatim String (=)

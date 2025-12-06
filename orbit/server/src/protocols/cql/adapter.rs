@@ -1047,7 +1047,7 @@ impl CqlAdapter {
                 } else {
                     let val_parts: Vec<String> = values
                         .iter()
-                        .map(|v| Self::cql_value_to_sql_string(v))
+                        .map(Self::cql_value_to_sql_string)
                         .collect();
                     format!(" VALUES ({})", val_parts.join(", "))
                 };
@@ -1120,8 +1120,7 @@ impl CqlAdapter {
                 };
 
                 // Handle IF clause (lightweight transaction)
-                let column_names: Vec<String> =
-                    assignments.iter().map(|(c, _)| c.clone()).collect();
+                let column_names: Vec<String> = assignments.keys().cloned().collect();
                 if let Some(if_conditions) = if_clause {
                     if !where_str.is_empty() {
                         // Fetch current row

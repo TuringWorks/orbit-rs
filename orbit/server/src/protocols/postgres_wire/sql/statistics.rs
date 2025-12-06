@@ -624,6 +624,6 @@ mod tests {
         assert!(estimate.is_some());
         // Should be around 10 (1000 rows / 100 distinct values)
         let est = estimate.unwrap();
-        assert!(est >= 5 && est <= 20);
+        assert!((5..=20).contains(&est));
     }
 }
