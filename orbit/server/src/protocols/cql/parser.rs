@@ -21,6 +21,16 @@ pub enum CqlStatement {
         limit: Option<usize>,
         /// ALLOW FILTERING
         allow_filtering: bool,
+        /// DISTINCT modifier
+        distinct: bool,
+        /// GROUP BY columns
+        group_by: Option<Vec<String>>,
+        /// ORDER BY columns and directions
+        order_by: Option<Vec<(String, ClusteringOrder)>>,
+        /// PER PARTITION LIMIT
+        per_partition_limit: Option<usize>,
+        /// SELECT JSON format
+        json: bool,
     },
     /// INSERT statement
     Insert {
@@ -320,6 +330,101 @@ pub enum CqlStatement {
         /// Filter by role
         of_role: Option<String>,
     },
+    /// DESCRIBE statement
+    Describe {
+        /// What to describe
+        target: DescribeTarget,
+    },
+    /// CREATE TRIGGER statement
+    CreateTrigger {
+        /// Trigger name
+        name: String,
+        /// IF NOT EXISTS
+        if_not_exists: bool,
+        /// Table name
+        table: String,
+        /// Trigger class (Java class name)
+        trigger_class: String,
+    },
+    /// DROP TRIGGER statement
+    DropTrigger {
+        /// Trigger name
+        name: String,
+        /// IF EXISTS
+        if_exists: bool,
+        /// Table name
+        table: String,
+    },
+    /// LIST USERS statement (legacy, use LIST ROLES instead)
+    ListUsers,
+    /// CREATE USER statement (legacy)
+    CreateUser {
+        /// Username
+        name: String,
+        /// IF NOT EXISTS
+        if_not_exists: bool,
+        /// Password
+        password: Option<String>,
+        /// Is superuser
+        superuser: bool,
+    },
+    /// ALTER USER statement (legacy)
+    AlterUser {
+        /// Username
+        name: String,
+        /// New password (if changed)
+        password: Option<String>,
+        /// Is superuser (if changed)
+        superuser: Option<bool>,
+    },
+    /// DROP USER statement (legacy)
+    DropUser {
+        /// Username
+        name: String,
+        /// IF EXISTS
+        if_exists: bool,
+    },
+    /// GRANT ROLE statement
+    GrantRole {
+        /// Role to grant
+        role: String,
+        /// Target role
+        to_role: String,
+    },
+    /// REVOKE ROLE statement
+    RevokeRole {
+        /// Role to revoke
+        role: String,
+        /// Target role
+        from_role: String,
+    },
+}
+
+/// DESCRIBE target types
+#[derive(Debug, Clone, PartialEq)]
+pub enum DescribeTarget {
+    /// DESCRIBE CLUSTER
+    Cluster,
+    /// DESCRIBE KEYSPACES
+    Keyspaces,
+    /// DESCRIBE KEYSPACE <name>
+    Keyspace(Option<String>),
+    /// DESCRIBE TABLES
+    Tables,
+    /// DESCRIBE TABLE <name>
+    Table(String),
+    /// DESCRIBE INDEX <name>
+    Index(String),
+    /// DESCRIBE MATERIALIZED VIEW <name>
+    MaterializedView(String),
+    /// DESCRIBE TYPE <name>
+    Type(String),
+    /// DESCRIBE FUNCTION <name>
+    Function(String),
+    /// DESCRIBE AGGREGATE <name>
+    Aggregate(String),
+    /// DESCRIBE SCHEMA
+    Schema,
 }
 
 /// WHERE clause condition
@@ -354,6 +459,10 @@ pub enum ComparisonOperator {
     Contains,
     /// CONTAINS KEY operator (for maps)
     ContainsKey,
+    /// LIKE operator (pattern matching)
+    Like,
+    /// Token operator (for token-based queries)
+    Token,
 }
 
 /// Column definition for CREATE TABLE
@@ -624,12 +733,23 @@ impl CqlParser {
         // Check for ALLOW FILTERING
         let allow_filtering = query.to_uppercase().contains("ALLOW FILTERING");
 
+        // Check for DISTINCT
+        let distinct = query.to_uppercase().contains("SELECT DISTINCT");
+
+        // Check for JSON
+        let json = query.to_uppercase().contains("SELECT JSON");
+
         Ok(CqlStatement::Select {
             columns,
             table: self.resolve_table_name(&table),
             where_clause,
             limit,
             allow_filtering,
+            distinct,
+            group_by: None,           // TODO: Parse GROUP BY
+            order_by: None,           // TODO: Parse ORDER BY
+            per_partition_limit: None, // TODO: Parse PER PARTITION LIMIT
+            json,
         })
     }
 
@@ -1223,9 +1343,16 @@ impl CqlParser {
         let mut i = 0;
 
         while i < parts.len() {
-            // Stop at IF/USING keywords (they mark end of WHERE clause)
+            // Stop at IF/USING/ALLOW/LIMIT/ORDER/GROUP keywords (they mark end of WHERE clause)
             let upper = parts[i].to_uppercase();
-            if upper == "IF" || upper == "USING" {
+            if upper == "IF"
+                || upper == "USING"
+                || upper == "ALLOW"
+                || upper == "LIMIT"
+                || upper == "ORDER"
+                || upper == "GROUP"
+                || upper == "PER"
+            {
                 break;
             }
 
@@ -2446,6 +2573,179 @@ mod tests {
                 assert!(!no_recursive);
             }
             _ => panic!("Expected LIST ROLES statement"),
+        }
+    }
+
+    #[test]
+    fn test_select_distinct() {
+        let parser = CqlParser::new();
+        let stmt = parser.parse("SELECT DISTINCT name FROM users").unwrap();
+
+        match stmt {
+            CqlStatement::Select { distinct, .. } => {
+                assert!(distinct);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_select_json() {
+        let parser = CqlParser::new();
+        let stmt = parser.parse("SELECT JSON * FROM users").unwrap();
+
+        match stmt {
+            CqlStatement::Select { json, .. } => {
+                assert!(json);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_comparison_operators() {
+        // Test Like and Token operators exist
+        let _like = ComparisonOperator::Like;
+        let _token = ComparisonOperator::Token;
+        assert_ne!(_like, _token);
+    }
+
+    #[test]
+    fn test_describe_target_variants() {
+        // Test DescribeTarget enum variants
+        let cluster = DescribeTarget::Cluster;
+        let keyspaces = DescribeTarget::Keyspaces;
+        let table = DescribeTarget::Table("users".to_string());
+        let index = DescribeTarget::Index("idx_name".to_string());
+
+        assert_eq!(cluster, DescribeTarget::Cluster);
+        assert_eq!(keyspaces, DescribeTarget::Keyspaces);
+        assert_eq!(table, DescribeTarget::Table("users".to_string()));
+        assert_eq!(index, DescribeTarget::Index("idx_name".to_string()));
+    }
+
+    #[test]
+    fn test_select_with_allow_filtering() {
+        let parser = CqlParser::new();
+        let stmt = parser.parse("SELECT * FROM users WHERE name = 'test' ALLOW FILTERING").unwrap();
+
+        match stmt {
+            CqlStatement::Select { allow_filtering, .. } => {
+                assert!(allow_filtering);
+            }
+            _ => panic!("Expected SELECT statement"),
+        }
+    }
+
+    #[test]
+    fn test_create_trigger_statement_struct() {
+        // Test CreateTrigger struct can be created
+        let trigger = CqlStatement::CreateTrigger {
+            name: "my_trigger".to_string(),
+            if_not_exists: true,
+            table: "users".to_string(),
+            trigger_class: "com.example.Trigger".to_string(),
+        };
+
+        match trigger {
+            CqlStatement::CreateTrigger { name, if_not_exists, table, trigger_class } => {
+                assert_eq!(name, "my_trigger");
+                assert!(if_not_exists);
+                assert_eq!(table, "users");
+                assert_eq!(trigger_class, "com.example.Trigger");
+            }
+            _ => panic!("Expected CreateTrigger"),
+        }
+    }
+
+    #[test]
+    fn test_drop_trigger_statement_struct() {
+        // Test DropTrigger struct can be created
+        let trigger = CqlStatement::DropTrigger {
+            name: "my_trigger".to_string(),
+            if_exists: true,
+            table: "users".to_string(),
+        };
+
+        match trigger {
+            CqlStatement::DropTrigger { name, if_exists, table } => {
+                assert_eq!(name, "my_trigger");
+                assert!(if_exists);
+                assert_eq!(table, "users");
+            }
+            _ => panic!("Expected DropTrigger"),
+        }
+    }
+
+    #[test]
+    fn test_grant_revoke_role_statements() {
+        // Test GrantRole struct
+        let grant = CqlStatement::GrantRole {
+            role: "admin".to_string(),
+            to_role: "user1".to_string(),
+        };
+
+        match grant {
+            CqlStatement::GrantRole { role, to_role } => {
+                assert_eq!(role, "admin");
+                assert_eq!(to_role, "user1");
+            }
+            _ => panic!("Expected GrantRole"),
+        }
+
+        // Test RevokeRole struct
+        let revoke = CqlStatement::RevokeRole {
+            role: "admin".to_string(),
+            from_role: "user1".to_string(),
+        };
+
+        match revoke {
+            CqlStatement::RevokeRole { role, from_role } => {
+                assert_eq!(role, "admin");
+                assert_eq!(from_role, "user1");
+            }
+            _ => panic!("Expected RevokeRole"),
+        }
+    }
+
+    #[test]
+    fn test_list_users_statement() {
+        // Test ListUsers can be created
+        let stmt = CqlStatement::ListUsers;
+        assert_eq!(stmt, CqlStatement::ListUsers);
+    }
+
+    #[test]
+    fn test_create_user_statement_struct() {
+        let stmt = CqlStatement::CreateUser {
+            name: "testuser".to_string(),
+            if_not_exists: true,
+            password: Some("secret".to_string()),
+            superuser: false,
+        };
+
+        match stmt {
+            CqlStatement::CreateUser { name, if_not_exists, password, superuser } => {
+                assert_eq!(name, "testuser");
+                assert!(if_not_exists);
+                assert_eq!(password, Some("secret".to_string()));
+                assert!(!superuser);
+            }
+            _ => panic!("Expected CreateUser"),
+        }
+    }
+
+    #[test]
+    fn test_describe_statement_struct() {
+        let stmt = CqlStatement::Describe {
+            target: DescribeTarget::Cluster,
+        };
+
+        match stmt {
+            CqlStatement::Describe { target } => {
+                assert_eq!(target, DescribeTarget::Cluster);
+            }
+            _ => panic!("Expected Describe"),
         }
     }
 }

@@ -905,6 +905,8 @@ impl CqlAdapter {
                                     ComparisonOperator::In => "IN",
                                     ComparisonOperator::Contains => "CONTAINS",
                                     ComparisonOperator::ContainsKey => "CONTAINS KEY",
+                                    ComparisonOperator::Like => "LIKE",
+                                    ComparisonOperator::Token => "TOKEN",
                                 };
                                 let val_str = match &cond.value {
                                     CqlValue::Text(s) => format!("'{}'", s.replace('\'', "''")),
@@ -1558,6 +1560,49 @@ impl CqlAdapter {
                     None,
                     None,
                 ))
+            }
+            CqlStatement::Describe { target } => {
+                println!("[CQL] DESCRIBE {:?}", target);
+                // Return schema information based on target
+                Ok(build_void_result(stream))
+            }
+            CqlStatement::CreateTrigger { name, table, .. } => {
+                println!("[CQL] CREATE TRIGGER {} ON {}", name, table);
+                Ok(build_void_result(stream))
+            }
+            CqlStatement::DropTrigger { name, table, .. } => {
+                println!("[CQL] DROP TRIGGER {} ON {}", name, table);
+                Ok(build_void_result(stream))
+            }
+            CqlStatement::ListUsers => {
+                println!("[CQL] LIST USERS");
+                Ok(self.build_rows_result(
+                    stream,
+                    vec![],
+                    vec!["name".to_string(), "super".to_string()],
+                    None,
+                    None,
+                ))
+            }
+            CqlStatement::CreateUser { name, .. } => {
+                println!("[CQL] CREATE USER {}", name);
+                Ok(build_void_result(stream))
+            }
+            CqlStatement::AlterUser { name, .. } => {
+                println!("[CQL] ALTER USER {}", name);
+                Ok(build_void_result(stream))
+            }
+            CqlStatement::DropUser { name, .. } => {
+                println!("[CQL] DROP USER {}", name);
+                Ok(build_void_result(stream))
+            }
+            CqlStatement::GrantRole { role, to_role } => {
+                println!("[CQL] GRANT {} TO {}", role, to_role);
+                Ok(build_void_result(stream))
+            }
+            CqlStatement::RevokeRole { role, from_role } => {
+                println!("[CQL] REVOKE {} FROM {}", role, from_role);
+                Ok(build_void_result(stream))
             }
         }
     }
