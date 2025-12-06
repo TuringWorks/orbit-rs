@@ -97,6 +97,56 @@ WHERE ns.latency_ms > ns.avg_latency_1h * 2
 ORDER BY ns.timestamp DESC
 LIMIT 20;
 
+ALTER TABLE customer_accounts ADD COLUMN IF NOT EXISTS churned BOOLEAN;
+UPDATE customer_accounts
+SET churned = (payment_delays > 2) OR (customer_service_calls > 5);
+SELECT ML_TRAIN_MODEL(
+  'telecom_churn_rf',
+  'random_forest',
+  ARRAY[
+    monthly_charge,
+    contract_length_months,
+    account_age_months,
+    data_usage_gb_monthly,
+    voice_minutes_monthly,
+    sms_count_monthly,
+    customer_service_calls,
+    payment_delays,
+    roaming_charges
+  ],
+  churned
+) FROM customer_accounts;
+SELECT ML_EVALUATE_MODEL(
+  'telecom_churn_rf',
+  ARRAY[
+    monthly_charge,
+    contract_length_months,
+    account_age_months,
+    data_usage_gb_monthly,
+    voice_minutes_monthly,
+    sms_count_monthly,
+    customer_service_calls,
+    payment_delays,
+    roaming_charges
+  ],
+  churned
+) FROM customer_accounts;
+UPDATE customer_accounts
+SET churn_probability = ML_PREDICT(
+  'telecom_churn_rf',
+  ARRAY[
+    monthly_charge,
+    contract_length_months,
+    account_age_months,
+    data_usage_gb_monthly,
+    voice_minutes_monthly,
+    sms_count_monthly,
+    customer_service_calls,
+    payment_delays,
+    roaming_charges
+  ]
+);
+
 -- Network capacity planning
 SELECT 
     ct.tower_name,

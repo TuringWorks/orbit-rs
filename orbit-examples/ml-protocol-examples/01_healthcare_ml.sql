@@ -256,6 +256,40 @@ CROSS JOIN clinical_trials ct
 WHERE ct.status = 'Recruiting'
   AND p.diagnosis ILIKE '%' || ct.condition || '%';
 
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS high_risk BOOLEAN;
+UPDATE patients SET high_risk = risk_score > 0.7;
+SELECT ML_TRAIN_MODEL(
+    'patient_risk_rf',
+    'random_forest',
+    ARRAY[
+        age,
+        (vital_signs->>'heart_rate')::INTEGER,
+        (vital_signs->>'bp_systolic')::INTEGER,
+        (vital_signs->>'bp_diastolic')::INTEGER
+    ],
+    high_risk
+) FROM patients;
+SELECT ML_EVALUATE_MODEL(
+    'patient_risk_rf',
+    ARRAY[
+        age,
+        (vital_signs->>'heart_rate')::INTEGER,
+        (vital_signs->>'bp_systolic')::INTEGER,
+        (vital_signs->>'bp_diastolic')::INTEGER
+    ],
+    high_risk
+) FROM patients;
+UPDATE patients
+SET risk_score = ML_PREDICT(
+    'patient_risk_rf',
+    ARRAY[
+        age,
+        (vital_signs->>'heart_rate')::INTEGER,
+        (vital_signs->>'bp_systolic')::INTEGER,
+        (vital_signs->>'bp_diastolic')::INTEGER
+    ]
+);
+
 -- ----------------------------------------------------------------------------
 -- 6. PREDICTIVE ANALYTICS - READMISSION RISK
 -- ----------------------------------------------------------------------------

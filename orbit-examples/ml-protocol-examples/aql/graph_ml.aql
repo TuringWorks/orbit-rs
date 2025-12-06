@@ -1,0 +1,57 @@
+LET alice = { name: "Alice", type: "Person", title: "Engineer at Acme" }
+LET bob = { name: "Bob", type: "Person", title: "Specialist at CityNet" }
+LET acme = { name: "Acme Corp", type: "Organization", summary: "Technology company" }
+LET citynet = { name: "CityNet ISP", type: "Organization", summary: "Internet service provider" }
+LET metropolis = { name: "Metropolis", type: "Location", summary: "Urban tech hub" }
+INSERT alice INTO entities
+INSERT bob INTO entities
+INSERT acme INTO entities
+INSERT citynet INTO entities
+INSERT metropolis INTO entities
+FOR e IN entities FILTER e.embedding == null
+  UPDATE e WITH { embedding: ML_EMBED_TEXT(coalesce(e.summary, e.title, e.name), "sentence-transformers") } IN entities
+LET works_at = FIRST(FOR r IN relations FILTER r.name == "works_at" RETURN r)
+LET located_in = FIRST(FOR r IN relations FILTER r.name == "located_in" RETURN r)
+LET partner_of = FIRST(FOR r IN relations FILTER r.name == "partner_of" RETURN r)
+LET alice_doc = FIRST(FOR e IN entities FILTER e.name == "Alice" RETURN e)
+LET bob_doc = FIRST(FOR e IN entities FILTER e.name == "Bob" RETURN e)
+LET acme_doc = FIRST(FOR e IN entities FILTER e.name == "Acme Corp" RETURN e)
+LET citynet_doc = FIRST(FOR e IN entities FILTER e.name == "CityNet ISP" RETURN e)
+LET metropolis_doc = FIRST(FOR e IN entities FILTER e.name == "Metropolis" RETURN e)
+INSERT { _from: alice_doc._id, _to: acme_doc._id, name: "works_at" } INTO edges
+INSERT { _from: bob_doc._id, _to: citynet_doc._id, name: "works_at" } INTO edges
+INSERT { _from: acme_doc._id, _to: metropolis_doc._id, name: "located_in" } INTO edges
+INSERT { _from: citynet_doc._id, _to: metropolis_doc._id, name: "located_in" } INTO edges
+INSERT { _from: citynet_doc._id, _to: acme_doc._id, name: "partner_of" } INTO edges
+FOR h IN entities FILTER h.name == "Alice"
+  FOR t IN entities FILTER t.type == "Organization"
+    FILTER LENGTH(FOR v,e IN 1..1 OUTBOUND h edges FILTER e.name == "works_at" RETURN v) == 0
+    LET deg_h = LENGTH(FOR v,e IN 1..1 ANY h edges RETURN e)
+    LET deg_t = LENGTH(FOR v,e IN 1..1 ANY t edges RETURN e)
+    LET sim = 1 - (t.embedding <=> ML_EMBED_TEXT(h.name + " works_at", "sentence-transformers"))
+    RETURN { candidate: t.name, link_probability: ML_PREDICT("kg_link_predictor", [sim, deg_h, deg_t]) }
+FOR e IN entities
+  LET prob = ML_PREDICT("kg_node_classifier", [LENGTH(FOR v,e2 IN 1..1 ANY e edges RETURN e2), 1 - (e.embedding <=> ML_EMBED_TEXT("organization", "sentence-transformers"))])
+  RETURN { name: e.name, organization_probability: prob }
+LET ts_now = DATE_NOW()
+LET alice_doc2 = FIRST(FOR e IN entities FILTER e.name == "Alice" RETURN e)
+LET acme_doc2 = FIRST(FOR e IN entities FILTER e.name == "Acme Corp" RETURN e)
+LET citynet_doc2 = FIRST(FOR e IN entities FILTER e.name == "CityNet ISP" RETURN e)
+INSERT { _from: alice_doc2._id, _to: citynet_doc2._id, name: "interacts_with", ts: ts_now - 3600000 } INTO edges
+INSERT { _from: alice_doc2._id, _to: acme_doc2._id, name: "interacts_with", ts: ts_now - 7200000 } INTO edges
+INSERT { _from: bob_doc._id, _to: acme_doc2._id, name: "interacts_with", ts: ts_now - 180000 } INTO edges
+FOR h IN entities FILTER h.name == "Alice"
+  FOR t IN entities FILTER t.type == "Organization"
+    FILTER LENGTH(FOR v,e IN 1..1 OUTBOUND h edges FILTER e.name == "works_at" RETURN v) == 0
+    LET recent_h = LENGTH(FOR v,e IN 1..1 OUTBOUND h edges FILTER e.name == "interacts_with" AND e.ts > DATE_NOW() - 86400000 RETURN e)
+    LET recent_t = LENGTH(FOR v,e IN 1..1 ANY t edges FILTER e.name == "interacts_with" AND e.ts > DATE_NOW() - 86400000 RETURN e)
+    LET sim_ts = 1 - (t.embedding <=> ML_EMBED_TEXT(h.name + " interacts_with", "sentence-transformers"))
+    RETURN { candidate: t.name, link_probability: ML_PREDICT("kg_temporal_link_predictor", [sim_ts, recent_h, recent_t]) }
+FOR h IN entities FILTER h.name == "Alice"
+  FOR t IN entities FILTER t.type == "Organization"
+    LET recent_h = LENGTH(FOR v,e IN 1..1 OUTBOUND h edges FILTER e.name == "interacts_with" AND e.ts > DATE_NOW() - 86400000 RETURN e)
+    LET recent_t = LENGTH(FOR v,e IN 1..1 ANY t edges FILTER e.name == "interacts_with" AND e.ts > DATE_NOW() - 86400000 RETURN e)
+    LET sim_ts = 1 - (t.embedding <=> ML_EMBED_TEXT(h.name + " interacts_with", "sentence-transformers"))
+    LET has_works = LENGTH(FOR v,e IN 1..1 OUTBOUND h edges FILTER e.name == "works_at" AND v._id == t._id RETURN v) > 0
+    LET label = TO_NUMBER(has_works)
+    RETURN ML_TRAIN_MODEL("kg_temporal_link_predictor", "gradient_boosting", [sim_ts, recent_h, recent_t], label)

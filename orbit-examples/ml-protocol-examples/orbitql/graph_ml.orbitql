@@ -1,0 +1,55 @@
+WITH alice AS ({ name: "Alice", type: "Person", title: "Engineer at Acme" })
+WITH bob AS ({ name: "Bob", type: "Person", title: "Specialist at CityNet" })
+WITH acme AS ({ name: "Acme Corp", type: "Organization", summary: "Technology company" })
+WITH citynet AS ({ name: "CityNet ISP", type: "Organization", summary: "Internet service provider" })
+WITH metropolis AS ({ name: "Metropolis", type: "Location", summary: "Urban tech hub" })
+INSERT INTO entities VALUES alice, bob, acme, citynet, metropolis
+UPDATE entities SET embedding = ML_EMBED_TEXT(coalesce(summary, title, name), "sentence-transformers") WHERE embedding IS NULL
+RELATE entities[name="Alice"]->works_at->entities[name="Acme Corp"] SET started_at = time::now()
+RELATE entities[name="Bob"]->works_at->entities[name="CityNet ISP"] SET started_at = time::now()
+RELATE entities[name="Acme Corp"]->located_in->entities[name="Metropolis"]
+RELATE entities[name="CityNet ISP"]->located_in->entities[name="Metropolis"]
+RELATE entities[name="CityNet ISP"]->partner_of->entities[name="Acme Corp"]
+SELECT t.name AS candidate,
+       ML_PREDICT("kg_link_predictor", ARRAY[
+         1 - (t.embedding <=> ML_EMBED_TEXT(h.name || " works_at", "sentence-transformers")),
+         COUNT(h->*),
+         COUNT(t->*)
+       ]) AS link_probability
+FROM entities AS h
+JOIN entities AS t ON t.type = "Organization"
+WHERE h.name = "Alice" AND NOT (h->works_at->t)
+ORDER BY link_probability DESC
+LIMIT 5
+SELECT ML_TRAIN_MODEL("kg_temporal_link_predictor", "gradient_boosting",
+  ARRAY[
+    1 - (t.embedding <=> ML_EMBED_TEXT(h.name || " interacts_with", "sentence-transformers")),
+    COUNT(h->interacts_with WHERE ts > time::now() - duration::days(1)),
+    COUNT(t->interacts_with WHERE ts > time::now() - duration::days(1))
+  ],
+  CASE WHEN (h->works_at->t) THEN 1 ELSE 0 END
+)
+FROM entities AS h
+JOIN entities AS t ON t.type = "Organization"
+WHERE h.name = "Alice"
+SELECT e.name,
+       ML_PREDICT("kg_node_classifier", ARRAY[
+         COUNT(e->*),
+         1 - (e.embedding <=> ML_EMBED_TEXT("organization", "sentence-transformers"))
+       ]) AS organization_probability
+FROM entities AS e
+ORDER BY organization_probability DESC
+RELATE entities[name="Alice"]->interacts_with->entities[name="CityNet ISP"] SET ts = time::now() - duration::hours(1)
+RELATE entities[name="Alice"]->interacts_with->entities[name="Acme Corp"] SET ts = time::now() - duration::hours(2)
+RELATE entities[name="Bob"]->interacts_with->entities[name="Acme Corp"] SET ts = time::now() - duration::minutes(3)
+SELECT t.name AS candidate,
+       ML_PREDICT("kg_temporal_link_predictor", ARRAY[
+         1 - (t.embedding <=> ML_EMBED_TEXT(h.name || " interacts_with", "sentence-transformers")),
+         COUNT(h->interacts_with WHERE ts > time::now() - duration::days(1)),
+         COUNT(t->interacts_with WHERE ts > time::now() - duration::days(1))
+       ]) AS link_probability
+FROM entities AS h
+JOIN entities AS t ON t.type = "Organization"
+WHERE h.name = "Alice" AND NOT (h->works_at->t)
+ORDER BY link_probability DESC
+LIMIT 5

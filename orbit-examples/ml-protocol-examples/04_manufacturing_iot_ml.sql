@@ -170,6 +170,54 @@ FROM equipment
 WHERE status = 'OPERATIONAL'
 ORDER BY failure_probability DESC;
 
+ALTER TABLE equipment ADD COLUMN IF NOT EXISTS failed BOOLEAN;
+UPDATE equipment SET failed = (status = 'FAILED') OR (failure_probability > 0.7);
+SELECT ML_TRAIN_MODEL(
+  'failure_predictor_gbm',
+  'gradient_boosting',
+  ARRAY[
+    COALESCE((
+      SELECT AVG(value) FROM sensor_readings
+      WHERE equipment_id = e.equipment_id AND sensor_type = 'temperature'
+        AND timestamp > extract(epoch from CURRENT_TIMESTAMP - INTERVAL '24 hours')::bigint * 1000
+    ), 70),
+    COALESCE((
+      SELECT AVG(value) FROM sensor_readings
+      WHERE equipment_id = e.equipment_id AND sensor_type = 'vibration'
+        AND timestamp > extract(epoch from CURRENT_TIMESTAMP - INTERVAL '24 hours')::bigint * 1000
+    ), 3.0),
+    COALESCE((
+      SELECT SUM(CASE WHEN is_anomaly THEN 1 ELSE 0 END) FROM sensor_readings
+      WHERE equipment_id = e.equipment_id
+        AND timestamp > extract(epoch from CURRENT_TIMESTAMP - INTERVAL '24 hours')::bigint * 1000
+    ), 0),
+    (CURRENT_DATE - e.last_maintenance_date)
+  ],
+  e.failed
+) FROM equipment e;
+UPDATE equipment e
+SET failure_probability = ML_PREDICT(
+  'failure_predictor_gbm',
+  ARRAY[
+    COALESCE((
+      SELECT AVG(value) FROM sensor_readings
+      WHERE equipment_id = e.equipment_id AND sensor_type = 'temperature'
+        AND timestamp > extract(epoch from CURRENT_TIMESTAMP - INTERVAL '24 hours')::bigint * 1000
+    ), 70),
+    COALESCE((
+      SELECT AVG(value) FROM sensor_readings
+      WHERE equipment_id = e.equipment_id AND sensor_type = 'vibration'
+        AND timestamp > extract(epoch from CURRENT_TIMESTAMP - INTERVAL '24 hours')::bigint * 1000
+    ), 3.0),
+    COALESCE((
+      SELECT SUM(CASE WHEN is_anomaly THEN 1 ELSE 0 END) FROM sensor_readings
+      WHERE equipment_id = e.equipment_id
+        AND timestamp > extract(epoch from CURRENT_TIMESTAMP - INTERVAL '24 hours')::bigint * 1000
+    ), 0),
+    (CURRENT_DATE - e.last_maintenance_date)
+  ]
+);
+
 -- ----------------------------------------------------------------------------
 -- 2. QUALITY CONTROL - DEFECT DETECTION
 -- ----------------------------------------------------------------------------

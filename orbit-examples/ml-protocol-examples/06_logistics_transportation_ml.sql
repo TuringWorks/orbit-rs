@@ -171,6 +171,29 @@ SELECT
 FROM route_optimization
 ORDER BY delivery_sequence;
 
+SELECT ML_TRAIN_MODEL(
+  'delivery_eta_lr',
+  'linear_regression',
+  ARRAY[
+    distance_km,
+    CASE traffic_level WHEN 'LOW' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END,
+    package_weight_kg,
+    EXTRACT(HOUR FROM scheduled_time)::INTEGER
+  ],
+  actual_duration_minutes
+) FROM deliveries
+WHERE actual_duration_minutes IS NOT NULL;
+UPDATE deliveries
+SET estimated_duration_minutes = ML_PREDICT(
+  'delivery_eta_lr',
+  ARRAY[
+    distance_km,
+    CASE traffic_level WHEN 'LOW' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END,
+    package_weight_kg,
+    EXTRACT(HOUR FROM scheduled_time)::INTEGER
+  ]
+);
+
 -- ----------------------------------------------------------------------------
 -- 2. FLEET MANAGEMENT & VEHICLE TRACKING
 -- ----------------------------------------------------------------------------

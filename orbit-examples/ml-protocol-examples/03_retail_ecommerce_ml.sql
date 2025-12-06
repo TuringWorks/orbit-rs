@@ -182,6 +182,33 @@ FROM customer_profiles
 GROUP BY segment
 ORDER BY segment_revenue DESC;
 
+ALTER TABLE customer_profiles ADD COLUMN IF NOT EXISTS is_vip BOOLEAN;
+UPDATE customer_profiles SET is_vip = (segment = 'VIP');
+SELECT ML_TRAIN_MODEL(
+  'vip_classifier_lr',
+  'logistic_regression',
+  ARRAY[
+    total_spent,
+    total_purchases,
+    avg_order_value,
+    days_since_last_purchase
+  ],
+  is_vip
+) FROM customer_profiles;
+UPDATE customer_profiles
+SET segment = CASE
+  WHEN ML_PREDICT(
+    'vip_classifier_lr',
+    ARRAY[
+      total_spent,
+      total_purchases,
+      avg_order_value,
+      days_since_last_purchase
+    ]
+  ) > 0.5 THEN 'VIP'
+  ELSE segment
+END;
+
 -- ----------------------------------------------------------------------------
 -- 3. DEMAND FORECASTING - TIME SERIES
 -- ----------------------------------------------------------------------------
