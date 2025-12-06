@@ -488,6 +488,12 @@ impl AqlTokenizer {
             self.flush_current_token();
             self.position += 1; // consume second .
             self.tokens.push(AqlToken::Range);
+        } else if !self.current_token.is_empty()
+            && self.current_token.chars().all(|c| c.is_ascii_digit())
+            && self.peek_char().map(|c| c.is_ascii_digit()).unwrap_or(false)
+        {
+            // This is a decimal number like 19.99 - keep the dot in the current token
+            self.current_token.push('.');
         } else {
             self.flush_current_token();
             self.tokens.push(AqlToken::Dot);

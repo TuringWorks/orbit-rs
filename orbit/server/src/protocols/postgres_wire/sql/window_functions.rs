@@ -293,9 +293,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(results.len(), 3);
-        assert_eq!(results[0].1, SqlValue::Integer(1));
-        assert_eq!(results[1].1, SqlValue::Integer(2));
-        assert_eq!(results[2].1, SqlValue::Integer(3));
+        assert_eq!(results[0].1, SqlValue::BigInt(1));
+        assert_eq!(results[1].1, SqlValue::BigInt(2));
+        assert_eq!(results[2].1, SqlValue::BigInt(3));
     }
 
     #[test]

@@ -760,11 +760,16 @@ impl AqlQueryEngine {
                 match op.as_str() {
                     "+" => match (&left_val, &right_val) {
                         (AqlValue::Number(l), AqlValue::Number(r)) => {
-                            let result = l.as_f64().unwrap_or(0.0) + r.as_f64().unwrap_or(0.0);
-                            Ok(AqlValue::Number(
-                                serde_json::Number::from_f64(result)
-                                    .unwrap_or(serde_json::Number::from(0)),
-                            ))
+                            // Preserve integer type if both operands are integers
+                            if let (Some(l_i64), Some(r_i64)) = (l.as_i64(), r.as_i64()) {
+                                Ok(AqlValue::Number(serde_json::Number::from(l_i64 + r_i64)))
+                            } else {
+                                let result = l.as_f64().unwrap_or(0.0) + r.as_f64().unwrap_or(0.0);
+                                Ok(AqlValue::Number(
+                                    serde_json::Number::from_f64(result)
+                                        .unwrap_or(serde_json::Number::from(0)),
+                                ))
+                            }
                         }
                         (AqlValue::String(l), AqlValue::String(r)) => {
                             Ok(AqlValue::String(format!("{}{}", l, r)))
@@ -773,21 +778,29 @@ impl AqlQueryEngine {
                     },
                     "-" => match (&left_val, &right_val) {
                         (AqlValue::Number(l), AqlValue::Number(r)) => {
-                            let result = l.as_f64().unwrap_or(0.0) - r.as_f64().unwrap_or(0.0);
-                            Ok(AqlValue::Number(
-                                serde_json::Number::from_f64(result)
-                                    .unwrap_or(serde_json::Number::from(0)),
-                            ))
+                            if let (Some(l_i64), Some(r_i64)) = (l.as_i64(), r.as_i64()) {
+                                Ok(AqlValue::Number(serde_json::Number::from(l_i64 - r_i64)))
+                            } else {
+                                let result = l.as_f64().unwrap_or(0.0) - r.as_f64().unwrap_or(0.0);
+                                Ok(AqlValue::Number(
+                                    serde_json::Number::from_f64(result)
+                                        .unwrap_or(serde_json::Number::from(0)),
+                                ))
+                            }
                         }
                         _ => Ok(AqlValue::Null),
                     },
                     "*" => match (&left_val, &right_val) {
                         (AqlValue::Number(l), AqlValue::Number(r)) => {
-                            let result = l.as_f64().unwrap_or(0.0) * r.as_f64().unwrap_or(0.0);
-                            Ok(AqlValue::Number(
-                                serde_json::Number::from_f64(result)
-                                    .unwrap_or(serde_json::Number::from(0)),
-                            ))
+                            if let (Some(l_i64), Some(r_i64)) = (l.as_i64(), r.as_i64()) {
+                                Ok(AqlValue::Number(serde_json::Number::from(l_i64 * r_i64)))
+                            } else {
+                                let result = l.as_f64().unwrap_or(0.0) * r.as_f64().unwrap_or(0.0);
+                                Ok(AqlValue::Number(
+                                    serde_json::Number::from_f64(result)
+                                        .unwrap_or(serde_json::Number::from(0)),
+                                ))
+                            }
                         }
                         _ => Ok(AqlValue::Null),
                     },
@@ -988,7 +1001,12 @@ impl AqlQueryEngine {
 
     /// Convert AQL document to AQL value
     fn document_to_value(&self, doc: &AqlDocument) -> AqlValue {
-        AqlValue::Object(doc.data.clone())
+        let mut obj = doc.data.clone();
+        // Include system fields
+        obj.insert("_key".to_string(), AqlValue::String(doc.key.clone()));
+        obj.insert("_id".to_string(), AqlValue::String(doc.id.clone()));
+        obj.insert("_rev".to_string(), AqlValue::String(doc.revision.clone()));
+        AqlValue::Object(obj)
     }
 
     /// Apply SORT and LIMIT clauses

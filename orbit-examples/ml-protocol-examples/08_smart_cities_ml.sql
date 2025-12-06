@@ -77,6 +77,80 @@ WHERE tf.sensor_id = 1
 ORDER BY tf.ts DESC
 LIMIT 60;
 
+WITH tf_fe AS (
+    SELECT ts,
+           vehicles_per_minute,
+           speed_avg,
+           LAG(speed_avg,1) OVER (ORDER BY ts) AS speed_lag1,
+           AVG(speed_avg) OVER (ORDER BY ts ROWS BETWEEN 5 PRECEDING AND CURRENT ROW) AS speed_ma6
+    FROM traffic_flow
+    WHERE sensor_id = 1
+), tf_train AS (
+    SELECT speed_lag1, speed_ma6, vehicles_per_minute, speed_avg AS target
+    FROM tf_fe
+    WHERE speed_lag1 IS NOT NULL
+)
+SELECT ML_TRAIN_MODEL('smart_city_speed_forecast_gb','gradient_boosting', ARRAY[speed_lag1, speed_ma6, vehicles_per_minute], target)
+FROM tf_train;
+
+WITH tf_eval AS (
+    SELECT speed_lag1, speed_ma6, vehicles_per_minute, speed_avg AS target
+    FROM tf_fe
+    WHERE speed_lag1 IS NOT NULL
+)
+SELECT ML_EVALUATE_MODEL('smart_city_speed_forecast_gb', ARRAY[speed_lag1, speed_ma6, vehicles_per_minute], target)
+FROM tf_eval;
+
+WITH tf_recent AS (
+    SELECT ts,
+           vehicles_per_minute,
+           speed_avg,
+           LAG(speed_avg,1) OVER (ORDER BY ts) AS speed_lag1,
+           AVG(speed_avg) OVER (ORDER BY ts ROWS BETWEEN 5 PRECEDING AND CURRENT ROW) AS speed_ma6
+    FROM traffic_flow
+    WHERE sensor_id = 1
+)
+SELECT ts,
+       speed_avg AS actual,
+       ML_PREDICT('smart_city_speed_forecast_gb', ARRAY[speed_lag1, speed_ma6, vehicles_per_minute]) AS predicted,
+       speed_avg - ML_PREDICT('smart_city_speed_forecast_gb', ARRAY[speed_lag1, speed_ma6, vehicles_per_minute]) AS residual,
+       CASE WHEN vehicles_per_minute > 50 AND predicted < 15 THEN 'FORECAST_CONGESTION' ELSE 'NORMAL' END AS forecast_state
+FROM tf_recent
+ORDER BY ts DESC
+LIMIT 60;
+
+WITH aq_fe AS (
+    SELECT ts,
+           pm25,
+           LAG(pm25,1) OVER (ORDER BY ts) AS pm25_lag1,
+           AVG(pm25) OVER (ORDER BY ts ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS pm25_ma30
+    FROM air_quality_readings
+    WHERE station_id = 1
+), aq_train AS (
+    SELECT pm25_lag1, pm25_ma30, pm25 AS target
+    FROM aq_fe
+    WHERE pm25_lag1 IS NOT NULL
+)
+SELECT ML_TRAIN_MODEL('smart_city_pm25_forecast_rf','random_forest', ARRAY[pm25_lag1, pm25_ma30], target)
+FROM aq_train;
+
+WITH aq_recent AS (
+    SELECT ts,
+           pm25,
+           LAG(pm25,1) OVER (ORDER BY ts) AS pm25_lag1,
+           AVG(pm25) OVER (ORDER BY ts ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS pm25_ma30
+    FROM air_quality_readings
+    WHERE station_id = 1
+)
+SELECT ts,
+       pm25 AS actual,
+       ML_PREDICT('smart_city_pm25_forecast_rf', ARRAY[pm25_lag1, pm25_ma30]) AS predicted,
+       pm25 - ML_PREDICT('smart_city_pm25_forecast_rf', ARRAY[pm25_lag1, pm25_ma30]) AS residual,
+       CASE WHEN predicted > 35 THEN 'FORECAST_AQI_POOR' ELSE 'FORECAST_AQI_OK' END AS forecast_air_quality
+FROM aq_recent
+ORDER BY ts DESC
+LIMIT 60;
+
 SELECT aq.ts,
        aq.pm25,
        aq.no2,

@@ -78,7 +78,7 @@ mod aql_data_modification_tests {
         let query = r#"INSERT { name: "Widget", price: 19.99 } INTO products"#;
         let result = engine.execute_query(query).await;
 
-        assert!(result.is_ok(), "INSERT with auto-key should succeed");
+        assert!(result.is_ok(), "INSERT with auto-key should succeed: {:?}", result.err());
         let result = result.unwrap();
         assert_eq!(result.data.len(), 1);
 

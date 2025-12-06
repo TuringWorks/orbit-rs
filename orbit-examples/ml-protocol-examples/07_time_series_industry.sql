@@ -37,6 +37,50 @@ WHERE entity_id = 1 AND tag = 'vibration'
 ORDER BY ts DESC
 LIMIT 60;
 
+WITH feats AS (
+    SELECT ts,
+           metric,
+           LAG(metric, 1) OVER (ORDER BY ts) AS lag1,
+           LAG(metric, 2) OVER (ORDER BY ts) AS lag2,
+           AVG(metric) OVER (ORDER BY ts ROWS BETWEEN 5 PRECEDING AND CURRENT ROW) AS ma6,
+           STDDEV(metric) OVER (ORDER BY ts ROWS BETWEEN 5 PRECEDING AND CURRENT ROW) AS std6
+    FROM ts_metrics
+    WHERE entity_id = 1 AND tag = 'vibration'
+), train AS (
+    SELECT lag1, lag2, ma6, std6, metric AS target
+    FROM feats
+    WHERE lag2 IS NOT NULL
+)
+SELECT ML_TRAIN_MODEL('ts_vibration_forecast_gb','gradient_boosting', ARRAY[lag1, lag2, ma6, std6], target)
+FROM train;
+
+WITH eval AS (
+    SELECT lag1, lag2, ma6, std6, metric AS target
+    FROM feats
+    WHERE lag2 IS NOT NULL
+)
+SELECT ML_EVALUATE_MODEL('ts_vibration_forecast_gb', ARRAY[lag1, lag2, ma6, std6], target)
+FROM eval;
+
+WITH recent AS (
+    SELECT ts,
+           metric,
+           LAG(metric, 1) OVER (ORDER BY ts) AS lag1,
+           LAG(metric, 2) OVER (ORDER BY ts) AS lag2,
+           AVG(metric) OVER (ORDER BY ts ROWS BETWEEN 5 PRECEDING AND CURRENT ROW) AS ma6,
+           STDDEV(metric) OVER (ORDER BY ts ROWS BETWEEN 5 PRECEDING AND CURRENT ROW) AS std6
+    FROM ts_metrics
+    WHERE entity_id = 1 AND tag = 'vibration'
+)
+SELECT ts,
+       metric AS actual,
+       ML_PREDICT('ts_vibration_forecast_gb', ARRAY[lag1, lag2, ma6, std6]) AS predicted,
+       metric - ML_PREDICT('ts_vibration_forecast_gb', ARRAY[lag1, lag2, ma6, std6]) AS residual,
+       CASE WHEN ABS(metric - ML_PREDICT('ts_vibration_forecast_gb', ARRAY[lag1, lag2, ma6, std6])) > 3 * std6 THEN 'FAULT' ELSE 'NORMAL' END AS state
+FROM recent
+ORDER BY ts DESC
+LIMIT 60;
+
 WITH deltas AS (
     SELECT ts,
            metric,
