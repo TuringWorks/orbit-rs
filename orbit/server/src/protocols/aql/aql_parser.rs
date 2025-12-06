@@ -311,6 +311,11 @@ enum AqlToken {
     Greater,
     GreaterOrEqual,
     Range,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Percent,
 
     // Symbols
     LeftParen,
@@ -393,7 +398,9 @@ impl AqlTokenizer {
         match ch {
             '"' | '\'' => self.start_string_literal(ch),
             ' ' | '\t' | '\n' | '\r' => self.handle_whitespace(),
-            '(' | ')' | '{' | '}' | '[' | ']' | ',' | ':' => self.handle_single_char_token(ch),
+            '(' | ')' | '{' | '}' | '[' | ']' | ',' | ':' | '+' | '-' | '*' | '/' | '%' => {
+                self.handle_single_char_token(ch)
+            }
             '=' => self.handle_equals_operator(),
             '!' => self.handle_exclamation_operator()?,
             '<' => self.handle_less_operator(),
@@ -425,6 +432,11 @@ impl AqlTokenizer {
             ']' => AqlToken::RightBracket,
             ',' => AqlToken::Comma,
             ':' => AqlToken::Colon,
+            '+' => AqlToken::Plus,
+            '-' => AqlToken::Minus,
+            '*' => AqlToken::Star,
+            '/' => AqlToken::Slash,
+            '%' => AqlToken::Percent,
             _ => unreachable!("Invalid single char token: {}", ch),
         };
         self.tokens.push(token);
@@ -754,9 +766,10 @@ impl AqlTokenParser {
             } else {
                 None
             };
-            let condition = self.parse_condition()?;
+            // Parse expression which can contain comparisons, AND, OR, NOT
+            let expression = self.parse_expression()?;
             Some(PruneClause {
-                condition,
+                condition: AqlCondition::Expression(expression),
                 prune_var,
             })
         } else {
@@ -947,8 +960,11 @@ impl AqlTokenParser {
 
     fn parse_filter_clause(&mut self) -> ProtocolResult<AqlClause> {
         self.advance(); // consume FILTER
-        let condition = self.parse_condition()?;
-        Ok(AqlClause::Filter { condition })
+        // Parse expression which can contain comparisons, AND, OR, NOT
+        let expression = self.parse_expression()?;
+        Ok(AqlClause::Filter {
+            condition: AqlCondition::Expression(expression),
+        })
     }
 
     fn parse_collect_clause(&mut self) -> ProtocolResult<AqlClause> {
@@ -962,11 +978,18 @@ impl AqlTokenParser {
 
         // Parse grouping variables
         while let Some(AqlToken::Identifier(name)) = self.current_token() {
-            // Check for special keywords
-            if name.to_uppercase() == "INTO"
-                || name.to_uppercase() == "KEEP"
-                || name.to_uppercase() == "AGGREGATE"
-                || name.to_uppercase() == "WITH"
+            // Check for special keywords and clause boundaries
+            let upper_name = name.to_uppercase();
+            if upper_name == "INTO"
+                || upper_name == "KEEP"
+                || upper_name == "AGGREGATE"
+                || upper_name == "WITH"
+                || upper_name == "RETURN"
+                || upper_name == "FOR"
+                || upper_name == "FILTER"
+                || upper_name == "SORT"
+                || upper_name == "LIMIT"
+                || upper_name == "LET"
             {
                 break;
             }
@@ -2065,8 +2088,94 @@ impl AqlTokenParser {
                 expr: Box::new(expr),
             })
         } else {
-            self.parse_primary_expression()
+            self.parse_comparison_expression()
         }
+    }
+
+    /// Parse comparison expression (==, !=, <, <=, >, >=)
+    fn parse_comparison_expression(&mut self) -> ProtocolResult<AqlExpression> {
+        let mut left = self.parse_additive_expression()?;
+
+        // Check for comparison operators
+        while matches!(
+            self.current_token(),
+            Some(AqlToken::Equals)
+                | Some(AqlToken::NotEquals)
+                | Some(AqlToken::Less)
+                | Some(AqlToken::LessOrEqual)
+                | Some(AqlToken::Greater)
+                | Some(AqlToken::GreaterOrEqual)
+        ) {
+            let op = match self.current_token() {
+                Some(AqlToken::Equals) => "==",
+                Some(AqlToken::NotEquals) => "!=",
+                Some(AqlToken::Less) => "<",
+                Some(AqlToken::LessOrEqual) => "<=",
+                Some(AqlToken::Greater) => ">",
+                Some(AqlToken::GreaterOrEqual) => ">=",
+                _ => unreachable!(),
+            };
+            self.advance(); // consume operator
+            let right = self.parse_additive_expression()?;
+            left = AqlExpression::BinaryOp {
+                op: op.to_string(),
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+
+        Ok(left)
+    }
+
+    /// Parse additive expression (+, -)
+    fn parse_additive_expression(&mut self) -> ProtocolResult<AqlExpression> {
+        let mut left = self.parse_multiplicative_expression()?;
+
+        while matches!(
+            self.current_token(),
+            Some(AqlToken::Plus) | Some(AqlToken::Minus)
+        ) {
+            let op = match self.current_token() {
+                Some(AqlToken::Plus) => "+",
+                Some(AqlToken::Minus) => "-",
+                _ => unreachable!(),
+            };
+            self.advance(); // consume operator
+            let right = self.parse_multiplicative_expression()?;
+            left = AqlExpression::BinaryOp {
+                op: op.to_string(),
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+
+        Ok(left)
+    }
+
+    /// Parse multiplicative expression (*, /, %)
+    fn parse_multiplicative_expression(&mut self) -> ProtocolResult<AqlExpression> {
+        let mut left = self.parse_primary_expression()?;
+
+        while matches!(
+            self.current_token(),
+            Some(AqlToken::Star) | Some(AqlToken::Slash) | Some(AqlToken::Percent)
+        ) {
+            let op = match self.current_token() {
+                Some(AqlToken::Star) => "*",
+                Some(AqlToken::Slash) => "/",
+                Some(AqlToken::Percent) => "%",
+                _ => unreachable!(),
+            };
+            self.advance(); // consume operator
+            let right = self.parse_primary_expression()?;
+            left = AqlExpression::BinaryOp {
+                op: op.to_string(),
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+
+        Ok(left)
     }
 
     /// Parse primary expression (literals, identifiers, function calls)
@@ -2183,17 +2292,14 @@ impl AqlTokenParser {
                 }
             };
 
-            // Expect colon
-            match self.current_token() {
-                Some(AqlToken::Colon) => self.advance(),
-                _ => {
-                    return Err(ProtocolError::ParseError(
-                        "Expected : in object literal".to_string(),
-                    ))
-                }
+            // Check for colon (explicit key: value) or shorthand ({key} = {key: key})
+            let value = if matches!(self.current_token(), Some(AqlToken::Colon)) {
+                self.advance(); // consume :
+                self.parse_expression()?
+            } else {
+                // Shorthand syntax: {vertex, edge} => {vertex: vertex, edge: edge}
+                AqlExpression::Variable(key.clone())
             };
-
-            let value = self.parse_expression()?;
             properties.insert(key, value);
 
             if matches!(self.current_token(), Some(AqlToken::Comma)) {
@@ -2482,7 +2588,8 @@ pub enum AqlCondition {
         operator: ComparisonOperator,
         right: AqlExpression,
     },
-    // TODO: Add logical conditions (AND, OR, NOT)
+    /// Expression-based condition (supports AND, OR, NOT)
+    Expression(AqlExpression),
 }
 
 /// Comparison operators

@@ -490,8 +490,80 @@ impl AqlQueryEngine {
                 let left_val = self.evaluate_expression(left, context)?;
                 let right_val = self.evaluate_expression(right, context)?;
                 self.compare_values(&left_val, operator, &right_val)
-            } // Note: AqlCondition currently only supports Comparison
-              // AND, OR, NOT would need to be added to the enum
+            }
+            AqlCondition::Expression(expr) => self.evaluate_expression_as_bool(expr, context),
+        }
+    }
+
+    /// Evaluate an expression and convert the result to a boolean
+    fn evaluate_expression_as_bool(
+        &self,
+        expr: &AqlExpression,
+        context: &HashMap<String, AqlValue>,
+    ) -> ProtocolResult<bool> {
+        use crate::protocols::aql::aql_parser::AqlExpression;
+
+        match expr {
+            AqlExpression::BinaryOp { op, left, right } => {
+                match op.as_str() {
+                    "AND" => {
+                        let left_bool = self.evaluate_expression_as_bool(left, context)?;
+                        if !left_bool {
+                            return Ok(false); // Short-circuit
+                        }
+                        self.evaluate_expression_as_bool(right, context)
+                    }
+                    "OR" => {
+                        let left_bool = self.evaluate_expression_as_bool(left, context)?;
+                        if left_bool {
+                            return Ok(true); // Short-circuit
+                        }
+                        self.evaluate_expression_as_bool(right, context)
+                    }
+                    "==" | "!=" | "<" | "<=" | ">" | ">=" => {
+                        // Comparison operators
+                        let left_val = self.evaluate_expression(left, context)?;
+                        let right_val = self.evaluate_expression(right, context)?;
+                        let cmp_op = match op.as_str() {
+                            "==" => ComparisonOperator::Equals,
+                            "!=" => ComparisonOperator::NotEquals,
+                            "<" => ComparisonOperator::Less,
+                            "<=" => ComparisonOperator::LessOrEqual,
+                            ">" => ComparisonOperator::Greater,
+                            ">=" => ComparisonOperator::GreaterOrEqual,
+                            _ => unreachable!(),
+                        };
+                        self.compare_values(&left_val, &cmp_op, &right_val)
+                    }
+                    _ => {
+                        // Other binary ops - evaluate and check if truthy
+                        let val = self.evaluate_expression(expr, context)?;
+                        Ok(self.is_truthy(&val))
+                    }
+                }
+            }
+            AqlExpression::UnaryOp { op, expr: inner } if op == "NOT" => {
+                let inner_bool = self.evaluate_expression_as_bool(inner, context)?;
+                Ok(!inner_bool)
+            }
+            _ => {
+                // For other expressions, evaluate and check truthiness
+                let val = self.evaluate_expression(expr, context)?;
+                Ok(self.is_truthy(&val))
+            }
+        }
+    }
+
+    /// Check if an AqlValue is truthy
+    fn is_truthy(&self, val: &AqlValue) -> bool {
+        match val {
+            AqlValue::Bool(b) => *b,
+            AqlValue::Null => false,
+            AqlValue::Number(n) => n.as_f64().map_or(false, |f| f != 0.0),
+            AqlValue::String(s) => !s.is_empty(),
+            AqlValue::Array(arr) => !arr.is_empty(),
+            AqlValue::Object(obj) => !obj.is_empty(),
+            AqlValue::DateTime(_) => true, // DateTime is always truthy if present
         }
     }
 
