@@ -36,11 +36,15 @@
 
 pub mod adapter;
 pub mod auth;
+pub mod batch_insert;
 pub mod packet;
+pub mod prepared_cache;
 pub mod protocol;
 pub mod types;
 
 pub use adapter::MySqlAdapter;
+pub use batch_insert::{BatchInsertConfig, BatchInsertOptimizer};
+pub use prepared_cache::{PreparedStatementCache, PreparedStatementCacheConfig};
 pub use protocol::{MySqlCommand, MySqlPacket};
 pub use types::{MySqlType, MySqlValue};
 
