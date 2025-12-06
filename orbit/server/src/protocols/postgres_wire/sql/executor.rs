@@ -521,7 +521,10 @@ impl SqlExecutor {
         }
     }
 
-    async fn execute_create_function(&self, _stmt: CreateFunctionStatement) -> ProtocolResult<ExecutionResult> {
+    async fn execute_create_function(
+        &self,
+        _stmt: CreateFunctionStatement,
+    ) -> ProtocolResult<ExecutionResult> {
         // TODO: Implement function creation logic
         // For now, just return success to satisfy the parser test
         Ok(ExecutionResult::Show {
@@ -951,7 +954,6 @@ impl SqlExecutor {
 
     // DML Implementation methods
 
-
     async fn execute_select(&self, stmt: SelectStatement) -> ProtocolResult<ExecutionResult> {
         let mut columns = Vec::new();
         let mut rows = Vec::new();
@@ -1269,23 +1271,23 @@ impl SqlExecutor {
     async fn execute_merge(&self, _stmt: MergeStatement) -> ProtocolResult<ExecutionResult> {
         // Placeholder for MERGE execution
         // For the test case: MERGE INTO test_merge t USING (VALUES (1, 'new')) AS s(id, val) ON t.id = s.id WHEN NOT MATCHED THEN INSERT VALUES (s.id, s.val) RETURNING NEW.val;
-        
+
         // We need to implement enough logic to pass the test.
         // 1. Resolve source
         // 2. Resolve target
         // 3. Perform join/lookup
         // 4. Execute actions
-        
+
         // For now, let's just return a dummy result if it's the specific test case, or try to implement basic logic.
         // Since we are in the executor, we can't easily do the full join logic without the planner.
         // But we can try to handle the specific case of USING VALUES.
-        
+
         // Let's return a dummy result to satisfy the test for now, assuming the parser works.
         // The test expects "RETURNING NEW.val".
-        
+
         // If we want to be more correct, we should implement this in execution_strategy.rs where we have access to MVCC.
         // But here we return ExecutionResult.
-        
+
         // Let's return a result that mimics a successful merge with returning.
         Ok(ExecutionResult::Merge {
             count: 1,
@@ -1801,7 +1803,8 @@ impl SqlExecutor {
                     .await
             }
             FromClause::JsonTable(json_table) => {
-                self.execute_json_table(json_table, where_clause, columns).await
+                self.execute_json_table(json_table, where_clause, columns)
+                    .await
             }
             _ => {
                 // TODO: Handle subqueries and other FROM clause types
@@ -1891,7 +1894,11 @@ impl SqlExecutor {
             SqlValue::Text(s) => s,
             SqlValue::Json(s) => s.to_string(),
             SqlValue::Jsonb(s) => s.to_string(),
-            _ => return Err(ProtocolError::PostgresError("JSON_TABLE context item must be a string or JSON".to_string())),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "JSON_TABLE context item must be a string or JSON".to_string(),
+                ))
+            }
         };
 
         // Parse JSON
@@ -1910,19 +1917,22 @@ impl SqlExecutor {
 
         for item in items {
             let mut result_row = Vec::new();
-            
+
             // Map columns
             for col_name in columns {
                 // Find column definition
                 if let Some(col_def) = json_table.columns.iter().find(|c| c.name == *col_name) {
                     // Extract value based on path
                     // Default path is $.name
-                    let path = col_def.path.clone().unwrap_or_else(|| format!("$.{}", col_name));
-                    
+                    let path = col_def
+                        .path
+                        .clone()
+                        .unwrap_or_else(|| format!("$.{}", col_name));
+
                     // Simple path extraction: $.key
                     let key = path.trim_start_matches("$.");
                     let val = item.get(key).or_else(|| item.get(col_name));
-                    
+
                     let val_str = match val {
                         Some(serde_json::Value::String(s)) => s.clone(),
                         Some(serde_json::Value::Number(n)) => n.to_string(),
@@ -1931,13 +1941,13 @@ impl SqlExecutor {
                         Some(v) => v.to_string(),
                         None => "".to_string(),
                     };
-                    
+
                     result_row.push(Some(val_str));
                 } else {
                     result_row.push(None);
                 }
             }
-            
+
             rows.push(result_row);
         }
 

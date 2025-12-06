@@ -529,7 +529,11 @@ impl PostgresWireProtocol {
                 }
                 .encode(buf);
             }
-            QueryResult::Merge { count, rows, columns } => {
+            QueryResult::Merge {
+                count,
+                rows,
+                columns,
+            } => {
                 // If rows are present (RETURNING clause), we need to send RowDescription and DataRow
                 if !rows.is_empty() {
                     let fields: Vec<FieldDescription> = columns

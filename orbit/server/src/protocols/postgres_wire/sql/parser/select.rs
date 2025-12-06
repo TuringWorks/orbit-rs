@@ -482,7 +482,7 @@ impl SelectParser {
         // Expected syntax: COLUMNS ( name type [PATH path] ... )
         // Note: The test query has 'COLUMNS' directly after path expression without comma
         // SELECT ... json_table(..., '$[*]' COLUMNS ...)
-        
+
         // Check for optional comma before COLUMNS (standard SQL might require it, but test query doesn't seem to use it?)
         // Actually standard SQL is: JSON_TABLE(context, path COLUMNS ...)
         // But let's handle optional comma just in case
@@ -492,7 +492,9 @@ impl SelectParser {
 
         let mut columns = Vec::new();
         if let Token::Identifier(s) = tokens.get(*pos).ok_or_else(|| {
-            crate::protocols::error::ProtocolError::ParseError("Expected COLUMNS keyword".to_string())
+            crate::protocols::error::ProtocolError::ParseError(
+                "Expected COLUMNS keyword".to_string(),
+            )
         })? {
             if s.to_uppercase() == "COLUMNS" {
                 *pos += 1;
@@ -517,11 +519,13 @@ impl SelectParser {
                     if let Token::Identifier(p) = tokens.get(*pos).unwrap_or(&Token::Eof) {
                         if p.to_uppercase() == "PATH" {
                             *pos += 1;
-                            if let Token::StringLiteral(path_str) = tokens.get(*pos).ok_or_else(|| {
-                                crate::protocols::error::ProtocolError::ParseError(
-                                    "Expected path string literal".to_string(),
-                                )
-                            })? {
+                            if let Token::StringLiteral(path_str) =
+                                tokens.get(*pos).ok_or_else(|| {
+                                    crate::protocols::error::ProtocolError::ParseError(
+                                        "Expected path string literal".to_string(),
+                                    )
+                                })?
+                            {
                                 path = Some(path_str.clone());
                                 *pos += 1;
                             }
@@ -549,12 +553,14 @@ impl SelectParser {
 
         let alias = self.parse_table_alias(tokens, pos)?;
 
-        Ok(FromClause::JsonTable(crate::protocols::postgres_wire::sql::ast::JsonTable {
-            context_item,
-            path_expression,
-            columns,
-            alias,
-        }))
+        Ok(FromClause::JsonTable(
+            crate::protocols::postgres_wire::sql::ast::JsonTable {
+                context_item,
+                path_expression,
+                columns,
+                alias,
+            },
+        ))
     }
 
     fn parse_table_alias(

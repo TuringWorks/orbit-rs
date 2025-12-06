@@ -133,7 +133,11 @@ impl OrbitMcpIntegration {
                 }],
                 row_count: 1,
             }),
-            PgQueryResult::Merge { count, rows, columns } => {
+            PgQueryResult::Merge {
+                count,
+                rows,
+                columns,
+            } => {
                 // If rows are present, treat as select-like result
                 if !rows.is_empty() {
                     let mcp_rows: Vec<Row> = rows
@@ -151,7 +155,7 @@ impl OrbitMcpIntegration {
                             mcp_row
                         })
                         .collect();
-                    
+
                     Ok(McpQueryResult {
                         columns: columns.clone(),
                         rows: mcp_rows,

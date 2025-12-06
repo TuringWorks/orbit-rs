@@ -710,10 +710,10 @@ impl MvccSqlExecutor {
     pub async fn execute_merge(&self, _stmt: MergeStatement) -> ProtocolResult<ExecutionResult> {
         // Placeholder for MERGE execution in MVCC executor
         // For the test case: MERGE INTO test_merge t USING (VALUES (1, 'new')) AS s(id, val) ON t.id = s.id WHEN NOT MATCHED THEN INSERT VALUES (s.id, s.val) RETURNING NEW.val;
-        
+
         // Return a dummy result to satisfy the test
-        Ok(ExecutionResult::Merge { 
-            count: 1, 
+        Ok(ExecutionResult::Merge {
+            count: 1,
             rows: vec![vec![Some("new".to_string())]],
             columns: vec!["val".to_string()],
         })

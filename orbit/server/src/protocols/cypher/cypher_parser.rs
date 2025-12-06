@@ -639,9 +639,9 @@ impl TokenParser {
             if let Some(op) = op_str {
                 self.advance();
                 let (right_expr, right_str) = self.parse_return_expression()?;
-                
+
                 let expr_str = format!("{} {} {}", left_str, op, right_str);
-                
+
                 let binary_op = match op {
                     "+" => BinaryOperator::Add,
                     "-" => BinaryOperator::Subtract,

@@ -444,7 +444,10 @@ pub enum Resource {
     /// Specific keyspace
     Keyspace(String),
     /// Specific table (keyspace.table)
-    Table { keyspace: Option<String>, table: String },
+    Table {
+        keyspace: Option<String>,
+        table: String,
+    },
     /// All roles
     AllRoles,
     /// Specific role
@@ -452,7 +455,10 @@ pub enum Resource {
     /// All functions in keyspace
     AllFunctions(Option<String>),
     /// Specific function
-    Function { keyspace: Option<String>, name: String },
+    Function {
+        keyspace: Option<String>,
+        name: String,
+    },
     /// All MBeans (JMX, optional support)
     AllMBeans,
     /// Specific MBean
@@ -1217,8 +1223,14 @@ impl CqlParser {
         let mut i = 0;
 
         while i < parts.len() {
+            // Stop at IF/USING keywords (they mark end of WHERE clause)
+            let upper = parts[i].to_uppercase();
+            if upper == "IF" || upper == "USING" {
+                break;
+            }
+
             // Skip AND/OR keywords for now (we'll support them later)
-            if parts[i].to_uppercase() == "AND" || parts[i].to_uppercase() == "OR" {
+            if upper == "AND" || upper == "OR" {
                 i += 1;
                 continue;
             }
@@ -1763,13 +1775,7 @@ impl CqlParser {
         // Extract FINALFUNC if present
         let finalfunc = if let Some(ff_pos) = query_upper.find("FINALFUNC") {
             let after_ff = &query[ff_pos + 9..].trim_start();
-            Some(
-                after_ff
-                    .split_whitespace()
-                    .next()
-                    .unwrap_or("")
-                    .to_string(),
-            )
+            Some(after_ff.split_whitespace().next().unwrap_or("").to_string())
         } else {
             None
         };
@@ -1821,10 +1827,9 @@ impl CqlParser {
             .to_string();
 
         // Parse options
-        let superuser = query_upper.contains("SUPERUSER = TRUE")
-            || query_upper.contains("SUPERUSER=TRUE");
-        let login =
-            query_upper.contains("LOGIN = TRUE") || query_upper.contains("LOGIN=TRUE");
+        let superuser =
+            query_upper.contains("SUPERUSER = TRUE") || query_upper.contains("SUPERUSER=TRUE");
+        let login = query_upper.contains("LOGIN = TRUE") || query_upper.contains("LOGIN=TRUE");
 
         // Extract password if present
         let password = if let Some(pwd_pos) = query_upper.find("PASSWORD") {
@@ -1843,10 +1848,7 @@ impl CqlParser {
                     None
                 }
             } else {
-                pwd_start
-                    .split_whitespace()
-                    .next()
-                    .map(|s| s.to_string())
+                pwd_start.split_whitespace().next().map(|s| s.to_string())
             }
         } else {
             None
@@ -1872,17 +1874,16 @@ impl CqlParser {
             .ok_or_else(|| ProtocolError::ParseError("Missing role name".to_string()))?
             .to_string();
 
-        let superuser = if query_upper.contains("SUPERUSER = TRUE")
-            || query_upper.contains("SUPERUSER=TRUE")
-        {
-            Some(true)
-        } else if query_upper.contains("SUPERUSER = FALSE")
-            || query_upper.contains("SUPERUSER=FALSE")
-        {
-            Some(false)
-        } else {
-            None
-        };
+        let superuser =
+            if query_upper.contains("SUPERUSER = TRUE") || query_upper.contains("SUPERUSER=TRUE") {
+                Some(true)
+            } else if query_upper.contains("SUPERUSER = FALSE")
+                || query_upper.contains("SUPERUSER=FALSE")
+            {
+                Some(false)
+            } else {
+                None
+            };
 
         let login = if query_upper.contains("LOGIN = TRUE") || query_upper.contains("LOGIN=TRUE") {
             Some(true)
@@ -1906,10 +1907,7 @@ impl CqlParser {
                     None
                 }
             } else {
-                pwd_start
-                    .split_whitespace()
-                    .next()
-                    .map(|s| s.to_string())
+                pwd_start.split_whitespace().next().map(|s| s.to_string())
             }
         } else {
             None
@@ -2015,7 +2013,10 @@ impl CqlParser {
 
         let of_role = if query_upper.contains(" OF ") {
             let parts: Vec<&str> = query.split_whitespace().collect();
-            let of_index = parts.iter().position(|&p| p.to_uppercase() == "OF").unwrap();
+            let of_index = parts
+                .iter()
+                .position(|&p| p.to_uppercase() == "OF")
+                .unwrap();
             parts.get(of_index + 1).map(|s| s.to_string())
         } else {
             None
@@ -2044,7 +2045,10 @@ impl CqlParser {
         // Check for ON resource
         let resource = if query_upper.contains(" ON ") {
             let parts: Vec<&str> = query.split_whitespace().collect();
-            let on_index = parts.iter().position(|&p| p.to_uppercase() == "ON").unwrap();
+            let on_index = parts
+                .iter()
+                .position(|&p| p.to_uppercase() == "ON")
+                .unwrap();
             let of_index = parts
                 .iter()
                 .position(|&p| p.to_uppercase() == "OF")
@@ -2058,7 +2062,10 @@ impl CqlParser {
         // Check for OF role
         let of_role = if query_upper.contains(" OF ") {
             let parts: Vec<&str> = query.split_whitespace().collect();
-            let of_index = parts.iter().position(|&p| p.to_uppercase() == "OF").unwrap();
+            let of_index = parts
+                .iter()
+                .position(|&p| p.to_uppercase() == "OF")
+                .unwrap();
             parts.get(of_index + 1).map(|s| s.to_string())
         } else {
             None
@@ -2265,9 +2272,7 @@ mod tests {
     #[test]
     fn test_parse_alter_table_add() {
         let parser = CqlParser::new();
-        let stmt = parser
-            .parse("ALTER TABLE users ADD email text")
-            .unwrap();
+        let stmt = parser.parse("ALTER TABLE users ADD email text").unwrap();
 
         match stmt {
             CqlStatement::AlterTable { name, alteration } => {
@@ -2287,9 +2292,7 @@ mod tests {
     #[test]
     fn test_parse_alter_table_drop() {
         let parser = CqlParser::new();
-        let stmt = parser
-            .parse("ALTER TABLE users DROP email")
-            .unwrap();
+        let stmt = parser.parse("ALTER TABLE users DROP email").unwrap();
 
         match stmt {
             CqlStatement::AlterTable { name, alteration } => {
@@ -2330,9 +2333,7 @@ mod tests {
     #[test]
     fn test_parse_drop_index() {
         let parser = CqlParser::new();
-        let stmt = parser
-            .parse("DROP INDEX IF EXISTS user_email_idx")
-            .unwrap();
+        let stmt = parser.parse("DROP INDEX IF EXISTS user_email_idx").unwrap();
 
         match stmt {
             CqlStatement::DropIndex { name, if_exists } => {

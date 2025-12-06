@@ -5,15 +5,15 @@
 
 use super::parser::{ComparisonOperator, CqlParser, CqlStatement};
 use super::protocol::{
-    build_error_from_protocol_error, build_error_response, build_ready_response,
-    build_supported_response, build_void_result, build_empty_rows_result, build_system_local_response, build_system_peers_v2_response,
-    build_system_schema_keyspaces_response, build_system_schema_tables_response,
-    build_system_schema_columns_response, build_system_schema_types_response,
-    build_system_schema_functions_response, build_system_schema_aggregates_response,
-    build_system_schema_views_response, build_system_schema_indexes_response,
-    build_system_schema_triggers_response, build_system_virtual_schema_response,
-    read_string, read_string_map, CqlFrame, CqlOpcode,
-    QueryParameters,
+    build_empty_rows_result, build_error_from_protocol_error, build_error_response,
+    build_ready_response, build_supported_response, build_system_local_response,
+    build_system_peers_v2_response, build_system_schema_aggregates_response,
+    build_system_schema_columns_response, build_system_schema_functions_response,
+    build_system_schema_indexes_response, build_system_schema_keyspaces_response,
+    build_system_schema_tables_response, build_system_schema_triggers_response,
+    build_system_schema_types_response, build_system_schema_views_response,
+    build_system_virtual_schema_response, build_void_result, read_string, read_string_map,
+    CqlFrame, CqlOpcode, QueryParameters,
 };
 use super::types::CqlValue;
 use super::CqlConfig;
@@ -26,8 +26,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tracing::{info, warn};
 use tokio::sync::RwLock;
+use tracing::{info, warn};
 
 /// CQL adapter
 pub struct CqlAdapter {
@@ -57,6 +57,17 @@ pub struct CqlMetrics {
     pub active_connections: usize,
     /// Prepared statements count
     pub prepared_statements_count: usize,
+}
+
+/// CQL batch types
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BatchType {
+    /// LOGGED batch - atomic, all-or-nothing (default)
+    Logged,
+    /// UNLOGGED batch - no atomicity guarantees, better performance
+    Unlogged,
+    /// COUNTER batch - for counter operations only
+    Counter,
 }
 
 /// Prepared statement
@@ -170,7 +181,11 @@ impl CqlAdapter {
                     transaction_id: None,
                 },
             ),
-            crate::protocols::postgres_wire::QueryResult::Merge { count, rows, columns } => Ok(
+            crate::protocols::postgres_wire::QueryResult::Merge {
+                count,
+                rows,
+                columns,
+            } => Ok(
                 crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Merge {
                     count,
                     rows,
@@ -381,7 +396,10 @@ impl CqlAdapter {
 
     /// Handle REGISTER request
     async fn handle_register(&self, frame: &CqlFrame) -> ProtocolResult<CqlFrame> {
-        println!("DEBUG: handle_register called. Body len: {}", frame.body.len());
+        println!(
+            "DEBUG: handle_register called. Body len: {}",
+            frame.body.len()
+        );
         // Just consume the body (list of event types) and return READY
         // We don't currently support pushing events to clients
         let mut body = frame.body.clone();
@@ -613,100 +631,171 @@ impl CqlAdapter {
     }
 
     /// Handle BATCH request
+    ///
+    /// CQL BATCH format (protocol v4):
+    /// - type: 1 byte (0=LOGGED, 1=UNLOGGED, 2=COUNTER)
+    /// - n: 2 bytes (number of statements)
+    /// - For each statement:
+    ///   - kind: 1 byte (0=query string, 1=prepared statement ID)
+    ///   - query/id: [int][bytes] for string, [short][bytes] for prepared
+    ///   - n_values: 2 bytes
+    ///   - For each value: [int][bytes] (-1 for NULL, -2 for NOT SET)
+    /// - consistency: 2 bytes
+    /// - flags: 1 byte (v4) or 4 bytes (v5)
+    /// - Optional based on flags: serial_consistency, timestamp, keyspace, now_in_seconds
     async fn handle_batch(&self, frame: &CqlFrame) -> ProtocolResult<CqlFrame> {
         let mut body = frame.body.clone();
 
+        if body.remaining() < 1 {
+            return Err(ProtocolError::IncompleteFrame);
+        }
+
         // Read batch type (1 byte: 0=LOGGED, 1=UNLOGGED, 2=COUNTER)
         let batch_type_byte = body.get_u8();
-        let _batch_type = match batch_type_byte {
-            0 => "LOGGED",
-            1 => "UNLOGGED",
-            2 => "COUNTER",
-            _ => "LOGGED", // Default
+        let batch_type = match batch_type_byte {
+            0 => BatchType::Logged,
+            1 => BatchType::Unlogged,
+            2 => BatchType::Counter,
+            _ => BatchType::Logged, // Default
         };
+
+        if body.remaining() < 2 {
+            return Err(ProtocolError::IncompleteFrame);
+        }
 
         // Read number of statements
         let statement_count = body.get_u16();
 
-        // Execute each statement in the batch
-        let mut errors = Vec::new();
+        // Parse all statements first
+        let mut batch_statements = Vec::with_capacity(statement_count as usize);
+
         for _ in 0..statement_count {
+            if body.remaining() < 1 {
+                return Err(ProtocolError::IncompleteFrame);
+            }
+
             // Read statement kind (1 byte: 0=query string, 1=prepared statement ID)
             let kind = body.get_u8();
 
-            if kind == 0 {
-                // Query string
-                let query_len = body.get_u32();
+            let statement = if kind == 0 {
+                // Query string (long string: 4 bytes length)
+                if body.remaining() < 4 {
+                    return Err(ProtocolError::IncompleteFrame);
+                }
+                let query_len = body.get_i32();
+                if query_len < 0 || body.remaining() < query_len as usize {
+                    return Err(ProtocolError::IncompleteFrame);
+                }
                 let query_bytes = body.copy_to_bytes(query_len as usize);
                 let query = String::from_utf8(query_bytes.to_vec())
                     .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
 
-                // Parse and execute
+                // Parse the query
                 let parser = self.parser.read().await;
-                match parser.parse(&query) {
-                    Ok(statement) => {
-                        drop(parser);
-                        match self
-                            .execute_statement(&statement, frame.stream, None, None)
-                            .await
-                        {
-                            Ok(_) => {} // Statement executed successfully
-                            Err(e) => {
-                                errors.push(format!("Batch statement error: {}", e));
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        errors.push(format!("Parse error: {}", e));
-                    }
+                let parsed = parser.parse(&query)?;
+                drop(parser);
+                parsed
+            } else {
+                // Prepared statement ID (short bytes: 2 bytes length)
+                if body.remaining() < 2 {
+                    return Err(ProtocolError::IncompleteFrame);
                 }
-            } else if kind == 1 {
-                // Prepared statement ID
                 let id_len = body.get_u16();
+                if body.remaining() < id_len as usize {
+                    return Err(ProtocolError::IncompleteFrame);
+                }
                 let id = body.copy_to_bytes(id_len as usize).to_vec();
 
                 // Get prepared statement
-                let statement_to_execute = {
-                    let prepared_statements = self.prepared_statements.read().await;
-                    prepared_statements.get(&id).map(|p| p.statement.clone())
-                };
+                let prepared_statements = self.prepared_statements.read().await;
+                let prepared = prepared_statements.get(&id).ok_or_else(|| {
+                    ProtocolError::InvalidStatement("Prepared statement not found".to_string())
+                })?;
+                prepared.statement.clone()
+            };
 
-                if let Some(statement) = statement_to_execute {
-                    match self
-                        .execute_statement(&statement, frame.stream, None, None)
-                        .await
-                    {
-                        Ok(_) => {} // Statement executed successfully
-                        Err(e) => {
-                            errors.push(format!("Batch prepared statement error: {}", e));
-                        }
-                    }
-                } else {
-                    errors.push("Prepared statement not found".to_string());
+            // Read values for this statement
+            if body.remaining() < 2 {
+                return Err(ProtocolError::IncompleteFrame);
+            }
+            let n_values = body.get_u16();
+
+            // Read and skip values (we don't use them yet, but must consume them)
+            for _ in 0..n_values {
+                if body.remaining() < 4 {
+                    return Err(ProtocolError::IncompleteFrame);
                 }
+                let val_len = body.get_i32();
+                if val_len > 0 {
+                    if body.remaining() < val_len as usize {
+                        return Err(ProtocolError::IncompleteFrame);
+                    }
+                    body.advance(val_len as usize);
+                }
+                // val_len == -1 is NULL, val_len == -2 is NOT_SET (v4+)
             }
 
-            // Skip query parameters for this statement (simplified - we don't use them in batch)
-            // In a full implementation, we'd decode and use QueryParameters here
+            batch_statements.push(statement);
         }
 
-        // Read consistency level (not used for execution, but must be read)
+        // Read consistency level
+        if body.remaining() < 2 {
+            return Err(ProtocolError::IncompleteFrame);
+        }
         let _consistency = body.get_u16();
+
+        // Read batch flags (1 byte in v4)
+        let _flags = if body.remaining() >= 1 {
+            body.get_u8()
+        } else {
+            0
+        };
+
+        // Skip optional fields based on flags
+        // 0x10 = serial consistency, 0x20 = default timestamp, etc.
+
+        // Execute all statements
+        // For LOGGED batches, we should use transactions, but for now execute sequentially
+        let mut errors = Vec::new();
+        let mut success_count = 0;
+
+        for statement in &batch_statements {
+            match self
+                .execute_statement(statement, frame.stream, None, None)
+                .await
+            {
+                Ok(_) => {
+                    success_count += 1;
+                }
+                Err(e) => {
+                    // For LOGGED batches, we should roll back on error
+                    // For now, just collect errors
+                    errors.push(format!("Statement error: {}", e));
+
+                    // For strict atomicity, break on first error in LOGGED batch
+                    if matches!(batch_type, BatchType::Logged) {
+                        break;
+                    }
+                }
+            }
+        }
 
         // If there were errors, return error response
         if !errors.is_empty() {
             return Ok(build_error_response(
                 frame.stream,
                 super::protocol::error_codes::INVALID,
-                &format!("Batch execution errors: {}", errors.join("; ")),
+                &format!(
+                    "Batch execution failed: {} of {} succeeded. Errors: {}",
+                    success_count,
+                    batch_statements.len(),
+                    errors.join("; ")
+                ),
             ));
         }
 
-
-
-        // For now, return empty ROWS result instead of VOID
-        // This helps drivers that expect result metadata (e.g. for system tables)
-        Ok(build_empty_rows_result(frame.stream))
+        // Return VOID result for successful batch
+        Ok(build_void_result(frame.stream))
     }
 
     /// Execute a CQL statement
@@ -733,8 +822,11 @@ impl CqlAdapter {
                 if table_lower == "system.local" || table_lower == "local" {
                     return Ok(build_system_local_response(stream));
                 }
-                if table_lower == "system.peers" || table_lower == "peers"
-                   || table_lower == "system.peers_v2" || table_lower == "peers_v2" {
+                if table_lower == "system.peers"
+                    || table_lower == "peers"
+                    || table_lower == "system.peers_v2"
+                    || table_lower == "peers_v2"
+                {
                     return Ok(build_system_peers_v2_response(stream));
                 }
                 // Handle system_schema tables (required for driver initialization)
@@ -899,6 +991,7 @@ impl CqlAdapter {
                 table,
                 columns,
                 values,
+                if_not_exists,
                 ..
             } => {
                 // Qualify table name with keyspace if not already qualified
@@ -912,6 +1005,28 @@ impl CqlAdapter {
                         table.clone()
                     }
                 };
+
+                // Handle IF NOT EXISTS (lightweight transaction)
+                if *if_not_exists && !columns.is_empty() && !values.is_empty() {
+                    // Build WHERE clause from primary key columns (assume first column is PK for simplicity)
+                    // In a full implementation, we'd need to know the table schema to identify PK columns
+                    let pk_col = &columns[0];
+                    let pk_val = Self::cql_value_to_sql_string(&values[0]);
+                    let where_clause = format!("{} = {}", pk_col, pk_val);
+
+                    // Check if row already exists
+                    if let Ok(Some(existing_row)) =
+                        self.check_row_exists(&qualified_table, &where_clause).await
+                    {
+                        // Row exists, return [applied] = false with current values
+                        return Ok(self.build_lwt_result(
+                            stream,
+                            false,
+                            Some(existing_row),
+                            columns,
+                        ));
+                    }
+                }
 
                 // Convert CQL INSERT to SQL and execute
                 let col_str = if columns.is_empty() {
@@ -933,7 +1048,14 @@ impl CqlAdapter {
                 let sql = format!("INSERT INTO {}{}{}", qualified_table, col_str, val_str);
 
                 match self.query_engine.execute_sql_direct(&sql).await {
-                    Ok(_) => Ok(build_void_result(stream)),
+                    Ok(_) => {
+                        // If this was an IF NOT EXISTS, return [applied] = true
+                        if *if_not_exists {
+                            Ok(self.build_lwt_result(stream, true, None, columns))
+                        } else {
+                            Ok(build_void_result(stream))
+                        }
+                    }
                     Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
                 }
             }
@@ -941,6 +1063,7 @@ impl CqlAdapter {
                 table,
                 assignments,
                 where_clause,
+                if_clause,
                 ..
             } => {
                 // Qualify table name with keyspace if not already qualified
@@ -954,6 +1077,65 @@ impl CqlAdapter {
                         table.clone()
                     }
                 };
+
+                // Build WHERE clause string for row lookup
+                let where_str = if !where_clause.is_empty() {
+                    let where_parts: Vec<String> = where_clause
+                        .iter()
+                        .map(|cond| {
+                            let op_str = match cond.operator {
+                                ComparisonOperator::Equal => "=",
+                                ComparisonOperator::GreaterThan => ">",
+                                ComparisonOperator::GreaterThanOrEqual => ">=",
+                                ComparisonOperator::LessThan => "<",
+                                ComparisonOperator::LessThanOrEqual => "<=",
+                                ComparisonOperator::NotEqual => "!=",
+                                _ => "=",
+                            };
+                            let val_str = match &cond.value {
+                                CqlValue::Text(s) => format!("'{}'", s.replace('\'', "''")),
+                                CqlValue::Int(i) => i.to_string(),
+                                CqlValue::Bigint(i) => i.to_string(),
+                                CqlValue::Boolean(b) => b.to_string(),
+                                CqlValue::Float(f) => f.to_string(),
+                                CqlValue::Double(f) => f.to_string(),
+                                CqlValue::Timestamp(ts) => (ts / 1000).to_string(),
+                                CqlValue::Null => "NULL".to_string(),
+                                _ => format!("'{:?}'", cond.value),
+                            };
+                            format!("{} {} {}", cond.column, op_str, val_str)
+                        })
+                        .collect();
+                    where_parts.join(" AND ")
+                } else {
+                    String::new()
+                };
+
+                // Handle IF clause (lightweight transaction)
+                let column_names: Vec<String> =
+                    assignments.iter().map(|(c, _)| c.clone()).collect();
+                if let Some(if_conditions) = if_clause {
+                    if !where_str.is_empty() {
+                        // Fetch current row
+                        if let Ok(Some(existing_row)) =
+                            self.check_row_exists(&qualified_table, &where_str).await
+                        {
+                            // Evaluate IF conditions
+                            if !self.evaluate_if_conditions(&existing_row, if_conditions) {
+                                // Conditions not met, return [applied] = false with current values
+                                return Ok(self.build_lwt_result(
+                                    stream,
+                                    false,
+                                    Some(existing_row),
+                                    &column_names,
+                                ));
+                            }
+                        } else {
+                            // Row doesn't exist, return [applied] = false
+                            return Ok(self.build_lwt_result(stream, false, None, &column_names));
+                        }
+                    }
+                }
 
                 // Convert CQL UPDATE to SQL and execute
                 let set_parts: Vec<String> = assignments
@@ -976,46 +1158,28 @@ impl CqlAdapter {
 
                 let mut sql = format!("UPDATE {} SET {}", qualified_table, set_parts.join(", "));
 
-                if !where_clause.is_empty() {
+                if !where_str.is_empty() {
                     sql.push_str(" WHERE ");
-                    let where_parts: Vec<String> = where_clause
-                        .iter()
-                        .map(|cond| {
-                            let op_str = match cond.operator {
-                                ComparisonOperator::Equal => "=",
-                                ComparisonOperator::GreaterThan => ">",
-                                ComparisonOperator::GreaterThanOrEqual => ">=",
-                                ComparisonOperator::LessThan => "<",
-                                ComparisonOperator::LessThanOrEqual => "<=",
-                                ComparisonOperator::NotEqual => "!=",
-                                _ => "=",
-                            };
-                            let val_str = match &cond.value {
-                                CqlValue::Text(s) => format!("'{}'", s.replace('\'', "''")),
-                                CqlValue::Int(i) => i.to_string(),
-                                CqlValue::Bigint(i) => i.to_string(),
-                                CqlValue::Boolean(b) => b.to_string(),
-                                CqlValue::Float(f) => f.to_string(),
-                                CqlValue::Double(f) => f.to_string(),
-                                CqlValue::Timestamp(ts) => (ts / 1000).to_string(),
-                                CqlValue::Null => "NULL".to_string(),
-                                _ => format!("'{:?}'", cond.value),
-                            };
-                            format!("{} {} {}", cond.column, op_str, val_str)
-                        })
-                        .collect();
-                    sql.push_str(&where_parts.join(" AND "));
+                    sql.push_str(&where_str);
                 }
 
                 match self.query_engine.execute_sql_direct(&sql).await {
-                    Ok(_) => Ok(build_void_result(stream)),
+                    Ok(_) => {
+                        // If this was a conditional update, return [applied] = true
+                        if if_clause.is_some() {
+                            Ok(self.build_lwt_result(stream, true, None, &column_names))
+                        } else {
+                            Ok(build_void_result(stream))
+                        }
+                    }
                     Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
                 }
             }
             CqlStatement::Delete {
                 table,
+                columns,
                 where_clause,
-                ..
+                if_clause,
             } => {
                 // Qualify table name with keyspace if not already qualified
                 let qualified_table = if table.contains('.') {
@@ -1029,11 +1193,8 @@ impl CqlAdapter {
                     }
                 };
 
-                // Convert CQL DELETE to SQL and execute
-                let mut sql = format!("DELETE FROM {}", qualified_table);
-
-                if !where_clause.is_empty() {
-                    sql.push_str(" WHERE ");
+                // Build WHERE clause string for row lookup
+                let where_str = if !where_clause.is_empty() {
                     let where_parts: Vec<String> = where_clause
                         .iter()
                         .map(|cond| {
@@ -1060,7 +1221,50 @@ impl CqlAdapter {
                             format!("{} {} {}", cond.column, op_str, val_str)
                         })
                         .collect();
-                    sql.push_str(&where_parts.join(" AND "));
+                    where_parts.join(" AND ")
+                } else {
+                    String::new()
+                };
+
+                // Handle IF clause (lightweight transaction)
+                // Use specified columns or all columns from IF clause
+                let column_names: Vec<String> = if !columns.is_empty() {
+                    columns.clone()
+                } else if let Some(ref if_conds) = if_clause {
+                    if_conds.iter().map(|c| c.column.clone()).collect()
+                } else {
+                    vec![]
+                };
+
+                if let Some(if_conditions) = if_clause {
+                    if !where_str.is_empty() {
+                        // Fetch current row
+                        if let Ok(Some(existing_row)) =
+                            self.check_row_exists(&qualified_table, &where_str).await
+                        {
+                            // Evaluate IF conditions
+                            if !self.evaluate_if_conditions(&existing_row, if_conditions) {
+                                // Conditions not met, return [applied] = false with current values
+                                return Ok(self.build_lwt_result(
+                                    stream,
+                                    false,
+                                    Some(existing_row),
+                                    &column_names,
+                                ));
+                            }
+                        } else {
+                            // Row doesn't exist, return [applied] = false
+                            return Ok(self.build_lwt_result(stream, false, None, &column_names));
+                        }
+                    }
+                }
+
+                // Convert CQL DELETE to SQL and execute
+                let mut sql = format!("DELETE FROM {}", qualified_table);
+
+                if !where_str.is_empty() {
+                    sql.push_str(" WHERE ");
+                    sql.push_str(&where_str);
                 }
 
                 #[cfg(test)]
@@ -1079,7 +1283,12 @@ impl CqlAdapter {
                             #[cfg(not(test))]
                             let _ = count; // Suppress unused variable warning in non-test builds
                         }
-                        Ok(build_void_result(stream))
+                        // If this was a conditional delete, return [applied] = true
+                        if if_clause.is_some() {
+                            Ok(self.build_lwt_result(stream, true, None, &column_names))
+                        } else {
+                            Ok(build_void_result(stream))
+                        }
                     }
                     Err(e) => {
                         #[cfg(test)]
@@ -1099,7 +1308,7 @@ impl CqlAdapter {
                 } else {
                     format!("CREATE SCHEMA {}", name)
                 };
-                
+
                 match self.query_engine.execute_sql_direct(&sql).await {
                     Ok(_) => Ok(self.build_schema_change_result(stream)),
                     Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
@@ -1113,7 +1322,7 @@ impl CqlAdapter {
                 ..
             } => {
                 println!("[CQL] CREATE TABLE {}", name);
-                
+
                 // Qualify table name with keyspace if not already qualified
                 let qualified_table = if name.contains('.') {
                     name.clone()
@@ -1130,9 +1339,13 @@ impl CqlAdapter {
                 let mut col_defs = Vec::new();
                 for col in columns {
                     let type_str = match &col.data_type {
-                        super::types::CqlType::Text | super::types::CqlType::Varchar | super::types::CqlType::Ascii => "TEXT",
+                        super::types::CqlType::Text
+                        | super::types::CqlType::Varchar
+                        | super::types::CqlType::Ascii => "TEXT",
                         super::types::CqlType::Int => "INT",
-                        super::types::CqlType::Bigint | super::types::CqlType::Counter | super::types::CqlType::Varint => "BIGINT",
+                        super::types::CqlType::Bigint
+                        | super::types::CqlType::Counter
+                        | super::types::CqlType::Varint => "BIGINT",
                         super::types::CqlType::Boolean => "BOOLEAN",
                         super::types::CqlType::Float => "REAL",
                         super::types::CqlType::Double => "DOUBLE PRECISION",
@@ -1153,7 +1366,11 @@ impl CqlAdapter {
                 }
 
                 let sql = if *if_not_exists {
-                    format!("CREATE TABLE IF NOT EXISTS {} ({})", qualified_table, col_defs.join(", "))
+                    format!(
+                        "CREATE TABLE IF NOT EXISTS {} ({})",
+                        qualified_table,
+                        col_defs.join(", ")
+                    )
                 } else {
                     format!("CREATE TABLE {} ({})", qualified_table, col_defs.join(", "))
                 };
@@ -1177,7 +1394,7 @@ impl CqlAdapter {
             }
             CqlStatement::DropTable { name, if_exists } => {
                 println!("[CQL] DROP TABLE {}", name);
-                 // Qualify table name with keyspace if not already qualified
+                // Qualify table name with keyspace if not already qualified
                 let qualified_table = if name.contains('.') {
                     name.clone()
                 } else {
@@ -1207,7 +1424,7 @@ impl CqlAdapter {
                 ..
             } => {
                 println!("[CQL] CREATE INDEX {} ON {} ({})", name, table, column);
-                 // Qualify table name with keyspace if not already qualified
+                // Qualify table name with keyspace if not already qualified
                 let qualified_table = if table.contains('.') {
                     table.clone()
                 } else {
@@ -1220,7 +1437,10 @@ impl CqlAdapter {
                 };
 
                 let sql = if *if_not_exists {
-                    format!("CREATE INDEX IF NOT EXISTS {} ON {} ({})", name, qualified_table, column)
+                    format!(
+                        "CREATE INDEX IF NOT EXISTS {} ON {} ({})",
+                        name, qualified_table, column
+                    )
                 } else {
                     format!("CREATE INDEX {} ON {} ({})", name, qualified_table, column)
                 };
@@ -1234,9 +1454,7 @@ impl CqlAdapter {
                 Ok(self.build_schema_change_result(stream))
             }
             CqlStatement::CreateMaterializedView {
-                name,
-                source_table,
-                ..
+                name, source_table, ..
             } => {
                 println!(
                     "[CQL] CREATE MATERIALIZED VIEW {} FROM {}",
@@ -1424,7 +1642,7 @@ impl CqlAdapter {
             // Column name
             body.put_u16(col_name.len() as u16);
             body.put(col_name.as_bytes());
-            
+
             // Infer column type from rows
             let mut cql_type_code = 0x000D; // Default Varchar
             for row in &rows {
@@ -1486,15 +1704,15 @@ impl CqlAdapter {
     fn sql_type_to_cql_code(&self, t: &SqlType) -> u16 {
         match t {
             SqlType::Text | SqlType::Varchar(_) | SqlType::Char(_) => 0x000D, // Varchar
-            SqlType::Integer => 0x0009, // Int
-            SqlType::BigInt => 0x0002, // Bigint
-            SqlType::Boolean => 0x0004, // Boolean
-            SqlType::Real => 0x0008, // Float
-            SqlType::DoublePrecision => 0x0007, // Double
-            SqlType::Timestamp { .. } => 0x000B, // Timestamp
-            SqlType::Uuid => 0x000C, // Uuid
-            SqlType::SmallInt => 0x0013, // Smallint
-            _ => 0x000D, // Default to Varchar
+            SqlType::Integer => 0x0009,                                       // Int
+            SqlType::BigInt => 0x0002,                                        // Bigint
+            SqlType::Boolean => 0x0004,                                       // Boolean
+            SqlType::Real => 0x0008,                                          // Float
+            SqlType::DoublePrecision => 0x0007,                               // Double
+            SqlType::Timestamp { .. } => 0x000B,                              // Timestamp
+            SqlType::Uuid => 0x000C,                                          // Uuid
+            SqlType::SmallInt => 0x0013,                                      // Smallint
+            _ => 0x000D,                                                      // Default to Varchar
         }
     }
 
@@ -1506,6 +1724,239 @@ impl CqlAdapter {
         body.put(keyspace.as_bytes());
 
         CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+    }
+
+    /// Build a lightweight transaction (LWT) result
+    ///
+    /// CQL lightweight transactions return a result with an `[applied]` boolean column.
+    /// If the operation was not applied, the current row values are also returned.
+    fn build_lwt_result(
+        &self,
+        stream: i16,
+        applied: bool,
+        current_row: Option<HashMap<String, SqlValue>>,
+        columns: &[String],
+    ) -> CqlFrame {
+        let mut body = BytesMut::new();
+        body.put_i32(0x0002); // RESULT::Rows
+
+        // Build column list: [applied] + original columns if not applied
+        let mut result_columns = vec!["[applied]".to_string()];
+        if !applied {
+            result_columns.extend(columns.iter().cloned());
+        }
+
+        // Metadata flags (no global tables spec)
+        body.put_i32(0x0000);
+
+        // Column count
+        body.put_i32(result_columns.len() as i32);
+
+        // Column metadata
+        for col_name in &result_columns {
+            // Keyspace name (empty string)
+            body.put_u16(0);
+            // Table name (empty string)
+            body.put_u16(0);
+            // Column name
+            body.put_u16(col_name.len() as u16);
+            body.put(col_name.as_bytes());
+
+            // Column type
+            if col_name == "[applied]" {
+                body.put_u16(0x0004); // Boolean
+            } else {
+                body.put_u16(0x000D); // Varchar (default)
+            }
+        }
+
+        // Row count (always 1 for LWT)
+        body.put_i32(1);
+
+        // [applied] value
+        let applied_bytes = if applied {
+            b"true".to_vec()
+        } else {
+            b"false".to_vec()
+        };
+        body.put_i32(applied_bytes.len() as i32);
+        body.put(&applied_bytes[..]);
+
+        // If not applied, include current row values
+        if !applied {
+            for col_name in columns {
+                if let Some(ref row) = current_row {
+                    if let Some(value) = row.get(col_name) {
+                        let value_bytes = self.sql_value_to_bytes(value);
+                        body.put_i32(value_bytes.len() as i32);
+                        body.put(&value_bytes[..]);
+                    } else {
+                        body.put_i32(-1); // NULL
+                    }
+                } else {
+                    body.put_i32(-1); // NULL
+                }
+            }
+        }
+
+        CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
+    }
+
+    /// Check if a row exists for the given WHERE clause
+    /// Returns the row as a HashMap<column_name, SqlValue>
+    async fn check_row_exists(
+        &self,
+        table: &str,
+        where_clause: &str,
+    ) -> ProtocolResult<Option<HashMap<String, SqlValue>>> {
+        let select_sql = format!("SELECT * FROM {} WHERE {} LIMIT 1", table, where_clause);
+
+        match self.query_engine.execute_sql_direct(&select_sql).await {
+            Ok(crate::protocols::postgres_wire::QueryResult::Select { columns, rows }) => {
+                if rows.is_empty() {
+                    Ok(None)
+                } else {
+                    // Convert Vec<Option<String>> to HashMap<String, SqlValue>
+                    let mut row_map = HashMap::new();
+                    for (i, col_name) in columns.iter().enumerate() {
+                        let value = if let Some(ref val) = rows[0].get(i).and_then(|v| v.as_ref()) {
+                            // Try to parse as various types
+                            if val.eq_ignore_ascii_case("true") || val.eq_ignore_ascii_case("false")
+                            {
+                                SqlValue::Boolean(val.eq_ignore_ascii_case("true"))
+                            } else if let Ok(i) = val.parse::<i32>() {
+                                SqlValue::Integer(i)
+                            } else if let Ok(i) = val.parse::<i64>() {
+                                SqlValue::BigInt(i)
+                            } else if let Ok(f) = val.parse::<f64>() {
+                                SqlValue::DoublePrecision(f)
+                            } else {
+                                SqlValue::Text(val.to_string())
+                            }
+                        } else {
+                            SqlValue::Null
+                        };
+                        row_map.insert(col_name.clone(), value);
+                    }
+                    Ok(Some(row_map))
+                }
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Evaluate IF conditions against a row
+    fn evaluate_if_conditions(
+        &self,
+        row: &HashMap<String, SqlValue>,
+        conditions: &[super::parser::WhereCondition],
+    ) -> bool {
+        for cond in conditions {
+            let row_value = row.get(&cond.column);
+            let condition_value = self.cql_value_to_sql_value(&cond.value);
+
+            let matches = match cond.operator {
+                ComparisonOperator::Equal => {
+                    if let Some(rv) = row_value {
+                        self.sql_values_equal(rv, &condition_value)
+                    } else {
+                        condition_value.is_null()
+                    }
+                }
+                ComparisonOperator::NotEqual => {
+                    if let Some(rv) = row_value {
+                        !self.sql_values_equal(rv, &condition_value)
+                    } else {
+                        !condition_value.is_null()
+                    }
+                }
+                ComparisonOperator::GreaterThan => {
+                    if let Some(rv) = row_value {
+                        self.sql_value_cmp(rv, &condition_value) > 0
+                    } else {
+                        false
+                    }
+                }
+                ComparisonOperator::GreaterThanOrEqual => {
+                    if let Some(rv) = row_value {
+                        self.sql_value_cmp(rv, &condition_value) >= 0
+                    } else {
+                        false
+                    }
+                }
+                ComparisonOperator::LessThan => {
+                    if let Some(rv) = row_value {
+                        self.sql_value_cmp(rv, &condition_value) < 0
+                    } else {
+                        false
+                    }
+                }
+                ComparisonOperator::LessThanOrEqual => {
+                    if let Some(rv) = row_value {
+                        self.sql_value_cmp(rv, &condition_value) <= 0
+                    } else {
+                        false
+                    }
+                }
+                _ => true, // IN, CONTAINS, etc. - default to true for now
+            };
+
+            if !matches {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Convert CqlValue to SqlValue
+    fn cql_value_to_sql_value(&self, value: &CqlValue) -> SqlValue {
+        match value {
+            CqlValue::Text(s) => SqlValue::Text(s.clone()),
+            CqlValue::Int(i) => SqlValue::Integer(*i),
+            CqlValue::Bigint(i) => SqlValue::BigInt(*i),
+            CqlValue::Boolean(b) => SqlValue::Boolean(*b),
+            CqlValue::Float(f) => SqlValue::Real(*f),
+            CqlValue::Double(f) => SqlValue::DoublePrecision(*f),
+            CqlValue::Null => SqlValue::Null,
+            _ => SqlValue::Text(format!("{:?}", value)),
+        }
+    }
+
+    /// Compare two SqlValues for equality
+    fn sql_values_equal(&self, a: &SqlValue, b: &SqlValue) -> bool {
+        match (a, b) {
+            (SqlValue::Null, SqlValue::Null) => true,
+            (SqlValue::Text(s1), SqlValue::Text(s2)) => s1 == s2,
+            (SqlValue::Integer(i1), SqlValue::Integer(i2)) => i1 == i2,
+            (SqlValue::BigInt(i1), SqlValue::BigInt(i2)) => i1 == i2,
+            (SqlValue::Boolean(b1), SqlValue::Boolean(b2)) => b1 == b2,
+            (SqlValue::Real(f1), SqlValue::Real(f2)) => (f1 - f2).abs() < f32::EPSILON,
+            (SqlValue::DoublePrecision(f1), SqlValue::DoublePrecision(f2)) => {
+                (f1 - f2).abs() < f64::EPSILON
+            }
+            // Cross-type comparisons
+            (SqlValue::Integer(i), SqlValue::BigInt(b)) => *i as i64 == *b,
+            (SqlValue::BigInt(b), SqlValue::Integer(i)) => *b == *i as i64,
+            _ => false,
+        }
+    }
+
+    /// Compare two SqlValues, returns -1, 0, or 1
+    fn sql_value_cmp(&self, a: &SqlValue, b: &SqlValue) -> i32 {
+        match (a, b) {
+            (SqlValue::Integer(i1), SqlValue::Integer(i2)) => i1.cmp(i2) as i32,
+            (SqlValue::BigInt(i1), SqlValue::BigInt(i2)) => i1.cmp(i2) as i32,
+            (SqlValue::Integer(i), SqlValue::BigInt(b)) => (*i as i64).cmp(b) as i32,
+            (SqlValue::BigInt(b), SqlValue::Integer(i)) => b.cmp(&(*i as i64)) as i32,
+            (SqlValue::Real(f1), SqlValue::Real(f2)) => {
+                f1.partial_cmp(f2).map(|o| o as i32).unwrap_or(0)
+            }
+            (SqlValue::DoublePrecision(f1), SqlValue::DoublePrecision(f2)) => {
+                f1.partial_cmp(f2).map(|o| o as i32).unwrap_or(0)
+            }
+            (SqlValue::Text(s1), SqlValue::Text(s2)) => s1.cmp(s2) as i32,
+            _ => 0,
+        }
     }
 
     /// Build a SCHEMA_CHANGE result
@@ -1558,5 +2009,324 @@ mod tests {
         // Verify keyspace was set
         let parser = adapter.parser.read().await;
         assert_eq!(parser.current_keyspace(), Some("test_ks"));
+    }
+
+    #[test]
+    fn test_batch_type_enum() {
+        assert_eq!(BatchType::Logged, BatchType::Logged);
+        assert_ne!(BatchType::Logged, BatchType::Unlogged);
+        assert_ne!(BatchType::Logged, BatchType::Counter);
+        assert_ne!(BatchType::Unlogged, BatchType::Counter);
+    }
+
+    /// Helper to build a BATCH frame for testing
+    fn build_batch_frame(batch_type: u8, queries: &[&str], stream: i16) -> CqlFrame {
+        let mut body = BytesMut::new();
+
+        // Batch type
+        body.put_u8(batch_type);
+
+        // Number of statements
+        body.put_u16(queries.len() as u16);
+
+        // Each statement
+        for query in queries {
+            // Kind: 0 = query string
+            body.put_u8(0);
+
+            // Query string (long string: 4 bytes length + bytes)
+            body.put_i32(query.len() as i32);
+            body.put(query.as_bytes());
+
+            // Number of values: 0
+            body.put_u16(0);
+        }
+
+        // Consistency level (ONE = 0x0001)
+        body.put_u16(0x0001);
+
+        // Flags (none)
+        body.put_u8(0);
+
+        CqlFrame {
+            version: 0x04, // Protocol v4 request
+            flags: 0,
+            stream,
+            opcode: CqlOpcode::Batch,
+            body: body.freeze(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_batch_empty() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Create table first
+        adapter
+            .execute_sql("CREATE TABLE batch_test (id INT PRIMARY KEY, name TEXT)")
+            .await
+            .unwrap();
+
+        // Empty batch
+        let frame = build_batch_frame(0, &[], 1);
+        let result = adapter.handle_batch(&frame).await.unwrap();
+
+        // Should return VOID result
+        assert_eq!(result.opcode, CqlOpcode::Result);
+    }
+
+    #[tokio::test]
+    async fn test_batch_logged_multiple_inserts() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Create table first
+        adapter
+            .execute_sql("CREATE TABLE batch_users (id INT PRIMARY KEY, name TEXT)")
+            .await
+            .unwrap();
+
+        // Batch with multiple INSERTs
+        let queries = [
+            "INSERT INTO batch_users (id, name) VALUES (1, 'Alice')",
+            "INSERT INTO batch_users (id, name) VALUES (2, 'Bob')",
+            "INSERT INTO batch_users (id, name) VALUES (3, 'Charlie')",
+        ];
+
+        let frame = build_batch_frame(0, &queries, 1); // 0 = LOGGED
+        let result = adapter.handle_batch(&frame).await.unwrap();
+
+        // Should return VOID result
+        assert_eq!(result.opcode, CqlOpcode::Result);
+    }
+
+    #[tokio::test]
+    async fn test_batch_unlogged() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Create table first
+        adapter
+            .execute_sql("CREATE TABLE batch_unlogged (id INT PRIMARY KEY, val INT)")
+            .await
+            .unwrap();
+
+        // Unlogged batch
+        let queries = [
+            "INSERT INTO batch_unlogged (id, val) VALUES (1, 100)",
+            "INSERT INTO batch_unlogged (id, val) VALUES (2, 200)",
+        ];
+
+        let frame = build_batch_frame(1, &queries, 2); // 1 = UNLOGGED
+        let result = adapter.handle_batch(&frame).await.unwrap();
+
+        assert_eq!(result.opcode, CqlOpcode::Result);
+    }
+
+    #[tokio::test]
+    async fn test_batch_counter() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Counter batches are for counter updates
+        // For now, we just verify the batch type is parsed correctly
+        let frame = build_batch_frame(2, &[], 3); // 2 = COUNTER
+        let result = adapter.handle_batch(&frame).await.unwrap();
+
+        assert_eq!(result.opcode, CqlOpcode::Result);
+    }
+
+    #[tokio::test]
+    async fn test_batch_incomplete_frame() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Incomplete frame - just batch type, no statement count
+        let mut body = BytesMut::new();
+        body.put_u8(0); // Batch type only
+
+        let frame = CqlFrame {
+            version: 0x04,
+            flags: 0,
+            stream: 1,
+            opcode: CqlOpcode::Batch,
+            body: body.freeze(),
+        };
+
+        let result = adapter.handle_batch(&frame).await;
+        assert!(result.is_err());
+    }
+
+    // ==================== Lightweight Transaction Tests ====================
+
+    use crate::protocols::cql::parser::WhereCondition;
+
+    /// Helper to execute a CQL statement through the adapter
+    #[allow(dead_code)]
+    async fn execute_cql_statement(adapter: &CqlAdapter, cql: &str) -> ProtocolResult<CqlFrame> {
+        let parser = adapter.parser.read().await;
+        let statement = parser.parse(cql)?;
+        drop(parser); // Release the lock before calling execute_statement
+        adapter.execute_statement(&statement, 0, None, None).await
+    }
+
+    #[tokio::test]
+    async fn test_lwt_insert_if_not_exists_parsing() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Test that IF NOT EXISTS parses correctly
+        let parser = adapter.parser.read().await;
+        let statement =
+            parser.parse("INSERT INTO lwt_test (id, name) VALUES (1, 'test') IF NOT EXISTS");
+        assert!(statement.is_ok());
+
+        if let Ok(CqlStatement::Insert { if_not_exists, .. }) = statement {
+            assert!(if_not_exists, "IF NOT EXISTS should be parsed as true");
+        } else {
+            panic!("Expected INSERT statement");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_lwt_update_if_condition_parsing() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Test that UPDATE IF parses correctly
+        let parser = adapter.parser.read().await;
+        let statement =
+            parser.parse("UPDATE lwt_test SET status = 'done' WHERE id = 1 IF status = 'pending'");
+
+        // Debug: print the error if parsing fails
+        if statement.is_err() {
+            println!("Parse error: {:?}", statement.as_ref().err());
+        }
+        assert!(statement.is_ok(), "Parsing should succeed");
+
+        if let Ok(CqlStatement::Update { if_clause, .. }) = statement {
+            assert!(if_clause.is_some(), "IF clause should be parsed");
+            let conditions = if_clause.unwrap();
+            assert_eq!(conditions.len(), 1);
+            assert_eq!(conditions[0].column, "status");
+        } else {
+            panic!("Expected UPDATE statement");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_lwt_delete_if_condition_parsing() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Test that DELETE IF parses correctly
+        let parser = adapter.parser.read().await;
+        let statement = parser.parse("DELETE FROM lwt_test WHERE id = 1 IF status = 'inactive'");
+
+        // Debug: print the error if parsing fails
+        if statement.is_err() {
+            println!("Parse error: {:?}", statement.as_ref().err());
+        }
+        assert!(statement.is_ok(), "Parsing should succeed");
+
+        if let Ok(CqlStatement::Delete { if_clause, .. }) = statement {
+            assert!(if_clause.is_some(), "IF clause should be parsed");
+            let conditions = if_clause.unwrap();
+            assert_eq!(conditions.len(), 1);
+            assert_eq!(conditions[0].column, "status");
+        } else {
+            panic!("Expected DELETE statement");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_lwt_result_builder_applied_true() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Test build_lwt_result for applied = true
+        let result = adapter.build_lwt_result(1, true, None, &["col1".to_string()]);
+
+        // Should have Result opcode
+        assert_eq!(result.opcode, CqlOpcode::Result);
+        // Body should be non-empty (contains [applied] column)
+        assert!(!result.body.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_lwt_result_builder_applied_false() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Test build_lwt_result for applied = false with existing row
+        let mut existing_row = HashMap::new();
+        existing_row.insert("col1".to_string(), SqlValue::Text("value1".to_string()));
+
+        let result = adapter.build_lwt_result(1, false, Some(existing_row), &["col1".to_string()]);
+
+        // Should have Result opcode
+        assert_eq!(result.opcode, CqlOpcode::Result);
+        // Body should be non-empty (contains [applied] column + original columns)
+        assert!(!result.body.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_lwt_evaluate_if_conditions_equal() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        let mut row = HashMap::new();
+        row.insert("status".to_string(), SqlValue::Text("pending".to_string()));
+        row.insert("count".to_string(), SqlValue::Integer(10));
+
+        // Test equality condition that matches
+        let conditions = vec![WhereCondition {
+            column: "status".to_string(),
+            operator: ComparisonOperator::Equal,
+            value: CqlValue::Text("pending".to_string()),
+        }];
+        assert!(adapter.evaluate_if_conditions(&row, &conditions));
+
+        // Test equality condition that doesn't match
+        let conditions_fail = vec![WhereCondition {
+            column: "status".to_string(),
+            operator: ComparisonOperator::Equal,
+            value: CqlValue::Text("done".to_string()),
+        }];
+        assert!(!adapter.evaluate_if_conditions(&row, &conditions_fail));
+    }
+
+    #[tokio::test]
+    async fn test_lwt_evaluate_if_conditions_numeric() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        let mut row = HashMap::new();
+        row.insert("count".to_string(), SqlValue::Integer(10));
+
+        // Test greater than
+        let conditions_gt = vec![WhereCondition {
+            column: "count".to_string(),
+            operator: ComparisonOperator::GreaterThan,
+            value: CqlValue::Int(5),
+        }];
+        assert!(adapter.evaluate_if_conditions(&row, &conditions_gt));
+
+        // Test less than or equal
+        let conditions_lte = vec![WhereCondition {
+            column: "count".to_string(),
+            operator: ComparisonOperator::LessThanOrEqual,
+            value: CqlValue::Int(10),
+        }];
+        assert!(adapter.evaluate_if_conditions(&row, &conditions_lte));
+
+        // Test not equal
+        let conditions_ne = vec![WhereCondition {
+            column: "count".to_string(),
+            operator: ComparisonOperator::NotEqual,
+            value: CqlValue::Int(5),
+        }];
+        assert!(adapter.evaluate_if_conditions(&row, &conditions_ne));
     }
 }

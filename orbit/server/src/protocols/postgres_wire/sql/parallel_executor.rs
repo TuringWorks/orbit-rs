@@ -92,9 +92,7 @@ pub enum PartitionStrategy {
         num_partitions: usize,
     },
     /// Round-robin partitioning (simple, good for any data)
-    RoundRobin {
-        num_partitions: usize,
-    },
+    RoundRobin { num_partitions: usize },
     /// Partition by predefined row ranges
     RowRange {
         ranges: Vec<(usize, usize)>, // (start, end) pairs
@@ -125,8 +123,14 @@ pub struct PartitionFilter {
 
 #[derive(Debug, Clone)]
 pub enum PartitionCondition {
-    Range { min: Option<SqlValue>, max: Option<SqlValue> },
-    HashMod { divisor: usize, remainder: usize },
+    Range {
+        min: Option<SqlValue>,
+        max: Option<SqlValue>,
+    },
+    HashMod {
+        divisor: usize,
+        remainder: usize,
+    },
 }
 
 /// Result from a single partition
@@ -276,11 +280,7 @@ impl WorkPartitioner {
     }
 
     /// Create partitions for sorting
-    pub fn partition_sort(
-        &self,
-        estimated_rows: usize,
-        _sort_column: &str,
-    ) -> Vec<WorkPartition> {
+    pub fn partition_sort(&self, estimated_rows: usize, _sort_column: &str) -> Vec<WorkPartition> {
         let num_partitions = self.calculate_partition_count(estimated_rows);
 
         if num_partitions <= 1 {
@@ -700,7 +700,8 @@ impl AggregateAccumulator {
 
         // Update max
         if self.max.is_none()
-            || Self::compare_values(value, self.max.as_ref().unwrap()) == std::cmp::Ordering::Greater
+            || Self::compare_values(value, self.max.as_ref().unwrap())
+                == std::cmp::Ordering::Greater
         {
             self.max = Some(value.clone());
         }
@@ -794,7 +795,9 @@ impl ParallelCoordinator {
         }
 
         // Create partitions
-        let partitions = self.partitioner.partition_scan(table_name, estimated_rows, table_stats);
+        let partitions = self
+            .partitioner
+            .partition_scan(table_name, estimated_rows, table_stats);
 
         // Execute in parallel
         self.execute_partitions(partitions, executor).await
@@ -812,7 +815,10 @@ impl ParallelCoordinator {
         F: Fn(WorkPartition) -> Fut + Send + Sync + Clone + 'static,
         Fut: std::future::Future<Output = PartitionResult> + Send,
     {
-        if !self.partitioner.should_parallelize(estimated_rows, "aggregate") {
+        if !self
+            .partitioner
+            .should_parallelize(estimated_rows, "aggregate")
+        {
             let mut stats = self.stats.write().await;
             stats.queries_serial += 1;
 
@@ -828,7 +834,9 @@ impl ParallelCoordinator {
             return ResultMerger::merge_aggregates(vec![result], group_by_columns, aggregates);
         }
 
-        let partitions = self.partitioner.partition_aggregate(estimated_rows, group_by_columns);
+        let partitions = self
+            .partitioner
+            .partition_aggregate(estimated_rows, group_by_columns);
         let results = self.execute_partitions_raw(partitions, executor).await;
 
         ResultMerger::merge_aggregates(results, group_by_columns, aggregates)
@@ -1069,8 +1077,12 @@ mod tests {
             PartitionResult {
                 partition_id: 0,
                 rows: vec![
-                    [("id".to_string(), SqlValue::Integer(1))].into_iter().collect(),
-                    [("id".to_string(), SqlValue::Integer(2))].into_iter().collect(),
+                    [("id".to_string(), SqlValue::Integer(1))]
+                        .into_iter()
+                        .collect(),
+                    [("id".to_string(), SqlValue::Integer(2))]
+                        .into_iter()
+                        .collect(),
                 ],
                 execution_time: Duration::from_millis(100),
                 rows_processed: 2,
@@ -1078,9 +1090,9 @@ mod tests {
             },
             PartitionResult {
                 partition_id: 1,
-                rows: vec![
-                    [("id".to_string(), SqlValue::Integer(3))].into_iter().collect(),
-                ],
+                rows: vec![[("id".to_string(), SqlValue::Integer(3))]
+                    .into_iter()
+                    .collect()],
                 execution_time: Duration::from_millis(50),
                 rows_processed: 1,
                 error: None,
@@ -1100,8 +1112,12 @@ mod tests {
             PartitionResult {
                 partition_id: 0,
                 rows: vec![
-                    [("value".to_string(), SqlValue::Integer(3))].into_iter().collect(),
-                    [("value".to_string(), SqlValue::Integer(1))].into_iter().collect(),
+                    [("value".to_string(), SqlValue::Integer(3))]
+                        .into_iter()
+                        .collect(),
+                    [("value".to_string(), SqlValue::Integer(1))]
+                        .into_iter()
+                        .collect(),
                 ],
                 execution_time: Duration::from_millis(100),
                 rows_processed: 2,
@@ -1109,9 +1125,9 @@ mod tests {
             },
             PartitionResult {
                 partition_id: 1,
-                rows: vec![
-                    [("value".to_string(), SqlValue::Integer(2))].into_iter().collect(),
-                ],
+                rows: vec![[("value".to_string(), SqlValue::Integer(2))]
+                    .into_iter()
+                    .collect()],
                 execution_time: Duration::from_millis(50),
                 rows_processed: 1,
                 error: None,
@@ -1123,7 +1139,9 @@ mod tests {
         assert_eq!(merged.rows.len(), 3);
 
         // Check order
-        let values: Vec<i32> = merged.rows.iter()
+        let values: Vec<i32> = merged
+            .rows
+            .iter()
             .filter_map(|r| r.get("value"))
             .filter_map(|v| match v {
                 SqlValue::Integer(i) => Some(*i),
@@ -1163,11 +1181,12 @@ mod tests {
         let executor = |partition: WorkPartition| async move {
             PartitionResult {
                 partition_id: partition.id,
-                rows: vec![
-                    [("partition".to_string(), SqlValue::Integer(partition.id as i32))]
-                        .into_iter()
-                        .collect(),
-                ],
+                rows: vec![[(
+                    "partition".to_string(),
+                    SqlValue::Integer(partition.id as i32),
+                )]
+                .into_iter()
+                .collect()],
                 execution_time: Duration::from_millis(10),
                 rows_processed: 1,
                 error: None,

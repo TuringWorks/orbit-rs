@@ -623,13 +623,65 @@ mod aql_tests {
     }
 
     #[tokio::test]
-    #[ignore = "PRUNE condition parsing needs backtracking support"]
-    async fn test_parser_graph_traversal_with_prune() {
+    async fn test_parser_graph_traversal_with_prune_condition_only() {
         let parser = AqlParser::new();
-        // Graph traversal with PRUNE clause using GRAPH keyword and simple condition
+        // Graph traversal with PRUNE clause - condition only (no variable binding)
+        // This tests the backtracking: "depth" should be parsed as part of the condition
         let result = parser.parse(
             "FOR vertex, edge IN 1..5 OUTBOUND 'users/john' GRAPH 'social' \
-             PRUNE vertex > 3 RETURN vertex",
+             PRUNE depth > 3 RETURN vertex",
+        );
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+
+        let query = result.unwrap();
+        // Verify the PRUNE was parsed correctly
+        if let Some(crate::protocols::aql::aql_parser::AqlClause::ForTraversal { prune, .. }) =
+            query.clauses.first()
+        {
+            assert!(prune.is_some(), "PRUNE clause should be present");
+            let prune = prune.as_ref().unwrap();
+            assert!(
+                prune.prune_var.is_none(),
+                "No prune variable binding expected"
+            );
+        } else {
+            panic!("Expected ForTraversal clause");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_parser_graph_traversal_with_prune_variable_binding() {
+        let parser = AqlParser::new();
+        // Graph traversal with PRUNE clause - with variable binding (v: condition)
+        let result = parser.parse(
+            "FOR vertex, edge IN 1..5 OUTBOUND 'users/john' GRAPH 'social' \
+             PRUNE v: v.depth > 3 RETURN vertex",
+        );
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+
+        let query = result.unwrap();
+        if let Some(crate::protocols::aql::aql_parser::AqlClause::ForTraversal { prune, .. }) =
+            query.clauses.first()
+        {
+            assert!(prune.is_some(), "PRUNE clause should be present");
+            let prune = prune.as_ref().unwrap();
+            assert_eq!(
+                prune.prune_var,
+                Some("v".to_string()),
+                "Prune variable 'v' expected"
+            );
+        } else {
+            panic!("Expected ForTraversal clause");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_parser_prune_with_dotted_expression() {
+        let parser = AqlParser::new();
+        // PRUNE with dotted property access - tests backtracking with complex left-hand side
+        let result = parser.parse(
+            "FOR v, e IN 1..10 OUTBOUND 'start' GRAPH 'g' \
+             PRUNE v.level > 5 RETURN v",
         );
         assert!(result.is_ok(), "Parser failed: {:?}", result.err());
     }
@@ -638,7 +690,8 @@ mod aql_tests {
     async fn test_parser_collect_with_into() {
         let parser = AqlParser::new();
         // COLLECT with INTO - using g as the group variable (not 'groups' which is a keyword)
-        let result = parser.parse("FOR doc IN users COLLECT city = doc.city INTO g RETURN {city: city, users: g}");
+        let result = parser
+            .parse("FOR doc IN users COLLECT city = doc.city INTO g RETURN {city: city, users: g}");
         assert!(result.is_ok(), "Parser failed: {:?}", result.err());
     }
 
@@ -660,7 +713,9 @@ mod aql_tests {
     #[tokio::test]
     async fn test_parser_upsert_with_update() {
         let parser = AqlParser::new();
-        let result = parser.parse("UPSERT {name: 'Alice'} INSERT {name: 'Alice', age: 30} UPDATE {age: 31} IN users");
+        let result = parser.parse(
+            "UPSERT {name: 'Alice'} INSERT {name: 'Alice', age: 30} UPDATE {age: 31} IN users",
+        );
         assert!(result.is_ok(), "Parser failed: {:?}", result.err());
     }
 
@@ -674,7 +729,8 @@ mod aql_tests {
     #[tokio::test]
     async fn test_parser_replace_clause() {
         let parser = AqlParser::new();
-        let result = parser.parse("FOR doc IN users REPLACE doc WITH {name: doc.name, verified: true} IN users");
+        let result = parser
+            .parse("FOR doc IN users REPLACE doc WITH {name: doc.name, verified: true} IN users");
         assert!(result.is_ok(), "Parser failed: {:?}", result.err());
     }
 
@@ -688,7 +744,8 @@ mod aql_tests {
     #[tokio::test]
     async fn test_parser_update_with_options() {
         let parser = AqlParser::new();
-        let result = parser.parse("FOR doc IN users UPDATE doc WITH {age: 31} IN users OPTIONS {keepNull: false}");
+        let result = parser
+            .parse("FOR doc IN users UPDATE doc WITH {age: 31} IN users OPTIONS {keepNull: false}");
         assert!(result.is_ok(), "Parser failed: {:?}", result.err());
     }
 
@@ -842,5 +899,349 @@ mod aql_tests {
             "FOR doc IN users COLLECT city = doc.city INTO g KEEP doc RETURN {city: city, data: g}",
         );
         assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+    }
+
+    // ==================== SEARCH CLAUSE TESTS ====================
+
+    #[tokio::test]
+    async fn test_parser_search_basic() {
+        let parser = AqlParser::new();
+        let result =
+            parser.parse("FOR doc IN articles SEARCH PHRASE(doc.title, 'hello world') RETURN doc");
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_parser_search_analyzer() {
+        let parser = AqlParser::new();
+        let result = parser.parse(
+            "FOR doc IN articles SEARCH ANALYZER(PHRASE(doc.content, 'search term'), 'text_en') RETURN doc",
+        );
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_parser_search_starts_with() {
+        let parser = AqlParser::new();
+        let result =
+            parser.parse("FOR doc IN products SEARCH STARTS_WITH(doc.name, 'App') RETURN doc");
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_parser_search_contains() {
+        let parser = AqlParser::new();
+        // Test CONTAINS function instead of LIKE (LIKE is a reserved keyword)
+        let result =
+            parser.parse("FOR doc IN users SEARCH CONTAINS(doc.email, 'example') RETURN doc");
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_parser_search_in_range() {
+        let parser = AqlParser::new();
+        let result = parser.parse(
+            "FOR doc IN products SEARCH IN_RANGE(doc.price, 10, 100, true, true) RETURN doc",
+        );
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_parser_search_levenshtein_match() {
+        let parser = AqlParser::new();
+        let result = parser.parse(
+            "FOR doc IN products SEARCH LEVENSHTEIN_MATCH(doc.name, 'prodct', 2) RETURN doc",
+        );
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_parser_search_boolean_and() {
+        let parser = AqlParser::new();
+        let result = parser.parse(
+            "FOR doc IN articles SEARCH PHRASE(doc.title, 'hello') AND PHRASE(doc.body, 'world') RETURN doc",
+        );
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_parser_search_boolean_or() {
+        let parser = AqlParser::new();
+        let result = parser.parse(
+            "FOR doc IN articles SEARCH PHRASE(doc.title, 'hello') OR PHRASE(doc.title, 'world') RETURN doc",
+        );
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_parser_search_exists() {
+        let parser = AqlParser::new();
+        let result = parser.parse("FOR doc IN users SEARCH EXISTS(doc.email) RETURN doc");
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_parser_search_boost() {
+        let parser = AqlParser::new();
+        // Use integer boost value to avoid float parsing issues
+        let result = parser.parse(
+            "FOR doc IN articles SEARCH BOOST(PHRASE(doc.title, 'important'), 2) RETURN doc",
+        );
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_parser_search_ngram() {
+        let parser = AqlParser::new();
+        let result = parser
+            .parse("FOR doc IN products SEARCH NGRAM_MATCH(doc.description, 'product') RETURN doc");
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+    }
+
+    // ==================== EXPRESSION EVALUATION TESTS ====================
+
+    #[tokio::test]
+    async fn test_evaluate_function_length_string() {
+        let (engine, _storage) = create_test_engine_with_storage().await;
+        let mut context = HashMap::new();
+        context.insert(
+            "text".to_string(),
+            AqlValue::String("hello world".to_string()),
+        );
+
+        use super::super::aql_parser::AqlExpression;
+        let expr = AqlExpression::FunctionCall {
+            name: "LENGTH".to_string(),
+            args: vec![AqlExpression::Variable("text".to_string())],
+        };
+
+        let result = engine.evaluate_expression_public(&expr, &context);
+        assert!(result.is_ok());
+        if let AqlValue::Number(n) = result.unwrap() {
+            assert_eq!(n.as_u64().unwrap(), 11);
+        } else {
+            panic!("Expected Number result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_function_upper() {
+        let (engine, _storage) = create_test_engine_with_storage().await;
+        let mut context = HashMap::new();
+        context.insert("text".to_string(), AqlValue::String("hello".to_string()));
+
+        use super::super::aql_parser::AqlExpression;
+        let expr = AqlExpression::FunctionCall {
+            name: "UPPER".to_string(),
+            args: vec![AqlExpression::Variable("text".to_string())],
+        };
+
+        let result = engine.evaluate_expression_public(&expr, &context);
+        assert!(result.is_ok());
+        if let AqlValue::String(s) = result.unwrap() {
+            assert_eq!(s, "HELLO");
+        } else {
+            panic!("Expected String result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_function_lower() {
+        let (engine, _storage) = create_test_engine_with_storage().await;
+        let mut context = HashMap::new();
+        context.insert("text".to_string(), AqlValue::String("HELLO".to_string()));
+
+        use super::super::aql_parser::AqlExpression;
+        let expr = AqlExpression::FunctionCall {
+            name: "LOWER".to_string(),
+            args: vec![AqlExpression::Variable("text".to_string())],
+        };
+
+        let result = engine.evaluate_expression_public(&expr, &context);
+        assert!(result.is_ok());
+        if let AqlValue::String(s) = result.unwrap() {
+            assert_eq!(s, "hello");
+        } else {
+            panic!("Expected String result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_binary_op_addition() {
+        let (engine, _storage) = create_test_engine_with_storage().await;
+        let mut context = HashMap::new();
+        context.insert(
+            "a".to_string(),
+            AqlValue::Number(serde_json::Number::from(5)),
+        );
+        context.insert(
+            "b".to_string(),
+            AqlValue::Number(serde_json::Number::from(3)),
+        );
+
+        use super::super::aql_parser::AqlExpression;
+        let expr = AqlExpression::BinaryOp {
+            op: "+".to_string(),
+            left: Box::new(AqlExpression::Variable("a".to_string())),
+            right: Box::new(AqlExpression::Variable("b".to_string())),
+        };
+
+        let result = engine.evaluate_expression_public(&expr, &context);
+        assert!(result.is_ok());
+        if let AqlValue::Number(n) = result.unwrap() {
+            assert_eq!(n.as_f64().unwrap(), 8.0);
+        } else {
+            panic!("Expected Number result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_binary_op_string_concat() {
+        let (engine, _storage) = create_test_engine_with_storage().await;
+        let mut context = HashMap::new();
+        context.insert("a".to_string(), AqlValue::String("Hello".to_string()));
+        context.insert("b".to_string(), AqlValue::String(" World".to_string()));
+
+        use super::super::aql_parser::AqlExpression;
+        let expr = AqlExpression::BinaryOp {
+            op: "+".to_string(),
+            left: Box::new(AqlExpression::Variable("a".to_string())),
+            right: Box::new(AqlExpression::Variable("b".to_string())),
+        };
+
+        let result = engine.evaluate_expression_public(&expr, &context);
+        assert!(result.is_ok());
+        if let AqlValue::String(s) = result.unwrap() {
+            assert_eq!(s, "Hello World");
+        } else {
+            panic!("Expected String result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_binary_op_division() {
+        let (engine, _storage) = create_test_engine_with_storage().await;
+        let mut context = HashMap::new();
+        context.insert(
+            "a".to_string(),
+            AqlValue::Number(serde_json::Number::from(10)),
+        );
+        context.insert(
+            "b".to_string(),
+            AqlValue::Number(serde_json::Number::from(2)),
+        );
+
+        use super::super::aql_parser::AqlExpression;
+        let expr = AqlExpression::BinaryOp {
+            op: "/".to_string(),
+            left: Box::new(AqlExpression::Variable("a".to_string())),
+            right: Box::new(AqlExpression::Variable("b".to_string())),
+        };
+
+        let result = engine.evaluate_expression_public(&expr, &context);
+        assert!(result.is_ok());
+        if let AqlValue::Number(n) = result.unwrap() {
+            assert_eq!(n.as_f64().unwrap(), 5.0);
+        } else {
+            panic!("Expected Number result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_binary_op_equality() {
+        let (engine, _storage) = create_test_engine_with_storage().await;
+        let mut context = HashMap::new();
+        context.insert(
+            "a".to_string(),
+            AqlValue::Number(serde_json::Number::from(5)),
+        );
+        context.insert(
+            "b".to_string(),
+            AqlValue::Number(serde_json::Number::from(5)),
+        );
+
+        use super::super::aql_parser::AqlExpression;
+        let expr = AqlExpression::BinaryOp {
+            op: "==".to_string(),
+            left: Box::new(AqlExpression::Variable("a".to_string())),
+            right: Box::new(AqlExpression::Variable("b".to_string())),
+        };
+
+        let result = engine.evaluate_expression_public(&expr, &context);
+        assert!(result.is_ok());
+        if let AqlValue::Bool(b) = result.unwrap() {
+            assert!(b);
+        } else {
+            panic!("Expected Bool result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_unary_op_negation() {
+        let (engine, _storage) = create_test_engine_with_storage().await;
+        let mut context = HashMap::new();
+        context.insert(
+            "x".to_string(),
+            AqlValue::Number(serde_json::Number::from(5)),
+        );
+
+        use super::super::aql_parser::AqlExpression;
+        let expr = AqlExpression::UnaryOp {
+            op: "-".to_string(),
+            expr: Box::new(AqlExpression::Variable("x".to_string())),
+        };
+
+        let result = engine.evaluate_expression_public(&expr, &context);
+        assert!(result.is_ok());
+        if let AqlValue::Number(n) = result.unwrap() {
+            assert_eq!(n.as_f64().unwrap(), -5.0);
+        } else {
+            panic!("Expected Number result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_evaluate_unary_op_not() {
+        let (engine, _storage) = create_test_engine_with_storage().await;
+        let mut context = HashMap::new();
+        context.insert("flag".to_string(), AqlValue::Bool(true));
+
+        use super::super::aql_parser::AqlExpression;
+        let expr = AqlExpression::UnaryOp {
+            op: "NOT".to_string(),
+            expr: Box::new(AqlExpression::Variable("flag".to_string())),
+        };
+
+        let result = engine.evaluate_expression_public(&expr, &context);
+        assert!(result.is_ok());
+        if let AqlValue::Bool(b) = result.unwrap() {
+            assert!(!b);
+        } else {
+            panic!("Expected Bool result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_levenshtein_distance() {
+        let (engine, _storage) = create_test_engine_with_storage().await;
+
+        // Test exact match
+        assert_eq!(engine.levenshtein_distance_public("hello", "hello"), 0);
+
+        // Test single character difference
+        assert_eq!(engine.levenshtein_distance_public("hello", "hallo"), 1);
+
+        // Test deletion
+        assert_eq!(engine.levenshtein_distance_public("hello", "helo"), 1);
+
+        // Test insertion
+        assert_eq!(engine.levenshtein_distance_public("helo", "hello"), 1);
+
+        // Test completely different strings
+        assert_eq!(engine.levenshtein_distance_public("abc", "xyz"), 3);
+
+        // Test empty strings
+        assert_eq!(engine.levenshtein_distance_public("", "hello"), 5);
+        assert_eq!(engine.levenshtein_distance_public("hello", ""), 5);
     }
 }

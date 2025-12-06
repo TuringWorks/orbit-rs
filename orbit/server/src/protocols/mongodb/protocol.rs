@@ -106,8 +106,9 @@ impl Decoder for MongoCodec {
         cursor.set_position(16);
         let body_len = message_length as usize - 16;
         let mut body_slice = vec![0u8; body_len];
-        std::io::Read::read_exact(&mut cursor, &mut body_slice).map_err(|e| OrbitError::network(format!("IO error: {}", e)))?;
-        
+        std::io::Read::read_exact(&mut cursor, &mut body_slice)
+            .map_err(|e| OrbitError::network(format!("IO error: {}", e)))?;
+
         // Consume bytes from src
         src.advance(message_length as usize);
 
@@ -115,7 +116,7 @@ impl Decoder for MongoCodec {
             OP_QUERY => {
                 let mut body_cursor = Cursor::new(body_slice);
                 let flags = body_cursor.get_i32_le();
-                
+
                 // Read CString for collection name
                 let mut full_collection_name = String::new();
                 loop {
@@ -134,23 +135,27 @@ impl Decoder for MongoCodec {
                 let mut reader = &body_cursor.get_ref()[pos as usize..];
                 let query = bson::Document::from_reader(&mut reader)
                     .map_err(|e| OrbitError::network(format!("Invalid BSON query: {}", e)))?;
-                
+
                 // Update cursor position after reading BSON
                 // BSON document starts with length (i32)
                 let query_size_bytes = u32::from_le_bytes(
-                    body_cursor.get_ref()[pos as usize..pos as usize + 4].try_into().unwrap()
+                    body_cursor.get_ref()[pos as usize..pos as usize + 4]
+                        .try_into()
+                        .unwrap(),
                 ) as u64;
-                
+
                 body_cursor.set_position(pos + query_size_bytes);
 
-                let return_fields_selector = if body_cursor.position() < body_cursor.get_ref().len() as u64 {
-                    let pos = body_cursor.position();
-                    let mut reader = &body_cursor.get_ref()[pos as usize..];
-                    Some(bson::Document::from_reader(&mut reader)
-                        .map_err(|e| OrbitError::network(format!("Invalid BSON selector: {}", e)))?)
-                } else {
-                    None
-                };
+                let return_fields_selector =
+                    if body_cursor.position() < body_cursor.get_ref().len() as u64 {
+                        let pos = body_cursor.position();
+                        let mut reader = &body_cursor.get_ref()[pos as usize..];
+                        Some(bson::Document::from_reader(&mut reader).map_err(|e| {
+                            OrbitError::network(format!("Invalid BSON selector: {}", e))
+                        })?)
+                    } else {
+                        None
+                    };
 
                 Ok(Some(MongoMessage::Query {
                     header,
@@ -165,7 +170,7 @@ impl Decoder for MongoCodec {
             OP_MSG => {
                 let mut body_cursor = Cursor::new(body_slice);
                 let flag_bits = body_cursor.get_u32_le();
-                
+
                 let mut sections = Vec::new();
                 let checksum: Option<u32> = None;
 
@@ -175,20 +180,23 @@ impl Decoder for MongoCodec {
                         KIND_BODY => {
                             let pos = body_cursor.position();
                             let mut reader = &body_cursor.get_ref()[pos as usize..];
-                            let doc = bson::Document::from_reader(&mut reader)
-                                .map_err(|e| OrbitError::network(format!("Invalid BSON body: {}", e)))?;
-                            
+                            let doc = bson::Document::from_reader(&mut reader).map_err(|e| {
+                                OrbitError::network(format!("Invalid BSON body: {}", e))
+                            })?;
+
                             let doc_size = u32::from_le_bytes(
-                                body_cursor.get_ref()[pos as usize..pos as usize + 4].try_into().unwrap()
+                                body_cursor.get_ref()[pos as usize..pos as usize + 4]
+                                    .try_into()
+                                    .unwrap(),
                             ) as u64;
                             body_cursor.set_position(pos + doc_size);
-                            
+
                             sections.push(MsgSection::Body(doc));
                         }
                         KIND_DOCUMENT_SEQUENCE => {
                             let section_size = body_cursor.get_i32_le();
                             let end_pos = body_cursor.position() + section_size as u64 - 4; // -4 because size includes itself
-                            
+
                             let mut identifier = String::new();
                             loop {
                                 let byte = body_cursor.get_u8();
@@ -197,22 +205,29 @@ impl Decoder for MongoCodec {
                                 }
                                 identifier.push(byte as char);
                             }
-                            
+
                             let mut documents = Vec::new();
                             while body_cursor.position() < end_pos {
                                 let pos = body_cursor.position();
                                 let mut reader = &body_cursor.get_ref()[pos as usize..];
-                                let doc = bson::Document::from_reader(&mut reader)
-                                    .map_err(|e| OrbitError::network(format!("Invalid BSON sequence doc: {}", e)))?;
-                                
+                                let doc =
+                                    bson::Document::from_reader(&mut reader).map_err(|e| {
+                                        OrbitError::network(format!(
+                                            "Invalid BSON sequence doc: {}",
+                                            e
+                                        ))
+                                    })?;
+
                                 let doc_size = u32::from_le_bytes(
-                                    body_cursor.get_ref()[pos as usize..pos as usize + 4].try_into().unwrap()
+                                    body_cursor.get_ref()[pos as usize..pos as usize + 4]
+                                        .try_into()
+                                        .unwrap(),
                                 ) as u64;
                                 body_cursor.set_position(pos + doc_size);
-                                
+
                                 documents.push(doc);
                             }
-                            
+
                             sections.push(MsgSection::DocumentSequence {
                                 identifier,
                                 documents,
@@ -241,12 +256,10 @@ impl Decoder for MongoCodec {
                     checksum,
                 }))
             }
-            _ => {
-                Ok(Some(MongoMessage::Unknown {
-                    header,
-                    body: body_slice,
-                }))
-            }
+            _ => Ok(Some(MongoMessage::Unknown {
+                header,
+                body: body_slice,
+            })),
         }
     }
 }
@@ -269,11 +282,12 @@ impl Encoder<MongoMessage> for MongoCodec {
                 let mut doc_bytes = Vec::new();
                 for doc in &documents {
                     let mut buf = Vec::new();
-                    doc.to_writer(&mut buf).map_err(|e| OrbitError::network(format!("BSON encode error: {}", e)))?;
+                    doc.to_writer(&mut buf)
+                        .map_err(|e| OrbitError::network(format!("BSON encode error: {}", e)))?;
                     doc_bytes.extend_from_slice(&buf);
                 }
                 body_len += doc_bytes.len();
-                
+
                 let total_len = 16 + body_len;
 
                 dst.reserve(total_len);
@@ -281,7 +295,7 @@ impl Encoder<MongoMessage> for MongoCodec {
                 dst.put_i32_le(header.request_id);
                 dst.put_i32_le(header.response_to);
                 dst.put_i32_le(OP_REPLY);
-                
+
                 dst.put_i32_le(response_flags);
                 dst.put_i64_le(cursor_id);
                 dst.put_i32_le(starting_from);
@@ -296,42 +310,49 @@ impl Encoder<MongoMessage> for MongoCodec {
             } => {
                 let mut body_buf = BytesMut::new();
                 body_buf.put_u32_le(flag_bits);
-                
+
                 for section in sections {
                     match section {
                         MsgSection::Body(doc) => {
                             body_buf.put_u8(KIND_BODY);
                             let mut buf = Vec::new();
-                            doc.to_writer(&mut buf).map_err(|e| OrbitError::network(format!("BSON encode error: {}", e)))?;
+                            doc.to_writer(&mut buf).map_err(|e| {
+                                OrbitError::network(format!("BSON encode error: {}", e))
+                            })?;
                             body_buf.put_slice(&buf);
                         }
-                        MsgSection::DocumentSequence { identifier, documents } => {
+                        MsgSection::DocumentSequence {
+                            identifier,
+                            documents,
+                        } => {
                             body_buf.put_u8(KIND_DOCUMENT_SEQUENCE);
-                            
+
                             // We need to calculate size first
                             let mut seq_buf = BytesMut::new();
                             seq_buf.put_slice(identifier.as_bytes());
                             seq_buf.put_u8(0); // CString null terminator
-                            
+
                             for doc in documents {
                                 let mut buf = Vec::new();
-                                doc.to_writer(&mut buf).map_err(|e| OrbitError::network(format!("BSON encode error: {}", e)))?;
+                                doc.to_writer(&mut buf).map_err(|e| {
+                                    OrbitError::network(format!("BSON encode error: {}", e))
+                                })?;
                                 seq_buf.put_slice(&buf);
                             }
-                            
+
                             let size = 4 + seq_buf.len() as i32;
                             body_buf.put_i32_le(size);
                             body_buf.put_slice(&seq_buf);
                         }
                     }
                 }
-                
+
                 if let Some(crc) = checksum {
                     body_buf.put_u32_le(crc);
                 }
-                
+
                 let total_len = 16 + body_buf.len();
-                
+
                 dst.reserve(total_len);
                 dst.put_i32_le(total_len as i32);
                 dst.put_i32_le(header.request_id);

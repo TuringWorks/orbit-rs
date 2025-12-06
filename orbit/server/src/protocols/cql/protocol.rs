@@ -259,7 +259,7 @@ impl QueryParameters {
             return Err(ProtocolError::IncompleteFrame);
         }
         let consistency = ConsistencyLevel::from_u16(buf.get_u16())?;
-        
+
         if buf.remaining() < 1 {
             return Err(ProtocolError::IncompleteFrame);
         }
@@ -308,7 +308,7 @@ impl QueryParameters {
             }
             let len = buf.get_i32();
             if len < 0 {
-                 return Err(ProtocolError::IncompleteFrame);
+                return Err(ProtocolError::IncompleteFrame);
             }
             if buf.remaining() < len as usize {
                 return Err(ProtocolError::IncompleteFrame);
@@ -412,7 +412,7 @@ pub fn build_empty_rows_result(stream: i16) -> CqlFrame {
     // Metadata: flags=0, columns_count=0
     body.put_i32(0); // flags
     body.put_i32(0); // columns_count
-    // Row count: 0
+                     // Row count: 0
     body.put_i32(0);
     CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
 }
@@ -430,7 +430,7 @@ pub fn build_system_local_response(stream: i16) -> CqlFrame {
 
     // Global table spec
     write_string(&mut body, "system"); // keyspace
-    write_string(&mut body, "local");  // table
+    write_string(&mut body, "local"); // table
 
     // Column specs (name, type)
     write_string(&mut body, "key");
@@ -524,12 +524,12 @@ pub fn build_system_local_response(stream: i16) -> CqlFrame {
 
     // schema_version: uuid (16 bytes)
     body.put_i32(16); // len
-    // random uuid
+                      // random uuid
     body.put(&b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"[..]);
 
     // host_id: uuid (16 bytes)
     body.put_i32(16); // len
-    // random uuid (different from schema_version just in case)
+                      // random uuid (different from schema_version just in case)
     body.put(&b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01"[..]);
 
     // broadcast_address: 127.0.0.1 (IPv4 = 4 bytes)
@@ -551,40 +551,40 @@ pub fn build_system_local_response(stream: i16) -> CqlFrame {
 pub fn build_system_peers_v2_response(stream: i16) -> CqlFrame {
     let mut body = BytesMut::new();
     body.put_i32(ResultKind::Rows as i32);
-    
+
     // Metadata
     // Flags: 0x0001 (Global_tables_spec)
-    body.put_i32(0x0001); 
+    body.put_i32(0x0001);
     // Column count: 7
     body.put_i32(7);
-    
+
     // Global table spec
     write_string(&mut body, "system"); // keyspace
-    write_string(&mut body, "peers_v2");  // table
-    
+    write_string(&mut body, "peers_v2"); // table
+
     // Column specs (name, type)
     write_string(&mut body, "peer");
     body.put_u16(0x0010); // inet
-    
+
     write_string(&mut body, "peer_port");
     body.put_u16(0x0009); // int
-    
+
     write_string(&mut body, "data_center");
     body.put_u16(0x000D); // text
-    
+
     write_string(&mut body, "rack");
     body.put_u16(0x000D); // text
-    
+
     write_string(&mut body, "tokens");
     body.put_u16(0x0022); // set
     body.put_u16(0x000D); // <text>
-    
+
     write_string(&mut body, "schema_version");
     body.put_u16(0x000C); // uuid
 
     write_string(&mut body, "host_id");
     body.put_u16(0x000C); // uuid
-    
+
     // Row count: 0
     body.put_i32(0);
 
@@ -1043,7 +1043,12 @@ pub fn map_error_to_cql_code(error: &crate::protocols::error::ProtocolError) -> 
 
 /// Build an ERROR response
 pub fn build_error_response(stream: i16, code: i32, message: &str) -> CqlFrame {
-    tracing::error!("Building error response: stream={}, code={:#x}, message='{}'", stream, code, message);
+    tracing::error!(
+        "Building error response: stream={}, code={:#x}, message='{}'",
+        stream,
+        code,
+        message
+    );
     let mut body = BytesMut::new();
     body.put_i32(code);
     write_string(&mut body, message);

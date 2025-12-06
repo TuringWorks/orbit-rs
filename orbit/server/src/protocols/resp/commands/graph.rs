@@ -311,9 +311,9 @@ impl GraphCommands {
                 return Ok(RespValue::Array(vec![
                     RespValue::Array(vec![]), // Empty header
                     RespValue::Array(vec![]), // Empty results
-                    RespValue::Array(vec![
-                        RespValue::bulk_string_from_str("Query internal execution time: 0.1 ms"),
-                    ]),
+                    RespValue::Array(vec![RespValue::bulk_string_from_str(
+                        "Query internal execution time: 0.1 ms",
+                    )]),
                 ]));
             }
         };
@@ -334,9 +334,9 @@ impl GraphCommands {
             return Ok(RespValue::Array(vec![
                 RespValue::Array(vec![]), // Empty header
                 RespValue::Array(vec![]), // Empty results
-                RespValue::Array(vec![
-                    RespValue::bulk_string_from_str("Query internal execution time: 0.1 ms"),
-                ]),
+                RespValue::Array(vec![RespValue::bulk_string_from_str(
+                    "Query internal execution time: 0.1 ms",
+                )]),
             ]));
         }
 
@@ -400,7 +400,11 @@ impl GraphCommands {
                                 row.push(RespValue::bulk_string_from_str(n.to_string()));
                             }
                             Some(serde_json::Value::Bool(b)) => {
-                                row.push(RespValue::bulk_string_from_str(if *b { "true" } else { "false" }));
+                                row.push(RespValue::bulk_string_from_str(if *b {
+                                    "true"
+                                } else {
+                                    "false"
+                                }));
                             }
                             Some(other) => {
                                 row.push(RespValue::bulk_string_from_str(other.to_string()));
@@ -418,7 +422,10 @@ impl GraphCommands {
                     node_map.insert(
                         "labels".to_string(),
                         serde_json::Value::Array(
-                            node.labels.iter().map(|l| serde_json::Value::String(l.clone())).collect(),
+                            node.labels
+                                .iter()
+                                .map(|l| serde_json::Value::String(l.clone()))
+                                .collect(),
                         ),
                     );
                     node_map.insert("properties".to_string(), serde_json::json!(node.properties));
@@ -926,7 +933,10 @@ mod tests {
         assert_eq!(graph.nodes.len(), 1);
         let node = graph.nodes.get(&node_id).unwrap();
         assert!(node.labels.contains(&"Person".to_string()));
-        assert_eq!(node.properties.get("name"), Some(&serde_json::json!("Alice")));
+        assert_eq!(
+            node.properties.get("name"),
+            Some(&serde_json::json!("Alice"))
+        );
     }
 
     #[test]

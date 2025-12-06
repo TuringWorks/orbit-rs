@@ -275,13 +275,52 @@ impl AclCommands {
 
         // Return commands in the category (simplified - just return category name)
         let commands = match category.as_str() {
-            "string" => vec!["GET", "SET", "APPEND", "GETRANGE", "SETRANGE", "STRLEN", "INCR", "DECR", "MGET", "MSET"],
-            "hash" => vec!["HGET", "HSET", "HDEL", "HEXISTS", "HGETALL", "HKEYS", "HVALS", "HLEN", "HINCRBY"],
-            "list" => vec!["LPUSH", "RPUSH", "LPOP", "RPOP", "LRANGE", "LLEN", "LINDEX", "LSET"],
-            "set" => vec!["SADD", "SREM", "SMEMBERS", "SCARD", "SISMEMBER", "SUNION", "SINTER", "SDIFF"],
-            "sortedset" => vec!["ZADD", "ZREM", "ZRANGE", "ZSCORE", "ZRANGEBYSCORE", "ZCARD", "ZCOUNT"],
-            "stream" => vec!["XADD", "XREAD", "XRANGE", "XLEN", "XGROUP", "XREADGROUP", "XACK", "XPENDING"],
-            "pubsub" => vec!["PUBLISH", "SUBSCRIBE", "UNSUBSCRIBE", "PSUBSCRIBE", "PUNSUBSCRIBE"],
+            "string" => vec![
+                "GET", "SET", "APPEND", "GETRANGE", "SETRANGE", "STRLEN", "INCR", "DECR", "MGET",
+                "MSET",
+            ],
+            "hash" => vec![
+                "HGET", "HSET", "HDEL", "HEXISTS", "HGETALL", "HKEYS", "HVALS", "HLEN", "HINCRBY",
+            ],
+            "list" => vec![
+                "LPUSH", "RPUSH", "LPOP", "RPOP", "LRANGE", "LLEN", "LINDEX", "LSET",
+            ],
+            "set" => vec![
+                "SADD",
+                "SREM",
+                "SMEMBERS",
+                "SCARD",
+                "SISMEMBER",
+                "SUNION",
+                "SINTER",
+                "SDIFF",
+            ],
+            "sortedset" => vec![
+                "ZADD",
+                "ZREM",
+                "ZRANGE",
+                "ZSCORE",
+                "ZRANGEBYSCORE",
+                "ZCARD",
+                "ZCOUNT",
+            ],
+            "stream" => vec![
+                "XADD",
+                "XREAD",
+                "XRANGE",
+                "XLEN",
+                "XGROUP",
+                "XREADGROUP",
+                "XACK",
+                "XPENDING",
+            ],
+            "pubsub" => vec![
+                "PUBLISH",
+                "SUBSCRIBE",
+                "UNSUBSCRIBE",
+                "PSUBSCRIBE",
+                "PUNSUBSCRIBE",
+            ],
             "connection" => vec!["PING", "ECHO", "AUTH", "SELECT", "QUIT"],
             "admin" => vec!["ACL", "INFO", "DBSIZE", "FLUSHDB", "FLUSHALL", "CONFIG"],
             "read" => vec!["GET", "HGET", "LRANGE", "SMEMBERS", "ZRANGE", "XREAD"],
@@ -470,9 +509,7 @@ impl AclCommands {
         let count: Option<usize> = if args.is_empty() {
             None
         } else {
-            self.get_string_arg(args, 0, "ACL LOG")?
-                .parse()
-                .ok()
+            self.get_string_arg(args, 0, "ACL LOG")?.parse().ok()
         };
 
         let entries = self.acl_manager.get_log(count).await;
@@ -578,7 +615,7 @@ impl AclCommands {
                     }
                     // Handle plaintext password (hash it)
                     else if rule.starts_with('>') {
-                        use sha2::{Sha256, Digest};
+                        use sha2::{Digest, Sha256};
                         let mut hasher = Sha256::new();
                         hasher.update(rule[1..].as_bytes());
                         let hash = format!("{:x}", hasher.finalize());
@@ -586,7 +623,7 @@ impl AclCommands {
                     }
                     // Remove password
                     else if rule.starts_with('<') {
-                        use sha2::{Sha256, Digest};
+                        use sha2::{Digest, Sha256};
                         let mut hasher = Sha256::new();
                         hasher.update(rule[1..].as_bytes());
                         let hash = format!("{:x}", hasher.finalize());
@@ -653,7 +690,11 @@ impl AclCommands {
                 }
 
                 Ok(RespValue::BulkString(Bytes::from(
-                    format!("This user has no permissions to run the '{}' command", command).into_bytes(),
+                    format!(
+                        "This user has no permissions to run the '{}' command",
+                        command
+                    )
+                    .into_bytes(),
                 )))
             }
             None => Err(ProtocolError::RespError(format!(
@@ -745,8 +786,8 @@ impl CommandHandler for AclCommands {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::traits::BaseCommandHandler;
+    use super::*;
 
     #[tokio::test]
     async fn test_acl_cat() {
@@ -757,7 +798,8 @@ mod tests {
         let orbit_client = orbit_client::OrbitClient::new_offline(client_config)
             .await
             .unwrap();
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+        let local_registry =
+            Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
         let handler = AclCommands {
             base: BaseCommandHandler::new(Arc::new(orbit_client), local_registry),
             acl_manager: Arc::new(AclManager::new()),
@@ -790,7 +832,8 @@ mod tests {
         let orbit_client = orbit_client::OrbitClient::new_offline(client_config)
             .await
             .unwrap();
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+        let local_registry =
+            Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
         let handler = AclCommands {
             base: BaseCommandHandler::new(Arc::new(orbit_client), local_registry),
             acl_manager: Arc::new(AclManager::new()),
@@ -830,7 +873,8 @@ mod tests {
         let orbit_client = orbit_client::OrbitClient::new_offline(client_config)
             .await
             .unwrap();
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+        let local_registry =
+            Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
         let handler = AclCommands {
             base: BaseCommandHandler::new(Arc::new(orbit_client), local_registry),
             acl_manager: Arc::new(AclManager::new()),
@@ -854,7 +898,8 @@ mod tests {
         let orbit_client = orbit_client::OrbitClient::new_offline(client_config)
             .await
             .unwrap();
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+        let local_registry =
+            Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
         let handler = AclCommands {
             base: BaseCommandHandler::new(Arc::new(orbit_client), local_registry),
             acl_manager: Arc::new(AclManager::new()),

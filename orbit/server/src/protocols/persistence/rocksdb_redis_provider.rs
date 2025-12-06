@@ -64,10 +64,7 @@ impl RocksDbRedisDataProvider {
             .map(|name| ColumnFamilyDescriptor::new(name, Options::default()))
             .collect();
 
-        tracing::info!(
-            "Opening Redis RocksDB with column families: {:?}",
-            all_cfs
-        );
+        tracing::info!("Opening Redis RocksDB with column families: {:?}", all_cfs);
 
         // Open database with column families
         let db = DB::open_cf_descriptors(&opts, path, cf_descriptors)

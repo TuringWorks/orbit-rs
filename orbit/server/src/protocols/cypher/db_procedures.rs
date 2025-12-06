@@ -162,10 +162,8 @@ impl<S: GraphStorage + Send + Sync + 'static> DbProcedures<S> {
 
         let labels: HashSet<String> = self.known_labels.iter().cloned().collect();
 
-        let mut rows: Vec<Vec<Option<String>>> = labels
-            .into_iter()
-            .map(|label| vec![Some(label)])
-            .collect();
+        let mut rows: Vec<Vec<Option<String>>> =
+            labels.into_iter().map(|label| vec![Some(label)]).collect();
         rows.sort_by(|a, b| a[0].cmp(&b[0]));
 
         Ok(Self::make_result(columns, rows))
@@ -505,10 +503,7 @@ impl<S: GraphStorage + Send + Sync + 'static> DbProcedures<S> {
 
     /// Execute dbms.listConfig()
     async fn execute_list_config(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
-        let filter = args
-            .first()
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+        let filter = args.first().and_then(|v| v.as_str()).map(|s| s.to_string());
 
         let columns = vec![
             "name".to_string(),
@@ -534,7 +529,11 @@ impl<S: GraphStorage + Send + Sync + 'static> DbProcedures<S> {
                 "true",
                 "HTTP connector enabled",
             ),
-            ("dbms.security.auth_enabled", "true", "Authentication enabled"),
+            (
+                "dbms.security.auth_enabled",
+                "true",
+                "Authentication enabled",
+            ),
         ];
 
         let rows: Vec<Vec<Option<String>>> = configs
@@ -592,16 +591,10 @@ impl<S: GraphStorage + Send + Sync + 'static> DbProcedures<S> {
 
     /// Execute db.awaitIndex()
     async fn execute_await_index(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
-        let _index_name = args
-            .first()
-            .and_then(|v| v.as_str())
-            .unwrap_or("default");
+        let _index_name = args.first().and_then(|v| v.as_str()).unwrap_or("default");
 
         let columns = vec!["indexName".to_string(), "state".to_string()];
-        let rows = vec![vec![
-            Some("index".to_string()),
-            Some("ONLINE".to_string()),
-        ]];
+        let rows = vec![vec![Some("index".to_string()), Some("ONLINE".to_string())]];
 
         Ok(Self::make_result(columns, rows))
     }
@@ -699,7 +692,10 @@ mod tests {
         let result = procedures.execute_dbms_components().await;
         assert!(result.is_ok());
         let result = result.unwrap();
-        assert!(result.rows.iter().any(|r| r[0] == Some("Orbit-RS".to_string())));
+        assert!(result
+            .rows
+            .iter()
+            .any(|r| r[0] == Some("Orbit-RS".to_string())));
     }
 
     #[tokio::test]

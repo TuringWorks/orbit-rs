@@ -9,8 +9,12 @@
 //! It bridges the SQL AST with the statistics system to provide
 //! accurate row count estimates for query planning.
 
-use crate::protocols::postgres_wire::sql::ast::{BinaryOperator, Expression, InList, UnaryOperator};
-use crate::protocols::postgres_wire::sql::statistics::{Predicate, StatisticsManager, TableStatistics};
+use crate::protocols::postgres_wire::sql::ast::{
+    BinaryOperator, Expression, InList, UnaryOperator,
+};
+use crate::protocols::postgres_wire::sql::statistics::{
+    Predicate, StatisticsManager, TableStatistics,
+};
 use crate::protocols::postgres_wire::sql::types::SqlValue;
 
 /// Cardinality estimator configuration
@@ -105,7 +109,11 @@ impl CardinalityEstimator {
             }
 
             // IN list
-            Expression::In { expr, list, negated } => {
+            Expression::In {
+                expr,
+                list,
+                negated,
+            } => {
                 let base = self.estimate_in_list_selectivity(expr, list, table_stats);
                 if *negated {
                     1.0 - base
@@ -131,9 +139,7 @@ impl CardinalityEstimator {
 
             // LIKE patterns
             Expression::Like {
-                pattern,
-                negated,
-                ..
+                pattern, negated, ..
             } => {
                 let base = self.estimate_like_selectivity(pattern);
                 if *negated {
@@ -214,9 +220,7 @@ impl CardinalityEstimator {
             | BinaryOperator::RightShift => 1.0,
 
             // Array operators
-            BinaryOperator::Contains
-            | BinaryOperator::ContainedBy
-            | BinaryOperator::Overlap => 0.1,
+            BinaryOperator::Contains | BinaryOperator::ContainedBy | BinaryOperator::Overlap => 0.1,
 
             // JSON/JSONB operators
             BinaryOperator::JsonExtract
@@ -478,7 +482,10 @@ impl CardinalityEstimator {
                             self.extract_column_name(left),
                             self.extract_literal_value(right),
                         ) {
-                            predicates.push(Predicate::Eq { column: col, value: val });
+                            predicates.push(Predicate::Eq {
+                                column: col,
+                                value: val,
+                            });
                         }
                     }
                     BinaryOperator::LessThan | BinaryOperator::LessThanOrEqual => {
@@ -532,7 +539,10 @@ impl CardinalityEstimator {
             if let Some(expr) = filter {
                 let predicates = self.extract_predicates(expr);
                 if !predicates.is_empty() {
-                    if let Some(estimate) = stats_manager.estimate_cardinality(table_name, &predicates).await {
+                    if let Some(estimate) = stats_manager
+                        .estimate_cardinality(table_name, &predicates)
+                        .await
+                    {
                         return estimate;
                     }
                 }

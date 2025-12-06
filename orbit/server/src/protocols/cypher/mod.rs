@@ -18,6 +18,7 @@
 //! RETURN a.id, b.id
 //! ```
 
+pub mod apoc_procedures;
 pub mod bolt;
 pub mod bolt_protocol;
 pub mod cypher_functions;
@@ -34,6 +35,7 @@ pub mod types;
 // #[cfg(test)]
 // mod tests;
 
+pub use apoc_procedures::{is_apoc_procedure, ApocProcedures};
 #[allow(deprecated)]
 pub use bolt::BoltProtocol;
 pub use bolt_protocol::BoltProtocolHandler;

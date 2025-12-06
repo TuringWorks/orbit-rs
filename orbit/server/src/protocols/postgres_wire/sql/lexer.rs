@@ -253,9 +253,9 @@ pub enum Token {
     VectorCosineDistance, // <=>
 
     // Operators - JSON/JSONB
-    Arrow,              // -> (JSON field extraction)
-    JsonExtractText,    // ->> (JSON field extraction as text)
-    JsonPathExtract,    // #> (JSON path extraction)
+    Arrow,               // -> (JSON field extraction)
+    JsonExtractText,     // ->> (JSON field extraction as text)
+    JsonPathExtract,     // #> (JSON path extraction)
     JsonPathExtractText, // #>> (JSON path extraction as text)
 
     // Operators - Other
@@ -1012,7 +1012,6 @@ impl Lexer {
                             self.advance();
                             return Token::Semicolon;
                         }
-
 
                         ':' => {
                             self.advance();

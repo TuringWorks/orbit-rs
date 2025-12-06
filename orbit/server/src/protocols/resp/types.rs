@@ -1073,7 +1073,10 @@ mod tests {
         assert_eq!(format!("{}", RespValue::Double(3.14)), "3.14");
         assert_eq!(format!("{}", RespValue::Double(f64::INFINITY)), "Infinity");
         assert_eq!(format!("{}", RespValue::Double(f64::NAN)), "NaN");
-        assert_eq!(format!("{}", RespValue::BigNumber("123".to_string())), "123");
+        assert_eq!(
+            format!("{}", RespValue::BigNumber("123".to_string())),
+            "123"
+        );
     }
 
     #[test]

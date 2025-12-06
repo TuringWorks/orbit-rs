@@ -134,7 +134,7 @@ async fn handle_request(
     cursors: Arc<RwLock<HashMap<String, AqlCursor>>>,
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
     let mut path = req.uri().path().to_string();
-    
+
     // Handle database prefix (e.g., /_db/_system/...)
     if path.starts_with("/_db/") {
         let parts: Vec<&str> = path.split('/').collect();

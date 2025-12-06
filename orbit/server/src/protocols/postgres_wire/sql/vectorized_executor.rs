@@ -22,7 +22,9 @@ use std::time::Instant;
 
 #[cfg(feature = "gpu-acceleration")]
 #[allow(unused_imports)]
-use orbit_compute::columnar_analytics::{AggregateFunction, ColumnarAnalyticsConfig, GPUColumnarAnalytics};
+use orbit_compute::columnar_analytics::{
+    AggregateFunction, ColumnarAnalyticsConfig, GPUColumnarAnalytics,
+};
 #[cfg(feature = "gpu-acceleration")]
 use orbit_compute::cpu::engine::CPUEngine;
 #[cfg(feature = "gpu-acceleration")]
@@ -108,10 +110,7 @@ impl ColumnarData {
     }
 
     /// Convert from row-oriented format to columnar
-    pub fn from_rows(
-        rows: &[HashMap<String, SqlValue>],
-        column_order: &[String],
-    ) -> Self {
+    pub fn from_rows(rows: &[HashMap<String, SqlValue>], column_order: &[String]) -> Self {
         let mut result = Self::new();
         result.row_count = rows.len();
         result.column_names = column_order.to_vec();
@@ -126,21 +125,31 @@ impl ColumnarData {
                 if let Some(value) = first_row.get(col_name) {
                     match value {
                         SqlValue::Integer(_) | SqlValue::BigInt(_) | SqlValue::SmallInt(_) => {
-                            result.int_columns.insert(col_name.clone(), Vec::with_capacity(rows.len()));
+                            result
+                                .int_columns
+                                .insert(col_name.clone(), Vec::with_capacity(rows.len()));
                         }
                         SqlValue::Real(_) | SqlValue::DoublePrecision(_) | SqlValue::Decimal(_) => {
-                            result.float_columns.insert(col_name.clone(), Vec::with_capacity(rows.len()));
+                            result
+                                .float_columns
+                                .insert(col_name.clone(), Vec::with_capacity(rows.len()));
                         }
                         SqlValue::Boolean(_) => {
-                            result.bool_columns.insert(col_name.clone(), Vec::with_capacity(rows.len()));
+                            result
+                                .bool_columns
+                                .insert(col_name.clone(), Vec::with_capacity(rows.len()));
                         }
                         _ => {
-                            result.string_columns.insert(col_name.clone(), Vec::with_capacity(rows.len()));
+                            result
+                                .string_columns
+                                .insert(col_name.clone(), Vec::with_capacity(rows.len()));
                         }
                     }
                 }
             }
-            result.null_bitmaps.insert(col_name.clone(), Vec::with_capacity(rows.len()));
+            result
+                .null_bitmaps
+                .insert(col_name.clone(), Vec::with_capacity(rows.len()));
         }
 
         // Populate columns
@@ -199,7 +208,8 @@ impl ColumnarData {
             let mut row = HashMap::new();
 
             for col_name in &self.column_names {
-                let is_null = self.null_bitmaps
+                let is_null = self
+                    .null_bitmaps
                     .get(col_name)
                     .and_then(|nulls| nulls.get(idx))
                     .copied()
@@ -332,18 +342,26 @@ impl VectorizedExecutor {
                 SqlValue::Integer(i) => *i as i64,
                 SqlValue::BigInt(i) => *i,
                 SqlValue::SmallInt(i) => *i as i64,
-                _ => return Err(ProtocolError::PostgresError(
-                    format!("Cannot compare integer column to {:?}", value)
-                )),
+                _ => {
+                    return Err(ProtocolError::PostgresError(format!(
+                        "Cannot compare integer column to {:?}",
+                        value
+                    )))
+                }
             };
 
             let result = match op {
                 FilterOp::Eq => self.cpu_engine.filter_eq_i64(int_col, target),
                 FilterOp::Ne => {
                     // Ne = all indices not in Eq result
-                    let eq_indices: std::collections::HashSet<_> =
-                        self.cpu_engine.filter_eq_i64(int_col, target).into_iter().collect();
-                    (0..int_col.len()).filter(|i| !eq_indices.contains(i)).collect()
+                    let eq_indices: std::collections::HashSet<_> = self
+                        .cpu_engine
+                        .filter_eq_i64(int_col, target)
+                        .into_iter()
+                        .collect();
+                    (0..int_col.len())
+                        .filter(|i| !eq_indices.contains(i))
+                        .collect()
                 }
                 FilterOp::Lt => self.cpu_engine.filter_lt_i64(int_col, target),
                 FilterOp::Le => {
@@ -359,12 +377,19 @@ impl VectorizedExecutor {
                         le.extend(self.cpu_engine.filter_eq_i64(int_col, target));
                         le.into_iter().collect()
                     };
-                    (0..int_col.len()).filter(|i| !le_indices.contains(i)).collect()
+                    (0..int_col.len())
+                        .filter(|i| !le_indices.contains(i))
+                        .collect()
                 }
                 FilterOp::Ge => {
-                    let lt_indices: std::collections::HashSet<_> =
-                        self.cpu_engine.filter_lt_i64(int_col, target).into_iter().collect();
-                    (0..int_col.len()).filter(|i| !lt_indices.contains(i)).collect()
+                    let lt_indices: std::collections::HashSet<_> = self
+                        .cpu_engine
+                        .filter_lt_i64(int_col, target)
+                        .into_iter()
+                        .collect();
+                    (0..int_col.len())
+                        .filter(|i| !lt_indices.contains(i))
+                        .collect()
                 }
             };
 
@@ -378,9 +403,12 @@ impl VectorizedExecutor {
                 SqlValue::DoublePrecision(f) => *f,
                 SqlValue::Integer(i) => *i as f64,
                 SqlValue::BigInt(i) => *i as f64,
-                _ => return Err(ProtocolError::PostgresError(
-                    format!("Cannot compare float column to {:?}", value)
-                )),
+                _ => {
+                    return Err(ProtocolError::PostgresError(format!(
+                        "Cannot compare float column to {:?}",
+                        value
+                    )))
+                }
             };
 
             let result = match op {
@@ -388,7 +416,8 @@ impl VectorizedExecutor {
                 FilterOp::Lt => self.cpu_engine.filter_lt_f64(float_col, target),
                 _ => {
                     // Fallback to scalar for other ops
-                    float_col.iter()
+                    float_col
+                        .iter()
                         .enumerate()
                         .filter(|(_, &v)| match op {
                             FilterOp::Ne => (v - target).abs() > f64::EPSILON,
@@ -408,7 +437,8 @@ impl VectorizedExecutor {
         // Fallback to scalar for string columns
         if let Some(str_col) = columnar_data.string_columns.get(column_name) {
             let target = value.to_postgres_string();
-            let result: Vec<usize> = str_col.iter()
+            let result: Vec<usize> = str_col
+                .iter()
                 .enumerate()
                 .filter(|(_, v)| {
                     let v_str = v.as_deref().unwrap_or("");
@@ -426,9 +456,10 @@ impl VectorizedExecutor {
             return Ok(result);
         }
 
-        Err(ProtocolError::PostgresError(
-            format!("Column '{}' not found for filtering", column_name)
-        ))
+        Err(ProtocolError::PostgresError(format!(
+            "Column '{}' not found for filtering",
+            column_name
+        )))
     }
 
     /// Execute aggregation using SIMD/GPU
@@ -445,7 +476,10 @@ impl VectorizedExecutor {
         // Get the column data filtered by indices
         let result = if let Some(int_col) = columnar_data.int_columns.get(column_name) {
             let values: Vec<i64> = match indices {
-                Some(idx) => idx.iter().filter_map(|&i| int_col.get(i).copied()).collect(),
+                Some(idx) => idx
+                    .iter()
+                    .filter_map(|&i| int_col.get(i).copied())
+                    .collect(),
                 None => int_col.clone(),
             };
 
@@ -487,7 +521,10 @@ impl VectorizedExecutor {
             }
         } else if let Some(float_col) = columnar_data.float_columns.get(column_name) {
             let values: Vec<f64> = match indices {
-                Some(idx) => idx.iter().filter_map(|&i| float_col.get(i).copied()).collect(),
+                Some(idx) => idx
+                    .iter()
+                    .filter_map(|&i| float_col.get(i).copied())
+                    .collect(),
                 None => float_col.clone(),
             };
 
@@ -532,7 +569,8 @@ impl VectorizedExecutor {
                 AggregateType::Count => {
                     if let Some(str_col) = columnar_data.string_columns.get(column_name) {
                         let count = match indices {
-                            Some(idx) => idx.iter()
+                            Some(idx) => idx
+                                .iter()
                                 .filter(|&&i| str_col.get(i).map_or(false, |v| v.is_some()))
                                 .count(),
                             None => str_col.iter().filter(|v| v.is_some()).count(),
@@ -542,9 +580,12 @@ impl VectorizedExecutor {
                         SqlValue::Null
                     }
                 }
-                _ => return Err(ProtocolError::PostgresError(
-                    format!("Aggregation {:?} not supported for string column '{}'", agg_func, column_name)
-                )),
+                _ => {
+                    return Err(ProtocolError::PostgresError(format!(
+                        "Aggregation {:?} not supported for string column '{}'",
+                        agg_func, column_name
+                    )))
+                }
             }
         };
 
@@ -577,12 +618,16 @@ impl VectorizedExecutor {
                 SqlValue::Integer(i) => *i as i64,
                 SqlValue::BigInt(i) => *i,
                 SqlValue::SmallInt(i) => *i as i64,
-                _ => return Err(ProtocolError::PostgresError(
-                    format!("Cannot compare integer column to {:?}", value)
-                )),
+                _ => {
+                    return Err(ProtocolError::PostgresError(format!(
+                        "Cannot compare integer column to {:?}",
+                        value
+                    )))
+                }
             };
 
-            let result: Vec<usize> = int_col.iter()
+            let result: Vec<usize> = int_col
+                .iter()
                 .enumerate()
                 .filter(|(_, &v)| match op {
                     FilterOp::Eq => v == target,
@@ -603,12 +648,16 @@ impl VectorizedExecutor {
                 SqlValue::Real(f) => *f as f64,
                 SqlValue::DoublePrecision(f) => *f,
                 SqlValue::Integer(i) => *i as f64,
-                _ => return Err(ProtocolError::PostgresError(
-                    format!("Cannot compare float column to {:?}", value)
-                )),
+                _ => {
+                    return Err(ProtocolError::PostgresError(format!(
+                        "Cannot compare float column to {:?}",
+                        value
+                    )))
+                }
             };
 
-            let result: Vec<usize> = float_col.iter()
+            let result: Vec<usize> = float_col
+                .iter()
                 .enumerate()
                 .filter(|(_, &v)| match op {
                     FilterOp::Eq => (v - target).abs() < f64::EPSILON,
@@ -624,9 +673,10 @@ impl VectorizedExecutor {
             return Ok(result);
         }
 
-        Err(ProtocolError::PostgresError(
-            format!("Column '{}' not found", column_name)
-        ))
+        Err(ProtocolError::PostgresError(format!(
+            "Column '{}' not found",
+            column_name
+        )))
     }
 
     /// Fallback scalar aggregation
@@ -651,7 +701,10 @@ impl VectorizedExecutor {
     ) -> ProtocolResult<SqlValue> {
         if let Some(int_col) = columnar_data.int_columns.get(column_name) {
             let values: Vec<i64> = match indices {
-                Some(idx) => idx.iter().filter_map(|&i| int_col.get(i).copied()).collect(),
+                Some(idx) => idx
+                    .iter()
+                    .filter_map(|&i| int_col.get(i).copied())
+                    .collect(),
                 None => int_col.clone(),
             };
 
@@ -675,7 +728,10 @@ impl VectorizedExecutor {
 
         if let Some(float_col) = columnar_data.float_columns.get(column_name) {
             let values: Vec<f64> = match indices {
-                Some(idx) => idx.iter().filter_map(|&i| float_col.get(i).copied()).collect(),
+                Some(idx) => idx
+                    .iter()
+                    .filter_map(|&i| float_col.get(i).copied())
+                    .collect(),
                 None => float_col.clone(),
             };
 
@@ -689,8 +745,12 @@ impl VectorizedExecutor {
                     let sum: f64 = values.iter().sum();
                     SqlValue::DoublePrecision(sum / values.len() as f64)
                 }
-                AggregateType::Min => SqlValue::DoublePrecision(values.iter().cloned().reduce(f64::min).unwrap()),
-                AggregateType::Max => SqlValue::DoublePrecision(values.iter().cloned().reduce(f64::max).unwrap()),
+                AggregateType::Min => {
+                    SqlValue::DoublePrecision(values.iter().cloned().reduce(f64::min).unwrap())
+                }
+                AggregateType::Max => {
+                    SqlValue::DoublePrecision(values.iter().cloned().reduce(f64::max).unwrap())
+                }
                 AggregateType::Count => SqlValue::BigInt(values.len() as i64),
             };
 
@@ -709,7 +769,9 @@ impl VectorizedExecutor {
         indices: Option<&[usize]>,
     ) -> ProtocolResult<Vec<usize>> {
         if sort_keys.is_empty() {
-            return Ok(indices.map(|i| i.to_vec()).unwrap_or_else(|| columnar_data.all_indices()));
+            return Ok(indices
+                .map(|i| i.to_vec())
+                .unwrap_or_else(|| columnar_data.all_indices()));
         }
 
         let mut sorted_indices: Vec<usize> = indices
@@ -779,7 +841,9 @@ impl VectorizedExecutor {
         } else if let Some(float_col) = columnar_data.float_columns.get(&key.column) {
             let val_a = float_col.get(a).copied().unwrap_or(0.0);
             let val_b = float_col.get(b).copied().unwrap_or(0.0);
-            val_a.partial_cmp(&val_b).unwrap_or(std::cmp::Ordering::Equal)
+            val_a
+                .partial_cmp(&val_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         } else if let Some(str_col) = columnar_data.string_columns.get(&key.column) {
             let val_a = str_col.get(a).and_then(|v| v.as_ref());
             let val_b = str_col.get(b).and_then(|v| v.as_ref());
@@ -815,12 +879,8 @@ impl VectorizedExecutor {
 
         // Apply each filter with AND semantics
         for filter in &analysis.filters {
-            let filter_result = self.execute_filter_simd(
-                columnar_data,
-                &filter.column,
-                filter.op,
-                &filter.value,
-            )?;
+            let filter_result =
+                self.execute_filter_simd(columnar_data, &filter.column, filter.op, &filter.value)?;
             let filter_set: std::collections::HashSet<usize> = filter_result.into_iter().collect();
             result_set = result_set.intersection(&filter_set).copied().collect();
         }
@@ -844,15 +904,13 @@ impl VectorizedExecutor {
             .select_list
             .iter()
             .filter_map(|item| match item {
-                SelectItem::Expression { expr, alias } => {
-                    alias.clone().or_else(|| {
-                        if let Expression::Column(col_ref) = expr {
-                            Some(col_ref.name.clone())
-                        } else {
-                            None
-                        }
-                    })
-                }
+                SelectItem::Expression { expr, alias } => alias.clone().or_else(|| {
+                    if let Expression::Column(col_ref) = expr {
+                        Some(col_ref.name.clone())
+                    } else {
+                        None
+                    }
+                }),
                 SelectItem::Wildcard => None,
                 SelectItem::QualifiedWildcard { .. } => None,
             })
@@ -897,15 +955,21 @@ impl VectorizedExecutor {
         let final_indices = if let Some(limit_clause) = &select.limit {
             let offset = select.offset.unwrap_or(0) as usize;
 
-            let limit_val = limit_clause.count.as_ref().and_then(|expr| {
-                match expr {
+            let limit_val = limit_clause
+                .count
+                .as_ref()
+                .and_then(|expr| match expr {
                     Expression::Literal(SqlValue::Integer(n)) => Some(*n as usize),
                     Expression::Literal(SqlValue::BigInt(n)) => Some(*n as usize),
                     _ => None,
-                }
-            }).unwrap_or(sorted_indices.len());
+                })
+                .unwrap_or(sorted_indices.len());
 
-            sorted_indices.into_iter().skip(offset).take(limit_val).collect()
+            sorted_indices
+                .into_iter()
+                .skip(offset)
+                .take(limit_val)
+                .collect()
         } else {
             sorted_indices
         };
@@ -986,7 +1050,11 @@ impl WhereAnalysis {
 
     fn extract_conditions(&mut self, expr: &Expression) {
         match expr {
-            Expression::Binary { left, operator, right } => {
+            Expression::Binary {
+                left,
+                operator,
+                right,
+            } => {
                 // Check for AND - combine conditions
                 if *operator == BinaryOperator::And {
                     self.extract_conditions(left);
@@ -1148,7 +1216,10 @@ mod tests {
         assert!(columnar.string_columns.contains_key("name"));
 
         assert_eq!(columnar.int_columns.get("id").unwrap(), &vec![1i64, 2i64]);
-        assert_eq!(columnar.float_columns.get("value").unwrap(), &vec![10.5, 20.5]);
+        assert_eq!(
+            columnar.float_columns.get("value").unwrap(),
+            &vec![10.5, 20.5]
+        );
     }
 
     #[test]
@@ -1157,9 +1228,15 @@ mod tests {
         columnar.column_names = vec!["id".to_string(), "value".to_string()];
         columnar.row_count = 3;
         columnar.int_columns.insert("id".to_string(), vec![1, 2, 3]);
-        columnar.float_columns.insert("value".to_string(), vec![10.0, 20.0, 30.0]);
-        columnar.null_bitmaps.insert("id".to_string(), vec![false, false, false]);
-        columnar.null_bitmaps.insert("value".to_string(), vec![false, false, false]);
+        columnar
+            .float_columns
+            .insert("value".to_string(), vec![10.0, 20.0, 30.0]);
+        columnar
+            .null_bitmaps
+            .insert("id".to_string(), vec![false, false, false]);
+        columnar
+            .null_bitmaps
+            .insert("value".to_string(), vec![false, false, false]);
 
         let rows = columnar.to_rows(&[0, 2]);
         assert_eq!(rows.len(), 2);
@@ -1173,7 +1250,9 @@ mod tests {
         let mut columnar = ColumnarData::new();
         columnar.column_names = vec!["age".to_string()];
         columnar.row_count = 5;
-        columnar.int_columns.insert("age".to_string(), vec![25, 30, 35, 40, 45]);
+        columnar
+            .int_columns
+            .insert("age".to_string(), vec![25, 30, 35, 40, 45]);
 
         let executor = VectorizedExecutor {
             config: VectorizedConfig::default(),
@@ -1184,12 +1263,9 @@ mod tests {
             last_stats: VectorizedStats::default(),
         };
 
-        let result = executor.execute_filter_scalar(
-            &columnar,
-            "age",
-            FilterOp::Gt,
-            &SqlValue::Integer(30),
-        ).unwrap();
+        let result = executor
+            .execute_filter_scalar(&columnar, "age", FilterOp::Gt, &SqlValue::Integer(30))
+            .unwrap();
 
         assert_eq!(result, vec![2, 3, 4]); // indices where age > 30
     }
@@ -1199,7 +1275,9 @@ mod tests {
         let mut columnar = ColumnarData::new();
         columnar.column_names = vec!["value".to_string()];
         columnar.row_count = 4;
-        columnar.int_columns.insert("value".to_string(), vec![10, 20, 30, 40]);
+        columnar
+            .int_columns
+            .insert("value".to_string(), vec![10, 20, 30, 40]);
 
         let executor = VectorizedExecutor {
             config: VectorizedConfig::default(),
@@ -1210,21 +1288,15 @@ mod tests {
             last_stats: VectorizedStats::default(),
         };
 
-        let sum = executor.execute_aggregate_scalar(
-            &columnar,
-            "value",
-            AggregateType::Sum,
-            None,
-        ).unwrap();
+        let sum = executor
+            .execute_aggregate_scalar(&columnar, "value", AggregateType::Sum, None)
+            .unwrap();
 
         assert_eq!(sum, SqlValue::BigInt(100));
 
-        let avg = executor.execute_aggregate_scalar(
-            &columnar,
-            "value",
-            AggregateType::Avg,
-            None,
-        ).unwrap();
+        let avg = executor
+            .execute_aggregate_scalar(&columnar, "value", AggregateType::Avg, None)
+            .unwrap();
 
         assert_eq!(avg, SqlValue::DoublePrecision(25.0));
     }
