@@ -256,6 +256,117 @@ impl GraphRelationship {
     }
 }
 
+/// Type of index
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum IndexType {
+    /// B-tree index for ordered data
+    BTree,
+    /// Range index for range queries
+    Range,
+    /// Lookup index for equality queries
+    Lookup,
+    /// Full-text index for text search
+    FullText,
+    /// Point index for spatial data
+    Point,
+    /// Vector index for similarity search
+    Vector,
+}
+
+impl Default for IndexType {
+    fn default() -> Self {
+        Self::BTree
+    }
+}
+
+/// Entity type for indexes and constraints
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum EntityType {
+    /// Node index/constraint
+    Node,
+    /// Relationship index/constraint
+    Relationship,
+}
+
+/// Graph index definition
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GraphIndex {
+    /// Index name
+    pub name: String,
+    /// Type of index
+    pub index_type: IndexType,
+    /// Entity type (Node or Relationship)
+    pub entity_type: EntityType,
+    /// Label or relationship type
+    pub label_or_type: String,
+    /// Properties indexed
+    pub properties: Vec<String>,
+}
+
+impl GraphIndex {
+    /// Create a new index definition
+    pub fn new(
+        name: String,
+        index_type: IndexType,
+        entity_type: EntityType,
+        label_or_type: String,
+        properties: Vec<String>,
+    ) -> Self {
+        Self {
+            name,
+            index_type,
+            entity_type,
+            label_or_type,
+            properties,
+        }
+    }
+}
+
+/// Type of constraint
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ConstraintType {
+    /// Unique constraint
+    Unique,
+    /// Node key constraint (unique + exists)
+    NodeKey,
+    /// Existence constraint
+    Exists,
+}
+
+/// Graph constraint definition
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GraphConstraint {
+    /// Constraint name
+    pub name: String,
+    /// Type of constraint
+    pub constraint_type: ConstraintType,
+    /// Entity type (Node or Relationship)
+    pub entity_type: EntityType,
+    /// Label or relationship type
+    pub label_or_type: String,
+    /// Properties constrained
+    pub properties: Vec<String>,
+}
+
+impl GraphConstraint {
+    /// Create a new constraint definition
+    pub fn new(
+        name: String,
+        constraint_type: ConstraintType,
+        entity_type: EntityType,
+        label_or_type: String,
+        properties: Vec<String>,
+    ) -> Self {
+        Self {
+            name,
+            constraint_type,
+            entity_type,
+            label_or_type,
+            properties,
+        }
+    }
+}
+
 /// Trait for graph storage operations
 #[async_trait]
 pub trait GraphStorage: Send + Sync {
@@ -334,6 +445,34 @@ pub trait GraphStorage: Send + Sync {
 
     /// Count relationships of specific type
     async fn count_relationships_by_type(&self, rel_type: &str) -> OrbitResult<u64>;
+
+    // ============ Index Operations ============
+
+    /// Create an index on a label/type and properties
+    async fn create_index(&self, index: GraphIndex) -> OrbitResult<bool>;
+
+    /// Drop an index by name
+    async fn drop_index(&self, name: &str) -> OrbitResult<bool>;
+
+    /// List all indexes
+    async fn list_indexes(&self) -> OrbitResult<Vec<GraphIndex>>;
+
+    /// Check if an index exists
+    async fn index_exists(&self, name: &str) -> OrbitResult<bool>;
+
+    // ============ Constraint Operations ============
+
+    /// Create a constraint on a label/type and properties
+    async fn create_constraint(&self, constraint: GraphConstraint) -> OrbitResult<bool>;
+
+    /// Drop a constraint by name
+    async fn drop_constraint(&self, name: &str) -> OrbitResult<bool>;
+
+    /// List all constraints
+    async fn list_constraints(&self) -> OrbitResult<Vec<GraphConstraint>>;
+
+    /// Check if a constraint exists
+    async fn constraint_exists(&self, name: &str) -> OrbitResult<bool>;
 }
 
 #[cfg(test)]

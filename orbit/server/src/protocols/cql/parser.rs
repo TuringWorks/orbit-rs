@@ -783,6 +783,12 @@ impl CqlParser {
         // Parse ORDER BY with potential ANN (vector similarity search)
         let (order_by, ann_search) = self.parse_order_by_with_ann(query)?;
 
+        // Parse GROUP BY clause
+        let group_by = self.parse_group_by(query);
+
+        // Parse PER PARTITION LIMIT
+        let per_partition_limit = self.parse_per_partition_limit(query);
+
         Ok(CqlStatement::Select {
             columns,
             table: self.resolve_table_name(&table),
@@ -790,12 +796,59 @@ impl CqlParser {
             limit,
             allow_filtering,
             distinct,
-            group_by: None,           // TODO: Parse GROUP BY
+            group_by,
             order_by,
-            per_partition_limit: None, // TODO: Parse PER PARTITION LIMIT
+            per_partition_limit,
             json,
             ann_search,
         })
+    }
+
+    /// Parse GROUP BY clause from query
+    fn parse_group_by(&self, query: &str) -> Option<Vec<String>> {
+        let query_upper = query.to_uppercase();
+        if let Some(group_idx) = query_upper.find("GROUP BY") {
+            let after_group = &query[group_idx + 8..];
+
+            // Find the end of GROUP BY clause (ORDER BY, LIMIT, PER PARTITION LIMIT, ALLOW FILTERING, or end)
+            let end_keywords = ["ORDER BY", "LIMIT", "PER PARTITION LIMIT", "ALLOW FILTERING"];
+            let end_idx = end_keywords
+                .iter()
+                .filter_map(|kw| after_group.to_uppercase().find(kw))
+                .min()
+                .unwrap_or(after_group.len());
+
+            let group_by_str = after_group[..end_idx].trim();
+            if !group_by_str.is_empty() {
+                let columns: Vec<String> = group_by_str
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if !columns.is_empty() {
+                    return Some(columns);
+                }
+            }
+        }
+        None
+    }
+
+    /// Parse PER PARTITION LIMIT clause from query
+    fn parse_per_partition_limit(&self, query: &str) -> Option<usize> {
+        let query_upper = query.to_uppercase();
+        if let Some(ppl_idx) = query_upper.find("PER PARTITION LIMIT") {
+            let after_ppl = &query[ppl_idx + 19..];
+            // Extract the limit value
+            let limit_str: String = after_ppl
+                .trim()
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            if !limit_str.is_empty() {
+                return limit_str.parse::<usize>().ok();
+            }
+        }
+        None
     }
 
     /// Parse ORDER BY clause, including ANN (vector similarity) searches
@@ -1764,20 +1817,25 @@ impl CqlParser {
                         }
                     }
 
-                    // For IN, we'll create a condition with the first value
-                    // In a full implementation, we'd handle IN properly with all values
+                    // Store all values in a List for IN operator
                     conditions.push(WhereCondition {
                         column,
                         operator: ComparisonOperator::In,
-                        value: values.first().cloned().unwrap_or(CqlValue::Null),
+                        value: CqlValue::List(values),
                     });
                     continue;
                 }
-                "CONTAINS" => ComparisonOperator::Contains,
-                "CONTAINS KEY" => {
-                    i += 1; // Skip KEY
-                    ComparisonOperator::ContainsKey
+                "CONTAINS" => {
+                    // Check if next token is KEY
+                    if i + 1 < parts.len() && parts[i + 1].to_uppercase() == "KEY" {
+                        i += 1; // Skip KEY
+                        ComparisonOperator::ContainsKey
+                    } else {
+                        ComparisonOperator::Contains
+                    }
                 }
+                "LIKE" => ComparisonOperator::Like,
+                "TOKEN" => ComparisonOperator::Token,
                 _ => {
                     return Err(ProtocolError::ParseError(format!(
                         "Unknown operator: {}",

@@ -922,6 +922,22 @@ impl CqlAdapter {
                                     CqlValue::Double(f) => f.to_string(),
                                     CqlValue::Timestamp(ts) => (ts / 1000).to_string(),
                                     CqlValue::Null => "NULL".to_string(),
+                                    CqlValue::List(values) if cond.operator == ComparisonOperator::In => {
+                                        // Format IN operator with proper parentheses
+                                        let formatted_values: Vec<String> = values
+                                            .iter()
+                                            .map(|v| match v {
+                                                CqlValue::Text(s) => format!("'{}'", s.replace('\'', "''")),
+                                                CqlValue::Int(i) => i.to_string(),
+                                                CqlValue::Bigint(i) => i.to_string(),
+                                                CqlValue::Boolean(b) => b.to_string(),
+                                                CqlValue::Float(f) => f.to_string(),
+                                                CqlValue::Double(f) => f.to_string(),
+                                                _ => format!("'{:?}'", v),
+                                            })
+                                            .collect();
+                                        format!("({})", formatted_values.join(", "))
+                                    }
                                     _ => format!("'{:?}'", cond.value),
                                 };
                                 format!("{} {} {}", cond.column, op_str, val_str)
@@ -1529,6 +1545,16 @@ impl CqlAdapter {
             }
             CqlStatement::Truncate { table } => {
                 println!("[CQL] TRUNCATE {}", table);
+                // Execute DELETE FROM table to actually truncate
+                let sql = format!("DELETE FROM {}", table);
+                match self.query_engine.execute_sql_direct(&sql).await {
+                    Ok(_) => {
+                        println!("[CQL] Truncated table: {}", table);
+                    }
+                    Err(e) => {
+                        println!("[CQL] Error truncating table {}: {}", table, e);
+                    }
+                }
                 Ok(build_void_result(stream))
             }
             CqlStatement::Batch { .. } => Ok(build_void_result(stream)),

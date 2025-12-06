@@ -702,59 +702,7 @@ impl AqlQueryEngine {
                     .map(|arg| self.evaluate_expression(arg, context))
                     .collect::<ProtocolResult<Vec<_>>>()?;
 
-                match name.to_uppercase().as_str() {
-                    "LENGTH" => {
-                        if let Some(AqlValue::String(s)) = evaluated_args.first() {
-                            Ok(AqlValue::Number(serde_json::Number::from(s.len())))
-                        } else if let Some(AqlValue::Array(arr)) = evaluated_args.first() {
-                            Ok(AqlValue::Number(serde_json::Number::from(arr.len())))
-                        } else {
-                            Ok(AqlValue::Number(serde_json::Number::from(0)))
-                        }
-                    }
-                    "UPPER" => {
-                        if let Some(AqlValue::String(s)) = evaluated_args.first() {
-                            Ok(AqlValue::String(s.to_uppercase()))
-                        } else {
-                            Ok(AqlValue::Null)
-                        }
-                    }
-                    "LOWER" => {
-                        if let Some(AqlValue::String(s)) = evaluated_args.first() {
-                            Ok(AqlValue::String(s.to_lowercase()))
-                        } else {
-                            Ok(AqlValue::Null)
-                        }
-                    }
-                    "CONCAT" => {
-                        let result: String = evaluated_args
-                            .iter()
-                            .filter_map(|v| {
-                                if let AqlValue::String(s) = v {
-                                    Some(s.as_str())
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect();
-                        Ok(AqlValue::String(result))
-                    }
-                    "ABS" => {
-                        if let Some(AqlValue::Number(n)) = evaluated_args.first() {
-                            let f = n.as_f64().unwrap_or(0.0).abs();
-                            Ok(AqlValue::Number(
-                                serde_json::Number::from_f64(f)
-                                    .unwrap_or(serde_json::Number::from(0)),
-                            ))
-                        } else {
-                            Ok(AqlValue::Null)
-                        }
-                    }
-                    _ => {
-                        // Unknown function - return null
-                        Ok(AqlValue::Null)
-                    }
-                }
+                self.evaluate_builtin_function(name, &evaluated_args)
             }
             AqlExpression::BinaryOp { op, left, right } => {
                 let left_val = self.evaluate_expression(left, context)?;
@@ -1022,9 +970,26 @@ impl AqlQueryEngine {
 
         // Apply SORT if present
         for clause in clauses {
-            if let AqlClause::Sort { items: _ } = clause {
-                // Simplified sorting - would need proper implementation
-                // For now, just keep original order
+            if let AqlClause::Sort { items } = clause {
+                if !items.is_empty() {
+                    // Sort the results based on sort items
+                    results.sort_by(|a, b| {
+                        for item in items {
+                            // Extract value for comparison from each result
+                            let val_a = self.extract_sort_value(a, &item.expression);
+                            let val_b = self.extract_sort_value(b, &item.expression);
+
+                            let cmp = self.compare_aql_values(&val_a, &val_b);
+                            if cmp != std::cmp::Ordering::Equal {
+                                return match item.direction {
+                                    crate::protocols::aql::aql_parser::SortDirection::Asc => cmp,
+                                    crate::protocols::aql::aql_parser::SortDirection::Desc => cmp.reverse(),
+                                };
+                            }
+                        }
+                        std::cmp::Ordering::Equal
+                    });
+                }
                 break;
             }
         }
@@ -1333,6 +1298,1318 @@ impl AqlQueryEngine {
     #[cfg(test)]
     pub fn levenshtein_distance_public(&self, a: &str, b: &str) -> usize {
         self.levenshtein_distance(a, b)
+    }
+
+    /// Extract a value from a result for sorting based on the expression
+    fn extract_sort_value(&self, value: &AqlValue, expression: &AqlExpression) -> AqlValue {
+        use crate::protocols::aql::aql_parser::AqlExpression;
+
+        match expression {
+            AqlExpression::Variable(name) => {
+                // If the value is an object, try to get the field
+                if let AqlValue::Object(map) = value {
+                    map.get(name).cloned().unwrap_or(AqlValue::Null)
+                } else if name == "doc" || name == "_" {
+                    value.clone()
+                } else {
+                    AqlValue::Null
+                }
+            }
+            AqlExpression::PropertyAccess { object, property } => {
+                // First resolve the object variable from the value
+                let obj_val = if let AqlValue::Object(map) = value {
+                    map.get(object).cloned().unwrap_or(AqlValue::Null)
+                } else if object == "doc" || object == "_" {
+                    value.clone()
+                } else {
+                    AqlValue::Null
+                };
+                // Then get the property from that object
+                if let AqlValue::Object(map) = obj_val {
+                    map.get(property).cloned().unwrap_or(AqlValue::Null)
+                } else {
+                    AqlValue::Null
+                }
+            }
+            AqlExpression::Literal(lit_val) => lit_val.clone(),
+            _ => {
+                // For complex expressions, try evaluating with the value as context
+                let mut context = HashMap::new();
+                if let AqlValue::Object(map) = value {
+                    for (k, v) in map {
+                        context.insert(k.clone(), v.clone());
+                    }
+                }
+                context.insert("doc".to_string(), value.clone());
+                self.evaluate_expression(expression, &context)
+                    .unwrap_or(AqlValue::Null)
+            }
+        }
+    }
+
+    /// Compare two AQL values for sorting
+    fn compare_aql_values(&self, a: &AqlValue, b: &AqlValue) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+
+        match (a, b) {
+            (AqlValue::Null, AqlValue::Null) => Ordering::Equal,
+            (AqlValue::Null, _) => Ordering::Less,
+            (_, AqlValue::Null) => Ordering::Greater,
+            (AqlValue::Bool(a), AqlValue::Bool(b)) => a.cmp(b),
+            (AqlValue::Number(a), AqlValue::Number(b)) => {
+                let a_f = a.as_f64().unwrap_or(0.0);
+                let b_f = b.as_f64().unwrap_or(0.0);
+                a_f.partial_cmp(&b_f).unwrap_or(Ordering::Equal)
+            }
+            (AqlValue::String(a), AqlValue::String(b)) => a.cmp(b),
+            (AqlValue::Array(a), AqlValue::Array(b)) => a.len().cmp(&b.len()),
+            (AqlValue::Object(_), AqlValue::Object(_)) => Ordering::Equal,
+            // Cross-type comparisons
+            (AqlValue::Number(_), AqlValue::String(_)) => Ordering::Less,
+            (AqlValue::String(_), AqlValue::Number(_)) => Ordering::Greater,
+            _ => Ordering::Equal,
+        }
+    }
+
+    /// Evaluate built-in AQL functions
+    fn evaluate_builtin_function(
+        &self,
+        name: &str,
+        args: &[AqlValue],
+    ) -> ProtocolResult<AqlValue> {
+        match name.to_uppercase().as_str() {
+            // ============ String Functions ============
+            "LENGTH" => {
+                if let Some(AqlValue::String(s)) = args.first() {
+                    Ok(AqlValue::Number(serde_json::Number::from(s.len())))
+                } else if let Some(AqlValue::Array(arr)) = args.first() {
+                    Ok(AqlValue::Number(serde_json::Number::from(arr.len())))
+                } else if let Some(AqlValue::Object(obj)) = args.first() {
+                    Ok(AqlValue::Number(serde_json::Number::from(obj.len())))
+                } else {
+                    Ok(AqlValue::Number(serde_json::Number::from(0)))
+                }
+            }
+            "UPPER" => {
+                if let Some(AqlValue::String(s)) = args.first() {
+                    Ok(AqlValue::String(s.to_uppercase()))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "LOWER" => {
+                if let Some(AqlValue::String(s)) = args.first() {
+                    Ok(AqlValue::String(s.to_lowercase()))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "CONCAT" => {
+                let result: String = args
+                    .iter()
+                    .filter_map(|v| match v {
+                        AqlValue::String(s) => Some(s.clone()),
+                        AqlValue::Number(n) => Some(n.to_string()),
+                        AqlValue::Bool(b) => Some(b.to_string()),
+                        _ => None,
+                    })
+                    .collect();
+                Ok(AqlValue::String(result))
+            }
+            "CONCAT_SEPARATOR" => {
+                if args.len() < 2 {
+                    return Ok(AqlValue::String(String::new()));
+                }
+                let sep = match &args[0] {
+                    AqlValue::String(s) => s.clone(),
+                    _ => String::new(),
+                };
+                let parts: Vec<String> = args[1..]
+                    .iter()
+                    .filter_map(|v| match v {
+                        AqlValue::String(s) => Some(s.clone()),
+                        AqlValue::Number(n) => Some(n.to_string()),
+                        _ => None,
+                    })
+                    .collect();
+                Ok(AqlValue::String(parts.join(&sep)))
+            }
+            "SUBSTRING" => {
+                if args.len() < 2 {
+                    return Ok(AqlValue::Null);
+                }
+                if let (Some(AqlValue::String(s)), Some(AqlValue::Number(offset))) =
+                    (args.first(), args.get(1))
+                {
+                    let offset = offset.as_i64().unwrap_or(0) as usize;
+                    let len = args
+                        .get(2)
+                        .and_then(|v| {
+                            if let AqlValue::Number(n) = v {
+                                n.as_i64()
+                            } else {
+                                None
+                            }
+                        })
+                        .map(|l| l as usize);
+
+                    if offset >= s.len() {
+                        return Ok(AqlValue::String(String::new()));
+                    }
+                    let result = match len {
+                        Some(l) => s.chars().skip(offset).take(l).collect(),
+                        None => s.chars().skip(offset).collect(),
+                    };
+                    Ok(AqlValue::String(result))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "LEFT" => {
+                if let (Some(AqlValue::String(s)), Some(AqlValue::Number(n))) =
+                    (args.first(), args.get(1))
+                {
+                    let n = n.as_i64().unwrap_or(0).max(0) as usize;
+                    Ok(AqlValue::String(s.chars().take(n).collect()))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "RIGHT" => {
+                if let (Some(AqlValue::String(s)), Some(AqlValue::Number(n))) =
+                    (args.first(), args.get(1))
+                {
+                    let n = n.as_i64().unwrap_or(0).max(0) as usize;
+                    let len = s.chars().count();
+                    let skip = len.saturating_sub(n);
+                    Ok(AqlValue::String(s.chars().skip(skip).collect()))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "TRIM" => {
+                if let Some(AqlValue::String(s)) = args.first() {
+                    Ok(AqlValue::String(s.trim().to_string()))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "LTRIM" => {
+                if let Some(AqlValue::String(s)) = args.first() {
+                    Ok(AqlValue::String(s.trim_start().to_string()))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "RTRIM" => {
+                if let Some(AqlValue::String(s)) = args.first() {
+                    Ok(AqlValue::String(s.trim_end().to_string()))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "SPLIT" => {
+                if args.is_empty() {
+                    return Ok(AqlValue::Array(vec![]));
+                }
+                if let Some(AqlValue::String(s)) = args.first() {
+                    let sep = args
+                        .get(1)
+                        .and_then(|v| {
+                            if let AqlValue::String(sep) = v {
+                                Some(sep.as_str())
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(",");
+                    let parts: Vec<AqlValue> = s
+                        .split(sep)
+                        .map(|p| AqlValue::String(p.to_string()))
+                        .collect();
+                    Ok(AqlValue::Array(parts))
+                } else {
+                    Ok(AqlValue::Array(vec![]))
+                }
+            }
+            "REVERSE" => {
+                if let Some(AqlValue::String(s)) = args.first() {
+                    Ok(AqlValue::String(s.chars().rev().collect()))
+                } else if let Some(AqlValue::Array(arr)) = args.first() {
+                    let mut reversed = arr.clone();
+                    reversed.reverse();
+                    Ok(AqlValue::Array(reversed))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "CONTAINS" => {
+                if let (Some(AqlValue::String(haystack)), Some(AqlValue::String(needle))) =
+                    (args.first(), args.get(1))
+                {
+                    let case_insensitive = args
+                        .get(2)
+                        .map(|v| matches!(v, AqlValue::Bool(true)))
+                        .unwrap_or(false);
+                    let result = if case_insensitive {
+                        haystack.to_lowercase().contains(&needle.to_lowercase())
+                    } else {
+                        haystack.contains(needle.as_str())
+                    };
+                    Ok(AqlValue::Bool(result))
+                } else {
+                    Ok(AqlValue::Bool(false))
+                }
+            }
+            "LIKE" => {
+                if let (Some(AqlValue::String(text)), Some(AqlValue::String(pattern))) =
+                    (args.first(), args.get(1))
+                {
+                    // Simple LIKE pattern matching (% = any, _ = single char)
+                    let regex_pattern = pattern
+                        .replace('%', ".*")
+                        .replace('_', ".");
+                    if let Ok(re) = regex::Regex::new(&format!("^{}$", regex_pattern)) {
+                        Ok(AqlValue::Bool(re.is_match(text)))
+                    } else {
+                        Ok(AqlValue::Bool(false))
+                    }
+                } else {
+                    Ok(AqlValue::Bool(false))
+                }
+            }
+            "REGEX_TEST" => {
+                if let (Some(AqlValue::String(text)), Some(AqlValue::String(pattern))) =
+                    (args.first(), args.get(1))
+                {
+                    if let Ok(re) = regex::Regex::new(pattern) {
+                        Ok(AqlValue::Bool(re.is_match(text)))
+                    } else {
+                        Ok(AqlValue::Bool(false))
+                    }
+                } else {
+                    Ok(AqlValue::Bool(false))
+                }
+            }
+            "REGEX_REPLACE" => {
+                if let (
+                    Some(AqlValue::String(text)),
+                    Some(AqlValue::String(pattern)),
+                    Some(AqlValue::String(replacement)),
+                ) = (args.first(), args.get(1), args.get(2))
+                {
+                    if let Ok(re) = regex::Regex::new(pattern) {
+                        Ok(AqlValue::String(re.replace_all(text, replacement.as_str()).to_string()))
+                    } else {
+                        Ok(AqlValue::String(text.clone()))
+                    }
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "MD5" | "SHA1" | "SHA256" | "SHA512" => {
+                // Hash functions - return placeholder for now
+                if let Some(AqlValue::String(s)) = args.first() {
+                    // Simple hash placeholder - would need actual crypto lib
+                    Ok(AqlValue::String(format!("{}_{}", name.to_lowercase(), s.len())))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "ENCODE_URI_COMPONENT" => {
+                if let Some(AqlValue::String(s)) = args.first() {
+                    Ok(AqlValue::String(urlencoding::encode(s).to_string()))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "DECODE_URI_COMPONENT" => {
+                if let Some(AqlValue::String(s)) = args.first() {
+                    match urlencoding::decode(s) {
+                        Ok(decoded) => Ok(AqlValue::String(decoded.to_string())),
+                        Err(_) => Ok(AqlValue::String(s.clone())),
+                    }
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+
+            // ============ Numeric Functions ============
+            "ABS" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let f = n.as_f64().unwrap_or(0.0).abs();
+                    Ok(AqlValue::Number(
+                        serde_json::Number::from_f64(f).unwrap_or(serde_json::Number::from(0)),
+                    ))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "CEIL" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let f = n.as_f64().unwrap_or(0.0).ceil();
+                    Ok(AqlValue::Number(serde_json::Number::from(f as i64)))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "FLOOR" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let f = n.as_f64().unwrap_or(0.0).floor();
+                    Ok(AqlValue::Number(serde_json::Number::from(f as i64)))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "ROUND" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let precision = args
+                        .get(1)
+                        .and_then(|v| {
+                            if let AqlValue::Number(p) = v {
+                                p.as_i64()
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(0);
+                    let f = n.as_f64().unwrap_or(0.0);
+                    let factor = 10_f64.powi(precision as i32);
+                    let rounded = (f * factor).round() / factor;
+                    Ok(AqlValue::Number(
+                        serde_json::Number::from_f64(rounded)
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "SQRT" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let f = n.as_f64().unwrap_or(0.0);
+                    if f >= 0.0 {
+                        Ok(AqlValue::Number(
+                            serde_json::Number::from_f64(f.sqrt())
+                                .unwrap_or(serde_json::Number::from(0)),
+                        ))
+                    } else {
+                        Ok(AqlValue::Null)
+                    }
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "POW" => {
+                if let (Some(AqlValue::Number(base)), Some(AqlValue::Number(exp))) =
+                    (args.first(), args.get(1))
+                {
+                    let b = base.as_f64().unwrap_or(0.0);
+                    let e = exp.as_f64().unwrap_or(0.0);
+                    Ok(AqlValue::Number(
+                        serde_json::Number::from_f64(b.powf(e))
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "LOG" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let f = n.as_f64().unwrap_or(0.0);
+                    if f > 0.0 {
+                        let base = args
+                            .get(1)
+                            .and_then(|v| {
+                                if let AqlValue::Number(b) = v {
+                                    b.as_f64()
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or(std::f64::consts::E);
+                        Ok(AqlValue::Number(
+                            serde_json::Number::from_f64(f.log(base))
+                                .unwrap_or(serde_json::Number::from(0)),
+                        ))
+                    } else {
+                        Ok(AqlValue::Null)
+                    }
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "LOG2" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let f = n.as_f64().unwrap_or(0.0);
+                    if f > 0.0 {
+                        Ok(AqlValue::Number(
+                            serde_json::Number::from_f64(f.log2())
+                                .unwrap_or(serde_json::Number::from(0)),
+                        ))
+                    } else {
+                        Ok(AqlValue::Null)
+                    }
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "LOG10" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let f = n.as_f64().unwrap_or(0.0);
+                    if f > 0.0 {
+                        Ok(AqlValue::Number(
+                            serde_json::Number::from_f64(f.log10())
+                                .unwrap_or(serde_json::Number::from(0)),
+                        ))
+                    } else {
+                        Ok(AqlValue::Null)
+                    }
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "EXP" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let f = n.as_f64().unwrap_or(0.0);
+                    Ok(AqlValue::Number(
+                        serde_json::Number::from_f64(f.exp())
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "EXP2" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let f = n.as_f64().unwrap_or(0.0);
+                    Ok(AqlValue::Number(
+                        serde_json::Number::from_f64(f.exp2())
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "SIN" | "COS" | "TAN" | "ASIN" | "ACOS" | "ATAN" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let f = n.as_f64().unwrap_or(0.0);
+                    let result = match name.to_uppercase().as_str() {
+                        "SIN" => f.sin(),
+                        "COS" => f.cos(),
+                        "TAN" => f.tan(),
+                        "ASIN" => f.asin(),
+                        "ACOS" => f.acos(),
+                        "ATAN" => f.atan(),
+                        _ => 0.0,
+                    };
+                    Ok(AqlValue::Number(
+                        serde_json::Number::from_f64(result)
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "ATAN2" => {
+                if let (Some(AqlValue::Number(y)), Some(AqlValue::Number(x))) =
+                    (args.first(), args.get(1))
+                {
+                    let y_f = y.as_f64().unwrap_or(0.0);
+                    let x_f = x.as_f64().unwrap_or(0.0);
+                    Ok(AqlValue::Number(
+                        serde_json::Number::from_f64(y_f.atan2(x_f))
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "PI" => Ok(AqlValue::Number(
+                serde_json::Number::from_f64(std::f64::consts::PI)
+                    .unwrap_or(serde_json::Number::from(0)),
+            )),
+            "DEGREES" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let f = n.as_f64().unwrap_or(0.0);
+                    Ok(AqlValue::Number(
+                        serde_json::Number::from_f64(f.to_degrees())
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "RADIANS" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let f = n.as_f64().unwrap_or(0.0);
+                    Ok(AqlValue::Number(
+                        serde_json::Number::from_f64(f.to_radians())
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "MIN" => {
+                if args.is_empty() {
+                    return Ok(AqlValue::Null);
+                }
+                let mut min_val: Option<f64> = None;
+                for arg in args {
+                    if let AqlValue::Number(n) = arg {
+                        let f = n.as_f64().unwrap_or(f64::MAX);
+                        min_val = Some(min_val.map_or(f, |m| m.min(f)));
+                    } else if let AqlValue::Array(arr) = arg {
+                        for item in arr {
+                            if let AqlValue::Number(n) = item {
+                                let f = n.as_f64().unwrap_or(f64::MAX);
+                                min_val = Some(min_val.map_or(f, |m| m.min(f)));
+                            }
+                        }
+                    }
+                }
+                match min_val {
+                    Some(v) => Ok(AqlValue::Number(
+                        serde_json::Number::from_f64(v).unwrap_or(serde_json::Number::from(0)),
+                    )),
+                    None => Ok(AqlValue::Null),
+                }
+            }
+            "MAX" => {
+                if args.is_empty() {
+                    return Ok(AqlValue::Null);
+                }
+                let mut max_val: Option<f64> = None;
+                for arg in args {
+                    if let AqlValue::Number(n) = arg {
+                        let f = n.as_f64().unwrap_or(f64::MIN);
+                        max_val = Some(max_val.map_or(f, |m| m.max(f)));
+                    } else if let AqlValue::Array(arr) = arg {
+                        for item in arr {
+                            if let AqlValue::Number(n) = item {
+                                let f = n.as_f64().unwrap_or(f64::MIN);
+                                max_val = Some(max_val.map_or(f, |m| m.max(f)));
+                            }
+                        }
+                    }
+                }
+                match max_val {
+                    Some(v) => Ok(AqlValue::Number(
+                        serde_json::Number::from_f64(v).unwrap_or(serde_json::Number::from(0)),
+                    )),
+                    None => Ok(AqlValue::Null),
+                }
+            }
+            "SUM" => {
+                let mut sum = 0.0;
+                for arg in args {
+                    if let AqlValue::Number(n) = arg {
+                        sum += n.as_f64().unwrap_or(0.0);
+                    } else if let AqlValue::Array(arr) = arg {
+                        for item in arr {
+                            if let AqlValue::Number(n) = item {
+                                sum += n.as_f64().unwrap_or(0.0);
+                            }
+                        }
+                    }
+                }
+                Ok(AqlValue::Number(
+                    serde_json::Number::from_f64(sum).unwrap_or(serde_json::Number::from(0)),
+                ))
+            }
+            "AVERAGE" | "AVG" => {
+                let mut sum = 0.0;
+                let mut count = 0;
+                for arg in args {
+                    if let AqlValue::Number(n) = arg {
+                        sum += n.as_f64().unwrap_or(0.0);
+                        count += 1;
+                    } else if let AqlValue::Array(arr) = arg {
+                        for item in arr {
+                            if let AqlValue::Number(n) = item {
+                                sum += n.as_f64().unwrap_or(0.0);
+                                count += 1;
+                            }
+                        }
+                    }
+                }
+                if count > 0 {
+                    Ok(AqlValue::Number(
+                        serde_json::Number::from_f64(sum / count as f64)
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "RAND" => {
+                use rand::Rng;
+                let mut rng = rand::thread_rng();
+                Ok(AqlValue::Number(
+                    serde_json::Number::from_f64(rng.gen::<f64>())
+                        .unwrap_or(serde_json::Number::from(0)),
+                ))
+            }
+            "RANDOM_TOKEN" => {
+                use rand::Rng;
+                let length = args
+                    .first()
+                    .and_then(|v| {
+                        if let AqlValue::Number(n) = v {
+                            n.as_i64()
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(16) as usize;
+                let token: String = rand::thread_rng()
+                    .sample_iter(&rand::distributions::Alphanumeric)
+                    .take(length)
+                    .map(char::from)
+                    .collect();
+                Ok(AqlValue::String(token))
+            }
+
+            // ============ Array Functions ============
+            "FIRST" => {
+                if let Some(AqlValue::Array(arr)) = args.first() {
+                    Ok(arr.first().cloned().unwrap_or(AqlValue::Null))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "LAST" => {
+                if let Some(AqlValue::Array(arr)) = args.first() {
+                    Ok(arr.last().cloned().unwrap_or(AqlValue::Null))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "NTH" => {
+                if let (Some(AqlValue::Array(arr)), Some(AqlValue::Number(n))) =
+                    (args.first(), args.get(1))
+                {
+                    let idx = n.as_i64().unwrap_or(0) as usize;
+                    Ok(arr.get(idx).cloned().unwrap_or(AqlValue::Null))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "PUSH" => {
+                if let (Some(AqlValue::Array(arr)), Some(value)) = (args.first(), args.get(1)) {
+                    let mut new_arr = arr.clone();
+                    new_arr.push(value.clone());
+                    Ok(AqlValue::Array(new_arr))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "APPEND" => {
+                if let (Some(AqlValue::Array(arr1)), Some(AqlValue::Array(arr2))) =
+                    (args.first(), args.get(1))
+                {
+                    let mut new_arr = arr1.clone();
+                    new_arr.extend(arr2.clone());
+                    Ok(AqlValue::Array(new_arr))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "POP" => {
+                if let Some(AqlValue::Array(arr)) = args.first() {
+                    let mut new_arr = arr.clone();
+                    new_arr.pop();
+                    Ok(AqlValue::Array(new_arr))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "SHIFT" => {
+                if let Some(AqlValue::Array(arr)) = args.first() {
+                    if arr.is_empty() {
+                        Ok(AqlValue::Array(vec![]))
+                    } else {
+                        Ok(AqlValue::Array(arr[1..].to_vec()))
+                    }
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "UNSHIFT" => {
+                if let (Some(AqlValue::Array(arr)), Some(value)) = (args.first(), args.get(1)) {
+                    let mut new_arr = vec![value.clone()];
+                    new_arr.extend(arr.clone());
+                    Ok(AqlValue::Array(new_arr))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "UNIQUE" => {
+                if let Some(AqlValue::Array(arr)) = args.first() {
+                    let mut seen = std::collections::HashSet::new();
+                    let unique: Vec<AqlValue> = arr
+                        .iter()
+                        .filter(|v| {
+                            let key = format!("{:?}", v);
+                            seen.insert(key)
+                        })
+                        .cloned()
+                        .collect();
+                    Ok(AqlValue::Array(unique))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "FLATTEN" => {
+                if let Some(AqlValue::Array(arr)) = args.first() {
+                    let depth = args
+                        .get(1)
+                        .and_then(|v| {
+                            if let AqlValue::Number(n) = v {
+                                n.as_i64()
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(1) as usize;
+                    fn flatten_recursive(arr: &[AqlValue], depth: usize) -> Vec<AqlValue> {
+                        let mut result = Vec::new();
+                        for item in arr {
+                            if let AqlValue::Array(inner) = item {
+                                if depth > 0 {
+                                    result.extend(flatten_recursive(inner, depth - 1));
+                                } else {
+                                    result.push(item.clone());
+                                }
+                            } else {
+                                result.push(item.clone());
+                            }
+                        }
+                        result
+                    }
+                    Ok(AqlValue::Array(flatten_recursive(arr, depth)))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "SLICE" => {
+                if let Some(AqlValue::Array(arr)) = args.first() {
+                    let start = args
+                        .get(1)
+                        .and_then(|v| {
+                            if let AqlValue::Number(n) = v {
+                                n.as_i64()
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(0) as usize;
+                    let length = args.get(2).and_then(|v| {
+                        if let AqlValue::Number(n) = v {
+                            n.as_i64().map(|l| l as usize)
+                        } else {
+                            None
+                        }
+                    });
+                    let end = length.map_or(arr.len(), |l| (start + l).min(arr.len()));
+                    Ok(AqlValue::Array(arr[start.min(arr.len())..end].to_vec()))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "POSITION" | "FIND_FIRST" => {
+                if let (Some(AqlValue::Array(arr)), Some(needle)) = (args.first(), args.get(1)) {
+                    for (i, item) in arr.iter().enumerate() {
+                        if item == needle {
+                            return Ok(AqlValue::Number(serde_json::Number::from(i)));
+                        }
+                    }
+                    Ok(AqlValue::Number(serde_json::Number::from(-1)))
+                } else {
+                    Ok(AqlValue::Number(serde_json::Number::from(-1)))
+                }
+            }
+            "COUNT" | "COUNT_DISTINCT" => {
+                if let Some(AqlValue::Array(arr)) = args.first() {
+                    if name.to_uppercase() == "COUNT_DISTINCT" {
+                        let mut seen = std::collections::HashSet::new();
+                        for v in arr {
+                            seen.insert(format!("{:?}", v));
+                        }
+                        Ok(AqlValue::Number(serde_json::Number::from(seen.len())))
+                    } else {
+                        Ok(AqlValue::Number(serde_json::Number::from(arr.len())))
+                    }
+                } else {
+                    Ok(AqlValue::Number(serde_json::Number::from(0)))
+                }
+            }
+            "SORTED" | "SORTED_UNIQUE" => {
+                if let Some(AqlValue::Array(arr)) = args.first() {
+                    let mut sorted = arr.clone();
+                    sorted.sort_by(|a, b| {
+                        match (a, b) {
+                            (AqlValue::Number(n1), AqlValue::Number(n2)) => {
+                                let f1 = n1.as_f64().unwrap_or(0.0);
+                                let f2 = n2.as_f64().unwrap_or(0.0);
+                                f1.partial_cmp(&f2).unwrap_or(std::cmp::Ordering::Equal)
+                            }
+                            (AqlValue::String(s1), AqlValue::String(s2)) => s1.cmp(s2),
+                            _ => std::cmp::Ordering::Equal,
+                        }
+                    });
+                    if name.to_uppercase() == "SORTED_UNIQUE" {
+                        let mut seen = std::collections::HashSet::new();
+                        sorted.retain(|v| {
+                            let key = format!("{:?}", v);
+                            seen.insert(key)
+                        });
+                    }
+                    Ok(AqlValue::Array(sorted))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "UNION" | "UNION_DISTINCT" => {
+                let mut result = Vec::new();
+                for arg in args {
+                    if let AqlValue::Array(arr) = arg {
+                        result.extend(arr.clone());
+                    }
+                }
+                if name.to_uppercase() == "UNION_DISTINCT" {
+                    let mut seen = std::collections::HashSet::new();
+                    result.retain(|v| {
+                        let key = format!("{:?}", v);
+                        seen.insert(key)
+                    });
+                }
+                Ok(AqlValue::Array(result))
+            }
+            "INTERSECTION" => {
+                if args.is_empty() {
+                    return Ok(AqlValue::Array(vec![]));
+                }
+                let first = match args.first() {
+                    Some(AqlValue::Array(arr)) => arr.clone(),
+                    _ => return Ok(AqlValue::Array(vec![])),
+                };
+                let result: Vec<AqlValue> = first
+                    .into_iter()
+                    .filter(|item| {
+                        args[1..].iter().all(|arg| {
+                            if let AqlValue::Array(arr) = arg {
+                                arr.contains(item)
+                            } else {
+                                false
+                            }
+                        })
+                    })
+                    .collect();
+                Ok(AqlValue::Array(result))
+            }
+            "MINUS" => {
+                if args.len() < 2 {
+                    return Ok(args.first().cloned().unwrap_or(AqlValue::Null));
+                }
+                let first = match args.first() {
+                    Some(AqlValue::Array(arr)) => arr.clone(),
+                    _ => return Ok(AqlValue::Array(vec![])),
+                };
+                let result: Vec<AqlValue> = first
+                    .into_iter()
+                    .filter(|item| {
+                        !args[1..].iter().any(|arg| {
+                            if let AqlValue::Array(arr) = arg {
+                                arr.contains(item)
+                            } else {
+                                false
+                            }
+                        })
+                    })
+                    .collect();
+                Ok(AqlValue::Array(result))
+            }
+
+            // ============ Object/Document Functions ============
+            "KEYS" | "ATTRIBUTES" => {
+                if let Some(AqlValue::Object(obj)) = args.first() {
+                    let keys: Vec<AqlValue> =
+                        obj.keys().map(|k| AqlValue::String(k.clone())).collect();
+                    Ok(AqlValue::Array(keys))
+                } else {
+                    Ok(AqlValue::Array(vec![]))
+                }
+            }
+            "VALUES" => {
+                if let Some(AqlValue::Object(obj)) = args.first() {
+                    let values: Vec<AqlValue> = obj.values().cloned().collect();
+                    Ok(AqlValue::Array(values))
+                } else {
+                    Ok(AqlValue::Array(vec![]))
+                }
+            }
+            "MERGE" => {
+                let mut result = HashMap::new();
+                for arg in args {
+                    if let AqlValue::Object(obj) = arg {
+                        for (k, v) in obj {
+                            result.insert(k.clone(), v.clone());
+                        }
+                    }
+                }
+                Ok(AqlValue::Object(result))
+            }
+            "MERGE_RECURSIVE" => {
+                fn merge_recursive(
+                    base: HashMap<String, AqlValue>,
+                    overlay: &HashMap<String, AqlValue>,
+                ) -> HashMap<String, AqlValue> {
+                    let mut result = base;
+                    for (k, v) in overlay {
+                        if let (Some(AqlValue::Object(base_obj)), AqlValue::Object(overlay_obj)) =
+                            (result.get(k), v)
+                        {
+                            result.insert(
+                                k.clone(),
+                                AqlValue::Object(merge_recursive(base_obj.clone(), overlay_obj)),
+                            );
+                        } else {
+                            result.insert(k.clone(), v.clone());
+                        }
+                    }
+                    result
+                }
+                let mut result = HashMap::new();
+                for arg in args {
+                    if let AqlValue::Object(obj) = arg {
+                        result = merge_recursive(result, obj);
+                    }
+                }
+                Ok(AqlValue::Object(result))
+            }
+            "HAS" => {
+                if let (Some(AqlValue::Object(obj)), Some(AqlValue::String(key))) =
+                    (args.first(), args.get(1))
+                {
+                    Ok(AqlValue::Bool(obj.contains_key(key)))
+                } else {
+                    Ok(AqlValue::Bool(false))
+                }
+            }
+            "UNSET" => {
+                if args.len() < 2 {
+                    return Ok(args.first().cloned().unwrap_or(AqlValue::Null));
+                }
+                if let Some(AqlValue::Object(obj)) = args.first() {
+                    let mut result = obj.clone();
+                    for arg in &args[1..] {
+                        if let AqlValue::String(key) = arg {
+                            result.remove(key);
+                        }
+                    }
+                    Ok(AqlValue::Object(result))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "KEEP" => {
+                if args.len() < 2 {
+                    return Ok(args.first().cloned().unwrap_or(AqlValue::Null));
+                }
+                if let Some(AqlValue::Object(obj)) = args.first() {
+                    let keys_to_keep: std::collections::HashSet<String> = args[1..]
+                        .iter()
+                        .filter_map(|a| {
+                            if let AqlValue::String(k) = a {
+                                Some(k.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    let result: HashMap<String, AqlValue> = obj
+                        .iter()
+                        .filter(|(k, _)| keys_to_keep.contains(*k))
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect();
+                    Ok(AqlValue::Object(result))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "ZIP" => {
+                if let (Some(AqlValue::Array(keys)), Some(AqlValue::Array(values))) =
+                    (args.first(), args.get(1))
+                {
+                    let mut result = HashMap::new();
+                    for (k, v) in keys.iter().zip(values.iter()) {
+                        if let AqlValue::String(key) = k {
+                            result.insert(key.clone(), v.clone());
+                        }
+                    }
+                    Ok(AqlValue::Object(result))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+
+            // ============ Type Functions ============
+            "IS_NULL" => Ok(AqlValue::Bool(matches!(args.first(), Some(AqlValue::Null) | None))),
+            "IS_BOOL" => Ok(AqlValue::Bool(matches!(args.first(), Some(AqlValue::Bool(_))))),
+            "IS_NUMBER" => Ok(AqlValue::Bool(matches!(args.first(), Some(AqlValue::Number(_))))),
+            "IS_STRING" => Ok(AqlValue::Bool(matches!(args.first(), Some(AqlValue::String(_))))),
+            "IS_ARRAY" | "IS_LIST" => {
+                Ok(AqlValue::Bool(matches!(args.first(), Some(AqlValue::Array(_)))))
+            }
+            "IS_OBJECT" | "IS_DOCUMENT" => {
+                Ok(AqlValue::Bool(matches!(args.first(), Some(AqlValue::Object(_)))))
+            }
+            "TYPENAME" => {
+                let type_name = match args.first() {
+                    Some(AqlValue::Null) => "null",
+                    Some(AqlValue::Bool(_)) => "bool",
+                    Some(AqlValue::Number(_)) => "number",
+                    Some(AqlValue::String(_)) => "string",
+                    Some(AqlValue::Array(_)) => "array",
+                    Some(AqlValue::Object(_)) => "object",
+                    Some(AqlValue::DateTime(_)) => "datetime",
+                    None => "null",
+                };
+                Ok(AqlValue::String(type_name.to_string()))
+            }
+            "TO_BOOL" => {
+                let result = match args.first() {
+                    Some(AqlValue::Bool(b)) => *b,
+                    Some(AqlValue::Number(n)) => n.as_f64().unwrap_or(0.0) != 0.0,
+                    Some(AqlValue::String(s)) => !s.is_empty(),
+                    Some(AqlValue::Array(arr)) => !arr.is_empty(),
+                    Some(AqlValue::Object(obj)) => !obj.is_empty(),
+                    _ => false,
+                };
+                Ok(AqlValue::Bool(result))
+            }
+            "TO_NUMBER" => {
+                let result = match args.first() {
+                    Some(AqlValue::Number(n)) => n.clone(),
+                    Some(AqlValue::String(s)) => s
+                        .parse::<f64>()
+                        .ok()
+                        .and_then(serde_json::Number::from_f64)
+                        .unwrap_or(serde_json::Number::from(0)),
+                    Some(AqlValue::Bool(true)) => serde_json::Number::from(1),
+                    Some(AqlValue::Bool(false)) => serde_json::Number::from(0),
+                    _ => serde_json::Number::from(0),
+                };
+                Ok(AqlValue::Number(result))
+            }
+            "TO_STRING" => {
+                let result = match args.first() {
+                    Some(AqlValue::String(s)) => s.clone(),
+                    Some(AqlValue::Number(n)) => n.to_string(),
+                    Some(AqlValue::Bool(b)) => b.to_string(),
+                    Some(AqlValue::Null) => "null".to_string(),
+                    Some(AqlValue::Array(arr)) => {
+                        format!("{:?}", arr)
+                    }
+                    Some(AqlValue::Object(obj)) => {
+                        format!("{:?}", obj)
+                    }
+                    Some(AqlValue::DateTime(dt)) => dt.to_rfc3339(),
+                    None => "null".to_string(),
+                };
+                Ok(AqlValue::String(result))
+            }
+            "TO_ARRAY" | "TO_LIST" => match args.first() {
+                Some(AqlValue::Array(arr)) => Ok(AqlValue::Array(arr.clone())),
+                Some(val) => Ok(AqlValue::Array(vec![val.clone()])),
+                None => Ok(AqlValue::Array(vec![])),
+            },
+
+            // ============ Date/Time Functions ============
+            "DATE_NOW" => {
+                let now = chrono::Utc::now().timestamp_millis();
+                Ok(AqlValue::Number(serde_json::Number::from(now)))
+            }
+            "DATE_ISO8601" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let ts = n.as_i64().unwrap_or(0);
+                    let dt = chrono::DateTime::from_timestamp_millis(ts)
+                        .unwrap_or_else(chrono::Utc::now);
+                    Ok(AqlValue::String(dt.to_rfc3339()))
+                } else {
+                    let now = chrono::Utc::now();
+                    Ok(AqlValue::String(now.to_rfc3339()))
+                }
+            }
+            "DATE_TIMESTAMP" => {
+                if let Some(AqlValue::String(s)) = args.first() {
+                    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+                        Ok(AqlValue::Number(serde_json::Number::from(
+                            dt.timestamp_millis(),
+                        )))
+                    } else {
+                        Ok(AqlValue::Null)
+                    }
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "DATE_YEAR" | "DATE_MONTH" | "DATE_DAY" | "DATE_HOUR" | "DATE_MINUTE"
+            | "DATE_SECOND" | "DATE_DAYOFWEEK" | "DATE_DAYOFYEAR" => {
+                use chrono::{Datelike, Timelike};
+                let dt = match args.first() {
+                    Some(AqlValue::Number(n)) => {
+                        let ts = n.as_i64().unwrap_or(0);
+                        chrono::DateTime::from_timestamp_millis(ts).unwrap_or_else(chrono::Utc::now)
+                    }
+                    Some(AqlValue::String(s)) => {
+                        chrono::DateTime::parse_from_rfc3339(s)
+                            .map(|d| d.with_timezone(&chrono::Utc))
+                            .unwrap_or_else(|_| chrono::Utc::now())
+                    }
+                    _ => chrono::Utc::now(),
+                };
+                let value = match name.to_uppercase().as_str() {
+                    "DATE_YEAR" => dt.year() as i64,
+                    "DATE_MONTH" => dt.month() as i64,
+                    "DATE_DAY" => dt.day() as i64,
+                    "DATE_HOUR" => dt.hour() as i64,
+                    "DATE_MINUTE" => dt.minute() as i64,
+                    "DATE_SECOND" => dt.second() as i64,
+                    "DATE_DAYOFWEEK" => dt.weekday().num_days_from_sunday() as i64,
+                    "DATE_DAYOFYEAR" => dt.ordinal() as i64,
+                    _ => 0,
+                };
+                Ok(AqlValue::Number(serde_json::Number::from(value)))
+            }
+            "DATE_ADD" | "DATE_SUBTRACT" => {
+                use chrono::Duration;
+                if let (Some(AqlValue::Number(ts)), Some(AqlValue::Number(amount)), Some(AqlValue::String(unit))) =
+                    (args.first(), args.get(1), args.get(2))
+                {
+                    let timestamp = ts.as_i64().unwrap_or(0);
+                    let amt = amount.as_i64().unwrap_or(0);
+                    let duration = match unit.to_lowercase().as_str() {
+                        "milliseconds" | "ms" => Duration::milliseconds(amt),
+                        "seconds" | "s" => Duration::seconds(amt),
+                        "minutes" | "m" | "i" => Duration::minutes(amt),
+                        "hours" | "h" => Duration::hours(amt),
+                        "days" | "d" => Duration::days(amt),
+                        "weeks" | "w" => Duration::weeks(amt),
+                        _ => Duration::milliseconds(0),
+                    };
+                    let new_ts = if name.to_uppercase() == "DATE_ADD" {
+                        timestamp + duration.num_milliseconds()
+                    } else {
+                        timestamp - duration.num_milliseconds()
+                    };
+                    Ok(AqlValue::Number(serde_json::Number::from(new_ts)))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "DATE_DIFF" => {
+                if let (Some(AqlValue::Number(ts1)), Some(AqlValue::Number(ts2)), Some(AqlValue::String(unit))) =
+                    (args.first(), args.get(1), args.get(2))
+                {
+                    let t1 = ts1.as_i64().unwrap_or(0);
+                    let t2 = ts2.as_i64().unwrap_or(0);
+                    let diff_ms = t2 - t1;
+                    let result = match unit.to_lowercase().as_str() {
+                        "milliseconds" | "ms" => diff_ms,
+                        "seconds" | "s" => diff_ms / 1000,
+                        "minutes" | "m" | "i" => diff_ms / 60000,
+                        "hours" | "h" => diff_ms / 3600000,
+                        "days" | "d" => diff_ms / 86400000,
+                        "weeks" | "w" => diff_ms / 604800000,
+                        _ => diff_ms,
+                    };
+                    Ok(AqlValue::Number(serde_json::Number::from(result)))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+
+            // ============ Misc Functions ============
+            "NOT_NULL" | "FIRST_LIST" | "FIRST_DOCUMENT" => {
+                for arg in args {
+                    if !matches!(arg, AqlValue::Null) {
+                        match name.to_uppercase().as_str() {
+                            "FIRST_LIST" if matches!(arg, AqlValue::Array(_)) => {
+                                return Ok(arg.clone())
+                            }
+                            "FIRST_DOCUMENT" if matches!(arg, AqlValue::Object(_)) => {
+                                return Ok(arg.clone())
+                            }
+                            "NOT_NULL" => return Ok(arg.clone()),
+                            _ => continue,
+                        }
+                    }
+                }
+                Ok(AqlValue::Null)
+            }
+            "RANGE" => {
+                if let (Some(AqlValue::Number(start)), Some(AqlValue::Number(end))) =
+                    (args.first(), args.get(1))
+                {
+                    let s = start.as_i64().unwrap_or(0);
+                    let e = end.as_i64().unwrap_or(0);
+                    let step = args
+                        .get(2)
+                        .and_then(|v| {
+                            if let AqlValue::Number(n) = v {
+                                n.as_i64()
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(1)
+                        .max(1);
+                    let range: Vec<AqlValue> = (s..=e)
+                        .step_by(step as usize)
+                        .map(|i| AqlValue::Number(serde_json::Number::from(i)))
+                        .collect();
+                    Ok(AqlValue::Array(range))
+                } else {
+                    Ok(AqlValue::Array(vec![]))
+                }
+            }
+            "DOCUMENT" => {
+                // Return the document as-is (used for document lookup)
+                Ok(args.first().cloned().unwrap_or(AqlValue::Null))
+            }
+            "V8" | "CALL" | "APPLY" => {
+                // JavaScript function calls - not supported, return null
+                Ok(AqlValue::Null)
+            }
+            "ASSERT" | "WARN" => {
+                // Assertion/warning functions - just return the condition result
+                Ok(args.first().cloned().unwrap_or(AqlValue::Null))
+            }
+            "PASSTHRU" | "NOOPT" | "SLEEP" => {
+                // Pass-through functions
+                Ok(args.first().cloned().unwrap_or(AqlValue::Null))
+            }
+            "UUID" => {
+                Ok(AqlValue::String(uuid::Uuid::new_v4().to_string()))
+            }
+            "HASH" => {
+                // Simple hash - return a numeric hash
+                let input = format!("{:?}", args);
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut hasher = DefaultHasher::new();
+                input.hash(&mut hasher);
+                Ok(AqlValue::Number(serde_json::Number::from(hasher.finish() as i64)))
+            }
+
+            // ============ Default Case ============
+            _ => {
+                // Unknown function - return null
+                Ok(AqlValue::Null)
+            }
+        }
     }
 }
 

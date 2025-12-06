@@ -5,7 +5,8 @@
 
 use crate::protocols::cypher::storage::CypherGraphStorage;
 use orbit_shared::graph::{
-    Direction, GraphNode, GraphRelationship, GraphStorage, NodeId, RelationshipId,
+    Direction, GraphConstraint, GraphIndex, GraphNode, GraphRelationship, GraphStorage, NodeId,
+    RelationshipId,
 };
 use orbit_shared::{OrbitError, OrbitResult};
 use std::collections::HashMap;
@@ -20,6 +21,10 @@ pub struct PersistentGraphStorage {
     node_id_map: Arc<RwLock<HashMap<String, String>>>,
     /// Relationship ID mapping
     rel_id_map: Arc<RwLock<HashMap<String, String>>>,
+    /// Graph indexes by name
+    indexes: Arc<RwLock<HashMap<String, GraphIndex>>>,
+    /// Graph constraints by name
+    constraints: Arc<RwLock<HashMap<String, GraphConstraint>>>,
 }
 
 impl PersistentGraphStorage {
@@ -29,6 +34,8 @@ impl PersistentGraphStorage {
             cypher_storage,
             node_id_map: Arc::new(RwLock::new(HashMap::new())),
             rel_id_map: Arc::new(RwLock::new(HashMap::new())),
+            indexes: Arc::new(RwLock::new(HashMap::new())),
+            constraints: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -338,5 +345,57 @@ impl GraphStorage for PersistentGraphStorage {
                 node_id: node_id.as_str().to_string(),
             })
         }
+    }
+
+    // ============ Index Operations ============
+
+    async fn create_index(&self, index: GraphIndex) -> OrbitResult<bool> {
+        let mut indexes = self.indexes.write().await;
+        if indexes.contains_key(&index.name) {
+            return Ok(false);
+        }
+        indexes.insert(index.name.clone(), index);
+        Ok(true)
+    }
+
+    async fn drop_index(&self, name: &str) -> OrbitResult<bool> {
+        let mut indexes = self.indexes.write().await;
+        Ok(indexes.remove(name).is_some())
+    }
+
+    async fn list_indexes(&self) -> OrbitResult<Vec<GraphIndex>> {
+        let indexes = self.indexes.read().await;
+        Ok(indexes.values().cloned().collect())
+    }
+
+    async fn index_exists(&self, name: &str) -> OrbitResult<bool> {
+        let indexes = self.indexes.read().await;
+        Ok(indexes.contains_key(name))
+    }
+
+    // ============ Constraint Operations ============
+
+    async fn create_constraint(&self, constraint: GraphConstraint) -> OrbitResult<bool> {
+        let mut constraints = self.constraints.write().await;
+        if constraints.contains_key(&constraint.name) {
+            return Ok(false);
+        }
+        constraints.insert(constraint.name.clone(), constraint);
+        Ok(true)
+    }
+
+    async fn drop_constraint(&self, name: &str) -> OrbitResult<bool> {
+        let mut constraints = self.constraints.write().await;
+        Ok(constraints.remove(name).is_some())
+    }
+
+    async fn list_constraints(&self) -> OrbitResult<Vec<GraphConstraint>> {
+        let constraints = self.constraints.read().await;
+        Ok(constraints.values().cloned().collect())
+    }
+
+    async fn constraint_exists(&self, name: &str) -> OrbitResult<bool> {
+        let constraints = self.constraints.read().await;
+        Ok(constraints.contains_key(name))
     }
 }

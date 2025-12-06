@@ -12,12 +12,18 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// A MongoDB collection containing documents
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Collection {
     /// Documents indexed by _id (stored as string representation)
     documents: HashMap<String, Document>,
     /// Indexes on the collection
     indexes: Vec<IndexDefinition>,
+}
+
+impl Default for Collection {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Index definition for a collection
@@ -242,6 +248,24 @@ impl Collection {
                 }
             })
             .collect()
+    }
+
+    /// Drop a specific index by name
+    pub fn drop_index(&mut self, name: &str) -> bool {
+        // Cannot drop the _id index
+        if name == "_id_" {
+            return false;
+        }
+        let initial_len = self.indexes.len();
+        self.indexes.retain(|idx| idx.name != name);
+        self.indexes.len() < initial_len
+    }
+
+    /// Drop all indexes except _id
+    pub fn drop_all_indexes(&mut self) -> bool {
+        let initial_len = self.indexes.len();
+        self.indexes.retain(|idx| idx.name == "_id_");
+        self.indexes.len() < initial_len
     }
 
     /// Find and modify a single document atomically
@@ -1475,6 +1499,26 @@ impl DocumentStore {
             }
         }
         vec![]
+    }
+
+    pub async fn drop_index(&self, db: &str, collection: &str, name: &str) -> bool {
+        let mut dbs = self.databases.write().await;
+        if let Some(database) = dbs.get_mut(db) {
+            if let Some(coll) = database.get_collection_mut(collection) {
+                return coll.drop_index(name);
+            }
+        }
+        false
+    }
+
+    pub async fn drop_all_indexes(&self, db: &str, collection: &str) -> bool {
+        let mut dbs = self.databases.write().await;
+        if let Some(database) = dbs.get_mut(db) {
+            if let Some(coll) = database.get_collection_mut(collection) {
+                return coll.drop_all_indexes();
+            }
+        }
+        false
     }
 
     pub async fn drop_collection(&self, db: &str, collection: &str) -> bool {
@@ -3139,5 +3183,131 @@ mod tests {
             Bson::Int64(i) => Some(*i as f64),
             _ => None,
         }
+    }
+
+    #[test]
+    fn test_drop_index() {
+        let mut coll = Collection::new();
+
+        // Create some indexes
+        coll.create_index(doc! { "name": 1 }, Some("name_index".to_string()), false, false);
+        coll.create_index(doc! { "age": 1 }, Some("age_index".to_string()), false, false);
+        assert_eq!(coll.indexes.len(), 3); // includes _id_
+
+        // Drop specific index
+        let dropped = coll.drop_index("name_index");
+        assert!(dropped);
+        assert_eq!(coll.indexes.len(), 2);
+
+        // Try to drop non-existent index
+        let dropped = coll.drop_index("nonexistent");
+        assert!(!dropped);
+        assert_eq!(coll.indexes.len(), 2);
+
+        // Cannot drop _id_ index
+        let dropped = coll.drop_index("_id_");
+        assert!(!dropped);
+        assert_eq!(coll.indexes.len(), 2);
+    }
+
+    #[test]
+    fn test_drop_all_indexes() {
+        let mut coll = Collection::new();
+
+        // Create some indexes
+        coll.create_index(doc! { "name": 1 }, Some("name_index".to_string()), false, false);
+        coll.create_index(doc! { "age": 1 }, Some("age_index".to_string()), false, false);
+        coll.create_index(doc! { "email": 1 }, Some("email_index".to_string()), false, false);
+        assert_eq!(coll.indexes.len(), 4); // includes _id_
+
+        // Drop all indexes except _id_
+        let dropped = coll.drop_all_indexes();
+        assert!(dropped);
+        assert_eq!(coll.indexes.len(), 1);
+        assert_eq!(coll.indexes[0].name, "_id_");
+    }
+
+    #[tokio::test]
+    async fn test_document_store_drop_index() {
+        let store = DocumentStore::new();
+
+        // Create a collection with indexes
+        store
+            .insert_one("testdb", "users", doc! { "name": "Alice" })
+            .await
+            .unwrap();
+
+        // Verify initial state - only _id_ index
+        let indexes = store.list_indexes("testdb", "users").await;
+        assert_eq!(indexes.len(), 1);
+
+        store
+            .create_index(
+                "testdb",
+                "users",
+                doc! { "name": 1 },
+                Some("name_idx".to_string()),
+                false, // unique
+                false, // sparse
+            )
+            .await;
+
+        // Verify index was created
+        let indexes = store.list_indexes("testdb", "users").await;
+        assert_eq!(indexes.len(), 2);
+
+        // Drop specific index
+        let dropped = store.drop_index("testdb", "users", "name_idx").await;
+        assert!(dropped);
+
+        let indexes = store.list_indexes("testdb", "users").await;
+        assert_eq!(indexes.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_document_store_drop_all_indexes() {
+        let store = DocumentStore::new();
+
+        // Create a collection with multiple indexes
+        store
+            .insert_one("testdb", "users", doc! { "name": "Alice", "age": 30 })
+            .await
+            .unwrap();
+
+        // Verify initial state - only _id_ index
+        let indexes = store.list_indexes("testdb", "users").await;
+        assert_eq!(indexes.len(), 1);
+
+        store
+            .create_index(
+                "testdb",
+                "users",
+                doc! { "name": 1 },
+                Some("name_idx".to_string()),
+                false, // unique
+                false, // sparse
+            )
+            .await;
+        store
+            .create_index(
+                "testdb",
+                "users",
+                doc! { "age": 1 },
+                Some("age_idx".to_string()),
+                false, // unique
+                false, // sparse
+            )
+            .await;
+
+        // Verify indexes exist
+        let indexes = store.list_indexes("testdb", "users").await;
+        assert_eq!(indexes.len(), 3);
+
+        // Drop all indexes except _id_
+        let dropped = store.drop_all_indexes("testdb", "users").await;
+        assert!(dropped);
+
+        let indexes = store.list_indexes("testdb", "users").await;
+        assert_eq!(indexes.len(), 1);
     }
 }

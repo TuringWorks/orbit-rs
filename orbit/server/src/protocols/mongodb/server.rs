@@ -4,7 +4,7 @@
 
 use super::protocol::{MongoCodec, MongoHeader, MongoMessage, MsgSection, OP_MSG, OP_REPLY};
 use super::storage::DocumentStore;
-use bson::{doc, Bson, Document};
+use bson::{doc, oid::ObjectId, Bson, Document};
 use futures::{SinkExt, StreamExt};
 use orbit_shared::OrbitResult;
 use std::sync::Arc;
@@ -1255,6 +1255,35 @@ async fn handle_command(
             "ok": 1.0,
         }
     }
+    // DropIndexes
+    else if let Ok(collection) = command.get_str("dropIndexes") {
+        let index_name = command.get_str("index").ok();
+
+        let result = if let Some(name) = index_name {
+            if name == "*" {
+                // Drop all indexes except _id
+                store.drop_all_indexes(db, collection).await
+            } else {
+                store.drop_index(db, collection, name).await
+            }
+        } else {
+            // If no index specified, drop all except _id
+            store.drop_all_indexes(db, collection).await
+        };
+
+        if result {
+            doc! {
+                "nIndexesWas": 1,
+                "ok": 1.0,
+            }
+        } else {
+            doc! {
+                "ok": 0.0,
+                "errmsg": "index not found",
+                "code": 27,
+            }
+        }
+    }
     // ListCollections
     else if command.contains_key("listCollections") {
         let collections = store.list_collections(db).await;
@@ -1460,6 +1489,160 @@ async fn handle_command(
 
         doc! {
             "values": values,
+            "ok": 1.0,
+        }
+    }
+    // bulkWrite - execute multiple write operations
+    else if command.contains_key("bulkWrite") {
+        let ops = command.get_array("ops").ok();
+        let ordered = command.get_bool("ordered").unwrap_or(true);
+        let ns_info = command.get_array("nsInfo").ok();
+
+        let mut insert_count = 0i64;
+        let mut _update_count = 0i64;
+        let mut delete_count = 0i64;
+        let mut matched_count = 0i64;
+        let mut modified_count = 0i64;
+        let mut errors: Vec<Document> = Vec::new();
+
+        // Get the collection from nsInfo if available
+        let default_collection = ns_info
+            .and_then(|arr| arr.first())
+            .and_then(|b| b.as_document())
+            .and_then(|d| d.get_str("ns").ok())
+            .and_then(|ns| ns.split('.').nth(1))
+            .unwrap_or("default");
+
+        if let Some(operations) = ops {
+            for (idx, op) in operations.iter().enumerate() {
+                if let Some(op_doc) = op.as_document() {
+                    // Insert operation
+                    if let Ok(insert_doc) = op_doc.get_document("insert") {
+                        let document = insert_doc.get_document("document").cloned().unwrap_or_default();
+                        match store.insert_one(db, default_collection, document).await {
+                            Ok(_) => insert_count += 1,
+                            Err(e) => {
+                                if ordered {
+                                    errors.push(doc! {
+                                        "index": idx as i32,
+                                        "code": 11000,
+                                        "errmsg": e,
+                                    });
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    // Update operation
+                    else if let Ok(update_doc) = op_doc.get_document("update") {
+                        let filter = update_doc.get_document("filter").cloned().unwrap_or_default();
+                        let update_spec = update_doc.get_document("updateMods").cloned().unwrap_or_default();
+                        let multi = update_doc.get_bool("multi").unwrap_or(false);
+
+                        let (matched, modified) = if multi {
+                            store.update_many(db, default_collection, &filter, &update_spec).await
+                        } else {
+                            store.update_one(db, default_collection, &filter, &update_spec).await
+                        };
+                        matched_count += matched;
+                        modified_count += modified;
+                        _update_count += 1;
+                    }
+                    // Delete operation
+                    else if let Ok(delete_doc) = op_doc.get_document("delete") {
+                        let filter = delete_doc.get_document("filter").cloned().unwrap_or_default();
+                        let multi = delete_doc.get_bool("multi").unwrap_or(false);
+
+                        let deleted = if multi {
+                            store.delete_many(db, default_collection, &filter).await
+                        } else {
+                            store.delete_one(db, default_collection, &filter).await
+                        };
+                        delete_count += deleted;
+                    }
+                }
+            }
+        }
+
+        doc! {
+            "ok": 1.0,
+            "nInserted": insert_count,
+            "nMatched": matched_count,
+            "nModified": modified_count,
+            "nDeleted": delete_count,
+            "nUpserted": 0,
+            "writeErrors": errors.into_iter().map(Bson::Document).collect::<Vec<_>>(),
+        }
+    }
+    // startSession - session management (stub for compatibility)
+    else if command.contains_key("startSession") {
+        let session_id = ObjectId::new();
+        doc! {
+            "id": {
+                "id": Bson::Binary(bson::Binary {
+                    subtype: bson::spec::BinarySubtype::Uuid,
+                    bytes: session_id.bytes().to_vec(),
+                }),
+            },
+            "timeoutMinutes": 30,
+            "ok": 1.0,
+        }
+    }
+    // endSessions - end one or more sessions
+    else if command.contains_key("endSessions") {
+        // Sessions are not persisted, so this is a no-op
+        doc! { "ok": 1.0 }
+    }
+    // refreshSessions - refresh sessions to prevent timeout
+    else if command.contains_key("refreshSessions") {
+        doc! { "ok": 1.0 }
+    }
+    // killSessions - terminate sessions
+    else if command.contains_key("killSessions") {
+        doc! { "ok": 1.0 }
+    }
+    // killAllSessions - terminate all sessions
+    else if command.contains_key("killAllSessions") {
+        doc! { "ok": 1.0 }
+    }
+    // killAllSessionsByPattern - terminate sessions matching pattern
+    else if command.contains_key("killAllSessionsByPattern") {
+        doc! { "ok": 1.0 }
+    }
+    // currentOp - get current operations
+    else if command.contains_key("currentOp") {
+        doc! {
+            "inprog": Bson::Array(vec![]),
+            "ok": 1.0,
+        }
+    }
+    // killOp - kill an operation
+    else if command.contains_key("killOp") {
+        doc! { "ok": 1.0 }
+    }
+    // validate - validate a collection
+    else if let Ok(collection) = command.get_str("validate") {
+        let count = store.count(db, collection, &doc! {}).await;
+        doc! {
+            "ns": format!("{}.{}", db, collection),
+            "nrecords": count,
+            "nIndexes": 1,
+            "valid": true,
+            "ok": 1.0,
+        }
+    }
+    // compact - compact a collection (no-op for in-memory)
+    else if command.contains_key("compact") {
+        doc! {
+            "bytesFreed": 0,
+            "ok": 1.0,
+        }
+    }
+    // reIndex - rebuild indexes (stub)
+    else if command.contains_key("reIndex") {
+        doc! {
+            "nIndexesWas": 1,
+            "nIndexes": 1,
             "ok": 1.0,
         }
     }
