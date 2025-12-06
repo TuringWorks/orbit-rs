@@ -3,6 +3,9 @@
 //! This module defines the complete AST for ANSI SQL statements including
 //! DDL, DML, DCL, and TCL operations, with extensions for vector operations.
 
+// Large enum variants are intentional for AST flexibility
+#![allow(clippy::large_enum_variant)]
+
 use crate::protocols::postgres_wire::sql::types::{SqlType, SqlValue};
 
 /// Top-level SQL statement
@@ -689,7 +692,9 @@ pub enum CopyOption {
 
 /// COPY format types
 #[derive(Debug, Clone, PartialEq)]
+#[derive(Default)]
 pub enum CopyFormat {
+    #[default]
     Text,
     Csv,
     Binary,
@@ -697,8 +702,10 @@ pub enum CopyFormat {
 
 /// COPY HEADER option values
 #[derive(Debug, Clone, PartialEq)]
+#[derive(Default)]
 pub enum CopyHeaderOption {
     /// No header processing
+    #[default]
     Off,
     /// First row is header (HEADER or HEADER true)
     On,
@@ -708,8 +715,10 @@ pub enum CopyHeaderOption {
 
 /// COPY ON_ERROR behavior
 #[derive(Debug, Clone, PartialEq)]
+#[derive(Default)]
 pub enum CopyOnError {
     /// Stop on error (default)
+    #[default]
     Stop,
     /// Skip rows with errors
     Ignore,
@@ -722,23 +731,8 @@ pub enum CopyLogVerbosity {
     Verbose,
 }
 
-impl Default for CopyFormat {
-    fn default() -> Self {
-        CopyFormat::Text
-    }
-}
 
-impl Default for CopyHeaderOption {
-    fn default() -> Self {
-        CopyHeaderOption::Off
-    }
-}
 
-impl Default for CopyOnError {
-    fn default() -> Self {
-        CopyOnError::Stop
-    }
-}
 
 // ===== Expressions =====
 

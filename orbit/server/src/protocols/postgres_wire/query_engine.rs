@@ -1,5 +1,8 @@
 //! SQL query engine for actor operations
 
+// Recursive helper functions use parameters only for recursion - intentional design
+#![allow(clippy::only_used_in_recursion)]
+
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -333,7 +336,7 @@ impl QueryEngine {
         let mut parser = SqlParser::new();
         let statements = match parser.parse_multiple(sql) {
             Ok(stmts) => stmts,
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e),
         };
 
         let mut results = Vec::new();

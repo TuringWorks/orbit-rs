@@ -7,6 +7,9 @@
 //! - Redis Streams Spec: `specifications/protocols/redis-resp-protocol-specification.md`
 //! - ANTLR4 Grammar: <https://github.com/TuringWorks/grammars-v4/tree/master/redis>
 
+// Complex return types are intentional for stream operation completeness
+#![allow(clippy::type_complexity)]
+
 use super::traits::{BaseCommandHandler, CommandHandler};
 use crate::protocols::error::ProtocolError;
 use crate::protocols::error::ProtocolResult;
@@ -348,7 +351,7 @@ impl StreamCommands {
 
         // Count remaining args to split between keys and IDs
         let remaining = args.len() - idx;
-        if remaining < 2 || remaining % 2 != 0 {
+        if remaining < 2 || !remaining.is_multiple_of(2) {
             return Err(ProtocolError::RespError(
                 "ERR Unbalanced XREAD list of streams: for each stream key an ID must be specified"
                     .to_string(),
@@ -671,7 +674,7 @@ impl StreamCommands {
 
         // Count remaining args to split between keys and IDs
         let remaining = args.len() - idx;
-        if remaining < 2 || remaining % 2 != 0 {
+        if remaining < 2 || !remaining.is_multiple_of(2) {
             return Err(ProtocolError::RespError(
                 "ERR Unbalanced XREADGROUP list of streams".to_string(),
             ));

@@ -1708,7 +1708,7 @@ mod tests {
             .unwrap();
 
         // Test various valid vector literal formats
-        let test_cases = vec![
+        let test_cases = [
             "[1, 2, 3]",             // Spaces after comma
             "[1,2,3]",               // No spaces
             "[ 1, 2, 3 ]",           // Spaces around brackets

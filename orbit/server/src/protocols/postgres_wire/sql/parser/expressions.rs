@@ -490,9 +490,9 @@ impl ExpressionParser {
                                 },
                             ))
                         } else {
-                            return Err(crate::protocols::error::ProtocolError::ParseError(
+                            Err(crate::protocols::error::ProtocolError::ParseError(
                                 "Expected identifier after dot".to_string(),
-                            ));
+                            ))
                         }
                     } else {
                         // Regular column reference
@@ -665,9 +665,9 @@ impl ExpressionParser {
                                     },
                                 ))
                             } else {
-                                return Err(crate::protocols::error::ProtocolError::ParseError(
+                                Err(crate::protocols::error::ProtocolError::ParseError(
                                     "Expected identifier after dot".to_string(),
-                                ));
+                                ))
                             }
                         } else {
                             // Regular column reference

@@ -3,6 +3,9 @@
 //! This module provides SSE endpoints for streaming CDC events and other
 //! real-time data to browsers and clients that prefer SSE over WebSockets.
 
+// Large enum variants are intentional for CDC event completeness
+#![allow(clippy::large_enum_variant)]
+
 use axum::{
     extract::{Query, State},
     response::sse::{Event, KeepAlive, Sse},

@@ -4,7 +4,7 @@
 
 use super::protocol::{MongoCodec, MongoHeader, MongoMessage, MsgSection, OP_MSG, OP_REPLY};
 use super::storage::DocumentStore;
-use bson::{doc, Bson, Document};
+use bson::{doc, oid::ObjectId, Bson, Document};
 use futures::{SinkExt, StreamExt};
 use orbit_shared::OrbitResult;
 use std::sync::Arc;
@@ -386,10 +386,7 @@ async fn handle_command(
                 if let Some(stage_doc) = stage.as_document() {
                     // $match - filter documents
                     if let Ok(match_doc) = stage_doc.get_document("$match") {
-                        docs = docs
-                            .into_iter()
-                            .filter(|d| matches_document_filter(d, match_doc))
-                            .collect();
+                        docs.retain(|d| matches_document_filter(d, match_doc));
                     }
                     // $project - reshape documents
                     else if let Ok(project_doc) = stage_doc.get_document("$project") {
@@ -636,7 +633,7 @@ async fn handle_command(
                                 if let Some(output) = output_spec {
                                     for (field, acc) in output {
                                         if let Bson::Document(acc_doc) = acc {
-                                            let doc_refs: Vec<&Document> = bucket_docs.iter().copied().collect();
+                                            let doc_refs: Vec<&Document> = bucket_docs.to_vec();
                                             if let Some((op, expr)) = acc_doc.iter().next() {
                                                 let value = apply_accumulator(op, expr, &doc_refs);
                                                 result.insert(field, value);
@@ -661,10 +658,7 @@ async fn handle_command(
                                     if let Bson::Document(inner_stage) = stage {
                                         // $match
                                         if let Ok(match_doc) = inner_stage.get_document("$match") {
-                                            facet_docs = facet_docs
-                                                .into_iter()
-                                                .filter(|d| matches_document_filter(d, match_doc))
-                                                .collect();
+                                            facet_docs.retain(|d| matches_document_filter(d, match_doc));
                                         }
                                         // $limit
                                         else if let Ok(limit) = inner_stage.get_i64("$limit") {
@@ -1024,8 +1018,8 @@ async fn handle_command(
                                 for mut partition in partitions {
                                     // Sort by field
                                     partition.sort_by(|a, b| {
-                                        let va = a.get(field).and_then(|v| bson_to_f64(v));
-                                        let vb = b.get(field).and_then(|v| bson_to_f64(v));
+                                        let va = a.get(field).and_then(bson_to_f64);
+                                        let vb = b.get(field).and_then(bson_to_f64);
                                         va.partial_cmp(&vb).unwrap_or(std::cmp::Ordering::Equal)
                                     });
 
@@ -1039,12 +1033,12 @@ async fn handle_command(
                                             let min = partition
                                                 .first()
                                                 .and_then(|d| d.get(field))
-                                                .and_then(|v| bson_to_f64(v))
+                                                .and_then(bson_to_f64)
                                                 .unwrap_or(0.0);
                                             let max = partition
                                                 .last()
                                                 .and_then(|d| d.get(field))
-                                                .and_then(|v| bson_to_f64(v))
+                                                .and_then(bson_to_f64)
                                                 .unwrap_or(0.0);
                                             (min, max)
                                         }
@@ -1053,12 +1047,12 @@ async fn handle_command(
                                             let min = partition
                                                 .first()
                                                 .and_then(|d| d.get(field))
-                                                .and_then(|v| bson_to_f64(v))
+                                                .and_then(bson_to_f64)
                                                 .unwrap_or(0.0);
                                             let max = partition
                                                 .last()
                                                 .and_then(|d| d.get(field))
-                                                .and_then(|v| bson_to_f64(v))
+                                                .and_then(bson_to_f64)
                                                 .unwrap_or(0.0);
                                             (min, max)
                                         }
@@ -1068,7 +1062,7 @@ async fn handle_command(
                                     let existing: std::collections::HashSet<i64> = partition
                                         .iter()
                                         .filter_map(|d| {
-                                            d.get(field).and_then(|v| bson_to_i64(v))
+                                            d.get(field).and_then(bson_to_i64)
                                         })
                                         .collect();
 
@@ -1082,7 +1076,7 @@ async fn handle_command(
                                         while partition_idx < partition.len() {
                                             let doc_val = partition[partition_idx]
                                                 .get(field)
-                                                .and_then(|v| bson_to_i64(v));
+                                                .and_then(bson_to_i64);
                                             if let Some(dv) = doc_val {
                                                 if dv < current {
                                                     result_docs.push(partition[partition_idx].clone());
@@ -1162,7 +1156,7 @@ async fn handle_command(
                                             // Linear interpolation
                                             let values: Vec<Option<f64>> = docs
                                                 .iter()
-                                                .map(|d| d.get(field).and_then(|v| bson_to_f64(v)))
+                                                .map(|d| d.get(field).and_then(bson_to_f64))
                                                 .collect();
 
                                             for i in 0..docs.len() {
@@ -1259,6 +1253,35 @@ async fn handle_command(
                 "firstBatch": indexes.into_iter().map(Bson::Document).collect::<Vec<_>>(),
             },
             "ok": 1.0,
+        }
+    }
+    // DropIndexes
+    else if let Ok(collection) = command.get_str("dropIndexes") {
+        let index_name = command.get_str("index").ok();
+
+        let result = if let Some(name) = index_name {
+            if name == "*" {
+                // Drop all indexes except _id
+                store.drop_all_indexes(db, collection).await
+            } else {
+                store.drop_index(db, collection, name).await
+            }
+        } else {
+            // If no index specified, drop all except _id
+            store.drop_all_indexes(db, collection).await
+        };
+
+        if result {
+            doc! {
+                "nIndexesWas": 1,
+                "ok": 1.0,
+            }
+        } else {
+            doc! {
+                "ok": 0.0,
+                "errmsg": "index not found",
+                "code": 27,
+            }
         }
     }
     // ListCollections
@@ -1469,6 +1492,160 @@ async fn handle_command(
             "ok": 1.0,
         }
     }
+    // bulkWrite - execute multiple write operations
+    else if command.contains_key("bulkWrite") {
+        let ops = command.get_array("ops").ok();
+        let ordered = command.get_bool("ordered").unwrap_or(true);
+        let ns_info = command.get_array("nsInfo").ok();
+
+        let mut insert_count = 0i64;
+        let mut _update_count = 0i64;
+        let mut delete_count = 0i64;
+        let mut matched_count = 0i64;
+        let mut modified_count = 0i64;
+        let mut errors: Vec<Document> = Vec::new();
+
+        // Get the collection from nsInfo if available
+        let default_collection = ns_info
+            .and_then(|arr| arr.first())
+            .and_then(|b| b.as_document())
+            .and_then(|d| d.get_str("ns").ok())
+            .and_then(|ns| ns.split('.').nth(1))
+            .unwrap_or("default");
+
+        if let Some(operations) = ops {
+            for (idx, op) in operations.iter().enumerate() {
+                if let Some(op_doc) = op.as_document() {
+                    // Insert operation
+                    if let Ok(insert_doc) = op_doc.get_document("insert") {
+                        let document = insert_doc.get_document("document").cloned().unwrap_or_default();
+                        match store.insert_one(db, default_collection, document).await {
+                            Ok(_) => insert_count += 1,
+                            Err(e) => {
+                                if ordered {
+                                    errors.push(doc! {
+                                        "index": idx as i32,
+                                        "code": 11000,
+                                        "errmsg": e,
+                                    });
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    // Update operation
+                    else if let Ok(update_doc) = op_doc.get_document("update") {
+                        let filter = update_doc.get_document("filter").cloned().unwrap_or_default();
+                        let update_spec = update_doc.get_document("updateMods").cloned().unwrap_or_default();
+                        let multi = update_doc.get_bool("multi").unwrap_or(false);
+
+                        let (matched, modified) = if multi {
+                            store.update_many(db, default_collection, &filter, &update_spec).await
+                        } else {
+                            store.update_one(db, default_collection, &filter, &update_spec).await
+                        };
+                        matched_count += matched;
+                        modified_count += modified;
+                        _update_count += 1;
+                    }
+                    // Delete operation
+                    else if let Ok(delete_doc) = op_doc.get_document("delete") {
+                        let filter = delete_doc.get_document("filter").cloned().unwrap_or_default();
+                        let multi = delete_doc.get_bool("multi").unwrap_or(false);
+
+                        let deleted = if multi {
+                            store.delete_many(db, default_collection, &filter).await
+                        } else {
+                            store.delete_one(db, default_collection, &filter).await
+                        };
+                        delete_count += deleted;
+                    }
+                }
+            }
+        }
+
+        doc! {
+            "ok": 1.0,
+            "nInserted": insert_count,
+            "nMatched": matched_count,
+            "nModified": modified_count,
+            "nDeleted": delete_count,
+            "nUpserted": 0,
+            "writeErrors": errors.into_iter().map(Bson::Document).collect::<Vec<_>>(),
+        }
+    }
+    // startSession - session management (stub for compatibility)
+    else if command.contains_key("startSession") {
+        let session_id = ObjectId::new();
+        doc! {
+            "id": {
+                "id": Bson::Binary(bson::Binary {
+                    subtype: bson::spec::BinarySubtype::Uuid,
+                    bytes: session_id.bytes().to_vec(),
+                }),
+            },
+            "timeoutMinutes": 30,
+            "ok": 1.0,
+        }
+    }
+    // endSessions - end one or more sessions
+    else if command.contains_key("endSessions") {
+        // Sessions are not persisted, so this is a no-op
+        doc! { "ok": 1.0 }
+    }
+    // refreshSessions - refresh sessions to prevent timeout
+    else if command.contains_key("refreshSessions") {
+        doc! { "ok": 1.0 }
+    }
+    // killSessions - terminate sessions
+    else if command.contains_key("killSessions") {
+        doc! { "ok": 1.0 }
+    }
+    // killAllSessions - terminate all sessions
+    else if command.contains_key("killAllSessions") {
+        doc! { "ok": 1.0 }
+    }
+    // killAllSessionsByPattern - terminate sessions matching pattern
+    else if command.contains_key("killAllSessionsByPattern") {
+        doc! { "ok": 1.0 }
+    }
+    // currentOp - get current operations
+    else if command.contains_key("currentOp") {
+        doc! {
+            "inprog": Bson::Array(vec![]),
+            "ok": 1.0,
+        }
+    }
+    // killOp - kill an operation
+    else if command.contains_key("killOp") {
+        doc! { "ok": 1.0 }
+    }
+    // validate - validate a collection
+    else if let Ok(collection) = command.get_str("validate") {
+        let count = store.count(db, collection, &doc! {}).await;
+        doc! {
+            "ns": format!("{}.{}", db, collection),
+            "nrecords": count,
+            "nIndexes": 1,
+            "valid": true,
+            "ok": 1.0,
+        }
+    }
+    // compact - compact a collection (no-op for in-memory)
+    else if command.contains_key("compact") {
+        doc! {
+            "bytesFreed": 0,
+            "ok": 1.0,
+        }
+    }
+    // reIndex - rebuild indexes (stub)
+    else if command.contains_key("reIndex") {
+        doc! {
+            "nIndexesWas": 1,
+            "nIndexes": 1,
+            "ok": 1.0,
+        }
+    }
     // Unknown command
     else {
         let cmd_name = command
@@ -1631,7 +1808,7 @@ fn apply_projection(doc: &Document, project: &Document) -> Document {
         .any(|v| matches!(v, Bson::Int32(1) | Bson::Int64(1) | Bson::Boolean(true)));
     if !has_inclusions && result.is_empty() {
         for (key, value) in doc {
-            let should_exclude = project.get(key).map_or(false, |v| {
+            let should_exclude = project.get(key).is_some_and(|v| {
                 matches!(v, Bson::Int32(0) | Bson::Int64(0) | Bson::Boolean(false))
             });
             if !should_exclude {
@@ -1641,7 +1818,7 @@ fn apply_projection(doc: &Document, project: &Document) -> Document {
     }
 
     // Always include _id unless explicitly excluded
-    if project.get("_id").map_or(true, |v| {
+    if project.get("_id").is_none_or(|v| {
         !matches!(v, Bson::Int32(0) | Bson::Int64(0) | Bson::Boolean(false))
     }) {
         if let Some(id) = doc.get("_id") {
@@ -2332,7 +2509,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$asin" => {
                         let val = evaluate_expression(args, doc);
                         if let Some(n) = bson_to_f64(&val) {
-                            if n >= -1.0 && n <= 1.0 {
+                            if (-1.0..=1.0).contains(&n) {
                                 return Bson::Double(n.asin());
                             }
                         }
@@ -2341,7 +2518,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$acos" => {
                         let val = evaluate_expression(args, doc);
                         if let Some(n) = bson_to_f64(&val) {
-                            if n >= -1.0 && n <= 1.0 {
+                            if (-1.0..=1.0).contains(&n) {
                                 return Bson::Double(n.acos());
                             }
                         }
@@ -2567,10 +2744,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                     let filtered: Vec<Bson> = arr.into_iter().filter(|item| {
                                         let mut temp_doc = doc.clone();
                                         temp_doc.insert(as_var.to_string(), item.clone());
-                                        match evaluate_expression(cond, &temp_doc) {
-                                            Bson::Boolean(true) => true,
-                                            _ => false,
-                                        }
+                                        matches!(evaluate_expression(cond, &temp_doc), Bson::Boolean(true))
                                     }).collect();
                                     return Bson::Array(filtered);
                                 }
@@ -3518,7 +3692,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                         match v {
                                             Bson::Boolean(false) | Bson::Null => return Bson::Boolean(false),
                                             Bson::Int32(0) | Bson::Int64(0) => return Bson::Boolean(false),
-                                            Bson::Double(n) if n == 0.0 => return Bson::Boolean(false),
+                                            Bson::Double(0.0) => return Bson::Boolean(false),
                                             _ => {}
                                         }
                                     }

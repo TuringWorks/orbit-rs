@@ -599,7 +599,7 @@ impl ResultMerger {
                     .collect::<Vec<_>>()
                     .join("|");
 
-                let accumulators = grouped.entry(group_key).or_insert_with(HashMap::new);
+                let accumulators = grouped.entry(group_key).or_default();
 
                 // Accumulate each aggregate
                 for agg in aggregates {

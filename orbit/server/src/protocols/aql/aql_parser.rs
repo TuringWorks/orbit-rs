@@ -7,6 +7,11 @@
 //! - AQL Spec: `specifications/protocols/arangodb_aql_reference.md`
 //! - ANTLR4 Grammar: <https://github.com/TuringWorks/grammars-v4/tree/master/aql>
 
+// Parser loops use complex exit conditions that don't translate cleanly to while let
+#![allow(clippy::while_let_loop)]
+// Identical blocks intentional for code symmetry in operator parsing
+#![allow(clippy::if_same_then_else)]
+
 use crate::protocols::aql::data_model::AqlValue;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use serde::{Deserialize, Serialize};

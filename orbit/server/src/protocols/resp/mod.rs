@@ -33,6 +33,7 @@ pub mod commands;
 // pub mod server;  // Moved to orbit_server::protocols
 pub mod simple_local;
 pub mod spatial_commands;
+pub mod transactions;
 pub mod types;
 
 pub use crate::protocols::vector_store::{
@@ -49,6 +50,7 @@ pub use commands::CommandHandler;
 pub use spatial_commands::{
     GeofenceDefinition, GeofenceEngine, RedisSpatialCommands, RedisValue, SpatialDataSet,
 };
+pub use transactions::{TransactionManager, TransactionState, QueuedCommand};
 pub use types::{RespArray, RespValue};
 // pub use local_invocation::{LocalActorRegistry, RespInvocationSystem, create_resp_orbit_client};  // Disabled
 pub use simple_local::SimpleLocalRegistry;

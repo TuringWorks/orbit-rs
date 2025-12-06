@@ -1,5 +1,8 @@
 //! CQL type system and value representations
 
+// from_str method name is intentional - not implementing FromStr trait
+#![allow(clippy::should_implement_trait)]
+
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::types::{SqlType, SqlValue};
 use serde::{Deserialize, Serialize};

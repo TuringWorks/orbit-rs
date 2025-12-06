@@ -28,7 +28,7 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use orbit_server::protocols::aql::{AqlServer, AqlStorage, AqlStorageProvider};
@@ -765,19 +765,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
     });
     protocol_handles.push(aql_handle);
-    info!("[AQL] AQL/ArangoDB protocol adapter started on port 8529");
+    debug!("[AQL] AQL/ArangoDB protocol adapter started on port 8529");
 
     info!("=========================================");
     info!("    Orbit Server Ready!");
     info!("=========================================");
-    info!("  gRPC:       {}:{}", args.bind, args.grpc_port);
-    info!("  PostgreSQL: {}:{}", args.bind, args.postgres_port);
-    info!("  Redis:      {}:{}", args.bind, args.redis_port);
-    info!("  MySQL:      {}:{}", args.bind, args.mysql_port);
-    info!("  CQL:        {}:{}", args.bind, args.cql_port);
-    info!("  Cypher:     {}:7687", args.bind);
-    info!("  AQL:        {}:8529", args.bind);
-    info!("  Metrics:    {}:{}/metrics", args.bind, args.metrics_port);
+    debug!("  gRPC:       {}:{}", args.bind, args.grpc_port);
+    debug!("  PostgreSQL: {}:{}", args.bind, args.postgres_port);
+    debug!("  Redis:      {}:{}", args.bind, args.redis_port);
+    debug!("  MySQL:      {}:{}", args.bind, args.mysql_port);
+    debug!("  CQL:        {}:{}", args.bind, args.cql_port);
+    debug!("  Cypher:     {}:7687", args.bind);
+    debug!("  AQL:        {}:8529", args.bind);
+    debug!("  Metrics:    {}:{}/metrics", args.bind, args.metrics_port);
 
     // Initialize MCP server if enabled
     if toml_config
@@ -1112,23 +1112,26 @@ async fn start_prometheus_metrics_exporter(port: u16) -> Result<(), Box<dyn Erro
 /// Log protocol configuration
 fn log_protocol_configuration(args: &Args) {
     info!("[Protocols] Enabled protocol servers:");
-    info!(
+    debug!(
         "  - gRPC (Actor Management): {}:{}",
         args.bind, args.grpc_port
     );
-    info!(
+    debug!(
         "  - PostgreSQL (Wire Protocol): {}:{}",
         args.bind, args.postgres_port
     );
-    info!(
+    debug!(
         "  - Redis (RESP Protocol): {}:{}",
         args.bind, args.redis_port
     );
-    info!(
+    debug!(
         "  - MySQL (Wire Protocol): {}:{}",
         args.bind, args.mysql_port
     );
-    info!("  - CQL (Cassandra): {}:{}", args.bind, args.cql_port);
+    debug!("  - CQL (Cassandra): {}:{}", args.bind, args.cql_port);
+    debug!("  - Cypher (Neo4j): {}:7687", args.bind);
+    debug!("  - AQL (ArangoDB): {}:8529", args.bind);
+    debug!("  - Metrics: {}:{}/metrics", args.bind, args.metrics_port);
 }
 
 /// Initialize cluster with Raft consensus

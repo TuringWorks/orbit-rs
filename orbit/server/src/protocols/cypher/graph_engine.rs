@@ -11,7 +11,8 @@ use crate::protocols::cypher::cypher_parser::{
 };
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use orbit_shared::graph::{
-    Direction, GraphNode, GraphRelationship, GraphStorage, NodeId, RelationshipId,
+    ConstraintType, Direction, EntityType, GraphConstraint, GraphIndex, GraphNode,
+    GraphRelationship, GraphStorage, IndexType, NodeId, RelationshipId,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -336,7 +337,64 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                         "CREATE INDEX: name={:?}, type={:?}, entity={:?}, label={}, props={:?}, if_not_exists={}",
                         name, index_type, entity_type, label_or_type, properties, if_not_exists
                     );
-                    // TODO: Implement index creation in storage layer
+
+                    // Convert parser types to storage types
+                    use crate::protocols::cypher::cypher_parser::{
+                        EntityType as ParserEntityType, IndexType as ParserIndexType,
+                    };
+
+                    let storage_index_type = match index_type {
+                        ParserIndexType::Range => IndexType::Range,
+                        ParserIndexType::Lookup => IndexType::Lookup,
+                        ParserIndexType::Text | ParserIndexType::Fulltext => IndexType::FullText,
+                        ParserIndexType::Point => IndexType::Point,
+                        ParserIndexType::Vector => IndexType::Vector,
+                    };
+
+                    let storage_entity_type = match entity_type {
+                        ParserEntityType::Node => EntityType::Node,
+                        ParserEntityType::Relationship => EntityType::Relationship,
+                    };
+
+                    // Generate index name if not provided
+                    let index_name = name
+                        .clone()
+                        .unwrap_or_else(|| format!("idx_{}_{}", label_or_type, properties.join("_")));
+
+                    let index = GraphIndex::new(
+                        index_name.clone(),
+                        storage_index_type,
+                        storage_entity_type,
+                        label_or_type.clone(),
+                        properties.clone(),
+                    );
+
+                    // Check if exists and handle if_not_exists
+                    let exists = self.storage.index_exists(&index_name).await.unwrap_or(false);
+                    if exists && *if_not_exists {
+                        info!("Index {} already exists, skipping due to IF NOT EXISTS", index_name);
+                    } else if exists {
+                        // Return error for duplicate index
+                        warn!("Index {} already exists", index_name);
+                    } else {
+                        match self.storage.create_index(index).await {
+                            Ok(created) => {
+                                if created {
+                                    info!("Created index: {}", index_name);
+                                    // Return success result as node
+                                    let mut props = HashMap::new();
+                                    props.insert(
+                                        "message".to_string(),
+                                        serde_json::Value::String(format!("Index {} created", index_name)),
+                                    );
+                                    result_nodes.push(GraphNode::new(vec!["_DDLResult".to_string()], props));
+                                }
+                            }
+                            Err(e) => {
+                                warn!("Failed to create index {}: {}", index_name, e);
+                            }
+                        }
+                    }
                 }
                 CypherClause::CreateConstraint {
                     name,
@@ -350,23 +408,184 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                         "CREATE CONSTRAINT: name={:?}, type={:?}, entity={:?}, label={}, props={:?}, if_not_exists={}",
                         name, constraint_type, entity_type, label_or_type, properties, if_not_exists
                     );
-                    // TODO: Implement constraint creation in storage layer
+
+                    use crate::protocols::cypher::cypher_parser::{
+                        ConstraintType as ParserConstraintType, EntityType as ParserEntityType,
+                    };
+
+                    let storage_constraint_type = match constraint_type {
+                        ParserConstraintType::Unique => ConstraintType::Unique,
+                        ParserConstraintType::NodeKey => ConstraintType::NodeKey,
+                        ParserConstraintType::Exists => ConstraintType::Exists,
+                        ParserConstraintType::PropertyType { .. } => ConstraintType::Exists, // Map to exists for now
+                    };
+
+                    let storage_entity_type = match entity_type {
+                        ParserEntityType::Node => EntityType::Node,
+                        ParserEntityType::Relationship => EntityType::Relationship,
+                    };
+
+                    // Generate constraint name if not provided
+                    let constraint_name = name
+                        .clone()
+                        .unwrap_or_else(|| format!("constraint_{}_{}", label_or_type, properties.join("_")));
+
+                    let constraint = GraphConstraint::new(
+                        constraint_name.clone(),
+                        storage_constraint_type,
+                        storage_entity_type,
+                        label_or_type.clone(),
+                        properties.clone(),
+                    );
+
+                    // Check if exists and handle if_not_exists
+                    let exists = self.storage.constraint_exists(&constraint_name).await.unwrap_or(false);
+                    if exists && *if_not_exists {
+                        info!("Constraint {} already exists, skipping due to IF NOT EXISTS", constraint_name);
+                    } else if exists {
+                        warn!("Constraint {} already exists", constraint_name);
+                    } else {
+                        match self.storage.create_constraint(constraint).await {
+                            Ok(created) => {
+                                if created {
+                                    info!("Created constraint: {}", constraint_name);
+                                    let mut props = HashMap::new();
+                                    props.insert(
+                                        "message".to_string(),
+                                        serde_json::Value::String(format!("Constraint {} created", constraint_name)),
+                                    );
+                                    result_nodes.push(GraphNode::new(vec!["_DDLResult".to_string()], props));
+                                }
+                            }
+                            Err(e) => {
+                                warn!("Failed to create constraint {}: {}", constraint_name, e);
+                            }
+                        }
+                    }
                 }
                 CypherClause::DropIndex { name, if_exists } => {
                     tracing::debug!("DROP INDEX: name={}, if_exists={}", name, if_exists);
-                    // TODO: Implement index deletion in storage layer
+
+                    let exists = self.storage.index_exists(name).await.unwrap_or(false);
+                    if !exists && *if_exists {
+                        info!("Index {} does not exist, skipping due to IF EXISTS", name);
+                    } else if !exists {
+                        warn!("Index {} does not exist", name);
+                    } else {
+                        match self.storage.drop_index(name).await {
+                            Ok(dropped) => {
+                                if dropped {
+                                    info!("Dropped index: {}", name);
+                                    let mut props = HashMap::new();
+                                    props.insert(
+                                        "message".to_string(),
+                                        serde_json::Value::String(format!("Index {} dropped", name)),
+                                    );
+                                    result_nodes.push(GraphNode::new(vec!["_DDLResult".to_string()], props));
+                                }
+                            }
+                            Err(e) => {
+                                warn!("Failed to drop index {}: {}", name, e);
+                            }
+                        }
+                    }
                 }
                 CypherClause::DropConstraint { name, if_exists } => {
                     tracing::debug!("DROP CONSTRAINT: name={}, if_exists={}", name, if_exists);
-                    // TODO: Implement constraint deletion in storage layer
+
+                    let exists = self.storage.constraint_exists(name).await.unwrap_or(false);
+                    if !exists && *if_exists {
+                        info!("Constraint {} does not exist, skipping due to IF EXISTS", name);
+                    } else if !exists {
+                        warn!("Constraint {} does not exist", name);
+                    } else {
+                        match self.storage.drop_constraint(name).await {
+                            Ok(dropped) => {
+                                if dropped {
+                                    info!("Dropped constraint: {}", name);
+                                    let mut props = HashMap::new();
+                                    props.insert(
+                                        "message".to_string(),
+                                        serde_json::Value::String(format!("Constraint {} dropped", name)),
+                                    );
+                                    result_nodes.push(GraphNode::new(vec!["_DDLResult".to_string()], props));
+                                }
+                            }
+                            Err(e) => {
+                                warn!("Failed to drop constraint {}: {}", name, e);
+                            }
+                        }
+                    }
                 }
                 CypherClause::ShowIndexes => {
                     tracing::debug!("SHOW INDEXES");
-                    // TODO: Return list of indexes from storage layer
+
+                    match self.storage.list_indexes().await {
+                        Ok(indexes) => {
+                            for idx in indexes {
+                                let mut props = HashMap::new();
+                                props.insert("name".to_string(), serde_json::Value::String(idx.name.clone()));
+                                props.insert(
+                                    "type".to_string(),
+                                    serde_json::Value::String(format!("{:?}", idx.index_type)),
+                                );
+                                props.insert(
+                                    "entityType".to_string(),
+                                    serde_json::Value::String(format!("{:?}", idx.entity_type)),
+                                );
+                                props.insert(
+                                    "labelsOrTypes".to_string(),
+                                    serde_json::Value::String(idx.label_or_type.clone()),
+                                );
+                                props.insert(
+                                    "properties".to_string(),
+                                    serde_json::Value::Array(
+                                        idx.properties.iter().map(|p| serde_json::Value::String(p.clone())).collect(),
+                                    ),
+                                );
+                                result_nodes.push(GraphNode::new(vec!["_Index".to_string()], props));
+                            }
+                            info!("Listed {} indexes", result_nodes.len());
+                        }
+                        Err(e) => {
+                            warn!("Failed to list indexes: {}", e);
+                        }
+                    }
                 }
                 CypherClause::ShowConstraints => {
                     tracing::debug!("SHOW CONSTRAINTS");
-                    // TODO: Return list of constraints from storage layer
+
+                    match self.storage.list_constraints().await {
+                        Ok(constraints) => {
+                            for c in constraints {
+                                let mut props = HashMap::new();
+                                props.insert("name".to_string(), serde_json::Value::String(c.name.clone()));
+                                props.insert(
+                                    "type".to_string(),
+                                    serde_json::Value::String(format!("{:?}", c.constraint_type)),
+                                );
+                                props.insert(
+                                    "entityType".to_string(),
+                                    serde_json::Value::String(format!("{:?}", c.entity_type)),
+                                );
+                                props.insert(
+                                    "labelsOrTypes".to_string(),
+                                    serde_json::Value::String(c.label_or_type.clone()),
+                                );
+                                props.insert(
+                                    "properties".to_string(),
+                                    serde_json::Value::Array(
+                                        c.properties.iter().map(|p| serde_json::Value::String(p.clone())).collect(),
+                                    ),
+                                );
+                                result_nodes.push(GraphNode::new(vec!["_Constraint".to_string()], props));
+                            }
+                            info!("Listed {} constraints", result_nodes.len());
+                        }
+                        Err(e) => {
+                            warn!("Failed to list constraints: {}", e);
+                        }
+                    }
                 }
             }
         }

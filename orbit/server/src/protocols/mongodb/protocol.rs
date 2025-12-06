@@ -68,6 +68,12 @@ pub enum MsgSection {
 
 pub struct MongoCodec;
 
+impl Default for MongoCodec {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MongoCodec {
     pub fn new() -> Self {
         Self

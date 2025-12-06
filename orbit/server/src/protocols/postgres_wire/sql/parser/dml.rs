@@ -2,6 +2,11 @@
 //!
 //! This module handles parsing of SELECT, INSERT, UPDATE, DELETE statements
 
+// Parser loops use complex exit conditions that don't translate cleanly to while let
+#![allow(clippy::while_let_loop)]
+// Identical blocks intentional for code symmetry in operator parsing
+#![allow(clippy::if_same_then_else)]
+
 use super::expressions::ExpressionParser;
 use super::{utilities, ParseError, ParseResult, SqlParser};
 use crate::protocols::postgres_wire::sql::{

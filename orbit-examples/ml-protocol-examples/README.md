@@ -6,12 +6,149 @@ This directory contains comprehensive SQL examples demonstrating machine learnin
 
 These examples showcase Orbit-RS's AI-native features including:
 
-- **Vector Search** - Similarity search with embeddings for recommendations, fraud detection, and pattern matching
-- **Time Series Analysis** - Real-time monitoring, forecasting, and anomaly detection
-- **Spatial Functions** - Geographic queries and distance calculations
-- **ML Integration** - Predictive models, scoring functions, and intelligent analytics
+ - **Vector Search** - Similarity search with embeddings for recommendations, fraud detection, and pattern matching
+ - **Time Series Analysis** - Real-time monitoring, forecasting, and anomaly detection
+ - **Spatial Functions** - Geographic queries and distance calculations
+ - **ML Integration** - Predictive models, scoring functions, and intelligent analytics
+ ## ML SQL Function Examples
+ 
+ This folder includes a consolidated demo of core ML SQL functions in `sql/ml_functions_examples.sql`. It provides small, self-contained tables and queries you can run end-to-end:
+ 
+ - `ML_TRAIN_MODEL` and `ML_PREDICT` for supervised learning on arrays of features.
+ - `ML_EVALUATE_MODEL` to measure performance on a test slice.
+ - `ML_NORMALIZE` and `ML_ENCODE_CATEGORICAL` for basic feature engineering.
+ - `ML_EMBED_TEXT` and `ML_PCA` to generate text embeddings and reduce their dimensionality.
+ - `ML_KMEANS`, `ML_VECTOR_CLUSTER`, `ML_DIMENSIONALITY_REDUCTION` for unsupervised analysis and visualization.
+ - `ML_FORECAST` and `ML_ANOMALY_DETECT` for time series forecasting and anomaly detection.
+ 
+ See the annotated queries in `sql/ml_functions_examples.sql` for direct usage.
+ 
+ ### Quick Examples
+ 
+ ```sql
+ SELECT ML_TRAIN_MODEL('demo_rf','random_forest', ARRAY[0.2,0.8], 1);
+ ```
+ 
+ ```sql
+ SELECT ML_PREDICT('demo_rf', ARRAY[0.2,0.8]);
+ ```
+ 
+ ```sql
+ SELECT ML_EVALUATE_MODEL('demo_rf', ARRAY[0.2,0.8], 1);
+ ```
+ 
+ ```sql
+ SELECT ML_NORMALIZE(ARRAY[0.2,0.8], 'minmax');
+ ```
+ 
+ ```sql
+ SELECT ML_ENCODE_CATEGORICAL('blue', 'onehot');
+ ```
+ 
+ ```sql
+ SELECT ML_EMBED_TEXT('Vector databases enable fast similarity search.', 'sentence-transformers');
+ ```
+ 
+ ```sql
+ SELECT ML_PCA(ML_EMBED_TEXT('Dimensionality reduction example', 'sentence-transformers'), 2);
+ ```
+ 
+ ```sql
+ SELECT ML_KMEANS(ARRAY[0.1,0.2]::real[], 2);
+ ```
+ 
+ ```sql
+ SELECT ML_VECTOR_CLUSTER(ML_EMBED_TEXT('Cluster this text', 'sentence-transformers'), 3);
+ ```
+ 
+ ```sql
+ SELECT ML_DIMENSIONALITY_REDUCTION(ML_EMBED_TEXT('Visualize in 2D', 'sentence-transformers'), 'tsne', 2);
+ ```
+ 
+ ```sql
+ SELECT ts, ML_FORECAST(value OVER (ORDER BY ts ROWS 30 PRECEDING), 10) FROM demo_series;
+ ```
+ 
+ ```sql
+ SELECT ts, ML_ANOMALY_DETECT(value OVER (ORDER BY ts ROWS 50 PRECEDING)) FROM demo_series;
+ ```
 
-## Industry Verticals
+ ### Cypher Quick Examples
+
+ ```cypher
+ MATCH (c:Component {name:'Engine'}) SET c.embedding = ML_EMBED_TEXT('Engine Overheating Condition','sentence-transformers');
+ CALL orbit.graphrag.buildKnowledge('kg','doc1','Vehicles with engine temperature above 105C should be inspected',{source:'policy',domain:'automotive'},{extractors:['entity','relationship'],build_graph:true,generate_embeddings:true}) YIELD kg_name, document_id RETURN kg_name, document_id;
+ CALL orbit.graphrag.ragQuery('kg','What rules affect high engine temperature?',{max_hops:2,include_path_reasoning:true}) YIELD response RETURN response;
+ ```
+
+### AQL Quick Examples
+
+```aql
+FOR r IN GRAPHRAG_BUILD_KNOWLEDGE("Online purchases over $500 require verification.", { "knowledge_graph": "kg", "document_id": "policy_1", "metadata": {"source": "policy", "domain": "banking"}, "extractors": ["entity", "relationship"], "build_graph": true, "generate_embeddings": true }) RETURN r;
+FOR q IN GRAPHRAG_QUERY("kg", "What are verification rules for purchases?", 2, 1024, "ollama", true) RETURN q;
+```
+
+### MySQL Quick Examples
+
+```sql
+SELECT ML_PREDICT('demo_rf', '[0.2,0.8]');
+```
+
+### CQL Quick Examples
+
+```cql
+SELECT ML_PREDICT('demo_rf', '[0.2,0.8]') FROM system.local;
+```
+
+### REST API Quick Examples
+
+```bash
+curl -X POST http://localhost:8080/api/ml/models/train \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "demo_rf",
+    "algorithm": "random_forest",
+    "features": [[0.2, 0.8]],
+    "labels": [1]
+  }'
+```
+
+```bash
+curl -X POST http://localhost:8080/api/ml/predict \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "demo_rf",
+    "features": [[0.2, 0.8]]
+  }'
+```
+
+### Redis (RESP) Quick Examples
+
+```bash
+# Train a model (example parameters)
+redis-cli -h localhost -p 6379 ML.TRAIN fraud_detector transactions:* EPOCHS 100
+
+# Predict with features
+redis-cli -h localhost -p 6379 ML.PREDICT demo_rf "[0.2,0.8]"
+
+# Forecast and anomaly detection on a sorted set key
+redis-cli -h localhost -p 6379 ML.FORECAST sales:daily 7
+redis-cli -h localhost -p 6379 ML.ANOMALY.DETECT sales:daily
+```
+
+### gRPC Quick Examples
+
+```bash
+# List available gRPC services
+grpcurl -plaintext localhost:50051 list
+
+# Health check
+grpcurl -plaintext -d '{"service":"orbit-server"}' localhost:50051 orbit.shared.HealthService/Check
+
+# Transaction health check
+grpcurl -plaintext -d '{"node_id":"node-1"}' localhost:50051 orbit.transactions.TransactionService/TransactionHealthCheck
+```
+ ## Industry Verticals
 
 ### 1. Healthcare (`01_healthcare_ml.sql`)
 

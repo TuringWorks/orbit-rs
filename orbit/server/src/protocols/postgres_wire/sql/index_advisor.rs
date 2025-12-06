@@ -355,10 +355,12 @@ impl WorkloadAnalyzer {
     fn extract_join_columns(&self, from_clause: &Option<FromClause>) -> Vec<String> {
         let mut columns = Vec::new();
 
-        if let Some(FromClause::Join { condition, .. }) = from_clause {
-            if let crate::protocols::postgres_wire::sql::ast::JoinCondition::On(expr) = condition {
-                self.extract_join_columns_recursive(expr, &mut columns);
-            }
+        if let Some(FromClause::Join {
+            condition: crate::protocols::postgres_wire::sql::ast::JoinCondition::On(expr),
+            ..
+        }) = from_clause
+        {
+            self.extract_join_columns_recursive(expr, &mut columns);
         }
 
         columns
@@ -537,13 +539,13 @@ impl IndexAdvisor {
         for pattern in significant_patterns {
             // Generate single-column index recommendations
             for (column, operator) in &pattern.filter_columns {
-                if self.is_column_indexed(&existing_indexes, &[column.clone()]) {
+                if self.is_column_indexed(&existing_indexes, std::slice::from_ref(column)) {
                     continue;
                 }
 
                 let index_type = self.suggest_index_type(operator);
                 let improvement =
-                    self.estimate_improvement(pattern, &[column.clone()], table_stats);
+                    self.estimate_improvement(pattern, std::slice::from_ref(column), table_stats);
 
                 if improvement >= self.config.min_improvement_ratio {
                     recommendations.push(IndexRecommendation {
@@ -551,7 +553,7 @@ impl IndexAdvisor {
                         columns: vec![column.clone()],
                         index_type,
                         improvement_ratio: improvement,
-                        storage_cost: self.estimate_storage(table_stats, &[column.clone()]),
+                        storage_cost: self.estimate_storage(table_stats, std::slice::from_ref(column)),
                         write_overhead: 1.1, // 10% write overhead for single column
                         benefiting_queries: pattern.count,
                         reason: format!("Frequently filtered by {} with {:?}", column, operator),
@@ -597,7 +599,7 @@ impl IndexAdvisor {
                             storage_cost: self.estimate_storage(table_stats, &multi_cols),
                             write_overhead: 1.0 + 0.05 * multi_cols.len() as f64,
                             benefiting_queries: pattern.count,
-                            reason: format!("Composite index for multi-column filter"),
+                            reason: "Composite index for multi-column filter".to_string(),
                             priority: self.calculate_priority(improvement, pattern.count),
                             partial_condition: None,
                             is_covering: false,

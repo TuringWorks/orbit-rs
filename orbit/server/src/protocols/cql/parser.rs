@@ -2,6 +2,9 @@
 //!
 //! This module provides a parser for CQL (Cassandra Query Language) statements.
 
+// Complex return types are intentional for parser completeness
+#![allow(clippy::type_complexity)]
+
 use super::types::{CqlType, CqlValue, SimilarityFunction};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use std::collections::HashMap;
@@ -780,6 +783,12 @@ impl CqlParser {
         // Parse ORDER BY with potential ANN (vector similarity search)
         let (order_by, ann_search) = self.parse_order_by_with_ann(query)?;
 
+        // Parse GROUP BY clause
+        let group_by = self.parse_group_by(query);
+
+        // Parse PER PARTITION LIMIT
+        let per_partition_limit = self.parse_per_partition_limit(query);
+
         Ok(CqlStatement::Select {
             columns,
             table: self.resolve_table_name(&table),
@@ -787,12 +796,59 @@ impl CqlParser {
             limit,
             allow_filtering,
             distinct,
-            group_by: None,           // TODO: Parse GROUP BY
+            group_by,
             order_by,
-            per_partition_limit: None, // TODO: Parse PER PARTITION LIMIT
+            per_partition_limit,
             json,
             ann_search,
         })
+    }
+
+    /// Parse GROUP BY clause from query
+    fn parse_group_by(&self, query: &str) -> Option<Vec<String>> {
+        let query_upper = query.to_uppercase();
+        if let Some(group_idx) = query_upper.find("GROUP BY") {
+            let after_group = &query[group_idx + 8..];
+
+            // Find the end of GROUP BY clause (ORDER BY, LIMIT, PER PARTITION LIMIT, ALLOW FILTERING, or end)
+            let end_keywords = ["ORDER BY", "LIMIT", "PER PARTITION LIMIT", "ALLOW FILTERING"];
+            let end_idx = end_keywords
+                .iter()
+                .filter_map(|kw| after_group.to_uppercase().find(kw))
+                .min()
+                .unwrap_or(after_group.len());
+
+            let group_by_str = after_group[..end_idx].trim();
+            if !group_by_str.is_empty() {
+                let columns: Vec<String> = group_by_str
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if !columns.is_empty() {
+                    return Some(columns);
+                }
+            }
+        }
+        None
+    }
+
+    /// Parse PER PARTITION LIMIT clause from query
+    fn parse_per_partition_limit(&self, query: &str) -> Option<usize> {
+        let query_upper = query.to_uppercase();
+        if let Some(ppl_idx) = query_upper.find("PER PARTITION LIMIT") {
+            let after_ppl = &query[ppl_idx + 19..];
+            // Extract the limit value
+            let limit_str: String = after_ppl
+                .trim()
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            if !limit_str.is_empty() {
+                return limit_str.parse::<usize>().ok();
+            }
+        }
+        None
     }
 
     /// Parse ORDER BY clause, including ANN (vector similarity) searches
@@ -846,7 +902,7 @@ impl CqlParser {
                 .join(" ");
 
             for item in order_part.split(',') {
-                let parts: Vec<&str> = item.trim().split_whitespace().collect();
+                let parts: Vec<&str> = item.split_whitespace().collect();
                 if let Some(col) = parts.first() {
                     let order = if parts.get(1).map(|s| s.to_uppercase()) == Some("DESC".to_string())
                     {
@@ -1499,7 +1555,7 @@ impl CqlParser {
     fn parse_type_fields(&self, fields_str: &str) -> Vec<(String, CqlType)> {
         let mut fields = Vec::new();
         for field in fields_str.split(',') {
-            let parts: Vec<&str> = field.trim().split_whitespace().collect();
+            let parts: Vec<&str> = field.split_whitespace().collect();
             if parts.len() >= 2 {
                 let name = parts[0].to_string();
                 let type_str = parts[1].to_uppercase();
@@ -1761,20 +1817,25 @@ impl CqlParser {
                         }
                     }
 
-                    // For IN, we'll create a condition with the first value
-                    // In a full implementation, we'd handle IN properly with all values
+                    // Store all values in a List for IN operator
                     conditions.push(WhereCondition {
                         column,
                         operator: ComparisonOperator::In,
-                        value: values.first().cloned().unwrap_or(CqlValue::Null),
+                        value: CqlValue::List(values),
                     });
                     continue;
                 }
-                "CONTAINS" => ComparisonOperator::Contains,
-                "CONTAINS KEY" => {
-                    i += 1; // Skip KEY
-                    ComparisonOperator::ContainsKey
+                "CONTAINS" => {
+                    // Check if next token is KEY
+                    if i + 1 < parts.len() && parts[i + 1].to_uppercase() == "KEY" {
+                        i += 1; // Skip KEY
+                        ComparisonOperator::ContainsKey
+                    } else {
+                        ComparisonOperator::Contains
+                    }
                 }
+                "LIKE" => ComparisonOperator::Like,
+                "TOKEN" => ComparisonOperator::Token,
                 _ => {
                     return Err(ProtocolError::ParseError(format!(
                         "Unknown operator: {}",
@@ -2295,20 +2356,12 @@ impl CqlParser {
 
         // Extract password if present
         let password = if let Some(pwd_pos) = query_upper.find("PASSWORD") {
-            let after_pwd = &query[pwd_pos + 8..].trim_start();
+            let after_pwd = query[pwd_pos + 8..].trim_start();
             // Skip '=' if present
-            let pwd_start = if after_pwd.starts_with('=') {
-                &after_pwd[1..].trim_start()
-            } else {
-                after_pwd
-            };
+            let pwd_start = after_pwd.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(after_pwd);
             // Extract quoted password
-            if pwd_start.starts_with('\'') {
-                if let Some(end_pos) = pwd_start[1..].find('\'') {
-                    Some(pwd_start[1..end_pos + 1].to_string())
-                } else {
-                    None
-                }
+            if let Some(unquoted) = pwd_start.strip_prefix('\'') {
+                unquoted.find('\'').map(|end_pos| unquoted[..end_pos].to_string())
             } else {
                 pwd_start.split_whitespace().next().map(|s| s.to_string())
             }
@@ -2356,18 +2409,10 @@ impl CqlParser {
         };
 
         let password = if let Some(pwd_pos) = query_upper.find("PASSWORD") {
-            let after_pwd = &query[pwd_pos + 8..].trim_start();
-            let pwd_start = if after_pwd.starts_with('=') {
-                &after_pwd[1..].trim_start()
-            } else {
-                after_pwd
-            };
-            if pwd_start.starts_with('\'') {
-                if let Some(end_pos) = pwd_start[1..].find('\'') {
-                    Some(pwd_start[1..end_pos + 1].to_string())
-                } else {
-                    None
-                }
+            let after_pwd = query[pwd_pos + 8..].trim_start();
+            let pwd_start = after_pwd.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(after_pwd);
+            if let Some(unquoted) = pwd_start.strip_prefix('\'') {
+                unquoted.find('\'').map(|end_pos| unquoted[..end_pos].to_string())
             } else {
                 pwd_start.split_whitespace().next().map(|s| s.to_string())
             }

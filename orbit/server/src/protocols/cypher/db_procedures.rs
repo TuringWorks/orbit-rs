@@ -511,8 +511,7 @@ impl<S: GraphStorage + Send + Sync + 'static> DbProcedures<S> {
             "description".to_string(),
         ];
 
-        let configs = vec![
-            ("dbms.memory.heap.initial_size", "512m", "Initial heap size"),
+        let configs = [("dbms.memory.heap.initial_size", "512m", "Initial heap size"),
             ("dbms.memory.heap.max_size", "1g", "Maximum heap size"),
             (
                 "dbms.connector.bolt.enabled",
@@ -533,8 +532,7 @@ impl<S: GraphStorage + Send + Sync + 'static> DbProcedures<S> {
                 "dbms.security.auth_enabled",
                 "true",
                 "Authentication enabled",
-            ),
-        ];
+            )];
 
         let rows: Vec<Vec<Option<String>>> = configs
             .iter()

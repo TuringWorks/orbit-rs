@@ -3,7 +3,10 @@
 //! This module provides a simple in-memory implementation of the GraphStorage trait
 //! suitable for development, testing, and single-node deployments.
 
-use super::{Direction, GraphNode, GraphRelationship, GraphStorage, NodeId, RelationshipId};
+use super::{
+    Direction, GraphConstraint, GraphIndex, GraphNode, GraphRelationship, GraphStorage, NodeId,
+    RelationshipId,
+};
 use crate::exception::{OrbitError, OrbitResult};
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -25,6 +28,10 @@ pub struct InMemoryGraphStorage {
     label_index: RwLock<HashMap<String, Vec<NodeId>>>,
     /// Relationship type index: type -> set of relationship IDs
     rel_type_index: RwLock<HashMap<String, Vec<RelationshipId>>>,
+    /// Graph indexes by name
+    indexes: RwLock<HashMap<String, GraphIndex>>,
+    /// Graph constraints by name
+    constraints: RwLock<HashMap<String, GraphConstraint>>,
 }
 
 impl InMemoryGraphStorage {
@@ -37,6 +44,8 @@ impl InMemoryGraphStorage {
             incoming_rels: RwLock::new(HashMap::new()),
             label_index: RwLock::new(HashMap::new()),
             rel_type_index: RwLock::new(HashMap::new()),
+            indexes: RwLock::new(HashMap::new()),
+            constraints: RwLock::new(HashMap::new()),
         }
     }
 
@@ -570,6 +579,100 @@ impl GraphStorage for InMemoryGraphStorage {
             "Counted relationships by type"
         );
         Ok(count)
+    }
+
+    // ============ Index Operations ============
+
+    #[instrument(skip(self))]
+    async fn create_index(&self, index: GraphIndex) -> OrbitResult<bool> {
+        let mut indexes = self.indexes.write().await;
+        if indexes.contains_key(&index.name) {
+            debug!(name = %index.name, "Index already exists");
+            return Ok(false);
+        }
+        info!(
+            name = %index.name,
+            index_type = ?index.index_type,
+            entity_type = ?index.entity_type,
+            label_or_type = %index.label_or_type,
+            properties = ?index.properties,
+            "Created index"
+        );
+        indexes.insert(index.name.clone(), index);
+        Ok(true)
+    }
+
+    #[instrument(skip(self))]
+    async fn drop_index(&self, name: &str) -> OrbitResult<bool> {
+        let mut indexes = self.indexes.write().await;
+        if indexes.remove(name).is_some() {
+            info!(name = name, "Dropped index");
+            Ok(true)
+        } else {
+            debug!(name = name, "Index not found");
+            Ok(false)
+        }
+    }
+
+    #[instrument(skip(self))]
+    async fn list_indexes(&self) -> OrbitResult<Vec<GraphIndex>> {
+        let indexes = self.indexes.read().await;
+        let result: Vec<GraphIndex> = indexes.values().cloned().collect();
+        debug!(count = result.len(), "Listed indexes");
+        Ok(result)
+    }
+
+    #[instrument(skip(self))]
+    async fn index_exists(&self, name: &str) -> OrbitResult<bool> {
+        let indexes = self.indexes.read().await;
+        Ok(indexes.contains_key(name))
+    }
+
+    // ============ Constraint Operations ============
+
+    #[instrument(skip(self))]
+    async fn create_constraint(&self, constraint: GraphConstraint) -> OrbitResult<bool> {
+        let mut constraints = self.constraints.write().await;
+        if constraints.contains_key(&constraint.name) {
+            debug!(name = %constraint.name, "Constraint already exists");
+            return Ok(false);
+        }
+        info!(
+            name = %constraint.name,
+            constraint_type = ?constraint.constraint_type,
+            entity_type = ?constraint.entity_type,
+            label_or_type = %constraint.label_or_type,
+            properties = ?constraint.properties,
+            "Created constraint"
+        );
+        constraints.insert(constraint.name.clone(), constraint);
+        Ok(true)
+    }
+
+    #[instrument(skip(self))]
+    async fn drop_constraint(&self, name: &str) -> OrbitResult<bool> {
+        let mut constraints = self.constraints.write().await;
+        if constraints.remove(name).is_some() {
+            info!(name = name, "Dropped constraint");
+            Ok(true)
+        } else {
+            debug!(name = name, "Constraint not found");
+            Ok(false)
+        }
+    }
+
+    #[instrument(skip(self))]
+    async fn list_constraints(&self) -> OrbitResult<Vec<GraphConstraint>> {
+        let constraints = self.constraints.read().await;
+        let result: Vec<GraphConstraint> = constraints.values().cloned().collect();
+        debug!(count = result.len(), "Listed constraints");
+        Ok(result)
+    }
+
+    #[instrument(skip(self))]
+    async fn constraint_exists(&self, name: &str) -> OrbitResult<bool> {
+        let constraints = self.constraints.read().await;
+        Ok(constraints.contains_key(name))
     }
 }
 

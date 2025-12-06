@@ -12,6 +12,10 @@
 //! - Map (Tiny, 8, 16, 32)
 //! - Structure (for Node, Relationship, Path)
 //!
+
+// Recursive helper functions use parameters only for recursion - intentional design
+#![allow(clippy::only_used_in_recursion)]
+
 //! ## Bolt v4.4 Features
 //!
 //! - Authentication (HELLO with auth token)
