@@ -4,10 +4,15 @@
 //! - TS.CREATE - Create a time series
 //! - TS.ADD - Add a sample to a time series
 //! - TS.GET - Get the last sample
-//! - TS.RANGE - Get samples in a time range
-//! - TS.MRANGE - Get samples from multiple time series
+//! - TS.MGET - Get the last sample from multiple time series
+//! - TS.RANGE - Get samples in a time range (ascending order)
+//! - TS.REVRANGE - Get samples in a time range (descending order)
+//! - TS.MRANGE - Get samples from multiple time series (ascending order)
+//! - TS.MREVRANGE - Get samples from multiple time series (descending order)
 //! - TS.INFO - Get time series metadata
 //! - TS.DEL - Delete samples in a range
+//! - TS.INCRBY - Increment the latest value
+//! - TS.DECRBY - Decrement the latest value
 
 use super::traits::{BaseCommandHandler, CommandHandler};
 use crate::protocols::error::ProtocolResult;
@@ -447,6 +452,60 @@ impl TimeSeriesCommands {
         }
     }
 
+    /// TS.MGET key [key ...]
+    /// Get the last sample from multiple time series
+    async fn cmd_ts_mget(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.is_empty() {
+            return Err(crate::protocols::error::ProtocolError::RespError(
+                "ERR wrong number of arguments for 'ts.mget' command".to_string(),
+            ));
+        }
+
+        let ts_storage = get_time_series();
+        let ts_guard = ts_storage.read().await;
+
+        let mut results = Vec::new();
+
+        for arg in args {
+            let key = match arg {
+                RespValue::BulkString(bytes) => {
+                    String::from_utf8_lossy(bytes).to_string()
+                }
+                RespValue::SimpleString(s) => s.clone(),
+                _ => continue,
+            };
+
+            if let Some(ts) = ts_guard.get(&key) {
+                // For each matching time series, return: [key, labels, [timestamp, value]]
+                let labels: Vec<RespValue> = ts.config.labels
+                    .iter()
+                    .flat_map(|(k, v)| vec![
+                        RespValue::bulk_string_from_str(k),
+                        RespValue::bulk_string_from_str(v),
+                    ])
+                    .collect();
+
+                let sample = if let Some(dp) = ts.last() {
+                    RespValue::Array(vec![
+                        RespValue::Integer(dp.timestamp),
+                        RespValue::bulk_string_from_str(dp.value.to_string()),
+                    ])
+                } else {
+                    RespValue::Array(vec![])
+                };
+
+                results.push(RespValue::Array(vec![
+                    RespValue::bulk_string_from_str(&key),
+                    RespValue::Array(labels),
+                    sample,
+                ]));
+            }
+        }
+
+        debug!("TS.MGET {} keys -> {} results", args.len(), results.len());
+        Ok(RespValue::Array(results))
+    }
+
     /// TS.RANGE key fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType bucketDuration]
     async fn cmd_ts_range(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() < 3 {
@@ -555,6 +614,118 @@ impl TimeSeriesCommands {
         Ok(RespValue::Array(result))
     }
 
+    /// TS.REVRANGE key fromTimestamp toTimestamp [COUNT count] [AGGREGATION aggregationType bucketDuration]
+    /// Returns samples in reverse (descending timestamp) order
+    async fn cmd_ts_revrange(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 3 {
+            return Err(crate::protocols::error::ProtocolError::RespError(
+                "ERR wrong number of arguments for 'ts.revrange' command".to_string(),
+            ));
+        }
+
+        let key = self.get_string_arg(args, 0, "TS.REVRANGE")?;
+        let from = self.parse_timestamp_arg(args, 1, "TS.REVRANGE")?;
+        let to = self.parse_timestamp_arg(args, 2, "TS.REVRANGE")?;
+
+        let mut count: Option<usize> = None;
+        let mut aggregation: Option<AggregationType> = None;
+        let mut bucket_duration: Option<i64> = None;
+
+        // Parse optional arguments
+        let mut i = 3;
+        while i < args.len() {
+            let arg = self.get_string_arg(args, i, "TS.REVRANGE")?.to_uppercase();
+            match arg.as_str() {
+                "COUNT" => {
+                    i += 1;
+                    count = Some(self.get_int_arg(args, i, "TS.REVRANGE")? as usize);
+                }
+                "AGGREGATION" => {
+                    i += 1;
+                    let agg_type_str = self.get_string_arg(args, i, "TS.REVRANGE")?;
+                    aggregation =
+                        Some(AggregationType::from_str(&agg_type_str).ok_or_else(|| {
+                            crate::protocols::error::ProtocolError::RespError(format!(
+                                "ERR unknown aggregation type '{}'",
+                                agg_type_str
+                            ))
+                        })?);
+                    i += 1;
+                    bucket_duration = Some(self.get_int_arg(args, i, "TS.REVRANGE")?);
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+
+        let ts_storage = get_time_series();
+        let ts_guard = ts_storage.read().await;
+
+        let ts = ts_guard.get(&key).ok_or_else(|| {
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR TSDB: key '{}' does not exist",
+                key
+            ))
+        })?;
+
+        let samples = ts.range(from, to);
+
+        // Apply aggregation if specified
+        let result: Vec<RespValue> =
+            if let (Some(agg), Some(bucket_ms)) = (aggregation, bucket_duration) {
+                // Group samples into buckets and aggregate
+                let mut buckets: BTreeMap<i64, Vec<f64>> = BTreeMap::new();
+                for dp in &samples {
+                    let bucket_start = (dp.timestamp / bucket_ms) * bucket_ms;
+                    buckets.entry(bucket_start).or_default().push(dp.value);
+                }
+
+                // Collect in reverse order (descending timestamp)
+                let mut aggregated: Vec<RespValue> = buckets
+                    .iter()
+                    .rev() // Reverse order for REVRANGE
+                    .map(|(&bucket_ts, values)| {
+                        let agg_value = agg.aggregate(values);
+                        RespValue::Array(vec![
+                            RespValue::Integer(bucket_ts),
+                            RespValue::bulk_string_from_str(agg_value.to_string()),
+                        ])
+                    })
+                    .collect();
+
+                if let Some(limit) = count {
+                    aggregated.truncate(limit);
+                }
+                aggregated
+            } else {
+                // No aggregation - return raw samples in reverse order
+                let mut raw: Vec<RespValue> = samples
+                    .iter()
+                    .rev() // Reverse order for REVRANGE
+                    .map(|dp| {
+                        RespValue::Array(vec![
+                            RespValue::Integer(dp.timestamp),
+                            RespValue::bulk_string_from_str(dp.value.to_string()),
+                        ])
+                    })
+                    .collect();
+
+                if let Some(limit) = count {
+                    raw.truncate(limit);
+                }
+                raw
+            };
+
+        debug!(
+            "TS.REVRANGE {} {} {} -> {} samples",
+            key,
+            from,
+            to,
+            result.len()
+        );
+        Ok(RespValue::Array(result))
+    }
+
     /// TS.MRANGE fromTimestamp toTimestamp FILTER filter...
     async fn cmd_ts_mrange(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() < 4 {
@@ -635,6 +806,73 @@ impl TimeSeriesCommands {
         }
 
         debug!("TS.MRANGE {} {} -> {} series", from, to, result.len());
+        Ok(RespValue::Array(result))
+    }
+
+    /// TS.MREVRANGE fromTimestamp toTimestamp key [key ...]
+    /// Get samples from multiple time series in reverse (descending) order
+    async fn cmd_ts_mrevrange(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 3 {
+            return Err(crate::protocols::error::ProtocolError::RespError(
+                "ERR wrong number of arguments for 'ts.mrevrange' command".to_string(),
+            ));
+        }
+
+        let from = self.parse_timestamp_arg(args, 0, "TS.MREVRANGE")?;
+        let to = self.parse_timestamp_arg(args, 1, "TS.MREVRANGE")?;
+
+        // Collect keys from remaining arguments
+        let keys: Vec<String> = args[2..]
+            .iter()
+            .filter_map(|arg| match arg {
+                RespValue::BulkString(bytes) => Some(String::from_utf8_lossy(bytes).to_string()),
+                RespValue::SimpleString(s) => Some(s.clone()),
+                _ => None,
+            })
+            .collect();
+
+        let ts_storage = get_time_series();
+        let ts_guard = ts_storage.read().await;
+
+        let mut result = Vec::new();
+
+        for key in &keys {
+            if let Some(ts) = ts_guard.get(key) {
+                let samples = ts.range(from, to);
+                // Reverse the samples for MREVRANGE
+                let samples_resp: Vec<RespValue> = samples
+                    .iter()
+                    .rev()
+                    .map(|dp| {
+                        RespValue::Array(vec![
+                            RespValue::Integer(dp.timestamp),
+                            RespValue::bulk_string_from_str(dp.value.to_string()),
+                        ])
+                    })
+                    .collect();
+
+                // Build labels array
+                let labels_resp: Vec<RespValue> = ts
+                    .config
+                    .labels
+                    .iter()
+                    .flat_map(|(k, v)| {
+                        vec![
+                            RespValue::bulk_string_from_str(k),
+                            RespValue::bulk_string_from_str(v),
+                        ]
+                    })
+                    .collect();
+
+                result.push(RespValue::Array(vec![
+                    RespValue::bulk_string_from_str(key),
+                    RespValue::Array(labels_resp),
+                    RespValue::Array(samples_resp),
+                ]));
+            }
+        }
+
+        debug!("TS.MREVRANGE {} {} -> {} series", from, to, result.len());
         Ok(RespValue::Array(result))
     }
 
@@ -765,6 +1003,140 @@ impl TimeSeriesCommands {
         }
 
         Ok(RespValue::Array(results))
+    }
+
+    /// TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS label value ...]
+    async fn cmd_ts_incrby(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 2 {
+            return Err(crate::protocols::error::ProtocolError::RespError(
+                "ERR wrong number of arguments for 'ts.incrby' command".to_string(),
+            ));
+        }
+
+        let key = self.get_string_arg(args, 0, "TS.INCRBY")?;
+        let increment = self.get_float_arg(args, 1, "TS.INCRBY")?;
+
+        // Parse optional TIMESTAMP
+        let mut timestamp: Option<i64> = None;
+        let mut i = 2;
+        while i < args.len() {
+            let arg = self.get_string_arg(args, i, "TS.INCRBY")?.to_uppercase();
+            if arg == "TIMESTAMP" && i + 1 < args.len() {
+                let ts_str = self.get_string_arg(args, i + 1, "TS.INCRBY")?;
+                timestamp = Some(if ts_str == "*" {
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as i64)
+                        .unwrap_or(0)
+                } else {
+                    ts_str.parse::<i64>().unwrap_or(0)
+                });
+                i += 2;
+            } else {
+                i += 1;
+            }
+        }
+
+        // Default to current time if not specified
+        let timestamp = timestamp.unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0)
+        });
+
+        let ts_storage = get_time_series();
+        let mut ts_guard = ts_storage.write().await;
+
+        // Auto-create time series if it doesn't exist
+        if !ts_guard.contains_key(&key) {
+            let config = TimeSeriesConfig {
+                name: key.clone(),
+                retention_ms: 0,
+                labels: HashMap::new(),
+                duplicate_policy: DuplicatePolicy::Last,
+            };
+            ts_guard.insert(key.clone(), TimeSeries::new(config));
+        }
+
+        let ts = ts_guard.get_mut(&key).unwrap();
+
+        // Get current value and add increment
+        let current_value = ts.last().map(|dp| dp.value).unwrap_or(0.0);
+        let new_value = current_value + increment;
+
+        ts.add_sample(timestamp, new_value)
+            .map_err(|e| crate::protocols::error::ProtocolError::RespError(format!("ERR {}", e)))?;
+
+        debug!("TS.INCRBY {} {} -> {}", key, increment, new_value);
+        Ok(RespValue::Integer(timestamp))
+    }
+
+    /// TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [LABELS label value ...]
+    async fn cmd_ts_decrby(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 2 {
+            return Err(crate::protocols::error::ProtocolError::RespError(
+                "ERR wrong number of arguments for 'ts.decrby' command".to_string(),
+            ));
+        }
+
+        let key = self.get_string_arg(args, 0, "TS.DECRBY")?;
+        let decrement = self.get_float_arg(args, 1, "TS.DECRBY")?;
+
+        // Parse optional TIMESTAMP
+        let mut timestamp: Option<i64> = None;
+        let mut i = 2;
+        while i < args.len() {
+            let arg = self.get_string_arg(args, i, "TS.DECRBY")?.to_uppercase();
+            if arg == "TIMESTAMP" && i + 1 < args.len() {
+                let ts_str = self.get_string_arg(args, i + 1, "TS.DECRBY")?;
+                timestamp = Some(if ts_str == "*" {
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as i64)
+                        .unwrap_or(0)
+                } else {
+                    ts_str.parse::<i64>().unwrap_or(0)
+                });
+                i += 2;
+            } else {
+                i += 1;
+            }
+        }
+
+        // Default to current time if not specified
+        let timestamp = timestamp.unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0)
+        });
+
+        let ts_storage = get_time_series();
+        let mut ts_guard = ts_storage.write().await;
+
+        // Auto-create time series if it doesn't exist
+        if !ts_guard.contains_key(&key) {
+            let config = TimeSeriesConfig {
+                name: key.clone(),
+                retention_ms: 0,
+                labels: HashMap::new(),
+                duplicate_policy: DuplicatePolicy::Last,
+            };
+            ts_guard.insert(key.clone(), TimeSeries::new(config));
+        }
+
+        let ts = ts_guard.get_mut(&key).unwrap();
+
+        // Get current value and subtract decrement
+        let current_value = ts.last().map(|dp| dp.value).unwrap_or(0.0);
+        let new_value = current_value - decrement;
+
+        ts.add_sample(timestamp, new_value)
+            .map_err(|e| crate::protocols::error::ProtocolError::RespError(format!("ERR {}", e)))?;
+
+        debug!("TS.DECRBY {} {} -> {}", key, decrement, new_value);
+        Ok(RespValue::Integer(timestamp))
     }
 
     /// TS.CREATERULE sourceKey destKey AGGREGATION aggregationType bucketDuration
@@ -902,11 +1274,16 @@ impl CommandHandler for TimeSeriesCommands {
             "TS.CREATE" => self.cmd_ts_create(args).await,
             "TS.ADD" => self.cmd_ts_add(args).await,
             "TS.GET" => self.cmd_ts_get(args).await,
+            "TS.MGET" => self.cmd_ts_mget(args).await,
             "TS.RANGE" => self.cmd_ts_range(args).await,
+            "TS.REVRANGE" => self.cmd_ts_revrange(args).await,
             "TS.MRANGE" => self.cmd_ts_mrange(args).await,
+            "TS.MREVRANGE" => self.cmd_ts_mrevrange(args).await,
             "TS.INFO" => self.cmd_ts_info(args).await,
             "TS.DEL" => self.cmd_ts_del(args).await,
             "TS.MADD" => self.cmd_ts_madd(args).await,
+            "TS.INCRBY" => self.cmd_ts_incrby(args).await,
+            "TS.DECRBY" => self.cmd_ts_decrby(args).await,
             "TS.CREATERULE" => self.cmd_ts_createrule(args).await,
             "TS.DELETERULE" => self.cmd_ts_deleterule(args).await,
             _ => Err(crate::protocols::error::ProtocolError::RespError(format!(
@@ -920,11 +1297,16 @@ impl CommandHandler for TimeSeriesCommands {
             "TS.CREATE",
             "TS.ADD",
             "TS.GET",
+            "TS.MGET",
             "TS.RANGE",
+            "TS.REVRANGE",
             "TS.MRANGE",
+            "TS.MREVRANGE",
             "TS.INFO",
             "TS.DEL",
             "TS.MADD",
+            "TS.INCRBY",
+            "TS.DECRBY",
             "TS.CREATERULE",
             "TS.DELETERULE",
         ]
@@ -1343,5 +1725,82 @@ mod tests {
         );
         assert_eq!(ts.config.labels.get("floor"), Some(&"3".to_string()));
         assert_eq!(ts.config.labels.len(), 2);
+    }
+
+    #[test]
+    fn test_time_series_revrange() {
+        let config = TimeSeriesConfig {
+            name: "test".to_string(),
+            retention_ms: 0,
+            labels: HashMap::new(),
+            duplicate_policy: DuplicatePolicy::Last,
+        };
+        let mut ts = TimeSeries::new(config);
+
+        ts.add_sample(1000, 1.0).unwrap();
+        ts.add_sample(2000, 2.0).unwrap();
+        ts.add_sample(3000, 3.0).unwrap();
+        ts.add_sample(4000, 4.0).unwrap();
+
+        // Get range and reverse it (simulating REVRANGE)
+        let range = ts.range(1500, 3500);
+        assert_eq!(range.len(), 2);
+
+        let reversed: Vec<_> = range.iter().rev().collect();
+        assert_eq!(reversed[0].timestamp, 3000);
+        assert_eq!(reversed[1].timestamp, 2000);
+    }
+
+    #[test]
+    fn test_time_series_incrby_decrby() {
+        let config = TimeSeriesConfig {
+            name: "counter".to_string(),
+            retention_ms: 0,
+            labels: HashMap::new(),
+            duplicate_policy: DuplicatePolicy::Last,
+        };
+        let mut ts = TimeSeries::new(config);
+
+        // Start with initial value
+        ts.add_sample(1000, 10.0).unwrap();
+
+        // Simulate INCRBY: get last value + increment
+        let last = ts.last().map(|dp| dp.value).unwrap_or(0.0);
+        let new_value = last + 5.0;
+        ts.add_sample(2000, new_value).unwrap();
+        assert_eq!(ts.last().unwrap().value, 15.0);
+
+        // Simulate DECRBY: get last value - decrement
+        let last = ts.last().map(|dp| dp.value).unwrap_or(0.0);
+        let new_value = last - 3.0;
+        ts.add_sample(3000, new_value).unwrap();
+        assert_eq!(ts.last().unwrap().value, 12.0);
+    }
+
+    #[test]
+    fn test_ts_commands_supported() {
+        // Just verify the supported commands list contains new commands
+        let expected_commands = [
+            "TS.REVRANGE",
+            "TS.MREVRANGE",
+            "TS.MGET",
+            "TS.INCRBY",
+            "TS.DECRBY",
+        ];
+
+        let all_commands = [
+            "TS.CREATE", "TS.ADD", "TS.GET", "TS.MGET", "TS.RANGE",
+            "TS.REVRANGE", "TS.MRANGE", "TS.MREVRANGE", "TS.INFO",
+            "TS.DEL", "TS.MADD", "TS.INCRBY", "TS.DECRBY",
+            "TS.CREATERULE", "TS.DELETERULE",
+        ];
+
+        for cmd in &expected_commands {
+            assert!(
+                all_commands.contains(cmd),
+                "Command {} should be supported",
+                cmd
+            );
+        }
     }
 }

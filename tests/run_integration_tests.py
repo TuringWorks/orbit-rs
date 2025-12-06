@@ -101,7 +101,7 @@ def run_timeseries_tests(host='localhost', port=6379):
         return False
 
 
-def run_vector_tests(host='127.0.0.1', port=6381):
+def run_vector_tests(host='127.0.0.1', port=6379):
     """Run vector command tests."""
     print("\n🔍 Running Vector Commands Integration Tests")
     print("=" * 60)
@@ -136,7 +136,7 @@ def main():
                        default="all", help="Which test suite to run")
     parser.add_argument("--host", default="localhost", help="Server host")
     parser.add_argument("--resp-port", default=6379, type=int, help="RESP server port")
-    parser.add_argument("--vector-port", default=6381, type=int, help="Vector server port")
+    parser.add_argument("--vector-port", default=6379, type=int, help="Vector server port")
     
     args = parser.parse_args()
     

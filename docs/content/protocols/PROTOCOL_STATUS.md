@@ -1,96 +1,189 @@
 # Protocol Implementation Status
 
 **Status**: Active Development
+**Last Updated**: December 2025
 
 ## Overview
 
-This document provides an accurate assessment of protocol implementation status in Orbit-RS.
+This document provides an accurate assessment of protocol implementation status in Orbit-RS, a multi-protocol database server supporting 9 native protocols.
 
 ## Protocol Summary
 
-| Protocol | Port | Status | Completion | Notes |
-|----------|------|--------|------------|-------|
-| **PostgreSQL Wire** | 5432 | Production Ready | ~95% | Full SQL support, some advanced features pending |
-| **Redis RESP** | 6379 | Mostly Complete | ~90% | 124+ commands, some advanced features pending |
-| **MySQL** | 3306 | Production Ready | ~95% | Full wire protocol compatibility |
-| **CQL (Cassandra)** | 9042 | Production Ready | ~95% | 38 tests passing |
-| **gRPC** | 50051 | Production Ready | 100% | Actor management, streaming |
-| **HTTP REST** | 8080 | Production Ready | 100% | JSON API |
-| **MCP** | - | Complete | 100% | AI agent integration |
-| **Cypher/Bolt** | 7687 | Beta | ~80% | Basic graph operations |
-| **AQL** | 8529 | Beta | ~75% | Basic ArangoDB compatibility |
+| Protocol | Port | Status | Completion | Tests | Notes |
+|----------|------|--------|------------|-------|-------|
+| **PostgreSQL Wire** | 5432 | Production Ready | 85% | 104+ | Full SQL, pgvector, JSONB, spatial |
+| **Redis RESP** | 6379 | Production Ready | 95% | 292 | 50+ commands, streams, ACL, functions |
+| **MySQL** | 3306 | Production Ready | 75% | 15+ | Wire protocol, prepared statements |
+| **CQL (Cassandra)** | 9042 | Production Ready | 70% | 12+ | DDL, DML, RBAC |
+| **Cypher/Bolt** | 7687 | Active | 60% | 18 | Graph algorithms, db procedures |
+| **AQL (ArangoDB)** | 8529 | Active | 65% | 61 | Graph traversals, window functions |
+| **MongoDB** | 27017 | Active | 25% | 8 | Basic wire protocol |
+| **gRPC** | 50051 | Production Ready | 100% | - | Actor management, streaming |
+| **HTTP REST** | 8080 | Production Ready | 90% | 25+ | JSON API, OpenAPI |
 
-## Detailed Status
+**Total Workspace Tests**: 2187+ passing
+
+## Detailed Protocol Status
 
 ### PostgreSQL Wire Protocol (Port 5432)
 
-**Status**: Production Ready (~95%)
+**Status**: Production Ready (85%)
 
 **Implemented**:
-- Full DDL support (CREATE, ALTER, DROP)
-- Full DML support (SELECT, INSERT, UPDATE, DELETE)
-- JOINs (INNER, LEFT, RIGHT, FULL, CROSS)
-- Aggregations (SUM, COUNT, AVG, MIN, MAX)
-- Subqueries and CTEs
-- Transaction support (BEGIN, COMMIT, ROLLBACK)
-- Vector operations (pgvector compatibility)
+- Full DDL support (CREATE, ALTER, DROP for tables, indexes, schemas)
+- Full DML support (SELECT, INSERT, UPDATE, DELETE, MERGE)
+- JOINs (INNER, LEFT, RIGHT, FULL, CROSS, NATURAL)
+- Aggregations (SUM, COUNT, AVG, MIN, MAX, array_agg)
+- Window functions (ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD)
+- Subqueries, CTEs (WITH clause), UNION/INTERSECT/EXCEPT
+- Transaction support (BEGIN, COMMIT, ROLLBACK, SAVEPOINT)
+- Vector operations (pgvector compatibility - vector types, HNSW, IVFFlat)
+- JSONB operations (all operators, path expressions)
+- Spatial/GIS operations
+- COPY command (import/export)
+- Array expressions and operations
 
 **Pending**:
 - Stored procedures (PL/pgSQL)
-- Advanced window functions
-- Full-text search integration
+- Materialized views (partial)
+- Full-text search (tsvector/tsquery)
+- Vectorized execution engine
 
 ### Redis RESP Protocol (Port 6379)
 
-**Status**: Mostly Complete (~90%)
+**Status**: Production Ready (95%)
 
-**Implemented** (124+ commands):
-- String operations (GET, SET, MGET, MSET, etc.)
-- Hash operations (HGET, HSET, HGETALL, etc.)
-- List operations (LPUSH, RPUSH, LPOP, RPOP, LRANGE)
-- Pub/Sub (PUBLISH, SUBSCRIBE, PSUBSCRIBE)
+**Implemented** (50+ command families):
+- String operations (GET, SET, MGET, MSET, INCR, APPEND, etc.)
+- Hash operations (HGET, HSET, HGETALL, HINCRBY, etc.)
+- List operations (LPUSH, RPUSH, LPOP, RPOP, LRANGE, LINDEX)
+- Set operations (SADD, SMEMBERS, SINTER, SUNION, SDIFF)
+- Sorted Set operations (ZADD, ZRANGE, ZRANK, ZSCORE)
+- Pub/Sub (PUBLISH, SUBSCRIBE, PSUBSCRIBE, UNSUBSCRIBE)
+- **Streams** (XADD, XREAD, XRANGE, XLEN, XINFO, XGROUP, XREADGROUP, XACK, XCLAIM, XPENDING, XTRIM)
+- **ACL** (ACL LIST, ACL SETUSER, ACL GETUSER, ACL DELUSER, ACL CAT, ACL GENPASS, ACL WHOAMI, ACL LOG)
+- **Functions** (FUNCTION LOAD, FUNCTION LIST, FUNCTION DELETE, FUNCTION DUMP, FUNCTION RESTORE, FUNCTION STATS, FCALL)
 - Vector operations (VECTOR.*, FT.*)
 - Time Series (TS.*)
 - Graph commands (GRAPH.*)
-- Server commands (INFO, PING, etc.)
+- Server commands (INFO, PING, CONFIG, CLIENT, DEBUG, MEMORY)
+- Key operations (KEYS, SCAN, EXISTS, DEL, EXPIRE, TTL, TYPE)
 
 **Pending**:
-- Transaction commands (MULTI/EXEC/DISCARD) - partial
-- Sorted Sets (ZADD, ZRANGE, ZRANK, etc.) - partial
-- Sets (SADD, SMEMBERS, SINTER, etc.) - partial
-- Blocking operations (BLPOP, BRPOP)
+- Cluster commands (CLUSTER *)
 - Lua scripting (EVAL, EVALSHA)
-- Cluster commands
+- Blocking operations (BLPOP, BRPOP) - partial
 
 ### MySQL Protocol (Port 3306)
 
-**Status**: Production Ready (~95%)
+**Status**: Production Ready (75%)
 
 **Implemented**:
 - Full wire protocol compatibility
-- DDL/DML operations
-- Authentication handshake
-- Prepared statements
-- 68+ tests passing
+- Authentication handshake (mysql_native_password)
+- DDL/DML operations via shared SQL executor
+- Prepared statements (COM_STMT_PREPARE)
+- Text protocol result sets
+- Error code mapping (MySQL error codes)
+- Connection management
 
 **Pending**:
+- Binary protocol execution (COM_STMT_EXECUTE)
 - Stored procedures
-- Advanced replication protocol
+- Triggers
+- Views
+- Replication protocol
 
 ### CQL/Cassandra Protocol (Port 9042)
 
-**Status**: Production Ready (~95%)
+**Status**: Production Ready (70%)
 
 **Implemented**:
-- Full CQL query support
+- CQL v4 protocol support
+- DDL (CREATE/DROP KEYSPACE, TABLE, INDEX)
+- DML (SELECT, INSERT, UPDATE, DELETE)
 - Collection types (LIST, SET, MAP)
-- Authentication
-- Batch operations
-- 38 tests passing
+- Authentication (SASL)
+- **RBAC** (CREATE/DROP/GRANT/REVOKE ROLE, GRANT/REVOKE permissions)
+- Prepared statements
+- Consistency levels
 
 **Pending**:
-- Materialized views
+- Batch operations (BATCH)
+- Lightweight transactions (IF NOT EXISTS/IF conditions)
 - User-defined types (UDT)
+- Materialized views
+- Secondary indexes (partial)
+
+### Cypher/Bolt Protocol (Port 7687)
+
+**Status**: Active Development (60%)
+
+**Implemented**:
+- Bolt v4/v5 protocol handshake and authentication
+- HELLO, LOGON, RUN, PULL, DISCARD messages
+- Basic Cypher queries (MATCH, CREATE, RETURN, WHERE)
+- Node and relationship operations (DELETE, SET, REMOVE, MERGE)
+- ORDER BY, LIMIT, SKIP
+- Transaction support (BEGIN, COMMIT, ROLLBACK)
+- **db.* procedures** (db.labels, db.relationshipTypes, db.propertyKeys, db.indexes, db.constraints, db.schema.nodeTypeProperties, db.schema.relTypeProperties)
+- **Graph algorithms** (gds.pageRank, gds.shortestPath, gds.bfs, gds.dfs, gds.betweenness, gds.closeness, gds.degree, gds.connectedComponents, gds.triangleCount)
+
+**Pending**:
+- Variable-length path patterns (*1..3)
+- Subqueries and WITH clause
+- Aggregation functions (collect, count in complex patterns)
+- APOC procedure library
+- Graph Data Science (GDS) library full support
+- Neo4j Desktop/Browser compatibility
+
+### AQL Protocol (Port 8529)
+
+**Status**: Active Development (65%)
+
+**Implemented**:
+- HTTP API endpoints
+- FOR loops with iteration
+- FILTER conditions (comparison, logical operators)
+- RETURN projections
+- LET variable binding
+- SORT with ASC/DESC
+- LIMIT and OFFSET
+- COLLECT with grouping and aggregation
+- **Graph traversals** (OUTBOUND, INBOUND, ANY with depth ranges)
+- **Traversal options** (bfs/dfs, uniqueVertices, uniqueEdges)
+- **SHORTEST_PATH and K_SHORTEST_PATHS**
+- **Window functions** (ROW_NUMBER, RANK, DENSE_RANK, NTILE, LAG, LEAD, FIRST_VALUE, LAST_VALUE, NTH_VALUE, SUM, AVG, MIN, MAX, COUNT)
+- **Window frames** (ROWS/RANGE, UNBOUNDED/CURRENT ROW/offset)
+- **UPSERT** operations
+- **REPLACE** operations
+- INSERT, UPDATE, REMOVE operations
+- Aggregate functions (SUM, AVG, MIN, MAX, COUNT, LENGTH, CONCAT, etc.)
+
+**Pending**:
+- PRUNE conditions (needs parser backtracking)
+- SEARCH views (full-text search)
+- User-defined functions (UDF)
+- Geospatial operations
+- Streaming query results
+
+### MongoDB Protocol (Port 27017)
+
+**Status**: Active Development (25%)
+
+**Implemented**:
+- Basic wire protocol (OP_MSG)
+- Connection handshake
+- Simple document operations
+- Collection listing
+
+**Pending**:
+- Full CRUD operations (find, insert, update, delete)
+- Aggregation pipeline
+- Index operations
+- Authentication (SCRAM-SHA-256)
+- Change streams
+- Transactions
 
 ### gRPC Protocol (Port 50051)
 
@@ -101,77 +194,27 @@ This document provides an accurate assessment of protocol implementation status 
 - Cluster coordination
 - Async streaming
 - 7+ protobuf service definitions
+- Connection pooling
+- Health checks
 
 ### HTTP REST Protocol (Port 8080)
 
-**Status**: Production Ready (100%)
+**Status**: Production Ready (90%)
 
 **Implemented**:
 - Full JSON API
-- CRUD operations
+- CRUD operations for all data models
 - Health endpoints
-- Metrics endpoints
-
-### MCP (Model Context Protocol)
-
-**Status**: Complete (100%)
-
-**Implemented**:
-- resources/read handler
-- prompts/get handler
-- tools/call handler
-- NLP processor integration
-- SQL generator
-
-### Cypher/Bolt Protocol (Port 7687)
-
-**Status**: Beta (~80%)
-
-**Implemented**:
-- Bolt protocol handshake
-- Basic Cypher queries (MATCH, CREATE, RETURN)
-- Node and relationship operations
-- WHERE clause filtering
-- Transaction support (BEGIN, COMMIT, ROLLBACK)
+- Metrics endpoints (Prometheus format)
+- OpenAPI documentation
 
 **Pending**:
-- Advanced pattern matching
-- Aggregation functions
-- Path queries
-- Full Neo4j compatibility
-
-### AQL Protocol (Port 8529)
-
-**Status**: Beta (~75%)
-
-**Implemented**:
-- HTTP API endpoints
-- Basic AQL queries (FOR, FILTER, RETURN)
-- Document operations
-- Collection management
-
-**Pending**:
-- Graph traversal
-- Full ArangoDB compatibility
-- Joins and subqueries
-
-## Test Coverage
-
-| Protocol | Test Count | Status |
-|----------|------------|--------|
-| PostgreSQL | 9+ integration | Passing |
-| Redis RESP | 50+ commands | Passing |
-| MySQL | 68+ | Passing |
-| CQL | 38 | Passing |
-| Cypher | 10+ | Passing |
-| AQL | 30+ | Passing |
-| MCP | 25+ | Passing |
-
-**Total**: ~230+ protocol tests
+- GraphQL endpoint
+- WebSocket subscriptions
 
 ## Persistence Status
 
-All protocols use RocksDB for durable storage:
+All protocols use RocksDB for durable storage with Write-Ahead Logging:
 
 ```
 data/
@@ -181,31 +224,46 @@ data/
 ├── redis/rocksdb/
 ├── cypher/rocksdb/
 ├── aql/rocksdb/
+├── mongodb/rocksdb/
 └── graphrag/rocksdb/
 ```
 
+## Test Coverage by Protocol
+
+| Protocol | Unit Tests | Integration | Total |
+|----------|------------|-------------|-------|
+| PostgreSQL | 104+ | 9+ | 113+ |
+| Redis RESP | 292 | 10+ | 302+ |
+| MySQL | 15+ | 5+ | 20+ |
+| CQL | 12+ | 5+ | 17+ |
+| Cypher | 18 | 5+ | 23+ |
+| AQL | 61 | 5+ | 66+ |
+| MongoDB | 8 | 2+ | 10+ |
+| MCP | 44 | - | 44+ |
+
+**Total Protocol Tests**: ~600+
+**Total Workspace Tests**: 2187+
+
 ## Roadmap
 
-### Phase 9 (Query Optimization)
-- Cost-based query planning
-- Parallel query execution
-- Index optimization
+### Current Focus (Phase 9)
+- Query optimization & vectorized execution
+- Parallel query processing
+- Multi-level caching
 
-### Phase 10 (Production Readiness)
-- Full transaction support across protocols
-- Advanced security features
-- Backup and recovery
+### Next (Phase 10)
+- Production hardening
+- Full transaction support across all protocols
+- Backup and recovery tools
 
-### Phase 11 (Advanced Features)
-- Stored procedures
-- Full-text search
-- Streaming/CDC
+### Future (Phase 11+)
+- OrbitQL unified multi-model queries
+- Real-time live queries & WebSockets
+- GraphML/GraphRAG integration
 
 ## Notes
 
-This document supersedes `PROTOCOL_100_PERCENT_COMPLETE.md` (archived) which contained inaccurate completion claims.
-
-For the most accurate status, refer to:
-- Individual protocol documentation in `docs/content/protocols/`
-- Test results from `cargo test --workspace`
-- Source code in `orbit/server/src/protocols/`
+This document reflects the actual implementation status as of December 2025. For the most current status:
+- Run `cargo test --workspace` for test counts
+- Check source code in `orbit/server/src/protocols/`
+- See individual protocol documentation in `docs/content/protocols/`

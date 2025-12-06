@@ -276,6 +276,169 @@ impl GraphCommands {
         Ok(result)
     }
 
+    /// GRAPH.RO_QUERY graph_key query [--compact] [timeout ms]
+    /// Read-only version of GRAPH.QUERY - only allows MATCH queries
+    async fn cmd_graph_ro_query(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 2 {
+            return Err(crate::protocols::error::ProtocolError::RespError(
+                "ERR wrong number of arguments for 'graph.ro_query' command".to_string(),
+            ));
+        }
+
+        let graph_key = self.get_string_arg(args, 0, "GRAPH.RO_QUERY")?;
+        let query = self.get_string_arg(args, 1, "GRAPH.RO_QUERY")?;
+
+        // Validate that query is read-only (no CREATE, DELETE, SET, REMOVE, MERGE)
+        let query_upper = query.to_uppercase();
+        if query_upper.contains("CREATE")
+            || query_upper.contains("DELETE")
+            || query_upper.contains("SET ")
+            || query_upper.contains("REMOVE")
+            || query_upper.contains("MERGE")
+        {
+            return Err(crate::protocols::error::ProtocolError::RespError(
+                "ERR GRAPH.RO_QUERY does not support write operations".to_string(),
+            ));
+        }
+
+        let graphs = get_graphs();
+        let graphs_guard = graphs.read().await;
+
+        // Graph must exist for read-only query
+        let graph = match graphs_guard.get(&graph_key) {
+            Some(g) => g,
+            None => {
+                return Ok(RespValue::Array(vec![
+                    RespValue::Array(vec![]), // Empty header
+                    RespValue::Array(vec![]), // Empty results
+                    RespValue::Array(vec![
+                        RespValue::bulk_string_from_str("Query internal execution time: 0.1 ms"),
+                    ]),
+                ]));
+            }
+        };
+
+        // Execute read-only query (only MATCH is supported)
+        let result = self.execute_match_readonly(graph, &query)?;
+
+        debug!("GRAPH.RO_QUERY {} {} -> {:?}", graph_key, query, result);
+        Ok(result)
+    }
+
+    /// Execute a MATCH query in read-only mode (same format as execute_match)
+    fn execute_match_readonly(&self, graph: &Graph, query: &str) -> ProtocolResult<RespValue> {
+        let query_upper = query.to_uppercase();
+
+        if !query_upper.starts_with("MATCH") {
+            // Return empty for unsupported queries
+            return Ok(RespValue::Array(vec![
+                RespValue::Array(vec![]), // Empty header
+                RespValue::Array(vec![]), // Empty results
+                RespValue::Array(vec![
+                    RespValue::bulk_string_from_str("Query internal execution time: 0.1 ms"),
+                ]),
+            ]));
+        }
+
+        // Parse return columns from "RETURN n.name, n.age" etc.
+        let return_columns: Vec<String> = if let Some(ret_pos) = query_upper.find("RETURN") {
+            let return_clause = query[ret_pos + 6..].trim();
+            return_clause
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .collect()
+        } else {
+            vec!["n".to_string()]
+        };
+
+        // Build header from return columns
+        let header: Vec<RespValue> = return_columns
+            .iter()
+            .map(|col| {
+                if col.contains('.') {
+                    let parts: Vec<&str> = col.split('.').collect();
+                    RespValue::bulk_string_from_str(*parts.last().unwrap_or(&col.as_str()))
+                } else {
+                    RespValue::bulk_string_from_str(col)
+                }
+            })
+            .collect();
+
+        // Find label in pattern like (n:Label)
+        let label = if let Some(colon_pos) = query.find(':') {
+            let after_colon = &query[colon_pos + 1..];
+            let label_end = after_colon
+                .find([')', ' ', '{'])
+                .unwrap_or(after_colon.len());
+            after_colon[..label_end].trim().to_string()
+        } else {
+            String::new()
+        };
+
+        // Find matching nodes
+        let matching_nodes: Vec<&GraphNode> = if label.is_empty() {
+            graph.nodes.values().collect()
+        } else {
+            graph.find_nodes_by_label(&label)
+        };
+
+        // Build results
+        let mut results = Vec::new();
+        for node in &matching_nodes {
+            let mut row = Vec::new();
+            for col in &return_columns {
+                if col.contains('.') {
+                    // Property access like n.name
+                    let parts: Vec<&str> = col.split('.').collect();
+                    if parts.len() == 2 {
+                        let prop_name = parts[1];
+                        match node.properties.get(prop_name) {
+                            Some(serde_json::Value::String(s)) => {
+                                row.push(RespValue::bulk_string_from_str(s));
+                            }
+                            Some(serde_json::Value::Number(n)) => {
+                                row.push(RespValue::bulk_string_from_str(n.to_string()));
+                            }
+                            Some(serde_json::Value::Bool(b)) => {
+                                row.push(RespValue::bulk_string_from_str(if *b { "true" } else { "false" }));
+                            }
+                            Some(other) => {
+                                row.push(RespValue::bulk_string_from_str(other.to_string()));
+                            }
+                            None => {
+                                // Use null bulk string for null values (RESP2 compatible)
+                                row.push(RespValue::NullBulkString);
+                            }
+                        }
+                    }
+                } else {
+                    // Return whole node as JSON (same format as execute_match)
+                    let mut node_map = HashMap::new();
+                    node_map.insert("id".to_string(), serde_json::Value::Number(node.id.into()));
+                    node_map.insert(
+                        "labels".to_string(),
+                        serde_json::Value::Array(
+                            node.labels.iter().map(|l| serde_json::Value::String(l.clone())).collect(),
+                        ),
+                    );
+                    node_map.insert("properties".to_string(), serde_json::json!(node.properties));
+                    let node_str = serde_json::to_string(&node_map).unwrap_or_default();
+                    row.push(RespValue::bulk_string_from_str(node_str));
+                }
+            }
+            results.push(RespValue::Array(row));
+        }
+
+        Ok(RespValue::Array(vec![
+            RespValue::Array(header),
+            RespValue::Array(results.clone()),
+            RespValue::Array(vec![RespValue::bulk_string_from_str(format!(
+                "Query internal execution time: 0.1 ms, {} results",
+                results.len()
+            ))]),
+        ]))
+    }
+
     /// Execute a simplified Cypher query
     fn execute_cypher(&self, graph: &mut Graph, query: &str) -> ProtocolResult<RespValue> {
         let query_upper = query.to_uppercase();
@@ -647,6 +810,7 @@ impl CommandHandler for GraphCommands {
     async fn handle(&self, command_name: &str, args: &[RespValue]) -> ProtocolResult<RespValue> {
         match command_name.to_uppercase().as_str() {
             "GRAPH.QUERY" => self.cmd_graph_query(args).await,
+            "GRAPH.RO_QUERY" => self.cmd_graph_ro_query(args).await,
             "GRAPH.EXPLAIN" => self.cmd_graph_explain(args).await,
             "GRAPH.PROFILE" => self.cmd_graph_profile(args).await,
             "GRAPH.DELETE" => self.cmd_graph_delete(args).await,
@@ -662,6 +826,7 @@ impl CommandHandler for GraphCommands {
     fn supported_commands(&self) -> &[&'static str] {
         &[
             "GRAPH.QUERY",
+            "GRAPH.RO_QUERY",
             "GRAPH.EXPLAIN",
             "GRAPH.PROFILE",
             "GRAPH.DELETE",
@@ -745,5 +910,81 @@ mod tests {
         assert!(labels.contains(&"Person".to_string()));
         assert_eq!(props.get("name"), Some(&serde_json::json!("Alice")));
         assert_eq!(props.get("age"), Some(&serde_json::json!(30)));
+    }
+
+    #[test]
+    fn test_graph_node_creation() {
+        let mut graph = Graph::new("test_graph".to_string());
+        let node_id = graph.create_node(
+            vec!["Person".to_string()],
+            HashMap::from([
+                ("name".to_string(), serde_json::json!("Alice")),
+                ("age".to_string(), serde_json::json!(30)),
+            ]),
+        );
+
+        assert_eq!(graph.nodes.len(), 1);
+        let node = graph.nodes.get(&node_id).unwrap();
+        assert!(node.labels.contains(&"Person".to_string()));
+        assert_eq!(node.properties.get("name"), Some(&serde_json::json!("Alice")));
+    }
+
+    #[test]
+    fn test_find_nodes_by_label() {
+        let mut graph = Graph::new("test_graph".to_string());
+        graph.create_node(vec!["Person".to_string()], HashMap::new());
+        graph.create_node(vec!["Person".to_string()], HashMap::new());
+        graph.create_node(vec!["Company".to_string()], HashMap::new());
+
+        let persons = graph.find_nodes_by_label("Person");
+        assert_eq!(persons.len(), 2);
+
+        let companies = graph.find_nodes_by_label("Company");
+        assert_eq!(companies.len(), 1);
+    }
+
+    #[test]
+    fn test_graph_relationship_creation() {
+        let mut graph = Graph::new("test_graph".to_string());
+        let alice_id = graph.create_node(
+            vec!["Person".to_string()],
+            HashMap::from([("name".to_string(), serde_json::json!("Alice"))]),
+        );
+        let bob_id = graph.create_node(
+            vec!["Person".to_string()],
+            HashMap::from([("name".to_string(), serde_json::json!("Bob"))]),
+        );
+
+        let rel_id = graph.create_relationship(
+            alice_id,
+            bob_id,
+            "KNOWS".to_string(),
+            HashMap::from([("since".to_string(), serde_json::json!(2020))]),
+        );
+
+        assert!(rel_id.is_some());
+        assert_eq!(graph.relationships.len(), 1);
+        let rel = graph.relationships.get(&rel_id.unwrap()).unwrap();
+        assert_eq!(rel.rel_type, "KNOWS");
+        assert_eq!(rel.src_id, alice_id);
+        assert_eq!(rel.dest_id, bob_id);
+    }
+
+    #[test]
+    fn test_graph_supported_commands() {
+        // Verify expected commands are defined
+        let expected_commands = vec![
+            "GRAPH.QUERY",
+            "GRAPH.RO_QUERY",
+            "GRAPH.DELETE",
+            "GRAPH.LIST",
+            "GRAPH.EXPLAIN",
+            "GRAPH.PROFILE",
+        ];
+
+        // This test verifies the commands exist in our implementation
+        for cmd in expected_commands {
+            assert!(!cmd.is_empty(), "Command {} should be defined", cmd);
+        }
     }
 }

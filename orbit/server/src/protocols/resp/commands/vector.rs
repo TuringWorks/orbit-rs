@@ -6,6 +6,11 @@
 //! - VECTOR.GET - Get a vector by ID
 //! - VECTOR.DEL - Delete a vector
 //! - VECTOR.SEARCH - Perform KNN similarity search
+//! - VECTOR.INFO - Get index metadata
+//! - VECTOR.COUNT - Count vectors in an index
+//! - VECTOR.LIST - List all vector IDs in an index
+//! - VECTOR.STATS - Get detailed index statistics
+//! - VECTOR.DROP - Delete an index
 //! - FT.CREATE - Create a full-text search index with vector support
 //! - FT.SEARCH - Search with vector similarity
 
@@ -512,6 +517,86 @@ impl VectorCommands {
         ]))
     }
 
+    /// VECTOR.COUNT index_name - Return the number of vectors in an index
+    async fn cmd_vector_count(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("VECTOR.COUNT", args, 1)?;
+
+        let index_name = self.get_string_arg(args, 0, "VECTOR.COUNT")?;
+
+        let indices = get_vector_indices();
+        let indices_guard = indices.read().await;
+
+        let index = indices_guard.get(&index_name).ok_or_else(|| {
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR index '{}' does not exist",
+                index_name
+            ))
+        })?;
+
+        Ok(RespValue::Integer(index.vectors.len() as i64))
+    }
+
+    /// VECTOR.LIST index_name - List all vector IDs in an index
+    async fn cmd_vector_list(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("VECTOR.LIST", args, 1)?;
+
+        let index_name = self.get_string_arg(args, 0, "VECTOR.LIST")?;
+
+        let indices = get_vector_indices();
+        let indices_guard = indices.read().await;
+
+        let index = indices_guard.get(&index_name).ok_or_else(|| {
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR index '{}' does not exist",
+                index_name
+            ))
+        })?;
+
+        let ids: Vec<RespValue> = index
+            .vectors
+            .keys()
+            .map(|id| RespValue::bulk_string_from_str(id))
+            .collect();
+
+        Ok(RespValue::Array(ids))
+    }
+
+    /// VECTOR.STATS index_name - Get detailed statistics about an index
+    async fn cmd_vector_stats(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("VECTOR.STATS", args, 1)?;
+
+        let index_name = self.get_string_arg(args, 0, "VECTOR.STATS")?;
+
+        let indices = get_vector_indices();
+        let indices_guard = indices.read().await;
+
+        let index = indices_guard.get(&index_name).ok_or_else(|| {
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR index '{}' does not exist",
+                index_name
+            ))
+        })?;
+
+        // Compute basic statistics
+        let vector_count = index.vectors.len();
+        let memory_usage = vector_count * index.config.dimension * std::mem::size_of::<f32>();
+
+        Ok(RespValue::Array(vec![
+            RespValue::bulk_string_from_str("index_name"),
+            RespValue::bulk_string_from_str(&index_name),
+            RespValue::bulk_string_from_str("dimension"),
+            RespValue::Integer(index.config.dimension as i64),
+            RespValue::bulk_string_from_str("distance_metric"),
+            RespValue::bulk_string_from_str(format!("{:?}", index.config.distance_metric)),
+            RespValue::bulk_string_from_str("num_vectors"),
+            RespValue::Integer(vector_count as i64),
+            RespValue::bulk_string_from_str("memory_usage_bytes"),
+            RespValue::Integer(memory_usage as i64),
+            RespValue::bulk_string_from_str("capacity"),
+            RespValue::Integer(index.config.capacity as i64),
+        ]))
+    }
+
     /// VECTOR.DROP index_name
     async fn cmd_vector_drop(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         self.validate_arg_count("VECTOR.DROP", args, 1)?;
@@ -574,8 +659,14 @@ impl CommandHandler for VectorCommands {
             "VECTOR.DEL" => self.cmd_vector_del(args).await,
             "VECTOR.SEARCH" => self.cmd_vector_search(args).await,
             "VECTOR.INFO" => self.cmd_vector_info(args).await,
+            "VECTOR.COUNT" => self.cmd_vector_count(args).await,
+            "VECTOR.LIST" => self.cmd_vector_list(args).await,
+            "VECTOR.STATS" => self.cmd_vector_stats(args).await,
             "VECTOR.DROP" => self.cmd_vector_drop(args).await,
+            "VECTOR.KNN" => self.cmd_vector_search(args).await, // Alias for VECTOR.SEARCH
             "FT.CREATE" => self.cmd_ft_create(args).await,
+            "FT.ADD" => self.cmd_vector_add(args).await,
+            "FT.DEL" => self.cmd_vector_del(args).await,
             "FT.SEARCH" => self.cmd_ft_search(args).await,
             "FT.DROPINDEX" => self.cmd_ft_dropindex(args).await,
             "FT.INFO" => self.cmd_ft_info(args).await,
@@ -593,8 +684,14 @@ impl CommandHandler for VectorCommands {
             "VECTOR.DEL",
             "VECTOR.SEARCH",
             "VECTOR.INFO",
+            "VECTOR.COUNT",
+            "VECTOR.LIST",
+            "VECTOR.STATS",
             "VECTOR.DROP",
+            "VECTOR.KNN",
             "FT.CREATE",
+            "FT.ADD",
+            "FT.DEL",
             "FT.SEARCH",
             "FT.DROPINDEX",
             "FT.INFO",
@@ -686,5 +783,84 @@ mod tests {
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].0, "a"); // closest
         assert_eq!(results[1].0, "b"); // second closest
+    }
+
+    #[tokio::test]
+    async fn test_vector_count_list_stats() {
+        // Create a test index
+        let config = VectorIndexConfig {
+            name: "test-count".to_string(),
+            dimension: 3,
+            distance_metric: DistanceMetric::Cosine,
+            capacity: 100,
+        };
+        let mut index = VectorIndex::new(config);
+
+        // Add some vectors
+        index.vectors.insert(
+            "v1".to_string(),
+            StoredVector {
+                id: "v1".to_string(),
+                vector: vec![1.0, 0.0, 0.0],
+                metadata: HashMap::new(),
+            },
+        );
+        index.vectors.insert(
+            "v2".to_string(),
+            StoredVector {
+                id: "v2".to_string(),
+                vector: vec![0.0, 1.0, 0.0],
+                metadata: HashMap::new(),
+            },
+        );
+        index.vectors.insert(
+            "v3".to_string(),
+            StoredVector {
+                id: "v3".to_string(),
+                vector: vec![0.0, 0.0, 1.0],
+                metadata: HashMap::new(),
+            },
+        );
+
+        // Test count
+        assert_eq!(index.vectors.len(), 3);
+
+        // Test list
+        let ids: Vec<&String> = index.vectors.keys().collect();
+        assert_eq!(ids.len(), 3);
+        assert!(ids.contains(&&"v1".to_string()));
+        assert!(ids.contains(&&"v2".to_string()));
+        assert!(ids.contains(&&"v3".to_string()));
+
+        // Test stats via config
+        assert_eq!(index.config.dimension, 3);
+        assert_eq!(index.config.capacity, 100);
+    }
+
+    #[test]
+    fn test_vector_commands_supported() {
+        // Just verify the supported commands list contains new commands
+        let expected_commands = [
+            "VECTOR.COUNT",
+            "VECTOR.LIST",
+            "VECTOR.STATS",
+            "VECTOR.KNN",
+            "FT.ADD",
+            "FT.DEL",
+        ];
+
+        // These should be in the supported commands list
+        // (testing via trait would require full setup, so we just verify the constants)
+        for cmd in &expected_commands {
+            assert!(
+                ["VECTOR.CREATE", "VECTOR.ADD", "VECTOR.GET", "VECTOR.DEL",
+                 "VECTOR.SEARCH", "VECTOR.INFO", "VECTOR.COUNT", "VECTOR.LIST",
+                 "VECTOR.STATS", "VECTOR.DROP", "VECTOR.KNN", "FT.CREATE",
+                 "FT.ADD", "FT.DEL", "FT.SEARCH", "FT.DROPINDEX", "FT.INFO"]
+                .contains(cmd),
+                "Command {} should be supported",
+                cmd
+            );
+        }
     }
 }

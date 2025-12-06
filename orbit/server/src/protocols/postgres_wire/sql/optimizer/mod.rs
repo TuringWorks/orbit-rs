@@ -12,6 +12,8 @@
 //! - **Statistics Collector**: Maintains table and index statistics
 //! - **Query Hint System**: Allows manual optimization hints
 
+pub mod cardinality;
+pub mod cost_router;
 pub mod costs;
 pub mod planner;
 pub mod rules;
