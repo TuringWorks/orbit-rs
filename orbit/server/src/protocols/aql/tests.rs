@@ -623,13 +623,65 @@ mod aql_tests {
     }
 
     #[tokio::test]
-    #[ignore = "PRUNE condition parsing needs backtracking support"]
-    async fn test_parser_graph_traversal_with_prune() {
+    async fn test_parser_graph_traversal_with_prune_condition_only() {
         let parser = AqlParser::new();
-        // Graph traversal with PRUNE clause using GRAPH keyword and simple condition
+        // Graph traversal with PRUNE clause - condition only (no variable binding)
+        // This tests the backtracking: "depth" should be parsed as part of the condition
         let result = parser.parse(
             "FOR vertex, edge IN 1..5 OUTBOUND 'users/john' GRAPH 'social' \
-             PRUNE vertex > 3 RETURN vertex",
+             PRUNE depth > 3 RETURN vertex",
+        );
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+
+        let query = result.unwrap();
+        // Verify the PRUNE was parsed correctly
+        if let Some(crate::protocols::aql::aql_parser::AqlClause::ForTraversal { prune, .. }) =
+            query.clauses.first()
+        {
+            assert!(prune.is_some(), "PRUNE clause should be present");
+            let prune = prune.as_ref().unwrap();
+            assert!(
+                prune.prune_var.is_none(),
+                "No prune variable binding expected"
+            );
+        } else {
+            panic!("Expected ForTraversal clause");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_parser_graph_traversal_with_prune_variable_binding() {
+        let parser = AqlParser::new();
+        // Graph traversal with PRUNE clause - with variable binding (v: condition)
+        let result = parser.parse(
+            "FOR vertex, edge IN 1..5 OUTBOUND 'users/john' GRAPH 'social' \
+             PRUNE v: v.depth > 3 RETURN vertex",
+        );
+        assert!(result.is_ok(), "Parser failed: {:?}", result.err());
+
+        let query = result.unwrap();
+        if let Some(crate::protocols::aql::aql_parser::AqlClause::ForTraversal { prune, .. }) =
+            query.clauses.first()
+        {
+            assert!(prune.is_some(), "PRUNE clause should be present");
+            let prune = prune.as_ref().unwrap();
+            assert_eq!(
+                prune.prune_var,
+                Some("v".to_string()),
+                "Prune variable 'v' expected"
+            );
+        } else {
+            panic!("Expected ForTraversal clause");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_parser_prune_with_dotted_expression() {
+        let parser = AqlParser::new();
+        // PRUNE with dotted property access - tests backtracking with complex left-hand side
+        let result = parser.parse(
+            "FOR v, e IN 1..10 OUTBOUND 'start' GRAPH 'g' \
+             PRUNE v.level > 5 RETURN v",
         );
         assert!(result.is_ok(), "Parser failed: {:?}", result.err());
     }

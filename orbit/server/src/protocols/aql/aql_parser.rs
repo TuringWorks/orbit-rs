@@ -730,17 +730,25 @@ impl AqlTokenParser {
             None
         };
 
-        // Parse optional PRUNE clause
+        // Parse optional PRUNE clause with proper backtracking
         let prune = if matches!(self.current_token(), Some(AqlToken::Prune)) {
             self.advance(); // consume PRUNE
+
+            // Save position for backtracking - we need to look ahead to determine
+            // if we have "PRUNE var: condition" or just "PRUNE condition"
+            let saved_position = self.position;
+
             let prune_var = if let Some(AqlToken::Identifier(name)) = self.current_token() {
                 let name = name.clone();
                 self.advance();
                 if matches!(self.current_token(), Some(AqlToken::Colon)) {
                     self.advance(); // consume :
+                    // This is a prune variable binding like "PRUNE v: v.depth > 3"
                     Some(name)
                 } else {
-                    // Not a prune var, just the condition start - put back
+                    // Not a prune var, just the condition start - backtrack!
+                    // Restore position so the identifier can be parsed as part of the condition
+                    self.position = saved_position;
                     None
                 }
             } else {
