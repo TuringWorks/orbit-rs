@@ -307,7 +307,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - **Redis RESP Protocol** - Full redis-cli compatibility with streams, ACL, functions + RocksDB persistence
 - **Cypher/Bolt Protocol** - Neo4j-compatible graph queries with procedures and algorithms
 - **AQL Protocol** - ArangoDB-compatible document/graph queries with traversals and window functions
-- **MongoDB Protocol** - MongoDB wire protocol support for document operations
+- **MongoDB Protocol** - MongoDB wire protocol with 34 expression operators, findAndModify, distinct, comprehensive aggregation support
 - **HTTP REST API** - Web-friendly JSON interface for all operations including vectors
 - **gRPC Actor API** - High-performance actor system management with vector support
 - **OrbitQL Multi-Model Queries** - Unified query language for documents, graphs, and time-series
@@ -417,7 +417,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | **Model Context Protocol (MCP)** | Experimental | 15% | No | 44 tests | Basic AI agent integration framework |
 | **Neo4j Cypher/Bolt** | Active | 60% | Yes | 18 tests | Bolt v4/v5 protocol, graph algorithms, db procedures |
 | **ArangoDB AQL** | Active | 65% | Yes | 61 tests | Graph traversals, window functions, aggregations, UPSERT |
-| **MongoDB Protocol** | Active | 25% | No | 8 tests | Basic wire protocol and document operations |
+| **MongoDB Protocol** | Complete | 75% | Yes | 102 tests | 34 expression operators, findAndModify, distinct, comprehensive test coverage |
 | **OrbitQL Engine** | Active | 40% | No | 256 tests | Query planning works, optimizer incomplete |
 | **Persistence Layer** | Complete | 85% | Yes | 47+ tests | RocksDB, COW B+Tree, LSM-Tree, Memory, TiKV, Cloud storage |
 | **Kubernetes Integration** | Active | 70% | No | 16 tests | Operator basics, needs production hardening |
