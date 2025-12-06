@@ -222,6 +222,35 @@ INSERT INTO stock_prices (symbol, timestamp, open_price, high_price, low_price, 
 ('AAPL', extract(epoch from now() - interval '2 minutes')::bigint * 1000, 176.80, 177.20, 176.50, 176.90, 1100000),
 ('AAPL', extract(epoch from now() - interval '1 minute')::bigint * 1000, 176.90, 177.50, 176.70, 177.20, 1300000);
 
+SELECT ML_TRAIN_MODEL(
+  'fraud_detector_xgb',
+  'xgboost',
+  ARRAY[
+    amount,
+    EXTRACT(HOUR FROM transaction_date)::INTEGER,
+    CASE WHEN is_online THEN 1 ELSE 0 END
+  ],
+  is_fraud
+) FROM transactions;
+SELECT ML_EVALUATE_MODEL(
+  'fraud_detector_xgb',
+  ARRAY[
+    amount,
+    EXTRACT(HOUR FROM transaction_date)::INTEGER,
+    CASE WHEN is_online THEN 1 ELSE 0 END
+  ],
+  is_fraud
+) FROM transactions;
+UPDATE transactions
+SET fraud_score = ML_PREDICT(
+  'fraud_detector_xgb',
+  ARRAY[
+    amount,
+    EXTRACT(HOUR FROM transaction_date)::INTEGER,
+    CASE WHEN is_online THEN 1 ELSE 0 END
+  ]
+);
+
 -- Calculate moving averages for trading signals
 SELECT 
     symbol,

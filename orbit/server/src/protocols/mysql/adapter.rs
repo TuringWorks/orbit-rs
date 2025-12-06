@@ -423,6 +423,42 @@ impl MySqlAdapter {
             return Some(self.build_show_collation_result());
         }
 
+        // Handle SELECT VERSION()
+        if query_upper.contains("VERSION()") {
+            println!("[MySQL] Handling SELECT VERSION()");
+            return Some(self.build_version_result());
+        }
+
+        // Handle SHOW COLUMNS FROM table
+        if query_upper.starts_with("SHOW COLUMNS FROM")
+            || query_upper.starts_with("SHOW FIELDS FROM")
+            || query_upper.starts_with("DESCRIBE ")
+            || query_upper.starts_with("DESC ")
+        {
+            println!("[MySQL] Handling SHOW COLUMNS/DESCRIBE");
+            return Some(self.build_show_columns_result(query).await);
+        }
+
+        // Handle SHOW CREATE TABLE
+        if query_upper.starts_with("SHOW CREATE TABLE") {
+            println!("[MySQL] Handling SHOW CREATE TABLE");
+            return Some(self.build_show_create_table_result(query).await);
+        }
+
+        // Handle SHOW INDEX FROM
+        if query_upper.starts_with("SHOW INDEX FROM") || query_upper.starts_with("SHOW INDEXES FROM")
+        {
+            println!("[MySQL] Handling SHOW INDEX");
+            return Some(self.build_show_index_result(query).await);
+        }
+
+        // Handle SHOW PROCESSLIST
+        if query_upper.starts_with("SHOW PROCESSLIST") || query_upper.starts_with("SHOW FULL PROCESSLIST")
+        {
+            println!("[MySQL] Handling SHOW PROCESSLIST");
+            return Some(self.build_show_processlist_result());
+        }
+
         None // Not a MySQL-specific query, let SQL engine handle it
     }
 
@@ -617,6 +653,185 @@ impl MySqlAdapter {
         let result = UnifiedExecutionResult::Select {
             columns: vec!["Database".to_string()],
             rows: vec![vec![Some("orbit".to_string())]],
+            row_count: 1,
+            transaction_id: None,
+        };
+
+        self.build_result_set(result)
+    }
+
+    /// Build result for SELECT VERSION()
+    fn build_version_result(&self) -> ProtocolResult<Vec<Bytes>> {
+        use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
+
+        let result = UnifiedExecutionResult::Select {
+            columns: vec!["VERSION()".to_string()],
+            rows: vec![vec![Some(self.config.server_version.clone())]],
+            row_count: 1,
+            transaction_id: None,
+        };
+
+        self.build_result_set(result)
+    }
+
+    /// Build result for SHOW COLUMNS FROM table
+    async fn build_show_columns_result(&self, query: &str) -> ProtocolResult<Vec<Bytes>> {
+        use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
+
+        // Extract table name from query
+        let query_upper = query.to_uppercase();
+        let table_name = if query_upper.starts_with("DESCRIBE ") || query_upper.starts_with("DESC ") {
+            query.split_whitespace().nth(1).unwrap_or("").trim_end_matches(';')
+        } else {
+            // SHOW COLUMNS FROM table or SHOW FIELDS FROM table
+            query.split_whitespace().nth(3).unwrap_or("").trim_end_matches(';')
+        };
+
+        // Query table structure using SQL engine
+        let schema_query = format!("SELECT * FROM {} LIMIT 0", table_name);
+        match self.sql_engine.write().await.execute(&schema_query).await {
+            Ok(crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select {
+                columns, ..
+            }) => {
+                // Build columns info
+                let rows: Vec<Vec<Option<String>>> = columns
+                    .iter()
+                    .map(|col| {
+                        vec![
+                            Some(col.clone()),                    // Field
+                            Some("varchar(255)".to_string()),     // Type
+                            Some("YES".to_string()),              // Null
+                            Some("".to_string()),                 // Key
+                            Some("NULL".to_string()),             // Default
+                            Some("".to_string()),                 // Extra
+                        ]
+                    })
+                    .collect();
+
+                let result = UnifiedExecutionResult::Select {
+                    columns: vec![
+                        "Field".to_string(),
+                        "Type".to_string(),
+                        "Null".to_string(),
+                        "Key".to_string(),
+                        "Default".to_string(),
+                        "Extra".to_string(),
+                    ],
+                    rows: rows.clone(),
+                    row_count: rows.len(),
+                    transaction_id: None,
+                };
+
+                self.build_result_set(result)
+            }
+            _ => Ok(vec![MySqlPacketBuilder::error(
+                super::protocol::error_codes::ER_NO_SUCH_TABLE,
+                &format!("Table '{}' doesn't exist", table_name),
+            )]),
+        }
+    }
+
+    /// Build result for SHOW CREATE TABLE
+    async fn build_show_create_table_result(&self, query: &str) -> ProtocolResult<Vec<Bytes>> {
+        use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
+
+        // Extract table name from query: SHOW CREATE TABLE table_name
+        let table_name = query.split_whitespace().nth(3).unwrap_or("").trim_end_matches(';');
+
+        // Query table structure using SQL engine
+        let schema_query = format!("SELECT * FROM {} LIMIT 0", table_name);
+        match self.sql_engine.write().await.execute(&schema_query).await {
+            Ok(crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select {
+                columns, ..
+            }) => {
+                // Build CREATE TABLE statement
+                let column_defs: Vec<String> = columns
+                    .iter()
+                    .map(|col| format!("  `{}` varchar(255)", col))
+                    .collect();
+
+                let create_statement = format!(
+                    "CREATE TABLE `{}` (\n{}\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+                    table_name,
+                    column_defs.join(",\n")
+                );
+
+                let result = UnifiedExecutionResult::Select {
+                    columns: vec!["Table".to_string(), "Create Table".to_string()],
+                    rows: vec![vec![
+                        Some(table_name.to_string()),
+                        Some(create_statement),
+                    ]],
+                    row_count: 1,
+                    transaction_id: None,
+                };
+
+                self.build_result_set(result)
+            }
+            _ => Ok(vec![MySqlPacketBuilder::error(
+                super::protocol::error_codes::ER_NO_SUCH_TABLE,
+                &format!("Table '{}' doesn't exist", table_name),
+            )]),
+        }
+    }
+
+    /// Build result for SHOW INDEX FROM table
+    async fn build_show_index_result(&self, query: &str) -> ProtocolResult<Vec<Bytes>> {
+        use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
+
+        // Extract table name from query: SHOW INDEX FROM table_name
+        let table_name = query.split_whitespace().nth(3).unwrap_or("").trim_end_matches(';');
+
+        // Return empty result (no indexes by default)
+        let result = UnifiedExecutionResult::Select {
+            columns: vec![
+                "Table".to_string(),
+                "Non_unique".to_string(),
+                "Key_name".to_string(),
+                "Seq_in_index".to_string(),
+                "Column_name".to_string(),
+                "Collation".to_string(),
+                "Cardinality".to_string(),
+                "Sub_part".to_string(),
+                "Packed".to_string(),
+                "Null".to_string(),
+                "Index_type".to_string(),
+                "Comment".to_string(),
+            ],
+            rows: vec![],
+            row_count: 0,
+            transaction_id: None,
+        };
+        let _ = table_name; // Suppress unused warning
+
+        self.build_result_set(result)
+    }
+
+    /// Build result for SHOW PROCESSLIST
+    fn build_show_processlist_result(&self) -> ProtocolResult<Vec<Bytes>> {
+        use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
+
+        let result = UnifiedExecutionResult::Select {
+            columns: vec![
+                "Id".to_string(),
+                "User".to_string(),
+                "Host".to_string(),
+                "db".to_string(),
+                "Command".to_string(),
+                "Time".to_string(),
+                "State".to_string(),
+                "Info".to_string(),
+            ],
+            rows: vec![vec![
+                Some("1".to_string()),
+                Some("root".to_string()),
+                Some("localhost".to_string()),
+                Some("orbit".to_string()),
+                Some("Query".to_string()),
+                Some("0".to_string()),
+                Some("executing".to_string()),
+                Some("SHOW PROCESSLIST".to_string()),
+            ]],
             row_count: 1,
             transaction_id: None,
         };
@@ -1823,5 +2038,355 @@ mod tests {
         let cmd = MySqlCommand::from_u8(0x1C);
         assert!(cmd.is_ok());
         assert_eq!(cmd.unwrap(), MySqlCommand::StmtFetch);
+    }
+
+    #[test]
+    fn test_mysql_all_commands() {
+        use super::super::protocol::MySqlCommand;
+
+        // Test all MySQL commands
+        assert_eq!(MySqlCommand::from_u8(0x00).unwrap(), MySqlCommand::Sleep);
+        assert_eq!(MySqlCommand::from_u8(0x01).unwrap(), MySqlCommand::Quit);
+        assert_eq!(MySqlCommand::from_u8(0x02).unwrap(), MySqlCommand::InitDb);
+        assert_eq!(MySqlCommand::from_u8(0x03).unwrap(), MySqlCommand::Query);
+        assert_eq!(MySqlCommand::from_u8(0x04).unwrap(), MySqlCommand::FieldList);
+        assert_eq!(MySqlCommand::from_u8(0x05).unwrap(), MySqlCommand::CreateDb);
+        assert_eq!(MySqlCommand::from_u8(0x06).unwrap(), MySqlCommand::DropDb);
+        assert_eq!(MySqlCommand::from_u8(0x07).unwrap(), MySqlCommand::Refresh);
+        assert_eq!(MySqlCommand::from_u8(0x0E).unwrap(), MySqlCommand::Ping);
+        assert_eq!(MySqlCommand::from_u8(0x16).unwrap(), MySqlCommand::StmtPrepare);
+        assert_eq!(MySqlCommand::from_u8(0x17).unwrap(), MySqlCommand::StmtExecute);
+        assert_eq!(MySqlCommand::from_u8(0x19).unwrap(), MySqlCommand::StmtClose);
+        assert_eq!(MySqlCommand::from_u8(0x1A).unwrap(), MySqlCommand::StmtReset);
+        assert_eq!(MySqlCommand::from_u8(0x1B).unwrap(), MySqlCommand::SetOption);
+        assert_eq!(MySqlCommand::from_u8(0x1F).unwrap(), MySqlCommand::ResetConnection);
+
+        // Test invalid command
+        assert!(MySqlCommand::from_u8(0xFF).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_mysql_set_names() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test SET NAMES command
+        let result = adapter
+            .handle_mysql_specific_query("SET NAMES 'utf8mb4'")
+            .await;
+        assert!(result.is_some());
+        let packets = result.unwrap().unwrap();
+        assert_eq!(packets[0][0], 0x00); // OK packet
+    }
+
+    #[tokio::test]
+    async fn test_mysql_set_names_with_collate() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test SET NAMES with COLLATE
+        let result = adapter
+            .handle_mysql_specific_query("SET NAMES 'utf8mb4' COLLATE 'utf8mb4_general_ci'")
+            .await;
+        assert!(result.is_some());
+        let packets = result.unwrap().unwrap();
+        assert_eq!(packets[0][0], 0x00); // OK packet
+    }
+
+    #[tokio::test]
+    async fn test_mysql_set_session_variable() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test SET @@SESSION variable
+        let result = adapter
+            .handle_mysql_specific_query("SET @@session.sql_mode = ''")
+            .await;
+        assert!(result.is_some());
+        let packets = result.unwrap().unwrap();
+        assert_eq!(packets[0][0], 0x00); // OK packet
+    }
+
+    #[tokio::test]
+    async fn test_mysql_set_collation() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test SET collation command
+        let result = adapter
+            .handle_mysql_specific_query("SET collation_connection = utf8mb4_general_ci")
+            .await;
+        assert!(result.is_some());
+        let packets = result.unwrap().unwrap();
+        assert_eq!(packets[0][0], 0x00); // OK packet
+    }
+
+    #[tokio::test]
+    async fn test_mysql_statistics() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test statistics handler
+        let result = adapter.handle_statistics().await;
+        assert!(result.is_ok());
+        let packets = result.unwrap();
+        assert_eq!(packets.len(), 1);
+        // Statistics returns a text response with server stats
+        let response = String::from_utf8(packets[0].to_vec()).unwrap();
+        assert!(response.contains("Uptime:"));
+    }
+
+    #[tokio::test]
+    async fn test_mysql_reset_connection() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test reset connection
+        let result = adapter.handle_reset_connection().await;
+        assert!(result.is_ok());
+        let packets = result.unwrap();
+        assert_eq!(packets[0][0], 0x00); // OK packet
+    }
+
+    #[tokio::test]
+    async fn test_mysql_create_db() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test create database
+        let payload = Bytes::from("test_database");
+        let result = adapter.handle_create_db(payload).await;
+        assert!(result.is_ok());
+        let packets = result.unwrap();
+        assert_eq!(packets[0][0], 0x00); // OK packet
+    }
+
+    #[tokio::test]
+    async fn test_mysql_drop_db() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test drop database
+        let payload = Bytes::from("test_database");
+        let result = adapter.handle_drop_db(payload).await;
+        assert!(result.is_ok());
+        let packets = result.unwrap();
+        assert_eq!(packets[0][0], 0x00); // OK packet
+    }
+
+    #[tokio::test]
+    async fn test_mysql_set_option() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test set option (MYSQL_OPTION_MULTI_STATEMENTS_ON = 0)
+        let mut payload = BytesMut::new();
+        payload.put_u16_le(0); // option value
+        let result = adapter.handle_set_option(payload.freeze()).await;
+        assert!(result.is_ok());
+        let packets = result.unwrap();
+        // Returns EOF packet for set option
+        assert!(!packets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_mysql_refresh() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test refresh command
+        let mut payload = BytesMut::new();
+        payload.put_u8(1); // REFRESH_GRANT
+        let result = adapter.handle_refresh(payload.freeze()).await;
+        assert!(result.is_ok());
+        let packets = result.unwrap();
+        assert_eq!(packets[0][0], 0x00); // OK packet
+    }
+
+    #[test]
+    fn test_error_code_mapping() {
+        use super::super::protocol::{error_codes, map_error_to_mysql_code};
+        use crate::protocols::error::ProtocolError;
+
+        // Test parse error mapping
+        let error = ProtocolError::ParseError("syntax error".to_string());
+        assert_eq!(map_error_to_mysql_code(&error), error_codes::ER_PARSE_ERROR);
+
+        // Test authentication error mapping
+        let error = ProtocolError::AuthenticationError("bad credentials".to_string());
+        assert_eq!(map_error_to_mysql_code(&error), error_codes::ER_ACCESS_DENIED);
+
+        // Test invalid opcode mapping
+        let error = ProtocolError::InvalidOpcode(0xFF);
+        assert_eq!(
+            map_error_to_mysql_code(&error),
+            error_codes::ER_UNKNOWN_COM_ERROR
+        );
+
+        // Test postgres error with table not found
+        let error = ProtocolError::PostgresError("table users does not exist".to_string());
+        assert_eq!(
+            map_error_to_mysql_code(&error),
+            error_codes::ER_NO_SUCH_TABLE
+        );
+
+        // Test postgres error with duplicate entry
+        let error = ProtocolError::PostgresError("duplicate key value".to_string());
+        assert_eq!(map_error_to_mysql_code(&error), error_codes::ER_DUP_ENTRY);
+    }
+
+    #[test]
+    fn test_mysql_packet_ok_structure() {
+        use super::super::protocol::MySqlPacket as MySqlPacketBuilder;
+
+        // Test OK packet structure
+        let ok = MySqlPacketBuilder::ok(5, 10);
+        assert_eq!(ok[0], 0x00); // OK packet header
+        // The rest contains affected_rows, last_insert_id, status, warnings
+    }
+
+    #[test]
+    fn test_mysql_packet_error_structure() {
+        use super::super::protocol::MySqlPacket as MySqlPacketBuilder;
+
+        // Test ERROR packet structure
+        let err = MySqlPacketBuilder::error(1045, "Access denied");
+        assert_eq!(err[0], 0xFF); // ERR packet header
+        // Error code is little-endian at bytes 1-2
+        assert_eq!(u16::from_le_bytes([err[1], err[2]]), 1045);
+        // SQL state marker
+        assert_eq!(err[3], b'#');
+    }
+
+    #[test]
+    fn test_mysql_packet_eof_structure() {
+        use super::super::protocol::MySqlPacket as MySqlPacketBuilder;
+
+        // Test EOF packet structure
+        let eof = MySqlPacketBuilder::eof();
+        assert_eq!(eof[0], 0xFE); // EOF packet header
+    }
+
+    #[tokio::test]
+    async fn test_mysql_show_variables() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test SHOW VARIABLES
+        let result = adapter.handle_mysql_specific_query("SHOW VARIABLES").await;
+        assert!(result.is_some());
+        let packets = result.unwrap().unwrap();
+        assert!(!packets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_mysql_show_status() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test SHOW STATUS
+        let result = adapter.handle_mysql_specific_query("SHOW STATUS").await;
+        assert!(result.is_some());
+        let packets = result.unwrap().unwrap();
+        assert!(!packets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_mysql_select_version() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test SELECT VERSION()
+        let result = adapter
+            .handle_mysql_specific_query("SELECT VERSION()")
+            .await;
+        assert!(result.is_some());
+        let packets = result.unwrap().unwrap();
+        assert!(!packets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_mysql_show_columns() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Create a test table first
+        let _ = adapter
+            .sql_engine
+            .write()
+            .await
+            .execute("CREATE TABLE test_cols (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
+            .await;
+
+        // Test SHOW COLUMNS
+        let result = adapter
+            .handle_mysql_specific_query("SHOW COLUMNS FROM test_cols")
+            .await;
+        assert!(result.is_some());
+        let packets = result.unwrap().unwrap();
+        assert!(!packets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_mysql_show_create_table() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Create a test table first
+        let _ = adapter
+            .sql_engine
+            .write()
+            .await
+            .execute("CREATE TABLE show_create_test (id INTEGER, name TEXT)")
+            .await;
+
+        // Test SHOW CREATE TABLE
+        let result = adapter
+            .handle_mysql_specific_query("SHOW CREATE TABLE show_create_test")
+            .await;
+        assert!(result.is_some());
+        let packets = result.unwrap().unwrap();
+        assert!(!packets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_mysql_metrics() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Get initial metrics
+        let metrics = adapter.metrics.read().await;
+        assert_eq!(metrics.total_queries, 0);
+        assert_eq!(metrics.total_errors, 0);
+        assert_eq!(metrics.active_connections, 0);
+    }
+
+    #[test]
+    fn test_mysql_type_from_u8() {
+        use super::super::types::MySqlType;
+
+        // Test all MySQL types
+        assert_eq!(MySqlType::from_u8(0x00).unwrap(), MySqlType::Decimal);
+        assert_eq!(MySqlType::from_u8(0x01).unwrap(), MySqlType::Tiny);
+        assert_eq!(MySqlType::from_u8(0x02).unwrap(), MySqlType::Short);
+        assert_eq!(MySqlType::from_u8(0x03).unwrap(), MySqlType::Long);
+        assert_eq!(MySqlType::from_u8(0x04).unwrap(), MySqlType::Float);
+        assert_eq!(MySqlType::from_u8(0x05).unwrap(), MySqlType::Double);
+        assert_eq!(MySqlType::from_u8(0x06).unwrap(), MySqlType::Null);
+        assert_eq!(MySqlType::from_u8(0x07).unwrap(), MySqlType::Timestamp);
+        assert_eq!(MySqlType::from_u8(0x08).unwrap(), MySqlType::LongLong);
+        assert_eq!(MySqlType::from_u8(0x09).unwrap(), MySqlType::Int24);
+        assert_eq!(MySqlType::from_u8(0x0A).unwrap(), MySqlType::Date);
+        assert_eq!(MySqlType::from_u8(0x0B).unwrap(), MySqlType::Time);
+        assert_eq!(MySqlType::from_u8(0x0C).unwrap(), MySqlType::DateTime);
+        assert_eq!(MySqlType::from_u8(0x0D).unwrap(), MySqlType::Year);
+        assert_eq!(MySqlType::from_u8(0x0F).unwrap(), MySqlType::VarChar);
+        assert_eq!(MySqlType::from_u8(0x10).unwrap(), MySqlType::Bit);
+        assert_eq!(MySqlType::from_u8(0xF5).unwrap(), MySqlType::Json);
+        assert_eq!(MySqlType::from_u8(0xF6).unwrap(), MySqlType::NewDecimal);
+        assert_eq!(MySqlType::from_u8(0xFC).unwrap(), MySqlType::Blob);
+        assert_eq!(MySqlType::from_u8(0xFD).unwrap(), MySqlType::VarString);
+        assert_eq!(MySqlType::from_u8(0xFE).unwrap(), MySqlType::String);
+        assert_eq!(MySqlType::from_u8(0xFF).unwrap(), MySqlType::Geometry);
     }
 }

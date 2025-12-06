@@ -34,6 +34,8 @@ pub enum CqlType {
     Set(Box<CqlType>),
     Tuple(Vec<CqlType>),
     Udt(String, Vec<(String, CqlType)>),
+    /// Vector type for similarity search (dimension, element_type)
+    Vector(usize, Box<CqlType>),
 }
 
 /// CQL value representation
@@ -54,6 +56,19 @@ pub enum CqlValue {
     Map(Vec<(CqlValue, CqlValue)>),
     Set(Vec<CqlValue>),
     Tuple(Vec<CqlValue>),
+    /// Vector of floating point values for similarity search
+    Vector(Vec<f32>),
+}
+
+/// Similarity function for vector search
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SimilarityFunction {
+    /// Cosine similarity
+    Cosine,
+    /// Euclidean distance
+    Euclidean,
+    /// Dot product
+    DotProduct,
 }
 
 impl CqlType {
@@ -118,6 +133,12 @@ impl CqlValue {
             }
             CqlValue::Tuple(items) => {
                 let json = serde_json::to_string(items)
+                    .map_err(|e| ProtocolError::SerializationError(e.to_string()))?;
+                Ok(SqlValue::Text(json))
+            }
+            CqlValue::Vector(values) => {
+                // Vectors stored as JSON arrays for SQL compatibility
+                let json = serde_json::to_string(values)
                     .map_err(|e| ProtocolError::SerializationError(e.to_string()))?;
                 Ok(SqlValue::Text(json))
             }
@@ -225,8 +246,38 @@ impl CqlValue {
                 buf.put_i32(tuple_buf.len() as i32);
                 buf.put(tuple_buf.freeze());
             }
+            CqlValue::Vector(values) => {
+                // Vector encoding: length (i32) + dimension (i32) + float values
+                let vec_size = 4 + values.len() * 4; // dimension + floats
+                buf.put_i32(vec_size as i32);
+                buf.put_i32(values.len() as i32);
+                for val in values {
+                    buf.put_f32(*val);
+                }
+            }
         }
 
         Ok(buf.to_vec())
+    }
+}
+
+impl SimilarityFunction {
+    /// Parse similarity function from string
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "cosine" | "cos" => Some(SimilarityFunction::Cosine),
+            "euclidean" | "l2" => Some(SimilarityFunction::Euclidean),
+            "dot_product" | "dot" => Some(SimilarityFunction::DotProduct),
+            _ => None,
+        }
+    }
+
+    /// Get the string name of this similarity function
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SimilarityFunction::Cosine => "cosine",
+            SimilarityFunction::Euclidean => "euclidean",
+            SimilarityFunction::DotProduct => "dot_product",
+        }
     }
 }

@@ -1,0 +1,35 @@
+FOR result IN GRAPHRAG_BUILD_KNOWLEDGE("Apple Inc. was founded by Steve Jobs in 1976. Steve Jobs co-founded Apple with Steve Wozniak and Ronald Wayne.", {
+  "knowledge_graph": "business_kg",
+  "document_id": "doc_apple",
+  "metadata": {"source": "news"},
+  "extractors": ["entity", "relationship"],
+  "build_graph": true,
+  "generate_embeddings": true
+})
+RETURN result
+FOR result IN GRAPHRAG_BUILD_KNOWLEDGE("Apple develops the iPhone. The iPhone is a smartphone product by Apple Inc.", {
+  "knowledge_graph": "business_kg",
+  "document_id": "doc_iphone",
+  "metadata": {"source": "catalog"},
+  "extractors": ["entity", "relationship"],
+  "build_graph": true,
+  "generate_embeddings": true
+})
+RETURN result
+FOR answer IN GRAPHRAG_QUERY("business_kg", "What is the relationship between Apple and Steve Jobs?", {
+  "max_hops": 2,
+  "include_explanation": true
+})
+RETURN {
+  "response": answer.response,
+  "confidence": answer.confidence,
+  "entities": answer.entities_involved
+}
+FOR path IN GRAPHRAG_FIND_PATHS("business_kg", "Apple Inc.", "iPhone", {
+  "max_hops": 3
+})
+RETURN {
+  "path_nodes": path.path_nodes,
+  "relationships": path.relationships,
+  "score": path.score
+}

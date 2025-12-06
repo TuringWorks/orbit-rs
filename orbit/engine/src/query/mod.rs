@@ -10,15 +10,22 @@ use crate::metrics::QueryMetrics;
 use crate::storage::{FilterPredicate, QueryResult};
 
 // Module declarations
+pub mod cost_model;
 pub mod execution;
 pub mod optimizer;
+pub mod statistics;
 
 // Re-exports
+pub use cost_model::{CostBasedOptimizer, CostModel};
 pub use execution::{
     AggregateFunction, ComparisonOp, VectorizedExecutor, VectorizedExecutorConfig,
     VectorizedExecutorConfigBuilder,
 };
 pub use optimizer::QueryOptimizer;
+pub use statistics::{
+    ColumnStatistics, Histogram, HistogramBucket, IndexStatistics, StatisticsCollector,
+    TableStatistics,
+};
 
 /// Query executor trait
 #[async_trait]

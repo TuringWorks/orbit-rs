@@ -112,6 +112,30 @@ impl CypherParser {
             "CONTAINS" => Token::Contains,
             "STARTS" => Token::Starts,
             "ENDS" => Token::Ends,
+            // DDL keywords
+            "INDEX" => Token::Index,
+            "CONSTRAINT" => Token::Constraint,
+            "DROP" => Token::Drop,
+            "SHOW" => Token::Show,
+            "INDEXES" => Token::Indexes,
+            "CONSTRAINTS" => Token::Constraints,
+            "UNIQUE" => Token::Unique,
+            "EXISTS" => Token::Exists,
+            "IF" => Token::If,
+            "FOR" => Token::For,
+            "ON" => Token::On,
+            "NODE" => Token::Node,
+            "RELATIONSHIP" => Token::Relationship,
+            "REL" => Token::Rel,
+            "KEY" => Token::Key,
+            "RANGE" => Token::Range,
+            "TEXT" => Token::Text,
+            "POINT" => Token::Point,
+            "FULLTEXT" => Token::Fulltext,
+            "VECTOR" => Token::Vector,
+            "LOOKUP" => Token::Lookup,
+            "ASSERT" => Token::Assert,
+            "REQUIRE" => Token::Require,
             _ => {
                 // Check if it's a number (including floats)
                 if token.chars().all(|c| c.is_ascii_digit() || c == '.')
@@ -185,6 +209,31 @@ enum Token {
     Contains,
     Starts,
     Ends,
+
+    // DDL keywords
+    Index,
+    Constraint,
+    Drop,
+    Show,
+    Indexes,
+    Constraints,
+    Unique,
+    Exists,
+    If,
+    For,
+    On,
+    Node,
+    Relationship,
+    Rel,
+    Key,
+    Range,
+    Text,
+    Point,
+    Fulltext,
+    Vector,
+    Lookup,
+    Assert,
+    Require,
 
     // Literals
     Identifier(String),
@@ -487,7 +536,59 @@ impl TokenParser {
                     clauses.push(self.parse_match_clause()?);
                 }
                 Some(Token::Create) => {
-                    clauses.push(self.parse_create_clause()?);
+                    // Peek ahead to check for DDL (INDEX, CONSTRAINT)
+                    self.advance();
+                    match self.current_token() {
+                        Some(Token::Index) | Some(Token::Range) | Some(Token::Text)
+                        | Some(Token::Point) | Some(Token::Fulltext) | Some(Token::Vector)
+                        | Some(Token::Lookup) => {
+                            // CREATE [type] INDEX
+                            clauses.push(self.parse_create_index()?);
+                        }
+                        Some(Token::Constraint) => {
+                            // CREATE CONSTRAINT
+                            clauses.push(self.parse_create_constraint()?);
+                        }
+                        _ => {
+                            // Regular CREATE for nodes/relationships - rewind position
+                            self.position -= 1;
+                            clauses.push(self.parse_create_clause()?);
+                        }
+                    }
+                }
+                Some(Token::Drop) => {
+                    self.advance();
+                    match self.current_token() {
+                        Some(Token::Index) => {
+                            clauses.push(self.parse_drop_index()?);
+                        }
+                        Some(Token::Constraint) => {
+                            clauses.push(self.parse_drop_constraint()?);
+                        }
+                        _ => {
+                            return Err(ProtocolError::CypherError(
+                                "Expected INDEX or CONSTRAINT after DROP".to_string(),
+                            ));
+                        }
+                    }
+                }
+                Some(Token::Show) => {
+                    self.advance();
+                    match self.current_token() {
+                        Some(Token::Indexes) | Some(Token::Index) => {
+                            self.advance();
+                            clauses.push(CypherClause::ShowIndexes);
+                        }
+                        Some(Token::Constraints) | Some(Token::Constraint) => {
+                            self.advance();
+                            clauses.push(CypherClause::ShowConstraints);
+                        }
+                        _ => {
+                            return Err(ProtocolError::CypherError(
+                                "Expected INDEXES or CONSTRAINTS after SHOW".to_string(),
+                            ));
+                        }
+                    }
                 }
                 Some(Token::Return) => {
                     clauses.push(self.parse_return_clause()?);
@@ -2064,6 +2165,411 @@ impl TokenParser {
             value,
         })
     }
+
+    /// Parse CREATE INDEX statement
+    /// Syntax: CREATE [RANGE|TEXT|POINT|FULLTEXT|VECTOR|LOOKUP] INDEX [name] [IF NOT EXISTS]
+    ///         FOR (n:Label) ON (n.property1[, n.property2, ...])
+    fn parse_create_index(&mut self) -> ProtocolResult<CypherClause> {
+        // Already consumed CREATE, now check for optional index type
+        let index_type = match self.current_token() {
+            Some(Token::Range) => {
+                self.advance();
+                IndexType::Range
+            }
+            Some(Token::Text) => {
+                self.advance();
+                IndexType::Text
+            }
+            Some(Token::Point) => {
+                self.advance();
+                IndexType::Point
+            }
+            Some(Token::Fulltext) => {
+                self.advance();
+                IndexType::Fulltext
+            }
+            Some(Token::Vector) => {
+                self.advance();
+                IndexType::Vector
+            }
+            Some(Token::Lookup) => {
+                self.advance();
+                IndexType::Lookup
+            }
+            _ => IndexType::Range, // Default to RANGE index
+        };
+
+        // Consume INDEX keyword
+        self.expect_token(Token::Index)?;
+
+        // Optional index name
+        let name = if let Some(Token::Identifier(n)) = self.current_token() {
+            let name = n.clone();
+            self.advance();
+            Some(name)
+        } else {
+            None
+        };
+
+        // Check for IF NOT EXISTS
+        let if_not_exists = if matches!(self.current_token(), Some(Token::If)) {
+            self.advance();
+            self.expect_token(Token::Not)?;
+            self.expect_token(Token::Exists)?;
+            true
+        } else {
+            false
+        };
+
+        // Expect FOR
+        self.expect_token(Token::For)?;
+
+        // Parse (n:Label) or ()-[r:TYPE]-()
+        let (entity_type, label_or_type, variable) = self.parse_index_entity_pattern()?;
+
+        // Expect ON
+        self.expect_token(Token::On)?;
+
+        // Parse property list (n.prop1, n.prop2)
+        let properties = self.parse_property_list(&variable)?;
+
+        Ok(CypherClause::CreateIndex {
+            name,
+            index_type,
+            entity_type,
+            label_or_type,
+            properties,
+            if_not_exists,
+        })
+    }
+
+    /// Parse CREATE CONSTRAINT statement
+    /// Syntax: CREATE CONSTRAINT [name] [IF NOT EXISTS]
+    ///         FOR (n:Label) REQUIRE n.property IS UNIQUE|NODE KEY|NOT NULL
+    fn parse_create_constraint(&mut self) -> ProtocolResult<CypherClause> {
+        // Already consumed CREATE CONSTRAINT
+        self.expect_token(Token::Constraint)?;
+
+        // Optional constraint name
+        let name = if let Some(Token::Identifier(n)) = self.current_token() {
+            // Check it's not a keyword like IF, FOR, ON
+            let n_upper = n.to_uppercase();
+            if n_upper != "IF" && n_upper != "FOR" && n_upper != "ON" {
+                let name = n.clone();
+                self.advance();
+                Some(name)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Check for IF NOT EXISTS
+        let if_not_exists = if matches!(self.current_token(), Some(Token::If)) {
+            self.advance();
+            self.expect_token(Token::Not)?;
+            self.expect_token(Token::Exists)?;
+            true
+        } else {
+            false
+        };
+
+        // Expect FOR or ON
+        let has_for = match self.current_token() {
+            Some(Token::For) => {
+                self.advance();
+                true
+            }
+            Some(Token::On) => {
+                self.advance();
+                false
+            }
+            _ => {
+                return Err(ProtocolError::CypherError(
+                    "Expected FOR or ON in CREATE CONSTRAINT".to_string(),
+                ))
+            }
+        };
+
+        // Parse (n:Label) or ()-[r:TYPE]-()
+        let (entity_type, label_or_type, variable) = self.parse_index_entity_pattern()?;
+
+        // Expect REQUIRE (new syntax with FOR) or ASSERT (old syntax with ON)
+        let found_keyword = match self.current_token() {
+            Some(Token::Require) => true,
+            Some(Token::Assert) => true,
+            _ => false,
+        };
+
+        if !found_keyword {
+            let expected = if has_for { "REQUIRE" } else { "ASSERT" };
+            return Err(ProtocolError::CypherError(format!(
+                "Expected {} in CREATE CONSTRAINT",
+                expected
+            )));
+        }
+        self.advance();
+
+        // Parse property expression: n.property or (n.prop1, n.prop2)
+        let properties = self.parse_constraint_properties(&variable)?;
+
+        // Parse constraint type: IS UNIQUE, IS NODE KEY, IS NOT NULL, IS :: type
+        let constraint_type = self.parse_constraint_type()?;
+
+        Ok(CypherClause::CreateConstraint {
+            name,
+            constraint_type,
+            entity_type,
+            label_or_type,
+            properties,
+            if_not_exists,
+        })
+    }
+
+    /// Parse DROP INDEX statement
+    /// Syntax: DROP INDEX name [IF EXISTS]
+    fn parse_drop_index(&mut self) -> ProtocolResult<CypherClause> {
+        // Already consumed DROP, consume INDEX
+        self.expect_token(Token::Index)?;
+
+        // Get index name
+        let name = if let Some(Token::Identifier(n)) = self.current_token() {
+            let name = n.clone();
+            self.advance();
+            name
+        } else {
+            return Err(ProtocolError::CypherError(
+                "Expected index name after DROP INDEX".to_string(),
+            ));
+        };
+
+        // Check for IF EXISTS
+        let if_exists = if matches!(self.current_token(), Some(Token::If)) {
+            self.advance();
+            self.expect_token(Token::Exists)?;
+            true
+        } else {
+            false
+        };
+
+        Ok(CypherClause::DropIndex { name, if_exists })
+    }
+
+    /// Parse DROP CONSTRAINT statement
+    /// Syntax: DROP CONSTRAINT name [IF EXISTS]
+    fn parse_drop_constraint(&mut self) -> ProtocolResult<CypherClause> {
+        // Already consumed DROP, consume CONSTRAINT
+        self.expect_token(Token::Constraint)?;
+
+        // Get constraint name
+        let name = if let Some(Token::Identifier(n)) = self.current_token() {
+            let name = n.clone();
+            self.advance();
+            name
+        } else {
+            return Err(ProtocolError::CypherError(
+                "Expected constraint name after DROP CONSTRAINT".to_string(),
+            ));
+        };
+
+        // Check for IF EXISTS
+        let if_exists = if matches!(self.current_token(), Some(Token::If)) {
+            self.advance();
+            self.expect_token(Token::Exists)?;
+            true
+        } else {
+            false
+        };
+
+        Ok(CypherClause::DropConstraint { name, if_exists })
+    }
+
+    /// Parse entity pattern for index/constraint: (n:Label) or ()-[r:TYPE]-()
+    fn parse_index_entity_pattern(&mut self) -> ProtocolResult<(EntityType, String, String)> {
+        self.expect_token(Token::LeftParen)?;
+
+        // Check if it's a relationship pattern: ()-[r:TYPE]-()
+        if matches!(self.current_token(), Some(Token::RightParen)) {
+            // Empty node (), expect relationship pattern
+            self.advance();
+            self.expect_token(Token::Minus)?;
+            self.expect_token(Token::LeftBracket)?;
+
+            // Get variable and type
+            let variable = if let Some(Token::Identifier(v)) = self.current_token() {
+                let var = v.clone();
+                self.advance();
+                var
+            } else {
+                "r".to_string() // Default variable
+            };
+
+            self.expect_token(Token::Colon)?;
+
+            let rel_type = if let Some(Token::Identifier(t)) = self.current_token() {
+                let type_name = t.clone();
+                self.advance();
+                type_name
+            } else {
+                return Err(ProtocolError::CypherError(
+                    "Expected relationship type".to_string(),
+                ));
+            };
+
+            self.expect_token(Token::RightBracket)?;
+            self.expect_token(Token::Minus)?;
+            self.expect_token(Token::LeftParen)?;
+            self.expect_token(Token::RightParen)?;
+
+            return Ok((EntityType::Relationship, rel_type, variable));
+        }
+
+        // Node pattern (n:Label)
+        let variable = if let Some(Token::Identifier(v)) = self.current_token() {
+            let var = v.clone();
+            self.advance();
+            var
+        } else {
+            "n".to_string() // Default variable
+        };
+
+        self.expect_token(Token::Colon)?;
+
+        let label = if let Some(Token::Identifier(l)) = self.current_token() {
+            let label = l.clone();
+            self.advance();
+            label
+        } else {
+            return Err(ProtocolError::CypherError("Expected node label".to_string()));
+        };
+
+        self.expect_token(Token::RightParen)?;
+
+        Ok((EntityType::Node, label, variable))
+    }
+
+    /// Parse property list for index: (n.prop1, n.prop2) or just (n.prop)
+    fn parse_property_list(&mut self, expected_var: &str) -> ProtocolResult<Vec<String>> {
+        self.expect_token(Token::LeftParen)?;
+
+        let mut properties = Vec::new();
+
+        loop {
+            // Expect variable.property
+            if let Some(Token::Identifier(var)) = self.current_token() {
+                if var != expected_var {
+                    warn!(
+                        "Property access variable {} doesn't match pattern variable {}",
+                        var, expected_var
+                    );
+                }
+                self.advance();
+            }
+
+            self.expect_token(Token::Dot)?;
+
+            if let Some(Token::Identifier(prop)) = self.current_token() {
+                properties.push(prop.clone());
+                self.advance();
+            } else {
+                return Err(ProtocolError::CypherError(
+                    "Expected property name".to_string(),
+                ));
+            }
+
+            // Check for comma (more properties) or end
+            if matches!(self.current_token(), Some(Token::Comma)) {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        self.expect_token(Token::RightParen)?;
+
+        if properties.is_empty() {
+            return Err(ProtocolError::CypherError(
+                "Index must have at least one property".to_string(),
+            ));
+        }
+
+        Ok(properties)
+    }
+
+    /// Parse constraint properties: n.property or (n.prop1, n.prop2)
+    fn parse_constraint_properties(&mut self, expected_var: &str) -> ProtocolResult<Vec<String>> {
+        // Check if it's a tuple (n.prop1, n.prop2)
+        if matches!(self.current_token(), Some(Token::LeftParen)) {
+            return self.parse_property_list(expected_var);
+        }
+
+        // Single property: n.property
+        let mut properties = Vec::new();
+
+        if let Some(Token::Identifier(var)) = self.current_token() {
+            if var != expected_var {
+                warn!(
+                    "Property access variable {} doesn't match pattern variable {}",
+                    var, expected_var
+                );
+            }
+            self.advance();
+        }
+
+        self.expect_token(Token::Dot)?;
+
+        if let Some(Token::Identifier(prop)) = self.current_token() {
+            properties.push(prop.clone());
+            self.advance();
+        } else {
+            return Err(ProtocolError::CypherError(
+                "Expected property name".to_string(),
+            ));
+        }
+
+        Ok(properties)
+    }
+
+    /// Parse constraint type: IS UNIQUE, IS NODE KEY, IS NOT NULL, IS :: type
+    fn parse_constraint_type(&mut self) -> ProtocolResult<ConstraintType> {
+        // Expect IS
+        self.expect_token(Token::Is)?;
+
+        match self.current_token() {
+            Some(Token::Unique) => {
+                self.advance();
+                Ok(ConstraintType::Unique)
+            }
+            Some(Token::Node) => {
+                self.advance();
+                self.expect_token(Token::Key)?;
+                Ok(ConstraintType::NodeKey)
+            }
+            Some(Token::Not) => {
+                self.advance();
+                self.expect_token(Token::Null)?;
+                Ok(ConstraintType::Exists)
+            }
+            Some(Token::Colon) => {
+                // IS :: type syntax
+                self.advance();
+                self.expect_token(Token::Colon)?;
+                if let Some(Token::Identifier(type_name)) = self.current_token() {
+                    let data_type = type_name.clone();
+                    self.advance();
+                    Ok(ConstraintType::PropertyType { data_type })
+                } else {
+                    Err(ProtocolError::CypherError(
+                        "Expected type name after IS ::".to_string(),
+                    ))
+                }
+            }
+            _ => Err(ProtocolError::CypherError(
+                "Expected UNIQUE, NODE KEY, NOT NULL, or :: type after IS".to_string(),
+            )),
+        }
+    }
 }
 
 /// Complete parsed Cypher query with clauses
@@ -2161,6 +2667,93 @@ pub enum CypherClause {
         /// ELSE result
         else_result: Option<serde_json::Value>,
     },
+    /// CREATE INDEX DDL command
+    CreateIndex {
+        /// Index name (optional)
+        name: Option<String>,
+        /// Index type (RANGE, TEXT, POINT, FULLTEXT, VECTOR, LOOKUP)
+        index_type: IndexType,
+        /// Target entity type (node or relationship)
+        entity_type: EntityType,
+        /// Label or relationship type
+        label_or_type: String,
+        /// Properties to index
+        properties: Vec<String>,
+        /// IF NOT EXISTS flag
+        if_not_exists: bool,
+    },
+    /// CREATE CONSTRAINT DDL command
+    CreateConstraint {
+        /// Constraint name (optional)
+        name: Option<String>,
+        /// Constraint type
+        constraint_type: ConstraintType,
+        /// Target entity type (node or relationship)
+        entity_type: EntityType,
+        /// Label or relationship type
+        label_or_type: String,
+        /// Properties for the constraint
+        properties: Vec<String>,
+        /// IF NOT EXISTS flag
+        if_not_exists: bool,
+    },
+    /// DROP INDEX DDL command
+    DropIndex {
+        /// Index name
+        name: String,
+        /// IF EXISTS flag
+        if_exists: bool,
+    },
+    /// DROP CONSTRAINT DDL command
+    DropConstraint {
+        /// Constraint name
+        name: String,
+        /// IF EXISTS flag
+        if_exists: bool,
+    },
+    /// SHOW INDEXES command
+    ShowIndexes,
+    /// SHOW CONSTRAINTS command
+    ShowConstraints,
+}
+
+/// Index types supported in Cypher
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum IndexType {
+    /// Default range index (B-tree)
+    Range,
+    /// Text search index
+    Text,
+    /// Spatial point index
+    Point,
+    /// Full-text search index
+    Fulltext,
+    /// Vector similarity index
+    Vector,
+    /// Token lookup index
+    Lookup,
+}
+
+/// Entity type for index/constraint
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EntityType {
+    /// Node entity
+    Node,
+    /// Relationship entity
+    Relationship,
+}
+
+/// Constraint types supported in Cypher
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConstraintType {
+    /// Unique constraint on properties
+    Unique,
+    /// Node key constraint (unique + not null)
+    NodeKey,
+    /// Existence constraint (property must exist)
+    Exists,
+    /// Property type constraint
+    PropertyType { data_type: String },
 }
 
 /// Expression that can be unwound (used in UNWIND/FOREACH)
@@ -3123,5 +3716,188 @@ mod tests {
             }
             _ => panic!("Expected RETURN clause"),
         }
+    }
+
+    #[test]
+    fn test_create_index() {
+        let parser = CypherParser::new();
+        let query = "CREATE INDEX person_name FOR (n:Person) ON (n.name)";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.clauses.len(), 1);
+
+        match &parsed.clauses[0] {
+            CypherClause::CreateIndex {
+                name,
+                index_type,
+                entity_type,
+                label_or_type,
+                properties,
+                if_not_exists,
+            } => {
+                assert_eq!(name.as_deref(), Some("person_name"));
+                assert_eq!(*index_type, IndexType::Range);
+                assert_eq!(*entity_type, EntityType::Node);
+                assert_eq!(label_or_type, "Person");
+                assert_eq!(properties, &vec!["name".to_string()]);
+                assert!(!if_not_exists);
+            }
+            _ => panic!("Expected CreateIndex clause"),
+        }
+    }
+
+    #[test]
+    fn test_create_text_index() {
+        let parser = CypherParser::new();
+        let query = "CREATE TEXT INDEX IF NOT EXISTS FOR (n:Article) ON (n.content)";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[0] {
+            CypherClause::CreateIndex {
+                name,
+                index_type,
+                if_not_exists,
+                ..
+            } => {
+                assert!(name.is_none());
+                assert_eq!(*index_type, IndexType::Text);
+                assert!(*if_not_exists);
+            }
+            _ => panic!("Expected CreateIndex clause"),
+        }
+    }
+
+    #[test]
+    fn test_create_constraint_unique() {
+        let parser = CypherParser::new();
+        let query = "CREATE CONSTRAINT unique_email FOR (n:User) REQUIRE n.email IS UNIQUE";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[0] {
+            CypherClause::CreateConstraint {
+                name,
+                constraint_type,
+                entity_type,
+                label_or_type,
+                properties,
+                if_not_exists,
+            } => {
+                assert_eq!(name.as_deref(), Some("unique_email"));
+                assert_eq!(*constraint_type, ConstraintType::Unique);
+                assert_eq!(*entity_type, EntityType::Node);
+                assert_eq!(label_or_type, "User");
+                assert_eq!(properties, &vec!["email".to_string()]);
+                assert!(!if_not_exists);
+            }
+            _ => panic!("Expected CreateConstraint clause"),
+        }
+    }
+
+    #[test]
+    fn test_create_constraint_node_key() {
+        let parser = CypherParser::new();
+        let query = "CREATE CONSTRAINT FOR (n:Person) REQUIRE n.ssn IS NODE KEY";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[0] {
+            CypherClause::CreateConstraint {
+                constraint_type,
+                label_or_type,
+                ..
+            } => {
+                assert_eq!(*constraint_type, ConstraintType::NodeKey);
+                assert_eq!(label_or_type, "Person");
+            }
+            _ => panic!("Expected CreateConstraint clause"),
+        }
+    }
+
+    #[test]
+    fn test_drop_index() {
+        let parser = CypherParser::new();
+        let query = "DROP INDEX person_name";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[0] {
+            CypherClause::DropIndex { name, if_exists } => {
+                assert_eq!(name, "person_name");
+                assert!(!if_exists);
+            }
+            _ => panic!("Expected DropIndex clause"),
+        }
+    }
+
+    #[test]
+    fn test_drop_index_if_exists() {
+        let parser = CypherParser::new();
+        let query = "DROP INDEX old_index IF EXISTS";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[0] {
+            CypherClause::DropIndex { name, if_exists } => {
+                assert_eq!(name, "old_index");
+                assert!(*if_exists);
+            }
+            _ => panic!("Expected DropIndex clause"),
+        }
+    }
+
+    #[test]
+    fn test_drop_constraint() {
+        let parser = CypherParser::new();
+        let query = "DROP CONSTRAINT unique_email";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        match &parsed.clauses[0] {
+            CypherClause::DropConstraint { name, if_exists } => {
+                assert_eq!(name, "unique_email");
+                assert!(!if_exists);
+            }
+            _ => panic!("Expected DropConstraint clause"),
+        }
+    }
+
+    #[test]
+    fn test_show_indexes() {
+        let parser = CypherParser::new();
+        let query = "SHOW INDEXES";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        assert!(matches!(parsed.clauses[0], CypherClause::ShowIndexes));
+    }
+
+    #[test]
+    fn test_show_constraints() {
+        let parser = CypherParser::new();
+        let query = "SHOW CONSTRAINTS";
+        let result = parser.parse(query);
+
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+
+        assert!(matches!(parsed.clauses[0], CypherClause::ShowConstraints));
     }
 }

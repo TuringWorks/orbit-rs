@@ -39,6 +39,7 @@
 
 pub mod analyzer;
 pub mod ast;
+pub mod cte_execution;
 pub mod execution;
 pub mod execution_strategy;
 pub mod executor;
@@ -56,6 +57,7 @@ pub mod query_engine;
 pub mod statistics;
 pub mod types;
 pub mod vectorized_executor;
+pub mod window_functions;
 
 #[cfg(test)]
 mod integration_test;

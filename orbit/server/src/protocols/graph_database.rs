@@ -570,6 +570,100 @@ impl GraphActor {
                     estimated_cost += step.estimated_cost;
                     steps.push(step);
                 }
+                // DDL commands
+                crate::protocols::cypher::cypher_parser::CypherClause::CreateIndex {
+                    name,
+                    index_type,
+                    label_or_type,
+                    properties,
+                    ..
+                } => {
+                    let step = PlanStep {
+                        operation: "CreateIndex".to_string(),
+                        description: format!(
+                            "Create {:?} index {:?} on {} ({:?})",
+                            index_type,
+                            name.as_deref().unwrap_or("unnamed"),
+                            label_or_type,
+                            properties
+                        ),
+                        estimated_rows: 0,
+                        estimated_cost: 15.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::CreateConstraint {
+                    name,
+                    constraint_type,
+                    label_or_type,
+                    properties,
+                    ..
+                } => {
+                    let step = PlanStep {
+                        operation: "CreateConstraint".to_string(),
+                        description: format!(
+                            "Create {:?} constraint {:?} on {} ({:?})",
+                            constraint_type,
+                            name.as_deref().unwrap_or("unnamed"),
+                            label_or_type,
+                            properties
+                        ),
+                        estimated_rows: 0,
+                        estimated_cost: 15.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::DropIndex { name, .. } => {
+                    let step = PlanStep {
+                        operation: "DropIndex".to_string(),
+                        description: format!("Drop index {}", name),
+                        estimated_rows: 0,
+                        estimated_cost: 5.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::DropConstraint {
+                    name,
+                    ..
+                } => {
+                    let step = PlanStep {
+                        operation: "DropConstraint".to_string(),
+                        description: format!("Drop constraint {}", name),
+                        estimated_rows: 0,
+                        estimated_cost: 5.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::ShowIndexes => {
+                    let step = PlanStep {
+                        operation: "ShowIndexes".to_string(),
+                        description: "List all indexes".to_string(),
+                        estimated_rows: 10,
+                        estimated_cost: 1.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::ShowConstraints => {
+                    let step = PlanStep {
+                        operation: "ShowConstraints".to_string(),
+                        description: "List all constraints".to_string(),
+                        estimated_rows: 10,
+                        estimated_cost: 1.0,
+                        children: vec![],
+                    };
+                    estimated_cost += step.estimated_cost;
+                    steps.push(step);
+                }
             }
         }
 
