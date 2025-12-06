@@ -3,6 +3,7 @@
 //! Splits the large command handler into focused modules for better maintainability
 
 pub mod acl;
+pub mod cluster;
 pub mod connection;
 pub mod functions;
 pub mod graph;
@@ -30,11 +31,11 @@ mod handler {
     use tracing::{debug, warn};
 
     use super::{
-        acl::AclCommands, connection::ConnectionCommands, functions::FunctionCommands,
-        graph::GraphCommands, graphrag::GraphRAGCommands, hash::HashCommands,
-        list::ListCommands, pubsub::PubSubCommands, server::ServerCommands, set::SetCommands,
-        sorted_set::SortedSetCommands, stream::StreamCommands, string::StringCommands,
-        time_series::TimeSeriesCommands, vector::VectorCommands,
+        acl::AclCommands, cluster::ClusterCommands, connection::ConnectionCommands,
+        functions::FunctionCommands, graph::GraphCommands, graphrag::GraphRAGCommands,
+        hash::HashCommands, list::ListCommands, pubsub::PubSubCommands, server::ServerCommands,
+        set::SetCommands, sorted_set::SortedSetCommands, stream::StreamCommands,
+        string::StringCommands, time_series::TimeSeriesCommands, vector::VectorCommands,
     };
     use crate::protocols::error::ProtocolResult;
     use crate::protocols::resp::simple_local::SimpleLocalRegistry;
@@ -46,6 +47,7 @@ mod handler {
     #[derive(Debug, Clone)]
     pub enum CommandCategory {
         Acl,
+        Cluster,
         Connection,
         Functions,
         String,
@@ -72,6 +74,7 @@ mod handler {
 
         // Specialized command handlers
         acl: AclCommands,
+        cluster: ClusterCommands,
         connection: ConnectionCommands,
         functions: FunctionCommands,
         string: StringCommands,
@@ -110,6 +113,7 @@ mod handler {
 
             Self {
                 acl: AclCommands::new(orbit_client.clone(), local_registry.clone()),
+                cluster: ClusterCommands::new(orbit_client.clone(), local_registry.clone()),
                 connection: ConnectionCommands::new(orbit_client.clone(), local_registry.clone()),
                 functions: FunctionCommands::new(orbit_client.clone(), local_registry.clone()),
                 string: StringCommands::new(orbit_client.clone(), local_registry.clone()),
@@ -154,6 +158,9 @@ mod handler {
             match category {
                 CommandCategory::Acl => {
                     CommandHandlerTrait::handle(&self.acl, &command_name, &args).await
+                }
+                CommandCategory::Cluster => {
+                    CommandHandlerTrait::handle(&self.cluster, &command_name, &args).await
                 }
                 CommandCategory::Connection => {
                     CommandHandlerTrait::handle(&self.connection, &command_name, &args).await
@@ -236,6 +243,9 @@ mod handler {
             match command_name {
                 // ACL commands
                 "ACL" => CommandCategory::Acl,
+
+                // Cluster commands
+                "CLUSTER" | "READONLY" | "READWRITE" => CommandCategory::Cluster,
 
                 // Functions commands
                 "FCALL" | "FCALL_RO" | "FUNCTION" => CommandCategory::Functions,

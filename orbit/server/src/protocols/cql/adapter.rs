@@ -59,6 +59,17 @@ pub struct CqlMetrics {
     pub prepared_statements_count: usize,
 }
 
+/// CQL batch types
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BatchType {
+    /// LOGGED batch - atomic, all-or-nothing (default)
+    Logged,
+    /// UNLOGGED batch - no atomicity guarantees, better performance
+    Unlogged,
+    /// COUNTER batch - for counter operations only
+    Counter,
+}
+
 /// Prepared statement
 #[allow(dead_code)] // Fields reserved for future prepared statement implementation
 struct PreparedStatement {
@@ -613,100 +624,171 @@ impl CqlAdapter {
     }
 
     /// Handle BATCH request
+    ///
+    /// CQL BATCH format (protocol v4):
+    /// - type: 1 byte (0=LOGGED, 1=UNLOGGED, 2=COUNTER)
+    /// - n: 2 bytes (number of statements)
+    /// - For each statement:
+    ///   - kind: 1 byte (0=query string, 1=prepared statement ID)
+    ///   - query/id: [int][bytes] for string, [short][bytes] for prepared
+    ///   - n_values: 2 bytes
+    ///   - For each value: [int][bytes] (-1 for NULL, -2 for NOT SET)
+    /// - consistency: 2 bytes
+    /// - flags: 1 byte (v4) or 4 bytes (v5)
+    /// - Optional based on flags: serial_consistency, timestamp, keyspace, now_in_seconds
     async fn handle_batch(&self, frame: &CqlFrame) -> ProtocolResult<CqlFrame> {
         let mut body = frame.body.clone();
 
+        if body.remaining() < 1 {
+            return Err(ProtocolError::IncompleteFrame);
+        }
+
         // Read batch type (1 byte: 0=LOGGED, 1=UNLOGGED, 2=COUNTER)
         let batch_type_byte = body.get_u8();
-        let _batch_type = match batch_type_byte {
-            0 => "LOGGED",
-            1 => "UNLOGGED",
-            2 => "COUNTER",
-            _ => "LOGGED", // Default
+        let batch_type = match batch_type_byte {
+            0 => BatchType::Logged,
+            1 => BatchType::Unlogged,
+            2 => BatchType::Counter,
+            _ => BatchType::Logged, // Default
         };
+
+        if body.remaining() < 2 {
+            return Err(ProtocolError::IncompleteFrame);
+        }
 
         // Read number of statements
         let statement_count = body.get_u16();
 
-        // Execute each statement in the batch
-        let mut errors = Vec::new();
+        // Parse all statements first
+        let mut batch_statements = Vec::with_capacity(statement_count as usize);
+
         for _ in 0..statement_count {
+            if body.remaining() < 1 {
+                return Err(ProtocolError::IncompleteFrame);
+            }
+
             // Read statement kind (1 byte: 0=query string, 1=prepared statement ID)
             let kind = body.get_u8();
 
-            if kind == 0 {
-                // Query string
-                let query_len = body.get_u32();
+            let statement = if kind == 0 {
+                // Query string (long string: 4 bytes length)
+                if body.remaining() < 4 {
+                    return Err(ProtocolError::IncompleteFrame);
+                }
+                let query_len = body.get_i32();
+                if query_len < 0 || body.remaining() < query_len as usize {
+                    return Err(ProtocolError::IncompleteFrame);
+                }
                 let query_bytes = body.copy_to_bytes(query_len as usize);
                 let query = String::from_utf8(query_bytes.to_vec())
                     .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
 
-                // Parse and execute
+                // Parse the query
                 let parser = self.parser.read().await;
-                match parser.parse(&query) {
-                    Ok(statement) => {
-                        drop(parser);
-                        match self
-                            .execute_statement(&statement, frame.stream, None, None)
-                            .await
-                        {
-                            Ok(_) => {} // Statement executed successfully
-                            Err(e) => {
-                                errors.push(format!("Batch statement error: {}", e));
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        errors.push(format!("Parse error: {}", e));
-                    }
+                let parsed = parser.parse(&query)?;
+                drop(parser);
+                parsed
+            } else {
+                // Prepared statement ID (short bytes: 2 bytes length)
+                if body.remaining() < 2 {
+                    return Err(ProtocolError::IncompleteFrame);
                 }
-            } else if kind == 1 {
-                // Prepared statement ID
                 let id_len = body.get_u16();
+                if body.remaining() < id_len as usize {
+                    return Err(ProtocolError::IncompleteFrame);
+                }
                 let id = body.copy_to_bytes(id_len as usize).to_vec();
 
                 // Get prepared statement
-                let statement_to_execute = {
-                    let prepared_statements = self.prepared_statements.read().await;
-                    prepared_statements.get(&id).map(|p| p.statement.clone())
-                };
+                let prepared_statements = self.prepared_statements.read().await;
+                let prepared = prepared_statements.get(&id).ok_or_else(|| {
+                    ProtocolError::InvalidStatement("Prepared statement not found".to_string())
+                })?;
+                prepared.statement.clone()
+            };
 
-                if let Some(statement) = statement_to_execute {
-                    match self
-                        .execute_statement(&statement, frame.stream, None, None)
-                        .await
-                    {
-                        Ok(_) => {} // Statement executed successfully
-                        Err(e) => {
-                            errors.push(format!("Batch prepared statement error: {}", e));
-                        }
-                    }
-                } else {
-                    errors.push("Prepared statement not found".to_string());
+            // Read values for this statement
+            if body.remaining() < 2 {
+                return Err(ProtocolError::IncompleteFrame);
+            }
+            let n_values = body.get_u16();
+
+            // Read and skip values (we don't use them yet, but must consume them)
+            for _ in 0..n_values {
+                if body.remaining() < 4 {
+                    return Err(ProtocolError::IncompleteFrame);
                 }
+                let val_len = body.get_i32();
+                if val_len > 0 {
+                    if body.remaining() < val_len as usize {
+                        return Err(ProtocolError::IncompleteFrame);
+                    }
+                    body.advance(val_len as usize);
+                }
+                // val_len == -1 is NULL, val_len == -2 is NOT_SET (v4+)
             }
 
-            // Skip query parameters for this statement (simplified - we don't use them in batch)
-            // In a full implementation, we'd decode and use QueryParameters here
+            batch_statements.push(statement);
         }
 
-        // Read consistency level (not used for execution, but must be read)
+        // Read consistency level
+        if body.remaining() < 2 {
+            return Err(ProtocolError::IncompleteFrame);
+        }
         let _consistency = body.get_u16();
+
+        // Read batch flags (1 byte in v4)
+        let _flags = if body.remaining() >= 1 {
+            body.get_u8()
+        } else {
+            0
+        };
+
+        // Skip optional fields based on flags
+        // 0x10 = serial consistency, 0x20 = default timestamp, etc.
+
+        // Execute all statements
+        // For LOGGED batches, we should use transactions, but for now execute sequentially
+        let mut errors = Vec::new();
+        let mut success_count = 0;
+
+        for statement in &batch_statements {
+            match self
+                .execute_statement(statement, frame.stream, None, None)
+                .await
+            {
+                Ok(_) => {
+                    success_count += 1;
+                }
+                Err(e) => {
+                    // For LOGGED batches, we should roll back on error
+                    // For now, just collect errors
+                    errors.push(format!("Statement error: {}", e));
+
+                    // For strict atomicity, break on first error in LOGGED batch
+                    if matches!(batch_type, BatchType::Logged) {
+                        break;
+                    }
+                }
+            }
+        }
 
         // If there were errors, return error response
         if !errors.is_empty() {
             return Ok(build_error_response(
                 frame.stream,
                 super::protocol::error_codes::INVALID,
-                &format!("Batch execution errors: {}", errors.join("; ")),
+                &format!(
+                    "Batch execution failed: {} of {} succeeded. Errors: {}",
+                    success_count,
+                    batch_statements.len(),
+                    errors.join("; ")
+                ),
             ));
         }
 
-
-
-        // For now, return empty ROWS result instead of VOID
-        // This helps drivers that expect result metadata (e.g. for system tables)
-        Ok(build_empty_rows_result(frame.stream))
+        // Return VOID result for successful batch
+        Ok(build_void_result(frame.stream))
     }
 
     /// Execute a CQL statement
@@ -1558,5 +1640,156 @@ mod tests {
         // Verify keyspace was set
         let parser = adapter.parser.read().await;
         assert_eq!(parser.current_keyspace(), Some("test_ks"));
+    }
+
+    #[test]
+    fn test_batch_type_enum() {
+        assert_eq!(BatchType::Logged, BatchType::Logged);
+        assert_ne!(BatchType::Logged, BatchType::Unlogged);
+        assert_ne!(BatchType::Logged, BatchType::Counter);
+        assert_ne!(BatchType::Unlogged, BatchType::Counter);
+    }
+
+    /// Helper to build a BATCH frame for testing
+    fn build_batch_frame(
+        batch_type: u8,
+        queries: &[&str],
+        stream: i16,
+    ) -> CqlFrame {
+        let mut body = BytesMut::new();
+
+        // Batch type
+        body.put_u8(batch_type);
+
+        // Number of statements
+        body.put_u16(queries.len() as u16);
+
+        // Each statement
+        for query in queries {
+            // Kind: 0 = query string
+            body.put_u8(0);
+
+            // Query string (long string: 4 bytes length + bytes)
+            body.put_i32(query.len() as i32);
+            body.put(query.as_bytes());
+
+            // Number of values: 0
+            body.put_u16(0);
+        }
+
+        // Consistency level (ONE = 0x0001)
+        body.put_u16(0x0001);
+
+        // Flags (none)
+        body.put_u8(0);
+
+        CqlFrame {
+            version: 0x04, // Protocol v4 request
+            flags: 0,
+            stream,
+            opcode: CqlOpcode::Batch,
+            body: body.freeze(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_batch_empty() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Create table first
+        adapter
+            .execute_sql("CREATE TABLE batch_test (id INT PRIMARY KEY, name TEXT)")
+            .await
+            .unwrap();
+
+        // Empty batch
+        let frame = build_batch_frame(0, &[], 1);
+        let result = adapter.handle_batch(&frame).await.unwrap();
+
+        // Should return VOID result
+        assert_eq!(result.opcode, CqlOpcode::Result);
+    }
+
+    #[tokio::test]
+    async fn test_batch_logged_multiple_inserts() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Create table first
+        adapter
+            .execute_sql("CREATE TABLE batch_users (id INT PRIMARY KEY, name TEXT)")
+            .await
+            .unwrap();
+
+        // Batch with multiple INSERTs
+        let queries = [
+            "INSERT INTO batch_users (id, name) VALUES (1, 'Alice')",
+            "INSERT INTO batch_users (id, name) VALUES (2, 'Bob')",
+            "INSERT INTO batch_users (id, name) VALUES (3, 'Charlie')",
+        ];
+
+        let frame = build_batch_frame(0, &queries, 1); // 0 = LOGGED
+        let result = adapter.handle_batch(&frame).await.unwrap();
+
+        // Should return VOID result
+        assert_eq!(result.opcode, CqlOpcode::Result);
+    }
+
+    #[tokio::test]
+    async fn test_batch_unlogged() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Create table first
+        adapter
+            .execute_sql("CREATE TABLE batch_unlogged (id INT PRIMARY KEY, val INT)")
+            .await
+            .unwrap();
+
+        // Unlogged batch
+        let queries = [
+            "INSERT INTO batch_unlogged (id, val) VALUES (1, 100)",
+            "INSERT INTO batch_unlogged (id, val) VALUES (2, 200)",
+        ];
+
+        let frame = build_batch_frame(1, &queries, 2); // 1 = UNLOGGED
+        let result = adapter.handle_batch(&frame).await.unwrap();
+
+        assert_eq!(result.opcode, CqlOpcode::Result);
+    }
+
+    #[tokio::test]
+    async fn test_batch_counter() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Counter batches are for counter updates
+        // For now, we just verify the batch type is parsed correctly
+        let frame = build_batch_frame(2, &[], 3); // 2 = COUNTER
+        let result = adapter.handle_batch(&frame).await.unwrap();
+
+        assert_eq!(result.opcode, CqlOpcode::Result);
+    }
+
+    #[tokio::test]
+    async fn test_batch_incomplete_frame() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Incomplete frame - just batch type, no statement count
+        let mut body = BytesMut::new();
+        body.put_u8(0); // Batch type only
+
+        let frame = CqlFrame {
+            version: 0x04,
+            flags: 0,
+            stream: 1,
+            opcode: CqlOpcode::Batch,
+            body: body.freeze(),
+        };
+
+        let result = adapter.handle_batch(&frame).await;
+        assert!(result.is_err());
     }
 }
