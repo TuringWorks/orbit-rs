@@ -955,20 +955,20 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 
 | Feature | Status | Tests | Key Files |
 |---------|--------|-------|-----------|
-| Core Actor System | Complete | 731 | `orbit-shared/src/lib.rs` |
-| RESP Protocol | Complete | 292 | `protocols/resp/` |
-| PostgreSQL Protocol | Complete | 104 | `protocols/postgres_wire/` |
-| MySQL Protocol | Complete | 15 | `protocols/mysql/` |
-| CQL Protocol | Complete | 12 | `protocols/cql/` |
-| REST API | Complete | 25 | `protocols/rest/` |
-| Distributed Transactions | Complete | 270 | `shared/src/transactions/` |
+| Core Actor System | Complete | 555 | `orbit-shared/src/lib.rs` |
+| RESP Protocol | Complete | 176 | `protocols/resp/` |
+| PostgreSQL Protocol | Complete | 427 | `protocols/postgres_wire/` |
+| MySQL Protocol | Complete | 33 | `protocols/mysql/` |
+| CQL Protocol | Complete | 18 | `protocols/cql/` |
+| REST API | Complete | 4 | `protocols/rest/` |
+| Distributed Transactions | Complete | 22 | `shared/src/transactions/` |
 | AI-Native Features | Complete | 14 | `server/src/ai/` |
-| Vector Database | Complete | 25 | `postgres_wire/sql/pgvector*` |
-| Time Series | Active | 36 | `resp/commands/time_series.rs` |
-| Graph Database | Active | 38 | `protocols/cypher/` |
-| Kubernetes Operator | Active | 16 | `orbit-operator/` |
-| Heterogeneous Compute | Active | 81 | `orbit-compute/` |
-| Machine Learning | Active | 52 | `orbit-ml/` |
+| Vector Database | Complete | 150 | `postgres_wire/sql/pgvector*`, `resp/commands/vector.rs` |
+| Time Series | Complete | 24 | `resp/commands/time_series.rs` |
+| Graph Database | Complete | 125 | `protocols/cypher/`, `resp/commands/graph.rs` |
+| Kubernetes Operator | Active | 0 | `orbit-operator/` |
+| Heterogeneous Compute | Complete | 83 | `orbit-compute/` |
+| Machine Learning | Complete | 283 | `orbit-ml/` |
 
 ---
 
