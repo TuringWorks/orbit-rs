@@ -144,10 +144,7 @@ async fn handle_message(message: MongoMessage, store: &DocumentStore) -> Option<
 
             debug!("Command: {:?}", command_doc);
 
-            let db = command_doc
-                .get_str("$db")
-                .unwrap_or("test")
-                .to_string();
+            let db = command_doc.get_str("$db").unwrap_or("test").to_string();
 
             let response_doc = handle_command(&db, command_doc, doc_sequence, store).await;
 
@@ -214,12 +211,15 @@ async fn handle_command(
     }
     // Find
     else if let Ok(collection) = command.get_str("find") {
-        let filter = command
-            .get_document("filter")
-            .cloned()
-            .unwrap_or_default();
-        let limit = command.get_i64("limit").or_else(|_| command.get_i32("limit").map(|v| v as i64)).ok();
-        let skip = command.get_i64("skip").or_else(|_| command.get_i32("skip").map(|v| v as i64)).ok();
+        let filter = command.get_document("filter").cloned().unwrap_or_default();
+        let limit = command
+            .get_i64("limit")
+            .or_else(|_| command.get_i32("limit").map(|v| v as i64))
+            .ok();
+        let skip = command
+            .get_i64("skip")
+            .or_else(|_| command.get_i32("skip").map(|v| v as i64))
+            .ok();
         let batch_size = command.get_i32("batchSize").ok();
 
         let (cursor_id, docs) = store
@@ -237,10 +237,7 @@ async fn handle_command(
     }
     // FindOne (findOne is typically just find with limit 1)
     else if let Ok(collection) = command.get_str("findOne") {
-        let filter = command
-            .get_document("filter")
-            .cloned()
-            .unwrap_or_default();
+        let filter = command.get_document("filter").cloned().unwrap_or_default();
 
         if let Some(doc) = store.find_one(db, collection, &filter).await {
             doc! {
@@ -271,20 +268,18 @@ async fn handle_command(
         if let Some(updates) = updates {
             for update in updates {
                 if let Some(update_doc) = update.as_document() {
-                    let filter = update_doc
-                        .get_document("q")
-                        .cloned()
-                        .unwrap_or_default();
-                    let update_spec = update_doc
-                        .get_document("u")
-                        .cloned()
-                        .unwrap_or_default();
+                    let filter = update_doc.get_document("q").cloned().unwrap_or_default();
+                    let update_spec = update_doc.get_document("u").cloned().unwrap_or_default();
                     let multi = update_doc.get_bool("multi").unwrap_or(false);
 
                     let (matched, modified) = if multi {
-                        store.update_many(db, collection, &filter, &update_spec).await
+                        store
+                            .update_many(db, collection, &filter, &update_spec)
+                            .await
                     } else {
-                        store.update_one(db, collection, &filter, &update_spec).await
+                        store
+                            .update_one(db, collection, &filter, &update_spec)
+                            .await
                     };
 
                     total_matched += matched;
@@ -307,10 +302,7 @@ async fn handle_command(
         if let Some(deletes) = deletes {
             for delete in deletes {
                 if let Some(delete_doc) = delete.as_document() {
-                    let filter = delete_doc
-                        .get_document("q")
-                        .cloned()
-                        .unwrap_or_default();
+                    let filter = delete_doc.get_document("q").cloned().unwrap_or_default();
                     let limit = delete_doc.get_i32("limit").unwrap_or(0);
 
                     let deleted = if limit == 1 {
@@ -346,10 +338,7 @@ async fn handle_command(
     }
     // CountDocuments (newer API)
     else if let Ok(collection) = command.get_str("countDocuments") {
-        let filter = command
-            .get_document("filter")
-            .cloned()
-            .unwrap_or_default();
+        let filter = command.get_document("filter").cloned().unwrap_or_default();
 
         let count = store.count(db, collection, &filter).await;
 
@@ -522,7 +511,10 @@ async fn handle_command(
                                     seed = (seed * 1103515245 + 12345) % (1 << 31);
                                     indices.insert(seed % docs.len());
                                 }
-                                docs = indices.into_iter().filter_map(|i| docs.get(i).cloned()).collect();
+                                docs = indices
+                                    .into_iter()
+                                    .filter_map(|i| docs.get(i).cloned())
+                                    .collect();
                             }
                         }
                     }
@@ -596,7 +588,10 @@ async fn handle_command(
     // ListDatabases
     else if command.contains_key("listDatabases") {
         let databases = store.list_databases().await;
-        let total_size: i64 = databases.iter().filter_map(|d| d.get_i64("sizeOnDisk").ok()).sum();
+        let total_size: i64 = databases
+            .iter()
+            .filter_map(|d| d.get_i64("sizeOnDisk").ok())
+            .sum();
 
         doc! {
             "databases": databases.into_iter().map(Bson::Document).collect::<Vec<_>>(),
@@ -623,8 +618,13 @@ async fn handle_command(
     else if let Ok(collection) = command.get_str("create") {
         // Collections are created implicitly on first insert
         // But we can force creation by inserting and deleting
-        store.insert_one(db, collection, doc! { "_orbit_init": true }).await.ok();
-        store.delete_one(db, collection, &doc! { "_orbit_init": true }).await;
+        store
+            .insert_one(db, collection, doc! { "_orbit_init": true })
+            .await
+            .ok();
+        store
+            .delete_one(db, collection, &doc! { "_orbit_init": true })
+            .await;
 
         doc! { "ok": 1.0 }
     }
@@ -863,7 +863,9 @@ fn apply_projection(doc: &Document, project: &Document) -> Document {
     }
 
     // If no explicit inclusions, include all except explicitly excluded
-    let has_inclusions = project.values().any(|v| matches!(v, Bson::Int32(1) | Bson::Int64(1) | Bson::Boolean(true)));
+    let has_inclusions = project
+        .values()
+        .any(|v| matches!(v, Bson::Int32(1) | Bson::Int64(1) | Bson::Boolean(true)));
     if !has_inclusions && result.is_empty() {
         for (key, value) in doc {
             let should_exclude = project.get(key).map_or(false, |v| {
@@ -876,7 +878,9 @@ fn apply_projection(doc: &Document, project: &Document) -> Document {
     }
 
     // Always include _id unless explicitly excluded
-    if project.get("_id").map_or(true, |v| !matches!(v, Bson::Int32(0) | Bson::Int64(0) | Bson::Boolean(false))) {
+    if project.get("_id").map_or(true, |v| {
+        !matches!(v, Bson::Int32(0) | Bson::Int64(0) | Bson::Boolean(false))
+    }) {
         if let Some(id) = doc.get("_id") {
             result.insert("_id", id.clone());
         }
@@ -945,7 +949,9 @@ fn compare_bson_values(a: Option<&Bson>, b: Option<&Bson>) -> std::cmp::Ordering
         (Some(Bson::Int64(x)), Some(Bson::Int64(y))) => x.cmp(y),
         (Some(Bson::Int32(x)), Some(Bson::Int64(y))) => (*x as i64).cmp(y),
         (Some(Bson::Int64(x)), Some(Bson::Int32(y))) => x.cmp(&(*y as i64)),
-        (Some(Bson::Double(x)), Some(Bson::Double(y))) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
+        (Some(Bson::Double(x)), Some(Bson::Double(y))) => {
+            x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal)
+        }
         (Some(Bson::String(x)), Some(Bson::String(y))) => x.cmp(y),
         (Some(Bson::Boolean(x)), Some(Bson::Boolean(y))) => x.cmp(y),
         (Some(Bson::DateTime(x)), Some(Bson::DateTime(y))) => x.cmp(y),
@@ -969,7 +975,11 @@ fn apply_group(docs: &[Document], group_doc: &Document) -> Vec<Document> {
             Bson::Null
         };
         let key_str = format!("{:?}", group_key);
-        groups.entry(key_str).or_insert_with(|| (group_key.clone(), Vec::new())).1.push(doc);
+        groups
+            .entry(key_str)
+            .or_insert_with(|| (group_key.clone(), Vec::new()))
+            .1
+            .push(doc);
     }
 
     // Apply accumulators to each group
@@ -1031,7 +1041,9 @@ fn apply_accumulator(op: &str, expr: &Bson, docs: &[&Document]) -> Bson {
             let mut min: Option<Bson> = None;
             for doc in docs {
                 let val = evaluate_expression(expr, doc);
-                if min.is_none() || compare_bson_values(Some(&val), min.as_ref()) == std::cmp::Ordering::Less {
+                if min.is_none()
+                    || compare_bson_values(Some(&val), min.as_ref()) == std::cmp::Ordering::Less
+                {
                     min = Some(val);
                 }
             }
@@ -1041,15 +1053,23 @@ fn apply_accumulator(op: &str, expr: &Bson, docs: &[&Document]) -> Bson {
             let mut max: Option<Bson> = None;
             for doc in docs {
                 let val = evaluate_expression(expr, doc);
-                if max.is_none() || compare_bson_values(Some(&val), max.as_ref()) == std::cmp::Ordering::Greater {
+                if max.is_none()
+                    || compare_bson_values(Some(&val), max.as_ref()) == std::cmp::Ordering::Greater
+                {
                     max = Some(val);
                 }
             }
             max.unwrap_or(Bson::Null)
         }
         "$count" => Bson::Int64(docs.len() as i64),
-        "$first" => docs.first().map(|d| evaluate_expression(expr, d)).unwrap_or(Bson::Null),
-        "$last" => docs.last().map(|d| evaluate_expression(expr, d)).unwrap_or(Bson::Null),
+        "$first" => docs
+            .first()
+            .map(|d| evaluate_expression(expr, d))
+            .unwrap_or(Bson::Null),
+        "$last" => docs
+            .last()
+            .map(|d| evaluate_expression(expr, d))
+            .unwrap_or(Bson::Null),
         "$push" => {
             let values: Vec<Bson> = docs.iter().map(|d| evaluate_expression(expr, d)).collect();
             Bson::Array(values)
@@ -1085,7 +1105,11 @@ fn apply_unwind(docs: Vec<Document>, unwind_spec: &Bson) -> Vec<Document> {
     let (path, preserve_null) = match unwind_spec {
         Bson::String(s) => (s.trim_start_matches('$').to_string(), false),
         Bson::Document(d) => {
-            let path = d.get_str("path").unwrap_or("").trim_start_matches('$').to_string();
+            let path = d
+                .get_str("path")
+                .unwrap_or("")
+                .trim_start_matches('$')
+                .to_string();
             let preserve = d.get_bool("preserveNullAndEmptyArrays").unwrap_or(false);
             (path, preserve)
         }
@@ -1132,7 +1156,8 @@ fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     // Arithmetic
                     "$add" => {
                         if let Bson::Array(arr) = args {
-                            let sum: f64 = arr.iter()
+                            let sum: f64 = arr
+                                .iter()
                                 .filter_map(|v| bson_to_f64(&evaluate_expression(v, doc)))
                                 .sum();
                             Bson::Double(sum)
@@ -1143,8 +1168,10 @@ fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$subtract" => {
                         if let Bson::Array(arr) = args {
                             if arr.len() == 2 {
-                                let a = bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0);
-                                let b = bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(0.0);
+                                let a =
+                                    bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0);
+                                let b =
+                                    bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(0.0);
                                 return Bson::Double(a - b);
                             }
                         }
@@ -1152,7 +1179,8 @@ fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     }
                     "$multiply" => {
                         if let Bson::Array(arr) = args {
-                            let product: f64 = arr.iter()
+                            let product: f64 = arr
+                                .iter()
                                 .filter_map(|v| bson_to_f64(&evaluate_expression(v, doc)))
                                 .product();
                             Bson::Double(product)
@@ -1163,8 +1191,10 @@ fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$divide" => {
                         if let Bson::Array(arr) = args {
                             if arr.len() == 2 {
-                                let a = bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0);
-                                let b = bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(1.0);
+                                let a =
+                                    bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0);
+                                let b =
+                                    bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(1.0);
                                 if b != 0.0 {
                                     return Bson::Double(a / b);
                                 }
@@ -1262,12 +1292,11 @@ fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     // String operations
                     "$concat" => {
                         if let Bson::Array(arr) = args {
-                            let parts: Vec<String> = arr.iter()
-                                .map(|v| {
-                                    match evaluate_expression(v, doc) {
-                                        Bson::String(s) => s,
-                                        other => format!("{:?}", other),
-                                    }
+                            let parts: Vec<String> = arr
+                                .iter()
+                                .map(|v| match evaluate_expression(v, doc) {
+                                    Bson::String(s) => s,
+                                    other => format!("{:?}", other),
                                 })
                                 .collect();
                             Bson::String(parts.join(""))
@@ -1306,7 +1335,8 @@ fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                 let array = evaluate_expression(&arr[0], doc);
                                 let idx = evaluate_expression(&arr[1], doc);
                                 if let (Bson::Array(arr), Bson::Int32(i)) = (array, idx) {
-                                    let index = if i < 0 { arr.len() as i32 + i } else { i } as usize;
+                                    let index =
+                                        if i < 0 { arr.len() as i32 + i } else { i } as usize;
                                     return arr.get(index).cloned().unwrap_or(Bson::Null);
                                 }
                             }
@@ -1324,7 +1354,9 @@ fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             Bson::Int32(n) => Bson::Int32(n),
                             Bson::Int64(n) => Bson::Int32(n as i32),
                             Bson::Double(n) => Bson::Int32(n as i32),
-                            Bson::String(s) => s.parse::<i32>().map(Bson::Int32).unwrap_or(Bson::Null),
+                            Bson::String(s) => {
+                                s.parse::<i32>().map(Bson::Int32).unwrap_or(Bson::Null)
+                            }
                             _ => Bson::Null,
                         }
                     }

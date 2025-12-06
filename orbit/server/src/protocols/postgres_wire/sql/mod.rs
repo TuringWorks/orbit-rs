@@ -77,35 +77,35 @@ pub use execution_strategy::{
     UnifiedExecutionResult,
 };
 pub use executor::{ExecutionResult, SqlExecutor};
+pub use index_advisor::{
+    ExistingIndex, IndexAdvisor, IndexAdvisorConfig, IndexRecommendation, IndexType,
+    RedundantIndex, WorkloadAnalyzer, WorkloadSummary,
+};
 pub use lexer::{Lexer, Token};
 pub use mvcc_executor::{MvccSqlExecutor, TransactionId};
-pub use parser::{ParseResult, SqlParser};
-pub use types::{SqlType, SqlValue};
-pub use vectorized_executor::{
-    AggregateType, ColumnarData, FilterCondition, FilterOp, SortKey, VectorizedConfig,
-    VectorizedExecutor, VectorizedStats, WhereAnalysis,
-};
-pub use statistics::{
-    ColumnStatistics, Histogram, Predicate, StatisticsConfig, StatisticsManager, TableStatistics,
-};
-pub use query_cache::{
-    CacheStats, CachedResult, QueryCache, QueryCacheConfig, QueryKey, extract_table_names,
-};
-pub use plan_cache::{
-    CachedPlan, PlanCache, PlanCacheConfig, PlanCacheStats, QueryPlan, TableStatsSnapshot,
-};
 pub use parallel_executor::{
     AggregateFunction as ParallelAggregateFunction, AggregateSpec, ParallelConfig,
     ParallelCoordinator, ParallelResult, ParallelStats, PartitionResult, PartitionStrategy,
     ResultMerger, WorkPartition, WorkPartitioner,
 };
-pub use index_advisor::{
-    ExistingIndex, IndexAdvisor, IndexAdvisorConfig, IndexRecommendation, IndexType,
-    RedundantIndex, WorkloadAnalyzer, WorkloadSummary,
+pub use parser::{ParseResult, SqlParser};
+pub use plan_cache::{
+    CachedPlan, PlanCache, PlanCacheConfig, PlanCacheStats, QueryPlan, TableStatsSnapshot,
+};
+pub use query_cache::{
+    extract_table_names, CacheStats, CachedResult, QueryCache, QueryCacheConfig, QueryKey,
 };
 pub use query_engine::{
     CacheStatistics, OptimizedExecutionResult, OptimizedQueryEngine, QueryEngineConfig,
     QueryMetrics,
+};
+pub use statistics::{
+    ColumnStatistics, Histogram, Predicate, StatisticsConfig, StatisticsManager, TableStatistics,
+};
+pub use types::{SqlType, SqlValue};
+pub use vectorized_executor::{
+    AggregateType, ColumnarData, FilterCondition, FilterOp, SortKey, VectorizedConfig,
+    VectorizedExecutor, VectorizedStats, WhereAnalysis,
 };
 
 use crate::protocols::error::{ProtocolError, ProtocolResult};

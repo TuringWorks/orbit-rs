@@ -45,7 +45,9 @@ impl PostgresServer {
 
                     tokio::spawn(async move {
                         let mut protocol = if let Some(engine) = query_engine {
-                            println!("DEBUG: PostgresServer using existing QueryEngine for connection");
+                            println!(
+                                "DEBUG: PostgresServer using existing QueryEngine for connection"
+                            );
                             PostgresWireProtocol::new_with_query_engine(engine)
                         } else {
                             println!("DEBUG: PostgresServer creating NEW QueryEngine for connection (fallback)");

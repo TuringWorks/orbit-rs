@@ -151,8 +151,18 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
                     "count".to_string(),
                 ];
                 let rows = vec![
-                    vec![Some("Node".to_string()), Some("id".to_string()), Some("String".to_string()), Some("0".to_string())],
-                    vec![Some("Node".to_string()), Some("name".to_string()), Some("String".to_string()), Some("0".to_string())],
+                    vec![
+                        Some("Node".to_string()),
+                        Some("id".to_string()),
+                        Some("String".to_string()),
+                        Some("0".to_string()),
+                    ],
+                    vec![
+                        Some("Node".to_string()),
+                        Some("name".to_string()),
+                        Some("String".to_string()),
+                        Some("0".to_string()),
+                    ],
                 ];
                 Ok(Self::make_result(columns, rows))
             }
@@ -180,8 +190,16 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
                     "propertyTypes".to_string(),
                 ];
                 let rows = vec![
-                    vec![Some(":`Node`".to_string()), Some("id".to_string()), Some("[\"String\"]".to_string())],
-                    vec![Some(":`Node`".to_string()), Some("name".to_string()), Some("[\"String\"]".to_string())],
+                    vec![
+                        Some(":`Node`".to_string()),
+                        Some("id".to_string()),
+                        Some("[\"String\"]".to_string()),
+                    ],
+                    vec![
+                        Some(":`Node`".to_string()),
+                        Some("name".to_string()),
+                        Some("[\"String\"]".to_string()),
+                    ],
                 ];
                 Ok(Self::make_result(columns, rows))
             }
@@ -214,26 +232,25 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
         match name {
             "apoc.coll.toset" => {
                 let list = self.get_array_arg(args, 0)?;
-                let set: HashSet<String> = list.iter()
+                let set: HashSet<String> = list
+                    .iter()
                     .filter_map(|v| v.as_str().map(String::from).or_else(|| Some(v.to_string())))
                     .collect();
                 let result: Vec<String> = set.into_iter().collect();
-                let rows = vec![vec![Some(serde_json::to_string(&result).unwrap_or_default())]];
+                let rows = vec![vec![Some(
+                    serde_json::to_string(&result).unwrap_or_default(),
+                )]];
                 Ok(Self::make_result(columns, rows))
             }
             "apoc.coll.sum" => {
                 let list = self.get_array_arg(args, 0)?;
-                let sum: f64 = list.iter()
-                    .filter_map(|v| v.as_f64())
-                    .sum();
+                let sum: f64 = list.iter().filter_map(|v| v.as_f64()).sum();
                 let rows = vec![vec![Some(sum.to_string())]];
                 Ok(Self::make_result(columns, rows))
             }
             "apoc.coll.avg" => {
                 let list = self.get_array_arg(args, 0)?;
-                let values: Vec<f64> = list.iter()
-                    .filter_map(|v| v.as_f64())
-                    .collect();
+                let values: Vec<f64> = list.iter().filter_map(|v| v.as_f64()).collect();
                 let avg = if values.is_empty() {
                     0.0
                 } else {
@@ -244,7 +261,8 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
             }
             "apoc.coll.min" => {
                 let list = self.get_array_arg(args, 0)?;
-                let min = list.iter()
+                let min = list
+                    .iter()
                     .filter_map(|v| v.as_f64())
                     .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 let rows = vec![vec![min.map(|v| v.to_string())]];
@@ -252,7 +270,8 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
             }
             "apoc.coll.max" => {
                 let list = self.get_array_arg(args, 0)?;
-                let max = list.iter()
+                let max = list
+                    .iter()
                     .filter_map(|v| v.as_f64())
                     .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 let rows = vec![vec![max.map(|v| v.to_string())]];
@@ -261,7 +280,9 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
             "apoc.coll.flatten" => {
                 let list = self.get_array_arg(args, 0)?;
                 let flattened = Self::flatten_array(&list);
-                let rows = vec![vec![Some(serde_json::to_string(&flattened).unwrap_or_default())]];
+                let rows = vec![vec![Some(
+                    serde_json::to_string(&flattened).unwrap_or_default(),
+                )]];
                 Ok(Self::make_result(columns, rows))
             }
             "apoc.coll.reverse" => {
@@ -319,10 +340,9 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
         match name {
             "apoc.text.join" => {
                 let list = self.get_array_arg(args, 0)?;
-                let delimiter = args.get(1)
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let strings: Vec<String> = list.iter()
+                let delimiter = args.get(1).and_then(|v| v.as_str()).unwrap_or("");
+                let strings: Vec<String> = list
+                    .iter()
                     .filter_map(|v| v.as_str().map(String::from).or_else(|| Some(v.to_string())))
                     .collect();
                 let joined = strings.join(delimiter);
@@ -331,11 +351,11 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
             }
             "apoc.text.split" => {
                 let text = self.get_string_arg(args, 0)?;
-                let delimiter = args.get(1)
-                    .and_then(|v| v.as_str())
-                    .unwrap_or(" ");
+                let delimiter = args.get(1).and_then(|v| v.as_str()).unwrap_or(" ");
                 let parts: Vec<&str> = text.split(delimiter).collect();
-                let rows = vec![vec![Some(serde_json::to_string(&parts).unwrap_or_default())]];
+                let rows = vec![vec![Some(
+                    serde_json::to_string(&parts).unwrap_or_default(),
+                )]];
                 Ok(Self::make_result(columns, rows))
             }
             "apoc.text.capitalize" => {
@@ -354,7 +374,8 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
             }
             "apoc.text.capitalizeall" => {
                 let text = self.get_string_arg(args, 0)?;
-                let result: String = text.split_whitespace()
+                let result: String = text
+                    .split_whitespace()
                     .map(|word| {
                         let mut chars = word.chars();
                         match chars.next() {
@@ -381,7 +402,8 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
             }
             "apoc.text.clean" => {
                 let text = self.get_string_arg(args, 0)?;
-                let cleaned: String = text.chars()
+                let cleaned: String = text
+                    .chars()
                     .filter(|c| c.is_alphanumeric() || c.is_whitespace())
                     .collect();
                 let rows = vec![vec![Some(cleaned)]];
@@ -389,13 +411,12 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
             }
             "apoc.text.regexgroups" => {
                 let text = self.get_string_arg(args, 0)?;
-                let pattern = args.get(1)
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("(.*)");
+                let pattern = args.get(1).and_then(|v| v.as_str()).unwrap_or("(.*)");
                 // Simple regex matching using std::regex
                 let result = match regex::Regex::new(pattern) {
                     Ok(re) => {
-                        let groups: Vec<Vec<String>> = re.captures_iter(&text)
+                        let groups: Vec<Vec<String>> = re
+                            .captures_iter(&text)
                             .map(|cap| {
                                 cap.iter()
                                     .filter_map(|m| m.map(|m| m.as_str().to_string()))
@@ -473,10 +494,12 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
             }
             "apoc.convert.fromjsonmap" => {
                 let json_str = self.get_string_arg(args, 0)?;
-                let parsed: Result<serde_json::Map<String, JsonValue>, _> = serde_json::from_str(&json_str);
+                let parsed: Result<serde_json::Map<String, JsonValue>, _> =
+                    serde_json::from_str(&json_str);
                 match parsed {
                     Ok(map) => {
-                        let rows = vec![vec![Some(serde_json::to_string(&map).unwrap_or_default())]];
+                        let rows =
+                            vec![vec![Some(serde_json::to_string(&map).unwrap_or_default())]];
                         Ok(Self::make_result(columns, rows))
                     }
                     Err(e) => Err(ProtocolError::CypherError(format!("Invalid JSON: {e}"))),
@@ -487,7 +510,8 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
                 let parsed: Result<Vec<JsonValue>, _> = serde_json::from_str(&json_str);
                 match parsed {
                     Ok(list) => {
-                        let rows = vec![vec![Some(serde_json::to_string(&list).unwrap_or_default())]];
+                        let rows =
+                            vec![vec![Some(serde_json::to_string(&list).unwrap_or_default())]];
                         Ok(Self::make_result(columns, rows))
                     }
                     Err(e) => Err(ProtocolError::CypherError(format!("Invalid JSON: {e}"))),
@@ -565,7 +589,10 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
             "apoc.create.vnode" => {
                 // Create a virtual node (not persisted)
                 let labels = self.get_array_arg(args, 0)?;
-                let props = args.get(1).cloned().unwrap_or(JsonValue::Object(serde_json::Map::new()));
+                let props = args
+                    .get(1)
+                    .cloned()
+                    .unwrap_or(JsonValue::Object(serde_json::Map::new()));
 
                 let virtual_node = serde_json::json!({
                     "type": "VirtualNode",
@@ -582,7 +609,10 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
                 let from = args.first().cloned().unwrap_or(JsonValue::Null);
                 let rel_type = args.get(1).and_then(|v| v.as_str()).unwrap_or("RELATED");
                 let to = args.get(2).cloned().unwrap_or(JsonValue::Null);
-                let props = args.get(3).cloned().unwrap_or(JsonValue::Object(serde_json::Map::new()));
+                let props = args
+                    .get(3)
+                    .cloned()
+                    .unwrap_or(JsonValue::Object(serde_json::Map::new()));
 
                 let virtual_rel = serde_json::json!({
                     "type": "VirtualRelationship",
@@ -622,7 +652,7 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
                 Ok(Self::make_result(columns, rows))
             }
             "apoc.util.sha1" | "apoc.util.sha256" => {
-                use sha2::{Sha256, Digest};
+                use sha2::{Digest, Sha256};
                 // Both SHA1 and SHA256 use SHA256 (SHA1 is deprecated)
                 let text = self.get_string_arg(args, 0)?;
                 let mut hasher = Sha256::new();
@@ -633,9 +663,7 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
                 Ok(Self::make_result(columns, rows))
             }
             "apoc.util.sleep" => {
-                let millis = args.first()
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0);
+                let millis = args.first().and_then(|v| v.as_u64()).unwrap_or(0);
                 tokio::time::sleep(tokio::time::Duration::from_millis(millis)).await;
                 let rows = vec![vec![Some(millis.to_string())]];
                 Ok(Self::make_result(columns, rows))
@@ -665,10 +693,9 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
                 Ok(Self::make_result(columns, rows))
             }
             "apoc.date.format" => {
-                let timestamp = args.first()
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(0);
-                let format = args.get(1)
+                let timestamp = args.first().and_then(|v| v.as_i64()).unwrap_or(0);
+                let format = args
+                    .get(1)
                     .and_then(|v| v.as_str())
                     .unwrap_or("%Y-%m-%d %H:%M:%S");
 
@@ -680,7 +707,8 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
             }
             "apoc.date.parse" => {
                 let date_str = self.get_string_arg(args, 0)?;
-                let format = args.get(1)
+                let format = args
+                    .get(1)
                     .and_then(|v| v.as_str())
                     .unwrap_or("%Y-%m-%d %H:%M:%S");
 
@@ -690,7 +718,9 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
                         let rows = vec![vec![Some(timestamp.to_string())]];
                         Ok(Self::make_result(columns, rows))
                     }
-                    Err(e) => Err(ProtocolError::CypherError(format!("Invalid date format: {e}"))),
+                    Err(e) => Err(ProtocolError::CypherError(format!(
+                        "Invalid date format: {e}"
+                    ))),
                 }
             }
             _ => Err(ProtocolError::CypherError(format!(
@@ -706,17 +736,17 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
     fn get_string_arg(&self, args: &[JsonValue], index: usize) -> ProtocolResult<String> {
         args.get(index)
             .and_then(|v| v.as_str().map(String::from))
-            .ok_or_else(|| ProtocolError::CypherError(format!(
-                "Expected string argument at position {index}"
-            )))
+            .ok_or_else(|| {
+                ProtocolError::CypherError(format!("Expected string argument at position {index}"))
+            })
     }
 
     fn get_array_arg(&self, args: &[JsonValue], index: usize) -> ProtocolResult<Vec<JsonValue>> {
         args.get(index)
             .and_then(|v| v.as_array().cloned())
-            .ok_or_else(|| ProtocolError::CypherError(format!(
-                "Expected array argument at position {index}"
-            )))
+            .ok_or_else(|| {
+                ProtocolError::CypherError(format!("Expected array argument at position {index}"))
+            })
     }
 }
 
@@ -768,7 +798,9 @@ mod tests {
     async fn test_apoc_text_capitalize() {
         let handler = create_handler();
         let args = vec![serde_json::json!("hello world")];
-        let result = handler.execute_procedure("apoc.text.capitalize", &args).await;
+        let result = handler
+            .execute_procedure("apoc.text.capitalize", &args)
+            .await;
         assert!(result.is_ok());
         let query_result = result.unwrap();
         assert_eq!(query_result.rows[0][0], Some("Hello world".to_string()));
@@ -778,7 +810,9 @@ mod tests {
     async fn test_apoc_text_camelcase() {
         let handler = create_handler();
         let args = vec![serde_json::json!("hello world test")];
-        let result = handler.execute_procedure("apoc.text.camelcase", &args).await;
+        let result = handler
+            .execute_procedure("apoc.text.camelcase", &args)
+            .await;
         assert!(result.is_ok());
         let query_result = result.unwrap();
         assert_eq!(query_result.rows[0][0], Some("helloWorldTest".to_string()));
@@ -788,7 +822,9 @@ mod tests {
     async fn test_apoc_text_snakecase() {
         let handler = create_handler();
         let args = vec![serde_json::json!("HelloWorld")];
-        let result = handler.execute_procedure("apoc.text.snakecase", &args).await;
+        let result = handler
+            .execute_procedure("apoc.text.snakecase", &args)
+            .await;
         assert!(result.is_ok());
         let query_result = result.unwrap();
         assert_eq!(query_result.rows[0][0], Some("hello_world".to_string()));
@@ -798,7 +834,9 @@ mod tests {
     async fn test_apoc_convert_tojson() {
         let handler = create_handler();
         let args = vec![serde_json::json!({"name": "Alice", "age": 30})];
-        let result = handler.execute_procedure("apoc.convert.tojson", &args).await;
+        let result = handler
+            .execute_procedure("apoc.convert.tojson", &args)
+            .await;
         assert!(result.is_ok());
     }
 
@@ -806,7 +844,9 @@ mod tests {
     async fn test_apoc_convert_tointeger() {
         let handler = create_handler();
         let args = vec![serde_json::json!("42")];
-        let result = handler.execute_procedure("apoc.convert.tointeger", &args).await;
+        let result = handler
+            .execute_procedure("apoc.convert.tointeger", &args)
+            .await;
         assert!(result.is_ok());
         let query_result = result.unwrap();
         assert_eq!(query_result.rows[0][0], Some("42".to_string()));
@@ -826,7 +866,9 @@ mod tests {
     #[tokio::test]
     async fn test_apoc_date_currenttimestamp() {
         let handler = create_handler();
-        let result = handler.execute_procedure("apoc.date.currenttimestamp", &[]).await;
+        let result = handler
+            .execute_procedure("apoc.date.currenttimestamp", &[])
+            .await;
         assert!(result.is_ok());
         let query_result = result.unwrap();
         assert!(query_result.rows[0][0].is_some());

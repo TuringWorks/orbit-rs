@@ -52,7 +52,10 @@ impl StreamCommands {
         command_name: &str,
     ) -> ProtocolResult<i64> {
         args.get(index)
-            .and_then(|v| v.as_integer().or_else(|| v.as_string().and_then(|s| s.parse().ok())))
+            .and_then(|v| {
+                v.as_integer()
+                    .or_else(|| v.as_string().and_then(|s| s.parse().ok()))
+            })
             .ok_or_else(|| {
                 ProtocolError::RespError(format!(
                     "ERR invalid integer argument for '{}' command",
@@ -64,10 +67,7 @@ impl StreamCommands {
     /// Convert StreamEntry to RESP format
     fn entry_to_resp(entry: &serde_json::Value) -> RespValue {
         if let Some(obj) = entry.as_object() {
-            let id = obj
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("");
             let fields = obj.get("fields").and_then(|v| v.as_object());
 
             let mut field_values = Vec::new();
@@ -75,7 +75,9 @@ impl StreamCommands {
                 for (k, v) in fields_map {
                     field_values.push(RespValue::BulkString(Bytes::from(k.as_bytes().to_vec())));
                     if let Some(val_str) = v.as_str() {
-                        field_values.push(RespValue::BulkString(Bytes::from(val_str.as_bytes().to_vec())));
+                        field_values.push(RespValue::BulkString(Bytes::from(
+                            val_str.as_bytes().to_vec(),
+                        )));
                     }
                 }
             }
@@ -243,7 +245,13 @@ impl StreamCommands {
         let entries: Vec<serde_json::Value> = serde_json::from_value(result).unwrap_or_default();
         let resp_entries: Vec<RespValue> = entries.iter().map(Self::entry_to_resp).collect();
 
-        debug!("XRANGE {} {} {} -> {} entries", key, start, end, resp_entries.len());
+        debug!(
+            "XRANGE {} {} {} -> {} entries",
+            key,
+            start,
+            end,
+            resp_entries.len()
+        );
         Ok(RespValue::Array(resp_entries))
     }
 
@@ -288,7 +296,13 @@ impl StreamCommands {
         let entries: Vec<serde_json::Value> = serde_json::from_value(result).unwrap_or_default();
         let resp_entries: Vec<RespValue> = entries.iter().map(Self::entry_to_resp).collect();
 
-        debug!("XREVRANGE {} {} {} -> {} entries", key, end, start, resp_entries.len());
+        debug!(
+            "XREVRANGE {} {} {} -> {} entries",
+            key,
+            end,
+            start,
+            resp_entries.len()
+        );
         Ok(RespValue::Array(resp_entries))
     }
 
@@ -336,7 +350,8 @@ impl StreamCommands {
         let remaining = args.len() - idx;
         if remaining < 2 || remaining % 2 != 0 {
             return Err(ProtocolError::RespError(
-                "ERR Unbalanced XREAD list of streams: for each stream key an ID must be specified".to_string(),
+                "ERR Unbalanced XREAD list of streams: for each stream key an ID must be specified"
+                    .to_string(),
             ));
         }
 
@@ -356,7 +371,11 @@ impl StreamCommands {
         let mut results = Vec::new();
         for (key, id) in keys.iter().zip(ids.iter()) {
             // Handle special $ ID (means "only new entries from now")
-            let read_id = if id == "$" { "9999999999999-9999999999999" } else { id };
+            let read_id = if id == "$" {
+                "9999999999999-9999999999999"
+            } else {
+                id
+            };
 
             let mut rpc_args = vec![serde_json::to_value(read_id).unwrap()];
             if let Some(c) = count {
@@ -370,10 +389,12 @@ impl StreamCommands {
                 .await
                 .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
 
-            let entries: Vec<serde_json::Value> = serde_json::from_value(result).unwrap_or_default();
+            let entries: Vec<serde_json::Value> =
+                serde_json::from_value(result).unwrap_or_default();
 
             if !entries.is_empty() {
-                let resp_entries: Vec<RespValue> = entries.iter().map(Self::entry_to_resp).collect();
+                let resp_entries: Vec<RespValue> =
+                    entries.iter().map(Self::entry_to_resp).collect();
                 results.push(RespValue::Array(vec![
                     RespValue::BulkString(Bytes::from(key.as_bytes().to_vec())),
                     RespValue::Array(resp_entries),
@@ -502,12 +523,10 @@ impl StreamCommands {
                 debug!("XINFO STREAM {} -> {} fields", key, resp_arr.len() / 2);
                 Ok(RespValue::Array(resp_arr))
             }
-            "GROUPS" | "CONSUMERS" | "HELP" => {
-                Err(ProtocolError::RespError(format!(
-                    "ERR XINFO {} not yet implemented",
-                    subcommand
-                )))
-            }
+            "GROUPS" | "CONSUMERS" | "HELP" => Err(ProtocolError::RespError(format!(
+                "ERR XINFO {} not yet implemented",
+                subcommand
+            ))),
             _ => Err(ProtocolError::RespError(format!(
                 "ERR Unknown XINFO subcommand '{}'",
                 subcommand
@@ -580,12 +599,10 @@ impl StreamCommands {
                 debug!("XGROUP DESTROY {} {} -> {}", key, group_name, destroyed);
                 Ok(RespValue::Integer(destroyed))
             }
-            "SETID" | "CREATECONSUMER" | "DELCONSUMER" => {
-                Err(ProtocolError::RespError(format!(
-                    "ERR XGROUP {} not yet implemented",
-                    subcommand
-                )))
-            }
+            "SETID" | "CREATECONSUMER" | "DELCONSUMER" => Err(ProtocolError::RespError(format!(
+                "ERR XGROUP {} not yet implemented",
+                subcommand
+            ))),
             _ => Err(ProtocolError::RespError(format!(
                 "ERR Unknown XGROUP subcommand '{}'",
                 subcommand
@@ -606,9 +623,7 @@ impl StreamCommands {
         // Parse GROUP keyword
         let group_keyword = self.get_string_arg(args, idx, "XREADGROUP")?.to_uppercase();
         if group_keyword != "GROUP" {
-            return Err(ProtocolError::RespError(
-                "ERR syntax error".to_string(),
-            ));
+            return Err(ProtocolError::RespError("ERR syntax error".to_string()));
         }
         idx += 1;
 
@@ -693,10 +708,12 @@ impl StreamCommands {
 
             match result {
                 Ok(value) => {
-                    let entries: Vec<serde_json::Value> = serde_json::from_value(value).unwrap_or_default();
+                    let entries: Vec<serde_json::Value> =
+                        serde_json::from_value(value).unwrap_or_default();
 
                     if !entries.is_empty() {
-                        let resp_entries: Vec<RespValue> = entries.iter().map(Self::entry_to_resp).collect();
+                        let resp_entries: Vec<RespValue> =
+                            entries.iter().map(Self::entry_to_resp).collect();
                         results.push(RespValue::Array(vec![
                             RespValue::BulkString(Bytes::from(key.as_bytes().to_vec())),
                             RespValue::Array(resp_entries),
@@ -709,7 +726,12 @@ impl StreamCommands {
             }
         }
 
-        debug!("XREADGROUP {} {} -> {} streams with data", group_name, consumer_name, results.len());
+        debug!(
+            "XREADGROUP {} {} -> {} streams with data",
+            group_name,
+            consumer_name,
+            results.len()
+        );
         if results.is_empty() {
             Ok(RespValue::NullArray)
         } else {
@@ -765,18 +787,34 @@ impl StreamCommands {
         let result = self
             .base
             .local_registry
-            .execute_stream(&key, "xpending", &[serde_json::to_value(&group_name).unwrap()])
+            .execute_stream(
+                &key,
+                "xpending",
+                &[serde_json::to_value(&group_name).unwrap()],
+            )
             .await
             .map_err(|e| ProtocolError::RespError(format!("{}", e)))?;
 
         // Result is (count, min_id, max_id, consumers)
-        let (count, min_id, max_id, consumers): (usize, Option<String>, Option<String>, Vec<(String, usize)>) =
-            serde_json::from_value(result).unwrap_or((0, None, None, vec![]));
+        let (count, min_id, max_id, consumers): (
+            usize,
+            Option<String>,
+            Option<String>,
+            Vec<(String, usize)>,
+        ) = serde_json::from_value(result).unwrap_or((0, None, None, vec![]));
 
         let mut resp_arr = Vec::new();
         resp_arr.push(RespValue::Integer(count as i64));
-        resp_arr.push(min_id.map(|s| RespValue::BulkString(Bytes::from(s.into_bytes()))).unwrap_or(RespValue::NullBulkString));
-        resp_arr.push(max_id.map(|s| RespValue::BulkString(Bytes::from(s.into_bytes()))).unwrap_or(RespValue::NullBulkString));
+        resp_arr.push(
+            min_id
+                .map(|s| RespValue::BulkString(Bytes::from(s.into_bytes())))
+                .unwrap_or(RespValue::NullBulkString),
+        );
+        resp_arr.push(
+            max_id
+                .map(|s| RespValue::BulkString(Bytes::from(s.into_bytes())))
+                .unwrap_or(RespValue::NullBulkString),
+        );
 
         if !consumers.is_empty() {
             let consumer_arr: Vec<RespValue> = consumers
@@ -861,17 +899,29 @@ impl CommandHandler for StreamCommands {
 
     fn supported_commands(&self) -> &[&'static str] {
         &[
-            "XADD", "XLEN", "XRANGE", "XREVRANGE", "XREAD", "XTRIM", "XDEL",
-            "XINFO", "XGROUP", "XREADGROUP", "XACK", "XPENDING", "XSETID",
-            "XCLAIM", "XAUTOCLAIM",
+            "XADD",
+            "XLEN",
+            "XRANGE",
+            "XREVRANGE",
+            "XREAD",
+            "XTRIM",
+            "XDEL",
+            "XINFO",
+            "XGROUP",
+            "XREADGROUP",
+            "XACK",
+            "XPENDING",
+            "XSETID",
+            "XCLAIM",
+            "XAUTOCLAIM",
         ]
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::traits::BaseCommandHandler;
+    use super::*;
 
     #[tokio::test]
     async fn test_supported_commands() {
@@ -882,12 +932,10 @@ mod tests {
         let orbit_client = orbit_client::OrbitClient::new_offline(client_config)
             .await
             .unwrap();
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+        let local_registry =
+            Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
         let handler = StreamCommands {
-            base: BaseCommandHandler::new(
-                Arc::new(orbit_client),
-                local_registry,
-            ),
+            base: BaseCommandHandler::new(Arc::new(orbit_client), local_registry),
         };
 
         let commands = handler.supported_commands();
@@ -909,12 +957,10 @@ mod tests {
         let orbit_client = orbit_client::OrbitClient::new_offline(client_config)
             .await
             .unwrap();
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+        let local_registry =
+            Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
         let handler = StreamCommands {
-            base: BaseCommandHandler::new(
-                Arc::new(orbit_client),
-                local_registry,
-            ),
+            base: BaseCommandHandler::new(Arc::new(orbit_client), local_registry),
         };
 
         // Test XADD
@@ -948,12 +994,10 @@ mod tests {
         let orbit_client = orbit_client::OrbitClient::new_offline(client_config)
             .await
             .unwrap();
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+        let local_registry =
+            Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
         let handler = StreamCommands {
-            base: BaseCommandHandler::new(
-                Arc::new(orbit_client),
-                local_registry,
-            ),
+            base: BaseCommandHandler::new(Arc::new(orbit_client), local_registry),
         };
 
         // Add some entries

@@ -42,8 +42,8 @@ pub use aql_parser::{
     AggregateFunction, AqlClause, AqlCondition, AqlExpression, AqlParser, AqlQuery,
     CollectAggregate, CollectGroup, GraphSource, KShortestPathsQuery, PruneClause,
     ShortestPathOptions, ShortestPathQuery, SortDirection, SortItem, TraversalDirection,
-    TraversalOptions, TraversalOrder, UniquenessLevel, UpsertAction, WindowClause,
-    WindowFrame, WindowFrameBound, WindowFrameType, WindowFunction,
+    TraversalOptions, TraversalOrder, UniquenessLevel, UpsertAction, WindowClause, WindowFrame,
+    WindowFrameBound, WindowFrameType, WindowFunction,
 };
 pub use data_model::{AqlCollection, AqlDocument, AqlValue};
 pub use graphrag_engine::AqlGraphRAGEngine;

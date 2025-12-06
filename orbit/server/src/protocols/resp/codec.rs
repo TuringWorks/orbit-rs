@@ -253,7 +253,9 @@ fn parse_boolean(src: &BytesMut) -> ProtocolResult<Option<(RespValue, usize)>> {
     } else if src.len() < 4 {
         Ok(None)
     } else {
-        Err(ProtocolError::RespError("Invalid boolean format".to_string()))
+        Err(ProtocolError::RespError(
+            "Invalid boolean format".to_string(),
+        ))
     }
 }
 
@@ -312,9 +314,9 @@ fn parse_bulk_error(src: &BytesMut) -> ProtocolResult<Option<(RespValue, usize)>
 fn parse_verbatim_string(src: &BytesMut) -> ProtocolResult<Option<(RespValue, usize)>> {
     if let Some(len_end) = find_crlf(src, 1) {
         let len_str = String::from_utf8_lossy(&src[1..len_end]);
-        let len = len_str
-            .parse::<usize>()
-            .map_err(|e| ProtocolError::RespError(format!("Invalid verbatim string length: {e}")))?;
+        let len = len_str.parse::<usize>().map_err(|e| {
+            ProtocolError::RespError(format!("Invalid verbatim string length: {e}"))
+        })?;
 
         let total_size = len_end + 2 + len + 2;
         if src.len() < total_size {
@@ -868,10 +870,7 @@ mod tests {
         let (val, consumed) = parse_map(&buf).unwrap().unwrap();
         if let RespValue::Map(entries) = val {
             assert_eq!(entries.len(), 1);
-            assert_eq!(
-                entries[0].0,
-                RespValue::BulkString("key".as_bytes().into())
-            );
+            assert_eq!(entries[0].0, RespValue::BulkString("key".as_bytes().into()));
             assert_eq!(entries[0].1, RespValue::Integer(42));
         } else {
             panic!("Expected map");

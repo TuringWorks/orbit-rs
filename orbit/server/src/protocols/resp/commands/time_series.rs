@@ -468,21 +468,23 @@ impl TimeSeriesCommands {
 
         for arg in args {
             let key = match arg {
-                RespValue::BulkString(bytes) => {
-                    String::from_utf8_lossy(bytes).to_string()
-                }
+                RespValue::BulkString(bytes) => String::from_utf8_lossy(bytes).to_string(),
                 RespValue::SimpleString(s) => s.clone(),
                 _ => continue,
             };
 
             if let Some(ts) = ts_guard.get(&key) {
                 // For each matching time series, return: [key, labels, [timestamp, value]]
-                let labels: Vec<RespValue> = ts.config.labels
+                let labels: Vec<RespValue> = ts
+                    .config
+                    .labels
                     .iter()
-                    .flat_map(|(k, v)| vec![
-                        RespValue::bulk_string_from_str(k),
-                        RespValue::bulk_string_from_str(v),
-                    ])
+                    .flat_map(|(k, v)| {
+                        vec![
+                            RespValue::bulk_string_from_str(k),
+                            RespValue::bulk_string_from_str(v),
+                        ]
+                    })
                     .collect();
 
                 let sample = if let Some(dp) = ts.last() {
@@ -1789,10 +1791,21 @@ mod tests {
         ];
 
         let all_commands = [
-            "TS.CREATE", "TS.ADD", "TS.GET", "TS.MGET", "TS.RANGE",
-            "TS.REVRANGE", "TS.MRANGE", "TS.MREVRANGE", "TS.INFO",
-            "TS.DEL", "TS.MADD", "TS.INCRBY", "TS.DECRBY",
-            "TS.CREATERULE", "TS.DELETERULE",
+            "TS.CREATE",
+            "TS.ADD",
+            "TS.GET",
+            "TS.MGET",
+            "TS.RANGE",
+            "TS.REVRANGE",
+            "TS.MRANGE",
+            "TS.MREVRANGE",
+            "TS.INFO",
+            "TS.DEL",
+            "TS.MADD",
+            "TS.INCRBY",
+            "TS.DECRBY",
+            "TS.CREATERULE",
+            "TS.DELETERULE",
         ];
 
         for cmd in &expected_commands {

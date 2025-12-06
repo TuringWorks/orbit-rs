@@ -247,9 +247,7 @@ impl Histogram {
             return 0.33; // Default estimate
         }
 
-        let range_min = min
-            .and_then(|v| v.to_f64())
-            .unwrap_or(self.boundaries[0]);
+        let range_min = min.and_then(|v| v.to_f64()).unwrap_or(self.boundaries[0]);
         let range_max = max
             .and_then(|v| v.to_f64())
             .unwrap_or(*self.boundaries.last().unwrap());
@@ -372,7 +370,8 @@ impl StatisticsManager {
         }
 
         // Collect values
-        let mut distinct_values: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut distinct_values: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         let mut null_count = 0usize;
         let mut numeric_values: Vec<f64> = Vec::new();
         let mut value_counts: HashMap<String, usize> = HashMap::new();
@@ -415,7 +414,9 @@ impl StatisticsManager {
             if numeric_values.len() >= 10 {
                 stats.histogram = Some(Histogram::from_values(
                     &numeric_values,
-                    self.config.max_histogram_buckets.min(numeric_values.len() / 2),
+                    self.config
+                        .max_histogram_buckets
+                        .min(numeric_values.len() / 2),
                 ));
             }
         }
@@ -450,26 +451,22 @@ impl StatisticsManager {
 
         for predicate in predicates {
             let selectivity = match predicate {
-                Predicate::Eq { column, .. } => {
-                    stats.get_column_stats(column)
-                        .map(|cs| cs.selectivity_eq(stats.row_count))
-                        .unwrap_or(0.1)
-                }
-                Predicate::Range { column, min, max } => {
-                    stats.get_column_stats(column)
-                        .map(|cs| cs.selectivity_range(min.as_ref(), max.as_ref()))
-                        .unwrap_or(0.33)
-                }
-                Predicate::IsNull { column } => {
-                    stats.get_column_stats(column)
-                        .map(|cs| cs.selectivity_null(stats.row_count))
-                        .unwrap_or(0.01)
-                }
-                Predicate::IsNotNull { column } => {
-                    stats.get_column_stats(column)
-                        .map(|cs| 1.0 - cs.selectivity_null(stats.row_count))
-                        .unwrap_or(0.99)
-                }
+                Predicate::Eq { column, .. } => stats
+                    .get_column_stats(column)
+                    .map(|cs| cs.selectivity_eq(stats.row_count))
+                    .unwrap_or(0.1),
+                Predicate::Range { column, min, max } => stats
+                    .get_column_stats(column)
+                    .map(|cs| cs.selectivity_range(min.as_ref(), max.as_ref()))
+                    .unwrap_or(0.33),
+                Predicate::IsNull { column } => stats
+                    .get_column_stats(column)
+                    .map(|cs| cs.selectivity_null(stats.row_count))
+                    .unwrap_or(0.01),
+                Predicate::IsNotNull { column } => stats
+                    .get_column_stats(column)
+                    .map(|cs| 1.0 - cs.selectivity_null(stats.row_count))
+                    .unwrap_or(0.99),
             };
             combined_selectivity *= selectivity;
         }
@@ -487,10 +484,21 @@ impl Default for StatisticsManager {
 /// Predicate types for cardinality estimation
 #[derive(Debug, Clone)]
 pub enum Predicate {
-    Eq { column: String, value: SqlValue },
-    Range { column: String, min: Option<SqlValue>, max: Option<SqlValue> },
-    IsNull { column: String },
-    IsNotNull { column: String },
+    Eq {
+        column: String,
+        value: SqlValue,
+    },
+    Range {
+        column: String,
+        min: Option<SqlValue>,
+        max: Option<SqlValue>,
+    },
+    IsNull {
+        column: String,
+    },
+    IsNotNull {
+        column: String,
+    },
 }
 
 /// Extension trait for SqlValue to get f64 representation
@@ -561,7 +569,10 @@ mod tests {
         for i in 0..100 {
             let mut row = HashMap::new();
             row.insert("id".to_string(), SqlValue::Integer(i));
-            row.insert("value".to_string(), SqlValue::DoublePrecision(i as f64 * 1.5));
+            row.insert(
+                "value".to_string(),
+                SqlValue::DoublePrecision(i as f64 * 1.5),
+            );
             rows.push(row);
         }
 
@@ -588,7 +599,10 @@ mod tests {
         for i in 0..1000 {
             let mut row = HashMap::new();
             row.insert("id".to_string(), SqlValue::Integer(i % 100)); // 100 distinct values
-            row.insert("category".to_string(), SqlValue::Text(format!("cat_{}", i % 10))); // 10 distinct
+            row.insert(
+                "category".to_string(),
+                SqlValue::Text(format!("cat_{}", i % 10)),
+            ); // 10 distinct
             rows.push(row);
         }
 
@@ -599,14 +613,14 @@ mod tests {
         manager.analyze_table("test_table", &rows, &col_types).await;
 
         // Estimate for equality predicate
-        let predicates = vec![
-            Predicate::Eq {
-                column: "id".to_string(),
-                value: SqlValue::Integer(5),
-            },
-        ];
+        let predicates = vec![Predicate::Eq {
+            column: "id".to_string(),
+            value: SqlValue::Integer(5),
+        }];
 
-        let estimate = manager.estimate_cardinality("test_table", &predicates).await;
+        let estimate = manager
+            .estimate_cardinality("test_table", &predicates)
+            .await;
         assert!(estimate.is_some());
         // Should be around 10 (1000 rows / 100 distinct values)
         let est = estimate.unwrap();

@@ -199,7 +199,13 @@ impl Collection {
     }
 
     /// Create an index
-    pub fn create_index(&mut self, keys: Document, name: Option<String>, unique: bool, sparse: bool) -> String {
+    pub fn create_index(
+        &mut self,
+        keys: Document,
+        name: Option<String>,
+        unique: bool,
+        sparse: bool,
+    ) -> String {
         let index_name = name.unwrap_or_else(|| {
             keys.iter()
                 .map(|(k, v)| format!("{}_{}", k, v))
@@ -386,7 +392,9 @@ fn matches_value(doc_value: &Option<Bson>, filter_value: &Bson) -> bool {
                         }
                     }
                     "$regex" => {
-                        if let (Some(Bson::String(s)), Bson::String(pattern)) = (doc_value, op_value) {
+                        if let (Some(Bson::String(s)), Bson::String(pattern)) =
+                            (doc_value, op_value)
+                        {
                             if let Ok(re) = regex::Regex::new(pattern) {
                                 if !re.is_match(s) {
                                     return false;
@@ -733,14 +741,24 @@ impl DocumentStore {
         self
     }
 
-    pub async fn insert_one(&self, db: &str, collection: &str, doc: Document) -> Result<Bson, String> {
+    pub async fn insert_one(
+        &self,
+        db: &str,
+        collection: &str,
+        doc: Document,
+    ) -> Result<Bson, String> {
         let mut dbs = self.databases.write().await;
         let database = dbs.entry(db.to_string()).or_insert_with(Database::new);
         let coll = database.get_or_create_collection(collection);
         coll.insert_one(doc)
     }
 
-    pub async fn insert_many(&self, db: &str, collection: &str, docs: Vec<Document>) -> Result<Vec<Bson>, String> {
+    pub async fn insert_many(
+        &self,
+        db: &str,
+        collection: &str,
+        docs: Vec<Document>,
+    ) -> Result<Vec<Bson>, String> {
         let mut dbs = self.databases.write().await;
         let database = dbs.entry(db.to_string()).or_insert_with(Database::new);
         let coll = database.get_or_create_collection(collection);
@@ -791,7 +809,11 @@ impl DocumentStore {
         (0, vec![])
     }
 
-    pub async fn get_more(&self, cursor_id: i64, batch_size: Option<i32>) -> Option<(i64, Vec<Document>)> {
+    pub async fn get_more(
+        &self,
+        cursor_id: i64,
+        batch_size: Option<i32>,
+    ) -> Option<(i64, Vec<Document>)> {
         let mut cursors = self.cursors.write().await;
         if let Some(cursor) = cursors.get_mut(&cursor_id) {
             let batch = batch_size.unwrap_or(cursor.batch_size as i32) as usize;
@@ -818,7 +840,12 @@ impl DocumentStore {
         None
     }
 
-    pub async fn find_one(&self, db: &str, collection: &str, filter: &Document) -> Option<Document> {
+    pub async fn find_one(
+        &self,
+        db: &str,
+        collection: &str,
+        filter: &Document,
+    ) -> Option<Document> {
         let dbs = self.databases.read().await;
         if let Some(database) = dbs.get(db) {
             if let Some(coll) = database.get_collection(collection) {
@@ -828,7 +855,13 @@ impl DocumentStore {
         None
     }
 
-    pub async fn update_one(&self, db: &str, collection: &str, filter: &Document, update: &Document) -> (i64, i64) {
+    pub async fn update_one(
+        &self,
+        db: &str,
+        collection: &str,
+        filter: &Document,
+        update: &Document,
+    ) -> (i64, i64) {
         let mut dbs = self.databases.write().await;
         if let Some(database) = dbs.get_mut(db) {
             if let Some(coll) = database.get_collection_mut(collection) {
@@ -838,7 +871,13 @@ impl DocumentStore {
         (0, 0)
     }
 
-    pub async fn update_many(&self, db: &str, collection: &str, filter: &Document, update: &Document) -> (i64, i64) {
+    pub async fn update_many(
+        &self,
+        db: &str,
+        collection: &str,
+        filter: &Document,
+        update: &Document,
+    ) -> (i64, i64) {
         let mut dbs = self.databases.write().await;
         if let Some(database) = dbs.get_mut(db) {
             if let Some(coll) = database.get_collection_mut(collection) {
@@ -979,12 +1018,11 @@ mod tests {
     fn test_update_operators() {
         let mut coll = Collection::new();
 
-        coll.insert_one(doc! { "name": "Bob", "score": 100 }).unwrap();
+        coll.insert_one(doc! { "name": "Bob", "score": 100 })
+            .unwrap();
 
-        let (matched, modified) = coll.update_one(
-            &doc! { "name": "Bob" },
-            &doc! { "$inc": { "score": 50 } },
-        );
+        let (matched, modified) =
+            coll.update_one(&doc! { "name": "Bob" }, &doc! { "$inc": { "score": 50 } });
         assert_eq!(matched, 1);
         assert_eq!(modified, 1);
 
@@ -1070,13 +1108,20 @@ mod tests {
 
         // Update
         let (matched, modified) = store
-            .update_one("testdb", "users", &doc! { "name": "Charlie" }, &doc! { "$set": { "age": 25 } })
+            .update_one(
+                "testdb",
+                "users",
+                &doc! { "name": "Charlie" },
+                &doc! { "$set": { "age": 25 } },
+            )
             .await;
         assert_eq!(matched, 1);
         assert_eq!(modified, 1);
 
         // Delete
-        let deleted = store.delete_one("testdb", "users", &doc! { "name": "Charlie" }).await;
+        let deleted = store
+            .delete_one("testdb", "users", &doc! { "name": "Charlie" })
+            .await;
         assert_eq!(deleted, 1);
     }
 }

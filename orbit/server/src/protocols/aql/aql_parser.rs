@@ -743,7 +743,7 @@ impl AqlTokenParser {
                 self.advance();
                 if matches!(self.current_token(), Some(AqlToken::Colon)) {
                     self.advance(); // consume :
-                    // This is a prune variable binding like "PRUNE v: v.depth > 3"
+                                    // This is a prune variable binding like "PRUNE v: v.depth > 3"
                     Some(name)
                 } else {
                     // Not a prune var, just the condition start - backtrack!
@@ -812,11 +812,7 @@ impl AqlTokenParser {
                     self.advance();
                     k
                 }
-                _ => {
-                    return Err(ProtocolError::ParseError(
-                        "Expected option key".to_string(),
-                    ))
-                }
+                _ => return Err(ProtocolError::ParseError("Expected option key".to_string())),
             };
 
             // Expect colon
@@ -1307,11 +1303,7 @@ impl AqlTokenParser {
                     self.advance();
                     k
                 }
-                _ => {
-                    return Err(ProtocolError::ParseError(
-                        "Expected option key".to_string(),
-                    ))
-                }
+                _ => return Err(ProtocolError::ParseError("Expected option key".to_string())),
             };
 
             if matches!(self.current_token(), Some(AqlToken::Colon)) {
@@ -2026,14 +2018,93 @@ impl AqlTokenParser {
     }
 
     fn parse_expression(&mut self) -> ProtocolResult<AqlExpression> {
-        // Simplified expression parsing
+        self.parse_or_expression()
+    }
+
+    /// Parse OR expression (lowest precedence)
+    fn parse_or_expression(&mut self) -> ProtocolResult<AqlExpression> {
+        let mut left = self.parse_and_expression()?;
+
+        while matches!(self.current_token(), Some(AqlToken::Or)) {
+            self.advance(); // consume OR
+            let right = self.parse_and_expression()?;
+            left = AqlExpression::BinaryOp {
+                op: "OR".to_string(),
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+
+        Ok(left)
+    }
+
+    /// Parse AND expression
+    fn parse_and_expression(&mut self) -> ProtocolResult<AqlExpression> {
+        let mut left = self.parse_not_expression()?;
+
+        while matches!(self.current_token(), Some(AqlToken::And)) {
+            self.advance(); // consume AND
+            let right = self.parse_not_expression()?;
+            left = AqlExpression::BinaryOp {
+                op: "AND".to_string(),
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+
+        Ok(left)
+    }
+
+    /// Parse NOT expression
+    fn parse_not_expression(&mut self) -> ProtocolResult<AqlExpression> {
+        if matches!(self.current_token(), Some(AqlToken::Not)) {
+            self.advance(); // consume NOT
+            let expr = self.parse_not_expression()?;
+            Ok(AqlExpression::UnaryOp {
+                op: "NOT".to_string(),
+                expr: Box::new(expr),
+            })
+        } else {
+            self.parse_primary_expression()
+        }
+    }
+
+    /// Parse primary expression (literals, identifiers, function calls)
+    fn parse_primary_expression(&mut self) -> ProtocolResult<AqlExpression> {
         match self.current_token() {
             Some(AqlToken::Identifier(name)) => {
                 let name = name.clone();
                 self.advance();
 
+                // Check for function call
+                if matches!(self.current_token(), Some(AqlToken::LeftParen)) {
+                    self.advance(); // consume (
+                    let mut args = Vec::new();
+
+                    // Parse arguments
+                    if !matches!(self.current_token(), Some(AqlToken::RightParen)) {
+                        args.push(self.parse_expression()?);
+
+                        while matches!(self.current_token(), Some(AqlToken::Comma)) {
+                            self.advance(); // consume ,
+                            args.push(self.parse_expression()?);
+                        }
+                    }
+
+                    // Expect closing paren
+                    match self.current_token() {
+                        Some(AqlToken::RightParen) => self.advance(),
+                        _ => {
+                            return Err(ProtocolError::ParseError(
+                                "Expected ) after function arguments".to_string(),
+                            ))
+                        }
+                    };
+
+                    Ok(AqlExpression::FunctionCall { name, args })
+                }
                 // Check for property access
-                if matches!(self.current_token(), Some(AqlToken::Dot)) {
+                else if matches!(self.current_token(), Some(AqlToken::Dot)) {
                     self.advance(); // consume .
                     let property = match self.current_token() {
                         Some(AqlToken::Identifier(prop)) => {
@@ -2073,6 +2144,19 @@ impl AqlTokenParser {
             Some(AqlToken::Null) => {
                 self.advance();
                 Ok(AqlExpression::Literal(AqlValue::Null))
+            }
+            Some(AqlToken::LeftParen) => {
+                self.advance(); // consume (
+                let expr = self.parse_expression()?;
+                match self.current_token() {
+                    Some(AqlToken::RightParen) => self.advance(),
+                    _ => {
+                        return Err(ProtocolError::ParseError(
+                            "Expected ) after expression".to_string(),
+                        ))
+                    }
+                };
+                Ok(expr)
             }
             Some(AqlToken::LeftBrace) => self.parse_object_expression(),
             Some(AqlToken::LeftBracket) => self.parse_array_expression(),
@@ -2371,7 +2455,22 @@ pub enum AqlExpression {
     Object(HashMap<String, AqlExpression>),
     /// Array literal
     Array(Vec<AqlExpression>),
-    // TODO: Add more expression types (function calls, arithmetic, etc.)
+    /// Function call
+    FunctionCall {
+        name: String,
+        args: Vec<AqlExpression>,
+    },
+    /// Binary operation (e.g., a + b, a AND b)
+    BinaryOp {
+        op: String,
+        left: Box<AqlExpression>,
+        right: Box<AqlExpression>,
+    },
+    /// Unary operation (e.g., NOT a, -b)
+    UnaryOp {
+        op: String,
+        expr: Box<AqlExpression>,
+    },
 }
 
 /// AQL condition types

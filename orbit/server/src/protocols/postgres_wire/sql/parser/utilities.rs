@@ -397,7 +397,7 @@ pub fn parse_data_type(parser: &mut SqlParser) -> ParseResult<SqlType> {
     // Check for array brackets (TYPE[])
     if parser.matches(&[Token::LeftBracket]) {
         parser.advance()?;
-        
+
         // Optional dimension (e.g., INTEGER[10])
         let dimensions = if let Some(Token::NumericLiteral(n)) = &parser.current_token {
             let dim = n.parse::<u32>().ok();
@@ -406,9 +406,9 @@ pub fn parse_data_type(parser: &mut SqlParser) -> ParseResult<SqlType> {
         } else {
             None
         };
-        
+
         parser.expect(Token::RightBracket)?;
-        
+
         Ok(SqlType::Array {
             element_type: Box::new(base_type),
             dimensions,
@@ -745,7 +745,10 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
         }
         Some(token) => {
             // Check for typed literal (e.g. INTERVAL '1 hour')
-            if matches!(token, Token::Interval | Token::Timestamp | Token::Date | Token::Time) {
+            if matches!(
+                token,
+                Token::Interval | Token::Timestamp | Token::Date | Token::Time
+            ) {
                 let type_name = match token {
                     Token::Interval => "interval",
                     Token::Timestamp => "timestamp",
@@ -753,27 +756,32 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
                     Token::Time => "time",
                     _ => unreachable!(),
                 };
-                
+
                 // Check if next token is a string literal
-                let literal_string = if let Some(Token::StringLiteral(s)) = parser.tokens.get(parser.position + 1) {
-                    Some(s.clone())
-                } else {
-                    None
-                };
+                let literal_string =
+                    if let Some(Token::StringLiteral(s)) = parser.tokens.get(parser.position + 1) {
+                        Some(s.clone())
+                    } else {
+                        None
+                    };
 
                 if let Some(s) = literal_string {
                     parser.advance()?; // Consume type keyword
                     parser.advance()?; // Consume string literal
-                    
+
                     // Create a cast expression or specific literal
                     // For now, treat as text cast to type
                     return Ok(Expression::Cast {
                         expr: Box::new(Expression::Literal(SqlValue::Text(s))),
                         target_type: match type_name {
                             "interval" => SqlType::Interval,
-                            "timestamp" => SqlType::Timestamp { with_timezone: false },
+                            "timestamp" => SqlType::Timestamp {
+                                with_timezone: false,
+                            },
                             "date" => SqlType::Date,
-                            "time" => SqlType::Time { with_timezone: false },
+                            "time" => SqlType::Time {
+                                with_timezone: false,
+                            },
                             _ => SqlType::Text,
                         },
                     });
@@ -785,7 +793,7 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
                 if name.to_uppercase() == "ARRAY" {
                     parser.advance()?;
                     parser.expect(Token::LeftBracket)?;
-                    
+
                     let mut elements = Vec::new();
                     if !parser.matches(&[Token::RightBracket]) {
                         loop {
@@ -797,7 +805,7 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
                             }
                         }
                     }
-                    
+
                     parser.expect(Token::RightBracket)?;
                     return Ok(Expression::Array(elements));
                 }
@@ -806,7 +814,7 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
             // Try to parse as identifier (including keywords)
             if let Some(name) = token_to_identifier_name(token) {
                 parser.advance()?;
-                
+
                 // Check for function call
                 if parser.matches(&[Token::LeftParen]) {
                     parser.advance()?;
@@ -822,26 +830,34 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
                         }
                     }
                     parser.expect(Token::RightParen)?;
-                    
-                    Ok(Expression::Function(Box::new(crate::protocols::postgres_wire::sql::ast::FunctionCall {
-                        name: crate::protocols::postgres_wire::sql::ast::FunctionName::Simple(name),
-                        args,
-                        distinct: false,
-                        order_by: None,
-                        filter: None,
-                    })))
+
+                    Ok(Expression::Function(Box::new(
+                        crate::protocols::postgres_wire::sql::ast::FunctionCall {
+                            name: crate::protocols::postgres_wire::sql::ast::FunctionName::Simple(
+                                name,
+                            ),
+                            args,
+                            distinct: false,
+                            order_by: None,
+                            filter: None,
+                        },
+                    )))
                 } else {
                     // Check for Dot (qualified name)
                     if parser.matches(&[Token::Dot]) {
                         parser.advance()?; // consume Dot
-                        if let Some(col_name) = parser.current_token.as_ref().and_then(token_to_identifier_name) {
-                             parser.advance()?;
-                             Ok(Expression::Column(ColumnRef {
-                                 table: Some(name),
-                                 name: col_name,
-                             }))
+                        if let Some(col_name) = parser
+                            .current_token
+                            .as_ref()
+                            .and_then(token_to_identifier_name)
+                        {
+                            parser.advance()?;
+                            Ok(Expression::Column(ColumnRef {
+                                table: Some(name),
+                                name: col_name,
+                            }))
                         } else {
-                             Err(ParseError {
+                            Err(ParseError {
                                 message: "Expected column name after dot".to_string(),
                                 position: parser.position,
                                 expected: vec!["identifier".to_string()],
@@ -849,10 +865,7 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
                             })
                         }
                     } else {
-                        Ok(Expression::Column(ColumnRef {
-                            table: None,
-                            name,
-                        }))
+                        Ok(Expression::Column(ColumnRef { table: None, name }))
                     }
                 }
             } else {
@@ -941,7 +954,16 @@ pub fn is_type_name(token: &Option<Token>) -> bool {
         Some(Token::Identifier(name)) => {
             matches!(
                 name.to_uppercase().as_str(),
-                "INT" | "INT2" | "INT4" | "INT8" | "FLOAT4" | "FLOAT8" | "BOOL" | "SERIAL" | "BIGSERIAL" | "SMALLSERIAL"
+                "INT"
+                    | "INT2"
+                    | "INT4"
+                    | "INT8"
+                    | "FLOAT4"
+                    | "FLOAT8"
+                    | "BOOL"
+                    | "SERIAL"
+                    | "BIGSERIAL"
+                    | "SMALLSERIAL"
             )
         }
         _ => false,

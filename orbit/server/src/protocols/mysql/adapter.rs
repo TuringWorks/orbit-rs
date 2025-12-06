@@ -378,13 +378,16 @@ impl MySqlAdapter {
         }
 
         // Handle SHOW VARIABLES
-        if query_upper.starts_with("SHOW VARIABLES") || query_upper.starts_with("SHOW SESSION VARIABLES") {
+        if query_upper.starts_with("SHOW VARIABLES")
+            || query_upper.starts_with("SHOW SESSION VARIABLES")
+        {
             println!("[MySQL] Handling SHOW VARIABLES");
             return Some(self.build_show_variables_result());
         }
 
         // Handle SHOW STATUS
-        if query_upper.starts_with("SHOW STATUS") || query_upper.starts_with("SHOW SESSION STATUS") {
+        if query_upper.starts_with("SHOW STATUS") || query_upper.starts_with("SHOW SESSION STATUS")
+        {
             println!("[MySQL] Handling SHOW STATUS");
             return Some(self.build_show_status_result());
         }
@@ -396,7 +399,8 @@ impl MySqlAdapter {
         }
 
         // Handle SHOW CHARACTER SET
-        if query_upper.starts_with("SHOW CHARACTER SET") || query_upper.starts_with("SHOW CHARSET") {
+        if query_upper.starts_with("SHOW CHARACTER SET") || query_upper.starts_with("SHOW CHARSET")
+        {
             println!("[MySQL] Handling SHOW CHARACTER SET");
             return Some(self.build_show_charset_result());
         }
@@ -1183,7 +1187,10 @@ impl MySqlAdapter {
                 .extend(data);
         } else {
             // Statement not found, but per MySQL protocol, no response is sent
-            println!("[MySQL] Warning: Long data for unknown statement {}", statement_id);
+            println!(
+                "[MySQL] Warning: Long data for unknown statement {}",
+                statement_id
+            );
         }
         drop(statements);
 
@@ -1205,10 +1212,7 @@ impl MySqlAdapter {
         let statement_id = payload.get_u32_le();
         let num_rows = payload.get_u32_le();
 
-        println!(
-            "[MySQL] Fetch: stmt={}, rows={}",
-            statement_id, num_rows
-        );
+        println!("[MySQL] Fetch: stmt={}, rows={}", statement_id, num_rows);
 
         // Note: Full cursor support would require:
         // 1. Storing the result set from COM_STMT_EXECUTE when CURSOR_TYPE_READ_ONLY is set
@@ -1647,7 +1651,12 @@ mod tests {
         // Extract statement_id from response (first 4 bytes after status byte)
         let first_packet = &packets[0];
         assert_eq!(first_packet[0], 0x00); // OK status
-        let statement_id = u32::from_le_bytes([first_packet[1], first_packet[2], first_packet[3], first_packet[4]]);
+        let statement_id = u32::from_le_bytes([
+            first_packet[1],
+            first_packet[2],
+            first_packet[3],
+            first_packet[4],
+        ]);
 
         // Send long data for param 1 (the data column)
         let mut long_data_payload = BytesMut::new();
@@ -1655,7 +1664,9 @@ mod tests {
         long_data_payload.put_u16_le(1); // param_id (0-indexed)
         long_data_payload.put(&b"This is some long text data for the test"[..]);
 
-        let result = adapter.handle_stmt_send_long_data(long_data_payload.freeze()).await;
+        let result = adapter
+            .handle_stmt_send_long_data(long_data_payload.freeze())
+            .await;
         assert!(result.is_ok());
         // COM_STMT_SEND_LONG_DATA returns no response
         assert!(result.unwrap().is_empty());
@@ -1664,7 +1675,10 @@ mod tests {
         let statements = adapter.prepared_statements.read().await;
         let stmt = statements.get(&statement_id).unwrap();
         assert!(stmt.long_data.contains_key(&1));
-        assert_eq!(stmt.long_data[&1], b"This is some long text data for the test");
+        assert_eq!(
+            stmt.long_data[&1],
+            b"This is some long text data for the test"
+        );
     }
 
     #[tokio::test]
@@ -1676,21 +1690,32 @@ mod tests {
         let prepare_payload = Bytes::from("INSERT INTO test (data) VALUES (?)");
         let prepare_result = adapter.handle_prepare(prepare_payload).await.unwrap();
         let first_packet = &prepare_result[0];
-        let statement_id = u32::from_le_bytes([first_packet[1], first_packet[2], first_packet[3], first_packet[4]]);
+        let statement_id = u32::from_le_bytes([
+            first_packet[1],
+            first_packet[2],
+            first_packet[3],
+            first_packet[4],
+        ]);
 
         // Send first chunk
         let mut chunk1 = BytesMut::new();
         chunk1.put_u32_le(statement_id);
         chunk1.put_u16_le(0); // param_id
         chunk1.put(&b"First chunk "[..]);
-        adapter.handle_stmt_send_long_data(chunk1.freeze()).await.unwrap();
+        adapter
+            .handle_stmt_send_long_data(chunk1.freeze())
+            .await
+            .unwrap();
 
         // Send second chunk
         let mut chunk2 = BytesMut::new();
         chunk2.put_u32_le(statement_id);
         chunk2.put_u16_le(0); // same param_id
         chunk2.put(&b"Second chunk"[..]);
-        adapter.handle_stmt_send_long_data(chunk2.freeze()).await.unwrap();
+        adapter
+            .handle_stmt_send_long_data(chunk2.freeze())
+            .await
+            .unwrap();
 
         // Verify chunks were concatenated
         let statements = adapter.prepared_statements.read().await;
@@ -1707,14 +1732,22 @@ mod tests {
         let prepare_payload = Bytes::from("INSERT INTO test (data) VALUES (?)");
         let prepare_result = adapter.handle_prepare(prepare_payload).await.unwrap();
         let first_packet = &prepare_result[0];
-        let statement_id = u32::from_le_bytes([first_packet[1], first_packet[2], first_packet[3], first_packet[4]]);
+        let statement_id = u32::from_le_bytes([
+            first_packet[1],
+            first_packet[2],
+            first_packet[3],
+            first_packet[4],
+        ]);
 
         // Send long data
         let mut long_data = BytesMut::new();
         long_data.put_u32_le(statement_id);
         long_data.put_u16_le(0);
         long_data.put(&b"Some data"[..]);
-        adapter.handle_stmt_send_long_data(long_data.freeze()).await.unwrap();
+        adapter
+            .handle_stmt_send_long_data(long_data.freeze())
+            .await
+            .unwrap();
 
         // Reset statement
         let mut reset_payload = BytesMut::new();
@@ -1737,7 +1770,12 @@ mod tests {
         let prepare_payload = Bytes::from("SELECT * FROM test");
         let prepare_result = adapter.handle_prepare(prepare_payload).await.unwrap();
         let first_packet = &prepare_result[0];
-        let statement_id = u32::from_le_bytes([first_packet[1], first_packet[2], first_packet[3], first_packet[4]]);
+        let statement_id = u32::from_le_bytes([
+            first_packet[1],
+            first_packet[2],
+            first_packet[3],
+            first_packet[4],
+        ]);
 
         // Try to fetch
         let mut fetch_payload = BytesMut::new();

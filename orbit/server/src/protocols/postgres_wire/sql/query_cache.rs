@@ -141,7 +141,9 @@ impl QueryKey {
             }
 
             // Replace numeric literals
-            if c.is_ascii_digit() || (c == '-' && i + 1 < chars.len() && chars[i + 1].is_ascii_digit()) {
+            if c.is_ascii_digit()
+                || (c == '-' && i + 1 < chars.len() && chars[i + 1].is_ascii_digit())
+            {
                 result.push('?');
                 if c == '-' {
                     i += 1;
@@ -468,13 +470,15 @@ mod tests {
             vec![Some("2".to_string()), Some("Bob".to_string())],
         ];
 
-        cache.put(
-            key.clone(),
-            columns.clone(),
-            rows.clone(),
-            vec!["USERS".to_string()],
-            100, // execution time > min threshold
-        ).await;
+        cache
+            .put(
+                key.clone(),
+                columns.clone(),
+                rows.clone(),
+                vec!["USERS".to_string()],
+                100, // execution time > min threshold
+            )
+            .await;
 
         let result = cache.get(&key).await;
         assert!(result.is_some());
@@ -489,13 +493,15 @@ mod tests {
         let cache = QueryCache::new_default();
         let key = QueryKey::new("SELECT * FROM users", "test", "public");
 
-        cache.put(
-            key.clone(),
-            vec!["id".to_string()],
-            vec![vec![Some("1".to_string())]],
-            vec!["USERS".to_string()],
-            100,
-        ).await;
+        cache
+            .put(
+                key.clone(),
+                vec!["id".to_string()],
+                vec![vec![Some("1".to_string())]],
+                vec!["USERS".to_string()],
+                100,
+            )
+            .await;
 
         assert!(cache.get(&key).await.is_some());
 
@@ -513,13 +519,15 @@ mod tests {
         let _ = cache.get(&key).await;
 
         // Put
-        cache.put(
-            key.clone(),
-            vec!["id".to_string()],
-            vec![vec![Some("1".to_string())]],
-            vec!["USERS".to_string()],
-            100,
-        ).await;
+        cache
+            .put(
+                key.clone(),
+                vec!["id".to_string()],
+                vec![vec![Some("1".to_string())]],
+                vec!["USERS".to_string()],
+                100,
+            )
+            .await;
 
         // Hit
         let _ = cache.get(&key).await;
@@ -554,13 +562,15 @@ mod tests {
 
         for table in &tables {
             let key = QueryKey::new(&format!("SELECT * FROM {}", table), "test", "public");
-            cache.put(
-                key,
-                vec!["id".to_string()],
-                vec![vec![Some("1".to_string())]],
-                vec![table.to_uppercase()],
-                100,
-            ).await;
+            cache
+                .put(
+                    key,
+                    vec!["id".to_string()],
+                    vec![vec![Some("1".to_string())]],
+                    vec![table.to_uppercase()],
+                    100,
+                )
+                .await;
         }
 
         // First entry (users) should be evicted

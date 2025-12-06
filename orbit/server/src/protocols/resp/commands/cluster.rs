@@ -249,15 +249,8 @@ impl ClusterCommands {
             for (start, end) in &node.slots {
                 // Parse host and port from address
                 let parts: Vec<&str> = node.address.split(':').collect();
-                let host = parts
-                    .first()
-                    .copied()
-                    .unwrap_or("127.0.0.1")
-                    .to_string();
-                let port: i64 = parts
-                    .get(1)
-                    .and_then(|p| p.parse().ok())
-                    .unwrap_or(6379);
+                let host = parts.first().copied().unwrap_or("127.0.0.1").to_string();
+                let port: i64 = parts.get(1).and_then(|p| p.parse().ok()).unwrap_or(6379);
 
                 // Each slot range is [start, end, [master_host, master_port, master_id], [replica...]]
                 let master_info = RespValue::Array(vec![
@@ -324,11 +317,7 @@ impl ClusterCommands {
 
             // Parse host and port
             let parts: Vec<&str> = node.address.split(':').collect();
-            let host = parts
-                .first()
-                .copied()
-                .unwrap_or("127.0.0.1")
-                .to_string();
+            let host = parts.first().copied().unwrap_or("127.0.0.1").to_string();
             let port: i64 = parts.get(1).and_then(|p| p.parse().ok()).unwrap_or(6379);
 
             // Build node info
@@ -415,9 +404,7 @@ impl CommandHandler for ClusterCommands {
                 ));
             }
 
-            let subcommand = self
-                .get_string_arg(args, 0, "CLUSTER")?
-                .to_uppercase();
+            let subcommand = self.get_string_arg(args, 0, "CLUSTER")?.to_uppercase();
             let sub_args = &args[1..];
 
             match subcommand.as_str() {

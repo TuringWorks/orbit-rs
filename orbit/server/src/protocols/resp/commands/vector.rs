@@ -853,10 +853,25 @@ mod tests {
         // (testing via trait would require full setup, so we just verify the constants)
         for cmd in &expected_commands {
             assert!(
-                ["VECTOR.CREATE", "VECTOR.ADD", "VECTOR.GET", "VECTOR.DEL",
-                 "VECTOR.SEARCH", "VECTOR.INFO", "VECTOR.COUNT", "VECTOR.LIST",
-                 "VECTOR.STATS", "VECTOR.DROP", "VECTOR.KNN", "FT.CREATE",
-                 "FT.ADD", "FT.DEL", "FT.SEARCH", "FT.DROPINDEX", "FT.INFO"]
+                [
+                    "VECTOR.CREATE",
+                    "VECTOR.ADD",
+                    "VECTOR.GET",
+                    "VECTOR.DEL",
+                    "VECTOR.SEARCH",
+                    "VECTOR.INFO",
+                    "VECTOR.COUNT",
+                    "VECTOR.LIST",
+                    "VECTOR.STATS",
+                    "VECTOR.DROP",
+                    "VECTOR.KNN",
+                    "FT.CREATE",
+                    "FT.ADD",
+                    "FT.DEL",
+                    "FT.SEARCH",
+                    "FT.DROPINDEX",
+                    "FT.INFO"
+                ]
                 .contains(cmd),
                 "Command {} should be supported",
                 cmd

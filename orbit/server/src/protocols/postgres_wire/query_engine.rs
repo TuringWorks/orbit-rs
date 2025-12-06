@@ -125,7 +125,8 @@ impl QueryEngine {
     pub fn new() -> Self {
         println!("DEBUG: QueryEngine::new() called (NO STORAGE)");
         println!("Backtrace:\n{}", std::backtrace::Backtrace::capture());
-        use std::io::Write; std::io::stdout().flush().unwrap();
+        use std::io::Write;
+        std::io::stdout().flush().unwrap();
         Self {
             actors: Arc::new(RwLock::new(HashMap::new())),
             persistent_storage: None,
@@ -139,7 +140,8 @@ impl QueryEngine {
     /// Create a new query engine with persistent storage
     pub fn new_with_persistent_storage(storage: Arc<dyn PersistentTableStorage>) -> Self {
         println!("DEBUG: QueryEngine initialized with persistent storage");
-        use std::io::Write; std::io::stdout().flush().unwrap();
+        use std::io::Write;
+        std::io::stdout().flush().unwrap();
         Self {
             actors: Arc::new(RwLock::new(HashMap::new())),
             persistent_storage: Some(storage),
@@ -309,10 +311,12 @@ impl QueryEngine {
                 }
             }
             Statement::DropTable { table, if_exists } => {
-                println!("DEBUG: Executing DropTable. Storage present: {}", self.persistent_storage.is_some());
+                println!(
+                    "DEBUG: Executing DropTable. Storage present: {}",
+                    self.persistent_storage.is_some()
+                );
                 if let Some(ref storage) = self.persistent_storage {
-                    self.execute_drop_table(storage, &table, if_exists)
-                        .await
+                    self.execute_drop_table(storage, &table, if_exists).await
                 } else {
                     Err(ProtocolError::PostgresError(
                         "Persistent storage not enabled".to_string(),
@@ -331,21 +335,24 @@ impl QueryEngine {
             Ok(stmts) => stmts,
             Err(e) => return Err(e.into()),
         };
-        
+
         let mut results = Vec::new();
-        
+
         for stmt in statements {
             let result = self.execute_ast_statement(stmt).await?;
             results.push(result);
         }
-        
+
         Ok(results)
     }
 
     /// Execute a single AST statement
-    async fn execute_ast_statement(&self, stmt: crate::protocols::postgres_wire::sql::ast::Statement) -> ProtocolResult<QueryResult> {
-        use crate::protocols::postgres_wire::sql::ast::Statement as AstStatement;
+    async fn execute_ast_statement(
+        &self,
+        stmt: crate::protocols::postgres_wire::sql::ast::Statement,
+    ) -> ProtocolResult<QueryResult> {
         use crate::protocols::postgres_wire::persistent_storage::ColumnType;
+        use crate::protocols::postgres_wire::sql::ast::Statement as AstStatement;
 
         // Check if we can execute this persistently
         if let Some(ref storage) = self.persistent_storage {
@@ -371,25 +378,34 @@ impl QueryEngine {
                             constraints,
                         });
                     }
-                    
+
                     // Execute on persistent storage
-                    let result = self.execute_create_table(storage, &create.name.full_name(), simple_columns, create.if_not_exists).await?;
-                    
+                    let result = self
+                        .execute_create_table(
+                            storage,
+                            &create.name.full_name(),
+                            simple_columns,
+                            create.if_not_exists,
+                        )
+                        .await?;
+
                     // Also execute on comprehensive engine so it knows about the table
                     let mut sql_engine = self.sql_engine.lock().await;
                     let _ = sql_engine.execute_statement(stmt).await; // Ignore errors from comprehensive engine
-                    
+
                     return Ok(result);
                 }
                 AstStatement::DropTable(drop) => {
                     // Handle first table only for now
                     if let Some(table) = drop.names.first() {
-                        let result = self.execute_drop_table(storage, &table.full_name(), drop.if_exists).await?;
-                        
+                        let result = self
+                            .execute_drop_table(storage, &table.full_name(), drop.if_exists)
+                            .await?;
+
                         // Also execute on comprehensive engine
                         let mut sql_engine = self.sql_engine.lock().await;
                         let _ = sql_engine.execute_statement(stmt).await;
-                        
+
                         return Ok(result);
                     }
                 }
@@ -397,27 +413,33 @@ impl QueryEngine {
                     // Convert AST Insert to persistent insert arguments
                     let table_name = insert.table.full_name();
                     let mut columns = insert.columns.clone().unwrap_or_default();
-                    
+
                     // Handle implicit columns (SELECT * FROM table style insert)
                     if columns.is_empty() {
-                         if let Some(schema) = storage.get_table_schema(&table_name).await? {
-                             columns = schema.columns.iter()
-                                 .filter(|c| !matches!(c.data_type, ColumnType::Serial))
-                                 .map(|c| c.name.clone())
-                                 .collect();
-                         }
+                        if let Some(schema) = storage.get_table_schema(&table_name).await? {
+                            columns = schema
+                                .columns
+                                .iter()
+                                .filter(|c| !matches!(c.data_type, ColumnType::Serial))
+                                .map(|c| c.name.clone())
+                                .collect();
+                        }
                     }
-                    
+
                     // Extract values
                     let mut values_list = Vec::new();
-                    if let crate::protocols::postgres_wire::sql::ast::InsertSource::Values(rows) = &insert.source {
+                    if let crate::protocols::postgres_wire::sql::ast::InsertSource::Values(rows) =
+                        &insert.source
+                    {
                         for row in rows {
                             let mut row_values = Vec::new();
                             for expr in row {
                                 // Evaluate expression to string
                                 // This is tricky without full evaluator context.
                                 // For now, handle literals and simple functions
-                                use crate::protocols::postgres_wire::sql::expression_evaluator::{ExpressionEvaluator, EvaluationContext};
+                                use crate::protocols::postgres_wire::sql::expression_evaluator::{
+                                    EvaluationContext, ExpressionEvaluator,
+                                };
                                 let mut evaluator = ExpressionEvaluator::new();
                                 let context = EvaluationContext::empty();
                                 let val = evaluator.evaluate(expr, &context)?;
@@ -426,14 +448,16 @@ impl QueryEngine {
                             values_list.push(row_values);
                         }
                     }
-                    
+
                     // Execute on persistent storage
-                    let result = self.execute_persistent_insert(storage, &table_name, columns, values_list).await?;
-                    
+                    let result = self
+                        .execute_persistent_insert(storage, &table_name, columns, values_list)
+                        .await?;
+
                     // Also execute on comprehensive engine
                     let mut sql_engine = self.sql_engine.lock().await;
                     let _ = sql_engine.execute_statement(stmt).await;
-                    
+
                     return Ok(result);
                 }
                 AstStatement::Select(select) => {
@@ -441,21 +465,23 @@ impl QueryEngine {
                     // If it does, we need to use persistent storage for the query
                     // Extract table name from FROM clause
                     if let Some(ref from_clause) = select.from_clause {
-                        if let Some(table_name) = self.extract_table_name_from_from_clause(from_clause) {
+                        if let Some(table_name) =
+                            self.extract_table_name_from_from_clause(from_clause)
+                        {
                             // Check if table exists in persistent storage
                             if storage.table_exists(&table_name).await? {
                                 // Table exists in persistent storage
                                 // For complex queries (GROUP BY, aggregates, etc.), we need to:
                                 // 1. Fetch all data from persistent storage
                                 // 2. Execute the query logic in memory
-                                
+
                                 // For now, fetch all rows and let the comprehensive engine handle it
                                 // but inject the data from persistent storage
-                                
+
                                 // This is a workaround: we'll fall through to the comprehensive engine
                                 // but first we need to populate it with data from persistent storage
                                 // Since that's complex, let's just handle simple SELECTs here
-                                
+
                                 // For complex queries, we'll need to enhance the comprehensive engine
                                 // to support persistent storage as a data source
                                 // For now, fall through to comprehensive engine
@@ -469,22 +495,23 @@ impl QueryEngine {
 
         // Fallback to comprehensive engine
         let mut sql_engine = self.sql_engine.lock().await;
-        
+
         // Before executing, check if this is a SELECT from a persistent table
         // If so, we need to make sure the comprehensive engine has the data
         if let AstStatement::Select(select) = &stmt {
             if let Some(ref storage) = self.persistent_storage {
                 if let Some(ref from_clause) = select.from_clause {
-                    if let Some(table_name) = self.extract_table_name_from_from_clause(from_clause) {
+                    if let Some(table_name) = self.extract_table_name_from_from_clause(from_clause)
+                    {
                         if storage.table_exists(&table_name).await? {
                             // Table exists in persistent storage
                             // We need to ensure the comprehensive engine has this table and data
                             // This is a workaround until we have full integration
-                            
+
                             // For now, execute the query directly on persistent storage data
                             // by creating a temporary in-memory representation
                             // This is not ideal but will work for the test
-                            
+
                             // Actually, let's just execute the statement and let it fail
                             // The comprehensive engine will report "table does not exist"
                             // which is the current behavior
@@ -493,13 +520,16 @@ impl QueryEngine {
                 }
             }
         }
-        
+
         let unified_result = sql_engine.execute_statement(stmt).await?;
         Ok(self.convert_sql_result_to_query_result(unified_result))
     }
-    
+
     /// Extract table name from FROM clause
-    fn extract_table_name_from_from_clause(&self, from_clause: &crate::protocols::postgres_wire::sql::ast::FromClause) -> Option<String> {
+    fn extract_table_name_from_from_clause(
+        &self,
+        from_clause: &crate::protocols::postgres_wire::sql::ast::FromClause,
+    ) -> Option<String> {
         use crate::protocols::postgres_wire::sql::ast::FromClause;
         match from_clause {
             FromClause::Table { name, .. } => Some(name.full_name()),
@@ -539,7 +569,16 @@ impl QueryEngine {
             UnifiedExecutionResult::Insert { count, .. } => QueryResult::Insert { count },
             UnifiedExecutionResult::Update { count, .. } => QueryResult::Update { count },
             UnifiedExecutionResult::Delete { count, .. } => QueryResult::Delete { count },
-            UnifiedExecutionResult::Merge { count, rows, columns, .. } => QueryResult::Merge { count, rows, columns },
+            UnifiedExecutionResult::Merge {
+                count,
+                rows,
+                columns,
+                ..
+            } => QueryResult::Merge {
+                count,
+                rows,
+                columns,
+            },
             UnifiedExecutionResult::CreateTable { table_name, .. } => {
                 // For DDL operations, return an empty select result with a message
                 QueryResult::Select {
@@ -603,13 +642,13 @@ impl QueryEngine {
                 columns: vec!["message".to_string()],
                 rows: vec![vec![Some("DROP VIEW".to_string())]],
             },
-            UnifiedExecutionResult::Set { variable, value, .. } => QueryResult::Set { variable, value },
-            UnifiedExecutionResult::Other { message, .. } => {
-                QueryResult::Select {
-                    columns: vec!["message".to_string()],
-                    rows: vec![vec![Some(message)]],
-                }
-            }
+            UnifiedExecutionResult::Set {
+                variable, value, ..
+            } => QueryResult::Set { variable, value },
+            UnifiedExecutionResult::Other { message, .. } => QueryResult::Select {
+                columns: vec!["message".to_string()],
+                rows: vec![vec![Some(message)]],
+            },
         }
     }
 
@@ -725,14 +764,14 @@ impl QueryEngine {
         let col_start = table_end + 1;
         let col_end = sql_upper[col_start..].find(')').unwrap() + col_start;
         let val_keyword_pos = sql_upper.find("VALUES").unwrap() + 6;
-        
+
         // Extract data using original SQL to preserve case
         let table = sql[table_start..table_end].trim().to_uppercase();
         let columns: Vec<String> = sql_upper[col_start..col_end]
             .split(',')
             .map(|s| s.trim().to_string())
             .collect();
-            
+
         // Parse values list: (v1, v2), (v3, v4)
         let values_str = sql[val_keyword_pos..].trim();
         let values = self.parse_values_list(values_str);
@@ -760,20 +799,26 @@ impl QueryEngine {
                 '\'' | '"' if !in_quotes => {
                     in_quotes = true;
                     quote_char = ch;
-                    if paren_depth > 0 { current_row_str.push(ch); }
+                    if paren_depth > 0 {
+                        current_row_str.push(ch);
+                    }
                 }
                 c if in_quotes && c == quote_char => {
                     in_quotes = false;
-                    if paren_depth > 0 { current_row_str.push(ch); }
+                    if paren_depth > 0 {
+                        current_row_str.push(ch);
+                    }
                 }
                 '(' if !in_quotes => {
                     paren_depth += 1;
-                    if paren_depth > 1 { current_row_str.push(ch); }
+                    if paren_depth > 1 {
+                        current_row_str.push(ch);
+                    }
                 }
                 ')' if !in_quotes => {
                     paren_depth -= 1;
-                    if paren_depth > 0 { 
-                        current_row_str.push(ch); 
+                    if paren_depth > 0 {
+                        current_row_str.push(ch);
                     } else if paren_depth == 0 {
                         // End of a row
                         if !current_row_str.trim().is_empty() {
@@ -786,7 +831,9 @@ impl QueryEngine {
                     // Separator between rows, ignore
                 }
                 _ => {
-                    if paren_depth > 0 { current_row_str.push(ch); }
+                    if paren_depth > 0 {
+                        current_row_str.push(ch);
+                    }
                 }
             }
             i += 1;
@@ -1209,8 +1256,8 @@ impl QueryEngine {
                 }
             }
 
-            let actor_id =
-                actor_id.ok_or_else(|| ProtocolError::PostgresError("Missing actor_id".to_string()))?;
+            let actor_id = actor_id
+                .ok_or_else(|| ProtocolError::PostgresError("Missing actor_id".to_string()))?;
             let actor_type = actor_type
                 .ok_or_else(|| ProtocolError::PostgresError("Missing actor_type".to_string()))?;
 
@@ -1471,20 +1518,23 @@ impl QueryEngine {
                 let col_upper = col.to_uppercase();
 
                 // Find column in schema to get correct casing
-                let schema_col = schema.columns.iter().find(|c| c.name.to_uppercase() == col_upper);
-                
+                let schema_col = schema
+                    .columns
+                    .iter()
+                    .find(|c| c.name.to_uppercase() == col_upper);
+
                 if let Some(column_def) = schema_col {
                     // Skip SERIAL columns as they're auto-generated
                     if matches!(column_def.data_type, ColumnType::Serial) {
                         continue;
                     }
-                    
+
                     // Try to parse as JSON, fall back to string
                     let json_val = match serde_json::from_str(val) {
                         Ok(json) => json,
                         Err(_) => JsonValue::String(val.clone()),
                     };
-                    
+
                     // Use schema column name
                     row_values.insert(column_def.name.clone(), json_val);
                 } else {

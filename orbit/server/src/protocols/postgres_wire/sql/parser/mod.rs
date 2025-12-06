@@ -55,9 +55,10 @@ impl SqlParser {
     /// Parse a SQL statement from string input
     pub fn parse(&mut self, input: &str) -> ProtocolResult<Statement> {
         let statements = self.parse_multiple(input)?;
-        statements.into_iter().next().ok_or_else(|| {
-            ProtocolError::PostgresError("Empty SQL statement".to_string())
-        })
+        statements
+            .into_iter()
+            .next()
+            .ok_or_else(|| ProtocolError::PostgresError("Empty SQL statement".to_string()))
     }
 
     /// Parse multiple SQL statements from string input
@@ -69,22 +70,24 @@ impl SqlParser {
         self.current_token = self.tokens.first().cloned();
 
         let mut statements = Vec::new();
-        
+
         while self.current_token.is_some() && self.current_token != Some(Token::Eof) {
             // Skip semicolons
             while self.matches(&[Token::Semicolon]) {
                 self.advance()?;
             }
-            
+
             if self.current_token.is_none() || self.current_token == Some(Token::Eof) {
                 break;
             }
 
             // Parse the statement
-            let stmt = self.parse_statement().map_err(crate::protocols::error::ProtocolError::from)?;
+            let stmt = self
+                .parse_statement()
+                .map_err(crate::protocols::error::ProtocolError::from)?;
             statements.push(stmt);
         }
-        
+
         Ok(statements)
     }
 
@@ -120,20 +123,22 @@ impl SqlParser {
             // Handle EXPLAIN as identifier (not a keyword yet)
             Some(Token::Identifier(name)) if name.to_uppercase() == "EXPLAIN" => {
                 self.advance()?; // consume EXPLAIN
-                
+
                 // Parse the statement to explain
                 let statement = self.parse_statement()?;
-                
+
                 // Return an EXPLAIN statement
-                Ok(Statement::Explain(crate::protocols::postgres_wire::sql::ast::ExplainStatement {
-                    analyze: false,
-                    verbose: false,
-                    costs: true,
-                    buffers: false,
-                    timing: false,
-                    format: crate::protocols::postgres_wire::sql::ast::ExplainFormat::Text,
-                    statement: Box::new(statement),
-                }))
+                Ok(Statement::Explain(
+                    crate::protocols::postgres_wire::sql::ast::ExplainStatement {
+                        analyze: false,
+                        verbose: false,
+                        costs: true,
+                        buffers: false,
+                        timing: false,
+                        format: crate::protocols::postgres_wire::sql::ast::ExplainFormat::Text,
+                        statement: Box::new(statement),
+                    },
+                ))
             }
 
             Some(token) => Err(ParseError {
@@ -219,7 +224,6 @@ impl SqlParser {
     /// Parse CREATE statements
     fn parse_create_statement(&mut self) -> ParseResult<Statement> {
         self.expect(Token::Create)?;
-
 
         // Check for CREATE OR REPLACE VIEW
         let or_replace = if self.matches(&[Token::Or]) {
@@ -430,10 +434,12 @@ impl SqlParser {
             }
         }
 
-        Ok(Statement::Set(crate::protocols::postgres_wire::sql::ast::SetStatement {
-            variable,
-            value: values,
-        }))
+        Ok(Statement::Set(
+            crate::protocols::postgres_wire::sql::ast::SetStatement {
+                variable,
+                value: values,
+            },
+        ))
     }
 }
 

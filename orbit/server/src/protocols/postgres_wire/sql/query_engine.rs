@@ -36,19 +36,15 @@ use crate::protocols::postgres_wire::sql::parallel_executor::{
     ParallelConfig, ParallelCoordinator,
 };
 use crate::protocols::postgres_wire::sql::parser::SqlParser;
-use crate::protocols::postgres_wire::sql::plan_cache::{
-    PlanCache, PlanCacheConfig, QueryPlan,
-};
+use crate::protocols::postgres_wire::sql::plan_cache::{PlanCache, PlanCacheConfig, QueryPlan};
 use crate::protocols::postgres_wire::sql::query_cache::{
     extract_table_names, QueryCache, QueryCacheConfig, QueryKey,
 };
-use crate::protocols::postgres_wire::sql::statistics::{
-    StatisticsConfig, StatisticsManager,
-};
+use crate::protocols::postgres_wire::sql::statistics::{StatisticsConfig, StatisticsManager};
 use crate::protocols::postgres_wire::sql::vectorized_executor::{
     VectorizedConfig, VectorizedExecutor,
 };
-use serde::{Deserialize, Serialize};  // Used by QueryMetrics, CacheStatistics
+use serde::{Deserialize, Serialize}; // Used by QueryMetrics, CacheStatistics
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
@@ -327,7 +323,8 @@ impl OptimizedQueryEngine {
                     .as_ref()
                     .and_then(|f| match f {
                         crate::protocols::postgres_wire::sql::ast::FromClause::Table {
-                            name, ..
+                            name,
+                            ..
                         } => Some(name.full_name()),
                         _ => None,
                     })
@@ -366,12 +363,18 @@ impl OptimizedQueryEngine {
             }),
             Statement::Update(update_stmt) => Ok(QueryPlan::SeqScan {
                 table: update_stmt.table.full_name(),
-                filter: update_stmt.where_clause.as_ref().map(|e| format!("{:?}", e)),
+                filter: update_stmt
+                    .where_clause
+                    .as_ref()
+                    .map(|e| format!("{:?}", e)),
                 estimated_rows: 1,
             }),
             Statement::Delete(delete_stmt) => Ok(QueryPlan::SeqScan {
                 table: delete_stmt.table.full_name(),
-                filter: delete_stmt.where_clause.as_ref().map(|e| format!("{:?}", e)),
+                filter: delete_stmt
+                    .where_clause
+                    .as_ref()
+                    .map(|e| format!("{:?}", e)),
                 estimated_rows: 1,
             }),
             _ => Ok(QueryPlan::SeqScan {
@@ -400,8 +403,7 @@ impl OptimizedQueryEngine {
 
     /// Check if query should be parallelized
     fn should_parallelize(&self, _statement: &Statement, estimated_rows: usize) -> bool {
-        self.config.parallel.enabled
-            && estimated_rows >= self.config.parallel.min_rows_for_parallel
+        self.config.parallel.enabled && estimated_rows >= self.config.parallel.min_rows_for_parallel
     }
 
     /// Execute with GPU acceleration
@@ -426,7 +428,7 @@ impl OptimizedQueryEngine {
                 distinct: None, // Apply after SIMD filtering
                 select_list: select.select_list.clone(),
                 from_clause: select.from_clause.clone(),
-                where_clause: None, // Will apply with SIMD
+                where_clause: None,                // Will apply with SIMD
                 group_by: select.group_by.clone(), // Keep for now
                 having: select.having.clone(),
                 order_by: None, // Will apply with SIMD sorting
@@ -446,7 +448,12 @@ impl OptimizedQueryEngine {
             // Extract rows from result
             if let ExecutionResult::Select { columns, rows, .. } = base_result {
                 // Convert rows to HashMap format for columnar conversion
-                let source_rows: Vec<std::collections::HashMap<String, crate::protocols::postgres_wire::sql::types::SqlValue>> = rows
+                let source_rows: Vec<
+                    std::collections::HashMap<
+                        String,
+                        crate::protocols::postgres_wire::sql::types::SqlValue,
+                    >,
+                > = rows
                     .iter()
                     .map(|row| {
                         columns
@@ -454,8 +461,14 @@ impl OptimizedQueryEngine {
                             .zip(row.iter())
                             .map(|(col, val)| {
                                 let sql_val = match val {
-                                    Some(s) => crate::protocols::postgres_wire::sql::types::SqlValue::Text(s.clone()),
-                                    None => crate::protocols::postgres_wire::sql::types::SqlValue::Null,
+                                    Some(s) => {
+                                        crate::protocols::postgres_wire::sql::types::SqlValue::Text(
+                                            s.clone(),
+                                        )
+                                    }
+                                    None => {
+                                        crate::protocols::postgres_wire::sql::types::SqlValue::Null
+                                    }
                                 };
                                 (col.clone(), sql_val)
                             })
@@ -498,12 +511,11 @@ impl OptimizedQueryEngine {
     }
 
     /// Get index recommendations for a table
-    pub async fn get_index_recommendations(
-        &self,
-        table_name: &str,
-    ) -> Vec<IndexRecommendation> {
+    pub async fn get_index_recommendations(&self, table_name: &str) -> Vec<IndexRecommendation> {
         let stats = self.statistics.get_table_stats(table_name).await;
-        self.index_advisor.recommend(table_name, stats.as_ref()).await
+        self.index_advisor
+            .recommend(table_name, stats.as_ref())
+            .await
     }
 
     /// Get query execution metrics
@@ -532,19 +544,26 @@ impl OptimizedQueryEngine {
     /// Invalidate cache for a table
     pub async fn invalidate_table(&self, table_name: &str) {
         self.query_cache.invalidate_table(table_name).await;
-        self.plan_cache.read().await.invalidate_table(table_name).await;
+        self.plan_cache
+            .read()
+            .await
+            .invalidate_table(table_name)
+            .await;
     }
 
     /// Analyze a table and update statistics
     pub async fn analyze_table(&self, table_name: &str) {
         // In a real implementation, this would scan the table and collect stats
-        let stats = crate::protocols::postgres_wire::sql::statistics::TableStatistics::new(
-            table_name,
-        );
+        let stats =
+            crate::protocols::postgres_wire::sql::statistics::TableStatistics::new(table_name);
         self.statistics.store_table_stats(stats).await;
 
         // Invalidate affected cached plans
-        self.plan_cache.read().await.invalidate_table(table_name).await;
+        self.plan_cache
+            .read()
+            .await
+            .invalidate_table(table_name)
+            .await;
     }
 
     /// Get workload summary for index advisor
@@ -672,7 +691,9 @@ mod tests {
 
         // Record some queries
         for _ in 0..5 {
-            let _ = engine.execute("SELECT * FROM users WHERE email = 'test@example.com'").await;
+            let _ = engine
+                .execute("SELECT * FROM users WHERE email = 'test@example.com'")
+                .await;
         }
 
         let recommendations = engine.get_index_recommendations("users").await;

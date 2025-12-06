@@ -7,12 +7,12 @@ use super::{utilities, ParseError, ParseResult, SqlParser};
 use crate::protocols::postgres_wire::sql::{
     ast::{
         AlterColumnAction, AlterTableAction, AlterTableStatement, ColumnConstraint,
-        ColumnDefinition, CreateDatabaseStatement, CreateExtensionStatement, CreateIndexStatement,
-        CreateSchemaStatement, CreateTableStatement, CreateViewStatement, DropDatabaseStatement,
-        DropExtensionStatement, DropIndexStatement, DropSchemaStatement, DropTableStatement,
-        DropViewStatement, IndexColumn, IndexOption, IndexType, NullsOrder, SortDirection,
-        Statement, TableConstraint, TableOption, CreateFunctionStatement, FunctionLanguage,
-        FunctionParameter, FunctionVolatility, ParameterMode, FunctionName,
+        ColumnDefinition, CreateDatabaseStatement, CreateExtensionStatement,
+        CreateFunctionStatement, CreateIndexStatement, CreateSchemaStatement, CreateTableStatement,
+        CreateViewStatement, DropDatabaseStatement, DropExtensionStatement, DropIndexStatement,
+        DropSchemaStatement, DropTableStatement, DropViewStatement, FunctionLanguage, FunctionName,
+        FunctionParameter, FunctionVolatility, IndexColumn, IndexOption, IndexType, NullsOrder,
+        ParameterMode, SortDirection, Statement, TableConstraint, TableOption,
     },
     lexer::Token,
     types::SqlValue,
@@ -905,7 +905,11 @@ pub fn parse_create_function(parser: &mut SqlParser) -> ParseResult<Statement> {
     parser.expect(Token::Function)?;
 
     // Parse function name
-    let name = if let Some(func_name) = parser.current_token.as_ref().and_then(utilities::token_to_identifier_name) {
+    let name = if let Some(func_name) = parser
+        .current_token
+        .as_ref()
+        .and_then(utilities::token_to_identifier_name)
+    {
         parser.advance()?;
         FunctionName::Simple(func_name)
     } else {
@@ -940,7 +944,11 @@ pub fn parse_create_function(parser: &mut SqlParser) -> ParseResult<Statement> {
             };
 
             // Parse parameter name (optional)
-            let name = if let Some(param_name) = parser.current_token.as_ref().and_then(utilities::token_to_identifier_name) {
+            let name = if let Some(param_name) = parser
+                .current_token
+                .as_ref()
+                .and_then(utilities::token_to_identifier_name)
+            {
                 // Check if it's a type name
                 if utilities::is_type_name(&parser.current_token) {
                     None
@@ -992,7 +1000,13 @@ pub fn parse_create_function(parser: &mut SqlParser) -> ParseResult<Statement> {
     let mut body = String::new();
     let mut volatility = None;
 
-    while parser.matches(&[Token::Language, Token::As, Token::Identifier("IMMUTABLE".to_string()), Token::Identifier("STABLE".to_string()), Token::Identifier("VOLATILE".to_string())]) {
+    while parser.matches(&[
+        Token::Language,
+        Token::As,
+        Token::Identifier("IMMUTABLE".to_string()),
+        Token::Identifier("STABLE".to_string()),
+        Token::Identifier("VOLATILE".to_string()),
+    ]) {
         if parser.matches(&[Token::Language]) {
             parser.advance()?;
             if let Some(Token::Identifier(lang)) = &parser.current_token {

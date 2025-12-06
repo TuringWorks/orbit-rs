@@ -86,11 +86,7 @@ pub struct IndexRecommendation {
 impl IndexRecommendation {
     /// Generate CREATE INDEX statement
     pub fn to_sql(&self) -> String {
-        let index_name = format!(
-            "idx_{}_{}",
-            self.table_name,
-            self.columns.join("_")
-        );
+        let index_name = format!("idx_{}_{}", self.table_name, self.columns.join("_"));
 
         let columns_sql = self.columns.join(", ");
 
@@ -267,7 +263,11 @@ impl WorkloadAnalyzer {
         columns: &mut Vec<(String, FilterOperator)>,
     ) {
         match expr {
-            Expression::Binary { left, operator, right } => {
+            Expression::Binary {
+                left,
+                operator,
+                right,
+            } => {
                 // Check for column = value patterns
                 if let Some(col) = self.extract_column_name(left) {
                     let op = match operator {
@@ -326,14 +326,13 @@ impl WorkloadAnalyzer {
         items
             .iter()
             .filter_map(|item| {
-                self.extract_column_name(&item.expression)
-                    .map(|col| {
-                        let ascending = match item.direction {
-                            Some(SortDirection::Descending) => false,
-                            _ => true, // Default to ascending
-                        };
-                        (col, ascending)
-                    })
+                self.extract_column_name(&item.expression).map(|col| {
+                    let ascending = match item.direction {
+                        Some(SortDirection::Descending) => false,
+                        _ => true, // Default to ascending
+                    };
+                    (col, ascending)
+                })
             })
             .collect()
     }
@@ -366,7 +365,12 @@ impl WorkloadAnalyzer {
     }
 
     fn extract_join_columns_recursive(&self, expr: &Expression, columns: &mut Vec<String>) {
-        if let Expression::Binary { left, operator, right } = expr {
+        if let Expression::Binary {
+            left,
+            operator,
+            right,
+        } = expr
+        {
             if matches!(operator, BinaryOperator::Equal) {
                 if let Some(col) = self.extract_column_name(left) {
                     columns.push(col);
@@ -413,12 +417,14 @@ impl WorkloadAnalyzer {
         format!(
             "{}:{}:{}:{}",
             pattern.table_name,
-            pattern.filter_columns
+            pattern
+                .filter_columns
                 .iter()
                 .map(|(c, _)| c.as_str())
                 .collect::<Vec<_>>()
                 .join(","),
-            pattern.order_by_columns
+            pattern
+                .order_by_columns
                 .iter()
                 .map(|(c, _)| c.as_str())
                 .collect::<Vec<_>>()
@@ -536,7 +542,8 @@ impl IndexAdvisor {
                 }
 
                 let index_type = self.suggest_index_type(operator);
-                let improvement = self.estimate_improvement(pattern, &[column.clone()], table_stats);
+                let improvement =
+                    self.estimate_improvement(pattern, &[column.clone()], table_stats);
 
                 if improvement >= self.config.min_improvement_ratio {
                     recommendations.push(IndexRecommendation {
@@ -577,8 +584,7 @@ impl IndexAdvisor {
                 multi_cols.extend(range_cols);
                 multi_cols.truncate(self.config.max_columns_per_index);
 
-                if multi_cols.len() >= 2
-                    && !self.is_column_indexed(&existing_indexes, &multi_cols)
+                if multi_cols.len() >= 2 && !self.is_column_indexed(&existing_indexes, &multi_cols)
                 {
                     let improvement = self.estimate_improvement(pattern, &multi_cols, table_stats);
 
@@ -693,28 +699,26 @@ impl IndexAdvisor {
         for (i, idx1) in indexes.iter().enumerate() {
             for idx2 in indexes.iter().skip(i + 1) {
                 // Check if idx1 is a prefix of idx2 (making idx1 redundant)
-                if self.is_prefix(&idx1.columns, &idx2.columns) && !idx1.is_primary && !idx1.is_unique
+                if self.is_prefix(&idx1.columns, &idx2.columns)
+                    && !idx1.is_primary
+                    && !idx1.is_unique
                 {
                     redundant.push(RedundantIndex {
                         redundant_index: idx1.name.clone(),
                         superseded_by: idx2.name.clone(),
-                        reason: format!(
-                            "Index {} is a prefix of {}",
-                            idx1.name, idx2.name
-                        ),
+                        reason: format!("Index {} is a prefix of {}", idx1.name, idx2.name),
                     });
                 }
 
                 // Check reverse
-                if self.is_prefix(&idx2.columns, &idx1.columns) && !idx2.is_primary && !idx2.is_unique
+                if self.is_prefix(&idx2.columns, &idx1.columns)
+                    && !idx2.is_primary
+                    && !idx2.is_unique
                 {
                     redundant.push(RedundantIndex {
                         redundant_index: idx2.name.clone(),
                         superseded_by: idx1.name.clone(),
-                        reason: format!(
-                            "Index {} is a prefix of {}",
-                            idx2.name, idx1.name
-                        ),
+                        reason: format!("Index {} is a prefix of {}", idx2.name, idx1.name),
                     });
                 }
             }
@@ -728,19 +732,12 @@ impl IndexAdvisor {
         existing.iter().any(|idx| {
             // Check if existing index covers these columns (as a prefix)
             columns.len() <= idx.columns.len()
-                && columns
-                    .iter()
-                    .zip(&idx.columns)
-                    .all(|(a, b)| a == b)
+                && columns.iter().zip(&idx.columns).all(|(a, b)| a == b)
         })
     }
 
     fn is_prefix(&self, shorter: &[String], longer: &[String]) -> bool {
-        shorter.len() < longer.len()
-            && shorter
-                .iter()
-                .zip(longer)
-                .all(|(a, b)| a == b)
+        shorter.len() < longer.len() && shorter.iter().zip(longer).all(|(a, b)| a == b)
     }
 
     fn suggest_index_type(&self, operator: &FilterOperator) -> IndexType {
@@ -777,10 +774,7 @@ impl IndexAdvisor {
         }
     }
 
-    fn estimate_sort_improvement(
-        &self,
-        table_stats: Option<&TableStatistics>,
-    ) -> f64 {
+    fn estimate_sort_improvement(&self, table_stats: Option<&TableStatistics>) -> f64 {
         let row_count = table_stats.map(|s| s.row_count).unwrap_or(10_000) as f64;
 
         // Sort cost without index: O(n log n)
@@ -809,9 +803,7 @@ impl IndexAdvisor {
     }
 
     fn deduplicate_recommendations(&self, recommendations: &mut Vec<IndexRecommendation>) {
-        recommendations.sort_by(|a, b| {
-            a.columns.cmp(&b.columns)
-        });
+        recommendations.sort_by(|a, b| a.columns.cmp(&b.columns));
         recommendations.dedup_by(|a, b| a.columns == b.columns);
     }
 
@@ -830,7 +822,11 @@ impl IndexAdvisor {
             }
             let mut counts: Vec<_> = table_counts.into_iter().collect();
             counts.sort_by_key(|(_, c)| std::cmp::Reverse(*c));
-            counts.into_iter().take(10).map(|(t, c)| (t.to_string(), c)).collect()
+            counts
+                .into_iter()
+                .take(10)
+                .map(|(t, c)| (t.to_string(), c))
+                .collect()
         };
 
         WorkloadSummary {
@@ -866,9 +862,7 @@ pub struct WorkloadSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocols::postgres_wire::sql::ast::{
-        ColumnRef, SelectItem, TableName,
-    };
+    use crate::protocols::postgres_wire::sql::ast::{ColumnRef, SelectItem, TableName};
 
     fn make_select(table: &str, where_clause: Option<Expression>) -> Statement {
         Statement::Select(Box::new(SelectStatement {

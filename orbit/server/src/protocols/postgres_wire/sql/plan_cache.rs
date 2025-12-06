@@ -163,12 +163,18 @@ impl QueryPlan {
                 let rows = input.estimated_rows() as f64;
                 input.estimated_cost() + rows * rows.log2()
             }
-            QueryPlan::Aggregate { input, .. } => input.estimated_cost() + input.estimated_rows() as f64,
+            QueryPlan::Aggregate { input, .. } => {
+                input.estimated_cost() + input.estimated_rows() as f64
+            }
             QueryPlan::Filter { input, .. } => input.estimated_cost(),
             QueryPlan::Project { input, .. } => input.estimated_cost(),
             QueryPlan::Limit { input, .. } => input.estimated_cost(),
             QueryPlan::Union { inputs, .. } => inputs.iter().map(|p| p.estimated_cost()).sum(),
-            QueryPlan::Vectorized { input, use_simd, use_gpu } => {
+            QueryPlan::Vectorized {
+                input,
+                use_simd,
+                use_gpu,
+            } => {
                 let base_cost = input.estimated_cost();
                 if *use_gpu {
                     base_cost * 0.1 // GPU is 10x faster for large data
@@ -185,78 +191,189 @@ impl QueryPlan {
     pub fn format(&self, indent: usize) -> String {
         let prefix = " ".repeat(indent);
         match self {
-            QueryPlan::SeqScan { table, filter, estimated_rows } => {
-                let filter_str = filter.as_ref().map(|f| format!(" [filter: {}]", f)).unwrap_or_default();
-                format!("{}SeqScan on {}{} (rows={})", prefix, table, filter_str, estimated_rows)
+            QueryPlan::SeqScan {
+                table,
+                filter,
+                estimated_rows,
+            } => {
+                let filter_str = filter
+                    .as_ref()
+                    .map(|f| format!(" [filter: {}]", f))
+                    .unwrap_or_default();
+                format!(
+                    "{}SeqScan on {}{} (rows={})",
+                    prefix, table, filter_str, estimated_rows
+                )
             }
-            QueryPlan::IndexScan { table, index, filter, estimated_rows } => {
-                let filter_str = filter.as_ref().map(|f| format!(" [filter: {}]", f)).unwrap_or_default();
-                format!("{}IndexScan using {} on {}{} (rows={})", prefix, index, table, filter_str, estimated_rows)
+            QueryPlan::IndexScan {
+                table,
+                index,
+                filter,
+                estimated_rows,
+            } => {
+                let filter_str = filter
+                    .as_ref()
+                    .map(|f| format!(" [filter: {}]", f))
+                    .unwrap_or_default();
+                format!(
+                    "{}IndexScan using {} on {}{} (rows={})",
+                    prefix, index, table, filter_str, estimated_rows
+                )
             }
-            QueryPlan::NestedLoop { left, right, join_condition, estimated_rows } => {
-                format!("{}NestedLoop [{}] (rows={})\n{}\n{}",
-                    prefix, join_condition, estimated_rows,
+            QueryPlan::NestedLoop {
+                left,
+                right,
+                join_condition,
+                estimated_rows,
+            } => {
+                format!(
+                    "{}NestedLoop [{}] (rows={})\n{}\n{}",
+                    prefix,
+                    join_condition,
+                    estimated_rows,
                     left.format(indent + 2),
-                    right.format(indent + 2))
+                    right.format(indent + 2)
+                )
             }
-            QueryPlan::HashJoin { build, probe, join_condition, estimated_rows } => {
-                format!("{}HashJoin [{}] (rows={})\n{}\n{}",
-                    prefix, join_condition, estimated_rows,
+            QueryPlan::HashJoin {
+                build,
+                probe,
+                join_condition,
+                estimated_rows,
+            } => {
+                format!(
+                    "{}HashJoin [{}] (rows={})\n{}\n{}",
+                    prefix,
+                    join_condition,
+                    estimated_rows,
                     build.format(indent + 2),
-                    probe.format(indent + 2))
+                    probe.format(indent + 2)
+                )
             }
-            QueryPlan::MergeJoin { left, right, join_condition, estimated_rows } => {
-                format!("{}MergeJoin [{}] (rows={})\n{}\n{}",
-                    prefix, join_condition, estimated_rows,
+            QueryPlan::MergeJoin {
+                left,
+                right,
+                join_condition,
+                estimated_rows,
+            } => {
+                format!(
+                    "{}MergeJoin [{}] (rows={})\n{}\n{}",
+                    prefix,
+                    join_condition,
+                    estimated_rows,
                     left.format(indent + 2),
-                    right.format(indent + 2))
+                    right.format(indent + 2)
+                )
             }
-            QueryPlan::Sort { input, sort_keys, estimated_rows } => {
-                let keys_str = sort_keys.iter()
+            QueryPlan::Sort {
+                input,
+                sort_keys,
+                estimated_rows,
+            } => {
+                let keys_str = sort_keys
+                    .iter()
                     .map(|(k, asc)| format!("{} {}", k, if *asc { "ASC" } else { "DESC" }))
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!("{}Sort [{}] (rows={})\n{}",
-                    prefix, keys_str, estimated_rows,
-                    input.format(indent + 2))
+                format!(
+                    "{}Sort [{}] (rows={})\n{}",
+                    prefix,
+                    keys_str,
+                    estimated_rows,
+                    input.format(indent + 2)
+                )
             }
-            QueryPlan::Aggregate { input, group_by, aggregates, estimated_rows } => {
-                let group_str = if group_by.is_empty() { String::new() } else { format!(" GROUP BY {}", group_by.join(", ")) };
-                format!("{}Aggregate [{}]{} (rows={})\n{}",
-                    prefix, aggregates.join(", "), group_str, estimated_rows,
-                    input.format(indent + 2))
+            QueryPlan::Aggregate {
+                input,
+                group_by,
+                aggregates,
+                estimated_rows,
+            } => {
+                let group_str = if group_by.is_empty() {
+                    String::new()
+                } else {
+                    format!(" GROUP BY {}", group_by.join(", "))
+                };
+                format!(
+                    "{}Aggregate [{}]{} (rows={})\n{}",
+                    prefix,
+                    aggregates.join(", "),
+                    group_str,
+                    estimated_rows,
+                    input.format(indent + 2)
+                )
             }
-            QueryPlan::Filter { input, condition, estimated_rows } => {
-                format!("{}Filter [{}] (rows={})\n{}",
-                    prefix, condition, estimated_rows,
-                    input.format(indent + 2))
+            QueryPlan::Filter {
+                input,
+                condition,
+                estimated_rows,
+            } => {
+                format!(
+                    "{}Filter [{}] (rows={})\n{}",
+                    prefix,
+                    condition,
+                    estimated_rows,
+                    input.format(indent + 2)
+                )
             }
-            QueryPlan::Project { input, columns, estimated_rows } => {
-                format!("{}Project [{}] (rows={})\n{}",
-                    prefix, columns.join(", "), estimated_rows,
-                    input.format(indent + 2))
+            QueryPlan::Project {
+                input,
+                columns,
+                estimated_rows,
+            } => {
+                format!(
+                    "{}Project [{}] (rows={})\n{}",
+                    prefix,
+                    columns.join(", "),
+                    estimated_rows,
+                    input.format(indent + 2)
+                )
             }
-            QueryPlan::Limit { input, count, offset } => {
-                format!("{}Limit {} (offset {})\n{}",
-                    prefix, count, offset,
-                    input.format(indent + 2))
+            QueryPlan::Limit {
+                input,
+                count,
+                offset,
+            } => {
+                format!(
+                    "{}Limit {} (offset {})\n{}",
+                    prefix,
+                    count,
+                    offset,
+                    input.format(indent + 2)
+                )
             }
-            QueryPlan::Union { inputs, all, estimated_rows } => {
+            QueryPlan::Union {
+                inputs,
+                all,
+                estimated_rows,
+            } => {
                 let union_type = if *all { "Union All" } else { "Union" };
-                let inputs_str = inputs.iter()
+                let inputs_str = inputs
+                    .iter()
                     .map(|p| p.format(indent + 2))
                     .collect::<Vec<_>>()
                     .join("\n");
-                format!("{}{} (rows={})\n{}", prefix, union_type, estimated_rows, inputs_str)
+                format!(
+                    "{}{} (rows={})\n{}",
+                    prefix, union_type, estimated_rows, inputs_str
+                )
             }
-            QueryPlan::Vectorized { input, use_simd, use_gpu } => {
+            QueryPlan::Vectorized {
+                input,
+                use_simd,
+                use_gpu,
+            } => {
                 let accel = match (*use_gpu, *use_simd) {
                     (true, _) => "GPU",
                     (_, true) => "SIMD",
                     _ => "None",
                 };
-                format!("{}Vectorized [accel={}]\n{}",
-                    prefix, accel, input.format(indent + 2))
+                format!(
+                    "{}Vectorized [accel={}]\n{}",
+                    prefix,
+                    accel,
+                    input.format(indent + 2)
+                )
             }
         }
     }
@@ -295,7 +412,11 @@ impl CachedPlan {
     }
 
     /// Check if statistics have changed significantly
-    pub fn stats_changed(&self, current_stats: &HashMap<String, &TableStatistics>, threshold: f64) -> bool {
+    pub fn stats_changed(
+        &self,
+        current_stats: &HashMap<String, &TableStatistics>,
+        threshold: f64,
+    ) -> bool {
         for (table, snapshot) in &self.stats_snapshot {
             if let Some(current) = current_stats.get(table) {
                 let old_count = snapshot.row_count as f64;
@@ -317,7 +438,8 @@ impl CachedPlan {
     /// Record plan execution
     pub fn record_execution(&mut self, execution_time_ms: u64) {
         let count = self.use_count as f64;
-        self.avg_execution_time_ms = (self.avg_execution_time_ms * count + execution_time_ms as f64) / (count + 1.0);
+        self.avg_execution_time_ms =
+            (self.avg_execution_time_ms * count + execution_time_ms as f64) / (count + 1.0);
         self.use_count += 1;
     }
 }
@@ -474,7 +596,8 @@ impl PlanCache {
         let mut stats = self.stats.write().await;
 
         // Find plans that reference this table
-        let keys_to_remove: Vec<QueryKey> = cache.iter()
+        let keys_to_remove: Vec<QueryKey> = cache
+            .iter()
             .filter(|(_, plan)| plan.stats_snapshot.contains_key(table_name))
             .map(|(k, _)| k.clone())
             .collect();
@@ -605,12 +728,9 @@ mod tests {
 
         let statement = create_test_statement();
 
-        cache.put(
-            key.clone(),
-            plan,
-            statement,
-            HashMap::new(),
-        ).await;
+        cache
+            .put(key.clone(), plan, statement, HashMap::new())
+            .await;
 
         let cached = cache.get(&key, None).await;
         assert!(cached.is_some());
@@ -632,17 +752,17 @@ mod tests {
         };
 
         let mut table_stats = HashMap::new();
-        table_stats.insert("users".to_string(), TableStatsSnapshot {
-            row_count: 100,
-            timestamp: chrono::Utc::now(),
-        });
+        table_stats.insert(
+            "users".to_string(),
+            TableStatsSnapshot {
+                row_count: 100,
+                timestamp: chrono::Utc::now(),
+            },
+        );
 
-        cache.put(
-            key.clone(),
-            plan,
-            create_test_statement(),
-            table_stats,
-        ).await;
+        cache
+            .put(key.clone(), plan, create_test_statement(), table_stats)
+            .await;
 
         assert!(cache.get(&key, None).await.is_some());
 

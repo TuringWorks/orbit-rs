@@ -1133,7 +1133,9 @@ impl StreamActor {
 
         let to_remove = if approximate {
             // For approximate, we can remove slightly fewer entries
-            (current_len - max_len).saturating_sub(100).max(current_len - max_len)
+            (current_len - max_len)
+                .saturating_sub(100)
+                .max(current_len - max_len)
         } else {
             current_len - max_len
         };
@@ -1160,11 +1162,17 @@ impl StreamActor {
         info.insert("length".to_string(), self.entries.len().to_string());
         info.insert(
             "first-entry-id".to_string(),
-            self.entries.first().map(|e| e.id.clone()).unwrap_or_default(),
+            self.entries
+                .first()
+                .map(|e| e.id.clone())
+                .unwrap_or_default(),
         );
         info.insert(
             "last-entry-id".to_string(),
-            self.entries.last().map(|e| e.id.clone()).unwrap_or_default(),
+            self.entries
+                .last()
+                .map(|e| e.id.clone())
+                .unwrap_or_default(),
         );
         info.insert("groups".to_string(), self.groups.len().to_string());
         info
@@ -1177,7 +1185,10 @@ impl StreamActor {
         }
 
         let last_delivered = if start_id == "$" {
-            self.entries.last().map(|e| e.id.clone()).unwrap_or_else(|| "0-0".to_string())
+            self.entries
+                .last()
+                .map(|e| e.id.clone())
+                .unwrap_or_else(|| "0-0".to_string())
         } else if start_id == "0" {
             "0-0".to_string()
         } else {
@@ -1221,11 +1232,14 @@ impl StreamActor {
             .unwrap()
             .as_secs();
 
-        group.consumers.entry(consumer_name.to_string()).or_insert_with(|| StreamConsumer {
-            name: consumer_name.to_string(),
-            pending_count: 0,
-            last_seen: now,
-        });
+        group
+            .consumers
+            .entry(consumer_name.to_string())
+            .or_insert_with(|| StreamConsumer {
+                name: consumer_name.to_string(),
+                pending_count: 0,
+                last_seen: now,
+            });
 
         if id == ">" {
             // Read new messages
@@ -1267,7 +1281,11 @@ impl StreamActor {
             Ok(result)
         } else {
             // Read pending messages for this consumer
-            let pending = group.pending.get(consumer_name).cloned().unwrap_or_default();
+            let pending = group
+                .pending
+                .get(consumer_name)
+                .cloned()
+                .unwrap_or_default();
             let result: Vec<StreamEntry> = self
                 .entries
                 .iter()
@@ -1301,7 +1319,10 @@ impl StreamActor {
     }
 
     /// XPENDING - Get pending entries info
-    pub fn xpending(&self, group_name: &str) -> Result<(usize, Option<String>, Option<String>, Vec<(String, usize)>), String> {
+    pub fn xpending(
+        &self,
+        group_name: &str,
+    ) -> Result<(usize, Option<String>, Option<String>, Vec<(String, usize)>), String> {
         let group = self
             .groups
             .get(group_name)
@@ -2182,9 +2203,15 @@ mod tests {
         let mut actor = StreamActor::new();
 
         // Add entries with explicit IDs
-        actor.xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())]).unwrap();
-        actor.xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())]).unwrap();
-        actor.xadd(Some("3000-0"), vec![("c".to_string(), "3".to_string())]).unwrap();
+        actor
+            .xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())])
+            .unwrap();
+        actor
+            .xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())])
+            .unwrap();
+        actor
+            .xadd(Some("3000-0"), vec![("c".to_string(), "3".to_string())])
+            .unwrap();
 
         // Get all entries
         let entries = actor.xrange("-", "+", None);
@@ -2204,9 +2231,15 @@ mod tests {
     fn test_stream_actor_xrevrange() {
         let mut actor = StreamActor::new();
 
-        actor.xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())]).unwrap();
-        actor.xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())]).unwrap();
-        actor.xadd(Some("3000-0"), vec![("c".to_string(), "3".to_string())]).unwrap();
+        actor
+            .xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())])
+            .unwrap();
+        actor
+            .xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())])
+            .unwrap();
+        actor
+            .xadd(Some("3000-0"), vec![("c".to_string(), "3".to_string())])
+            .unwrap();
 
         // Get all entries in reverse
         let entries = actor.xrevrange("+", "-", None);
@@ -2219,9 +2252,15 @@ mod tests {
     fn test_stream_actor_xread() {
         let mut actor = StreamActor::new();
 
-        actor.xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())]).unwrap();
-        actor.xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())]).unwrap();
-        actor.xadd(Some("3000-0"), vec![("c".to_string(), "3".to_string())]).unwrap();
+        actor
+            .xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())])
+            .unwrap();
+        actor
+            .xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())])
+            .unwrap();
+        actor
+            .xadd(Some("3000-0"), vec![("c".to_string(), "3".to_string())])
+            .unwrap();
 
         // Read entries after 1000-0
         let entries = actor.xread("1000-0", None);
@@ -2239,7 +2278,12 @@ mod tests {
         let mut actor = StreamActor::new();
 
         for i in 0..10 {
-            actor.xadd(Some(&format!("{}-0", i * 1000)), vec![("idx".to_string(), i.to_string())]).unwrap();
+            actor
+                .xadd(
+                    Some(&format!("{}-0", i * 1000)),
+                    vec![("idx".to_string(), i.to_string())],
+                )
+                .unwrap();
         }
         assert_eq!(actor.xlen(), 10);
 
@@ -2257,9 +2301,15 @@ mod tests {
     fn test_stream_actor_xdel() {
         let mut actor = StreamActor::new();
 
-        actor.xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())]).unwrap();
-        actor.xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())]).unwrap();
-        actor.xadd(Some("3000-0"), vec![("c".to_string(), "3".to_string())]).unwrap();
+        actor
+            .xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())])
+            .unwrap();
+        actor
+            .xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())])
+            .unwrap();
+        actor
+            .xadd(Some("3000-0"), vec![("c".to_string(), "3".to_string())])
+            .unwrap();
 
         // Delete one entry
         let deleted = actor.xdel(vec!["2000-0".to_string()]);
@@ -2276,8 +2326,12 @@ mod tests {
         let mut actor = StreamActor::new();
 
         // Add some entries
-        actor.xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())]).unwrap();
-        actor.xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())]).unwrap();
+        actor
+            .xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())])
+            .unwrap();
+        actor
+            .xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())])
+            .unwrap();
 
         // Create consumer group
         let result = actor.xgroup_create("mygroup", "0");
@@ -2300,7 +2354,9 @@ mod tests {
         assert!(max_id.is_some());
 
         // Acknowledge entries
-        let acked = actor.xack("mygroup", vec!["1000-0".to_string(), "2000-0".to_string()]).unwrap();
+        let acked = actor
+            .xack("mygroup", vec!["1000-0".to_string(), "2000-0".to_string()])
+            .unwrap();
         assert_eq!(acked, 2);
 
         // Pending should be empty now
@@ -2317,7 +2373,9 @@ mod tests {
         let mut actor = StreamActor::new();
 
         // First add an entry to establish a baseline
-        actor.xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())]).unwrap();
+        actor
+            .xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())])
+            .unwrap();
 
         // Set ID higher than current
         let result = actor.xsetid("5000-0");
@@ -2336,8 +2394,12 @@ mod tests {
     fn test_stream_actor_xinfo() {
         let mut actor = StreamActor::new();
 
-        actor.xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())]).unwrap();
-        actor.xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())]).unwrap();
+        actor
+            .xadd(Some("1000-0"), vec![("a".to_string(), "1".to_string())])
+            .unwrap();
+        actor
+            .xadd(Some("2000-0"), vec![("b".to_string(), "2".to_string())])
+            .unwrap();
         actor.xgroup_create("group1", "0").unwrap();
 
         let info = actor.xinfo_stream();

@@ -63,11 +63,11 @@ pub struct CostRouterConfig {
 impl Default for CostRouterConfig {
     fn default() -> Self {
         Self {
-            simd_row_threshold: 1000,      // SIMD beneficial above 1K rows
-            gpu_row_threshold: 100_000,     // GPU beneficial above 100K rows
+            simd_row_threshold: 1000,   // SIMD beneficial above 1K rows
+            gpu_row_threshold: 100_000, // GPU beneficial above 100K rows
             gpu_enabled: cfg!(feature = "gpu-acceleration"),
             simd_enabled: true,
-            gpu_transfer_overhead: 50_000,  // Equivalent to 50K rows of processing
+            gpu_transfer_overhead: 50_000, // Equivalent to 50K rows of processing
             prefer_gpu_for_vectors: true,
         }
     }
@@ -116,21 +116,17 @@ impl CostRouter {
     }
 
     /// Get detailed cost estimates for all backends
-    pub fn estimate_costs(
-        &self,
-        operation: OperationType,
-        estimated_rows: usize,
-    ) -> CostEstimate {
+    pub fn estimate_costs(&self, operation: OperationType, estimated_rows: usize) -> CostEstimate {
         // Base cost per row for CPU scalar (normalized to 1.0)
         let cpu_scalar_per_row = self.operation_base_cost(operation);
         let cpu_scalar_cost = estimated_rows as f64 * cpu_scalar_per_row;
 
         // SIMD speedup factors (approximate)
         let simd_speedup = match operation {
-            OperationType::Filter => 4.0,     // SIMD excels at filtering
-            OperationType::Aggregate => 8.0,  // Very good for reductions
-            OperationType::Sort => 2.0,       // Some benefit
-            OperationType::Join => 3.0,       // Hash operations
+            OperationType::Filter => 4.0,       // SIMD excels at filtering
+            OperationType::Aggregate => 8.0,    // Very good for reductions
+            OperationType::Sort => 2.0,         // Some benefit
+            OperationType::Join => 3.0,         // Hash operations
             OperationType::VectorSearch => 8.0, // Dot products parallelize well
             OperationType::Projection => 2.0,
         };
@@ -146,14 +142,16 @@ impl CostRouter {
         };
 
         // Calculate SIMD cost
-        let cpu_simd_cost = if self.config.simd_enabled && estimated_rows >= self.config.simd_row_threshold {
-            cpu_scalar_cost / simd_speedup
-        } else {
-            cpu_scalar_cost * 1.1 // Slight overhead if below threshold
-        };
+        let cpu_simd_cost =
+            if self.config.simd_enabled && estimated_rows >= self.config.simd_row_threshold {
+                cpu_scalar_cost / simd_speedup
+            } else {
+                cpu_scalar_cost * 1.1 // Slight overhead if below threshold
+            };
 
         // Calculate GPU cost (including transfer overhead)
-        let gpu_cost = if self.config.gpu_enabled && estimated_rows >= self.config.gpu_row_threshold {
+        let gpu_cost = if self.config.gpu_enabled && estimated_rows >= self.config.gpu_row_threshold
+        {
             let processing_cost = cpu_scalar_cost / gpu_speedup;
             let transfer_cost = self.config.gpu_transfer_overhead as f64 * cpu_scalar_per_row;
             processing_cost + transfer_cost
@@ -162,9 +160,13 @@ impl CostRouter {
         };
 
         // Special case: always prefer GPU for vector operations if configured
-        let gpu_cost = if operation == OperationType::VectorSearch && self.config.prefer_gpu_for_vectors && self.config.gpu_enabled {
+        let gpu_cost = if operation == OperationType::VectorSearch
+            && self.config.prefer_gpu_for_vectors
+            && self.config.gpu_enabled
+        {
             let processing_cost = cpu_scalar_cost / gpu_speedup;
-            let transfer_cost = (self.config.gpu_transfer_overhead as f64 * cpu_scalar_per_row) * 0.5;
+            let transfer_cost =
+                (self.config.gpu_transfer_overhead as f64 * cpu_scalar_per_row) * 0.5;
             processing_cost + transfer_cost
         } else {
             gpu_cost
@@ -274,11 +276,7 @@ impl CostRouter {
     }
 
     /// Explain routing decision
-    pub fn explain_routing(
-        &self,
-        operation: OperationType,
-        estimated_rows: usize,
-    ) -> String {
+    pub fn explain_routing(&self, operation: OperationType, estimated_rows: usize) -> String {
         let estimate = self.estimate_costs(operation, estimated_rows);
 
         format!(
@@ -296,13 +294,21 @@ impl CostRouter {
             estimated_rows,
             estimate.cpu_scalar_cost,
             estimate.cpu_simd_cost,
-            if !self.config.simd_enabled { " (disabled)" } else { "" },
+            if !self.config.simd_enabled {
+                " (disabled)"
+            } else {
+                ""
+            },
             if estimate.gpu_cost.is_infinite() {
                 "N/A".to_string()
             } else {
                 format!("{:.2}", estimate.gpu_cost)
             },
-            if !self.config.gpu_enabled { " (disabled)" } else { "" },
+            if !self.config.gpu_enabled {
+                " (disabled)"
+            } else {
+                ""
+            },
             estimate.recommended_backend,
             self.routing_reason(&estimate, operation),
         )
@@ -378,8 +384,8 @@ mod tests {
         let config = CostRouterConfig {
             gpu_enabled: true,
             prefer_gpu_for_vectors: true,
-            gpu_row_threshold: 1000,         // Lower threshold for this test
-            gpu_transfer_overhead: 100,      // Low transfer overhead to make GPU cost competitive
+            gpu_row_threshold: 1000,    // Lower threshold for this test
+            gpu_transfer_overhead: 100, // Low transfer overhead to make GPU cost competitive
             ..Default::default()
         };
         let router = CostRouter::new(config);

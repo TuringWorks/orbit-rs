@@ -715,7 +715,9 @@ impl BoltProtocolHandler {
 
                 Ok(size)
             }
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => Err(ProtocolError::ConnectionClosed),
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                Err(ProtocolError::ConnectionClosed)
+            }
             Err(e) => Err(ProtocolError::Other(format!("Read error: {}", e))),
         }
     }
@@ -731,7 +733,7 @@ impl BoltProtocolHandler {
         }
 
         let marker = message_bytes[0];
-        
+
         // Check if it's a structure (Bolt messages are always structures)
         // Tiny structure: 0xB0 - 0xBF
         let signature = if (marker & 0xF0) == 0xB0 {
@@ -739,15 +741,16 @@ impl BoltProtocolHandler {
                 return Err(ProtocolError::CypherError("Message too short".to_string()));
             }
             message_bytes[1]
-        } else if marker == 0xDC { // Struct 8
-             if message_bytes.len() < 3 {
+        } else if marker == 0xDC {
+            // Struct 8
+            if message_bytes.len() < 3 {
                 return Err(ProtocolError::CypherError("Message too short".to_string()));
             }
             message_bytes[2]
         } else {
-             warn!("Invalid message format: marker 0x{:02X}", marker);
-             self.send_ignored(stream).await?;
-             return Ok(true);
+            warn!("Invalid message format: marker 0x{:02X}", marker);
+            self.send_ignored(stream).await?;
+            return Ok(true);
         };
 
         match signature {
@@ -795,9 +798,9 @@ impl BoltProtocolHandler {
             }
             0x66 => {
                 // ROUTE message (0x66)
-                 // Simplified: just ignore or send empty route
-                 warn!("Received ROUTE message (ignoring)");
-                 self.send_success(HashMap::new(), stream).await?;
+                // Simplified: just ignore or send empty route
+                warn!("Received ROUTE message (ignoring)");
+                self.send_success(HashMap::new(), stream).await?;
             }
             _ => {
                 warn!("Unknown message signature: 0x{:02X}", signature);
@@ -1051,14 +1054,12 @@ impl BoltProtocolHandler {
         columns: &[String],
     ) -> Value {
         match expr {
-            crate::protocols::cypher::cypher_parser::Expression::Literal(val) => {
-                match val {
-                    serde_json::Value::Number(n) => Value::Number(n.clone()),
-                    serde_json::Value::String(s) => Value::String(s.clone()),
-                    serde_json::Value::Bool(b) => Value::Bool(*b),
-                    serde_json::Value::Null => Value::Null,
-                    _ => Value::String(val.to_string()),
-                }
+            crate::protocols::cypher::cypher_parser::Expression::Literal(val) => match val {
+                serde_json::Value::Number(n) => Value::Number(n.clone()),
+                serde_json::Value::String(s) => Value::String(s.clone()),
+                serde_json::Value::Bool(b) => Value::Bool(*b),
+                serde_json::Value::Null => Value::Null,
+                _ => Value::String(val.to_string()),
             },
             crate::protocols::cypher::cypher_parser::Expression::Variable(name) => {
                 if let Some(idx) = columns.iter().position(|c| c == name) {
@@ -1071,18 +1072,25 @@ impl BoltProtocolHandler {
                     Value::Null
                 }
             }
-            crate::protocols::cypher::cypher_parser::Expression::BinaryOp { left, operator, right } => {
+            crate::protocols::cypher::cypher_parser::Expression::BinaryOp {
+                left,
+                operator,
+                right,
+            } => {
                 let left_val = self.evaluate_expression(left, row, columns);
                 let right_val = self.evaluate_expression(right, row, columns);
-                
+
                 match operator {
                     crate::protocols::cypher::cypher_parser::BinaryOperator::Add => {
                         match (left_val, right_val) {
                             (Value::Number(l), Value::Number(r)) => {
                                 if let (Some(l_i64), Some(r_i64)) = (l.as_i64(), r.as_i64()) {
                                     Value::Number(serde_json::Number::from(l_i64 + r_i64))
-                                } else if let (Some(l_f64), Some(r_f64)) = (l.as_f64(), r.as_f64()) {
-                                    serde_json::Number::from_f64(l_f64 + r_f64).map(Value::Number).unwrap_or(Value::Null)
+                                } else if let (Some(l_f64), Some(r_f64)) = (l.as_f64(), r.as_f64())
+                                {
+                                    serde_json::Number::from_f64(l_f64 + r_f64)
+                                        .map(Value::Number)
+                                        .unwrap_or(Value::Null)
                                 } else {
                                     Value::Null
                                 }
@@ -1098,8 +1106,11 @@ impl BoltProtocolHandler {
                             (Value::Number(l), Value::Number(r)) => {
                                 if let (Some(l_i64), Some(r_i64)) = (l.as_i64(), r.as_i64()) {
                                     Value::Number(serde_json::Number::from(l_i64 - r_i64))
-                                } else if let (Some(l_f64), Some(r_f64)) = (l.as_f64(), r.as_f64()) {
-                                    serde_json::Number::from_f64(l_f64 - r_f64).map(Value::Number).unwrap_or(Value::Null)
+                                } else if let (Some(l_f64), Some(r_f64)) = (l.as_f64(), r.as_f64())
+                                {
+                                    serde_json::Number::from_f64(l_f64 - r_f64)
+                                        .map(Value::Number)
+                                        .unwrap_or(Value::Null)
                                 } else {
                                     Value::Null
                                 }
@@ -1185,19 +1196,21 @@ impl BoltProtocolHandler {
                     // Execute CREATE clause
                     // We need to handle variable binding from previous clauses (MATCH)
                     // And we need to link nodes with relationships
-                    
+
                     // For each row in current results (or 1 run if empty), we execute the CREATE
                     if results.is_empty() {
                         results.push(vec![]);
                     }
-                    
+
                     let mut new_results = Vec::new();
-                    
+
                     for row in &results {
                         let mut current_row = row.clone();
                         let mut last_node_id: Option<String> = None;
-                        let mut pending_rel: Option<crate::protocols::cypher::cypher_parser::RelationshipPattern> = None;
-                        
+                        let mut pending_rel: Option<
+                            crate::protocols::cypher::cypher_parser::RelationshipPattern,
+                        > = None;
+
                         for element in &pattern.elements {
                             match element {
                                 crate::protocols::cypher::cypher_parser::PatternElement::Node(node_pattern) => {
@@ -1269,33 +1282,39 @@ impl BoltProtocolHandler {
                         }
                         new_results.push(current_row);
                     }
-                    
+
                     // Update columns if we added new variables
                     // This is a bit hacky, we should track new variables properly
                     for element in &pattern.elements {
-                         if let crate::protocols::cypher::cypher_parser::PatternElement::Node(node_pattern) = element {
-                             if let Some(var) = &node_pattern.variable {
-                                 if !columns.contains(var) {
-                                     columns.push(var.clone());
-                                 }
-                             }
-                         }
+                        if let crate::protocols::cypher::cypher_parser::PatternElement::Node(
+                            node_pattern,
+                        ) = element
+                        {
+                            if let Some(var) = &node_pattern.variable {
+                                if !columns.contains(var) {
+                                    columns.push(var.clone());
+                                }
+                            }
+                        }
                     }
-                    
+
                     results = new_results;
                 }
                 crate::protocols::cypher::cypher_parser::CypherClause::Return { items } => {
                     // If results is empty and we haven't executed a MATCH, assume implicit single row
                     // (This is a simplification; ideally we'd track if we have a stream of rows)
                     if results.is_empty() && columns.is_empty() {
-                         results.push(vec![]);
+                        results.push(vec![]);
                     }
 
                     let mut new_columns = Vec::new();
                     let mut new_results = Vec::new();
 
                     for item in items {
-                        let col_name = item.alias.clone().unwrap_or_else(|| item.expression.clone());
+                        let col_name = item
+                            .alias
+                            .clone()
+                            .unwrap_or_else(|| item.expression.clone());
                         new_columns.push(col_name);
                     }
 
@@ -1307,14 +1326,17 @@ impl BoltProtocolHandler {
                         }
                         new_results.push(new_row);
                     }
-                    
+
                     columns = new_columns;
                     results = new_results;
                 }
-                crate::protocols::cypher::cypher_parser::CypherClause::With { items, where_condition: _ } => {
+                crate::protocols::cypher::cypher_parser::CypherClause::With {
+                    items,
+                    where_condition: _,
+                } => {
                     // WITH clause is similar to RETURN but for intermediate results
-                     if results.is_empty() && columns.is_empty() {
-                         results.push(vec![]);
+                    if results.is_empty() && columns.is_empty() {
+                        results.push(vec![]);
                     }
 
                     let mut new_columns = Vec::new();
@@ -1333,7 +1355,7 @@ impl BoltProtocolHandler {
                         }
                         new_results.push(new_row);
                     }
-                    
+
                     columns = new_columns;
                     results = new_results;
                 }
@@ -1729,10 +1751,10 @@ impl BoltProtocolHandler {
         let mut buf = BytesMut::new();
         buf.put_u8(0xB1); // Structure (size 1)
         buf.put_u8(0x70); // SUCCESS signature
-        
+
         // Encode metadata map
         self.encode_packstream_value(&Value::Object(metadata.into_iter().collect()), &mut buf);
-        
+
         self.send_chunk(&buf, stream).await
     }
 
@@ -1874,11 +1896,10 @@ impl BoltProtocolHandler {
         chunk.put_u16(size);
         chunk.put_slice(data);
         chunk.put_u16(0); // End of message marker
-        
+
         stream.write_all(&chunk).await.map_err(|e| {
             error!("Failed to write chunk: {}", e);
             ProtocolError::Other(format!("Write error: {}", e))
         })
     }
-
 }

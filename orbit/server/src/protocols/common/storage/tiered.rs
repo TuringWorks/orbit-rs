@@ -209,10 +209,7 @@ impl TableStorage for TieredTableStorage {
                 .map(|name| ColumnFamilyDescriptor::new(name, Options::default()))
                 .collect();
 
-            info!(
-                "Opening RocksDB with column families: {:?}",
-                all_cfs
-            );
+            info!("Opening RocksDB with column families: {:?}", all_cfs);
 
             match DB::open_cf_descriptors(&opts, &db_path, cf_descriptors) {
                 Ok(db) => {

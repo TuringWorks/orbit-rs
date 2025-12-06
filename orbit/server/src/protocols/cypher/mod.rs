@@ -35,12 +35,12 @@ pub mod types;
 // #[cfg(test)]
 // mod tests;
 
+pub use apoc_procedures::{is_apoc_procedure, ApocProcedures};
 #[allow(deprecated)]
 pub use bolt::BoltProtocol;
 pub use bolt_protocol::BoltProtocolHandler;
 pub use cypher_functions::{CypherFunctions, FunctionContext};
 pub use cypher_parser::{BinaryOperator, CypherParser, Expression, UnaryOperator};
-pub use apoc_procedures::{ApocProcedures, is_apoc_procedure};
 pub use db_procedures::DbProcedures;
 pub use graph_algorithms_procedures::GraphAlgorithmProcedures;
 pub use graph_engine::GraphEngine;

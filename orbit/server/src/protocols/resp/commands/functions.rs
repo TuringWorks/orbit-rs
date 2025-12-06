@@ -105,7 +105,13 @@ impl FunctionManager {
     }
 
     /// Load a function library
-    pub async fn load_library(&self, name: &str, code: &str, engine: &str, replace: bool) -> Result<(), String> {
+    pub async fn load_library(
+        &self,
+        name: &str,
+        code: &str,
+        engine: &str,
+        replace: bool,
+    ) -> Result<(), String> {
         let library = FunctionLibrary::parse(name, code, engine)?;
 
         let mut libraries = self.libraries.write().await;
@@ -123,7 +129,11 @@ impl FunctionManager {
     }
 
     /// List all libraries
-    pub async fn list_libraries(&self, library_filter: Option<&str>, with_code: bool) -> Vec<FunctionLibrary> {
+    pub async fn list_libraries(
+        &self,
+        library_filter: Option<&str>,
+        with_code: bool,
+    ) -> Vec<FunctionLibrary> {
         let libraries = self.libraries.read().await;
 
         libraries
@@ -182,12 +192,19 @@ impl FunctionManager {
         let running = self.running_script.read().await;
 
         let mut stats = HashMap::new();
-        stats.insert("running_script".to_string(), running.clone().unwrap_or_default());
+        stats.insert(
+            "running_script".to_string(),
+            running.clone().unwrap_or_default(),
+        );
         stats.insert("engines".to_string(), "LUA".to_string());
         stats.insert("libraries".to_string(), libraries.len().to_string());
         stats.insert(
             "functions".to_string(),
-            libraries.values().map(|l| l.functions.len()).sum::<usize>().to_string(),
+            libraries
+                .values()
+                .map(|l| l.functions.len())
+                .sum::<usize>()
+                .to_string(),
         );
         stats.insert("calls".to_string(), calls.to_string());
 
@@ -195,18 +212,27 @@ impl FunctionManager {
     }
 
     /// Call a function (simulated)
-    pub async fn call(&self, func_name: &str, _keys: &[String], _args: &[String]) -> Result<RespValue, String> {
+    pub async fn call(
+        &self,
+        func_name: &str,
+        _keys: &[String],
+        _args: &[String],
+    ) -> Result<RespValue, String> {
         // Check if function exists
-        let _func = self.get_function(func_name).await.ok_or_else(|| {
-            format!("Function not found: {}", func_name)
-        })?;
+        let _func = self
+            .get_function(func_name)
+            .await
+            .ok_or_else(|| format!("Function not found: {}", func_name))?;
 
         // Update statistics
         *self.calls.write().await += 1;
 
         // In a real implementation, we would execute the Lua script here
         // For now, return a simulated response
-        Ok(RespValue::SimpleString(format!("(function {} executed)", func_name)))
+        Ok(RespValue::SimpleString(format!(
+            "(function {} executed)",
+            func_name
+        )))
     }
 }
 
@@ -254,7 +280,10 @@ impl FunctionCommands {
         command_name: &str,
     ) -> ProtocolResult<i64> {
         args.get(index)
-            .and_then(|v| v.as_integer().or_else(|| v.as_string().and_then(|s| s.parse().ok())))
+            .and_then(|v| {
+                v.as_integer()
+                    .or_else(|| v.as_string().and_then(|s| s.parse().ok()))
+            })
             .ok_or_else(|| {
                 ProtocolError::RespError(format!(
                     "ERR invalid integer argument for '{}' command",
@@ -333,7 +362,9 @@ impl FunctionCommands {
             .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
 
         debug!("FUNCTION LOAD {} -> OK", library_name);
-        Ok(RespValue::BulkString(Bytes::from(library_name.into_bytes())))
+        Ok(RespValue::BulkString(Bytes::from(
+            library_name.into_bytes(),
+        )))
     }
 
     /// FUNCTION LIST [LIBRARYNAME library-name-pattern] [WITHCODE]
@@ -343,7 +374,9 @@ impl FunctionCommands {
         let mut idx = 0;
 
         while idx < args.len() {
-            let arg = self.get_string_arg(args, idx, "FUNCTION LIST")?.to_uppercase();
+            let arg = self
+                .get_string_arg(args, idx, "FUNCTION LIST")?
+                .to_uppercase();
             match arg.as_str() {
                 "LIBRARYNAME" => {
                     idx += 1;
@@ -357,7 +390,10 @@ impl FunctionCommands {
             idx += 1;
         }
 
-        let libraries = self.function_manager.list_libraries(library_filter.as_deref(), with_code).await;
+        let libraries = self
+            .function_manager
+            .list_libraries(library_filter.as_deref(), with_code)
+            .await;
 
         let result: Vec<RespValue> = libraries
             .iter()
@@ -383,7 +419,9 @@ impl FunctionCommands {
                             RespValue::Array(
                                 f.flags
                                     .iter()
-                                    .map(|fl| RespValue::BulkString(Bytes::from(fl.as_bytes().to_vec())))
+                                    .map(|fl| {
+                                        RespValue::BulkString(Bytes::from(fl.as_bytes().to_vec()))
+                                    })
                                     .collect(),
                             ),
                         ])
@@ -394,7 +432,9 @@ impl FunctionCommands {
 
                 if with_code {
                     info.push(RespValue::BulkString(Bytes::from("library_code")));
-                    info.push(RespValue::BulkString(Bytes::from(lib.code.as_bytes().to_vec())));
+                    info.push(RespValue::BulkString(Bytes::from(
+                        lib.code.as_bytes().to_vec(),
+                    )));
                 }
 
                 RespValue::Array(info)
@@ -445,23 +485,39 @@ impl FunctionCommands {
 
         let mut result = Vec::new();
         result.push(RespValue::BulkString(Bytes::from("running_script")));
-        result.push(if stats.get("running_script").map(|s| s.is_empty()).unwrap_or(true) {
-            RespValue::NullBulkString
-        } else {
-            RespValue::BulkString(Bytes::from(stats.get("running_script").unwrap().as_bytes().to_vec()))
-        });
+        result.push(
+            if stats
+                .get("running_script")
+                .map(|s| s.is_empty())
+                .unwrap_or(true)
+            {
+                RespValue::NullBulkString
+            } else {
+                RespValue::BulkString(Bytes::from(
+                    stats.get("running_script").unwrap().as_bytes().to_vec(),
+                ))
+            },
+        );
 
         result.push(RespValue::BulkString(Bytes::from("engines")));
-        let engines = RespValue::Array(vec![
-            RespValue::Array(vec![
-                RespValue::BulkString(Bytes::from("name")),
-                RespValue::BulkString(Bytes::from("LUA")),
-                RespValue::BulkString(Bytes::from("libraries_count")),
-                RespValue::Integer(stats.get("libraries").and_then(|s| s.parse().ok()).unwrap_or(0)),
-                RespValue::BulkString(Bytes::from("functions_count")),
-                RespValue::Integer(stats.get("functions").and_then(|s| s.parse().ok()).unwrap_or(0)),
-            ]),
-        ]);
+        let engines = RespValue::Array(vec![RespValue::Array(vec![
+            RespValue::BulkString(Bytes::from("name")),
+            RespValue::BulkString(Bytes::from("LUA")),
+            RespValue::BulkString(Bytes::from("libraries_count")),
+            RespValue::Integer(
+                stats
+                    .get("libraries")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0),
+            ),
+            RespValue::BulkString(Bytes::from("functions_count")),
+            RespValue::Integer(
+                stats
+                    .get("functions")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0),
+            ),
+        ])]);
         result.push(engines);
 
         debug!("FUNCTION STATS -> OK");
@@ -472,7 +528,9 @@ impl FunctionCommands {
     async fn cmd_function_kill(&self) -> ProtocolResult<RespValue> {
         // In a real implementation, this would interrupt the running script
         debug!("FUNCTION KILL -> NOTBUSY (no script running)");
-        Err(ProtocolError::RespError("NOTBUSY No scripts in execution right now.".to_string()))
+        Err(ProtocolError::RespError(
+            "NOTBUSY No scripts in execution right now.".to_string(),
+        ))
     }
 
     /// FUNCTION DUMP - Dump all functions (serialized)
@@ -482,7 +540,10 @@ impl FunctionCommands {
         // Serialize to a simple format
         let mut dump = String::new();
         for lib in &libraries {
-            dump.push_str(&format!("LIB:{}:{}\n{}\nENDLIB\n", lib.name, lib.engine, lib.code));
+            dump.push_str(&format!(
+                "LIB:{}:{}\n{}\nENDLIB\n",
+                lib.name, lib.engine, lib.code
+            ));
         }
 
         debug!("FUNCTION DUMP -> {} bytes", dump.len());
@@ -499,7 +560,8 @@ impl FunctionCommands {
 
         let data = self.get_string_arg(args, 0, "FUNCTION RESTORE")?;
         let mode = if args.len() > 1 {
-            self.get_string_arg(args, 1, "FUNCTION RESTORE")?.to_uppercase()
+            self.get_string_arg(args, 1, "FUNCTION RESTORE")?
+                .to_uppercase()
         } else {
             "APPEND".to_string()
         };
@@ -524,7 +586,10 @@ impl FunctionCommands {
                 }
             } else if line == "ENDLIB" {
                 if let Some((name, engine)) = current_lib.take() {
-                    let _ = self.function_manager.load_library(&name, &current_code, &engine, replace).await;
+                    let _ = self
+                        .function_manager
+                        .load_library(&name, &current_code, &engine, replace)
+                        .await;
                 }
             } else if current_lib.is_some() {
                 current_code.push_str(line);
@@ -613,8 +678,8 @@ impl CommandHandler for FunctionCommands {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::traits::BaseCommandHandler;
+    use super::*;
 
     #[tokio::test]
     async fn test_function_load_and_list() {
@@ -625,7 +690,8 @@ mod tests {
         let orbit_client = orbit_client::OrbitClient::new_offline(client_config)
             .await
             .unwrap();
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+        let local_registry =
+            Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
         let handler = FunctionCommands {
             base: BaseCommandHandler::new(Arc::new(orbit_client), local_registry),
             function_manager: Arc::new(FunctionManager::new()),
@@ -659,7 +725,8 @@ mod tests {
         let orbit_client = orbit_client::OrbitClient::new_offline(client_config)
             .await
             .unwrap();
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+        let local_registry =
+            Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
         let handler = FunctionCommands {
             base: BaseCommandHandler::new(Arc::new(orbit_client), local_registry),
             function_manager: Arc::new(FunctionManager::new()),
@@ -679,7 +746,8 @@ mod tests {
         let orbit_client = orbit_client::OrbitClient::new_offline(client_config)
             .await
             .unwrap();
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+        let local_registry =
+            Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
         let handler = FunctionCommands {
             base: BaseCommandHandler::new(Arc::new(orbit_client), local_registry),
             function_manager: Arc::new(FunctionManager::new()),

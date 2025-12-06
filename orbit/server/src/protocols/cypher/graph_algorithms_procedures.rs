@@ -124,7 +124,22 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             "orbit.graph.allshortestpaths" => self.execute_all_shortest_paths(args).await,
             "orbit.graph.kshortestpaths" => self.execute_k_shortest_paths(args).await,
             "orbit.graph.spanningtree" => self.execute_spanning_tree(args).await,
-            "orbit.graph.singlesourceshortestpath" => self.execute_single_source_shortest_path(args).await,
+            "orbit.graph.singlesourceshortestpath" => {
+                self.execute_single_source_shortest_path(args).await
+            }
+            // GDS (Graph Data Science) Algorithms
+            "orbit.graph.labelpropagation" | "gds.labelpropagation" => {
+                self.execute_label_propagation(args).await
+            }
+            "orbit.graph.randomwalk" | "gds.randomwalk" => self.execute_random_walk(args).await,
+            "orbit.graph.hits" | "gds.hits" => self.execute_hits(args).await,
+            "orbit.graph.articlerank" | "gds.articlerank" => self.execute_article_rank(args).await,
+            "orbit.graph.nodessimilarity" | "gds.nodesimilarity" => {
+                self.execute_node_similarity(args).await
+            }
+            "orbit.graph.graphstats" | "gds.graph.stats" => self.execute_graph_stats(args).await,
+            "orbit.graph.wcc" | "gds.wcc" => self.execute_weakly_connected_components(args).await,
+            "orbit.graph.scc" | "gds.scc" => self.execute_strongly_connected_components(args).await,
             _ => Err(ProtocolError::CypherError(format!(
                 "Unknown graph algorithm procedure: {procedure_name}"
             ))),
@@ -2555,7 +2570,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         let start_id = config
             .get("startNode")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ProtocolError::CypherError("startNode parameter required".to_string()))?;
+            .ok_or_else(|| {
+                ProtocolError::CypherError("startNode parameter required".to_string())
+            })?;
         let end_id = config
             .get("endNode")
             .and_then(|v| v.as_str())
@@ -2682,7 +2699,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         let start_id = config
             .get("startNode")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ProtocolError::CypherError("startNode parameter required".to_string()))?;
+            .ok_or_else(|| {
+                ProtocolError::CypherError("startNode parameter required".to_string())
+            })?;
         let end_id = config.get("endNode").and_then(|v| v.as_str());
         let weight_property = config
             .get("weightProperty")
@@ -2725,7 +2744,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         let mut heap = std::collections::BinaryHeap::new();
 
         dist[start_idx] = 0.0;
-        heap.push(std::cmp::Reverse((ordered_float::OrderedFloat(0.0), start_idx)));
+        heap.push(std::cmp::Reverse((
+            ordered_float::OrderedFloat(0.0),
+            start_idx,
+        )));
 
         while let Some(std::cmp::Reverse((d, u))) = heap.pop() {
             if d.0 > dist[u] {
@@ -2737,7 +2759,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 if new_dist < dist[v] {
                     dist[v] = new_dist;
                     prev[v] = Some(u);
-                    heap.push(std::cmp::Reverse((ordered_float::OrderedFloat(new_dist), v)));
+                    heap.push(std::cmp::Reverse((
+                        ordered_float::OrderedFloat(new_dist),
+                        v,
+                    )));
                 }
             }
         }
@@ -2807,7 +2832,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         let start_id = config
             .get("startNode")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ProtocolError::CypherError("startNode parameter required".to_string()))?;
+            .ok_or_else(|| {
+                ProtocolError::CypherError("startNode parameter required".to_string())
+            })?;
         let end_id = config
             .get("endNode")
             .and_then(|v| v.as_str())
@@ -2881,7 +2908,12 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             nodes: &[GraphNode],
         ) {
             if current == end {
-                all_paths.push(current_path.iter().map(|&i| nodes[i].id.to_string()).collect());
+                all_paths.push(
+                    current_path
+                        .iter()
+                        .map(|&i| nodes[i].id.to_string())
+                        .collect(),
+                );
                 return;
             }
 
@@ -2945,15 +2977,14 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         let start_id = config
             .get("startNode")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ProtocolError::CypherError("startNode parameter required".to_string()))?;
+            .ok_or_else(|| {
+                ProtocolError::CypherError("startNode parameter required".to_string())
+            })?;
         let end_id = config
             .get("endNode")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ProtocolError::CypherError("endNode parameter required".to_string()))?;
-        let k = config
-            .get("k")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(3) as usize;
+        let k = config.get("k").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
         let weight_property = config
             .get("weightProperty")
             .and_then(|v| v.as_str())
@@ -3079,7 +3110,11 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             return Ok(QueryResult {
                 nodes: vec![],
                 relationships: vec![],
-                columns: vec!["source".to_string(), "target".to_string(), "weight".to_string()],
+                columns: vec![
+                    "source".to_string(),
+                    "target".to_string(),
+                    "weight".to_string(),
+                ],
                 rows: vec![],
             });
         }
@@ -3170,7 +3205,11 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
                 for &(next, weight) in &adj[v] {
                     if !in_mst[next] {
-                        heap.push(std::cmp::Reverse((ordered_float::OrderedFloat(weight), v, next)));
+                        heap.push(std::cmp::Reverse((
+                            ordered_float::OrderedFloat(weight),
+                            v,
+                            next,
+                        )));
                     }
                 }
             }
@@ -3229,7 +3268,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         let start_id = config
             .get("startNode")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ProtocolError::CypherError("startNode parameter required".to_string()))?;
+            .ok_or_else(|| {
+                ProtocolError::CypherError("startNode parameter required".to_string())
+            })?;
         let weight_property = config
             .get("weightProperty")
             .and_then(|v| v.as_str())
@@ -3274,7 +3315,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         let mut heap = std::collections::BinaryHeap::new();
 
         dist[start_idx] = 0.0;
-        heap.push(std::cmp::Reverse((ordered_float::OrderedFloat(0.0), start_idx)));
+        heap.push(std::cmp::Reverse((
+            ordered_float::OrderedFloat(0.0),
+            start_idx,
+        )));
 
         while let Some(std::cmp::Reverse((d, u))) = heap.pop() {
             if d.0 > dist[u] || d.0 > max_distance {
@@ -3285,7 +3329,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 let new_dist = dist[u] + weight;
                 if new_dist < dist[v] && new_dist <= max_distance {
                     dist[v] = new_dist;
-                    heap.push(std::cmp::Reverse((ordered_float::OrderedFloat(new_dist), v)));
+                    heap.push(std::cmp::Reverse((
+                        ordered_float::OrderedFloat(new_dist),
+                        v,
+                    )));
                 }
             }
         }
@@ -3316,10 +3363,850 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         // Sort by distance
         rows.sort_by(|a, b| {
-            let da = a[1].as_ref().and_then(|s| s.parse::<f64>().ok()).unwrap_or(f64::INFINITY);
-            let db = b[1].as_ref().and_then(|s| s.parse::<f64>().ok()).unwrap_or(f64::INFINITY);
+            let da = a[1]
+                .as_ref()
+                .and_then(|s| s.parse::<f64>().ok())
+                .unwrap_or(f64::INFINITY);
+            let db = b[1]
+                .as_ref()
+                .and_then(|s| s.parse::<f64>().ok())
+                .unwrap_or(f64::INFINITY);
             da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
         });
+
+        Ok(QueryResult {
+            nodes: vec![],
+            relationships: vec![],
+            columns,
+            rows,
+        })
+    }
+
+    // ==================== GDS (Graph Data Science) Algorithms ====================
+
+    /// Execute Label Propagation Algorithm for community detection
+    /// CALL orbit.graph.labelpropagation({maxIterations: 10})
+    async fn execute_label_propagation(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            HashMap::new()
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let max_iterations = config
+            .get("maxIterations")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(10);
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: vec![],
+                relationships: vec![],
+                columns: vec!["nodeId".to_string(), "communityId".to_string()],
+                rows: vec![],
+            });
+        }
+
+        // Build node ID to index mapping
+        let node_id_to_idx: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        // Build adjacency list
+        let mut adjacency: Vec<Vec<usize>> = vec![vec![]; nodes.len()];
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_id_to_idx.get(rel.start_node.to_string().as_str()),
+                node_id_to_idx.get(rel.end_node.to_string().as_str()),
+            ) {
+                adjacency[from_idx].push(to_idx);
+                adjacency[to_idx].push(from_idx); // Undirected for LPA
+            }
+        }
+
+        // Initialize labels - each node starts with its own label
+        let mut labels: Vec<usize> = (0..nodes.len()).collect();
+
+        // Label propagation iterations
+        for _ in 0..max_iterations {
+            let mut changed = false;
+            for node_idx in 0..nodes.len() {
+                if adjacency[node_idx].is_empty() {
+                    continue;
+                }
+
+                // Count neighbor labels
+                let mut label_counts: HashMap<usize, usize> = HashMap::new();
+                for &neighbor in &adjacency[node_idx] {
+                    *label_counts.entry(labels[neighbor]).or_insert(0) += 1;
+                }
+
+                // Find most frequent label
+                if let Some((&best_label, _)) = label_counts.iter().max_by_key(|(_, &count)| count)
+                {
+                    if labels[node_idx] != best_label {
+                        labels[node_idx] = best_label;
+                        changed = true;
+                    }
+                }
+            }
+
+            if !changed {
+                break; // Converged
+            }
+        }
+
+        // Build results
+        let columns = vec!["nodeId".to_string(), "communityId".to_string()];
+        let rows: Vec<Vec<Option<String>>> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, node)| vec![Some(node.id.to_string()), Some(labels[i].to_string())])
+            .collect();
+
+        Ok(QueryResult {
+            nodes: vec![],
+            relationships: vec![],
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute Random Walk algorithm
+    /// CALL orbit.graph.randomwalk({startNode: 'node1', walkLength: 10, walks: 5})
+    async fn execute_random_walk(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            return Err(ProtocolError::CypherError(
+                "Random walk requires startNode parameter".to_string(),
+            ));
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let start_node_id = config
+            .get("startNode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ProtocolError::CypherError("startNode parameter required".to_string()))?
+            .to_string();
+
+        let walk_length = config
+            .get("walkLength")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(10);
+
+        let num_walks = config
+            .get("walks")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(5);
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        // Build adjacency list
+        let node_id_to_idx: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        let start_idx = node_id_to_idx.get(&start_node_id).copied().ok_or_else(|| {
+            ProtocolError::CypherError(format!("Start node not found: {}", start_node_id))
+        })?;
+
+        let mut adjacency: Vec<Vec<usize>> = vec![vec![]; nodes.len()];
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_id_to_idx.get(rel.start_node.to_string().as_str()),
+                node_id_to_idx.get(rel.end_node.to_string().as_str()),
+            ) {
+                adjacency[from_idx].push(to_idx);
+            }
+        }
+
+        // Perform random walks
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let seed = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as u64;
+        let mut rng_state = seed;
+
+        let mut walks: Vec<Vec<String>> = Vec::with_capacity(num_walks);
+        for _ in 0..num_walks {
+            let mut walk = vec![nodes[start_idx].id.to_string()];
+            let mut current = start_idx;
+
+            for _ in 0..walk_length {
+                if adjacency[current].is_empty() {
+                    break;
+                }
+                // Simple LCG random number generator
+                rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1);
+                let next_idx = (rng_state as usize) % adjacency[current].len();
+                current = adjacency[current][next_idx];
+                walk.push(nodes[current].id.to_string());
+            }
+            walks.push(walk);
+        }
+
+        // Build results
+        let columns = vec!["walkIndex".to_string(), "path".to_string()];
+        let rows: Vec<Vec<Option<String>>> = walks
+            .iter()
+            .enumerate()
+            .map(|(i, walk)| vec![Some(i.to_string()), Some(walk.join(" -> "))])
+            .collect();
+
+        Ok(QueryResult {
+            nodes: vec![],
+            relationships: vec![],
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute HITS (Hyperlink-Induced Topic Search) algorithm
+    /// CALL orbit.graph.hits({iterations: 20, tolerance: 0.0001})
+    async fn execute_hits(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            HashMap::new()
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let max_iterations = config
+            .get("iterations")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(20);
+
+        let tolerance = config
+            .get("tolerance")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0001);
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: vec![],
+                relationships: vec![],
+                columns: vec![
+                    "nodeId".to_string(),
+                    "authority".to_string(),
+                    "hub".to_string(),
+                ],
+                rows: vec![],
+            });
+        }
+
+        let node_id_to_idx: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        // Build outgoing and incoming edge lists
+        let mut outgoing: Vec<Vec<usize>> = vec![vec![]; nodes.len()];
+        let mut incoming: Vec<Vec<usize>> = vec![vec![]; nodes.len()];
+
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_id_to_idx.get(rel.start_node.to_string().as_str()),
+                node_id_to_idx.get(rel.end_node.to_string().as_str()),
+            ) {
+                outgoing[from_idx].push(to_idx);
+                incoming[to_idx].push(from_idx);
+            }
+        }
+
+        // Initialize authority and hub scores
+        let mut authority: Vec<f64> = vec![1.0; nodes.len()];
+        let mut hub: Vec<f64> = vec![1.0; nodes.len()];
+
+        // HITS iterations
+        for _ in 0..max_iterations {
+            let old_authority = authority.clone();
+
+            // Update authority scores: sum of hub scores of nodes pointing to this node
+            for i in 0..nodes.len() {
+                authority[i] = incoming[i].iter().map(|&j| hub[j]).sum();
+            }
+
+            // Update hub scores: sum of authority scores of nodes this node points to
+            for i in 0..nodes.len() {
+                hub[i] = outgoing[i].iter().map(|&j| authority[j]).sum();
+            }
+
+            // Normalize
+            let auth_sum: f64 = authority.iter().map(|&x| x * x).sum::<f64>().sqrt();
+            let hub_sum: f64 = hub.iter().map(|&x| x * x).sum::<f64>().sqrt();
+
+            if auth_sum > 0.0 {
+                authority.iter_mut().for_each(|x| *x /= auth_sum);
+            }
+            if hub_sum > 0.0 {
+                hub.iter_mut().for_each(|x| *x /= hub_sum);
+            }
+
+            // Check convergence
+            let diff: f64 = authority
+                .iter()
+                .zip(old_authority.iter())
+                .map(|(&a, &b)| (a - b).abs())
+                .sum();
+            if diff < tolerance {
+                break;
+            }
+        }
+
+        // Build results
+        let columns = vec![
+            "nodeId".to_string(),
+            "authority".to_string(),
+            "hub".to_string(),
+        ];
+        let mut results: Vec<(f64, f64, String)> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, node)| (authority[i], hub[i], node.id.to_string()))
+            .collect();
+        results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        let rows: Vec<Vec<Option<String>>> = results
+            .into_iter()
+            .map(|(auth, hub_score, id)| {
+                vec![
+                    Some(id),
+                    Some(format!("{:.6}", auth)),
+                    Some(format!("{:.6}", hub_score)),
+                ]
+            })
+            .collect();
+
+        Ok(QueryResult {
+            nodes: vec![],
+            relationships: vec![],
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute Article Rank algorithm (PageRank variant)
+    /// CALL orbit.graph.articlerank({damping: 0.85, iterations: 20})
+    async fn execute_article_rank(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            HashMap::new()
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let damping = config
+            .get("damping")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.85);
+
+        let max_iterations = config
+            .get("iterations")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(20);
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: vec![],
+                relationships: vec![],
+                columns: vec!["nodeId".to_string(), "articleRank".to_string()],
+                rows: vec![],
+            });
+        }
+
+        let node_id_to_idx: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        // Build outgoing edges and count
+        let mut outgoing: Vec<Vec<usize>> = vec![vec![]; nodes.len()];
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_id_to_idx.get(rel.start_node.to_string().as_str()),
+                node_id_to_idx.get(rel.end_node.to_string().as_str()),
+            ) {
+                outgoing[from_idx].push(to_idx);
+            }
+        }
+
+        let n = nodes.len() as f64;
+        let avg_out_degree = relationships.len() as f64 / n;
+
+        // Article Rank: uses average degree instead of actual out-degree for normalization
+        let mut ranks: Vec<f64> = vec![1.0 / n; nodes.len()];
+
+        for _ in 0..max_iterations {
+            let old_ranks = ranks.clone();
+            let mut new_ranks = vec![(1.0 - damping) / n; nodes.len()];
+
+            for i in 0..nodes.len() {
+                if !outgoing[i].is_empty() {
+                    // ArticleRank: divide by average degree + node's out-degree
+                    let contrib =
+                        damping * old_ranks[i] / (avg_out_degree + outgoing[i].len() as f64);
+                    for &j in &outgoing[i] {
+                        new_ranks[j] += contrib;
+                    }
+                }
+            }
+
+            ranks = new_ranks;
+        }
+
+        // Build results
+        let columns = vec!["nodeId".to_string(), "articleRank".to_string()];
+        let mut results: Vec<(f64, String)> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, node)| (ranks[i], node.id.to_string()))
+            .collect();
+        results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        let rows: Vec<Vec<Option<String>>> = results
+            .into_iter()
+            .map(|(rank, id)| vec![Some(id), Some(format!("{:.6}", rank))])
+            .collect();
+
+        Ok(QueryResult {
+            nodes: vec![],
+            relationships: vec![],
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute Node Similarity algorithm (k-nearest neighbors based on neighbors)
+    /// CALL orbit.graph.nodessimilarity({topK: 10})
+    async fn execute_node_similarity(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let config = if args.is_empty() {
+            HashMap::new()
+        } else {
+            self.parse_config_arg(&args[0])?
+        };
+
+        let top_k = config
+            .get("topK")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(10);
+
+        let similarity_cutoff = config
+            .get("similarityCutoff")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: vec![],
+                relationships: vec![],
+                columns: vec![
+                    "node1".to_string(),
+                    "node2".to_string(),
+                    "similarity".to_string(),
+                ],
+                rows: vec![],
+            });
+        }
+
+        let node_id_to_idx: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        // Build neighbor sets for each node
+        let mut neighbors: Vec<HashSet<usize>> = vec![HashSet::new(); nodes.len()];
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_id_to_idx.get(rel.start_node.to_string().as_str()),
+                node_id_to_idx.get(rel.end_node.to_string().as_str()),
+            ) {
+                neighbors[from_idx].insert(to_idx);
+                neighbors[to_idx].insert(from_idx);
+            }
+        }
+
+        // Calculate pairwise Jaccard similarity
+        let mut similarities: Vec<(String, String, f64)> = Vec::new();
+
+        for i in 0..nodes.len() {
+            for j in (i + 1)..nodes.len() {
+                if neighbors[i].is_empty() && neighbors[j].is_empty() {
+                    continue;
+                }
+
+                let intersection = neighbors[i].intersection(&neighbors[j]).count();
+                let union = neighbors[i].union(&neighbors[j]).count();
+
+                if union > 0 {
+                    let similarity = intersection as f64 / union as f64;
+                    if similarity >= similarity_cutoff {
+                        similarities.push((
+                            nodes[i].id.to_string(),
+                            nodes[j].id.to_string(),
+                            similarity,
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Sort by similarity descending
+        similarities.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+        similarities.truncate(top_k);
+
+        // Build results
+        let columns = vec![
+            "node1".to_string(),
+            "node2".to_string(),
+            "similarity".to_string(),
+        ];
+        let rows: Vec<Vec<Option<String>>> = similarities
+            .into_iter()
+            .map(|(n1, n2, sim)| vec![Some(n1), Some(n2), Some(format!("{:.6}", sim))])
+            .collect();
+
+        Ok(QueryResult {
+            nodes: vec![],
+            relationships: vec![],
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute Graph Statistics procedure
+    /// CALL orbit.graph.graphstats()
+    async fn execute_graph_stats(&self, _args: &[JsonValue]) -> ProtocolResult<QueryResult> {
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        let node_count = nodes.len();
+        let relationship_count = relationships.len();
+
+        // Calculate density: E / (V * (V-1)) for directed graph
+        let density = if node_count > 1 {
+            relationship_count as f64 / (node_count as f64 * (node_count as f64 - 1.0))
+        } else {
+            0.0
+        };
+
+        // Calculate degree statistics
+        let mut in_degrees: Vec<usize> = vec![0; node_count];
+        let mut out_degrees: Vec<usize> = vec![0; node_count];
+
+        let node_id_to_idx: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        for rel in &relationships {
+            if let Some(&from_idx) = node_id_to_idx.get(rel.start_node.to_string().as_str()) {
+                out_degrees[from_idx] += 1;
+            }
+            if let Some(&to_idx) = node_id_to_idx.get(rel.end_node.to_string().as_str()) {
+                in_degrees[to_idx] += 1;
+            }
+        }
+
+        let avg_in_degree = if node_count > 0 {
+            in_degrees.iter().sum::<usize>() as f64 / node_count as f64
+        } else {
+            0.0
+        };
+
+        let avg_out_degree = if node_count > 0 {
+            out_degrees.iter().sum::<usize>() as f64 / node_count as f64
+        } else {
+            0.0
+        };
+
+        let max_in_degree = in_degrees.iter().max().copied().unwrap_or(0);
+        let max_out_degree = out_degrees.iter().max().copied().unwrap_or(0);
+
+        // Count isolated nodes
+        let isolated_nodes = in_degrees
+            .iter()
+            .zip(out_degrees.iter())
+            .filter(|(&in_d, &out_d)| in_d == 0 && out_d == 0)
+            .count();
+
+        // Build results
+        let columns = vec!["statistic".to_string(), "value".to_string()];
+        let rows: Vec<Vec<Option<String>>> = vec![
+            vec![Some("nodeCount".to_string()), Some(node_count.to_string())],
+            vec![
+                Some("relationshipCount".to_string()),
+                Some(relationship_count.to_string()),
+            ],
+            vec![Some("density".to_string()), Some(format!("{:.6}", density))],
+            vec![
+                Some("avgInDegree".to_string()),
+                Some(format!("{:.2}", avg_in_degree)),
+            ],
+            vec![
+                Some("avgOutDegree".to_string()),
+                Some(format!("{:.2}", avg_out_degree)),
+            ],
+            vec![
+                Some("maxInDegree".to_string()),
+                Some(max_in_degree.to_string()),
+            ],
+            vec![
+                Some("maxOutDegree".to_string()),
+                Some(max_out_degree.to_string()),
+            ],
+            vec![
+                Some("isolatedNodes".to_string()),
+                Some(isolated_nodes.to_string()),
+            ],
+        ];
+
+        Ok(QueryResult {
+            nodes: vec![],
+            relationships: vec![],
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute Weakly Connected Components algorithm
+    /// CALL orbit.graph.wcc()
+    async fn execute_weakly_connected_components(
+        &self,
+        _args: &[JsonValue],
+    ) -> ProtocolResult<QueryResult> {
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: vec![],
+                relationships: vec![],
+                columns: vec!["nodeId".to_string(), "componentId".to_string()],
+                rows: vec![],
+            });
+        }
+
+        let node_id_to_idx: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        // Build undirected adjacency list
+        let mut adjacency: Vec<Vec<usize>> = vec![vec![]; nodes.len()];
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_id_to_idx.get(rel.start_node.to_string().as_str()),
+                node_id_to_idx.get(rel.end_node.to_string().as_str()),
+            ) {
+                adjacency[from_idx].push(to_idx);
+                adjacency[to_idx].push(from_idx);
+            }
+        }
+
+        // Union-Find for WCC
+        let mut parent: Vec<usize> = (0..nodes.len()).collect();
+        let mut rank: Vec<usize> = vec![0; nodes.len()];
+
+        fn find(parent: &mut Vec<usize>, i: usize) -> usize {
+            if parent[i] != i {
+                parent[i] = find(parent, parent[i]);
+            }
+            parent[i]
+        }
+
+        fn union(parent: &mut Vec<usize>, rank: &mut Vec<usize>, x: usize, y: usize) {
+            let root_x = find(parent, x);
+            let root_y = find(parent, y);
+            if root_x != root_y {
+                if rank[root_x] < rank[root_y] {
+                    parent[root_x] = root_y;
+                } else if rank[root_x] > rank[root_y] {
+                    parent[root_y] = root_x;
+                } else {
+                    parent[root_y] = root_x;
+                    rank[root_x] += 1;
+                }
+            }
+        }
+
+        // Process edges
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_id_to_idx.get(rel.start_node.to_string().as_str()),
+                node_id_to_idx.get(rel.end_node.to_string().as_str()),
+            ) {
+                union(&mut parent, &mut rank, from_idx, to_idx);
+            }
+        }
+
+        // Get component IDs
+        let mut component_ids: Vec<usize> = Vec::with_capacity(nodes.len());
+        for i in 0..nodes.len() {
+            component_ids.push(find(&mut parent, i));
+        }
+
+        // Renumber components starting from 0
+        let unique_components: HashSet<usize> = component_ids.iter().copied().collect();
+        let component_map: HashMap<usize, usize> = unique_components
+            .iter()
+            .enumerate()
+            .map(|(new_id, &old_id)| (old_id, new_id))
+            .collect();
+
+        let columns = vec!["nodeId".to_string(), "componentId".to_string()];
+        let rows: Vec<Vec<Option<String>>> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, node)| {
+                let comp_id = component_map.get(&component_ids[i]).copied().unwrap_or(0);
+                vec![Some(node.id.to_string()), Some(comp_id.to_string())]
+            })
+            .collect();
+
+        Ok(QueryResult {
+            nodes: vec![],
+            relationships: vec![],
+            columns,
+            rows,
+        })
+    }
+
+    /// Execute Strongly Connected Components algorithm (Kosaraju's)
+    /// CALL orbit.graph.scc()
+    async fn execute_strongly_connected_components(
+        &self,
+        _args: &[JsonValue],
+    ) -> ProtocolResult<QueryResult> {
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        if nodes.is_empty() {
+            return Ok(QueryResult {
+                nodes: vec![],
+                relationships: vec![],
+                columns: vec!["nodeId".to_string(), "componentId".to_string()],
+                rows: vec![],
+            });
+        }
+
+        let node_id_to_idx: HashMap<String, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.to_string(), i))
+            .collect();
+
+        // Build directed adjacency lists
+        let mut adjacency: Vec<Vec<usize>> = vec![vec![]; nodes.len()];
+        let mut reverse_adj: Vec<Vec<usize>> = vec![vec![]; nodes.len()];
+
+        for rel in &relationships {
+            if let (Some(&from_idx), Some(&to_idx)) = (
+                node_id_to_idx.get(rel.start_node.to_string().as_str()),
+                node_id_to_idx.get(rel.end_node.to_string().as_str()),
+            ) {
+                adjacency[from_idx].push(to_idx);
+                reverse_adj[to_idx].push(from_idx);
+            }
+        }
+
+        // Kosaraju's algorithm
+        // Step 1: DFS on original graph to get finish order
+        let mut visited = vec![false; nodes.len()];
+        let mut finish_order: Vec<usize> = Vec::new();
+
+        fn dfs_finish(
+            node: usize,
+            adj: &[Vec<usize>],
+            visited: &mut [bool],
+            finish_order: &mut Vec<usize>,
+        ) {
+            visited[node] = true;
+            for &neighbor in &adj[node] {
+                if !visited[neighbor] {
+                    dfs_finish(neighbor, adj, visited, finish_order);
+                }
+            }
+            finish_order.push(node);
+        }
+
+        for i in 0..nodes.len() {
+            if !visited[i] {
+                dfs_finish(i, &adjacency, &mut visited, &mut finish_order);
+            }
+        }
+
+        // Step 2: DFS on reverse graph in reverse finish order
+        visited.fill(false);
+        let mut component_ids = vec![0usize; nodes.len()];
+        let mut current_component = 0;
+
+        fn dfs_assign(
+            node: usize,
+            rev_adj: &[Vec<usize>],
+            visited: &mut [bool],
+            component_ids: &mut [usize],
+            component_id: usize,
+        ) {
+            visited[node] = true;
+            component_ids[node] = component_id;
+            for &neighbor in &rev_adj[node] {
+                if !visited[neighbor] {
+                    dfs_assign(neighbor, rev_adj, visited, component_ids, component_id);
+                }
+            }
+        }
+
+        for &node in finish_order.iter().rev() {
+            if !visited[node] {
+                dfs_assign(
+                    node,
+                    &reverse_adj,
+                    &mut visited,
+                    &mut component_ids,
+                    current_component,
+                );
+                current_component += 1;
+            }
+        }
+
+        let columns = vec!["nodeId".to_string(), "componentId".to_string()];
+        let rows: Vec<Vec<Option<String>>> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, node)| {
+                vec![
+                    Some(node.id.to_string()),
+                    Some(component_ids[i].to_string()),
+                ]
+            })
+            .collect();
 
         Ok(QueryResult {
             nodes: vec![],
@@ -3608,5 +4495,172 @@ mod tests {
             .execute_procedure("orbit.graph.unknown", &[])
             .await;
         assert!(result.is_err());
+    }
+
+    // ============================================================================
+    // Tests for GDS (Graph Data Science) Algorithms
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_label_propagation() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures
+            .execute_procedure("orbit.graph.labelpropagation", &[])
+            .await
+            .unwrap();
+
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.columns[0], "nodeId");
+        assert_eq!(result.columns[1], "communityId");
+        assert!(!result.rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_hits_algorithm() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures
+            .execute_procedure("orbit.graph.hits", &[])
+            .await
+            .unwrap();
+
+        assert_eq!(result.columns.len(), 3);
+        assert_eq!(result.columns[0], "nodeId");
+        assert_eq!(result.columns[1], "authority");
+        assert_eq!(result.columns[2], "hub");
+        assert!(!result.rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_article_rank() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures
+            .execute_procedure("orbit.graph.articlerank", &[])
+            .await
+            .unwrap();
+
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.columns[0], "nodeId");
+        assert_eq!(result.columns[1], "articleRank");
+        assert!(!result.rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_node_similarity() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures
+            .execute_procedure("orbit.graph.nodessimilarity", &[])
+            .await
+            .unwrap();
+
+        assert_eq!(result.columns.len(), 3);
+        assert_eq!(result.columns[0], "node1");
+        assert_eq!(result.columns[1], "node2");
+        assert_eq!(result.columns[2], "similarity");
+    }
+
+    #[tokio::test]
+    async fn test_graph_stats() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures
+            .execute_procedure("orbit.graph.graphstats", &[])
+            .await
+            .unwrap();
+
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.columns[0], "statistic");
+        assert_eq!(result.columns[1], "value");
+
+        // Verify key statistics are present
+        let stats: HashMap<String, String> = result
+            .rows
+            .iter()
+            .filter_map(|row| {
+                if let (Some(key), Some(value)) = (&row[0], &row[1]) {
+                    Some((key.clone(), value.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert!(stats.contains_key("nodeCount"));
+        assert!(stats.contains_key("relationshipCount"));
+        assert!(stats.contains_key("density"));
+        assert!(stats.contains_key("avgInDegree"));
+        assert!(stats.contains_key("avgOutDegree"));
+    }
+
+    #[tokio::test]
+    async fn test_weakly_connected_components() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures
+            .execute_procedure("orbit.graph.wcc", &[])
+            .await
+            .unwrap();
+
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.columns[0], "nodeId");
+        assert_eq!(result.columns[1], "componentId");
+        assert!(!result.rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_strongly_connected_components() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        let result = procedures
+            .execute_procedure("orbit.graph.scc", &[])
+            .await
+            .unwrap();
+
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.columns[0], "nodeId");
+        assert_eq!(result.columns[1], "componentId");
+        assert!(!result.rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_gds_aliases() {
+        let storage = create_test_graph().await;
+        let mut procedures = GraphAlgorithmProcedures::new(storage);
+        procedures.add_known_label("Person".to_string());
+
+        // Test GDS-style aliases work (lowercase since execute_procedure lowercases)
+        let result = procedures
+            .execute_procedure("gds.labelpropagation", &[])
+            .await;
+        assert!(result.is_ok());
+
+        let result = procedures.execute_procedure("gds.hits", &[]).await;
+        assert!(result.is_ok());
+
+        let result = procedures.execute_procedure("gds.wcc", &[]).await;
+        assert!(result.is_ok());
+
+        let result = procedures.execute_procedure("gds.scc", &[]).await;
+        assert!(result.is_ok());
+
+        let result = procedures.execute_procedure("gds.articlerank", &[]).await;
+        assert!(result.is_ok());
     }
 }

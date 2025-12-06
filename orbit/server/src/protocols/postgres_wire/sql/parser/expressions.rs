@@ -388,7 +388,9 @@ impl ExpressionParser {
                         index: Box::new(index),
                     };
                 }
-                Token::Colon if *pos + 1 < tokens.len() && matches!(tokens[*pos + 1], Token::Colon) => {
+                Token::Colon
+                    if *pos + 1 < tokens.len() && matches!(tokens[*pos + 1], Token::Colon) =>
+                {
                     // :: type cast (PostgreSQL style)
                     *pos += 2;
                     let target_type = self.parse_sql_type(tokens, pos)?;
@@ -458,24 +460,24 @@ impl ExpressionParser {
                     self.parse_function_call(tokens, pos, name.clone())
                 } else {
                     *pos += 1;
-                    
+
                     // Check for Dot (qualified name)
                     if *pos < tokens.len() && matches!(tokens[*pos], Token::Dot) {
                         *pos += 1; // consume Dot
-                        // Check for wildcard
+                                   // Check for wildcard
                         if *pos < tokens.len() && matches!(tokens[*pos], Token::Multiply) {
-                             // This is table.*, which is usually handled in SELECT list, but could be an expression?
-                             // Actually Expression::Column doesn't support wildcard.
-                             // But wait, parse_select_list handles QualifiedWildcard separately.
-                             // If we are here, we are parsing an expression.
-                             // Maybe we should just return ColumnRef with name="*"?
-                             // Or maybe we shouldn't handle wildcard here?
-                             // Let's assume for now it's a column.
-                             // But wait, if it IS table.*, parse_select_list checks for it explicitly BEFORE calling parse_expression.
-                             // So we don't need to handle it here?
-                             // Let's check parse_select_list in select.rs.
-                             // It checks: if matches(Dot) && matches(Multiply) -> QualifiedWildcard.
-                             // So we are safe.
+                            // This is table.*, which is usually handled in SELECT list, but could be an expression?
+                            // Actually Expression::Column doesn't support wildcard.
+                            // But wait, parse_select_list handles QualifiedWildcard separately.
+                            // If we are here, we are parsing an expression.
+                            // Maybe we should just return ColumnRef with name="*"?
+                            // Or maybe we shouldn't handle wildcard here?
+                            // Let's assume for now it's a column.
+                            // But wait, if it IS table.*, parse_select_list checks for it explicitly BEFORE calling parse_expression.
+                            // So we don't need to handle it here?
+                            // Let's check parse_select_list in select.rs.
+                            // It checks: if matches(Dot) && matches(Multiply) -> QualifiedWildcard.
+                            // So we are safe.
                         }
 
                         if let Some(Token::Identifier(col_name)) = tokens.get(*pos) {
@@ -488,7 +490,7 @@ impl ExpressionParser {
                                 },
                             ))
                         } else {
-                             return Err(crate::protocols::error::ProtocolError::ParseError(
+                            return Err(crate::protocols::error::ProtocolError::ParseError(
                                 "Expected identifier after dot".to_string(),
                             ));
                         }
@@ -533,32 +535,32 @@ impl ExpressionParser {
             // Handle ARRAY constructor
             Token::Array => {
                 *pos += 1; // consume 'ARRAY'
-                
+
                 if *pos >= tokens.len() || !matches!(tokens[*pos], Token::LeftBracket) {
                     return Err(crate::protocols::error::ProtocolError::ParseError(
                         "Expected '[' after ARRAY".to_string(),
                     ));
                 }
                 *pos += 1; // consume '['
-                
+
                 let mut elements = Vec::new();
                 while *pos < tokens.len() && !matches!(tokens[*pos], Token::RightBracket) {
                     elements.push(self.parse_expression(tokens, pos)?);
-                    
+
                     if *pos < tokens.len() && matches!(tokens[*pos], Token::Comma) {
                         *pos += 1; // consume ','
                     } else {
                         break;
                     }
                 }
-                
+
                 if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightBracket) {
                     return Err(crate::protocols::error::ProtocolError::ParseError(
                         "Expected ']' after ARRAY elements".to_string(),
                     ));
                 }
                 *pos += 1; // consume ']'
-                
+
                 Ok(Expression::Array(elements))
             }
 
@@ -585,7 +587,9 @@ impl ExpressionParser {
                 if let Some(Token::StringLiteral(s)) = tokens.get(*pos) {
                     *pos += 1;
                     // Default to no timezone for generic TIMESTAMP literal
-                    match crate::protocols::postgres_wire::sql::types::SqlValue::parse_timestamp(s, false) {
+                    match crate::protocols::postgres_wire::sql::types::SqlValue::parse_timestamp(
+                        s, false,
+                    ) {
                         Ok(val) => Ok(Expression::Literal(val)),
                         Err(e) => Err(crate::protocols::error::ProtocolError::ParseError(e)),
                     }
@@ -637,7 +641,7 @@ impl ExpressionParser {
 
                 Ok(expr)
             }
-            
+
             // Handle keywords that can be used as identifiers (like 'time', 'date', etc.)
             token => {
                 // Try to convert keyword to identifier name
@@ -647,7 +651,7 @@ impl ExpressionParser {
                         self.parse_function_call(tokens, pos, name)
                     } else {
                         *pos += 1;
-                        
+
                         // Check for Dot (qualified name)
                         if *pos < tokens.len() && matches!(tokens[*pos], Token::Dot) {
                             *pos += 1; // consume Dot
@@ -661,7 +665,7 @@ impl ExpressionParser {
                                     },
                                 ))
                             } else {
-                                 return Err(crate::protocols::error::ProtocolError::ParseError(
+                                return Err(crate::protocols::error::ProtocolError::ParseError(
                                     "Expected identifier after dot".to_string(),
                                 ));
                             }
@@ -684,7 +688,7 @@ impl ExpressionParser {
             }
         }
     }
-    
+
     /// Extract identifier string from token (handles both Identifier and keyword tokens used as names)
     fn token_to_identifier_name(&self, token: &Token) -> Option<String> {
         match token {
@@ -1337,7 +1341,11 @@ impl ExpressionParser {
     }
 
     /// Parse the base SQL type (without array suffix)
-    fn parse_base_sql_type(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<SqlType> {
+    fn parse_base_sql_type(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<SqlType> {
         match &tokens[*pos] {
             Token::Integer => {
                 *pos += 1;
@@ -1398,78 +1406,78 @@ impl ExpressionParser {
                 Ok(SqlType::Date)
             }
             Token::Time => {
-            *pos += 1;
-            Ok(SqlType::Time {
-                with_timezone: false,
-            })
-        }
-        Token::Vector => {
-            *pos += 1;
-            // Check for optional dimension specification
-            if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
                 *pos += 1;
-                if let Some(Token::NumericLiteral(dim_str)) = tokens.get(*pos) {
-                    if let Ok(dimensions) = dim_str.parse::<u32>() {
-                        *pos += 1;
-                        if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                Ok(SqlType::Time {
+                    with_timezone: false,
+                })
+            }
+            Token::Vector => {
+                *pos += 1;
+                // Check for optional dimension specification
+                if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
+                    *pos += 1;
+                    if let Some(Token::NumericLiteral(dim_str)) = tokens.get(*pos) {
+                        if let Ok(dimensions) = dim_str.parse::<u32>() {
                             *pos += 1;
-                            return Ok(SqlType::Vector {
-                                dimensions: Some(dimensions),
-                            });
+                            if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                                *pos += 1;
+                                return Ok(SqlType::Vector {
+                                    dimensions: Some(dimensions),
+                                });
+                            }
                         }
                     }
+                    return Err(crate::protocols::error::ProtocolError::ParseError(
+                        "Invalid VECTOR dimension specification".to_string(),
+                    ));
                 }
-                return Err(crate::protocols::error::ProtocolError::ParseError(
-                    "Invalid VECTOR dimension specification".to_string(),
-                ));
+                Ok(SqlType::Vector { dimensions: None })
             }
-            Ok(SqlType::Vector { dimensions: None })
-        }
-        Token::HalfVec => {
-            *pos += 1;
-            // Check for optional dimension specification
-            if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
+            Token::HalfVec => {
                 *pos += 1;
-                if let Some(Token::NumericLiteral(dim_str)) = tokens.get(*pos) {
-                    if let Ok(dimensions) = dim_str.parse::<u32>() {
-                        *pos += 1;
-                        if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                // Check for optional dimension specification
+                if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
+                    *pos += 1;
+                    if let Some(Token::NumericLiteral(dim_str)) = tokens.get(*pos) {
+                        if let Ok(dimensions) = dim_str.parse::<u32>() {
                             *pos += 1;
-                            return Ok(SqlType::HalfVec {
-                                dimensions: Some(dimensions),
-                            });
+                            if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                                *pos += 1;
+                                return Ok(SqlType::HalfVec {
+                                    dimensions: Some(dimensions),
+                                });
+                            }
                         }
                     }
+                    return Err(crate::protocols::error::ProtocolError::ParseError(
+                        "Invalid HALFVEC dimension specification".to_string(),
+                    ));
                 }
-                return Err(crate::protocols::error::ProtocolError::ParseError(
-                    "Invalid HALFVEC dimension specification".to_string(),
-                ));
+                Ok(SqlType::HalfVec { dimensions: None })
             }
-            Ok(SqlType::HalfVec { dimensions: None })
-        }
-        Token::SparseVec => {
-            *pos += 1;
-            // Check for optional dimension specification
-            if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
+            Token::SparseVec => {
                 *pos += 1;
-                if let Some(Token::NumericLiteral(dim_str)) = tokens.get(*pos) {
-                    if let Ok(dimensions) = dim_str.parse::<u32>() {
-                        *pos += 1;
-                        if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                // Check for optional dimension specification
+                if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
+                    *pos += 1;
+                    if let Some(Token::NumericLiteral(dim_str)) = tokens.get(*pos) {
+                        if let Ok(dimensions) = dim_str.parse::<u32>() {
                             *pos += 1;
-                            return Ok(SqlType::SparseVec {
-                                dimensions: Some(dimensions),
-                            });
+                            if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                                *pos += 1;
+                                return Ok(SqlType::SparseVec {
+                                    dimensions: Some(dimensions),
+                                });
+                            }
                         }
                     }
+                    return Err(crate::protocols::error::ProtocolError::ParseError(
+                        "Invalid SPARSEVEC dimension specification".to_string(),
+                    ));
                 }
-                return Err(crate::protocols::error::ProtocolError::ParseError(
-                    "Invalid SPARSEVEC dimension specification".to_string(),
-                ));
+                Ok(SqlType::SparseVec { dimensions: None })
             }
-            Ok(SqlType::SparseVec { dimensions: None })
-        }
-        Token::Identifier(type_name) => {
+            Token::Identifier(type_name) => {
                 *pos += 1;
                 Ok(SqlType::Custom {
                     type_name: type_name.clone(),

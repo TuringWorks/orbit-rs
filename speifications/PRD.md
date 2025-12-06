@@ -6,9 +6,10 @@ category: "architecture"
 permalink: /PRD.html
 ---
 
-> **Last Updated**: November 29, 2025
+> **Last Updated**: December 5, 2025
 > **Status**: Production-Ready Multi-Protocol Database Platform
 > **Architecture Reference**: See [`docs/content/architecture/ORBIT_ARCHITECTURE.md`](content/architecture/ORBIT_ARCHITECTURE.md) for detailed architecture patterns, transaction layer (MVCC, 2PC, Saga), query execution (vectorized, SIMD), network layer (gRPC, Protocol Buffers), and hybrid storage architecture.
+> **Protocol Analysis**: See [`protocols/PROTOCOL_COMPLETION_ANALYSIS.md`](protocols/PROTOCOL_COMPLETION_ANALYSIS.md) for detailed protocol implementation status and gaps.
 
 ---
 
@@ -44,9 +45,9 @@ permalink: /PRD.html
 
 | Metric | Value |
 |--------|-------|
-| Lines of Code | 361,800+ |
-| Source Files | 520+ |
-| Test Coverage | 1,014+ tests |
+| Lines of Code | 365,000+ |
+| Source Files | 530+ |
+| Test Coverage | 2,352+ tests |
 | Compiler Warnings | 0 (zero warnings policy) |
 | Workspace Crates | 15 |
 
@@ -960,9 +961,9 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | **Redis RESP** | Complete | 97% | 183 | String, Hash, List, Set, SortedSet, Stream, PubSub, Vector, TimeSeries, Graph, CLUSTER |
 | **PostgreSQL** | Complete | 90% | 412 | Wire protocol, SQL parser, Query engine, JSONB, pgvector, CTEs, Window functions |
 | **MySQL** | Complete | 80% | 32 | Wire protocol, Auth, Binary protocol (prepared statements) |
-| **CQL (Cassandra)** | Complete | 75% | 23 | Wire protocol, CQL parser, BATCH operations |
-| **AQL (ArangoDB)** | Active | 75% | 80 | Parser, Query engine, Graph traversal, PRUNE, OPTIONS |
-| **Cypher/Bolt** | Active | 70% | 99 | Bolt protocol, Cypher parser, Graph engine, db.* procedures, APOC procedures |
+| **CQL (Cassandra)** | Complete | 75% | 23 | Wire protocol, CQL parser, BATCH operations, LWT |
+| **AQL (ArangoDB)** | Active | 75% | 102 | Parser, Query engine, Graph traversal, PRUNE, OPTIONS, SEARCH |
+| **Cypher/Bolt** | Active | 75% | 107 | Bolt protocol, Cypher parser, Graph engine, db.* procedures, APOC, GDS algorithms |
 | **MongoDB** | Active | 50% | 6 | Wire protocol (OP_MSG), CRUD, Aggregation pipeline (12 stages) |
 
 ### Detailed Feature Breakdown
@@ -994,7 +995,7 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | Graph Engine | Complete | ~30 | `graph_engine.rs` |
 | db.* Procedures | Complete | ~10 | `db_procedures.rs` |
 | APOC Procedures | Complete | 11 | `apoc_procedures.rs` |
-| GDS Algorithms | Active | ~8 | `graph_algorithms_procedures.rs` |
+| GDS Algorithms | Complete | 16 | `graph_algorithms_procedures.rs` (PageRank, Betweenness, Louvain, LabelProp, HITS, WCC, SCC, etc.) |
 | **MongoDB Features** | | | |
 | Wire Protocol (OP_MSG) | Complete | - | `mongodb/protocol.rs` |
 | Document Storage | Complete | - | `mongodb/storage.rs` |
@@ -1006,7 +1007,7 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | **Infrastructure** | | | |
 | Kubernetes Operator | Active | 0 | `orbit-operator/` |
 
-**Total Tests: 1,014+**
+**Total Tests: 2,352+** (as of December 2025)
 
 ---
 

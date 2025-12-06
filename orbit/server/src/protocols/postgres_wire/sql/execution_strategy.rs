@@ -245,7 +245,10 @@ pub trait SqlExecutionStrategy: Send + Sync {
     async fn execute_multiple(&mut self, sql: &str) -> ProtocolResult<Vec<UnifiedExecutionResult>>;
 
     /// Execute a parsed statement
-    async fn execute_statement(&mut self, statement: Statement) -> ProtocolResult<UnifiedExecutionResult>;
+    async fn execute_statement(
+        &mut self,
+        statement: Statement,
+    ) -> ProtocolResult<UnifiedExecutionResult>;
 
     /// Execute a parsed statement within an explicit transaction (MVCC only)
     async fn execute_statement_in_transaction(
@@ -309,7 +312,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
     async fn execute_multiple(&mut self, sql: &str) -> ProtocolResult<Vec<UnifiedExecutionResult>> {
         let statements = self.parser.parse_multiple(sql)?;
         let mut results = Vec::new();
-        
+
         if self.config.auto_transaction {
             let transaction_id = self
                 .executor
@@ -317,7 +320,10 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                 .await?;
 
             for stmt in statements {
-                match self.execute_statement_in_transaction(stmt, transaction_id).await {
+                match self
+                    .execute_statement_in_transaction(stmt, transaction_id)
+                    .await
+                {
                     Ok(result) => results.push(result),
                     Err(e) => {
                         let _ = self.executor.rollback_transaction(transaction_id).await;
@@ -334,14 +340,20 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
         Ok(results)
     }
 
-    async fn execute_statement(&mut self, statement: Statement) -> ProtocolResult<UnifiedExecutionResult> {
+    async fn execute_statement(
+        &mut self,
+        statement: Statement,
+    ) -> ProtocolResult<UnifiedExecutionResult> {
         if self.config.auto_transaction {
             let transaction_id = self
                 .executor
                 .begin_transaction(self.config.default_isolation_level.clone(), None)
                 .await?;
 
-            match self.execute_statement_in_transaction(statement, transaction_id).await {
+            match self
+                .execute_statement_in_transaction(statement, transaction_id)
+                .await
+            {
                 Ok(result) => {
                     self.executor.commit_transaction(transaction_id).await?;
                     Ok(result)
@@ -361,36 +373,51 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
         statement: Statement,
         transaction_id: TransactionId,
     ) -> ProtocolResult<UnifiedExecutionResult> {
-
         match statement {
-            Statement::Select(select_stmt) if matches!(select_stmt.from_clause, Some(FromClause::JsonTable(_))) => {
+            Statement::Select(select_stmt)
+                if matches!(select_stmt.from_clause, Some(FromClause::JsonTable(_))) =>
+            {
                 // Handle JSON_TABLE
                 if let Some(FromClause::JsonTable(json_table)) = &select_stmt.from_clause {
-                    use crate::protocols::postgres_wire::sql::expression_evaluator::{ExpressionEvaluator, EvaluationContext};
+                    use crate::protocols::postgres_wire::sql::expression_evaluator::{
+                        EvaluationContext, ExpressionEvaluator,
+                    };
                     let mut evaluator = ExpressionEvaluator::new();
                     let context = EvaluationContext::empty();
 
                     // Evaluate context item (JSON document)
-                    let json_val = evaluator.evaluate(&json_table.context_item, &context).map_err(|e| {
-                        ProtocolError::PostgresError(format!("Evaluation error: {}", e))
-                    })?;
+                    let json_val = evaluator
+                        .evaluate(&json_table.context_item, &context)
+                        .map_err(|e| {
+                            ProtocolError::PostgresError(format!("Evaluation error: {}", e))
+                        })?;
 
                     let json_str = match json_val {
                         SqlValue::Text(s) => s,
                         SqlValue::Json(s) => s.to_string(),
                         SqlValue::Jsonb(s) => s.to_string(),
-                        _ => return Err(ProtocolError::PostgresError("JSON_TABLE context item must be a string or JSON".to_string())),
+                        _ => {
+                            return Err(ProtocolError::PostgresError(
+                                "JSON_TABLE context item must be a string or JSON".to_string(),
+                            ))
+                        }
                     };
 
                     // Parse JSON
                     let parsed_json: serde_json::Value = match serde_json::from_str(&json_str) {
                         Ok(v) => v,
-                        Err(_) => return Ok(UnifiedExecutionResult::Select {
-                            columns: json_table.columns.iter().map(|c| c.name.clone()).collect(),
-                            rows: Vec::new(),
-                            row_count: 0,
-                            transaction_id: Some(transaction_id),
-                        }),
+                        Err(_) => {
+                            return Ok(UnifiedExecutionResult::Select {
+                                columns: json_table
+                                    .columns
+                                    .iter()
+                                    .map(|c| c.name.clone())
+                                    .collect(),
+                                rows: Vec::new(),
+                                row_count: 0,
+                                transaction_id: Some(transaction_id),
+                            })
+                        }
                     };
 
                     // Handle path expression (simplified: only support $[*] for now which means iterate array)
@@ -402,7 +429,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
 
                     let mut rows = Vec::new();
                     let mut columns = Vec::new();
-                    
+
                     // Set up columns
                     for col in &json_table.columns {
                         columns.push(col.name.clone());
@@ -410,17 +437,20 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
 
                     for item in items {
                         let mut row_values = Vec::new();
-                        
+
                         // Map columns
                         for col_def in &json_table.columns {
                             // Extract value based on path
                             // Default path is $.name
-                            let path = col_def.path.clone().unwrap_or_else(|| format!("$.{}", col_def.name));
-                            
+                            let path = col_def
+                                .path
+                                .clone()
+                                .unwrap_or_else(|| format!("$.{}", col_def.name));
+
                             // Simple path extraction: $.key
                             let key = path.trim_start_matches("$.").to_string();
                             let val = item.get(&key).or_else(|| item.get(&col_def.name));
-                            
+
                             let val_str = match val {
                                 Some(serde_json::Value::String(s)) => Some(s.clone()),
                                 Some(serde_json::Value::Number(n)) => Some(n.to_string()),
@@ -451,8 +481,10 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                     // Evaluate expressions without a table context (e.g. SELECT 1, SELECT func())
                     let mut columns = Vec::new();
                     let mut row_values = Vec::new();
-                    
-                    use crate::protocols::postgres_wire::sql::expression_evaluator::{ExpressionEvaluator, EvaluationContext};
+
+                    use crate::protocols::postgres_wire::sql::expression_evaluator::{
+                        EvaluationContext, ExpressionEvaluator,
+                    };
                     let mut evaluator = ExpressionEvaluator::new();
                     let context = EvaluationContext::empty(); // Empty context
 
@@ -462,7 +494,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                                 let value = evaluator.evaluate(expr, &context).map_err(|e| {
                                     ProtocolError::PostgresError(format!("Evaluation error: {}", e))
                                 })?;
-                                
+
                                 let col_name = alias.clone().unwrap_or_else(|| "expr".to_string());
                                 columns.push(col_name);
                                 row_values.push(Some(value.to_postgres_string()));
@@ -474,7 +506,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                             }
                         }
                     }
-                    
+
                     return Ok(UnifiedExecutionResult::Select {
                         columns,
                         rows: vec![row_values],
@@ -663,13 +695,19 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                 // Delegate to executor for now (placeholder implementation)
                 let result = self.executor.execute_merge(merge_stmt).await?;
                 match result {
-                    ExecutionResult::Merge { count, rows, columns } => Ok(UnifiedExecutionResult::Merge {
+                    ExecutionResult::Merge {
+                        count,
+                        rows,
+                        columns,
+                    } => Ok(UnifiedExecutionResult::Merge {
                         count,
                         rows,
                         columns,
                         transaction_id: Some(transaction_id),
                     }),
-                    _ => Err(ProtocolError::PostgresError("Unexpected result from MERGE".to_string())),
+                    _ => Err(ProtocolError::PostgresError(
+                        "Unexpected result from MERGE".to_string(),
+                    )),
                 }
             }
             Statement::CreateTable(create_stmt) => {
@@ -915,15 +953,18 @@ impl SqlExecutionStrategy for TraditionalExecutionStrategy {
     async fn execute_multiple(&mut self, sql: &str) -> ProtocolResult<Vec<UnifiedExecutionResult>> {
         let statements = self.parser.parse_multiple(sql)?;
         let mut results = Vec::new();
-        
+
         for stmt in statements {
             results.push(self.execute_statement(stmt).await?);
         }
-        
+
         Ok(results)
     }
 
-    async fn execute_statement(&mut self, statement: Statement) -> ProtocolResult<UnifiedExecutionResult> {
+    async fn execute_statement(
+        &mut self,
+        statement: Statement,
+    ) -> ProtocolResult<UnifiedExecutionResult> {
         let result = self.executor.execute_statement(statement).await?;
         Ok(self.convert_execution_result(result, None))
     }
@@ -1140,12 +1181,18 @@ impl ConfigurableSqlEngine {
     }
 
     /// Execute multiple SQL statements
-    pub async fn execute_multiple(&mut self, sql: &str) -> ProtocolResult<Vec<UnifiedExecutionResult>> {
+    pub async fn execute_multiple(
+        &mut self,
+        sql: &str,
+    ) -> ProtocolResult<Vec<UnifiedExecutionResult>> {
         self.strategy.execute_multiple(sql).await
     }
 
     /// Execute a parsed statement
-    pub async fn execute_statement(&mut self, statement: Statement) -> ProtocolResult<UnifiedExecutionResult> {
+    pub async fn execute_statement(
+        &mut self,
+        statement: Statement,
+    ) -> ProtocolResult<UnifiedExecutionResult> {
         self.strategy.execute_statement(statement).await
     }
 
