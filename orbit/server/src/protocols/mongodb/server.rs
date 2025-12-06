@@ -827,6 +827,386 @@ async fn handle_command(
                             d
                         }).collect();
                     }
+                    // $bucketAuto - automatically determine bucket boundaries
+                    else if let Ok(bucket_doc) = stage_doc.get_document("$bucketAuto") {
+                        let group_by = bucket_doc.get("groupBy");
+                        let buckets_count = bucket_doc
+                            .get_i32("buckets")
+                            .ok()
+                            .or_else(|| bucket_doc.get_i64("buckets").ok().map(|v| v as i32))
+                            .unwrap_or(5);
+                        let output = bucket_doc.get_document("output").ok();
+                        let granularity = bucket_doc.get_str("granularity").ok();
+
+                        if let Some(group_expr) = group_by {
+                            // Collect all values for grouping
+                            let mut values: Vec<(f64, Document)> = docs
+                                .iter()
+                                .filter_map(|d| {
+                                    let val = evaluate_expression(group_expr, d);
+                                    bson_to_f64(&val).map(|v| (v, d.clone()))
+                                })
+                                .collect();
+
+                            // Sort by value
+                            values.sort_by(|a, b| {
+                                a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)
+                            });
+
+                            if !values.is_empty() {
+                                let bucket_size =
+                                    (values.len() as f64 / buckets_count as f64).ceil() as usize;
+                                let bucket_size = bucket_size.max(1);
+
+                                let mut bucket_results = Vec::new();
+                                let mut i = 0;
+
+                                while i < values.len() {
+                                    let end = (i + bucket_size).min(values.len());
+                                    let bucket_docs: Vec<&Document> =
+                                        values[i..end].iter().map(|(_, d)| d).collect();
+
+                                    let min_val = values[i].0;
+                                    let max_val = if end < values.len() {
+                                        values[end].0
+                                    } else {
+                                        values[end - 1].0
+                                    };
+
+                                    // Apply granularity if specified
+                                    let (adjusted_min, adjusted_max) = if let Some(gran) = granularity
+                                    {
+                                        apply_granularity(min_val, max_val, gran)
+                                    } else {
+                                        (min_val, max_val)
+                                    };
+
+                                    let mut bucket_doc = doc! {
+                                        "_id": {
+                                            "min": adjusted_min,
+                                            "max": adjusted_max
+                                        },
+                                        "count": bucket_docs.len() as i64
+                                    };
+
+                                    // Apply output accumulators
+                                    if let Some(output_doc) = &output {
+                                        for (field, acc_doc) in output_doc.iter() {
+                                            if let Bson::Document(acc) = acc_doc {
+                                                if let Some((acc_op, acc_expr)) = acc.iter().next() {
+                                                    let result = apply_accumulator(
+                                                        acc_op,
+                                                        acc_expr,
+                                                        &bucket_docs,
+                                                    );
+                                                    bucket_doc.insert(field, result);
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    bucket_results.push(bucket_doc);
+                                    i = end;
+                                }
+
+                                docs = bucket_results;
+                            } else {
+                                docs = Vec::new();
+                            }
+                        }
+                    }
+                    // $unionWith - combine documents from another collection
+                    else if let Some(union_spec) = stage_doc.get("$unionWith") {
+                        let (union_collection, union_pipeline): (&str, Option<&Vec<Bson>>) =
+                            match union_spec {
+                                Bson::String(coll) => (coll.as_str(), None),
+                                Bson::Document(d) => (
+                                    d.get_str("coll").unwrap_or(""),
+                                    d.get_array("pipeline").ok(),
+                                ),
+                                _ => ("", None),
+                            };
+
+                        if !union_collection.is_empty() {
+                            // Get documents from the union collection
+                            let (_, mut union_docs) = store
+                                .find(db, union_collection, &doc! {}, None, None, None)
+                                .await;
+
+                            // Apply pipeline stages if any
+                            if let Some(pipeline) = union_pipeline {
+                                for stage in pipeline {
+                                    if let Bson::Document(stage_d) = stage {
+                                        if let Ok(match_doc) = stage_d.get_document("$match") {
+                                            union_docs
+                                                .retain(|d| matches_document_filter(d, match_doc));
+                                        } else if let Ok(project_doc) =
+                                            stage_d.get_document("$project")
+                                        {
+                                            union_docs = union_docs
+                                                .into_iter()
+                                                .map(|d| apply_projection(&d, project_doc))
+                                                .collect();
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Append union documents
+                            docs.extend(union_docs);
+                        }
+                    }
+                    // $replaceWith - replace document with expression result
+                    else if let Some(replace_expr) = stage_doc.get("$replaceWith") {
+                        docs = docs
+                            .into_iter()
+                            .filter_map(|d| {
+                                match evaluate_expression(replace_expr, &d) {
+                                    Bson::Document(new_doc) => Some(new_doc),
+                                    _ => None, // Skip non-document results
+                                }
+                            })
+                            .collect();
+                    }
+                    // $densify - fills gaps in sequence
+                    else if let Ok(densify_doc) = stage_doc.get_document("$densify") {
+                        let field = densify_doc.get_str("field").unwrap_or("");
+                        let partition_by = densify_doc.get("partitionByFields");
+                        let range = densify_doc.get_document("range").ok();
+
+                        if !field.is_empty() {
+                            if let Some(range_doc) = range {
+                                let step = range_doc
+                                    .get_i32("step")
+                                    .ok()
+                                    .or_else(|| range_doc.get_i64("step").ok().map(|v| v as i32))
+                                    .unwrap_or(1);
+                                let bounds = range_doc.get_str("bounds").unwrap_or("full");
+
+                                // Determine partitions
+                                let partitions: Vec<Vec<Document>> =
+                                    if let Some(Bson::Array(fields)) = partition_by {
+                                        let partition_fields: Vec<&str> = fields
+                                            .iter()
+                                            .filter_map(|f| {
+                                                if let Bson::String(s) = f {
+                                                    Some(s.as_str())
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                            .collect();
+
+                                        let mut partition_map: std::collections::HashMap<
+                                            String,
+                                            Vec<Document>,
+                                        > = std::collections::HashMap::new();
+                                        for d in &docs {
+                                            let key: String = partition_fields
+                                                .iter()
+                                                .map(|f| {
+                                                    format!(
+                                                        "{:?}",
+                                                        d.get(*f).unwrap_or(&Bson::Null)
+                                                    )
+                                                })
+                                                .collect::<Vec<_>>()
+                                                .join("_");
+                                            partition_map.entry(key).or_default().push(d.clone());
+                                        }
+                                        partition_map.into_values().collect()
+                                    } else {
+                                        vec![docs.clone()]
+                                    };
+
+                                let mut result_docs = Vec::new();
+
+                                for mut partition in partitions {
+                                    // Sort by field
+                                    partition.sort_by(|a, b| {
+                                        let va = a.get(field).and_then(|v| bson_to_f64(v));
+                                        let vb = b.get(field).and_then(|v| bson_to_f64(v));
+                                        va.partial_cmp(&vb).unwrap_or(std::cmp::Ordering::Equal)
+                                    });
+
+                                    if partition.is_empty() {
+                                        continue;
+                                    }
+
+                                    // Get min/max based on bounds
+                                    let (min_val, max_val) = match bounds {
+                                        "full" => {
+                                            let min = partition
+                                                .first()
+                                                .and_then(|d| d.get(field))
+                                                .and_then(|v| bson_to_f64(v))
+                                                .unwrap_or(0.0);
+                                            let max = partition
+                                                .last()
+                                                .and_then(|d| d.get(field))
+                                                .and_then(|v| bson_to_f64(v))
+                                                .unwrap_or(0.0);
+                                            (min, max)
+                                        }
+                                        _ => {
+                                            // partition - use existing range
+                                            let min = partition
+                                                .first()
+                                                .and_then(|d| d.get(field))
+                                                .and_then(|v| bson_to_f64(v))
+                                                .unwrap_or(0.0);
+                                            let max = partition
+                                                .last()
+                                                .and_then(|d| d.get(field))
+                                                .and_then(|v| bson_to_f64(v))
+                                                .unwrap_or(0.0);
+                                            (min, max)
+                                        }
+                                    };
+
+                                    // Build a set of existing values
+                                    let existing: std::collections::HashSet<i64> = partition
+                                        .iter()
+                                        .filter_map(|d| {
+                                            d.get(field).and_then(|v| bson_to_i64(v))
+                                        })
+                                        .collect();
+
+                                    // Generate densified sequence
+                                    let mut current = min_val as i64;
+                                    let max = max_val as i64;
+                                    let mut partition_idx = 0;
+
+                                    while current <= max {
+                                        // Find existing document or create new one
+                                        while partition_idx < partition.len() {
+                                            let doc_val = partition[partition_idx]
+                                                .get(field)
+                                                .and_then(|v| bson_to_i64(v));
+                                            if let Some(dv) = doc_val {
+                                                if dv < current {
+                                                    result_docs.push(partition[partition_idx].clone());
+                                                    partition_idx += 1;
+                                                } else {
+                                                    break;
+                                                }
+                                            } else {
+                                                partition_idx += 1;
+                                            }
+                                        }
+
+                                        if existing.contains(&current) {
+                                            // Document exists at this value
+                                            if partition_idx < partition.len() {
+                                                result_docs.push(partition[partition_idx].clone());
+                                                partition_idx += 1;
+                                            }
+                                        } else {
+                                            // Create gap-filling document
+                                            let mut gap_doc = doc! {};
+                                            gap_doc.insert(field, current);
+                                            result_docs.push(gap_doc);
+                                        }
+
+                                        current += step as i64;
+                                    }
+
+                                    // Add remaining documents
+                                    while partition_idx < partition.len() {
+                                        result_docs.push(partition[partition_idx].clone());
+                                        partition_idx += 1;
+                                    }
+                                }
+
+                                docs = result_docs;
+                            }
+                        }
+                    }
+                    // $fill - fill missing field values
+                    else if let Ok(fill_doc) = stage_doc.get_document("$fill") {
+                        let partition_by = fill_doc.get("partitionBy");
+                        let sort_by = fill_doc.get_document("sortBy").ok();
+                        let output = fill_doc.get_document("output").ok();
+
+                        // Sort if specified
+                        if let Some(sort_doc) = sort_by {
+                            docs = apply_sort(docs, sort_doc);
+                        }
+
+                        if let Some(output_doc) = output {
+                            for (field, fill_spec) in output_doc.iter() {
+                                if let Bson::Document(spec) = fill_spec {
+                                    let method = spec.get_str("method").ok();
+                                    let value = spec.get("value");
+
+                                    match (method, value) {
+                                        (Some("locf"), _) => {
+                                            // Last observation carried forward
+                                            let mut last_value: Option<Bson> = None;
+                                            for doc in &mut docs {
+                                                if let Some(v) = doc.get(field) {
+                                                    if !matches!(v, Bson::Null) {
+                                                        last_value = Some(v.clone());
+                                                    }
+                                                }
+                                                if doc.get(field).is_none()
+                                                    || matches!(doc.get(field), Some(Bson::Null))
+                                                {
+                                                    if let Some(lv) = &last_value {
+                                                        doc.insert(field, lv.clone());
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        (Some("linear"), _) => {
+                                            // Linear interpolation
+                                            let values: Vec<Option<f64>> = docs
+                                                .iter()
+                                                .map(|d| d.get(field).and_then(|v| bson_to_f64(v)))
+                                                .collect();
+
+                                            for i in 0..docs.len() {
+                                                if values[i].is_none() {
+                                                    // Find prev and next non-null values
+                                                    let prev = (0..i).rev().find_map(|j| {
+                                                        values[j].map(|v| (j, v))
+                                                    });
+                                                    let next = ((i + 1)..docs.len()).find_map(|j| {
+                                                        values[j].map(|v| (j, v))
+                                                    });
+
+                                                    if let (Some((pi, pv)), Some((ni, nv))) =
+                                                        (prev, next)
+                                                    {
+                                                        let ratio = (i - pi) as f64
+                                                            / (ni - pi) as f64;
+                                                        let interpolated = pv + ratio * (nv - pv);
+                                                        docs[i].insert(field, interpolated);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        (_, Some(v)) => {
+                                            // Fill with specific value
+                                            for doc in &mut docs {
+                                                if doc.get(field).is_none()
+                                                    || matches!(doc.get(field), Some(Bson::Null))
+                                                {
+                                                    doc.insert(
+                                                        field,
+                                                        evaluate_expression(v, doc),
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                        }
+
+                        let _ = partition_by; // Handle partitioning in a more complex implementation
+                    }
                 }
             }
         }
@@ -1483,6 +1863,16 @@ fn bson_to_f64(bson: &Bson) -> Option<f64> {
     }
 }
 
+/// Convert BSON to i64 for integer operations
+fn bson_to_i64(bson: &Bson) -> Option<i64> {
+    match bson {
+        Bson::Int32(n) => Some(*n as i64),
+        Bson::Int64(n) => Some(*n),
+        Bson::Double(n) => Some(*n as i64),
+        _ => None,
+    }
+}
+
 /// Apply $unwind stage
 fn apply_unwind(docs: Vec<Document>, unwind_spec: &Bson) -> Vec<Document> {
     let (path, preserve_null) = match unwind_spec {
@@ -1522,6 +1912,43 @@ fn apply_unwind(docs: Vec<Document>, unwind_spec: &Bson) -> Vec<Document> {
     }
 
     result
+}
+
+/// Apply granularity to bucket boundaries for $bucketAuto
+fn apply_granularity(min: f64, max: f64, granularity: &str) -> (f64, f64) {
+    match granularity {
+        "R5" | "R10" | "R20" | "R40" | "R80" => {
+            // Renard series - round to preferred numbers
+            let factor = 10_f64.powf(min.log10().floor());
+            let adjusted_min = (min / factor).floor() * factor;
+            let adjusted_max = (max / factor).ceil() * factor;
+            (adjusted_min, adjusted_max)
+        }
+        "1-2-5" => {
+            // 1-2-5 series
+            let factor = 10_f64.powf(min.log10().floor());
+            let steps = [1.0, 2.0, 5.0, 10.0];
+            let normalized_min = min / factor;
+            let normalized_max = max / factor;
+            let adjusted_min = steps.iter().rev().find(|&&s| s <= normalized_min).unwrap_or(&1.0) * factor;
+            let adjusted_max = steps.iter().find(|&&s| s >= normalized_max).unwrap_or(&10.0) * factor;
+            (adjusted_min, adjusted_max)
+        }
+        "E6" | "E12" | "E24" | "E48" | "E96" | "E192" => {
+            // E series (for resistors/capacitors)
+            let factor = 10_f64.powf(min.log10().floor());
+            let adjusted_min = (min / factor).floor() * factor;
+            let adjusted_max = (max / factor).ceil() * factor;
+            (adjusted_min, adjusted_max)
+        }
+        "POWERSOF2" => {
+            // Powers of 2
+            let min_power = (min.log2().floor()) as i32;
+            let max_power = (max.log2().ceil()) as i32;
+            (2_f64.powi(min_power), 2_f64.powi(max_power))
+        }
+        _ => (min, max), // No adjustment for unknown granularity
+    }
 }
 
 /// Evaluate an aggregation expression
@@ -2688,7 +3115,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     }
                     "$dateFromParts" => {
                         if let Bson::Document(parts_doc) = args {
-                            use chrono::{TimeZone, Utc, Datelike};
+                            use chrono::{TimeZone, Utc};
                             
                             let year = parts_doc.get_i32("year").unwrap_or(1970);
                             let month = parts_doc.get_i32("month").unwrap_or(1) as u32;
@@ -2908,8 +3335,8 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$millisecond" => {
                         let val = evaluate_expression(args, doc);
                         if let Bson::DateTime(dt) = val {
-                            use chrono::{TimeZone, Utc, Timelike};
-                            let datetime = Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
+                            use chrono::TimeZone;
+                            let datetime = chrono::Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
                             Bson::Int32(datetime.timestamp_subsec_millis() as i32)
                         } else {
                             Bson::Null
@@ -3156,6 +3583,477 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                         }
                         Bson::Null
                     }
+
+                    // Object expressions: $setField, $getField, $unsetField
+                    "$setField" => {
+                        if let Bson::Document(set_doc) = args {
+                            let field = set_doc.get("field").and_then(|f| match f {
+                                Bson::String(s) => Some(s.as_str()),
+                                _ => None,
+                            });
+                            let input = set_doc.get("input");
+                            let value = set_doc.get("value");
+
+                            if let (Some(field_name), Some(input_val), Some(val)) =
+                                (field, input, value)
+                            {
+                                let mut result = match evaluate_expression(input_val, doc) {
+                                    Bson::Document(d) => d,
+                                    _ => return Bson::Null,
+                                };
+                                result.insert(field_name.to_string(), evaluate_expression(val, doc));
+                                return Bson::Document(result);
+                            }
+                        }
+                        Bson::Null
+                    }
+                    "$getField" => {
+                        if let Bson::Document(get_doc) = args {
+                            let field = get_doc.get("field").and_then(|f| match f {
+                                Bson::String(s) => Some(s.as_str()),
+                                _ => None,
+                            });
+                            let input = get_doc.get("input");
+
+                            if let (Some(field_name), Some(input_val)) = (field, input) {
+                                let result = evaluate_expression(input_val, doc);
+                                if let Bson::Document(d) = result {
+                                    return d.get(field_name).cloned().unwrap_or(Bson::Null);
+                                }
+                            }
+                        } else if let Bson::String(field_name) = args {
+                            // Simple form: { $getField: "fieldName" }
+                            return doc.get(field_name).cloned().unwrap_or(Bson::Null);
+                        }
+                        Bson::Null
+                    }
+                    "$unsetField" => {
+                        if let Bson::Document(unset_doc) = args {
+                            let field = unset_doc.get("field").and_then(|f| match f {
+                                Bson::String(s) => Some(s.as_str()),
+                                _ => None,
+                            });
+                            let input = unset_doc.get("input");
+
+                            if let (Some(field_name), Some(input_val)) = (field, input) {
+                                let mut result = match evaluate_expression(input_val, doc) {
+                                    Bson::Document(d) => d,
+                                    _ => return Bson::Null,
+                                };
+                                result.remove(field_name);
+                                return Bson::Document(result);
+                            }
+                        }
+                        Bson::Null
+                    }
+
+                    // Regex expressions: $regexFind, $regexFindAll
+                    "$regexFind" => {
+                        if let Bson::Document(regex_doc) = args {
+                            let input = regex_doc.get("input").and_then(|i| {
+                                match evaluate_expression(i, doc) {
+                                    Bson::String(s) => Some(s),
+                                    _ => None,
+                                }
+                            });
+                            let regex_str = regex_doc.get("regex").and_then(|r| match r {
+                                Bson::String(s) => Some(s.clone()),
+                                Bson::RegularExpression(re) => Some(re.pattern.clone()),
+                                _ => None,
+                            });
+                            let options = regex_doc.get("options").and_then(|o| match o {
+                                Bson::String(s) => Some(s.clone()),
+                                _ => None,
+                            });
+
+                            if let (Some(input_str), Some(pattern)) = (input, regex_str) {
+                                let mut regex_pattern = pattern;
+                                if let Some(opts) = options {
+                                    regex_pattern = format!("(?{}){}", opts, regex_pattern);
+                                }
+                                if let Ok(re) = regex::Regex::new(&regex_pattern) {
+                                    if let Some(mat) = re.find(&input_str) {
+                                        let captures: Vec<Bson> = re
+                                            .captures(&input_str)
+                                            .map(|caps| {
+                                                caps.iter()
+                                                    .skip(1)
+                                                    .map(|m| {
+                                                        m.map(|m| Bson::String(m.as_str().to_string()))
+                                                            .unwrap_or(Bson::Null)
+                                                    })
+                                                    .collect()
+                                            })
+                                            .unwrap_or_default();
+                                        return Bson::Document(doc! {
+                                            "match": mat.as_str(),
+                                            "idx": mat.start() as i32,
+                                            "captures": captures
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                        Bson::Null
+                    }
+                    "$regexFindAll" => {
+                        if let Bson::Document(regex_doc) = args {
+                            let input = regex_doc.get("input").and_then(|i| {
+                                match evaluate_expression(i, doc) {
+                                    Bson::String(s) => Some(s),
+                                    _ => None,
+                                }
+                            });
+                            let regex_str = regex_doc.get("regex").and_then(|r| match r {
+                                Bson::String(s) => Some(s.clone()),
+                                Bson::RegularExpression(re) => Some(re.pattern.clone()),
+                                _ => None,
+                            });
+                            let options = regex_doc.get("options").and_then(|o| match o {
+                                Bson::String(s) => Some(s.clone()),
+                                _ => None,
+                            });
+
+                            if let (Some(input_str), Some(pattern)) = (input, regex_str) {
+                                let mut regex_pattern = pattern;
+                                if let Some(opts) = options {
+                                    regex_pattern = format!("(?{}){}", opts, regex_pattern);
+                                }
+                                if let Ok(re) = regex::Regex::new(&regex_pattern) {
+                                    let matches: Vec<Bson> = re
+                                        .find_iter(&input_str)
+                                        .map(|mat| {
+                                            let captures: Vec<Bson> = re
+                                                .captures(mat.as_str())
+                                                .map(|caps| {
+                                                    caps.iter()
+                                                        .skip(1)
+                                                        .map(|m| {
+                                                            m.map(|m| {
+                                                                Bson::String(m.as_str().to_string())
+                                                            })
+                                                            .unwrap_or(Bson::Null)
+                                                        })
+                                                        .collect()
+                                                })
+                                                .unwrap_or_default();
+                                            Bson::Document(doc! {
+                                                "match": mat.as_str(),
+                                                "idx": mat.start() as i32,
+                                                "captures": captures
+                                            })
+                                        })
+                                        .collect();
+                                    return Bson::Array(matches);
+                                }
+                            }
+                        }
+                        Bson::Array(vec![])
+                    }
+
+                    // Type expressions: $convert, $isBool, $isDate, $toDecimal, $toObjectId
+                    "$convert" => {
+                        if let Bson::Document(conv_doc) = args {
+                            let input = conv_doc.get("input").map(|i| evaluate_expression(i, doc));
+                            let to = conv_doc.get("to").and_then(|t| match t {
+                                Bson::String(s) => Some(s.as_str()),
+                                Bson::Int32(i) => match i {
+                                    1 => Some("double"),
+                                    2 => Some("string"),
+                                    7 => Some("objectId"),
+                                    8 => Some("bool"),
+                                    9 => Some("date"),
+                                    16 => Some("int"),
+                                    18 => Some("long"),
+                                    19 => Some("decimal"),
+                                    _ => None,
+                                },
+                                _ => None,
+                            });
+                            let on_error = conv_doc.get("onError");
+                            let on_null = conv_doc.get("onNull");
+
+                            if let (Some(input_val), Some(target_type)) = (input, to) {
+                                if matches!(input_val, Bson::Null) {
+                                    return on_null
+                                        .map(|v| evaluate_expression(v, doc))
+                                        .unwrap_or(Bson::Null);
+                                }
+                                match target_type {
+                                    "string" => {
+                                        return Bson::String(format!("{:?}", input_val));
+                                    }
+                                    "double" => {
+                                        if let Some(n) = bson_to_f64(&input_val) {
+                                            return Bson::Double(n);
+                                        }
+                                    }
+                                    "int" => {
+                                        if let Some(n) = bson_to_i64(&input_val) {
+                                            return Bson::Int32(n as i32);
+                                        }
+                                    }
+                                    "long" => {
+                                        if let Some(n) = bson_to_i64(&input_val) {
+                                            return Bson::Int64(n);
+                                        }
+                                    }
+                                    "bool" => {
+                                        return Bson::Boolean(match &input_val {
+                                            Bson::Boolean(b) => *b,
+                                            Bson::Int32(i) => *i != 0,
+                                            Bson::Int64(i) => *i != 0,
+                                            Bson::Double(d) => *d != 0.0,
+                                            Bson::String(s) => !s.is_empty(),
+                                            Bson::Null => false,
+                                            _ => true,
+                                        });
+                                    }
+                                    "objectId" => {
+                                        if let Bson::String(s) = &input_val {
+                                            if let Ok(oid) = bson::oid::ObjectId::parse_str(s) {
+                                                return Bson::ObjectId(oid);
+                                            }
+                                        }
+                                    }
+                                    "date" => {
+                                        if let Bson::String(s) = &input_val {
+                                            if let Ok(dt) =
+                                                chrono::DateTime::parse_from_rfc3339(s)
+                                            {
+                                                return Bson::DateTime(bson::DateTime::from_millis(
+                                                    dt.with_timezone(&chrono::Utc).timestamp_millis(),
+                                                ));
+                                            }
+                                        } else if let Some(n) = bson_to_i64(&input_val) {
+                                            return Bson::DateTime(bson::DateTime::from_millis(n));
+                                        }
+                                    }
+                                    "decimal" => {
+                                        if let Some(n) = bson_to_f64(&input_val) {
+                                            return Bson::Double(n); // Approximate decimal
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                                return on_error
+                                    .map(|v| evaluate_expression(v, doc))
+                                    .unwrap_or(Bson::Null);
+                            }
+                        }
+                        Bson::Null
+                    }
+                    "$isBool" => {
+                        let val = evaluate_expression(args, doc);
+                        Bson::Boolean(matches!(val, Bson::Boolean(_)))
+                    }
+                    "$isDate" => {
+                        let val = evaluate_expression(args, doc);
+                        Bson::Boolean(matches!(val, Bson::DateTime(_)))
+                    }
+                    "$toDecimal" => {
+                        let val = evaluate_expression(args, doc);
+                        if let Some(n) = bson_to_f64(&val) {
+                            Bson::Double(n)
+                        } else {
+                            Bson::Null
+                        }
+                    }
+                    "$toObjectId" => {
+                        let val = evaluate_expression(args, doc);
+                        if let Bson::String(s) = val {
+                            if let Ok(oid) = bson::oid::ObjectId::parse_str(&s) {
+                                return Bson::ObjectId(oid);
+                            }
+                        }
+                        Bson::Null
+                    }
+                    "$toDate" | "$toISODate" => {
+                        let val = evaluate_expression(args, doc);
+                        match val {
+                            Bson::String(s) => {
+                                if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&s) {
+                                    Bson::DateTime(bson::DateTime::from_millis(
+                                        dt.with_timezone(&chrono::Utc).timestamp_millis(),
+                                    ))
+                                } else {
+                                    Bson::Null
+                                }
+                            }
+                            Bson::Int64(n) => Bson::DateTime(bson::DateTime::from_millis(n)),
+                            Bson::Int32(n) => {
+                                Bson::DateTime(bson::DateTime::from_millis(n as i64))
+                            }
+                            Bson::Double(n) => {
+                                Bson::DateTime(bson::DateTime::from_millis(n as i64))
+                            }
+                            _ => Bson::Null,
+                        }
+                    }
+                    "$toUUID" => {
+                        let val = evaluate_expression(args, doc);
+                        if let Bson::String(s) = val {
+                            // Parse UUID string format
+                            if s.len() == 36 && s.chars().filter(|c| *c == '-').count() == 4 {
+                                return Bson::String(s); // Return as string UUID
+                            }
+                        }
+                        Bson::Null
+                    }
+
+                    // Miscellaneous expressions: $rand, $meta, bitwise ops, $sortArray
+                    "$rand" => {
+                        use rand::Rng;
+                        let mut rng = rand::thread_rng();
+                        Bson::Double(rng.gen::<f64>())
+                    }
+                    "$sampleRate" => {
+                        use rand::Rng;
+                        if let Some(rate) = bson_to_f64(args) {
+                            let mut rng = rand::thread_rng();
+                            Bson::Boolean(rng.gen::<f64>() < rate)
+                        } else {
+                            Bson::Boolean(false)
+                        }
+                    }
+                    "$meta" => {
+                        // $meta provides access to document metadata
+                        if let Bson::String(meta_type) = args {
+                            match meta_type.as_str() {
+                                "textScore" => {
+                                    // Return text search score if available
+                                    doc.get("$textScore").cloned().unwrap_or(Bson::Double(0.0))
+                                }
+                                "indexKey" => {
+                                    // Return index key used
+                                    doc.get("$indexKey").cloned().unwrap_or(Bson::Null)
+                                }
+                                "searchScore" => {
+                                    doc.get("$searchScore").cloned().unwrap_or(Bson::Double(0.0))
+                                }
+                                "searchHighlights" => {
+                                    doc.get("$searchHighlights")
+                                        .cloned()
+                                        .unwrap_or(Bson::Array(vec![]))
+                                }
+                                _ => Bson::Null,
+                            }
+                        } else {
+                            Bson::Null
+                        }
+                    }
+                    "$bitAnd" => {
+                        if let Bson::Array(arr) = args {
+                            let values: Vec<i64> = arr
+                                .iter()
+                                .filter_map(|v| bson_to_i64(&evaluate_expression(v, doc)))
+                                .collect();
+                            if values.is_empty() {
+                                return Bson::Null;
+                            }
+                            let result = values.iter().fold(!0i64, |acc, v| acc & v);
+                            Bson::Int64(result)
+                        } else {
+                            Bson::Null
+                        }
+                    }
+                    "$bitOr" => {
+                        if let Bson::Array(arr) = args {
+                            let values: Vec<i64> = arr
+                                .iter()
+                                .filter_map(|v| bson_to_i64(&evaluate_expression(v, doc)))
+                                .collect();
+                            if values.is_empty() {
+                                return Bson::Null;
+                            }
+                            let result = values.iter().fold(0i64, |acc, v| acc | v);
+                            Bson::Int64(result)
+                        } else {
+                            Bson::Null
+                        }
+                    }
+                    "$bitXor" => {
+                        if let Bson::Array(arr) = args {
+                            let values: Vec<i64> = arr
+                                .iter()
+                                .filter_map(|v| bson_to_i64(&evaluate_expression(v, doc)))
+                                .collect();
+                            if values.is_empty() {
+                                return Bson::Null;
+                            }
+                            let result = values.iter().fold(0i64, |acc, v| acc ^ v);
+                            Bson::Int64(result)
+                        } else {
+                            Bson::Null
+                        }
+                    }
+                    "$bitNot" => {
+                        let val = evaluate_expression(args, doc);
+                        if let Some(n) = bson_to_i64(&val) {
+                            Bson::Int64(!n)
+                        } else {
+                            Bson::Null
+                        }
+                    }
+                    "$sortArray" => {
+                        if let Bson::Document(sort_doc) = args {
+                            let input = sort_doc.get("input");
+                            let sort_by = sort_doc.get("sortBy");
+
+                            if let (Some(input_val), Some(sort_spec)) = (input, sort_by) {
+                                let mut arr = match evaluate_expression(input_val, doc) {
+                                    Bson::Array(a) => a,
+                                    _ => return Bson::Null,
+                                };
+
+                                // Parse sort specification
+                                let sort_fields: Vec<(String, i32)> = match sort_spec {
+                                    Bson::Document(d) => d
+                                        .iter()
+                                        .filter_map(|(k, v)| {
+                                            bson_to_i64(v).map(|n| (k.clone(), n as i32))
+                                        })
+                                        .collect(),
+                                    Bson::Int32(n) => vec![("".to_string(), *n)],
+                                    Bson::Int64(n) => vec![("".to_string(), *n as i32)],
+                                    _ => return Bson::Array(arr),
+                                };
+
+                                arr.sort_by(|a, b| {
+                                    for (field, direction) in &sort_fields {
+                                        let val_a = if field.is_empty() {
+                                            Some(a.clone())
+                                        } else if let Bson::Document(d) = a {
+                                            Some(d.get(field).cloned().unwrap_or(Bson::Null))
+                                        } else {
+                                            Some(Bson::Null)
+                                        };
+                                        let val_b = if field.is_empty() {
+                                            Some(b.clone())
+                                        } else if let Bson::Document(d) = b {
+                                            Some(d.get(field).cloned().unwrap_or(Bson::Null))
+                                        } else {
+                                            Some(Bson::Null)
+                                        };
+
+                                        let cmp = compare_bson_values(val_a.as_ref(), val_b.as_ref());
+                                        if cmp != std::cmp::Ordering::Equal {
+                                            return if *direction >= 0 {
+                                                cmp
+                                            } else {
+                                                cmp.reverse()
+                                            };
+                                        }
+                                    }
+                                    std::cmp::Ordering::Equal
+                                });
+
+                                return Bson::Array(arr);
+                            }
+                        }
+                        Bson::Null
+                    }
+
                     _ => Bson::Null,
                 }
             } else {

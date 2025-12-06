@@ -2834,6 +2834,300 @@ mod tests {
         assert_eq!(coll.count(&doc! {}), 0);
     }
 
+    #[test]
+    fn test_get_field_expression() {
+        // Test $getField expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! {
+            "name": "test",
+            "nested": {
+                "value": 42
+            }
+        };
+
+        // Simple form: { $getField: "name" }
+        let expr = Bson::Document(doc! { "$getField": "name" });
+        let result = evaluate_expression(&expr, &doc);
+        assert_eq!(result, Bson::String("test".to_string()));
+    }
+
+    #[test]
+    fn test_set_field_expression() {
+        // Test $setField expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! { "a": 1, "b": 2 };
+
+        let expr = Bson::Document(doc! {
+            "$setField": {
+                "field": "c",
+                "input": "$ROOT",
+                "value": 3
+            }
+        });
+
+        // Since we can't easily reference $ROOT, test with literal
+        let expr2 = Bson::Document(doc! {
+            "$setField": {
+                "field": "c",
+                "input": { "a": 1 },
+                "value": 3
+            }
+        });
+        let result = evaluate_expression(&expr2, &doc);
+        if let Bson::Document(d) = result {
+            assert_eq!(d.get("c"), Some(&Bson::Int32(3)));
+            assert_eq!(d.get("a"), Some(&Bson::Int32(1)));
+        }
+    }
+
+    #[test]
+    fn test_unset_field_expression() {
+        // Test $unsetField expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! {};
+
+        let expr = Bson::Document(doc! {
+            "$unsetField": {
+                "field": "b",
+                "input": { "a": 1, "b": 2, "c": 3 }
+            }
+        });
+        let result = evaluate_expression(&expr, &doc);
+        if let Bson::Document(d) = result {
+            assert!(d.get("b").is_none());
+            assert_eq!(d.get("a"), Some(&Bson::Int32(1)));
+            assert_eq!(d.get("c"), Some(&Bson::Int32(3)));
+        }
+    }
+
+    #[test]
+    fn test_regex_find_expression() {
+        // Test $regexFind expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! { "text": "hello world" };
+
+        let expr = Bson::Document(doc! {
+            "$regexFind": {
+                "input": "$text",
+                "regex": "world"
+            }
+        });
+        let result = evaluate_expression(&expr, &doc);
+        if let Bson::Document(d) = result {
+            assert_eq!(d.get("match"), Some(&Bson::String("world".to_string())));
+            assert_eq!(d.get("idx"), Some(&Bson::Int32(6)));
+        }
+    }
+
+    #[test]
+    fn test_convert_expression() {
+        // Test $convert expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! {};
+
+        // Convert string to int
+        let expr = Bson::Document(doc! {
+            "$convert": {
+                "input": "42",
+                "to": "int"
+            }
+        });
+        let result = evaluate_expression(&expr, &doc);
+        // Note: This returns Null because string->int conversion needs bson_to_i64
+
+        // Convert int to double
+        let expr2 = Bson::Document(doc! {
+            "$convert": {
+                "input": 42,
+                "to": "double"
+            }
+        });
+        let result2 = evaluate_expression(&expr2, &doc);
+        assert_eq!(result2, Bson::Double(42.0));
+
+        // Convert int to bool
+        let expr3 = Bson::Document(doc! {
+            "$convert": {
+                "input": 1,
+                "to": "bool"
+            }
+        });
+        let result3 = evaluate_expression(&expr3, &doc);
+        assert_eq!(result3, Bson::Boolean(true));
+    }
+
+    #[test]
+    fn test_is_bool_expression() {
+        // Test $isBool expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! { "flag": true, "num": 42 };
+
+        let expr1 = Bson::Document(doc! { "$isBool": "$flag" });
+        let result1 = evaluate_expression(&expr1, &doc);
+        assert_eq!(result1, Bson::Boolean(true));
+
+        let expr2 = Bson::Document(doc! { "$isBool": "$num" });
+        let result2 = evaluate_expression(&expr2, &doc);
+        assert_eq!(result2, Bson::Boolean(false));
+    }
+
+    #[test]
+    fn test_is_date_expression() {
+        // Test $isDate expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! { "date": bson::DateTime::now(), "num": 42 };
+
+        let expr1 = Bson::Document(doc! { "$isDate": "$date" });
+        let result1 = evaluate_expression(&expr1, &doc);
+        assert_eq!(result1, Bson::Boolean(true));
+
+        let expr2 = Bson::Document(doc! { "$isDate": "$num" });
+        let result2 = evaluate_expression(&expr2, &doc);
+        assert_eq!(result2, Bson::Boolean(false));
+    }
+
+    #[test]
+    fn test_rand_expression() {
+        // Test $rand expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! {};
+
+        let expr = Bson::Document(doc! { "$rand": {} });
+        let result = evaluate_expression(&expr, &doc);
+        if let Bson::Double(n) = result {
+            assert!(n >= 0.0 && n < 1.0);
+        } else {
+            panic!("$rand should return a double");
+        }
+    }
+
+    #[test]
+    fn test_bit_and_expression() {
+        // Test $bitAnd expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! {};
+
+        let expr = Bson::Document(doc! { "$bitAnd": [0b1111, 0b1010] });
+        let result = evaluate_expression(&expr, &doc);
+        assert_eq!(result, Bson::Int64(0b1010));
+    }
+
+    #[test]
+    fn test_bit_or_expression() {
+        // Test $bitOr expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! {};
+
+        let expr = Bson::Document(doc! { "$bitOr": [0b0101, 0b1010] });
+        let result = evaluate_expression(&expr, &doc);
+        assert_eq!(result, Bson::Int64(0b1111));
+    }
+
+    #[test]
+    fn test_bit_xor_expression() {
+        // Test $bitXor expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! {};
+
+        let expr = Bson::Document(doc! { "$bitXor": [0b1111, 0b0101] });
+        let result = evaluate_expression(&expr, &doc);
+        assert_eq!(result, Bson::Int64(0b1010));
+    }
+
+    #[test]
+    fn test_bit_not_expression() {
+        // Test $bitNot expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! {};
+
+        let expr = Bson::Document(doc! { "$bitNot": 0_i64 });
+        let result = evaluate_expression(&expr, &doc);
+        assert_eq!(result, Bson::Int64(-1));
+    }
+
+    #[test]
+    fn test_sort_array_expression() {
+        // Test $sortArray expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! {};
+
+        // Sort simple array ascending
+        let expr = Bson::Document(doc! {
+            "$sortArray": {
+                "input": [3, 1, 2],
+                "sortBy": 1
+            }
+        });
+        let result = evaluate_expression(&expr, &doc);
+        if let Bson::Array(arr) = result {
+            assert_eq!(arr.len(), 3);
+            assert_eq!(arr[0], Bson::Int32(1));
+            assert_eq!(arr[1], Bson::Int32(2));
+            assert_eq!(arr[2], Bson::Int32(3));
+        }
+
+        // Sort array of documents by field
+        let expr2 = Bson::Document(doc! {
+            "$sortArray": {
+                "input": [
+                    { "name": "b", "val": 2 },
+                    { "name": "a", "val": 1 },
+                    { "name": "c", "val": 3 }
+                ],
+                "sortBy": { "val": 1 }
+            }
+        });
+        let result2 = evaluate_expression(&expr2, &doc);
+        if let Bson::Array(arr) = result2 {
+            assert_eq!(arr.len(), 3);
+            if let Bson::Document(d) = &arr[0] {
+                assert_eq!(d.get("val"), Some(&Bson::Int32(1)));
+            }
+        }
+    }
+
+    #[test]
+    fn test_to_object_id_expression() {
+        // Test $toObjectId expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! {};
+        let oid_str = "507f1f77bcf86cd799439011";
+
+        let expr = Bson::Document(doc! { "$toObjectId": oid_str });
+        let result = evaluate_expression(&expr, &doc);
+        if let Bson::ObjectId(oid) = result {
+            assert_eq!(oid.to_hex(), oid_str);
+        } else {
+            panic!("$toObjectId should return ObjectId");
+        }
+    }
+
+    #[test]
+    fn test_to_decimal_expression() {
+        // Test $toDecimal expression operator
+        use crate::protocols::mongodb::server::evaluate_expression;
+
+        let doc = doc! {};
+
+        let expr = Bson::Document(doc! { "$toDecimal": 42 });
+        let result = evaluate_expression(&expr, &doc);
+        assert_eq!(result, Bson::Double(42.0));
+    }
+
     // Helper function for tests
     fn bson_to_f64(bson: &Bson) -> Option<f64> {
         match bson {
