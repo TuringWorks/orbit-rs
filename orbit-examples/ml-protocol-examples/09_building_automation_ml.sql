@@ -1,9 +1,15 @@
+-- Building automation example: sensors, HVAC events, energy usage, and actions
+-- 1) Setup building, sensors, HVAC events, energy usage
+-- 2) Derive action recommendations based on sensor thresholds
+-- 3) Daily aggregation with recommendations
+-- 4) Baseload detection by joining energy and occupancy
 CREATE TABLE IF NOT EXISTS buildings (
     building_id SERIAL PRIMARY KEY,
     name VARCHAR(100)
 );
 INSERT INTO buildings (name) VALUES ('HQ-1') ON CONFLICT DO NOTHING;
 
+-- Building sensors time series (5-minute sampling)
 CREATE TABLE IF NOT EXISTS building_sensors (
     building_id INTEGER REFERENCES buildings(building_id),
     ts TIMESTAMP NOT NULL,
@@ -21,6 +27,7 @@ SELECT 1,
        400 + (RANDOM() * 800)
 FROM GENERATE_SERIES(0, 288) AS n;
 
+-- HVAC mode events sampled every 30 minutes
 CREATE TABLE IF NOT EXISTS hvac_events (
     building_id INTEGER REFERENCES buildings(building_id),
     ts TIMESTAMP NOT NULL,
@@ -34,6 +41,7 @@ SELECT 1,
        22
 FROM GENERATE_SERIES(0, 48) AS n;
 
+-- Energy usage sampled every 15 minutes
 CREATE TABLE IF NOT EXISTS energy_usage (
     building_id INTEGER REFERENCES buildings(building_id),
     ts TIMESTAMP NOT NULL,
@@ -45,6 +53,7 @@ SELECT 1,
        80 + (RANDOM() * 40)
 FROM GENERATE_SERIES(0, 192) AS n;
 
+-- Action recommendation based on CO2, occupancy, and temperature
 SELECT bs.ts,
        bs.temp_c,
        bs.humidity,
@@ -138,6 +147,7 @@ FROM hvac_recent
 ORDER BY ts DESC
 LIMIT 60;
 
+-- Daily aggregation and schedule hints
 WITH daily AS (
     SELECT DATE_TRUNC('day', ts) AS day,
            AVG(temp_c) AS avg_temp,
@@ -160,6 +170,7 @@ FROM daily
 ORDER BY day DESC
 LIMIT 7;
 
+-- Baseload detection: join energy usage and occupancy and compute rolling mean
 WITH joined AS (
     SELECT e.ts,
            e.kwh,

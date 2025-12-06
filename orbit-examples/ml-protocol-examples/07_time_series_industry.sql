@@ -1,9 +1,16 @@
+-- Industrial time series example: anomaly detection, trend analysis, and cross-signal covariance
+-- 1) Create entities and metrics, seed vibration data
+-- 2) Rolling mean/STD anomaly detection over 6-minute window
+-- 3) Trend slope via deltas and 30-minute rolling window
+-- 4) Secondary metric (temperature) aligned with vibration
+-- 5) Rolling covariance between vibration and temperature
 CREATE TABLE IF NOT EXISTS ts_entities (
     entity_id SERIAL PRIMARY KEY,
     entity_name VARCHAR(100)
 );
 INSERT INTO ts_entities (entity_name) VALUES ('Turbine-A') ON CONFLICT DO NOTHING;
 
+-- Seed vibration series at 1-minute intervals
 CREATE TABLE IF NOT EXISTS ts_metrics (
     entity_id INTEGER REFERENCES ts_entities(entity_id),
     ts TIMESTAMP NOT NULL,
@@ -17,6 +24,7 @@ SELECT 1,
        'vibration'
 FROM GENERATE_SERIES(0, 180) AS n;
 
+-- Rolling 6-minute mean and standard deviation; flag 3-sigma anomalies
 SELECT ts,
        metric,
        AVG(metric) OVER (
@@ -81,6 +89,7 @@ FROM recent
 ORDER BY ts DESC
 LIMIT 60;
 
+-- Compute per-minute deltas and 30-minute slope to classify trend
 WITH deltas AS (
     SELECT ts,
            metric,
@@ -103,6 +112,7 @@ FROM trend
 ORDER BY ts DESC
 LIMIT 60;
 
+-- Secondary series: temperature tag aligned to vibration timestamps
 CREATE TABLE IF NOT EXISTS ts_metrics_secondary (
     entity_id INTEGER REFERENCES ts_entities(entity_id),
     ts TIMESTAMP NOT NULL,
@@ -116,6 +126,7 @@ SELECT 1,
        'temperature'
 FROM GENERATE_SERIES(0, 180) AS n;
 
+-- Rolling covariance between aligned vibration and temperature over 30-minute window
 WITH aligned AS (
     SELECT a.ts,
            a.metric AS vib,

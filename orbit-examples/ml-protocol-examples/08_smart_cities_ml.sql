@@ -1,3 +1,9 @@
+-- Smart cities example: traffic and air quality analytics with alerts
+-- 1) Setup traffic sensors and flow time series
+-- 2) Setup air quality stations and readings time series
+-- 3) Traffic congestion detection via speed and flow windows
+-- 4) Air quality state via thresholds and rolling mean
+-- 5) Aligned traffic-air quality alert generation
 CREATE TABLE IF NOT EXISTS traffic_sensors (
     sensor_id SERIAL PRIMARY KEY,
     location_name VARCHAR(100),
@@ -7,6 +13,7 @@ CREATE TABLE IF NOT EXISTS traffic_sensors (
 INSERT INTO traffic_sensors (location_name, latitude, longitude)
 VALUES ('Downtown-1', 37.7749, -122.4194) ON CONFLICT DO NOTHING;
 
+-- Seed traffic flow with 1-minute resolution
 CREATE TABLE IF NOT EXISTS traffic_flow (
     sensor_id INTEGER REFERENCES traffic_sensors(sensor_id),
     ts TIMESTAMP NOT NULL,
@@ -20,6 +27,7 @@ SELECT 1,
        20 + (RANDOM() * 30)
 FROM GENERATE_SERIES(0, 240) AS n;
 
+-- Seed air quality readings with 1-minute resolution
 CREATE TABLE IF NOT EXISTS air_quality (
     station_id SERIAL PRIMARY KEY,
     name VARCHAR(100),
@@ -61,6 +69,7 @@ SELECT 1,
        100 + (RANDOM() * 50)
 FROM GENERATE_SERIES(0, 192) AS n;
 
+-- Traffic congestion detection: 30-minute rolling speed mean and rules
 SELECT tf.ts,
        tf.vehicles_per_minute,
         tf.speed_avg,
@@ -151,6 +160,7 @@ FROM aq_recent
 ORDER BY ts DESC
 LIMIT 60;
 
+-- Air quality state: thresholds and 60-minute rolling mean for PM2.5
 SELECT aq.ts,
        aq.pm25,
        aq.no2,
@@ -166,6 +176,7 @@ WHERE aq.station_id = 1
 ORDER BY aq.ts DESC
 LIMIT 60;
 
+-- Aligned traffic-air quality alert: combine congestion and PM2.5
 WITH aligned AS (
     SELECT tf.ts,
            tf.vehicles_per_minute,

@@ -1,18 +1,30 @@
+// End-to-end banking example in AQL with document+graph and GraphRAG
+// 1) Insert customers and accounts as documents
+// 2) Create edges linking ownership
+// 3) Generate merchant embeddings and compute similarity
+// 4) Ingest policy documents and query via GraphRAG
 INSERT { name: 'Alice', segment: 'low' } INTO customers
 INSERT { name: 'Bob', segment: 'medium' } INTO customers
+// Lookup inserted customers
 LET alice = FIRST(FOR c IN customers FILTER c.name == 'Alice' RETURN c)
 LET bob = FIRST(FOR c IN customers FILTER c.name == 'Bob' RETURN c)
 INSERT { type: 'checking' } INTO accounts
 INSERT { type: 'credit' } INTO accounts
+// Lookup accounts
 LET acc1 = FIRST(FOR a IN accounts FILTER a.type == 'checking' RETURN a)
 LET acc2 = FIRST(FOR a IN accounts FILTER a.type == 'credit' RETURN a)
+// Ownership edges
 INSERT { _from: alice._id, _to: acc1._id, name: 'owns' } INTO owns
 INSERT { _from: alice._id, _to: acc2._id, name: 'owns' } INTO owns
 INSERT { name: 'SuperMart', category: 'grocery' } INTO merchants
 INSERT { name: 'TechWorld', category: 'electronics' } INTO merchants
+// Generate embeddings for merchants if missing
 FOR m IN merchants FILTER m.embedding == null UPDATE m WITH { embedding: ML_EMBED_TEXT(m.name, 'sentence-transformers') } IN merchants
+// Compute cosine similarity between two merchant embeddings
 LET sm = FIRST(FOR m IN merchants FILTER m.name == 'SuperMart' RETURN m)
 LET tw = FIRST(FOR m IN merchants FILTER m.name == 'TechWorld' RETURN m)
 RETURN 1 - (sm.embedding <=> tw.embedding)
+// GraphRAG knowledge ingestion with entity and relationship extraction
 FOR result IN GRAPHRAG_BUILD_KNOWLEDGE("Online electronics purchases over $500 require secondary verification.", { "knowledge_graph": "banking_kg", "document_id": "policy_1", "metadata": {"source": "policy", "domain": "banking"}, "extractors": ["entity", "relationship"], "build_graph": true, "generate_embeddings": true }) RETURN result
+// RAG query to explain applicable rules
 FOR answer IN GRAPHRAG_QUERY("banking_kg", "Explain rules affecting high-value online purchases.", { "max_hops": 2, "include_explanation": true }) RETURN { response: answer.response, confidence: answer.confidence }
