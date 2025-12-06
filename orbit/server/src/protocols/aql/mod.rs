@@ -35,8 +35,11 @@ pub mod query_engine;
 pub mod server;
 pub mod storage;
 
+// Test modules
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod data_modification_tests;
 
 pub use aql_parser::{
     AggregateFunction, AqlClause, AqlCondition, AqlExpression, AqlParser, AqlQuery,

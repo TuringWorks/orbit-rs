@@ -3,7 +3,6 @@
 // Provides optimized batch insert operations to improve throughput
 // for bulk data loading scenarios.
 
-use bytes::Bytes;
 use std::collections::HashMap;
 
 /// Batch insert configuration

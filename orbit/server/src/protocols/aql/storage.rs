@@ -4,7 +4,7 @@
 
 #![cfg(feature = "storage-rocksdb")]
 
-use crate::protocols::aql::data_model::{AqlCollection, AqlDocument};
+use crate::protocols::aql::data_model::{AqlCollection, AqlDocument, AqlValue};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use async_trait::async_trait;
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
@@ -41,6 +41,20 @@ pub trait AqlStorageProvider: Send + Sync {
 
     /// Get all documents in a collection
     async fn get_collection_documents(&self, collection: &str) -> ProtocolResult<Vec<AqlDocument>>;
+
+    /// Delete a document by collection and key
+    async fn delete_document(&self, collection: &str, key: &str) -> ProtocolResult<bool>;
+
+    /// Update a document (merge with existing data)
+    async fn update_document(
+        &self,
+        collection: &str,
+        key: &str,
+        updates: HashMap<String, AqlValue>,
+    ) -> ProtocolResult<Option<AqlDocument>>;
+
+    /// Check if a document exists
+    async fn document_exists(&self, collection: &str, key: &str) -> bool;
 
     /// Shutdown the storage backend
     async fn shutdown(&self) -> ProtocolResult<()>;
@@ -262,6 +276,94 @@ impl AqlStorage {
         Ok(Vec::new())
     }
 
+    /// Delete a document by collection and key
+    pub async fn delete_document(&self, collection: &str, key: &str) -> ProtocolResult<bool> {
+        // Delete from memory
+        let deleted = {
+            let mut documents = self.documents.write().await;
+            if let Some(coll_docs) = documents.get_mut(collection) {
+                coll_docs.remove(key).is_some()
+            } else {
+                false
+            }
+        };
+
+        // Delete from RocksDB
+        if deleted {
+            let db_guard = self.db.read().await;
+            if let Some(ref db) = *db_guard {
+                let docs_cf = db.cf_handle("documents").ok_or_else(|| {
+                    ProtocolError::Other("Documents column family not found".to_string())
+                })?;
+
+                let db_key = format!("doc:{}:{}", collection, key);
+                db.delete_cf(docs_cf, db_key.as_bytes()).map_err(|e| {
+                    ProtocolError::Other(format!("Failed to delete document from RocksDB: {}", e))
+                })?;
+            }
+        }
+
+        Ok(deleted)
+    }
+
+    /// Update a document (merge with existing data)
+    pub async fn update_document(
+        &self,
+        collection: &str,
+        key: &str,
+        updates: HashMap<String, AqlValue>,
+    ) -> ProtocolResult<Option<AqlDocument>> {
+        // Get and update in memory
+        let updated_doc = {
+            let mut documents = self.documents.write().await;
+            if let Some(coll_docs) = documents.get_mut(collection) {
+                if let Some(doc) = coll_docs.get_mut(key) {
+                    // Merge updates into existing document
+                    for (field, value) in updates {
+                        doc.data.insert(field, value);
+                    }
+                    // Update revision
+                    doc.revision = format!("_{}", chrono::Utc::now().timestamp());
+                    Some(doc.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
+        // Persist to RocksDB if updated
+        if let Some(ref doc) = updated_doc {
+            let db_guard = self.db.read().await;
+            if let Some(ref db) = *db_guard {
+                let docs_cf = db.cf_handle("documents").ok_or_else(|| {
+                    ProtocolError::Other("Documents column family not found".to_string())
+                })?;
+
+                let db_key = format!("doc:{}:{}", collection, key);
+                let value = serde_json::to_vec(&doc).map_err(|e| {
+                    ProtocolError::Other(format!("Failed to serialize document: {}", e))
+                })?;
+
+                db.put_cf(docs_cf, db_key.as_bytes(), &value).map_err(|e| {
+                    ProtocolError::Other(format!("Failed to persist document to RocksDB: {}", e))
+                })?;
+            }
+        }
+
+        Ok(updated_doc)
+    }
+
+    /// Check if a document exists
+    pub async fn document_exists(&self, collection: &str, key: &str) -> bool {
+        let documents = self.documents.read().await;
+        if let Some(coll_docs) = documents.get(collection) {
+            return coll_docs.contains_key(key);
+        }
+        false
+    }
+
     /// Shutdown and close RocksDB database
     /// This explicitly releases the RocksDB lock
     pub async fn shutdown(&self) -> ProtocolResult<()> {
@@ -305,6 +407,23 @@ impl AqlStorageProvider for AqlStorage {
 
     async fn get_collection_documents(&self, collection: &str) -> ProtocolResult<Vec<AqlDocument>> {
         AqlStorage::get_collection_documents(self, collection).await
+    }
+
+    async fn delete_document(&self, collection: &str, key: &str) -> ProtocolResult<bool> {
+        AqlStorage::delete_document(self, collection, key).await
+    }
+
+    async fn update_document(
+        &self,
+        collection: &str,
+        key: &str,
+        updates: HashMap<String, AqlValue>,
+    ) -> ProtocolResult<Option<AqlDocument>> {
+        AqlStorage::update_document(self, collection, key, updates).await
+    }
+
+    async fn document_exists(&self, collection: &str, key: &str) -> bool {
+        AqlStorage::document_exists(self, collection, key).await
     }
 
     async fn shutdown(&self) -> ProtocolResult<()> {

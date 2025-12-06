@@ -3,7 +3,7 @@
 //! This module provides a complete AQL query engine that includes GraphRAG function support.
 
 use crate::protocols::aql::aql_parser::{
-    AqlClause, AqlCondition, AqlExpression, ComparisonOperator,
+    AqlClause, AqlCondition, AqlExpression, ComparisonOperator, UpsertAction,
 };
 use crate::protocols::aql::{
     AqlDocument, AqlGraphRAGEngine, AqlParser, AqlQuery, AqlStorage, AqlValue,
@@ -12,7 +12,7 @@ use crate::protocols::error::{ProtocolError, ProtocolResult};
 use orbit_client::OrbitClient;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::warn;
+use tracing::{info, warn};
 
 /// AQL query execution result
 #[derive(Debug, Clone)]
@@ -227,6 +227,86 @@ impl AqlQueryEngine {
                         });
                     }
                 }
+                AqlClause::Insert {
+                    document,
+                    collection,
+                    options: _,
+                } => {
+                    // Execute INSERT clause - create new document
+                    let doc_result = self.execute_insert(storage, document, collection, &context).await?;
+                    result_data.push(doc_result);
+                }
+                AqlClause::Update {
+                    key,
+                    document,
+                    collection,
+                    options: _,
+                } => {
+                    // Execute UPDATE clause - modify existing document
+                    if let Some(ref var) = for_variable {
+                        // Update based on FOR iteration
+                        for doc in &for_documents {
+                            let mut ctx = context.clone();
+                            ctx.insert(var.clone(), self.document_to_value(doc));
+                            if let Ok(updated) = self.execute_update(storage, key, document, collection, &ctx).await {
+                                result_data.push(updated);
+                            }
+                        }
+                    } else {
+                        // Direct update
+                        let updated = self.execute_update(storage, key, document, collection, &context).await?;
+                        result_data.push(updated);
+                    }
+                }
+                AqlClause::Replace {
+                    key,
+                    document,
+                    collection,
+                } => {
+                    // Execute REPLACE clause - replace entire document
+                    if let Some(ref var) = for_variable {
+                        for doc in &for_documents {
+                            let mut ctx = context.clone();
+                            ctx.insert(var.clone(), self.document_to_value(doc));
+                            if let Ok(replaced) = self.execute_replace(storage, key, document, collection, &ctx).await {
+                                result_data.push(replaced);
+                            }
+                        }
+                    } else {
+                        let replaced = self.execute_replace(storage, key, document, collection, &context).await?;
+                        result_data.push(replaced);
+                    }
+                }
+                AqlClause::Remove { key, collection } => {
+                    // Execute REMOVE clause - delete document
+                    if let Some(ref var) = for_variable {
+                        for doc in &for_documents {
+                            let mut ctx = context.clone();
+                            ctx.insert(var.clone(), self.document_to_value(doc));
+                            if let Ok(removed) = self.execute_remove(storage, key, collection, &ctx).await {
+                                result_data.push(removed);
+                            }
+                        }
+                    } else {
+                        let removed = self.execute_remove(storage, key, collection, &context).await?;
+                        result_data.push(removed);
+                    }
+                }
+                AqlClause::Upsert {
+                    search,
+                    insert,
+                    update_or_replace,
+                    collection,
+                } => {
+                    // Execute UPSERT clause - insert or update/replace
+                    let upserted = self.execute_upsert(storage, search, insert, update_or_replace, collection, &context).await?;
+                    result_data.push(upserted);
+                }
+                AqlClause::Let { variable, expression } => {
+                    // Execute LET clause - bind variable to expression result
+                    let value = self.evaluate_expression(expression, &context)?;
+                    context.insert(variable.clone(), value);
+                }
                 _ => {
                     // Other clauses not yet implemented
                     warn!("Unsupported clause type in AQL query execution");
@@ -261,6 +341,311 @@ impl AqlQueryEngine {
     ) -> ProtocolResult<Vec<AqlDocument>> {
         // Get all documents from the collection
         storage.get_collection_documents(collection_name).await
+    }
+
+    /// Execute INSERT clause - create a new document
+    async fn execute_insert(
+        &self,
+        storage: &AqlStorage,
+        document_expr: &AqlExpression,
+        collection: &str,
+        context: &HashMap<String, AqlValue>,
+    ) -> ProtocolResult<AqlValue> {
+        // Evaluate the document expression to get the document data
+        let doc_value = self.evaluate_expression(document_expr, context)?;
+
+        // Convert AqlValue to document data
+        let doc_data = match doc_value {
+            AqlValue::Object(obj) => obj,
+            _ => {
+                return Err(ProtocolError::AqlError(
+                    "INSERT expects an object expression".to_string(),
+                ))
+            }
+        };
+
+        // Generate a key if not provided
+        let key = if let Some(AqlValue::String(k)) = doc_data.get("_key") {
+            k.clone()
+        } else {
+            uuid::Uuid::new_v4().to_string()
+        };
+
+        // Create the document (filter out system fields from user data)
+        let mut data = HashMap::new();
+        for (k, v) in doc_data {
+            if !k.starts_with('_') {
+                data.insert(k, v);
+            }
+        }
+
+        let doc = AqlDocument::new(collection, key.clone(), data);
+
+        // Store the document
+        storage.store_document(doc.clone()).await?;
+        info!("AQL INSERT: Created document {}/{}", collection, key);
+
+        // Return the created document as result
+        Ok(self.document_to_value(&doc))
+    }
+
+    /// Execute UPDATE clause - modify an existing document
+    async fn execute_update(
+        &self,
+        storage: &AqlStorage,
+        key_expr: &AqlExpression,
+        document_expr: &AqlExpression,
+        collection: &str,
+        context: &HashMap<String, AqlValue>,
+    ) -> ProtocolResult<AqlValue> {
+        // Evaluate the key expression
+        let key = self.extract_document_key(key_expr, context)?;
+
+        // Evaluate the update expression to get the update data
+        let update_value = self.evaluate_expression(document_expr, context)?;
+
+        let updates = match update_value {
+            AqlValue::Object(obj) => obj,
+            _ => {
+                return Err(ProtocolError::AqlError(
+                    "UPDATE expects an object expression".to_string(),
+                ))
+            }
+        };
+
+        // Perform the update
+        let updated_doc = storage
+            .update_document(collection, &key, updates)
+            .await?
+            .ok_or_else(|| {
+                ProtocolError::AqlError(format!("Document {}/{} not found for UPDATE", collection, key))
+            })?;
+
+        info!("AQL UPDATE: Updated document {}/{}", collection, key);
+        Ok(self.document_to_value(&updated_doc))
+    }
+
+    /// Execute REPLACE clause - replace an entire document
+    async fn execute_replace(
+        &self,
+        storage: &AqlStorage,
+        key_expr: &AqlExpression,
+        document_expr: &AqlExpression,
+        collection: &str,
+        context: &HashMap<String, AqlValue>,
+    ) -> ProtocolResult<AqlValue> {
+        // Evaluate the key expression
+        let key = self.extract_document_key(key_expr, context)?;
+
+        // Evaluate the replacement document expression
+        let replace_value = self.evaluate_expression(document_expr, context)?;
+
+        let new_data = match replace_value {
+            AqlValue::Object(obj) => obj,
+            _ => {
+                return Err(ProtocolError::AqlError(
+                    "REPLACE expects an object expression".to_string(),
+                ))
+            }
+        };
+
+        // Delete the old document and create a new one with the same key
+        storage.delete_document(collection, &key).await?;
+
+        // Create new document with the replacement data
+        let mut data = HashMap::new();
+        for (k, v) in new_data {
+            if !k.starts_with('_') {
+                data.insert(k, v);
+            }
+        }
+
+        let doc = AqlDocument::new(collection, key.clone(), data);
+        storage.store_document(doc.clone()).await?;
+
+        info!("AQL REPLACE: Replaced document {}/{}", collection, key);
+        Ok(self.document_to_value(&doc))
+    }
+
+    /// Execute REMOVE clause - delete a document
+    async fn execute_remove(
+        &self,
+        storage: &AqlStorage,
+        key_expr: &AqlExpression,
+        collection: &str,
+        context: &HashMap<String, AqlValue>,
+    ) -> ProtocolResult<AqlValue> {
+        // Evaluate the key expression
+        let key = self.extract_document_key(key_expr, context)?;
+
+        // Get the document before deletion to return it
+        let doc = storage.get_document(collection, &key).await?;
+
+        // Delete the document
+        let deleted = storage.delete_document(collection, &key).await?;
+
+        if deleted {
+            info!("AQL REMOVE: Deleted document {}/{}", collection, key);
+            if let Some(d) = doc {
+                Ok(self.document_to_value(&d))
+            } else {
+                Ok(AqlValue::Object({
+                    let mut m = HashMap::new();
+                    m.insert("_key".to_string(), AqlValue::String(key));
+                    m.insert("_removed".to_string(), AqlValue::Bool(true));
+                    m
+                }))
+            }
+        } else {
+            Err(ProtocolError::AqlError(format!(
+                "Document {}/{} not found for REMOVE",
+                collection, key
+            )))
+        }
+    }
+
+    /// Execute UPSERT clause - insert or update/replace
+    async fn execute_upsert(
+        &self,
+        storage: &AqlStorage,
+        search_expr: &AqlExpression,
+        insert_expr: &AqlExpression,
+        update_or_replace: &UpsertAction,
+        collection: &str,
+        context: &HashMap<String, AqlValue>,
+    ) -> ProtocolResult<AqlValue> {
+        // Evaluate the search expression to find matching document
+        let search_value = self.evaluate_expression(search_expr, context)?;
+
+        // Try to find the document by _key if present in search
+        let existing_key = if let AqlValue::Object(ref obj) = search_value {
+            obj.get("_key").and_then(|v| {
+                if let AqlValue::String(k) = v {
+                    Some(k.clone())
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        };
+
+        // Check if document exists
+        let doc_exists = if let Some(ref key) = existing_key {
+            storage.document_exists(collection, key).await
+        } else {
+            false
+        };
+
+        if doc_exists {
+            // Document exists - perform UPDATE or REPLACE
+            let key = existing_key.unwrap();
+            match update_or_replace {
+                UpsertAction::Update(update_expr) => {
+                    let update_value = self.evaluate_expression(update_expr, context)?;
+                    let updates = match update_value {
+                        AqlValue::Object(obj) => obj,
+                        _ => {
+                            return Err(ProtocolError::AqlError(
+                                "UPSERT UPDATE expects an object expression".to_string(),
+                            ))
+                        }
+                    };
+                    let updated_doc = storage
+                        .update_document(collection, &key, updates)
+                        .await?
+                        .ok_or_else(|| {
+                            ProtocolError::AqlError(format!(
+                                "Document {}/{} not found for UPSERT UPDATE",
+                                collection, key
+                            ))
+                        })?;
+                    info!("AQL UPSERT: Updated existing document {}/{}", collection, key);
+                    Ok(self.document_to_value(&updated_doc))
+                }
+                UpsertAction::Replace(replace_expr) => {
+                    let replace_value = self.evaluate_expression(replace_expr, context)?;
+                    let new_data = match replace_value {
+                        AqlValue::Object(obj) => obj,
+                        _ => {
+                            return Err(ProtocolError::AqlError(
+                                "UPSERT REPLACE expects an object expression".to_string(),
+                            ))
+                        }
+                    };
+
+                    storage.delete_document(collection, &key).await?;
+                    let mut data = HashMap::new();
+                    for (k, v) in new_data {
+                        if !k.starts_with('_') {
+                            data.insert(k, v);
+                        }
+                    }
+                    let doc = AqlDocument::new(collection, key.clone(), data);
+                    storage.store_document(doc.clone()).await?;
+                    info!("AQL UPSERT: Replaced existing document {}/{}", collection, key);
+                    Ok(self.document_to_value(&doc))
+                }
+            }
+        } else {
+            // Document doesn't exist - perform INSERT
+            let insert_value = self.evaluate_expression(insert_expr, context)?;
+            let doc_data = match insert_value {
+                AqlValue::Object(obj) => obj,
+                _ => {
+                    return Err(ProtocolError::AqlError(
+                        "UPSERT INSERT expects an object expression".to_string(),
+                    ))
+                }
+            };
+
+            let key = if let Some(AqlValue::String(k)) = doc_data.get("_key") {
+                k.clone()
+            } else if let Some(k) = existing_key {
+                k
+            } else {
+                uuid::Uuid::new_v4().to_string()
+            };
+
+            let mut data = HashMap::new();
+            for (k, v) in doc_data {
+                if !k.starts_with('_') {
+                    data.insert(k, v);
+                }
+            }
+
+            let doc = AqlDocument::new(collection, key.clone(), data);
+            storage.store_document(doc.clone()).await?;
+            info!("AQL UPSERT: Inserted new document {}/{}", collection, key);
+            Ok(self.document_to_value(&doc))
+        }
+    }
+
+    /// Extract document key from key expression
+    fn extract_document_key(
+        &self,
+        key_expr: &AqlExpression,
+        context: &HashMap<String, AqlValue>,
+    ) -> ProtocolResult<String> {
+        let key_value = self.evaluate_expression(key_expr, context)?;
+
+        match key_value {
+            AqlValue::String(k) => Ok(k),
+            AqlValue::Object(obj) => {
+                // If it's an object, try to get the _key field
+                if let Some(AqlValue::String(k)) = obj.get("_key") {
+                    Ok(k.clone())
+                } else {
+                    Err(ProtocolError::AqlError(
+                        "Could not extract _key from object".to_string(),
+                    ))
+                }
+            }
+            _ => Err(ProtocolError::AqlError(format!(
+                "Invalid key type: expected string or object with _key, got {:?}",
+                key_value
+            ))),
+        }
     }
 
     /// Evaluate an AQL expression

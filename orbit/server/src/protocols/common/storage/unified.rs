@@ -1742,7 +1742,7 @@ pub use redis_provider_impl::UnifiedRedisDataProvider;
 #[cfg(feature = "storage-rocksdb")]
 mod aql_storage_impl {
     use super::*;
-    use crate::protocols::aql::data_model::{AqlCollection, AqlDocument};
+    use crate::protocols::aql::data_model::{AqlCollection, AqlDocument, AqlValue};
 
     /// Internal table names for AQL storage
     const AQL_COLLECTIONS_TABLE: &str = "__aql_collections";
@@ -2049,6 +2049,62 @@ mod aql_storage_impl {
         pub async fn shutdown(&self) -> ProtocolResult<()> {
             Ok(())
         }
+
+        /// Delete a document by collection and key
+        pub async fn delete_document(&self, collection: &str, key: &str) -> ProtocolResult<bool> {
+            self.ensure_tables_exist().await?;
+
+            // Construct the document ID
+            let doc_id = format!("{}/{}", collection, key);
+
+            // Delete the document using the underlying storage
+            let result = self
+                .storage
+                .integration
+                .storage()
+                .delete(AQL_DOCUMENTS_TABLE, &doc_id)
+                .await;
+
+            Ok(result.is_ok())
+        }
+
+        /// Update a document (merge with existing data)
+        pub async fn update_document(
+            &self,
+            collection: &str,
+            key: &str,
+            updates: HashMap<String, AqlValue>,
+        ) -> ProtocolResult<Option<AqlDocument>> {
+            self.ensure_tables_exist().await?;
+
+            // Get existing document
+            if let Some(mut doc) = self.get_document(collection, key).await? {
+                // Merge updates
+                for (field, value) in updates {
+                    doc.data.insert(field, value);
+                }
+                // Update revision
+                doc.revision = format!("_{}", chrono::Utc::now().timestamp());
+
+                // Store the updated document
+                self.store_document(doc.clone()).await?;
+                Ok(Some(doc))
+            } else {
+                Ok(None)
+            }
+        }
+
+        /// Check if a document exists
+        pub async fn document_exists(&self, collection: &str, key: &str) -> bool {
+            if self.ensure_tables_exist().await.is_err() {
+                return false;
+            }
+
+            self.get_document(collection, key)
+                .await
+                .map(|doc| doc.is_some())
+                .unwrap_or(false)
+        }
     }
 
     /// Implement AqlStorageProvider trait for UnifiedAqlStorage
@@ -2083,6 +2139,23 @@ mod aql_storage_impl {
             collection: &str,
         ) -> ProtocolResult<Vec<AqlDocument>> {
             UnifiedAqlStorage::get_collection_documents(self, collection).await
+        }
+
+        async fn delete_document(&self, collection: &str, key: &str) -> ProtocolResult<bool> {
+            UnifiedAqlStorage::delete_document(self, collection, key).await
+        }
+
+        async fn update_document(
+            &self,
+            collection: &str,
+            key: &str,
+            updates: HashMap<String, AqlValue>,
+        ) -> ProtocolResult<Option<AqlDocument>> {
+            UnifiedAqlStorage::update_document(self, collection, key, updates).await
+        }
+
+        async fn document_exists(&self, collection: &str, key: &str) -> bool {
+            UnifiedAqlStorage::document_exists(self, collection, key).await
         }
 
         async fn shutdown(&self) -> ProtocolResult<()> {

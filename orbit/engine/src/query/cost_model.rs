@@ -1,9 +1,9 @@
-// Cost-based query optimization
-//
-// Provides cost estimation for different query execution strategies
-// to enable intelligent query plan selection.
+//! Cost-based query optimization
+//!
+//! Provides cost estimation for different query execution strategies
+//! to enable intelligent query plan selection.
 
-use super::statistics::{IndexStatistics, StatisticsCollector, TableStatistics};
+use super::statistics::StatisticsCollector;
 use super::{PlanNode, PlanNodeType};
 use serde::{Deserialize, Serialize};
 

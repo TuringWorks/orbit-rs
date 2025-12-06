@@ -230,6 +230,11 @@ impl CqlAdapter {
                 let json = serde_json::to_string(items).unwrap_or_else(|_| "[]".to_string());
                 format!("'{}'", json.replace('\'', "''"))
             }
+            CqlValue::Vector(values) => {
+                // Store as JSON array of floats
+                let json = serde_json::to_string(values).unwrap_or_else(|_| "[]".to_string());
+                format!("'{}'", json.replace('\'', "''"))
+            }
         }
     }
 
@@ -1064,6 +1069,7 @@ impl CqlAdapter {
             CqlStatement::Update {
                 table,
                 assignments,
+                counter_assignments,
                 where_clause,
                 if_clause,
                 ..
@@ -1140,23 +1146,75 @@ impl CqlAdapter {
                 }
 
                 // Convert CQL UPDATE to SQL and execute
-                let set_parts: Vec<String> = assignments
-                    .iter()
-                    .map(|(col, val)| {
-                        let val_str = match val {
-                            CqlValue::Text(s) => format!("'{}'", s.replace('\'', "''")),
-                            CqlValue::Int(i) => i.to_string(),
-                            CqlValue::Bigint(i) => i.to_string(),
-                            CqlValue::Boolean(b) => b.to_string(),
-                            CqlValue::Float(f) => f.to_string(),
-                            CqlValue::Double(f) => f.to_string(),
-                            CqlValue::Timestamp(ts) => (ts / 1000).to_string(),
-                            CqlValue::Null => "NULL".to_string(),
-                            _ => format!("'{:?}'", val),
-                        };
-                        format!("{} = {}", col, val_str)
-                    })
-                    .collect();
+                let mut set_parts: Vec<String> = Vec::new();
+
+                // Add simple value assignments
+                for (col, val) in assignments.iter() {
+                    let val_str = match val {
+                        CqlValue::Text(s) => format!("'{}'", s.replace('\'', "''")),
+                        CqlValue::Int(i) => i.to_string(),
+                        CqlValue::Bigint(i) => i.to_string(),
+                        CqlValue::Boolean(b) => b.to_string(),
+                        CqlValue::Float(f) => f.to_string(),
+                        CqlValue::Double(f) => f.to_string(),
+                        CqlValue::Timestamp(ts) => (ts / 1000).to_string(),
+                        CqlValue::Null => "NULL".to_string(),
+                        _ => format!("'{:?}'", val),
+                    };
+                    set_parts.push(format!("{} = {}", col, val_str));
+                }
+
+                // Add counter and collection assignments
+                for (col, assignment) in counter_assignments.iter() {
+                    use crate::protocols::cql::parser::CqlAssignment;
+                    let assignment_str = match assignment {
+                        CqlAssignment::CounterIncrement(inc) => {
+                            // For counter increment: column = column + value
+                            format!("{} = {} + {}", col, col, inc)
+                        }
+                        CqlAssignment::CounterDecrement(dec) => {
+                            // For counter decrement: column = column - value
+                            format!("{} = {} - {}", col, col, dec)
+                        }
+                        CqlAssignment::ListAppend(values) => {
+                            // For list append, serialize the values as JSON and use concatenation
+                            let json_vals = serde_json::to_string(values).unwrap_or_default();
+                            format!("{} = {} || '{}'", col, col, json_vals)
+                        }
+                        CqlAssignment::ListPrepend(values) => {
+                            let json_vals = serde_json::to_string(values).unwrap_or_default();
+                            format!("{} = '{}' || {}", col, json_vals, col)
+                        }
+                        CqlAssignment::SetAdd(values) => {
+                            // Set union operation
+                            let json_vals = serde_json::to_string(values).unwrap_or_default();
+                            format!("{} = {} || '{}'", col, col, json_vals)
+                        }
+                        CqlAssignment::SetRemove(values) => {
+                            // Set difference (not directly supported in SQL, use JSON functions)
+                            let json_vals = serde_json::to_string(values).unwrap_or_default();
+                            format!("{} = {} - '{}'", col, col, json_vals)
+                        }
+                        CqlAssignment::MapPut(entries) => {
+                            let json_map = serde_json::to_string(entries).unwrap_or_default();
+                            format!("{} = {} || '{}'", col, col, json_map)
+                        }
+                        CqlAssignment::MapRemove(key) => {
+                            let key_str = serde_json::to_string(key).unwrap_or_default();
+                            format!("{} = {} - '{}'", col, col, key_str)
+                        }
+                        CqlAssignment::Value(val) => {
+                            let val_str = match val {
+                                CqlValue::Text(s) => format!("'{}'", s.replace('\'', "''")),
+                                CqlValue::Int(i) => i.to_string(),
+                                CqlValue::Bigint(i) => i.to_string(),
+                                _ => format!("'{:?}'", val),
+                            };
+                            format!("{} = {}", col, val_str)
+                        }
+                    };
+                    set_parts.push(assignment_str);
+                }
 
                 let mut sql = format!("UPDATE {} SET {}", qualified_table, set_parts.join(", "));
 

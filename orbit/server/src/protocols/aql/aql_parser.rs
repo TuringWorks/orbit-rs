@@ -2351,6 +2351,7 @@ impl AqlTokenParser {
         Ok(AqlExpression::Array(elements))
     }
 
+    #[allow(dead_code)]
     fn parse_condition(&mut self) -> ProtocolResult<AqlCondition> {
         let left = self.parse_expression()?;
 

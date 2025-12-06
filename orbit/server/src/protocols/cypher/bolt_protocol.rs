@@ -1232,7 +1232,7 @@ impl BoltProtocolHandler {
                                             }
                                         }
                                     }
-                                    
+
                                     // If not bound, create new node
                                     if node_id.is_none() {
                                         let node = GraphNode {
@@ -1243,7 +1243,7 @@ impl BoltProtocolHandler {
                                         self.storage.store_node(node.clone()).await?;
                                         node_id = Some(node.id.clone());
                                         info!("Created node: {:?}", node.id);
-                                        
+
                                         // Update row/columns if variable present
                                         if let Some(var) = &node_pattern.variable {
                                             if !columns.contains(var) {
@@ -1255,9 +1255,9 @@ impl BoltProtocolHandler {
                                             }
                                         }
                                     }
-                                    
+
                                     let current_node_id = node_id.unwrap();
-                                    
+
                                     // If we have a pending relationship, create it now
                                     if let Some(rel_pattern) = pending_rel.take() {
                                         if let Some(start_id) = last_node_id {
@@ -1272,7 +1272,7 @@ impl BoltProtocolHandler {
                                             info!("Created relationship: {:?} -> {:?} -> {:?}", rel.start_node, rel.rel_type, rel.end_node);
                                         }
                                     }
-                                    
+
                                     last_node_id = Some(current_node_id);
                                 }
                                 crate::protocols::cypher::cypher_parser::PatternElement::Relationship(rel_pattern) => {
@@ -1438,6 +1438,56 @@ impl BoltProtocolHandler {
                         when_clauses.len(),
                         else_result
                     );
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::CreateIndex {
+                    name,
+                    index_type,
+                    entity_type,
+                    label_or_type,
+                    properties,
+                    if_not_exists,
+                } => {
+                    debug!(
+                        "CREATE INDEX: name={:?}, type={:?}, entity={:?}, label={}, props={:?}, if_not_exists={}",
+                        name, index_type, entity_type, label_or_type, properties, if_not_exists
+                    );
+                    // TODO: Implement index creation in storage layer
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::CreateConstraint {
+                    name,
+                    constraint_type,
+                    entity_type,
+                    label_or_type,
+                    properties,
+                    if_not_exists,
+                } => {
+                    debug!(
+                        "CREATE CONSTRAINT: name={:?}, type={:?}, entity={:?}, label={}, props={:?}, if_not_exists={}",
+                        name, constraint_type, entity_type, label_or_type, properties, if_not_exists
+                    );
+                    // TODO: Implement constraint creation in storage layer
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::DropIndex {
+                    name,
+                    if_exists,
+                } => {
+                    debug!("DROP INDEX: name={}, if_exists={}", name, if_exists);
+                    // TODO: Implement index deletion in storage layer
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::DropConstraint {
+                    name,
+                    if_exists,
+                } => {
+                    debug!("DROP CONSTRAINT: name={}, if_exists={}", name, if_exists);
+                    // TODO: Implement constraint deletion in storage layer
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::ShowIndexes => {
+                    debug!("SHOW INDEXES");
+                    // TODO: Return list of indexes from storage layer
+                }
+                crate::protocols::cypher::cypher_parser::CypherClause::ShowConstraints => {
+                    debug!("SHOW CONSTRAINTS");
+                    // TODO: Return list of constraints from storage layer
                 }
             }
         }

@@ -2,7 +2,7 @@
 //
 // Implements WITH clause execution including recursive CTEs
 
-use crate::protocols::error::{ProtocolError, ProtocolResult};
+use crate::protocols::error::ProtocolResult;
 use crate::protocols::postgres_wire::sql::ast::{CommonTableExpression, SelectStatement};
 use crate::protocols::postgres_wire::sql::types::SqlValue;
 use std::collections::HashMap;
@@ -14,9 +14,9 @@ pub struct CteContext {
 }
 
 /// Materialized CTE result
-struct CteResult {
-    columns: Vec<String>,
-    rows: Vec<Vec<SqlValue>>,
+pub(crate) struct CteResult {
+    pub(crate) columns: Vec<String>,
+    pub(crate) rows: Vec<Vec<SqlValue>>,
 }
 
 impl CteContext {
@@ -55,8 +55,9 @@ impl CteContext {
         Ok(())
     }
 
-    /// Get materialized CTE result
-    pub fn get_cte(&self, name: &str) -> Option<&CteResult> {
+    /// Get materialized CTE result (used in tests)
+    #[cfg(test)]
+    pub(crate) fn get_cte(&self, name: &str) -> Option<&CteResult> {
         self.cte_results.get(name)
     }
 

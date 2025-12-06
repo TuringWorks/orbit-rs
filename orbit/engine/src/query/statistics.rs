@@ -1,7 +1,7 @@
-// Statistics collection for query optimization
-//
-// Collects and maintains statistics about tables, columns, and indexes
-// to enable cost-based query optimization.
+//! Statistics collection for query optimization
+//!
+//! Collects and maintains statistics about tables, columns, and indexes
+//! to enable cost-based query optimization.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

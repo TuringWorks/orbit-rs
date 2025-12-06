@@ -2,9 +2,43 @@
 //!
 //! This module provides a parser for CQL (Cassandra Query Language) statements.
 
-use super::types::{CqlType, CqlValue};
+use super::types::{CqlType, CqlValue, SimilarityFunction};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use std::collections::HashMap;
+
+/// ANN (Approximate Nearest Neighbor) search configuration
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnnSearch {
+    /// Column containing vectors
+    pub column: String,
+    /// Query vector to search for
+    pub query_vector: Vec<f32>,
+    /// Similarity function (cosine, euclidean, dot_product)
+    pub similarity_function: SimilarityFunction,
+}
+
+/// CQL assignment types for UPDATE statements
+#[derive(Debug, Clone, PartialEq)]
+pub enum CqlAssignment {
+    /// Simple value assignment: column = value
+    Value(CqlValue),
+    /// Counter increment: column = column + value
+    CounterIncrement(i64),
+    /// Counter decrement: column = column - value
+    CounterDecrement(i64),
+    /// List prepend: column = [values] + column
+    ListPrepend(Vec<CqlValue>),
+    /// List append: column = column + [values]
+    ListAppend(Vec<CqlValue>),
+    /// Set add: column = column + {values}
+    SetAdd(Vec<CqlValue>),
+    /// Set remove: column = column - {values}
+    SetRemove(Vec<CqlValue>),
+    /// Map put: column = column + {key: value, ...}
+    MapPut(Vec<(CqlValue, CqlValue)>),
+    /// Map remove: column[key] = null
+    MapRemove(CqlValue),
+}
 
 /// Parsed CQL statement
 #[derive(Debug, Clone, PartialEq)]
@@ -31,6 +65,8 @@ pub enum CqlStatement {
         per_partition_limit: Option<usize>,
         /// SELECT JSON format
         json: bool,
+        /// ANN (Approximate Nearest Neighbor) search configuration
+        ann_search: Option<AnnSearch>,
     },
     /// INSERT statement
     Insert {
@@ -49,8 +85,10 @@ pub enum CqlStatement {
     Update {
         /// Table name
         table: String,
-        /// SET clause assignments
+        /// SET clause assignments (simple value assignments)
         assignments: HashMap<String, CqlValue>,
+        /// Counter and collection operations (for counter tables and collection updates)
+        counter_assignments: HashMap<String, CqlAssignment>,
         /// WHERE clause conditions
         where_clause: Vec<WhereCondition>,
         /// IF conditions
@@ -739,6 +777,9 @@ impl CqlParser {
         // Check for JSON
         let json = query.to_uppercase().contains("SELECT JSON");
 
+        // Parse ORDER BY with potential ANN (vector similarity search)
+        let (order_by, ann_search) = self.parse_order_by_with_ann(query)?;
+
         Ok(CqlStatement::Select {
             columns,
             table: self.resolve_table_name(&table),
@@ -747,10 +788,82 @@ impl CqlParser {
             allow_filtering,
             distinct,
             group_by: None,           // TODO: Parse GROUP BY
-            order_by: None,           // TODO: Parse ORDER BY
+            order_by,
             per_partition_limit: None, // TODO: Parse PER PARTITION LIMIT
             json,
+            ann_search,
         })
+    }
+
+    /// Parse ORDER BY clause, including ANN (vector similarity) searches
+    fn parse_order_by_with_ann(
+        &self,
+        query: &str,
+    ) -> ProtocolResult<(Option<Vec<(String, ClusteringOrder)>>, Option<AnnSearch>)> {
+        let query_upper = query.to_uppercase();
+
+        // Look for ORDER BY ... ANN OF pattern (vector similarity search)
+        if let Some(order_idx) = query_upper.find("ORDER BY") {
+            let after_order = &query[order_idx + 8..];
+
+            // Check for ANN OF pattern: column ANN OF [vector]
+            if let Some(ann_idx) = after_order.to_uppercase().find(" ANN OF ") {
+                let column = after_order[..ann_idx].trim().to_string();
+
+                // Extract vector after "ANN OF"
+                let vector_start = ann_idx + 8;
+                let after_ann = &after_order[vector_start..];
+
+                // Find the vector literal [1.0, 2.0, ...]
+                if let Some(bracket_start) = after_ann.find('[') {
+                    if let Some(bracket_end) = after_ann.find(']') {
+                        let vector_str = &after_ann[bracket_start + 1..bracket_end];
+                        let query_vector: Vec<f32> = vector_str
+                            .split(',')
+                            .filter_map(|s| s.trim().parse::<f32>().ok())
+                            .collect();
+
+                        if !query_vector.is_empty() {
+                            return Ok((
+                                None,
+                                Some(AnnSearch {
+                                    column,
+                                    query_vector,
+                                    similarity_function: SimilarityFunction::Cosine, // Default
+                                }),
+                            ));
+                        }
+                    }
+                }
+            }
+
+            // Regular ORDER BY (column ASC/DESC)
+            let mut order_items = Vec::new();
+            let order_part = after_order
+                .split_whitespace()
+                .take_while(|s| !["LIMIT", "ALLOW", "WHERE"].contains(&s.to_uppercase().as_str()))
+                .collect::<Vec<_>>()
+                .join(" ");
+
+            for item in order_part.split(',') {
+                let parts: Vec<&str> = item.trim().split_whitespace().collect();
+                if let Some(col) = parts.first() {
+                    let order = if parts.get(1).map(|s| s.to_uppercase()) == Some("DESC".to_string())
+                    {
+                        ClusteringOrder::Desc
+                    } else {
+                        ClusteringOrder::Asc
+                    };
+                    order_items.push((col.to_string(), order));
+                }
+            }
+
+            if !order_items.is_empty() {
+                return Ok((Some(order_items), None));
+            }
+        }
+
+        Ok((None, None))
     }
 
     /// Parse INSERT statement
@@ -896,7 +1009,7 @@ impl CqlParser {
 
         let set_part = &parts[set_index + 1..where_index];
         let set_str = set_part.join(" ");
-        let assignments = self.parse_assignments(&set_str)?;
+        let (assignments, counter_assignments) = self.parse_assignments(&set_str)?;
 
         // Parse WHERE clause
         let where_clause = if where_index < parts.len() {
@@ -931,15 +1044,21 @@ impl CqlParser {
         Ok(CqlStatement::Update {
             table,
             assignments,
+            counter_assignments,
             where_clause,
             if_clause,
             ttl,
         })
     }
 
-    /// Parse SET assignments (col1 = val1, col2 = val2)
-    fn parse_assignments(&self, set_str: &str) -> ProtocolResult<HashMap<String, CqlValue>> {
+    /// Parse SET assignments (col1 = val1, col2 = col2 + 1, etc.)
+    /// Returns (simple_assignments, counter/collection_assignments)
+    fn parse_assignments(
+        &self,
+        set_str: &str,
+    ) -> ProtocolResult<(HashMap<String, CqlValue>, HashMap<String, CqlAssignment>)> {
         let mut assignments = HashMap::new();
+        let mut counter_assignments = HashMap::new();
         let parts: Vec<&str> = set_str.split(',').collect();
 
         for part in parts {
@@ -947,12 +1066,115 @@ impl CqlParser {
             if let Some(eq_index) = trimmed.find('=') {
                 let column = trimmed[..eq_index].trim().to_string();
                 let value_str = trimmed[eq_index + 1..].trim();
-                let value = self.parse_value(value_str)?;
-                assignments.insert(column, value);
+
+                // Check for counter operations: column = column + value or column = column - value
+                if let Some(counter_op) = self.parse_counter_expression(&column, value_str)? {
+                    counter_assignments.insert(column, counter_op);
+                } else {
+                    // Regular value assignment
+                    let value = self.parse_value(value_str)?;
+                    assignments.insert(column, value);
+                }
             }
         }
 
-        Ok(assignments)
+        Ok((assignments, counter_assignments))
+    }
+
+    /// Parse counter expressions like "column + 1" or "column - 5"
+    fn parse_counter_expression(
+        &self,
+        column: &str,
+        value_str: &str,
+    ) -> ProtocolResult<Option<CqlAssignment>> {
+        let value_str = value_str.trim();
+
+        // Check for increment: column + value
+        if let Some(plus_idx) = value_str.find('+') {
+            let left = value_str[..plus_idx].trim();
+            let right = value_str[plus_idx + 1..].trim();
+
+            // Check if it's column + value (counter increment)
+            if left.eq_ignore_ascii_case(column) {
+                if let Ok(increment) = right.parse::<i64>() {
+                    return Ok(Some(CqlAssignment::CounterIncrement(increment)));
+                }
+                // Could be list append: column + [values]
+                if right.starts_with('[') && right.ends_with(']') {
+                    let list_values = self.parse_list_values(&right[1..right.len() - 1])?;
+                    return Ok(Some(CqlAssignment::ListAppend(list_values)));
+                }
+                // Could be set add: column + {values}
+                if right.starts_with('{') && right.ends_with('}') {
+                    let set_values = self.parse_set_values(&right[1..right.len() - 1])?;
+                    if set_values.iter().all(|v| matches!(v, CqlValue::Text(_) | CqlValue::Int(_) | CqlValue::Bigint(_))) {
+                        return Ok(Some(CqlAssignment::SetAdd(set_values)));
+                    }
+                    // Map put: {key: value, ...}
+                    let map_entries = self.parse_map_entries(&right[1..right.len() - 1])?;
+                    return Ok(Some(CqlAssignment::MapPut(map_entries)));
+                }
+            }
+            // Check if it's [values] + column (list prepend)
+            if right.eq_ignore_ascii_case(column) && left.starts_with('[') && left.ends_with(']') {
+                let list_values = self.parse_list_values(&left[1..left.len() - 1])?;
+                return Ok(Some(CqlAssignment::ListPrepend(list_values)));
+            }
+        }
+
+        // Check for decrement: column - value
+        if let Some(minus_idx) = value_str.find('-') {
+            let left = value_str[..minus_idx].trim();
+            let right = value_str[minus_idx + 1..].trim();
+
+            // Check if it's column - value (counter decrement)
+            if left.eq_ignore_ascii_case(column) {
+                if let Ok(decrement) = right.parse::<i64>() {
+                    return Ok(Some(CqlAssignment::CounterDecrement(decrement)));
+                }
+                // Could be set remove: column - {values}
+                if right.starts_with('{') && right.ends_with('}') {
+                    let set_values = self.parse_set_values(&right[1..right.len() - 1])?;
+                    return Ok(Some(CqlAssignment::SetRemove(set_values)));
+                }
+            }
+        }
+
+        // Not a counter/collection operation
+        Ok(None)
+    }
+
+    /// Parse list values from string like "1, 2, 3" or "'a', 'b', 'c'"
+    fn parse_list_values(&self, values_str: &str) -> ProtocolResult<Vec<CqlValue>> {
+        let mut values = Vec::new();
+        for part in values_str.split(',') {
+            let trimmed = part.trim();
+            if !trimmed.is_empty() {
+                values.push(self.parse_value(trimmed)?);
+            }
+        }
+        Ok(values)
+    }
+
+    /// Parse set values from string
+    fn parse_set_values(&self, values_str: &str) -> ProtocolResult<Vec<CqlValue>> {
+        self.parse_list_values(values_str)
+    }
+
+    /// Parse map entries from string like "'key1': 'val1', 'key2': 'val2'"
+    fn parse_map_entries(&self, entries_str: &str) -> ProtocolResult<Vec<(CqlValue, CqlValue)>> {
+        let mut entries = Vec::new();
+        for part in entries_str.split(',') {
+            let trimmed = part.trim();
+            if let Some(colon_idx) = trimmed.find(':') {
+                let key_str = trimmed[..colon_idx].trim();
+                let val_str = trimmed[colon_idx + 1..].trim();
+                let key = self.parse_value(key_str)?;
+                let val = self.parse_value(val_str)?;
+                entries.push((key, val));
+            }
+        }
+        Ok(entries)
     }
 
     /// Parse DELETE statement
@@ -1069,14 +1291,127 @@ impl CqlParser {
         // Resolve table name with current keyspace
         let table_name = self.resolve_table_name(raw_table_name);
 
+        // Parse columns from parentheses
+        let mut columns = Vec::new();
+        let mut primary_key = Vec::new();
+        let clustering_key = Vec::new();
+
+        if let Some(start) = query.find('(') {
+            if let Some(end) = query.rfind(')') {
+                let columns_str = &query[start + 1..end];
+
+                // Parse each column definition, handling nested angle brackets in types
+                for col_def in self.split_column_definitions(columns_str) {
+                    let col_def = col_def.trim();
+                    if col_def.is_empty() {
+                        continue;
+                    }
+
+                    // Check for PRIMARY KEY definition
+                    let col_upper = col_def.to_uppercase();
+                    if col_upper.starts_with("PRIMARY KEY") {
+                        // Parse PRIMARY KEY (col1, col2, ...)
+                        if let Some(pk_start) = col_def.find('(') {
+                            if let Some(pk_end) = col_def.rfind(')') {
+                                let pk_cols = &col_def[pk_start + 1..pk_end];
+                                for pk_col in pk_cols.split(',') {
+                                    let col_name = pk_col.trim().trim_matches(|c| c == '(' || c == ')');
+                                    if !col_name.is_empty() {
+                                        primary_key.push(col_name.to_string());
+                                    }
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    // Parse column name and type
+                    // Format: column_name type [PRIMARY KEY] [STATIC]
+                    let col_parts: Vec<&str> = col_def.splitn(2, char::is_whitespace).collect();
+                    if col_parts.len() >= 2 {
+                        let col_name = col_parts[0].to_string();
+                        let remaining = col_parts[1].trim();
+
+                        // Check if this column is PRIMARY KEY
+                        let is_primary_key = remaining.to_uppercase().contains("PRIMARY KEY");
+                        let is_static = remaining.to_uppercase().contains("STATIC");
+
+                        // Extract type (before PRIMARY KEY or STATIC keywords)
+                        let type_str = remaining
+                            .split_whitespace()
+                            .take_while(|s| {
+                                let upper = s.to_uppercase();
+                                upper != "PRIMARY" && upper != "STATIC"
+                            })
+                            .collect::<Vec<_>>()
+                            .join(" ");
+
+                        let data_type = self.parse_cql_type(&type_str);
+
+                        if is_primary_key {
+                            primary_key.push(col_name.clone());
+                        }
+
+                        columns.push(ColumnDef {
+                            name: col_name,
+                            data_type,
+                            is_static,
+                        });
+                    }
+                }
+            }
+        }
+
         Ok(CqlStatement::CreateTable {
             name: table_name,
             if_not_exists,
-            columns: vec![],
-            primary_key: vec![],
-            clustering_key: vec![],
+            columns,
+            primary_key,
+            clustering_key,
             options: HashMap::new(),
         })
+    }
+
+    /// Split column definitions handling nested angle brackets in types like vector<float, 128>
+    fn split_column_definitions(&self, columns_str: &str) -> Vec<String> {
+        let mut result = Vec::new();
+        let mut current = String::new();
+        let mut angle_depth = 0;
+        let mut paren_depth = 0;
+
+        for ch in columns_str.chars() {
+            match ch {
+                '<' => {
+                    angle_depth += 1;
+                    current.push(ch);
+                }
+                '>' => {
+                    angle_depth -= 1;
+                    current.push(ch);
+                }
+                '(' => {
+                    paren_depth += 1;
+                    current.push(ch);
+                }
+                ')' => {
+                    paren_depth -= 1;
+                    current.push(ch);
+                }
+                ',' if angle_depth == 0 && paren_depth == 0 => {
+                    result.push(current.trim().to_string());
+                    current = String::new();
+                }
+                _ => {
+                    current.push(ch);
+                }
+            }
+        }
+
+        if !current.trim().is_empty() {
+            result.push(current.trim().to_string());
+        }
+
+        result
     }
 
     /// Parse CREATE INDEX statement
@@ -2313,7 +2648,43 @@ impl CqlParser {
 
     /// Parse CQL type from string
     fn parse_cql_type(&self, type_str: &str) -> CqlType {
-        match type_str.to_uppercase().as_str() {
+        let upper = type_str.to_uppercase();
+
+        // Handle parameterized types first
+        // VECTOR<element_type, dimension>
+        if upper.starts_with("VECTOR<") || upper.starts_with("VECTOR ") {
+            return self.parse_vector_type(type_str);
+        }
+
+        // LIST<element_type>
+        if upper.starts_with("LIST<") {
+            if let Some(inner) = extract_generic_param(type_str) {
+                let element_type = self.parse_cql_type(inner);
+                return CqlType::List(Box::new(element_type));
+            }
+        }
+
+        // SET<element_type>
+        if upper.starts_with("SET<") {
+            if let Some(inner) = extract_generic_param(type_str) {
+                let element_type = self.parse_cql_type(inner);
+                return CqlType::Set(Box::new(element_type));
+            }
+        }
+
+        // MAP<key_type, value_type>
+        if upper.starts_with("MAP<") {
+            if let Some(inner) = extract_generic_param(type_str) {
+                let parts: Vec<&str> = inner.splitn(2, ',').collect();
+                if parts.len() == 2 {
+                    let key_type = self.parse_cql_type(parts[0].trim());
+                    let value_type = self.parse_cql_type(parts[1].trim());
+                    return CqlType::Map(Box::new(key_type), Box::new(value_type));
+                }
+            }
+        }
+
+        match upper.as_str() {
             "TEXT" | "VARCHAR" => CqlType::Text,
             "ASCII" => CqlType::Ascii,
             "INT" => CqlType::Int,
@@ -2337,6 +2708,45 @@ impl CqlParser {
             _ => CqlType::Text,
         }
     }
+
+    /// Parse VECTOR type: VECTOR<element_type, dimension>
+    fn parse_vector_type(&self, type_str: &str) -> CqlType {
+        // Extract content between < and >
+        if let Some(start) = type_str.find('<') {
+            if let Some(end) = type_str.rfind('>') {
+                let inner = &type_str[start + 1..end];
+                let parts: Vec<&str> = inner.split(',').collect();
+                if parts.len() >= 2 {
+                    let element_type_str = parts[0].trim();
+                    let dimension_str = parts[1].trim();
+
+                    let element_type = match element_type_str.to_uppercase().as_str() {
+                        "FLOAT" => CqlType::Float,
+                        "DOUBLE" => CqlType::Double,
+                        "INT" => CqlType::Int,
+                        _ => CqlType::Float, // Default to float for vectors
+                    };
+
+                    if let Ok(dimension) = dimension_str.parse::<usize>() {
+                        return CqlType::Vector(dimension, Box::new(element_type));
+                    }
+                }
+            }
+        }
+
+        // Default to 128-dimensional float vector
+        CqlType::Vector(128, Box::new(CqlType::Float))
+    }
+}
+
+/// Extract the parameter from a generic type like LIST<text> -> "text"
+fn extract_generic_param(type_str: &str) -> Option<&str> {
+    if let Some(start) = type_str.find('<') {
+        if let Some(end) = type_str.rfind('>') {
+            return Some(&type_str[start + 1..end]);
+        }
+    }
+    None
 }
 
 impl Default for CqlParser {
@@ -2746,6 +3156,219 @@ mod tests {
                 assert_eq!(target, DescribeTarget::Cluster);
             }
             _ => panic!("Expected Describe"),
+        }
+    }
+
+    #[test]
+    fn test_counter_increment() {
+        let parser = CqlParser::new();
+        let result = parser.parse("UPDATE counters SET count = count + 1 WHERE id = 'test'");
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            CqlStatement::Update {
+                counter_assignments,
+                where_clause,
+                ..
+            } => {
+                assert_eq!(counter_assignments.len(), 1);
+                assert!(counter_assignments.contains_key("count"));
+                if let Some(CqlAssignment::CounterIncrement(val)) =
+                    counter_assignments.get("count")
+                {
+                    assert_eq!(*val, 1);
+                } else {
+                    panic!("Expected CounterIncrement");
+                }
+                assert_eq!(where_clause.len(), 1);
+            }
+            _ => panic!("Expected Update statement"),
+        }
+    }
+
+    #[test]
+    fn test_counter_decrement() {
+        let parser = CqlParser::new();
+        let result = parser.parse("UPDATE counters SET visits = visits - 5 WHERE page = 'home'");
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            CqlStatement::Update {
+                counter_assignments,
+                ..
+            } => {
+                assert_eq!(counter_assignments.len(), 1);
+                if let Some(CqlAssignment::CounterDecrement(val)) =
+                    counter_assignments.get("visits")
+                {
+                    assert_eq!(*val, 5);
+                } else {
+                    panic!("Expected CounterDecrement");
+                }
+            }
+            _ => panic!("Expected Update statement"),
+        }
+    }
+
+    #[test]
+    fn test_mixed_counter_and_regular_assignments() {
+        let parser = CqlParser::new();
+        let result =
+            parser.parse("UPDATE data SET name = 'test', counter = counter + 10 WHERE id = 1");
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            CqlStatement::Update {
+                assignments,
+                counter_assignments,
+                ..
+            } => {
+                // Regular assignment
+                assert_eq!(assignments.len(), 1);
+                assert!(assignments.contains_key("name"));
+
+                // Counter assignment
+                assert_eq!(counter_assignments.len(), 1);
+                if let Some(CqlAssignment::CounterIncrement(val)) =
+                    counter_assignments.get("counter")
+                {
+                    assert_eq!(*val, 10);
+                } else {
+                    panic!("Expected CounterIncrement");
+                }
+            }
+            _ => panic!("Expected Update statement"),
+        }
+    }
+
+    #[test]
+    fn test_counter_batch_type() {
+        // Test that COUNTER batch type is recognized
+        let batch_type = BatchType::Counter;
+        assert_eq!(batch_type, BatchType::Counter);
+    }
+
+    // ==================== Vector Search Tests ====================
+
+    #[test]
+    fn test_vector_ann_search() {
+        let parser = CqlParser::new();
+        let result =
+            parser.parse("SELECT * FROM products ORDER BY embedding ANN OF [0.1, 0.2, 0.3] LIMIT 10");
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            CqlStatement::Select { ann_search, .. } => {
+                assert!(ann_search.is_some());
+                let ann = ann_search.unwrap();
+                assert_eq!(ann.column, "embedding");
+                assert_eq!(ann.query_vector, vec![0.1, 0.2, 0.3]);
+                assert_eq!(ann.similarity_function, SimilarityFunction::Cosine);
+            }
+            _ => panic!("Expected Select statement"),
+        }
+    }
+
+    #[test]
+    fn test_vector_type_parsing() {
+        let parser = CqlParser::new();
+
+        // Test VECTOR type in CREATE TABLE
+        let result = parser.parse(
+            "CREATE TABLE items (id uuid PRIMARY KEY, embedding vector<float, 128>)",
+        );
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            CqlStatement::CreateTable { columns, .. } => {
+                assert!(columns.iter().any(|col| col.name == "embedding"));
+            }
+            _ => panic!("Expected CreateTable statement"),
+        }
+    }
+
+    #[test]
+    fn test_similarity_function_from_str() {
+        use super::super::types::SimilarityFunction;
+
+        assert_eq!(
+            SimilarityFunction::from_str("cosine"),
+            Some(SimilarityFunction::Cosine)
+        );
+        assert_eq!(
+            SimilarityFunction::from_str("COS"),
+            Some(SimilarityFunction::Cosine)
+        );
+        assert_eq!(
+            SimilarityFunction::from_str("euclidean"),
+            Some(SimilarityFunction::Euclidean)
+        );
+        assert_eq!(
+            SimilarityFunction::from_str("L2"),
+            Some(SimilarityFunction::Euclidean)
+        );
+        assert_eq!(
+            SimilarityFunction::from_str("dot_product"),
+            Some(SimilarityFunction::DotProduct)
+        );
+        assert_eq!(
+            SimilarityFunction::from_str("DOT"),
+            Some(SimilarityFunction::DotProduct)
+        );
+        assert_eq!(SimilarityFunction::from_str("invalid"), None);
+    }
+
+    #[test]
+    fn test_vector_value() {
+        use super::super::types::CqlValue;
+
+        // Test vector value creation and properties
+        let vec_val = CqlValue::Vector(vec![1.0, 2.0, 3.0, 4.0]);
+        if let CqlValue::Vector(v) = vec_val {
+            assert_eq!(v.len(), 4);
+            assert_eq!(v[0], 1.0);
+            assert_eq!(v[3], 4.0);
+        } else {
+            panic!("Expected Vector value");
+        }
+    }
+
+    #[test]
+    fn test_vector_ann_search_empty_vector() {
+        let parser = CqlParser::new();
+        // Empty vector should not create an ANN search
+        let result = parser.parse("SELECT * FROM products ORDER BY embedding ANN OF [] LIMIT 10");
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            CqlStatement::Select { ann_search, .. } => {
+                // Empty vector should result in no ANN search
+                assert!(ann_search.is_none());
+            }
+            _ => panic!("Expected Select statement"),
+        }
+    }
+
+    #[test]
+    fn test_vector_ann_search_high_dimension() {
+        let parser = CqlParser::new();
+        // Test with higher dimension vector (common for embeddings like text-embedding-ada-002 which is 1536)
+        let vector_str = (0..10).map(|i| format!("{}.0", i)).collect::<Vec<_>>().join(", ");
+        let query = format!(
+            "SELECT * FROM items ORDER BY vector_col ANN OF [{}] LIMIT 5",
+            vector_str
+        );
+        let result = parser.parse(&query);
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            CqlStatement::Select { ann_search, limit, .. } => {
+                assert!(ann_search.is_some());
+                let ann = ann_search.unwrap();
+                assert_eq!(ann.query_vector.len(), 10);
+                assert_eq!(limit, Some(5));
+            }
+            _ => panic!("Expected Select statement"),
         }
     }
 }

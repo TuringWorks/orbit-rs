@@ -323,6 +323,51 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
 
                     info!("CASE expression evaluated");
                 }
+                // DDL commands
+                CypherClause::CreateIndex {
+                    name,
+                    index_type,
+                    entity_type,
+                    label_or_type,
+                    properties,
+                    if_not_exists,
+                } => {
+                    tracing::debug!(
+                        "CREATE INDEX: name={:?}, type={:?}, entity={:?}, label={}, props={:?}, if_not_exists={}",
+                        name, index_type, entity_type, label_or_type, properties, if_not_exists
+                    );
+                    // TODO: Implement index creation in storage layer
+                }
+                CypherClause::CreateConstraint {
+                    name,
+                    constraint_type,
+                    entity_type,
+                    label_or_type,
+                    properties,
+                    if_not_exists,
+                } => {
+                    tracing::debug!(
+                        "CREATE CONSTRAINT: name={:?}, type={:?}, entity={:?}, label={}, props={:?}, if_not_exists={}",
+                        name, constraint_type, entity_type, label_or_type, properties, if_not_exists
+                    );
+                    // TODO: Implement constraint creation in storage layer
+                }
+                CypherClause::DropIndex { name, if_exists } => {
+                    tracing::debug!("DROP INDEX: name={}, if_exists={}", name, if_exists);
+                    // TODO: Implement index deletion in storage layer
+                }
+                CypherClause::DropConstraint { name, if_exists } => {
+                    tracing::debug!("DROP CONSTRAINT: name={}, if_exists={}", name, if_exists);
+                    // TODO: Implement constraint deletion in storage layer
+                }
+                CypherClause::ShowIndexes => {
+                    tracing::debug!("SHOW INDEXES");
+                    // TODO: Return list of indexes from storage layer
+                }
+                CypherClause::ShowConstraints => {
+                    tracing::debug!("SHOW CONSTRAINTS");
+                    // TODO: Return list of constraints from storage layer
+                }
             }
         }
 
