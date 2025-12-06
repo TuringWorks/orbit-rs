@@ -39,7 +39,7 @@ pub mod utils {
                 host: "localhost".to_string(),
                 resp_port: 6379,
                 postgres_port: 5432,
-                vector_port: 6381,
+                vector_port: 6379,
             }
         }
     }
@@ -59,7 +59,7 @@ pub mod utils {
             vector_port: std::env::var("ORBIT_TEST_VECTOR_PORT")
                 .ok()
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(6381),
+                .unwrap_or(6379),
         }
     }
 
@@ -82,7 +82,7 @@ mod tests {
         assert_eq!(config.host, "localhost");
         assert_eq!(config.resp_port, 6379);
         assert_eq!(config.postgres_port, 5432);
-        assert_eq!(config.vector_port, 6381);
+        assert_eq!(config.vector_port, 6379);
     }
 
     #[test]

@@ -43,12 +43,19 @@ pub mod execution;
 pub mod execution_strategy;
 pub mod executor;
 pub mod expression_evaluator;
+pub mod index_advisor;
 pub mod json;
 pub mod lexer;
 pub mod mvcc_executor;
 pub mod optimizer;
+pub mod parallel_executor;
 pub mod parser;
+pub mod plan_cache;
+pub mod query_cache;
+pub mod query_engine;
+pub mod statistics;
 pub mod types;
+pub mod vectorized_executor;
 
 #[cfg(test)]
 mod integration_test;
@@ -74,6 +81,32 @@ pub use lexer::{Lexer, Token};
 pub use mvcc_executor::{MvccSqlExecutor, TransactionId};
 pub use parser::{ParseResult, SqlParser};
 pub use types::{SqlType, SqlValue};
+pub use vectorized_executor::{
+    AggregateType, ColumnarData, FilterCondition, FilterOp, SortKey, VectorizedConfig,
+    VectorizedExecutor, VectorizedStats, WhereAnalysis,
+};
+pub use statistics::{
+    ColumnStatistics, Histogram, Predicate, StatisticsConfig, StatisticsManager, TableStatistics,
+};
+pub use query_cache::{
+    CacheStats, CachedResult, QueryCache, QueryCacheConfig, QueryKey, extract_table_names,
+};
+pub use plan_cache::{
+    CachedPlan, PlanCache, PlanCacheConfig, PlanCacheStats, QueryPlan, TableStatsSnapshot,
+};
+pub use parallel_executor::{
+    AggregateFunction as ParallelAggregateFunction, AggregateSpec, ParallelConfig,
+    ParallelCoordinator, ParallelResult, ParallelStats, PartitionResult, PartitionStrategy,
+    ResultMerger, WorkPartition, WorkPartitioner,
+};
+pub use index_advisor::{
+    ExistingIndex, IndexAdvisor, IndexAdvisorConfig, IndexRecommendation, IndexType,
+    RedundantIndex, WorkloadAnalyzer, WorkloadSummary,
+};
+pub use query_engine::{
+    CacheStatistics, OptimizedExecutionResult, OptimizedQueryEngine, QueryEngineConfig,
+    QueryMetrics,
+};
 
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 

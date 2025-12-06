@@ -20,8 +20,8 @@ import numpy as np
 from typing import List, Dict, Any
 
 class VectorCommandsTester:
-    def __init__(self, host='127.0.0.1', port=6381):
-        """Initialize connection to Orbit vector store."""
+    def __init__(self, host='127.0.0.1', port=6379):
+        """Initialize connection to Orbit RESP server."""
         self.redis_client = redis.Redis(host=host, port=port, decode_responses=True)
         self.test_index = "test-vectors"
         self.ft_index = "ft-test-vectors"
@@ -38,7 +38,7 @@ class VectorCommandsTester:
     
     def generate_test_vector(self, dimension: int = 128, seed: int = 42) -> List[float]:
         """Generate a test vector with given dimension."""
-        np.random.seed(seed)
+        np.random.seed(int(seed))
         vector = np.random.rand(dimension).astype(float).tolist()
         return vector
     
@@ -49,12 +49,22 @@ class VectorCommandsTester:
     def test_basic_vector_commands(self):
         """Test basic VECTOR.* commands."""
         print("\n📋 Testing Basic VECTOR.* Commands")
-        
+
+        # First create the index
+        try:
+            self.redis_client.execute_command('VECTOR.CREATE', self.test_index, 'DIM', 128, 'DISTANCE_METRIC', 'COSINE')
+            print(f"✅ VECTOR.CREATE {self.test_index}: OK")
+        except Exception as e:
+            if "already exists" in str(e):
+                print(f"⚠️ VECTOR.CREATE {self.test_index}: Index already exists (continuing)")
+            else:
+                print(f"❌ VECTOR.CREATE {self.test_index}: Error - {e}")
+
         # Generate test vectors
         vec1 = self.generate_test_vector(128, 1)
         vec2 = self.generate_test_vector(128, 2)
         vec3 = self.generate_test_vector(128, 3)
-        
+
         test_cases = [
             # VECTOR.ADD
             {
@@ -135,7 +145,7 @@ class VectorCommandsTester:
         print("\n🔍 Testing Vector Search Commands")
         
         # Generate query vector similar to doc1
-        query_vector = self.generate_test_vector(128, 1.1)  # Similar to doc1 but slightly different
+        query_vector = self.generate_test_vector(128, 11)  # Similar to doc1 but slightly different
         
         search_tests = [
             # VECTOR.SEARCH
