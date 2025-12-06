@@ -44,9 +44,9 @@ permalink: /PRD.html
 
 | Metric | Value |
 |--------|-------|
-| Lines of Code | 148,780+ |
-| Source Files | 517+ |
-| Test Coverage | 1,078+ tests |
+| Lines of Code | 361,800+ |
+| Source Files | 520+ |
+| Test Coverage | 1,014+ tests |
 | Compiler Warnings | 0 (zero warnings policy) |
 | Workspace Crates | 15 |
 
@@ -953,22 +953,60 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 
 ## Feature Status Matrix
 
+### Protocol Implementation Status
+
+| Protocol | Status | Completion | Tests | Key Components |
+|----------|--------|------------|-------|----------------|
+| **Redis RESP** | Complete | 97% | 183 | String, Hash, List, Set, SortedSet, Stream, PubSub, Vector, TimeSeries, Graph, CLUSTER |
+| **PostgreSQL** | Complete | 90% | 412 | Wire protocol, SQL parser, Query engine, JSONB, pgvector, CTEs, Window functions |
+| **MySQL** | Complete | 80% | 32 | Wire protocol, Auth, Binary protocol (prepared statements) |
+| **CQL (Cassandra)** | Complete | 75% | 23 | Wire protocol, CQL parser, BATCH operations |
+| **AQL (ArangoDB)** | Active | 75% | 80 | Parser, Query engine, Graph traversal, PRUNE, OPTIONS |
+| **Cypher/Bolt** | Active | 70% | 99 | Bolt protocol, Cypher parser, Graph engine, db.* procedures, APOC procedures |
+| **MongoDB** | Active | 50% | 6 | Wire protocol (OP_MSG), CRUD, Aggregation pipeline (12 stages) |
+
+### Detailed Feature Breakdown
+
 | Feature | Status | Tests | Key Files |
 |---------|--------|-------|-----------|
+| **Core Systems** | | | |
 | Core Actor System | Complete | 555 | `orbit-shared/src/lib.rs` |
-| RESP Protocol | Complete | 176 | `protocols/resp/` |
-| PostgreSQL Protocol | Complete | 427 | `protocols/postgres_wire/` |
-| MySQL Protocol | Complete | 33 | `protocols/mysql/` |
-| CQL Protocol | Complete | 18 | `protocols/cql/` |
-| REST API | Complete | 4 | `protocols/rest/` |
 | Distributed Transactions | Complete | 22 | `shared/src/transactions/` |
+| REST API | Complete | 4 | `protocols/rest/` |
+| **Redis RESP Features** | | | |
+| String/Hash/List/Set/SortedSet | Complete | ~80 | `resp/commands/*.rs` |
+| Stream/PubSub | Complete | ~20 | `resp/commands/stream.rs`, `pubsub.rs` |
+| Vector Commands | Complete | ~25 | `resp/commands/vector.rs` |
+| Time Series | Complete | ~24 | `resp/commands/time_series.rs` |
+| Graph Commands | Complete | ~20 | `resp/commands/graph.rs` |
+| CLUSTER Commands | Complete | 7 | `resp/commands/cluster.rs` |
+| ACL Commands | Complete | ~5 | `resp/commands/acl.rs` |
+| **PostgreSQL Features** | | | |
+| Wire Protocol | Complete | - | `postgres_wire/protocol.rs` |
+| SQL Parser (DML/DDL/DQL) | Complete | ~200 | `sql/parser/*.rs` |
+| Query Engine | Complete | ~100 | `sql/query_engine.rs` |
+| JSONB Operators | Complete | 12 | `jsonb/operators.rs` |
+| pgvector Support | Complete | ~50 | `sql/pgvector*.rs` |
+| Window Functions | Complete | ~30 | `sql/window_functions.rs` |
+| **Cypher/Bolt Features** | | | |
+| Bolt Protocol v4/v5 | Complete | - | `bolt_protocol.rs` |
+| Cypher Parser | Complete | ~40 | `cypher_parser.rs` |
+| Graph Engine | Complete | ~30 | `graph_engine.rs` |
+| db.* Procedures | Complete | ~10 | `db_procedures.rs` |
+| APOC Procedures | Complete | 11 | `apoc_procedures.rs` |
+| GDS Algorithms | Active | ~8 | `graph_algorithms_procedures.rs` |
+| **MongoDB Features** | | | |
+| Wire Protocol (OP_MSG) | Complete | - | `mongodb/protocol.rs` |
+| Document Storage | Complete | - | `mongodb/storage.rs` |
+| Aggregation Pipeline | Complete | - | 12 stages: $match, $project, $sort, $group, $unwind, $lookup, etc. |
+| **AI/ML Features** | | | |
 | AI-Native Features | Complete | 14 | `server/src/ai/` |
-| Vector Database | Complete | 150 | `postgres_wire/sql/pgvector*`, `resp/commands/vector.rs` |
-| Time Series | Complete | 24 | `resp/commands/time_series.rs` |
-| Graph Database | Complete | 125 | `protocols/cypher/`, `resp/commands/graph.rs` |
-| Kubernetes Operator | Active | 0 | `orbit-operator/` |
 | Heterogeneous Compute | Complete | 83 | `orbit-compute/` |
 | Machine Learning | Complete | 283 | `orbit-ml/` |
+| **Infrastructure** | | | |
+| Kubernetes Operator | Active | 0 | `orbit-operator/` |
+
+**Total Tests: 1,014+**
 
 ---
 
