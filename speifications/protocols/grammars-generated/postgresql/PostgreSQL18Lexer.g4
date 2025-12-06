@@ -1,0 +1,818 @@
+/*
+ * PostgreSQL 18 Lexer Grammar for ANTLR4
+ * 
+ * This grammar covers PostgreSQL 18 (released September 2025) SQL syntax.
+ * Based on the official PostgreSQL documentation and SQL:2023 standard.
+ * 
+ * New in PostgreSQL 18:
+ * - Virtual generated columns (VIRTUAL keyword)
+ * - UUIDv7 function support
+ * - OLD/NEW aliases in RETURNING clauses
+ * - Temporal constraints (WITHOUT OVERLAPS, PERIOD)
+ * - OAuth authentication tokens
+ * - Enhanced COPY options (REJECT_LIMIT, LOG_VERBOSITY)
+ * - NOT VALID for NOT NULL constraints
+ * - ENFORCED/NOT ENFORCED for CHECK constraints
+ * 
+ * License: MIT
+ * Copyright (c) 2025
+ */
+
+lexer grammar PostgreSQL18Lexer;
+
+options {
+    caseInsensitive = true;
+}
+
+channels {
+    COMMENTS_CHANNEL,
+    WHITESPACE_CHANNEL
+}
+
+// =============================================================================
+// KEYWORDS - PostgreSQL Reserved Words
+// =============================================================================
+
+// A
+ABORT: 'ABORT';
+ABSOLUTE: 'ABSOLUTE';
+ACCESS: 'ACCESS';
+ACTION: 'ACTION';
+ADD: 'ADD';
+ADMIN: 'ADMIN';
+AFTER: 'AFTER';
+AGGREGATE: 'AGGREGATE';
+ALL: 'ALL';
+ALSO: 'ALSO';
+ALTER: 'ALTER';
+ALWAYS: 'ALWAYS';
+ANALYSE: 'ANALYSE';
+ANALYZE: 'ANALYZE';
+AND: 'AND';
+ANY: 'ANY';
+ARRAY: 'ARRAY';
+AS: 'AS';
+ASC: 'ASC';
+ASENSITIVE: 'ASENSITIVE';
+ASSERTION: 'ASSERTION';
+ASSIGNMENT: 'ASSIGNMENT';
+ASYMMETRIC: 'ASYMMETRIC';
+ASYNC: 'ASYNC';           // PostgreSQL 18 - AIO
+AT: 'AT';
+ATOMIC: 'ATOMIC';
+ATTACH: 'ATTACH';
+ATTRIBUTE: 'ATTRIBUTE';
+AUTHORIZATION: 'AUTHORIZATION';
+
+// B
+BACKWARD: 'BACKWARD';
+BEFORE: 'BEFORE';
+BEGIN: 'BEGIN';
+BETWEEN: 'BETWEEN';
+BIGINT: 'BIGINT';
+BINARY: 'BINARY';
+BIT: 'BIT';
+BOOLEAN: 'BOOLEAN';
+BOTH: 'BOTH';
+BREADTH: 'BREADTH';
+BY: 'BY';
+
+// C
+CACHE: 'CACHE';
+CALL: 'CALL';
+CALLED: 'CALLED';
+CASCADE: 'CASCADE';
+CASCADED: 'CASCADED';
+CASE: 'CASE';
+CAST: 'CAST';
+CATALOG: 'CATALOG';
+CHAIN: 'CHAIN';
+CHAR: 'CHAR';
+CHARACTER: 'CHARACTER';
+CHARACTERISTICS: 'CHARACTERISTICS';
+CHECK: 'CHECK';
+CHECKPOINT: 'CHECKPOINT';
+CLASS: 'CLASS';
+CLOSE: 'CLOSE';
+CLUSTER: 'CLUSTER';
+COALESCE: 'COALESCE';
+COLLATE: 'COLLATE';
+COLLATION: 'COLLATION';
+COLUMN: 'COLUMN';
+COLUMNS: 'COLUMNS';
+COMMENT: 'COMMENT';
+COMMENTS: 'COMMENTS';
+COMMIT: 'COMMIT';
+COMMITTED: 'COMMITTED';
+COMPRESSION: 'COMPRESSION';
+CONCURRENTLY: 'CONCURRENTLY';
+CONFIGURATION: 'CONFIGURATION';
+CONFLICT: 'CONFLICT';
+CONNECTION: 'CONNECTION';
+CONSTRAINT: 'CONSTRAINT';
+CONSTRAINTS: 'CONSTRAINTS';
+CONTENT: 'CONTENT';
+CONTINUE: 'CONTINUE';
+CONVERSION: 'CONVERSION';
+COPY: 'COPY';
+COST: 'COST';
+CREATE: 'CREATE';
+CROSS: 'CROSS';
+CSV: 'CSV';
+CUBE: 'CUBE';
+CURRENT: 'CURRENT';
+CURRENT_CATALOG: 'CURRENT_CATALOG';
+CURRENT_DATE: 'CURRENT_DATE';
+CURRENT_ROLE: 'CURRENT_ROLE';
+CURRENT_SCHEMA: 'CURRENT_SCHEMA';
+CURRENT_TIME: 'CURRENT_TIME';
+CURRENT_TIMESTAMP: 'CURRENT_TIMESTAMP';
+CURRENT_USER: 'CURRENT_USER';
+CURSOR: 'CURSOR';
+CYCLE: 'CYCLE';
+
+// D
+DATA: 'DATA';
+DATABASE: 'DATABASE';
+DAY: 'DAY';
+DEALLOCATE: 'DEALLOCATE';
+DEC: 'DEC';
+DECIMAL: 'DECIMAL';
+DECLARE: 'DECLARE';
+DEFAULT: 'DEFAULT';
+DEFAULTS: 'DEFAULTS';
+DEFERRABLE: 'DEFERRABLE';
+DEFERRED: 'DEFERRED';
+DEFINER: 'DEFINER';
+DELETE: 'DELETE';
+DELIMITER: 'DELIMITER';
+DELIMITERS: 'DELIMITERS';
+DEPENDS: 'DEPENDS';
+DEPTH: 'DEPTH';
+DESC: 'DESC';
+DETACH: 'DETACH';
+DICTIONARY: 'DICTIONARY';
+DISABLE: 'DISABLE';
+DISCARD: 'DISCARD';
+DISTINCT: 'DISTINCT';
+DO: 'DO';
+DOCUMENT: 'DOCUMENT';
+DOMAIN: 'DOMAIN';
+DOUBLE: 'DOUBLE';
+DROP: 'DROP';
+
+// E
+EACH: 'EACH';
+ELSE: 'ELSE';
+ENABLE: 'ENABLE';
+ENCODING: 'ENCODING';
+ENCRYPTED: 'ENCRYPTED';
+END: 'END';
+ENFORCED: 'ENFORCED';           // PostgreSQL 18
+ENUM: 'ENUM';
+ESCAPE: 'ESCAPE';
+EVENT: 'EVENT';
+EXCEPT: 'EXCEPT';
+EXCLUDE: 'EXCLUDE';
+EXCLUDING: 'EXCLUDING';
+EXCLUSIVE: 'EXCLUSIVE';
+EXECUTE: 'EXECUTE';
+EXISTS: 'EXISTS';
+EXPLAIN: 'EXPLAIN';
+EXPRESSION: 'EXPRESSION';
+EXTENSION: 'EXTENSION';
+EXTERNAL: 'EXTERNAL';
+EXTRACT: 'EXTRACT';
+
+// F
+FALSE: 'FALSE';
+FAMILY: 'FAMILY';
+FETCH: 'FETCH';
+FILTER: 'FILTER';
+FINALIZE: 'FINALIZE';
+FIRST: 'FIRST';
+FLOAT: 'FLOAT';
+FOLLOWING: 'FOLLOWING';
+FOR: 'FOR';
+FORCE: 'FORCE';
+FOREIGN: 'FOREIGN';
+FORMAT: 'FORMAT';
+FORWARD: 'FORWARD';
+FREEZE: 'FREEZE';
+FROM: 'FROM';
+FULL: 'FULL';
+FUNCTION: 'FUNCTION';
+FUNCTIONS: 'FUNCTIONS';
+
+// G
+GENERATED: 'GENERATED';
+GLOBAL: 'GLOBAL';
+GRANT: 'GRANT';
+GRANTED: 'GRANTED';
+GREATEST: 'GREATEST';
+GROUP: 'GROUP';
+GROUPING: 'GROUPING';
+GROUPS: 'GROUPS';
+
+// H
+HANDLER: 'HANDLER';
+HAVING: 'HAVING';
+HEADER: 'HEADER';
+HOLD: 'HOLD';
+HOUR: 'HOUR';
+
+// I
+IDENTITY: 'IDENTITY';
+IF: 'IF';
+ILIKE: 'ILIKE';
+IMMEDIATE: 'IMMEDIATE';
+IMMUTABLE: 'IMMUTABLE';
+IMPLICIT: 'IMPLICIT';
+IMPORT: 'IMPORT';
+IN: 'IN';
+INCLUDE: 'INCLUDE';
+INCLUDING: 'INCLUDING';
+INCREMENT: 'INCREMENT';
+INDENT: 'INDENT';
+INDEX: 'INDEX';
+INDEXES: 'INDEXES';
+INHERIT: 'INHERIT';
+INHERITS: 'INHERITS';
+INITIALLY: 'INITIALLY';
+INLINE: 'INLINE';
+INNER: 'INNER';
+INOUT: 'INOUT';
+INPUT: 'INPUT';
+INSENSITIVE: 'INSENSITIVE';
+INSERT: 'INSERT';
+INSTEAD: 'INSTEAD';
+INT: 'INT';
+INTEGER: 'INTEGER';
+INTERSECT: 'INTERSECT';
+INTERVAL: 'INTERVAL';
+INTO: 'INTO';
+INVOKER: 'INVOKER';
+IS: 'IS';
+ISNULL: 'ISNULL';
+ISOLATION: 'ISOLATION';
+
+// J
+JOIN: 'JOIN';
+JSON: 'JSON';
+JSON_ARRAY: 'JSON_ARRAY';
+JSON_ARRAYAGG: 'JSON_ARRAYAGG';
+JSON_EXISTS: 'JSON_EXISTS';
+JSON_OBJECT: 'JSON_OBJECT';
+JSON_OBJECTAGG: 'JSON_OBJECTAGG';
+JSON_QUERY: 'JSON_QUERY';
+JSON_SCALAR: 'JSON_SCALAR';
+JSON_SERIALIZE: 'JSON_SERIALIZE';
+JSON_TABLE: 'JSON_TABLE';
+JSON_VALUE: 'JSON_VALUE';
+
+// K
+KEY: 'KEY';
+KEYS: 'KEYS';
+
+// L
+LABEL: 'LABEL';
+LANGUAGE: 'LANGUAGE';
+LARGE: 'LARGE';
+LAST: 'LAST';
+LATERAL: 'LATERAL';
+LEADING: 'LEADING';
+LEAKPROOF: 'LEAKPROOF';
+LEAST: 'LEAST';
+LEFT: 'LEFT';
+LEVEL: 'LEVEL';
+LIKE: 'LIKE';
+LIMIT: 'LIMIT';
+LISTEN: 'LISTEN';
+LOAD: 'LOAD';
+LOCAL: 'LOCAL';
+LOCALTIME: 'LOCALTIME';
+LOCALTIMESTAMP: 'LOCALTIMESTAMP';
+LOCATION: 'LOCATION';
+LOCK: 'LOCK';
+LOCKED: 'LOCKED';
+LOGGED: 'LOGGED';
+LOG_VERBOSITY: 'LOG_VERBOSITY';    // PostgreSQL 18
+
+// M
+MAPPING: 'MAPPING';
+MATCH: 'MATCH';
+MATCHED: 'MATCHED';
+MATERIALIZED: 'MATERIALIZED';
+MAXVALUE: 'MAXVALUE';
+MERGE: 'MERGE';
+METHOD: 'METHOD';
+MINUTE: 'MINUTE';
+MINVALUE: 'MINVALUE';
+MODE: 'MODE';
+MONTH: 'MONTH';
+MOVE: 'MOVE';
+
+// N
+NAME: 'NAME';
+NAMES: 'NAMES';
+NATIONAL: 'NATIONAL';
+NATURAL: 'NATURAL';
+NCHAR: 'NCHAR';
+NEW: 'NEW';                        // PostgreSQL 18 - RETURNING clause alias
+NEXT: 'NEXT';
+NFC: 'NFC';
+NFD: 'NFD';
+NFKC: 'NFKC';
+NFKD: 'NFKD';
+NO: 'NO';
+NONE: 'NONE';
+NORMALIZE: 'NORMALIZE';
+NORMALIZED: 'NORMALIZED';
+NOT: 'NOT';
+NOTHING: 'NOTHING';
+NOTIFY: 'NOTIFY';
+NOTNULL: 'NOTNULL';
+NOWAIT: 'NOWAIT';
+NULL: 'NULL';
+NULLIF: 'NULLIF';
+NULLS: 'NULLS';
+NUMERIC: 'NUMERIC';
+
+// O
+OBJECT: 'OBJECT';
+OF: 'OF';
+OFF: 'OFF';
+OFFSET: 'OFFSET';
+OIDS: 'OIDS';
+OLD: 'OLD';                        // PostgreSQL 18 - RETURNING clause alias
+ON: 'ON';
+ONLY: 'ONLY';
+OPERATOR: 'OPERATOR';
+OPTION: 'OPTION';
+OPTIONS: 'OPTIONS';
+OR: 'OR';
+ORDER: 'ORDER';
+ORDINALITY: 'ORDINALITY';
+OTHERS: 'OTHERS';
+OUT: 'OUT';
+OUTER: 'OUTER';
+OVER: 'OVER';
+OVERLAPS: 'OVERLAPS';
+OVERLAY: 'OVERLAY';
+OVERRIDING: 'OVERRIDING';
+OWNED: 'OWNED';
+OWNER: 'OWNER';
+
+// P
+PARALLEL: 'PARALLEL';
+PARAMETER: 'PARAMETER';
+PARSER: 'PARSER';
+PARTIAL: 'PARTIAL';
+PARTITION: 'PARTITION';
+PASSING: 'PASSING';
+PASSWORD: 'PASSWORD';
+PATH: 'PATH';
+PERIOD: 'PERIOD';                  // PostgreSQL 18 - Temporal constraints
+PLACING: 'PLACING';
+PLAN: 'PLAN';
+PLANS: 'PLANS';
+POLICY: 'POLICY';
+POSITION: 'POSITION';
+PRECEDING: 'PRECEDING';
+PRECISION: 'PRECISION';
+PREPARE: 'PREPARE';
+PREPARED: 'PREPARED';
+PRESERVE: 'PRESERVE';
+PRIMARY: 'PRIMARY';
+PRIOR: 'PRIOR';
+PRIVILEGES: 'PRIVILEGES';
+PROCEDURAL: 'PROCEDURAL';
+PROCEDURE: 'PROCEDURE';
+PROCEDURES: 'PROCEDURES';
+PROGRAM: 'PROGRAM';
+PUBLICATION: 'PUBLICATION';
+
+// Q
+QUOTE: 'QUOTE';
+QUOTES: 'QUOTES';
+
+// R
+RANGE: 'RANGE';
+READ: 'READ';
+REAL: 'REAL';
+REASSIGN: 'REASSIGN';
+RECHECK: 'RECHECK';
+RECURSIVE: 'RECURSIVE';
+REF: 'REF';
+REFERENCES: 'REFERENCES';
+REFERENCING: 'REFERENCING';
+REFRESH: 'REFRESH';
+REINDEX: 'REINDEX';
+REJECT_LIMIT: 'REJECT_LIMIT';      // PostgreSQL 18
+RELATIVE: 'RELATIVE';
+RELEASE: 'RELEASE';
+RENAME: 'RENAME';
+REPEATABLE: 'REPEATABLE';
+REPLACE: 'REPLACE';
+REPLICA: 'REPLICA';
+RESET: 'RESET';
+RESTART: 'RESTART';
+RESTRICT: 'RESTRICT';
+RETURN: 'RETURN';
+RETURNING: 'RETURNING';
+RETURNS: 'RETURNS';
+REVOKE: 'REVOKE';
+RIGHT: 'RIGHT';
+ROLE: 'ROLE';
+ROLLBACK: 'ROLLBACK';
+ROLLUP: 'ROLLUP';
+ROUTINE: 'ROUTINE';
+ROUTINES: 'ROUTINES';
+ROW: 'ROW';
+ROWS: 'ROWS';
+RULE: 'RULE';
+
+// S
+SAVEPOINT: 'SAVEPOINT';
+SCALAR: 'SCALAR';
+SCHEMA: 'SCHEMA';
+SCHEMAS: 'SCHEMAS';
+SCROLL: 'SCROLL';
+SEARCH: 'SEARCH';
+SECOND: 'SECOND';
+SECURITY: 'SECURITY';
+SELECT: 'SELECT';
+SEQUENCE: 'SEQUENCE';
+SEQUENCES: 'SEQUENCES';
+SERIALIZABLE: 'SERIALIZABLE';
+SERVER: 'SERVER';
+SESSION: 'SESSION';
+SESSION_USER: 'SESSION_USER';
+SET: 'SET';
+SETOF: 'SETOF';
+SETS: 'SETS';
+SHARE: 'SHARE';
+SHOW: 'SHOW';
+SILENT: 'SILENT';                  // PostgreSQL 18 - LOG_VERBOSITY option
+SIMILAR: 'SIMILAR';
+SIMPLE: 'SIMPLE';
+SKIP_: 'SKIP';
+SMALLINT: 'SMALLINT';
+SNAPSHOT: 'SNAPSHOT';
+SOME: 'SOME';
+SQL: 'SQL';
+STABLE: 'STABLE';
+STANDALONE: 'STANDALONE';
+START: 'START';
+STATEMENT: 'STATEMENT';
+STATISTICS: 'STATISTICS';
+STDIN: 'STDIN';
+STDOUT: 'STDOUT';
+STORAGE: 'STORAGE';
+STORED: 'STORED';
+STRICT: 'STRICT';
+STRING: 'STRING';
+STRIP: 'STRIP';
+SUBSCRIPTION: 'SUBSCRIPTION';
+SUBSTRING: 'SUBSTRING';
+SUPPORT: 'SUPPORT';
+SYMMETRIC: 'SYMMETRIC';
+SYSID: 'SYSID';
+SYSTEM: 'SYSTEM';
+SYSTEM_USER: 'SYSTEM_USER';
+
+// T
+TABLE: 'TABLE';
+TABLES: 'TABLES';
+TABLESAMPLE: 'TABLESAMPLE';
+TABLESPACE: 'TABLESPACE';
+TEMP: 'TEMP';
+TEMPLATE: 'TEMPLATE';
+TEMPORARY: 'TEMPORARY';
+TEXT: 'TEXT';
+THEN: 'THEN';
+TIES: 'TIES';
+TIME: 'TIME';
+TIMESTAMP: 'TIMESTAMP';
+TO: 'TO';
+TRAILING: 'TRAILING';
+TRANSACTION: 'TRANSACTION';
+TRANSFORM: 'TRANSFORM';
+TREAT: 'TREAT';
+TRIGGER: 'TRIGGER';
+TRIM: 'TRIM';
+TRUE: 'TRUE';
+TRUNCATE: 'TRUNCATE';
+TRUSTED: 'TRUSTED';
+TYPE: 'TYPE';
+TYPES: 'TYPES';
+
+// U
+UESCAPE: 'UESCAPE';
+UNBOUNDED: 'UNBOUNDED';
+UNCOMMITTED: 'UNCOMMITTED';
+UNCONDITIONAL: 'UNCONDITIONAL';
+UNENCRYPTED: 'UNENCRYPTED';
+UNION: 'UNION';
+UNIQUE: 'UNIQUE';
+UNKNOWN: 'UNKNOWN';
+UNLISTEN: 'UNLISTEN';
+UNLOGGED: 'UNLOGGED';
+UNTIL: 'UNTIL';
+UPDATE: 'UPDATE';
+USER: 'USER';
+USING: 'USING';
+
+// V
+VACUUM: 'VACUUM';
+VALID: 'VALID';
+VALIDATE: 'VALIDATE';
+VALIDATOR: 'VALIDATOR';
+VALUE: 'VALUE';
+VALUES: 'VALUES';
+VARCHAR: 'VARCHAR';
+VARIADIC: 'VARIADIC';
+VARYING: 'VARYING';
+VERBOSE: 'VERBOSE';
+VERSION: 'VERSION';
+VIEW: 'VIEW';
+VIEWS: 'VIEWS';
+VIRTUAL: 'VIRTUAL';                // PostgreSQL 18 - Virtual generated columns
+VOLATILE: 'VOLATILE';
+
+// W
+WHEN: 'WHEN';
+WHERE: 'WHERE';
+WHITESPACE: 'WHITESPACE';
+WINDOW: 'WINDOW';
+WITH: 'WITH';
+WITHIN: 'WITHIN';
+WITHOUT: 'WITHOUT';
+WORK: 'WORK';
+WRAPPER: 'WRAPPER';
+WRITE: 'WRITE';
+
+// X
+XML: 'XML';
+XMLATTRIBUTES: 'XMLATTRIBUTES';
+XMLCONCAT: 'XMLCONCAT';
+XMLELEMENT: 'XMLELEMENT';
+XMLEXISTS: 'XMLEXISTS';
+XMLFOREST: 'XMLFOREST';
+XMLNAMESPACES: 'XMLNAMESPACES';
+XMLPARSE: 'XMLPARSE';
+XMLPI: 'XMLPI';
+XMLROOT: 'XMLROOT';
+XMLSERIALIZE: 'XMLSERIALIZE';
+XMLTABLE: 'XMLTABLE';
+
+// Y
+YEAR: 'YEAR';
+YES: 'YES';
+
+// Z
+ZONE: 'ZONE';
+
+// =============================================================================
+// OPERATORS AND PUNCTUATION
+// =============================================================================
+
+// Comparison operators
+EQUALS: '=';
+NOT_EQUALS: '<>' | '!=';
+LESS_THAN: '<';
+GREATER_THAN: '>';
+LESS_THAN_OR_EQUALS: '<=';
+GREATER_THAN_OR_EQUALS: '>=';
+
+// Arithmetic operators
+PLUS: '+';
+MINUS: '-';
+ASTERISK: '*';
+SLASH: '/';
+PERCENT: '%';
+CARET: '^';
+
+// Bitwise operators
+AMPERSAND: '&';
+PIPE: '|';
+TILDE: '~';
+HASH: '#';
+SHIFT_LEFT: '<<';
+SHIFT_RIGHT: '>>';
+
+// String operators
+CONCAT: '||';
+
+// Type cast
+TYPECAST: '::';
+
+// Assignment
+COLON_EQUALS: ':=';
+
+// JSON operators (PostgreSQL specific)
+JSON_EXTRACT: '->';
+JSON_EXTRACT_TEXT: '->>';
+JSON_PATH: '#>';
+JSON_PATH_TEXT: '#>>';
+JSON_CONTAINS: '@>';
+JSON_CONTAINED: '<@';
+JSON_EXISTS_OP: '?';
+JSON_EXISTS_ANY: '?|';
+JSON_EXISTS_ALL: '?&';
+JSON_DELETE: '-';
+JSONB_CONCAT: '||';
+
+// Array operators
+ARRAY_OVERLAP: '&&';
+ARRAY_CONTAINS: '@>';
+ARRAY_CONTAINED: '<@';
+
+// Range operators
+RANGE_CONTAINS: '@>';
+RANGE_CONTAINED: '<@';
+RANGE_OVERLAP: '&&';
+RANGE_LEFT_OF: '<<';
+RANGE_RIGHT_OF: '>>';
+RANGE_ADJACENT: '-|-';
+RANGE_UNION: '+';
+RANGE_INTERSECTION: '*';
+RANGE_DIFFERENCE: '-';
+
+// Geometric operators
+GEO_DISTANCE: '<->';
+GEO_CENTER: '@@';
+GEO_CONTAINS: '@>';
+GEO_POINT: '~=';
+
+// Text search operators
+TS_MATCH: '@@';
+TS_AND: '&&';
+TS_OR: '||';
+TS_NOT: '!!';
+TS_FOLLOWED_BY: '<->';
+
+// Punctuation
+OPEN_PAREN: '(';
+CLOSE_PAREN: ')';
+OPEN_BRACKET: '[';
+CLOSE_BRACKET: ']';
+OPEN_BRACE: '{';
+CLOSE_BRACE: '}';
+COMMA: ',';
+SEMICOLON: ';';
+COLON: ':';
+DOT: '.';
+DOUBLE_DOT: '..';
+
+// =============================================================================
+// LITERALS
+// =============================================================================
+
+// Integer literal
+INTEGER_LITERAL
+    : DIGIT+
+    ;
+
+// Numeric/Decimal literal
+NUMERIC_LITERAL
+    : DIGIT+ DOT DIGIT* EXPONENT?
+    | DOT DIGIT+ EXPONENT?
+    | DIGIT+ EXPONENT
+    ;
+
+// Hexadecimal literal
+HEX_LITERAL
+    : '0' [xX] HEX_DIGIT+
+    ;
+
+// Binary literal
+BINARY_LITERAL
+    : '0' [bB] [01]+
+    ;
+
+// Octal literal
+OCTAL_LITERAL
+    : '0' [oO] [0-7]+
+    ;
+
+// Bit string literal
+BIT_STRING
+    : [bB] '\'' [01]* '\''
+    ;
+
+// Hex string literal
+HEX_STRING
+    : [xX] '\'' HEX_DIGIT* '\''
+    ;
+
+// String literal (single-quoted)
+STRING_LITERAL
+    : '\'' ( ~'\'' | '\'\'' )* '\''
+    ;
+
+// Unicode string literal
+UNICODE_STRING
+    : [uU] '&' '\'' ( ~'\'' | '\'\'' )* '\''
+    ;
+
+// Escape string literal (E'...')
+ESCAPE_STRING
+    : [eE] '\'' ( '\\' . | ~['\\] )* '\''
+    ;
+
+// Dollar-quoted string literal
+DOLLAR_STRING
+    : DOLLAR_TAG .*? DOLLAR_TAG
+    ;
+
+fragment DOLLAR_TAG
+    : '$' IDENTIFIER_BODY? '$'
+    ;
+
+// =============================================================================
+// IDENTIFIERS
+// =============================================================================
+
+// Regular identifier
+IDENTIFIER
+    : IDENTIFIER_START IDENTIFIER_BODY*
+    ;
+
+// Quoted identifier (double-quoted)
+QUOTED_IDENTIFIER
+    : '"' ( ~'"' | '""' )* '"'
+    ;
+
+// Unicode quoted identifier
+UNICODE_IDENTIFIER
+    : [uU] '&' '"' ( ~'"' | '""' )* '"'
+    ;
+
+// Parameter placeholder
+PARAM_MARKER
+    : '$' DIGIT+
+    ;
+
+// Named parameter (used in PL/pgSQL)
+NAMED_PARAM
+    : ':' IDENTIFIER
+    ;
+
+// =============================================================================
+// COMMENTS
+// =============================================================================
+
+// Single-line comment
+LINE_COMMENT
+    : '--' ~[\r\n]* -> channel(COMMENTS_CHANNEL)
+    ;
+
+// Multi-line comment (can be nested in PostgreSQL)
+BLOCK_COMMENT
+    : '/*' ( BLOCK_COMMENT | . )*? '*/' -> channel(COMMENTS_CHANNEL)
+    ;
+
+// =============================================================================
+// WHITESPACE
+// =============================================================================
+
+WHITESPACE_
+    : [ \t\r\n]+ -> channel(WHITESPACE_CHANNEL)
+    ;
+
+// =============================================================================
+// FRAGMENTS
+// =============================================================================
+
+fragment DIGIT
+    : [0-9]
+    ;
+
+fragment HEX_DIGIT
+    : [0-9a-fA-F]
+    ;
+
+fragment EXPONENT
+    : [eE] [+-]? DIGIT+
+    ;
+
+fragment IDENTIFIER_START
+    : [a-zA-Z_]
+    | [\u0080-\uFFFF]  // Extended Unicode characters
+    ;
+
+fragment IDENTIFIER_BODY
+    : IDENTIFIER_START
+    | DIGIT
+    | '$'
+    ;
+
+// =============================================================================
+// ERROR HANDLING
+// =============================================================================
+
+// Catch-all for unrecognized characters
+ERROR_CHARACTER
+    : .
+    ;
