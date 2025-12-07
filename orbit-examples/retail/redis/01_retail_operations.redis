@@ -1,0 +1,432 @@
+# ============================================================================
+# OrbitRS Retail Examples - Redis Real-Time Operations
+# ============================================================================
+# Shopping cart, inventory, flash sales, recommendations, pricing, segments
+# ============================================================================
+
+# ============================================================================
+# SHOPPING CART MANAGEMENT
+# ============================================================================
+
+# Add item to cart (Hash for cart items)
+# Key pattern: cart:{session_id} or cart:user:{customer_id}
+
+HSET cart:sess-abc123 product:SKU-001 2
+HSET cart:sess-abc123 product:SKU-005 1
+HSET cart:sess-abc123 product:SKU-010 3
+EXPIRE cart:sess-abc123 86400  # 24 hours
+
+# Get all cart items
+HGETALL cart:sess-abc123
+
+# Update quantity
+HSET cart:sess-abc123 product:SKU-001 3
+
+# Remove item
+HDEL cart:sess-abc123 product:SKU-005
+
+# Get cart item count
+HLEN cart:sess-abc123
+
+# Cart metadata
+HSET cart:meta:sess-abc123 customer_id "cust-001"
+HSET cart:meta:sess-abc123 created_at "2024-12-06T19:07:00Z"
+HSET cart:meta:sess-abc123 subtotal "245.99"
+EXPIRE cart:meta:sess-abc123 86400
+
+# ============================================================================
+# REAL-TIME INVENTORY TRACKING
+# ============================================================================
+
+# Product stock levels (String for simple counter)
+SET inventory:SKU-001 150
+SET inventory:SKU-002 75
+SET inventory:SKU-003 0
+
+# Decrement on purchase (atomic operation)
+DECRBY inventory:SKU-001 2
+
+# Check stock before adding to cart
+GET inventory:SKU-001
+
+# Low stock alert threshold
+SET inventory:threshold:SKU-001 10
+
+# Out of stock notification queue
+LPUSH queue:out-of-stock SKU-003
+
+# Reserved inventory (during checkout)
+SETEX inventory:reserved:order-123:SKU-001 900 2  # Reserve 2 units for 15 min
+
+# ============================================================================
+# FLASH SALES & LIMITED EDITIONS
+# ============================================================================
+
+# Flash sale countdown
+SETEX flash:sale:winter-drop 3600 '{
+  "sale_id": "flash-001",
+  "collection": "Winter Drop 2024",
+  "discount": 30,
+  "start_time": "2024-12-06T20:00:00Z",
+  "end_time": "2024-12-06T21:00:00Z",
+  "products": ["SKU-100", "SKU-101", "SKU-102"]
+}'
+
+# Limited edition inventory (sorted set with timestamps)
+ZADD limited:edition:collab-001 1733529600 "SKU-200:size-S"
+ZADD limited:edition:collab-001 1733529601 "SKU-200:size-M"
+ZADD limited:edition:collab-001 1733529602 "SKU-200:size-L"
+
+# Get available items
+ZRANGE limited:edition:collab-001 0 -1
+
+# Claim item (remove from available)
+ZREM limited:edition:collab-001 "SKU-200:size-M"
+
+# Flash sale participants (track who purchased)
+SADD flash:participants:flash-001 cust-001 cust-005 cust-010
+
+# Get participant count
+SCARD flash:participants:flash-001
+
+# ============================================================================
+# PRODUCT RECOMMENDATIONS CACHE
+# ============================================================================
+
+# Frequently bought together (sorted set with scores)
+ZADD recommend:fbt:SKU-001 0.95 "SKU-002"
+ZADD recommend:fbt:SKU-001 0.88 "SKU-003"
+ZADD recommend:fbt:SKU-001 0.75 "SKU-004"
+
+# Get top 3 recommendations
+ZREVRANGE recommend:fbt:SKU-001 0 2 WITHSCORES
+
+# Similar products
+SADD recommend:similar:SKU-001 SKU-010 SKU-011 SKU-012
+
+# Get similar products
+SMEMBERS recommend:similar:SKU-001
+
+# Personalized recommendations for customer
+ZADD recommend:personal:cust-001 0.92 "SKU-050"
+ZADD recommend:personal:cust-001 0.87 "SKU-051"
+ZADD recommend:personal:cust-001 0.81 "SKU-052"
+EXPIRE recommend:personal:cust-001 3600  # 1 hour
+
+# Trending products (sorted set with view count)
+ZINCRBY trending:products 1 "SKU-001"
+ZINCRBY trending:products 1 "SKU-005"
+
+# Get top 10 trending
+ZREVRANGE trending:products 0 9 WITHSCORES
+
+# ============================================================================
+# DYNAMIC PRICING
+# ============================================================================
+
+# Base price cache
+HSET price:SKU-001 base_price "99.99"
+HSET price:SKU-001 cost "45.00"
+HSET price:SKU-001 msrp "129.99"
+EXPIRE price:SKU-001 3600
+
+# Dynamic price (based on demand, inventory, time)
+SETEX price:dynamic:SKU-001 300 '{
+  "current_price": 89.99,
+  "discount_pct": 10,
+  "reason": "LOW_DEMAND",
+  "expires_at": "2024-12-06T20:00:00Z"
+}'
+
+# Price history (list)
+LPUSH price:history:SKU-001 '{"price": 89.99, "timestamp": "2024-12-06T19:07:00Z"}'
+LTRIM price:history:SKU-001 0 99  # Keep last 100
+
+# Competitor pricing
+HSET price:competitor:SKU-001 amazon "94.99"
+HSET price:competitor:SKU-001 walmart "92.99"
+HSET price:competitor:SKU-001 target "97.99"
+EXPIRE price:competitor:SKU-001 1800  # 30 minutes
+
+# ============================================================================
+# CUSTOMER SEGMENTATION (AUDIENCE MANAGEMENT)
+# ============================================================================
+
+# High-value customers (VIP)
+SADD segment:vip cust-001 cust-005 cust-010
+
+# Recent purchasers (last 30 days)
+SADD segment:recent-buyers cust-002 cust-003 cust-007
+
+# Cart abandoners
+SADD segment:abandoned-cart cust-004 cust-008
+
+# New customers (first 30 days)
+SADD segment:new-customers cust-015 cust-016
+
+# Check segment membership
+SISMEMBER segment:vip cust-001
+
+# Get segment size
+SCARD segment:vip
+
+# Find customers in multiple segments (intersection)
+SINTER segment:vip segment:recent-buyers
+
+# Targeted campaign audience
+SUNIONSTORE campaign:target:email-001 segment:vip segment:recent-buyers
+EXPIRE campaign:target:email-001 86400
+
+# ============================================================================
+# SESSION MANAGEMENT
+# ============================================================================
+
+# User session
+SETEX session:user:sess-abc123 1800 '{
+  "customer_id": "cust-001",
+  "email": "customer@example.com",
+  "login_time": "2024-12-06T19:07:00Z",
+  "last_activity": "2024-12-06T19:07:00Z",
+  "cart_id": "cart-123"
+}'
+
+# Get session
+GET session:user:sess-abc123
+
+# Update last activity (reset TTL)
+EXPIRE session:user:sess-abc123 1800
+
+# ============================================================================
+# PRODUCT VIEWS & ENGAGEMENT
+# ============================================================================
+
+# Track product views
+INCR views:product:SKU-001
+EXPIRE views:product:SKU-001 86400  # Daily counter
+
+# Recently viewed by customer
+LPUSH recent:viewed:cust-001 SKU-001 SKU-005 SKU-010
+LTRIM recent:viewed:cust-001 0 19  # Keep last 20
+
+# Get recently viewed
+LRANGE recent:viewed:cust-001 0 9
+
+# Wishlist
+SADD wishlist:cust-001 SKU-020 SKU-021 SKU-022
+
+# Get wishlist
+SMEMBERS wishlist:cust-001
+
+# Remove from wishlist
+SREM wishlist:cust-001 SKU-020
+
+# ============================================================================
+# SEARCH & FILTERS
+# ============================================================================
+
+# Popular search terms (sorted set)
+ZINCRBY search:popular 1 "winter jacket"
+ZINCRBY search:popular 1 "sneakers"
+ZINCRBY search:popular 1 "jeans"
+
+# Get top 10 searches
+ZREVRANGE search:popular 0 9 WITHSCORES
+
+# Search suggestions cache
+SADD search:suggest:win "winter jacket" "winter coat" "winter boots"
+
+# Get suggestions
+SMEMBERS search:suggest:win
+
+# Active filters cache (for category page)
+SETEX filters:category:mens-clothing 300 '{
+  "sizes": ["S", "M", "L", "XL"],
+  "colors": ["Black", "Blue", "Gray"],
+  "price_ranges": ["0-50", "50-100", "100-200"],
+  "brands": ["Nike", "Adidas", "Puma"]
+}'
+
+# ============================================================================
+# PROMOTIONS & DISCOUNTS
+# ============================================================================
+
+# Coupon code validation
+HSET coupon:WINTER30 discount_pct "30"
+HSET coupon:WINTER30 min_purchase "100"
+HSET coupon:WINTER30 max_uses "1000"
+HSET coupon:WINTER30 uses "247"
+HSET coupon:WINTER30 expires_at "2024-12-31T23:59:59Z"
+EXPIRE coupon:WINTER30 2592000  # 30 days
+
+# Check if coupon valid
+HGETALL coupon:WINTER30
+
+# Increment usage
+HINCRBY coupon:WINTER30 uses 1
+
+# Customer-specific discount
+SETEX discount:customer:cust-001 86400 '{
+  "discount_pct": 15,
+  "reason": "LOYALTY_REWARD",
+  "applicable_to": "ALL"
+}'
+
+# ============================================================================
+# INVENTORY ALERTS
+# ============================================================================
+
+# Low stock alerts
+LPUSH alerts:low-stock SKU-003 SKU-007 SKU-015
+
+# Process alert
+RPOP alerts:low-stock
+
+# Restock notifications (customers waiting)
+SADD notify:restock:SKU-003 cust-005 cust-008 cust-012
+
+# Get notification list
+SMEMBERS notify:restock:SKU-003
+
+# ============================================================================
+# ORDER PROCESSING QUEUE
+# ============================================================================
+
+# New orders queue (FIFO)
+LPUSH queue:orders:new order-001 order-002 order-003
+
+# Process order
+RPOP queue:orders:new
+
+# Priority orders (express shipping)
+LPUSH queue:orders:priority order-004 order-005
+
+# Get queue length
+LLEN queue:orders:new
+
+# ============================================================================
+# REAL-TIME ANALYTICS
+# ============================================================================
+
+# Today's sales count
+INCR analytics:sales:count:2024-12-06
+EXPIRE analytics:sales:count:2024-12-06 604800  # 7 days
+
+# Today's revenue
+INCRBYFLOAT analytics:sales:revenue:2024-12-06 245.99
+EXPIRE analytics:sales:revenue:2024-12-06 604800
+
+# Active users (HyperLogLog for unique count)
+PFADD analytics:active-users:2024-12-06 cust-001 cust-002 cust-003
+
+# Get unique user count
+PFCOUNT analytics:active-users:2024-12-06
+
+# Category performance
+ZINCRBY analytics:category:sales mens-clothing 1
+ZINCRBY analytics:category:sales womens-shoes 1
+
+# ============================================================================
+# RATE LIMITING
+# ============================================================================
+
+# API rate limit (max 100 requests per minute)
+INCR ratelimit:api:customer:cust-001
+EXPIRE ratelimit:api:customer:cust-001 60
+
+# Check rate limit
+GET ratelimit:api:customer:cust-001
+
+# ============================================================================
+# CACHE INVALIDATION
+# ============================================================================
+
+# Product cache
+SETEX cache:product:SKU-001 3600 '{
+  "product_id": "prod-001",
+  "sku": "SKU-001",
+  "name": "Premium Winter Jacket",
+  "price": 99.99,
+  "stock": 150
+}'
+
+# Category cache
+SETEX cache:category:mens-clothing 1800 '{
+  "category_id": "cat-001",
+  "name": "Mens Clothing",
+  "product_count": 1250
+}'
+
+# Invalidate cache
+DEL cache:product:SKU-001
+
+# ============================================================================
+# NOTIFICATIONS
+# ============================================================================
+
+# Publish order status update
+PUBLISH notifications:orders '{
+  "order_id": "order-001",
+  "status": "SHIPPED",
+  "tracking": "1Z999AA10123456784"
+}'
+
+# Publish inventory update
+PUBLISH notifications:inventory '{
+  "sku": "SKU-001",
+  "stock": 148,
+  "status": "IN_STOCK"
+}'
+
+# Subscribe to notifications (in separate connection)
+# SUBSCRIBE notifications:orders
+# SUBSCRIBE notifications:inventory
+
+# ============================================================================
+# LEADERBOARDS
+# ============================================================================
+
+# Best sellers (sorted set)
+ZADD leaderboard:bestsellers 1250 "SKU-001"
+ZADD leaderboard:bestsellers 980 "SKU-002"
+ZADD leaderboard:bestsellers 875 "SKU-003"
+
+# Get top 10 bestsellers
+ZREVRANGE leaderboard:bestsellers 0 9 WITHSCORES
+
+# Top customers by spend
+ZADD leaderboard:customers 15420.50 "cust-001"
+ZADD leaderboard:customers 12890.00 "cust-002"
+
+# Get customer rank
+ZREVRANK leaderboard:customers "cust-001"
+
+# ============================================================================
+# GEOLOCATION (Store Finder)
+# ============================================================================
+
+# Add store locations (Geospatial)
+GEOADD stores:locations -122.4194 37.7749 "store-sf-001"
+GEOADD stores:locations -118.2437 34.0522 "store-la-001"
+GEOADD stores:locations -73.9352 40.7306 "store-ny-001"
+
+# Find nearest stores (within 10km)
+GEORADIUS stores:locations -122.4194 37.7749 10 km WITHDIST
+
+# Get store distance
+GEODIST stores:locations "store-sf-001" "store-la-001" km
+
+# ============================================================================
+# CLEANUP
+# ============================================================================
+
+# Clear expired carts
+# KEYS cart:* | xargs redis-cli DEL
+
+# Monitor commands
+# MONITOR
+
+# Get memory usage
+MEMORY STATS
+
+# Get key count
+DBSIZE
