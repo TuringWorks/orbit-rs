@@ -507,9 +507,7 @@ mod tests {
 
         match msg {
             MongoMessage::Msg {
-                sections,
-                checksum,
-                ..
+                sections, checksum, ..
             } => {
                 assert_eq!(sections.len(), 1);
                 assert!(checksum.is_none());

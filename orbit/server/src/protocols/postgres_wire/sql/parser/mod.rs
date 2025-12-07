@@ -120,6 +120,9 @@ impl SqlParser {
             // Session Management
             Some(Token::Set) => self.parse_set_statement(),
 
+            // COMMENT ON statement
+            Some(Token::CommentKeyword) => ddl::parse_comment_on(self),
+
             // Handle EXPLAIN as identifier (not a keyword yet)
             Some(Token::Identifier(name)) if name.to_uppercase() == "EXPLAIN" => {
                 self.advance()?; // consume EXPLAIN
@@ -160,6 +163,7 @@ impl SqlParser {
                     "COMMIT".to_string(),
                     "ROLLBACK".to_string(),
                     "SET".to_string(),
+                    "COMMENT".to_string(),
                 ],
                 found: Some(token.clone()),
             }),
@@ -225,7 +229,7 @@ impl SqlParser {
     fn parse_create_statement(&mut self) -> ParseResult<Statement> {
         self.expect(Token::Create)?;
 
-        // Check for CREATE OR REPLACE VIEW
+        // Check for CREATE OR REPLACE VIEW/FUNCTION/TRIGGER
         let or_replace = if self.matches(&[Token::Or]) {
             self.advance()?;
             self.expect(Token::Replace)?;
@@ -265,6 +269,13 @@ impl SqlParser {
                 }
                 Ok(stmt)
             },
+            Some(Token::Trigger) => {
+                let mut stmt = ddl::parse_create_trigger(self)?;
+                if let Statement::CreateTrigger(ref mut trigger_stmt) = stmt {
+                    trigger_stmt.or_replace = or_replace;
+                }
+                Ok(stmt)
+            },
 
             Some(token) => Err(ParseError {
                 message: format!("Unexpected token after CREATE: {token:?}"),
@@ -279,6 +290,7 @@ impl SqlParser {
                     "SCHEMA".to_string(),
                     "EXTENSION".to_string(),
                     "FUNCTION".to_string(),
+                    "TRIGGER".to_string(),
                 ],
                 found: Some(token.clone()),
             }),
@@ -286,7 +298,7 @@ impl SqlParser {
             None => Err(ParseError {
                 message: "Expected object type after CREATE".to_string(),
                 position: self.position,
-                expected: vec!["DATABASE, TABLE, UNIQUE INDEX, INDEX, OR REPLACE VIEW, VIEW, SCHEMA, EXTENSION, or FUNCTION".to_string()],
+                expected: vec!["DATABASE, TABLE, UNIQUE INDEX, INDEX, OR REPLACE VIEW, VIEW, SCHEMA, EXTENSION, FUNCTION, or TRIGGER".to_string()],
                 found: None,
             }),
         }
@@ -326,6 +338,7 @@ impl SqlParser {
             Some(Token::View) => ddl::parse_drop_view(self),
             Some(Token::Schema) => ddl::parse_drop_schema(self),
             Some(Token::Extension) => ddl::parse_drop_extension(self),
+            Some(Token::Trigger) => ddl::parse_drop_trigger(self),
 
             Some(token) => Err(ParseError {
                 message: format!("Unexpected token after DROP: {token:?}"),
@@ -337,6 +350,7 @@ impl SqlParser {
                     "VIEW".to_string(),
                     "SCHEMA".to_string(),
                     "EXTENSION".to_string(),
+                    "TRIGGER".to_string(),
                 ],
                 found: Some(token.clone()),
             }),
@@ -344,7 +358,9 @@ impl SqlParser {
             None => Err(ParseError {
                 message: "Expected object type after DROP".to_string(),
                 position: self.position,
-                expected: vec!["DATABASE, TABLE, INDEX, VIEW, SCHEMA, or EXTENSION".to_string()],
+                expected: vec![
+                    "DATABASE, TABLE, INDEX, VIEW, SCHEMA, EXTENSION, or TRIGGER".to_string(),
+                ],
                 found: None,
             }),
         }

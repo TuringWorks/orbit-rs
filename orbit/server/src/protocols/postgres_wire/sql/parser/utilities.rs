@@ -383,7 +383,32 @@ pub fn parse_data_type(parser: &mut SqlParser) -> ParseResult<SqlType> {
                 "SERIAL" => Ok(SqlType::Integer), // SERIAL is INT with AUTO_INCREMENT
                 "BIGSERIAL" => Ok(SqlType::BigInt),
                 "SMALLSERIAL" => Ok(SqlType::SmallInt),
-                _ => Ok(SqlType::Custom { type_name: name }),
+                "INET" => Ok(SqlType::Inet),
+                "CIDR" => Ok(SqlType::Cidr),
+                "MACADDR" => Ok(SqlType::Macaddr),
+                // PostGIS types - handle GEOGRAPHY(POINT, 4326) and GEOMETRY(POLYGON) etc.
+                "GEOGRAPHY" | "GEOMETRY" => {
+                    // Consume optional type parameters
+                    if parser.matches(&[Token::LeftParen]) {
+                        let mut depth = 1;
+                        parser.advance()?;
+                        while depth > 0 {
+                            match &parser.current_token {
+                                Some(Token::LeftParen) => depth += 1,
+                                Some(Token::RightParen) => depth -= 1,
+                                None => break,
+                                _ => {}
+                            }
+                            parser.advance()?;
+                        }
+                    }
+                    Ok(SqlType::Custom { type_name: name })
+                }
+                _ => {
+                    // Handle custom types with optional parameters, like VECTOR(3)
+                    // but skip PostGIS-style parameters
+                    Ok(SqlType::Custom { type_name: name })
+                }
             }
         }
         _ => Err(ParseError {

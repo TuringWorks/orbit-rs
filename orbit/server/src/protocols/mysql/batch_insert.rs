@@ -97,10 +97,10 @@ impl BatchInsertOptimizer {
         // Parse first insert to get table and columns
         let first = &inserts[0];
         let upper = first.to_uppercase();
-        
+
         if let Some(values_pos) = upper.find("VALUES") {
             let prefix = &first[..values_pos + 6].trim();
-            
+
             // Extract all value clauses
             let mut all_values = Vec::new();
             for insert in inserts {
@@ -140,14 +140,22 @@ mod tests {
 
     #[test]
     fn test_is_insert_query() {
-        assert!(BatchInsertOptimizer::is_insert_query("INSERT INTO users VALUES (1, 'test')"));
-        assert!(BatchInsertOptimizer::is_insert_query("  insert into users values (1, 'test')"));
-        assert!(!BatchInsertOptimizer::is_insert_query("SELECT * FROM users"));
+        assert!(BatchInsertOptimizer::is_insert_query(
+            "INSERT INTO users VALUES (1, 'test')"
+        ));
+        assert!(BatchInsertOptimizer::is_insert_query(
+            "  insert into users values (1, 'test')"
+        ));
+        assert!(!BatchInsertOptimizer::is_insert_query(
+            "SELECT * FROM users"
+        ));
     }
 
     #[test]
     fn test_extract_table_name() {
-        let table = BatchInsertOptimizer::extract_table_name("INSERT INTO users (id, name) VALUES (1, 'test')");
+        let table = BatchInsertOptimizer::extract_table_name(
+            "INSERT INTO users (id, name) VALUES (1, 'test')",
+        );
         assert_eq!(table, Some("users".to_string()));
 
         let table = BatchInsertOptimizer::extract_table_name("INSERT INTO my_table VALUES (1)");
@@ -164,7 +172,7 @@ mod tests {
 
         optimizer.add_to_batch("INSERT INTO users VALUES (1, 'a')".to_string());
         optimizer.add_to_batch("INSERT INTO users VALUES (2, 'b')".to_string());
-        
+
         let stats = optimizer.stats();
         assert_eq!(stats.pending_batches, 1);
         assert_eq!(stats.total_pending_rows, 2);
@@ -185,7 +193,7 @@ mod tests {
 
         let combined = BatchInsertOptimizer::combine_inserts(&inserts);
         assert!(combined.is_some());
-        
+
         let result = combined.unwrap();
         assert!(result.contains("VALUES"));
         assert!(result.contains("(1, 'Alice')"));
@@ -202,7 +210,7 @@ mod tests {
 
         let all_batches = optimizer.flush_all();
         assert_eq!(all_batches.len(), 2);
-        
+
         let stats = optimizer.stats();
         assert_eq!(stats.pending_batches, 0);
     }

@@ -518,6 +518,22 @@ impl SqlExecutor {
 
             // COPY operations
             Statement::Copy(stmt) => self.execute_copy(stmt).await,
+
+            // Trigger operations (no-op for now, just return success)
+            Statement::CreateTrigger(_stmt) => Ok(ExecutionResult::Show {
+                variable: "CREATE TRIGGER".to_string(),
+                value: "OK".to_string(),
+            }),
+            Statement::DropTrigger(_stmt) => Ok(ExecutionResult::Show {
+                variable: "DROP TRIGGER".to_string(),
+                value: "OK".to_string(),
+            }),
+
+            // Comment operations (no-op for now, just return success)
+            Statement::CommentOn(_stmt) => Ok(ExecutionResult::Show {
+                variable: "COMMENT".to_string(),
+                value: "OK".to_string(),
+            }),
         }
     }
 
@@ -2721,7 +2737,11 @@ impl SqlExecutor {
             SqlType::Date => 1082,
             SqlType::Time { .. } => 1083,
             SqlType::Timestamp { with_timezone } => {
-                if *with_timezone { 1184 } else { 1114 }
+                if *with_timezone {
+                    1184
+                } else {
+                    1114
+                }
             }
             SqlType::Interval => 1186,
             SqlType::Json => 114,
@@ -2782,10 +2802,7 @@ impl SqlExecutor {
     }
 
     /// Query pg_catalog.pg_class - table/index/view definitions
-    async fn query_pg_class(
-        &self,
-        columns: &[String],
-    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+    async fn query_pg_class(&self, columns: &[String]) -> ProtocolResult<Vec<Vec<Option<String>>>> {
         let tables = self.tables.read().await;
         let views = self.views.read().await;
         let mut rows = Vec::new();
@@ -2811,7 +2828,10 @@ impl SqlExecutor {
             row_data.insert("relisshared".to_string(), "f".to_string());
             row_data.insert("relpersistence".to_string(), "p".to_string()); // permanent
             row_data.insert("relkind".to_string(), "r".to_string()); // ordinary table
-            row_data.insert("relnatts".to_string(), table_schema.columns.len().to_string());
+            row_data.insert(
+                "relnatts".to_string(),
+                table_schema.columns.len().to_string(),
+            );
             row_data.insert("relchecks".to_string(), "0".to_string());
             row_data.insert("relhasrules".to_string(), "f".to_string());
             row_data.insert("relhastriggers".to_string(), "f".to_string());
@@ -2867,7 +2887,10 @@ impl SqlExecutor {
                 let mut row_data = HashMap::new();
                 row_data.insert("attrelid".to_string(), table_oid.to_string());
                 row_data.insert("attname".to_string(), column.name.clone());
-                row_data.insert("atttypid".to_string(), Self::sql_type_to_oid(&column.data_type).to_string());
+                row_data.insert(
+                    "atttypid".to_string(),
+                    Self::sql_type_to_oid(&column.data_type).to_string(),
+                );
                 row_data.insert("attstattarget".to_string(), "-1".to_string());
                 row_data.insert("attlen".to_string(), "-1".to_string());
                 row_data.insert("attnum".to_string(), (attnum + 1).to_string());
@@ -2877,8 +2900,14 @@ impl SqlExecutor {
                 row_data.insert("attbyval".to_string(), "f".to_string());
                 row_data.insert("attstorage".to_string(), "x".to_string()); // extended
                 row_data.insert("attalign".to_string(), "i".to_string()); // int align
-                row_data.insert("attnotnull".to_string(), if column.nullable { "f" } else { "t" }.to_string());
-                row_data.insert("atthasdef".to_string(), if column.default.is_some() { "t" } else { "f" }.to_string());
+                row_data.insert(
+                    "attnotnull".to_string(),
+                    if column.nullable { "f" } else { "t" }.to_string(),
+                );
+                row_data.insert(
+                    "atthasdef".to_string(),
+                    if column.default.is_some() { "t" } else { "f" }.to_string(),
+                );
                 row_data.insert("atthasmissing".to_string(), "f".to_string());
                 row_data.insert("attidentity".to_string(), "".to_string());
                 row_data.insert("attgenerated".to_string(), "".to_string());
@@ -2901,10 +2930,7 @@ impl SqlExecutor {
     }
 
     /// Query pg_catalog.pg_type - type information
-    async fn query_pg_type(
-        &self,
-        columns: &[String],
-    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+    async fn query_pg_type(&self, columns: &[String]) -> ProtocolResult<Vec<Vec<Option<String>>>> {
         let mut rows = Vec::new();
 
         // Standard PostgreSQL types
@@ -3035,16 +3061,23 @@ impl SqlExecutor {
             for constraint in &table_schema.constraints {
                 let mut row_data = HashMap::new();
                 row_data.insert("oid".to_string(), oid.to_string());
-                row_data.insert("conname".to_string(), constraint.name.clone().unwrap_or_default());
+                row_data.insert(
+                    "conname".to_string(),
+                    constraint.name.clone().unwrap_or_default(),
+                );
                 row_data.insert("connamespace".to_string(), "2200".to_string());
-                row_data.insert("contype".to_string(), match constraint.constraint_type.as_str() {
-                    "PRIMARY KEY" => "p",
-                    "FOREIGN KEY" => "f",
-                    "UNIQUE" => "u",
-                    "CHECK" => "c",
-                    "EXCLUDE" => "x",
-                    _ => "c",
-                }.to_string());
+                row_data.insert(
+                    "contype".to_string(),
+                    match constraint.constraint_type.as_str() {
+                        "PRIMARY KEY" => "p",
+                        "FOREIGN KEY" => "f",
+                        "UNIQUE" => "u",
+                        "CHECK" => "c",
+                        "EXCLUDE" => "x",
+                        _ => "c",
+                    }
+                    .to_string(),
+                );
                 row_data.insert("condeferrable".to_string(), "f".to_string());
                 row_data.insert("condeferred".to_string(), "f".to_string());
                 row_data.insert("convalidated".to_string(), "t".to_string());
@@ -3083,8 +3116,24 @@ impl SqlExecutor {
 
         let databases = vec![
             (1, "template1", "10", "6", "en_US.UTF-8", "en_US.UTF-8", "t"),
-            (12345, "template0", "10", "6", "en_US.UTF-8", "en_US.UTF-8", "f"),
-            (16384, "orbit_demo", "10", "6", "en_US.UTF-8", "en_US.UTF-8", "t"),
+            (
+                12345,
+                "template0",
+                "10",
+                "6",
+                "en_US.UTF-8",
+                "en_US.UTF-8",
+                "f",
+            ),
+            (
+                16384,
+                "orbit_demo",
+                "10",
+                "6",
+                "en_US.UTF-8",
+                "en_US.UTF-8",
+                "t",
+            ),
         ];
 
         for (oid, datname, datdba, encoding, datcollate, datctype, datistemplate) in databases {
@@ -3145,10 +3194,7 @@ impl SqlExecutor {
     }
 
     /// Query pg_catalog.pg_views - view definitions
-    async fn query_pg_views(
-        &self,
-        columns: &[String],
-    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+    async fn query_pg_views(&self, columns: &[String]) -> ProtocolResult<Vec<Vec<Option<String>>>> {
         let views = self.views.read().await;
         let mut rows = Vec::new();
 
@@ -3190,27 +3236,107 @@ impl SqlExecutor {
 
         // Common PostgreSQL settings that clients often query
         let settings = vec![
-            ("server_version", "16.0", "PostgreSQL server version", "internal"),
-            ("server_version_num", "160000", "Server version number", "internal"),
-            ("server_encoding", "UTF8", "Server character set encoding", "preset"),
-            ("client_encoding", "UTF8", "Client character set encoding", "user"),
-            ("lc_collate", "en_US.UTF-8", "Database locale for collation", "preset"),
-            ("lc_ctype", "en_US.UTF-8", "Database locale for character classification", "preset"),
-            ("is_superuser", "on", "Whether current user is a superuser", "internal"),
-            ("session_authorization", "postgres", "Session authorization", "internal"),
-            ("standard_conforming_strings", "on", "Standard conforming strings", "user"),
+            (
+                "server_version",
+                "16.0",
+                "PostgreSQL server version",
+                "internal",
+            ),
+            (
+                "server_version_num",
+                "160000",
+                "Server version number",
+                "internal",
+            ),
+            (
+                "server_encoding",
+                "UTF8",
+                "Server character set encoding",
+                "preset",
+            ),
+            (
+                "client_encoding",
+                "UTF8",
+                "Client character set encoding",
+                "user",
+            ),
+            (
+                "lc_collate",
+                "en_US.UTF-8",
+                "Database locale for collation",
+                "preset",
+            ),
+            (
+                "lc_ctype",
+                "en_US.UTF-8",
+                "Database locale for character classification",
+                "preset",
+            ),
+            (
+                "is_superuser",
+                "on",
+                "Whether current user is a superuser",
+                "internal",
+            ),
+            (
+                "session_authorization",
+                "postgres",
+                "Session authorization",
+                "internal",
+            ),
+            (
+                "standard_conforming_strings",
+                "on",
+                "Standard conforming strings",
+                "user",
+            ),
             ("DateStyle", "ISO, MDY", "Date format style", "user"),
             ("TimeZone", "UTC", "Time zone", "user"),
-            ("IntervalStyle", "postgres", "Interval display style", "user"),
-            ("max_connections", "100", "Maximum number of connections", "postmaster"),
-            ("shared_buffers", "128MB", "Shared memory buffers", "postmaster"),
+            (
+                "IntervalStyle",
+                "postgres",
+                "Interval display style",
+                "user",
+            ),
+            (
+                "max_connections",
+                "100",
+                "Maximum number of connections",
+                "postmaster",
+            ),
+            (
+                "shared_buffers",
+                "128MB",
+                "Shared memory buffers",
+                "postmaster",
+            ),
             ("work_mem", "4MB", "Work memory", "user"),
-            ("maintenance_work_mem", "64MB", "Maintenance work memory", "user"),
-            ("default_transaction_isolation", "read committed", "Default transaction isolation level", "user"),
-            ("default_transaction_read_only", "off", "Default read-only transactions", "user"),
+            (
+                "maintenance_work_mem",
+                "64MB",
+                "Maintenance work memory",
+                "user",
+            ),
+            (
+                "default_transaction_isolation",
+                "read committed",
+                "Default transaction isolation level",
+                "user",
+            ),
+            (
+                "default_transaction_read_only",
+                "off",
+                "Default read-only transactions",
+                "user",
+            ),
             ("statement_timeout", "0", "Statement timeout (ms)", "user"),
             ("lock_timeout", "0", "Lock timeout (ms)", "user"),
-            ("idle_in_transaction_session_timeout", "0", "Idle in transaction timeout", "user"),
+            (
+                "idle_in_transaction_session_timeout",
+                "0",
+                "Idle in transaction timeout",
+                "user",
+            ),
             ("application_name", "", "Application name", "user"),
             ("search_path", "\"$user\", public", "Search path", "user"),
         ];
@@ -3296,10 +3422,7 @@ impl SqlExecutor {
     }
 
     /// Query pg_catalog.pg_proc - function definitions
-    async fn query_pg_proc(
-        &self,
-        columns: &[String],
-    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+    async fn query_pg_proc(&self, columns: &[String]) -> ProtocolResult<Vec<Vec<Option<String>>>> {
         let mut rows = Vec::new();
 
         // Common built-in functions that clients might query

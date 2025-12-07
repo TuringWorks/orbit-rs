@@ -677,11 +677,10 @@ impl AclCommands {
                 }
 
                 // Check if command is allowed (simplified check)
-                if user.categories.contains("+@all")
-                    && !user.denied_commands.contains(&command) {
-                        debug!("ACL DRYRUN {} {} -> OK", username, command);
-                        return Ok(RespValue::SimpleString("OK".to_string()));
-                    }
+                if user.categories.contains("+@all") && !user.denied_commands.contains(&command) {
+                    debug!("ACL DRYRUN {} {} -> OK", username, command);
+                    return Ok(RespValue::SimpleString("OK".to_string()));
+                }
 
                 if user.commands.contains(&command) {
                     debug!("ACL DRYRUN {} {} -> OK", username, command);

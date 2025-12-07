@@ -7,12 +7,14 @@ use super::{utilities, ParseError, ParseResult, SqlParser};
 use crate::protocols::postgres_wire::sql::{
     ast::{
         AlterColumnAction, AlterTableAction, AlterTableStatement, ColumnConstraint,
-        ColumnDefinition, CreateDatabaseStatement, CreateExtensionStatement,
-        CreateFunctionStatement, CreateIndexStatement, CreateSchemaStatement, CreateTableStatement,
-        CreateViewStatement, DropDatabaseStatement, DropExtensionStatement, DropIndexStatement,
-        DropSchemaStatement, DropTableStatement, DropViewStatement, FunctionLanguage, FunctionName,
-        FunctionParameter, FunctionVolatility, IndexColumn, IndexOption, IndexType, NullsOrder,
-        ParameterMode, SortDirection, Statement, TableConstraint, TableOption,
+        ColumnDefinition, CommentObjectType, CommentOnStatement, CreateDatabaseStatement,
+        CreateExtensionStatement, CreateFunctionStatement, CreateIndexStatement,
+        CreateSchemaStatement, CreateTableStatement, CreateTriggerStatement, CreateViewStatement,
+        DropDatabaseStatement, DropExtensionStatement, DropIndexStatement, DropSchemaStatement,
+        DropTableStatement, DropTriggerStatement, DropViewStatement, FunctionLanguage,
+        FunctionName, FunctionParameter, FunctionVolatility, IndexColumn, IndexOption, IndexType,
+        NullsOrder, ParameterMode, ReferentialAction, SortDirection, Statement, TableConstraint,
+        TableOption, TriggerEvent, TriggerForEach, TriggerTiming,
     },
     lexer::Token,
     types::SqlValue,
@@ -1161,11 +1163,30 @@ fn parse_column_definition(parser: &mut SqlParser) -> ParseResult<ColumnDefiniti
                     None
                 };
 
+                // Parse optional ON DELETE and ON UPDATE clauses
+                let mut on_delete = None;
+                let mut on_update = None;
+
+                while parser.matches(&[Token::On]) {
+                    parser.advance()?;
+                    match &parser.current_token {
+                        Some(Token::Delete) => {
+                            parser.advance()?;
+                            on_delete = Some(parse_referential_action(parser)?);
+                        }
+                        Some(Token::Update) => {
+                            parser.advance()?;
+                            on_update = Some(parse_referential_action(parser)?);
+                        }
+                        _ => break,
+                    }
+                }
+
                 constraints.push(ColumnConstraint::References {
                     table,
                     columns,
-                    on_delete: None, // TODO: Parse ON DELETE/UPDATE actions
-                    on_update: None,
+                    on_delete,
+                    on_update,
                 });
             }
             Some(Token::Check) => {
@@ -1264,13 +1285,152 @@ fn parse_table_constraint(parser: &mut SqlParser) -> ParseResult<TableConstraint
                 expression,
             })
         }
+        Some(Token::Foreign) => {
+            parser.advance()?;
+            parser.expect(Token::Key)?;
+            parser.expect(Token::LeftParen)?;
+
+            // Parse column list
+            let mut columns = Vec::new();
+            while !parser.matches(&[Token::RightParen]) {
+                if let Some(Token::Identifier(col_name)) = &parser.current_token {
+                    columns.push(col_name.clone());
+                    parser.advance()?;
+
+                    if parser.matches(&[Token::Comma]) {
+                        parser.advance()?;
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            parser.expect(Token::RightParen)?;
+            parser.expect(Token::References)?;
+
+            // Parse referenced table
+            let references_table = utilities::parse_table_name(parser)?;
+
+            // Parse referenced columns
+            parser.expect(Token::LeftParen)?;
+            let mut references_columns = Vec::new();
+            while !parser.matches(&[Token::RightParen]) {
+                if let Some(Token::Identifier(col_name)) = &parser.current_token {
+                    references_columns.push(col_name.clone());
+                    parser.advance()?;
+
+                    if parser.matches(&[Token::Comma]) {
+                        parser.advance()?;
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+            parser.expect(Token::RightParen)?;
+
+            // Parse optional ON DELETE and ON UPDATE clauses
+            let mut on_delete = None;
+            let mut on_update = None;
+
+            while parser.matches(&[Token::On]) {
+                parser.advance()?;
+                match &parser.current_token {
+                    Some(Token::Delete) => {
+                        parser.advance()?;
+                        on_delete = Some(parse_referential_action(parser)?);
+                    }
+                    Some(Token::Update) => {
+                        parser.advance()?;
+                        on_update = Some(parse_referential_action(parser)?);
+                    }
+                    _ => break,
+                }
+            }
+
+            Ok(TableConstraint::ForeignKey {
+                name: constraint_name,
+                columns,
+                references_table,
+                references_columns,
+                on_delete,
+                on_update,
+            })
+        }
         _ => Err(ParseError {
-            message: "Expected PRIMARY KEY, UNIQUE, or CHECK constraint".to_string(),
+            message: "Expected PRIMARY KEY, UNIQUE, CHECK, or FOREIGN KEY constraint".to_string(),
             position: parser.position,
             expected: vec![
                 "PRIMARY KEY".to_string(),
                 "UNIQUE".to_string(),
                 "CHECK".to_string(),
+                "FOREIGN KEY".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        }),
+    }
+}
+
+/// Parse referential action for ON DELETE / ON UPDATE
+fn parse_referential_action(parser: &mut SqlParser) -> ParseResult<ReferentialAction> {
+    match &parser.current_token {
+        Some(Token::Cascade) => {
+            parser.advance()?;
+            Ok(ReferentialAction::Cascade)
+        }
+        Some(Token::Set) => {
+            parser.advance()?;
+            match &parser.current_token {
+                Some(Token::Null) => {
+                    parser.advance()?;
+                    Ok(ReferentialAction::SetNull)
+                }
+                Some(Token::Default) => {
+                    parser.advance()?;
+                    Ok(ReferentialAction::SetDefault)
+                }
+                _ => Err(ParseError {
+                    message: "Expected NULL or DEFAULT after SET".to_string(),
+                    position: parser.position,
+                    expected: vec!["NULL".to_string(), "DEFAULT".to_string()],
+                    found: parser.current_token.clone(),
+                }),
+            }
+        }
+        Some(Token::Restrict) => {
+            parser.advance()?;
+            Ok(ReferentialAction::Restrict)
+        }
+        Some(Token::No) => {
+            parser.advance()?;
+            // Expect ACTION keyword (as identifier since NO ACTION is two words)
+            if let Some(Token::Identifier(id)) = &parser.current_token {
+                if id.to_uppercase() == "ACTION" {
+                    parser.advance()?;
+                    return Ok(ReferentialAction::NoAction);
+                }
+            }
+            Err(ParseError {
+                message: "Expected ACTION after NO".to_string(),
+                position: parser.position,
+                expected: vec!["ACTION".to_string()],
+                found: parser.current_token.clone(),
+            })
+        }
+        _ => Err(ParseError {
+            message:
+                "Expected referential action (CASCADE, SET NULL, SET DEFAULT, RESTRICT, NO ACTION)"
+                    .to_string(),
+            position: parser.position,
+            expected: vec![
+                "CASCADE".to_string(),
+                "SET NULL".to_string(),
+                "SET DEFAULT".to_string(),
+                "RESTRICT".to_string(),
+                "NO ACTION".to_string(),
             ],
             found: parser.current_token.clone(),
         }),
@@ -1523,4 +1683,486 @@ fn parse_index_options(parser: &mut SqlParser) -> ParseResult<Vec<IndexOption>> 
 
     parser.expect(Token::RightParen)?;
     Ok(options)
+}
+
+/// Parse CREATE TRIGGER statement
+pub fn parse_create_trigger(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Trigger)?;
+
+    // Parse trigger name
+    let name = if let Some(Token::Identifier(trigger_name)) = &parser.current_token {
+        let name = trigger_name.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected trigger name".to_string(),
+            position: parser.position,
+            expected: vec!["trigger name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse timing (BEFORE, AFTER, INSTEAD OF)
+    let timing = match &parser.current_token {
+        Some(Token::Before) => {
+            parser.advance()?;
+            TriggerTiming::Before
+        }
+        Some(Token::After) => {
+            parser.advance()?;
+            TriggerTiming::After
+        }
+        Some(Token::Instead) => {
+            parser.advance()?;
+            parser.expect(Token::Of)?;
+            TriggerTiming::InsteadOf
+        }
+        _ => {
+            return Err(ParseError {
+                message: "Expected BEFORE, AFTER, or INSTEAD OF".to_string(),
+                position: parser.position,
+                expected: vec![
+                    "BEFORE".to_string(),
+                    "AFTER".to_string(),
+                    "INSTEAD OF".to_string(),
+                ],
+                found: parser.current_token.clone(),
+            });
+        }
+    };
+
+    // Parse events (INSERT, UPDATE, DELETE, TRUNCATE)
+    let mut events = Vec::new();
+    loop {
+        let event = match &parser.current_token {
+            Some(Token::Insert) => {
+                parser.advance()?;
+                TriggerEvent::Insert
+            }
+            Some(Token::Update) => {
+                parser.advance()?;
+                // Check for OF column_list
+                let columns = if parser.matches(&[Token::Of]) {
+                    parser.advance()?;
+                    let mut cols = Vec::new();
+                    while let Some(Token::Identifier(col_name)) = &parser.current_token {
+                        cols.push(col_name.clone());
+                        parser.advance()?;
+                        // Check for comma and next column
+                        if parser.matches(&[Token::Comma]) {
+                            if let Some(Token::Identifier(_)) =
+                                parser.tokens.get(parser.position + 1)
+                            {
+                                parser.advance()?;
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                    if cols.is_empty() {
+                        None
+                    } else {
+                        Some(cols)
+                    }
+                } else {
+                    None
+                };
+                TriggerEvent::Update(columns)
+            }
+            Some(Token::Delete) => {
+                parser.advance()?;
+                TriggerEvent::Delete
+            }
+            Some(Token::Identifier(t)) if t.to_uppercase() == "TRUNCATE" => {
+                parser.advance()?;
+                TriggerEvent::Truncate
+            }
+            _ => break,
+        };
+        events.push(event);
+
+        // Check for OR to continue
+        if parser.matches(&[Token::Or]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    if events.is_empty() {
+        return Err(ParseError {
+            message: "Expected at least one trigger event (INSERT, UPDATE, DELETE, TRUNCATE)"
+                .to_string(),
+            position: parser.position,
+            expected: vec![
+                "INSERT".to_string(),
+                "UPDATE".to_string(),
+                "DELETE".to_string(),
+                "TRUNCATE".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    }
+
+    // Parse ON table_name
+    parser.expect(Token::On)?;
+    let table = utilities::parse_table_name(parser)?;
+
+    // Parse FOR EACH ROW or FOR EACH STATEMENT (optional, default is STATEMENT)
+    let for_each = if parser.matches(&[Token::For]) {
+        parser.advance()?;
+        parser.expect(Token::Each)?;
+        match &parser.current_token {
+            Some(Token::Row) => {
+                parser.advance()?;
+                TriggerForEach::Row
+            }
+            Some(Token::Statement) => {
+                parser.advance()?;
+                TriggerForEach::Statement
+            }
+            _ => TriggerForEach::Statement,
+        }
+    } else {
+        TriggerForEach::Statement
+    };
+
+    // Parse optional WHEN clause
+    let when_clause = if parser.matches(&[Token::When]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        let expr = utilities::parse_expression(parser)?;
+        parser.expect(Token::RightParen)?;
+        Some(expr)
+    } else {
+        None
+    };
+
+    // Parse EXECUTE FUNCTION/PROCEDURE function_name(args)
+    parser.expect(Token::Execute)?;
+    // Accept either FUNCTION or PROCEDURE
+    if parser.matches(&[Token::Function]) || parser.matches(&[Token::Procedure]) {
+        parser.advance()?;
+    }
+
+    // Parse function name
+    let function = if let Some(func_name) = parser
+        .current_token
+        .as_ref()
+        .and_then(utilities::token_to_identifier_name)
+    {
+        parser.advance()?;
+        FunctionName::Simple(func_name)
+    } else {
+        return Err(ParseError {
+            message: "Expected function name".to_string(),
+            position: parser.position,
+            expected: vec!["function name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse function arguments
+    parser.expect(Token::LeftParen)?;
+    let mut function_args = Vec::new();
+    if !parser.matches(&[Token::RightParen]) {
+        loop {
+            let arg = utilities::parse_expression(parser)?;
+            function_args.push(arg);
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+    }
+    parser.expect(Token::RightParen)?;
+
+    Ok(Statement::CreateTrigger(CreateTriggerStatement {
+        or_replace: false, // Set by caller if OR REPLACE was present
+        name,
+        timing,
+        events,
+        table,
+        for_each,
+        when_clause,
+        function,
+        function_args,
+    }))
+}
+
+/// Parse DROP TRIGGER statement
+pub fn parse_drop_trigger(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Trigger)?;
+
+    // Check for IF EXISTS
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    // Parse trigger name
+    let name = if let Some(Token::Identifier(trigger_name)) = &parser.current_token {
+        let n = trigger_name.clone();
+        parser.advance()?;
+        n
+    } else {
+        return Err(ParseError {
+            message: "Expected trigger name".to_string(),
+            position: parser.position,
+            expected: vec!["trigger name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse ON table_name
+    parser.expect(Token::On)?;
+    let table = utilities::parse_table_name(parser)?;
+
+    // Check for CASCADE
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropTrigger(DropTriggerStatement {
+        if_exists,
+        name,
+        table,
+        cascade,
+    }))
+}
+
+/// Parse COMMENT ON statement
+pub fn parse_comment_on(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::CommentKeyword)?;
+    parser.expect(Token::On)?;
+
+    // Parse object type
+    let (object_type, object_name, column_name) = match &parser.current_token {
+        Some(Token::Table) => {
+            parser.advance()?;
+            let name = utilities::parse_table_name(parser)?;
+            (CommentObjectType::Table, name.full_name(), None)
+        }
+        Some(Token::Column) => {
+            parser.advance()?;
+            // Parse table.column format
+            let table_name = utilities::parse_table_name(parser)?;
+            parser.expect(Token::Dot)?;
+            let col_name = if let Some(Token::Identifier(c)) = &parser.current_token {
+                let n = c.clone();
+                parser.advance()?;
+                n
+            } else {
+                return Err(ParseError {
+                    message: "Expected column name".to_string(),
+                    position: parser.position,
+                    expected: vec!["column name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            (
+                CommentObjectType::Column,
+                table_name.full_name(),
+                Some(col_name),
+            )
+        }
+        Some(Token::Index) => {
+            parser.advance()?;
+            let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let idx_name = n.clone();
+                parser.advance()?;
+                idx_name
+            } else {
+                return Err(ParseError {
+                    message: "Expected index name".to_string(),
+                    position: parser.position,
+                    expected: vec!["index name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            (CommentObjectType::Index, name, None)
+        }
+        Some(Token::View) => {
+            parser.advance()?;
+            let name = utilities::parse_table_name(parser)?;
+            (CommentObjectType::View, name.full_name(), None)
+        }
+        Some(Token::Schema) => {
+            parser.advance()?;
+            let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let schema_name = n.clone();
+                parser.advance()?;
+                schema_name
+            } else {
+                return Err(ParseError {
+                    message: "Expected schema name".to_string(),
+                    position: parser.position,
+                    expected: vec!["schema name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            (CommentObjectType::Schema, name, None)
+        }
+        Some(Token::Extension) => {
+            parser.advance()?;
+            let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let ext_name = n.clone();
+                parser.advance()?;
+                ext_name
+            } else if let Some(Token::QuotedIdentifier(n)) = &parser.current_token {
+                let ext_name = n.clone();
+                parser.advance()?;
+                ext_name
+            } else {
+                return Err(ParseError {
+                    message: "Expected extension name".to_string(),
+                    position: parser.position,
+                    expected: vec!["extension name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            (CommentObjectType::Extension, name, None)
+        }
+        Some(Token::Function) => {
+            parser.advance()?;
+            // Parse function name (possibly with signature)
+            let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let func_name = n.clone();
+                parser.advance()?;
+                func_name
+            } else {
+                return Err(ParseError {
+                    message: "Expected function name".to_string(),
+                    position: parser.position,
+                    expected: vec!["function name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            // Skip optional parameter list for now
+            if parser.matches(&[Token::LeftParen]) {
+                let mut depth = 1;
+                parser.advance()?;
+                while depth > 0 {
+                    match &parser.current_token {
+                        Some(Token::LeftParen) => depth += 1,
+                        Some(Token::RightParen) => depth -= 1,
+                        None => break,
+                        _ => {}
+                    }
+                    parser.advance()?;
+                }
+            }
+            (CommentObjectType::Function, name, None)
+        }
+        Some(Token::Trigger) => {
+            parser.advance()?;
+            let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let trigger_name = n.clone();
+                parser.advance()?;
+                trigger_name
+            } else {
+                return Err(ParseError {
+                    message: "Expected trigger name".to_string(),
+                    position: parser.position,
+                    expected: vec!["trigger name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            // Skip ON table_name
+            if parser.matches(&[Token::On]) {
+                parser.advance()?;
+                let _ = utilities::parse_table_name(parser)?;
+            }
+            (CommentObjectType::Trigger, name, None)
+        }
+        Some(Token::Constraint) => {
+            parser.advance()?;
+            let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let constraint_name = n.clone();
+                parser.advance()?;
+                constraint_name
+            } else {
+                return Err(ParseError {
+                    message: "Expected constraint name".to_string(),
+                    position: parser.position,
+                    expected: vec!["constraint name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            // Skip ON table_name if present
+            if parser.matches(&[Token::On]) {
+                parser.advance()?;
+                let _ = utilities::parse_table_name(parser)?;
+            }
+            (CommentObjectType::Constraint, name, None)
+        }
+        Some(Token::Database) => {
+            parser.advance()?;
+            let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let db_name = n.clone();
+                parser.advance()?;
+                db_name
+            } else {
+                return Err(ParseError {
+                    message: "Expected database name".to_string(),
+                    position: parser.position,
+                    expected: vec!["database name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            (CommentObjectType::Database, name, None)
+        }
+        _ => {
+            return Err(ParseError {
+                message: "Expected object type (TABLE, COLUMN, INDEX, etc.)".to_string(),
+                position: parser.position,
+                expected: vec![
+                    "TABLE".to_string(),
+                    "COLUMN".to_string(),
+                    "INDEX".to_string(),
+                    "VIEW".to_string(),
+                    "SCHEMA".to_string(),
+                    "FUNCTION".to_string(),
+                    "TRIGGER".to_string(),
+                ],
+                found: parser.current_token.clone(),
+            });
+        }
+    };
+
+    // Parse IS 'comment' or IS NULL
+    parser.expect(Token::Is)?;
+
+    let comment = if parser.matches(&[Token::Null]) {
+        parser.advance()?;
+        None
+    } else if let Some(Token::StringLiteral(s)) = &parser.current_token {
+        let c = s.clone();
+        parser.advance()?;
+        Some(c)
+    } else {
+        return Err(ParseError {
+            message: "Expected string literal or NULL after IS".to_string(),
+            position: parser.position,
+            expected: vec!["string literal".to_string(), "NULL".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::CommentOn(CommentOnStatement {
+        object_type,
+        object_name,
+        column_name,
+        comment,
+    }))
 }

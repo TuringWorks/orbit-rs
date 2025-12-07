@@ -758,8 +758,12 @@ pub async fn execute_sql_query(
     if request.query.trim().is_empty() {
         return (
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new("EMPTY_QUERY", "SQL query cannot be empty")),
-        ).into_response();
+            Json(ErrorResponse::new(
+                "EMPTY_QUERY",
+                "SQL query cannot be empty",
+            )),
+        )
+            .into_response();
     }
 
     // For now, return a mock response indicating the query was received
@@ -777,9 +781,7 @@ pub async fn execute_sql_query(
                 nullable: true,
             },
         ],
-        rows: vec![
-            vec![serde_json::json!(1), serde_json::json!("example")],
-        ],
+        rows: vec![vec![serde_json::json!(1), serde_json::json!("example")]],
         row_count: 1,
         rows_affected: None,
         execution_time_ms: start.elapsed().as_millis() as u64,
@@ -930,15 +932,13 @@ pub async fn list_tables(
     ),
     tag = "system"
 )]
-pub async fn get_database_stats(
-    State(state): State<ApiState>,
-) -> impl IntoResponse {
+pub async fn get_database_stats(State(state): State<ApiState>) -> impl IntoResponse {
     // Get client stats if available
     let client_stats = state.orbit_client.stats().await.ok();
 
     let stats = DatabaseStats {
-        table_count: 10, // Mock value
-        index_count: 15, // Mock value
+        table_count: 10,                     // Mock value
+        index_count: 15,                     // Mock value
         size_bytes: Some(1024 * 1024 * 100), // 100 MB mock
         active_connections: client_stats
             .as_ref()
@@ -967,9 +967,7 @@ pub async fn get_database_stats(
     ),
     tag = "sql"
 )]
-pub async fn list_schemas(
-    State(_state): State<ApiState>,
-) -> impl IntoResponse {
+pub async fn list_schemas(State(_state): State<ApiState>) -> impl IntoResponse {
     // Mock schema list - in full implementation, this would query the catalog
     let schemas = vec![
         SchemaInfo {
@@ -1047,14 +1045,12 @@ pub async fn describe_table(
             },
         ],
         primary_key: Some(vec!["id".to_string()]),
-        indexes: vec![
-            IndexInfo {
-                name: format!("{}_pkey", table),
-                columns: vec!["id".to_string()],
-                unique: true,
-                index_type: "btree".to_string(),
-            },
-        ],
+        indexes: vec![IndexInfo {
+            name: format!("{}_pkey", table),
+            columns: vec!["id".to_string()],
+            unique: true,
+            index_type: "btree".to_string(),
+        }],
         estimated_rows: Some(1000),
         size_bytes: Some(1024 * 100),
     };
@@ -1130,29 +1126,25 @@ pub async fn list_indexes(
     ),
     tag = "cluster"
 )]
-pub async fn list_cluster_nodes(
-    State(state): State<ApiState>,
-) -> impl IntoResponse {
+pub async fn list_cluster_nodes(State(state): State<ApiState>) -> impl IntoResponse {
     let node_id = state
         .orbit_client
         .node_id()
         .map(|n| n.key.clone())
         .unwrap_or_else(|| "local".to_string());
 
-    let nodes = vec![
-        ClusterNodeInfo {
-            node_id: node_id.clone(),
-            address: "127.0.0.1:50051".to_string(),
-            status: "healthy".to_string(),
-            role: "leader".to_string(),
-            cpu_usage: Some(45.2),
-            memory_usage: Some(62.8),
-            disk_usage: Some(38.5),
-            uptime_seconds: 86400,
-            actor_count: 150,
-            connection_count: 25,
-        },
-    ];
+    let nodes = vec![ClusterNodeInfo {
+        node_id: node_id.clone(),
+        address: "127.0.0.1:50051".to_string(),
+        status: "healthy".to_string(),
+        role: "leader".to_string(),
+        cpu_usage: Some(45.2),
+        memory_usage: Some(62.8),
+        disk_usage: Some(38.5),
+        uptime_seconds: 86400,
+        actor_count: 150,
+        connection_count: 25,
+    }];
 
     tracing::debug!("Cluster nodes listed via REST API");
 
@@ -1171,9 +1163,7 @@ pub async fn list_cluster_nodes(
     ),
     tag = "cluster"
 )]
-pub async fn get_cluster_status(
-    State(state): State<ApiState>,
-) -> impl IntoResponse {
+pub async fn get_cluster_status(State(state): State<ApiState>) -> impl IntoResponse {
     let client_stats = state.orbit_client.stats().await.ok();
 
     let status = ClusterStatus {
@@ -1182,10 +1172,7 @@ pub async fn get_cluster_status(
         total_nodes: 1,
         healthy_nodes: 1,
         unhealthy_nodes: 0,
-        total_actors: client_stats
-            .as_ref()
-            .map(|_| 150)
-            .unwrap_or(0),
+        total_actors: client_stats.as_ref().map(|_| 150).unwrap_or(0),
         replication_factor: 3,
         consistency_level: "quorum".to_string(),
     };
@@ -1261,9 +1248,7 @@ pub async fn get_query_history(
     ),
     tag = "system"
 )]
-pub async fn get_server_config(
-    State(_state): State<ApiState>,
-) -> impl IntoResponse {
+pub async fn get_server_config(State(_state): State<ApiState>) -> impl IntoResponse {
     let config = ServerConfig {
         version: env!("CARGO_PKG_VERSION").to_string(),
         protocols: vec![

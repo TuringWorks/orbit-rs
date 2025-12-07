@@ -320,7 +320,7 @@ impl Collection {
                 // Apply update
                 apply_update(&mut doc, update_spec);
                 self.documents.insert(key, doc.clone());
-                
+
                 if new_doc {
                     return Some(doc);
                 } else {
@@ -333,19 +333,19 @@ impl Collection {
             // No match and upsert is true - insert new document
             if let Some(update_spec) = update {
                 let mut inserted_doc = query.clone();
-                
+
                 // Apply update operators to create the new document
                 apply_update(&mut inserted_doc, update_spec);
-                
+
                 // Generate _id if not present
                 if !inserted_doc.contains_key("_id") {
                     inserted_doc.insert("_id", Bson::ObjectId(ObjectId::new()));
                 }
-                
+
                 let id = inserted_doc.get("_id").cloned().unwrap();
                 let key = Self::bson_to_key(&id);
                 self.documents.insert(key, inserted_doc.clone());
-                
+
                 if new_doc {
                     return Some(inserted_doc);
                 } else {
@@ -360,7 +360,7 @@ impl Collection {
     /// Find distinct values for a field
     pub fn distinct(&self, key: &str, query: Option<&Document>) -> Vec<Bson> {
         use std::collections::HashSet;
-        
+
         // Get documents matching the query (or all if no query)
         let docs: Vec<&Document> = if let Some(filter) = query {
             self.documents
@@ -909,17 +909,30 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
                             if push_doc.contains_key("$each") {
                                 // Handle $each with optional modifiers ($slice, $sort, $position)
                                 let each_values = push_doc.get_array("$each").ok();
-                                let slice = push_doc.get_i32("$slice").ok().or_else(|| push_doc.get_i64("$slice").ok().map(|v| v as i32));
-                                let position = push_doc.get_i32("$position").ok().or_else(|| push_doc.get_i64("$position").ok().map(|v| v as i32));
+                                let slice = push_doc
+                                    .get_i32("$slice")
+                                    .ok()
+                                    .or_else(|| push_doc.get_i64("$slice").ok().map(|v| v as i32));
+                                let position = push_doc.get_i32("$position").ok().or_else(|| {
+                                    push_doc.get_i64("$position").ok().map(|v| v as i32)
+                                });
                                 let sort = push_doc.get_document("$sort").ok();
 
                                 if let Some(values) = each_values {
-                                    let arr = doc.entry(key.clone()).or_insert_with(|| Bson::Array(Vec::new()));
+                                    let arr = doc
+                                        .entry(key.clone())
+                                        .or_insert_with(|| Bson::Array(Vec::new()));
                                     if let Bson::Array(arr) = arr {
                                         // Insert at position or append
-                                        let insert_pos = position.map(|p| {
-                                            if p >= 0 { p as usize } else { (arr.len() as i32 + p).max(0) as usize }
-                                        }).unwrap_or(arr.len());
+                                        let insert_pos = position
+                                            .map(|p| {
+                                                if p >= 0 {
+                                                    p as usize
+                                                } else {
+                                                    (arr.len() as i32 + p).max(0) as usize
+                                                }
+                                            })
+                                            .unwrap_or(arr.len());
 
                                         for (i, v) in values.iter().enumerate() {
                                             arr.insert(insert_pos + i, v.clone());
@@ -927,17 +940,32 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
 
                                         // Apply $sort if specified
                                         if let Some(sort_doc) = sort {
-                                            if let Some((sort_field, sort_order)) = sort_doc.iter().next() {
+                                            if let Some((sort_field, sort_order)) =
+                                                sort_doc.iter().next()
+                                            {
                                                 let order = match sort_order {
                                                     Bson::Int32(n) => *n,
                                                     Bson::Int64(n) => *n as i32,
                                                     _ => 1,
                                                 };
                                                 arr.sort_by(|a, b| {
-                                                    let a_val = if let Bson::Document(d) = a { d.get(sort_field) } else { None };
-                                                    let b_val = if let Bson::Document(d) = b { d.get(sort_field) } else { None };
-                                                    let cmp = compare_bson_values_direct(a_val, b_val);
-                                                    if order < 0 { cmp.reverse() } else { cmp }
+                                                    let a_val = if let Bson::Document(d) = a {
+                                                        d.get(sort_field)
+                                                    } else {
+                                                        None
+                                                    };
+                                                    let b_val = if let Bson::Document(d) = b {
+                                                        d.get(sort_field)
+                                                    } else {
+                                                        None
+                                                    };
+                                                    let cmp =
+                                                        compare_bson_values_direct(a_val, b_val);
+                                                    if order < 0 {
+                                                        cmp.reverse()
+                                                    } else {
+                                                        cmp
+                                                    }
                                                 });
                                             }
                                         }
@@ -1020,7 +1048,9 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
                 // $pullAll removes all matching values from an array
                 if let Bson::Document(fields) = op_value {
                     for (key, values_to_remove) in fields.iter() {
-                        if let (Some(Bson::Array(arr)), Bson::Array(remove_arr)) = (doc.get_mut(key), values_to_remove) {
+                        if let (Some(Bson::Array(arr)), Bson::Array(remove_arr)) =
+                            (doc.get_mut(key), values_to_remove)
+                        {
                             let before_len = arr.len();
                             arr.retain(|v| !remove_arr.contains(v));
                             if arr.len() != before_len {
@@ -1036,7 +1066,9 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
                         // Check for $each modifier
                         if let Bson::Document(add_doc) = add_value {
                             if let Ok(each_values) = add_doc.get_array("$each") {
-                                let arr = doc.entry(key.clone()).or_insert_with(|| Bson::Array(Vec::new()));
+                                let arr = doc
+                                    .entry(key.clone())
+                                    .or_insert_with(|| Bson::Array(Vec::new()));
                                 if let Bson::Array(arr) = arr {
                                     for v in each_values {
                                         if !arr.contains(v) {
@@ -1217,9 +1249,7 @@ impl Database {
     }
 
     pub fn get_or_create_collection(&mut self, name: &str) -> &mut Collection {
-        self.collections
-            .entry(name.to_string())
-            .or_default()
+        self.collections.entry(name.to_string()).or_default()
     }
 
     pub fn get_collection(&self, name: &str) -> Option<&Collection> {
@@ -1723,13 +1753,13 @@ mod tests {
     }
 
     // Trigonometric Operators Tests (20 tests)
-    
+
     #[test]
     fn test_trig_sin() {
         let doc = doc! { "angle": 0.0 };
         let result = eval_expr(doc! { "$sin": "$angle" }, &doc);
         assert_eq!(result, Bson::Double(0.0));
-        
+
         let doc2 = doc! { "angle": std::f64::consts::PI / 2.0 };
         let result2 = eval_expr(doc! { "$sin": "$angle" }, &doc2);
         assert!((bson_to_f64(&result2).unwrap() - 1.0).abs() < 0.0001);
@@ -1740,7 +1770,7 @@ mod tests {
         let doc = doc! { "angle": 0.0 };
         let result = eval_expr(doc! { "$cos": "$angle" }, &doc);
         assert_eq!(result, Bson::Double(1.0));
-        
+
         let doc2 = doc! { "angle": std::f64::consts::PI };
         let result2 = eval_expr(doc! { "$cos": "$angle" }, &doc2);
         assert!((bson_to_f64(&result2).unwrap() + 1.0).abs() < 0.0001);
@@ -1751,7 +1781,7 @@ mod tests {
         let doc = doc! { "angle": 0.0 };
         let result = eval_expr(doc! { "$tan": "$angle" }, &doc);
         assert_eq!(result, Bson::Double(0.0));
-        
+
         let doc2 = doc! { "angle": std::f64::consts::PI / 4.0 };
         let result2 = eval_expr(doc! { "$tan": "$angle" }, &doc2);
         assert!((bson_to_f64(&result2).unwrap() - 1.0).abs() < 0.0001);
@@ -1762,7 +1792,7 @@ mod tests {
         let doc = doc! { "value": 0.5 };
         let result = eval_expr(doc! { "$asin": "$value" }, &doc);
         assert!((bson_to_f64(&result).unwrap() - (std::f64::consts::PI / 6.0)).abs() < 0.0001);
-        
+
         // Test domain error
         let doc2 = doc! { "value": 2.0 };
         let result2 = eval_expr(doc! { "$asin": "$value" }, &doc2);
@@ -1774,7 +1804,7 @@ mod tests {
         let doc = doc! { "value": 0.5 };
         let result = eval_expr(doc! { "$acos": "$value" }, &doc);
         assert!((bson_to_f64(&result).unwrap() - (std::f64::consts::PI / 3.0)).abs() < 0.0001);
-        
+
         // Test domain error
         let doc2 = doc! { "value": -2.0 };
         let result2 = eval_expr(doc! { "$acos": "$value" }, &doc2);
@@ -1828,7 +1858,7 @@ mod tests {
         let doc = doc! { "value": 1.0 };
         let result = eval_expr(doc! { "$acosh": "$value" }, &doc);
         assert_eq!(result, Bson::Double(0.0));
-        
+
         // Test domain error
         let doc2 = doc! { "value": 0.5 };
         let result2 = eval_expr(doc! { "$acosh": "$value" }, &doc2);
@@ -1840,7 +1870,7 @@ mod tests {
         let doc = doc! { "value": 0.0 };
         let result = eval_expr(doc! { "$atanh": "$value" }, &doc);
         assert_eq!(result, Bson::Double(0.0));
-        
+
         // Test domain error
         let doc2 = doc! { "value": 1.5 };
         let result2 = eval_expr(doc! { "$atanh": "$value" }, &doc2);
@@ -1874,7 +1904,7 @@ mod tests {
         let doc = doc! { "angle": 0.5 };
         let sin_result = eval_expr(doc! { "$sin": "$angle" }, &doc);
         let cos_result = eval_expr(doc! { "$cos": "$angle" }, &doc);
-        
+
         let sin_val = bson_to_f64(&sin_result).unwrap();
         let cos_val = bson_to_f64(&cos_result).unwrap();
         assert!((sin_val * sin_val + cos_val * cos_val - 1.0).abs() < 0.0001);
@@ -1920,13 +1950,14 @@ mod tests {
     #[test]
     fn test_zip_basic() {
         let doc = doc! { "arr1": [1, 2, 3], "arr2": ["a", "b", "c"] };
-        let result = eval_expr(doc! { "$zip": { "inputs": ["$arr1", "$arr2"] } },
-            &doc
-        );
-        
+        let result = eval_expr(doc! { "$zip": { "inputs": ["$arr1", "$arr2"] } }, &doc);
+
         if let Bson::Array(arr) = result {
             assert_eq!(arr.len(), 3);
-            assert_eq!(arr[0], Bson::Array(vec![Bson::Int32(1), Bson::String("a".to_string())]));
+            assert_eq!(
+                arr[0],
+                Bson::Array(vec![Bson::Int32(1), Bson::String("a".to_string())])
+            );
         } else {
             panic!("Expected array result");
         }
@@ -1935,10 +1966,8 @@ mod tests {
     #[test]
     fn test_zip_different_lengths() {
         let doc = doc! { "arr1": [1, 2], "arr2": ["a", "b", "c"] };
-        let result = eval_expr(doc! { "$zip": { "inputs": ["$arr1", "$arr2"] } },
-            &doc
-        );
-        
+        let result = eval_expr(doc! { "$zip": { "inputs": ["$arr1", "$arr2"] } }, &doc);
+
         if let Bson::Array(arr) = result {
             assert_eq!(arr.len(), 2); // Shortest length
         } else {
@@ -1949,10 +1978,11 @@ mod tests {
     #[test]
     fn test_zip_use_longest() {
         let doc = doc! { "arr1": [1, 2], "arr2": ["a", "b", "c"] };
-        let result = eval_expr(doc! { "$zip": { "inputs": ["$arr1", "$arr2"], "useLongestLength": true } },
-            &doc
+        let result = eval_expr(
+            doc! { "$zip": { "inputs": ["$arr1", "$arr2"], "useLongestLength": true } },
+            &doc,
         );
-        
+
         if let Bson::Array(arr) = result {
             assert_eq!(arr.len(), 3); // Longest length
         } else {
@@ -1963,16 +1993,17 @@ mod tests {
     #[test]
     fn test_zip_with_defaults() {
         let doc = doc! { "arr1": [1, 2], "arr2": ["a", "b", "c"] };
-        let result = eval_expr(doc! { 
-                "$zip": { 
-                    "inputs": ["$arr1", "$arr2"], 
+        let result = eval_expr(
+            doc! {
+                "$zip": {
+                    "inputs": ["$arr1", "$arr2"],
                     "useLongestLength": true,
                     "defaults": [0, "x"]
-                } 
+                }
             },
-            &doc
+            &doc,
         );
-        
+
         if let Bson::Array(arr) = result {
             assert_eq!(arr.len(), 3);
             if let Bson::Array(last) = &arr[2] {
@@ -1987,13 +2018,19 @@ mod tests {
     fn test_range_basic() {
         let doc = doc! {};
         let result = eval_expr(doc! { "$range": [0, 5] }, &doc);
-        
+
         if let Bson::Array(arr) = result {
             assert_eq!(arr.len(), 5);
-            assert_eq!(arr, vec![
-                Bson::Int32(0), Bson::Int32(1), Bson::Int32(2), 
-                Bson::Int32(3), Bson::Int32(4)
-            ]);
+            assert_eq!(
+                arr,
+                vec![
+                    Bson::Int32(0),
+                    Bson::Int32(1),
+                    Bson::Int32(2),
+                    Bson::Int32(3),
+                    Bson::Int32(4)
+                ]
+            );
         } else {
             panic!("Expected array result");
         }
@@ -2003,12 +2040,18 @@ mod tests {
     fn test_range_with_step() {
         let doc = doc! {};
         let result = eval_expr(doc! { "$range": [0, 10, 2] }, &doc);
-        
+
         if let Bson::Array(arr) = result {
-            assert_eq!(arr, vec![
-                Bson::Int32(0), Bson::Int32(2), Bson::Int32(4), 
-                Bson::Int32(6), Bson::Int32(8)
-            ]);
+            assert_eq!(
+                arr,
+                vec![
+                    Bson::Int32(0),
+                    Bson::Int32(2),
+                    Bson::Int32(4),
+                    Bson::Int32(6),
+                    Bson::Int32(8)
+                ]
+            );
         } else {
             panic!("Expected array result");
         }
@@ -2018,12 +2061,18 @@ mod tests {
     fn test_range_negative_step() {
         let doc = doc! {};
         let result = eval_expr(doc! { "$range": [10, 0, -2] }, &doc);
-        
+
         if let Bson::Array(arr) = result {
-            assert_eq!(arr, vec![
-                Bson::Int32(10), Bson::Int32(8), Bson::Int32(6), 
-                Bson::Int32(4), Bson::Int32(2)
-            ]);
+            assert_eq!(
+                arr,
+                vec![
+                    Bson::Int32(10),
+                    Bson::Int32(8),
+                    Bson::Int32(6),
+                    Bson::Int32(4),
+                    Bson::Int32(2)
+                ]
+            );
         } else {
             panic!("Expected array result");
         }
@@ -2040,7 +2089,7 @@ mod tests {
     fn test_range_empty() {
         let doc = doc! {};
         let result = eval_expr(doc! { "$range": [5, 5] }, &doc);
-        
+
         if let Bson::Array(arr) = result {
             assert_eq!(arr.len(), 0);
         } else {
@@ -2160,8 +2209,9 @@ mod tests {
     #[test]
     fn test_date_from_parts_basic() {
         let doc = doc! {};
-        let result = eval_expr(doc! { "$dateFromParts": { "year": 2024, "month": 1, "day": 15 } },
-            &doc
+        let result = eval_expr(
+            doc! { "$dateFromParts": { "year": 2024, "month": 1, "day": 15 } },
+            &doc,
         );
         assert!(matches!(result, Bson::DateTime(_)));
     }
@@ -2169,13 +2219,14 @@ mod tests {
     #[test]
     fn test_date_from_parts_with_time() {
         let doc = doc! {};
-        let result = eval_expr(doc! { 
-                "$dateFromParts": { 
+        let result = eval_expr(
+            doc! {
+                "$dateFromParts": {
                     "year": 2024, "month": 1, "day": 15,
                     "hour": 10, "minute": 30, "second": 45
-                } 
+                }
             },
-            &doc
+            &doc,
         );
         assert!(matches!(result, Bson::DateTime(_)));
     }
@@ -2183,8 +2234,9 @@ mod tests {
     #[test]
     fn test_date_from_string_iso() {
         let doc = doc! {};
-        let result = eval_expr(doc! { "$dateFromString": { "dateString": "2024-01-15T10:30:00Z" } },
-            &doc
+        let result = eval_expr(
+            doc! { "$dateFromString": { "dateString": "2024-01-15T10:30:00Z" } },
+            &doc,
         );
         assert!(matches!(result, Bson::DateTime(_)));
     }
@@ -2195,7 +2247,7 @@ mod tests {
         let dt = DateTime::now();
         let doc = doc! { "date": dt };
         let result = eval_expr(doc! { "$dateToParts": { "date": "$date" } }, &doc);
-        
+
         if let Bson::Document(parts) = result {
             assert!(parts.contains_key("year"));
             assert!(parts.contains_key("month"));
@@ -2210,8 +2262,9 @@ mod tests {
         use bson::DateTime;
         let dt = DateTime::now();
         let doc = doc! { "date": dt };
-        let result = eval_expr(doc! { "$dateAdd": { "startDate": "$date", "unit": "day", "amount": 7 } },
-            &doc
+        let result = eval_expr(
+            doc! { "$dateAdd": { "startDate": "$date", "unit": "day", "amount": 7 } },
+            &doc,
         );
         assert!(matches!(result, Bson::DateTime(_)));
     }
@@ -2221,8 +2274,9 @@ mod tests {
         use bson::DateTime;
         let dt = DateTime::now();
         let doc = doc! { "date": dt };
-        let result = eval_expr(doc! { "$dateAdd": { "startDate": "$date", "unit": "month", "amount": 3 } },
-            &doc
+        let result = eval_expr(
+            doc! { "$dateAdd": { "startDate": "$date", "unit": "month", "amount": 3 } },
+            &doc,
         );
         assert!(matches!(result, Bson::DateTime(_)));
     }
@@ -2232,8 +2286,9 @@ mod tests {
         use bson::DateTime;
         let dt = DateTime::now();
         let doc = doc! { "date": dt };
-        let result = eval_expr(doc! { "$dateSubtract": { "startDate": "$date", "unit": "day", "amount": 7 } },
-            &doc
+        let result = eval_expr(
+            doc! { "$dateSubtract": { "startDate": "$date", "unit": "day", "amount": 7 } },
+            &doc,
         );
         assert!(matches!(result, Bson::DateTime(_)));
     }
@@ -2244,8 +2299,9 @@ mod tests {
         let dt1 = DateTime::now();
         let dt2 = DateTime::now();
         let doc = doc! { "date1": dt1, "date2": dt2 };
-        let result = eval_expr(doc! { "$dateDiff": { "startDate": "$date1", "endDate": "$date2", "unit": "day" } },
-            &doc
+        let result = eval_expr(
+            doc! { "$dateDiff": { "startDate": "$date1", "endDate": "$date2", "unit": "day" } },
+            &doc,
         );
         assert!(matches!(result, Bson::Int64(_)));
     }
@@ -2255,8 +2311,9 @@ mod tests {
         use bson::DateTime;
         let dt = DateTime::now();
         let doc = doc! { "date": dt };
-        let result = eval_expr(doc! { "$dateTrunc": { "date": "$date", "unit": "day" } },
-            &doc
+        let result = eval_expr(
+            doc! { "$dateTrunc": { "date": "$date", "unit": "day" } },
+            &doc,
         );
         assert!(matches!(result, Bson::DateTime(_)));
     }
@@ -2267,7 +2324,7 @@ mod tests {
         let dt = DateTime::now();
         let doc = doc! { "date": dt };
         let result = eval_expr(doc! { "$isoWeek": "$date" }, &doc);
-        
+
         if let Bson::Int32(week) = result {
             assert!((1..=53).contains(&week));
         } else {
@@ -2290,7 +2347,7 @@ mod tests {
         let dt = DateTime::now();
         let doc = doc! { "date": dt };
         let result = eval_expr(doc! { "$isoDayOfWeek": "$date" }, &doc);
-        
+
         if let Bson::Int32(day) = result {
             assert!((1..=7).contains(&day));
         } else {
@@ -2304,7 +2361,7 @@ mod tests {
         let dt = DateTime::now();
         let doc = doc! { "date": dt };
         let result = eval_expr(doc! { "$millisecond": "$date" }, &doc);
-        
+
         if let Bson::Int32(ms) = result {
             assert!((0..1000).contains(&ms));
         } else {
@@ -2318,7 +2375,7 @@ mod tests {
         let dt = DateTime::now();
         let doc = doc! { "date": dt };
         let result = eval_expr(doc! { "$week": "$date" }, &doc);
-        
+
         if let Bson::Int32(week) = result {
             assert!((0..=53).contains(&week));
         } else {
@@ -2332,8 +2389,9 @@ mod tests {
         use bson::DateTime;
         let dt = DateTime::now();
         let doc = doc! { "date": dt };
-        let result = eval_expr(doc! { "$dateAdd": { "startDate": "$date", "unit": "hour", "amount": 24 } },
-            &doc
+        let result = eval_expr(
+            doc! { "$dateAdd": { "startDate": "$date", "unit": "hour", "amount": 24 } },
+            &doc,
         );
         assert!(matches!(result, Bson::DateTime(_)));
     }
@@ -2343,8 +2401,9 @@ mod tests {
         use bson::DateTime;
         let dt = DateTime::now();
         let doc = doc! { "date": dt };
-        let result = eval_expr(doc! { "$dateAdd": { "startDate": "$date", "unit": "minute", "amount": 60 } },
-            &doc
+        let result = eval_expr(
+            doc! { "$dateAdd": { "startDate": "$date", "unit": "minute", "amount": 60 } },
+            &doc,
         );
         assert!(matches!(result, Bson::DateTime(_)));
     }
@@ -2355,8 +2414,9 @@ mod tests {
         let dt1 = DateTime::now();
         let dt2 = DateTime::now();
         let doc = doc! { "date1": dt1, "date2": dt2 };
-        let result = eval_expr(doc! { "$dateDiff": { "startDate": "$date1", "endDate": "$date2", "unit": "hour" } },
-            &doc
+        let result = eval_expr(
+            doc! { "$dateDiff": { "startDate": "$date1", "endDate": "$date2", "unit": "hour" } },
+            &doc,
         );
         assert!(matches!(result, Bson::Int64(_)));
     }
@@ -2366,8 +2426,9 @@ mod tests {
         use bson::DateTime;
         let dt = DateTime::now();
         let doc = doc! { "date": dt };
-        let result = eval_expr(doc! { "$dateTrunc": { "date": "$date", "unit": "month" } },
-            &doc
+        let result = eval_expr(
+            doc! { "$dateTrunc": { "date": "$date", "unit": "month" } },
+            &doc,
         );
         assert!(matches!(result, Bson::DateTime(_)));
     }
@@ -2377,8 +2438,9 @@ mod tests {
         use bson::DateTime;
         let dt = DateTime::now();
         let doc = doc! { "date": dt };
-        let result = eval_expr(doc! { "$dateTrunc": { "date": "$date", "unit": "year" } },
-            &doc
+        let result = eval_expr(
+            doc! { "$dateTrunc": { "date": "$date", "unit": "year" } },
+            &doc,
         );
         assert!(matches!(result, Bson::DateTime(_)));
     }
@@ -2395,8 +2457,9 @@ mod tests {
     #[test]
     fn test_find_and_modify_update_return_original() {
         let mut coll = Collection::new();
-        coll.insert_one(doc! { "name": "Alice", "score": 100 }).unwrap();
-        
+        coll.insert_one(doc! { "name": "Alice", "score": 100 })
+            .unwrap();
+
         let result = coll.find_and_modify(
             &doc! { "name": "Alice" },
             None,
@@ -2405,11 +2468,11 @@ mod tests {
             false,
             false,
         );
-        
+
         assert!(result.is_some());
         let doc = result.unwrap();
         assert_eq!(doc.get_i32("score").unwrap(), 100); // Original value
-        
+
         // Verify update was applied
         let updated = coll.find_one(&doc! { "name": "Alice" }).unwrap();
         assert_eq!(updated.get_i32("score").unwrap(), 150);
@@ -2418,8 +2481,9 @@ mod tests {
     #[test]
     fn test_find_and_modify_update_return_new() {
         let mut coll = Collection::new();
-        coll.insert_one(doc! { "name": "Bob", "score": 200 }).unwrap();
-        
+        coll.insert_one(doc! { "name": "Bob", "score": 200 })
+            .unwrap();
+
         let result = coll.find_and_modify(
             &doc! { "name": "Bob" },
             None,
@@ -2428,7 +2492,7 @@ mod tests {
             true,
             false,
         );
-        
+
         assert!(result.is_some());
         let doc = result.unwrap();
         assert_eq!(doc.get_i32("score").unwrap(), 250); // New value
@@ -2437,21 +2501,16 @@ mod tests {
     #[test]
     fn test_find_and_modify_remove() {
         let mut coll = Collection::new();
-        coll.insert_one(doc! { "name": "Charlie", "score": 300 }).unwrap();
-        
-        let result = coll.find_and_modify(
-            &doc! { "name": "Charlie" },
-            None,
-            None,
-            true,
-            false,
-            false,
-        );
-        
+        coll.insert_one(doc! { "name": "Charlie", "score": 300 })
+            .unwrap();
+
+        let result =
+            coll.find_and_modify(&doc! { "name": "Charlie" }, None, None, true, false, false);
+
         assert!(result.is_some());
         let doc = result.unwrap();
         assert_eq!(doc.get_str("name").unwrap(), "Charlie");
-        
+
         // Verify document was removed
         assert_eq!(coll.count(&doc! { "name": "Charlie" }), 0);
     }
@@ -2459,7 +2518,7 @@ mod tests {
     #[test]
     fn test_find_and_modify_upsert_no_match() {
         let mut coll = Collection::new();
-        
+
         let result = coll.find_and_modify(
             &doc! { "name": "David" },
             None,
@@ -2468,12 +2527,12 @@ mod tests {
             true,
             true,
         );
-        
+
         assert!(result.is_some());
         let doc = result.unwrap();
         assert_eq!(doc.get_str("name").unwrap(), "David");
         assert_eq!(doc.get_i32("score").unwrap(), 400);
-        
+
         // Verify document was inserted
         assert_eq!(coll.count(&doc! { "name": "David" }), 1);
     }
@@ -2481,10 +2540,13 @@ mod tests {
     #[test]
     fn test_find_and_modify_with_sort() {
         let mut coll = Collection::new();
-        coll.insert_one(doc! { "type": "test", "value": 10 }).unwrap();
-        coll.insert_one(doc! { "type": "test", "value": 20 }).unwrap();
-        coll.insert_one(doc! { "type": "test", "value": 15 }).unwrap();
-        
+        coll.insert_one(doc! { "type": "test", "value": 10 })
+            .unwrap();
+        coll.insert_one(doc! { "type": "test", "value": 20 })
+            .unwrap();
+        coll.insert_one(doc! { "type": "test", "value": 15 })
+            .unwrap();
+
         let result = coll.find_and_modify(
             &doc! { "type": "test" },
             Some(&doc! { "value": -1 }), // Sort descending
@@ -2493,7 +2555,7 @@ mod tests {
             false,
             false,
         );
-        
+
         assert!(result.is_some());
         let doc = result.unwrap();
         assert_eq!(doc.get_i32("value").unwrap(), 20); // Highest value
@@ -2503,7 +2565,7 @@ mod tests {
     fn test_find_and_modify_no_match() {
         let mut coll = Collection::new();
         coll.insert_one(doc! { "name": "Eve" }).unwrap();
-        
+
         let result = coll.find_and_modify(
             &doc! { "name": "Frank" },
             None,
@@ -2512,14 +2574,14 @@ mod tests {
             false,
             false,
         );
-        
+
         assert!(result.is_none());
     }
 
     #[test]
     fn test_find_and_modify_upsert_return_original() {
         let mut coll = Collection::new();
-        
+
         let result = coll.find_and_modify(
             &doc! { "name": "Grace" },
             None,
@@ -2528,7 +2590,7 @@ mod tests {
             false,
             true,
         );
-        
+
         assert!(result.is_none()); // Original was null since we inserted
         assert_eq!(coll.count(&doc! { "name": "Grace" }), 1);
     }
@@ -2536,8 +2598,9 @@ mod tests {
     #[test]
     fn test_find_and_modify_multiple_updates() {
         let mut coll = Collection::new();
-        coll.insert_one(doc! { "name": "Henry", "x": 1, "y": 2 }).unwrap();
-        
+        coll.insert_one(doc! { "name": "Henry", "x": 1, "y": 2 })
+            .unwrap();
+
         let result = coll.find_and_modify(
             &doc! { "name": "Henry" },
             None,
@@ -2546,7 +2609,7 @@ mod tests {
             true,
             false,
         );
-        
+
         assert!(result.is_some());
         let doc = result.unwrap();
         assert_eq!(doc.get_i32("x").unwrap(), 11);
@@ -2556,7 +2619,7 @@ mod tests {
     #[test]
     fn test_find_and_modify_empty_collection() {
         let mut coll = Collection::new();
-        
+
         let result = coll.find_and_modify(
             &doc! { "name": "Ivy" },
             None,
@@ -2565,16 +2628,18 @@ mod tests {
             false,
             false,
         );
-        
+
         assert!(result.is_none());
     }
 
     #[test]
     fn test_find_and_modify_complex_query() {
         let mut coll = Collection::new();
-        coll.insert_one(doc! { "status": "active", "priority": 1 }).unwrap();
-        coll.insert_one(doc! { "status": "active", "priority": 2 }).unwrap();
-        
+        coll.insert_one(doc! { "status": "active", "priority": 1 })
+            .unwrap();
+        coll.insert_one(doc! { "status": "active", "priority": 2 })
+            .unwrap();
+
         let result = coll.find_and_modify(
             &doc! { "status": "active", "priority": { "$gt": 1 } },
             None,
@@ -2583,7 +2648,7 @@ mod tests {
             true,
             false,
         );
-        
+
         assert!(result.is_some());
         let doc = result.unwrap();
         assert!(doc.get_bool("processed").unwrap());
@@ -2598,7 +2663,7 @@ mod tests {
         coll.insert_one(doc! { "city": "LA" }).unwrap();
         coll.insert_one(doc! { "city": "NYC" }).unwrap();
         coll.insert_one(doc! { "city": "Chicago" }).unwrap();
-        
+
         let values = coll.distinct("city", None);
         assert_eq!(values.len(), 3);
     }
@@ -2609,8 +2674,9 @@ mod tests {
         coll.insert_one(doc! { "city": "NYC", "age": 25 }).unwrap();
         coll.insert_one(doc! { "city": "LA", "age": 30 }).unwrap();
         coll.insert_one(doc! { "city": "NYC", "age": 35 }).unwrap();
-        coll.insert_one(doc! { "city": "Chicago", "age": 20 }).unwrap();
-        
+        coll.insert_one(doc! { "city": "Chicago", "age": 20 })
+            .unwrap();
+
         let values = coll.distinct("city", Some(&doc! { "age": { "$gte": 30 } }));
         assert_eq!(values.len(), 2); // LA and NYC
     }
@@ -2618,10 +2684,13 @@ mod tests {
     #[test]
     fn test_distinct_nested_field() {
         let mut coll = Collection::new();
-        coll.insert_one(doc! { "address": { "city": "NYC" } }).unwrap();
-        coll.insert_one(doc! { "address": { "city": "LA" } }).unwrap();
-        coll.insert_one(doc! { "address": { "city": "NYC" } }).unwrap();
-        
+        coll.insert_one(doc! { "address": { "city": "NYC" } })
+            .unwrap();
+        coll.insert_one(doc! { "address": { "city": "LA" } })
+            .unwrap();
+        coll.insert_one(doc! { "address": { "city": "NYC" } })
+            .unwrap();
+
         let values = coll.distinct("address.city", None);
         assert_eq!(values.len(), 2);
     }
@@ -2632,7 +2701,7 @@ mod tests {
         coll.insert_one(doc! { "tags": ["a", "b", "c"] }).unwrap();
         coll.insert_one(doc! { "tags": ["b", "c", "d"] }).unwrap();
         coll.insert_one(doc! { "tags": ["a", "d"] }).unwrap();
-        
+
         let values = coll.distinct("tags", None);
         assert_eq!(values.len(), 4); // a, b, c, d
     }
@@ -2648,7 +2717,7 @@ mod tests {
     fn test_distinct_no_matches() {
         let mut coll = Collection::new();
         coll.insert_one(doc! { "city": "NYC", "age": 25 }).unwrap();
-        
+
         let values = coll.distinct("city", Some(&doc! { "age": { "$gt": 100 } }));
         assert_eq!(values.len(), 0);
     }
@@ -2658,7 +2727,7 @@ mod tests {
         let mut coll = Collection::new();
         coll.insert_one(doc! { "name": "Alice" }).unwrap();
         coll.insert_one(doc! { "name": "Bob" }).unwrap();
-        
+
         let values = coll.distinct("city", None);
         assert_eq!(values.len(), 0);
     }
@@ -2669,7 +2738,7 @@ mod tests {
         coll.insert_one(doc! { "value": 1 }).unwrap();
         coll.insert_one(doc! { "value": "1" }).unwrap();
         coll.insert_one(doc! { "value": 1 }).unwrap();
-        
+
         let values = coll.distinct("value", None);
         assert_eq!(values.len(), 2); // Number 1 and string "1"
     }
@@ -2680,7 +2749,7 @@ mod tests {
         coll.insert_one(doc! { "value": Bson::Null }).unwrap();
         coll.insert_one(doc! { "value": "test" }).unwrap();
         coll.insert_one(doc! { "value": Bson::Null }).unwrap();
-        
+
         let values = coll.distinct("value", None);
         assert_eq!(values.len(), 2); // Null and "test"
     }
@@ -2691,7 +2760,7 @@ mod tests {
         coll.insert_one(doc! { "city": "NYC" }).unwrap();
         coll.insert_one(doc! { "city": "NYC" }).unwrap();
         coll.insert_one(doc! { "city": "NYC" }).unwrap();
-        
+
         let values = coll.distinct("city", None);
         assert_eq!(values.len(), 1);
     }
@@ -2702,8 +2771,9 @@ mod tests {
     fn test_integration_trig_in_aggregation() {
         let mut coll = Collection::new();
         coll.insert_one(doc! { "angle": 0.0 }).unwrap();
-        coll.insert_one(doc! { "angle": std::f64::consts::PI / 2.0 }).unwrap();
-        
+        coll.insert_one(doc! { "angle": std::f64::consts::PI / 2.0 })
+            .unwrap();
+
         // This would be tested via aggregation pipeline in real usage
         let doc = coll.find_one(&doc! {}).unwrap();
         let sin_result = eval_expr(doc! { "$sin": "$angle" }, &doc);
@@ -2712,14 +2782,14 @@ mod tests {
 
     #[test]
     fn test_integration_array_and_string_ops() {
-        let doc = doc! { 
+        let doc = doc! {
             "items": ["apple", "banana", "cherry"],
             "search": "banana"
         };
-        
+
         let idx = eval_expr(doc! { "$indexOfArray": ["$items", "$search"] }, &doc);
         assert_eq!(idx, Bson::Int32(1));
-        
+
         let substr = eval_expr(doc! { "$substrCP": ["$search", 0, 3] }, &doc);
         assert_eq!(substr, Bson::String("ban".to_string()));
     }
@@ -2729,12 +2799,13 @@ mod tests {
         use bson::DateTime;
         let dt = DateTime::now();
         let doc = doc! { "date": dt };
-        
+
         // Add 7 days then get day of week
-        let future = eval_expr(doc! { "$dateAdd": { "startDate": "$date", "unit": "day", "amount": 7 } },
-            &doc
+        let future = eval_expr(
+            doc! { "$dateAdd": { "startDate": "$date", "unit": "day", "amount": 7 } },
+            &doc,
         );
-        
+
         let future_doc = doc! { "date": future };
         let day_of_week = eval_expr(doc! { "$isoDayOfWeek": "$date" }, &future_doc);
         assert!(matches!(day_of_week, Bson::Int32(_)));
@@ -2743,13 +2814,14 @@ mod tests {
     #[test]
     fn test_integration_find_and_modify_with_expressions() {
         let mut coll = Collection::new();
-        coll.insert_one(doc! { "name": "Test", "score": 100, "bonus": 10 }).unwrap();
-        
+        coll.insert_one(doc! { "name": "Test", "score": 100, "bonus": 10 })
+            .unwrap();
+
         // Update using multiple operators
         let result = coll.find_and_modify(
             &doc! { "name": "Test" },
             None,
-            Some(&doc! { 
+            Some(&doc! {
                 "$inc": { "score": 50 },
                 "$mul": { "bonus": 2 }
             }),
@@ -2757,7 +2829,7 @@ mod tests {
             true,
             false,
         );
-        
+
         assert!(result.is_some());
         let doc = result.unwrap();
         assert_eq!(doc.get_i32("score").unwrap(), 150);
@@ -2767,14 +2839,18 @@ mod tests {
     #[test]
     fn test_integration_distinct_with_complex_query() {
         let mut coll = Collection::new();
-        coll.insert_one(doc! { "category": "A", "value": 10, "active": true }).unwrap();
-        coll.insert_one(doc! { "category": "B", "value": 20, "active": true }).unwrap();
-        coll.insert_one(doc! { "category": "A", "value": 30, "active": false }).unwrap();
-        coll.insert_one(doc! { "category": "C", "value": 40, "active": true }).unwrap();
-        
+        coll.insert_one(doc! { "category": "A", "value": 10, "active": true })
+            .unwrap();
+        coll.insert_one(doc! { "category": "B", "value": 20, "active": true })
+            .unwrap();
+        coll.insert_one(doc! { "category": "A", "value": 30, "active": false })
+            .unwrap();
+        coll.insert_one(doc! { "category": "C", "value": 40, "active": true })
+            .unwrap();
+
         let values = coll.distinct(
             "category",
-            Some(&doc! { "active": true, "value": { "$gte": 15 } })
+            Some(&doc! { "active": true, "value": { "$gte": 15 } }),
         );
         assert_eq!(values.len(), 2); // B and C
     }
@@ -2783,7 +2859,7 @@ mod tests {
     fn test_integration_range_with_array_ops() {
         let doc = doc! {};
         let range = eval_expr(doc! { "$range": [0, 5] }, &doc);
-        
+
         let doc_with_range = doc! { "arr": range };
         let idx = eval_expr(doc! { "$indexOfArray": ["$arr", 3] }, &doc_with_range);
         assert_eq!(idx, Bson::Int32(3));
@@ -2792,17 +2868,18 @@ mod tests {
     #[test]
     fn test_integration_zip_with_range() {
         let doc = doc! {};
-        let result = eval_expr(doc! { 
-                "$zip": { 
+        let result = eval_expr(
+            doc! {
+                "$zip": {
                     "inputs": [
                         { "$range": [0, 3] },
                         ["a", "b", "c"]
                     ]
-                } 
+                }
             },
-            &doc
+            &doc,
         );
-        
+
         if let Bson::Array(arr) = result {
             assert_eq!(arr.len(), 3);
         } else {
@@ -2813,10 +2890,10 @@ mod tests {
     #[test]
     fn test_integration_string_comparison_and_search() {
         let doc = doc! { "text": "Hello World", "search": "World" };
-        
+
         let cmp = eval_expr(doc! { "$strcasecmp": ["$text", "HELLO WORLD"] }, &doc);
         assert_eq!(cmp, Bson::Int32(0));
-        
+
         let idx = eval_expr(doc! { "$indexOfCP": ["$text", "$search"] }, &doc);
         assert_eq!(idx, Bson::Int32(6));
     }
@@ -2824,14 +2901,14 @@ mod tests {
     #[test]
     fn test_integration_multiple_trig_operations() {
         let doc = doc! { "x": 1.0, "y": 1.0 };
-        
+
         // Calculate angle using atan2
         let angle = eval_expr(doc! { "$atan2": ["$y", "$x"] }, &doc);
-        
+
         // Convert to degrees
         let angle_doc = doc! { "radians": angle };
         let degrees = eval_expr(doc! { "$radiansToDegrees": "$radians" }, &angle_doc);
-        
+
         if let Bson::Double(deg) = degrees {
             assert!((deg - 45.0).abs() < 0.0001);
         } else {
@@ -2842,15 +2919,17 @@ mod tests {
     #[test]
     fn test_integration_comprehensive_document_operations() {
         let mut coll = Collection::new();
-        
+
         // Insert with generated ID
-        let id = coll.insert_one(doc! { 
-            "name": "Integration Test",
-            "tags": ["test", "integration", "mongodb"],
-            "created": bson::DateTime::now(),
-            "score": 0
-        }).unwrap();
-        
+        let id = coll
+            .insert_one(doc! {
+                "name": "Integration Test",
+                "tags": ["test", "integration", "mongodb"],
+                "created": bson::DateTime::now(),
+                "score": 0
+            })
+            .unwrap();
+
         // Find and modify
         let updated = coll.find_and_modify(
             &doc! { "_id": id.clone() },
@@ -2860,23 +2939,16 @@ mod tests {
             true,
             false,
         );
-        
+
         assert!(updated.is_some());
-        
+
         // Get distinct tags
         let tags = coll.distinct("tags", None);
         assert_eq!(tags.len(), 3);
-        
+
         // Remove document
-        let removed = coll.find_and_modify(
-            &doc! { "_id": id },
-            None,
-            None,
-            true,
-            false,
-            false,
-        );
-        
+        let removed = coll.find_and_modify(&doc! { "_id": id }, None, None, true, false, false);
+
         assert!(removed.is_some());
         assert_eq!(coll.count(&doc! {}), 0);
     }
@@ -3190,8 +3262,18 @@ mod tests {
         let mut coll = Collection::new();
 
         // Create some indexes
-        coll.create_index(doc! { "name": 1 }, Some("name_index".to_string()), false, false);
-        coll.create_index(doc! { "age": 1 }, Some("age_index".to_string()), false, false);
+        coll.create_index(
+            doc! { "name": 1 },
+            Some("name_index".to_string()),
+            false,
+            false,
+        );
+        coll.create_index(
+            doc! { "age": 1 },
+            Some("age_index".to_string()),
+            false,
+            false,
+        );
         assert_eq!(coll.indexes.len(), 3); // includes _id_
 
         // Drop specific index
@@ -3215,9 +3297,24 @@ mod tests {
         let mut coll = Collection::new();
 
         // Create some indexes
-        coll.create_index(doc! { "name": 1 }, Some("name_index".to_string()), false, false);
-        coll.create_index(doc! { "age": 1 }, Some("age_index".to_string()), false, false);
-        coll.create_index(doc! { "email": 1 }, Some("email_index".to_string()), false, false);
+        coll.create_index(
+            doc! { "name": 1 },
+            Some("name_index".to_string()),
+            false,
+            false,
+        );
+        coll.create_index(
+            doc! { "age": 1 },
+            Some("age_index".to_string()),
+            false,
+            false,
+        );
+        coll.create_index(
+            doc! { "email": 1 },
+            Some("email_index".to_string()),
+            false,
+            false,
+        );
         assert_eq!(coll.indexes.len(), 4); // includes _id_
 
         // Drop all indexes except _id_

@@ -976,11 +976,13 @@ impl StreamActor {
                 // Validate that new ID is greater than last
                 if (timestamp < self.last_id.0
                     || (timestamp == self.last_id.0 && sequence <= self.last_id.1))
-                    && !self.entries.is_empty() {
-                        return Err(
-                            "ERR The ID specified is equal or smaller than the target stream top item".to_string()
-                        );
-                    }
+                    && !self.entries.is_empty()
+                {
+                    return Err(
+                        "ERR The ID specified is equal or smaller than the target stream top item"
+                            .to_string(),
+                    );
+                }
 
                 self.last_id = (timestamp, sequence);
                 Ok(format!("{}-{}", timestamp, sequence))

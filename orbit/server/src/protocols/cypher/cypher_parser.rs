@@ -539,8 +539,12 @@ impl TokenParser {
                     // Peek ahead to check for DDL (INDEX, CONSTRAINT)
                     self.advance();
                     match self.current_token() {
-                        Some(Token::Index) | Some(Token::Range) | Some(Token::Text)
-                        | Some(Token::Point) | Some(Token::Fulltext) | Some(Token::Vector)
+                        Some(Token::Index)
+                        | Some(Token::Range)
+                        | Some(Token::Text)
+                        | Some(Token::Point)
+                        | Some(Token::Fulltext)
+                        | Some(Token::Vector)
                         | Some(Token::Lookup) => {
                             // CREATE [type] INDEX
                             clauses.push(self.parse_create_index()?);
@@ -2296,7 +2300,10 @@ impl TokenParser {
         let (entity_type, label_or_type, variable) = self.parse_index_entity_pattern()?;
 
         // Expect REQUIRE (new syntax with FOR) or ASSERT (old syntax with ON)
-        let found_keyword = matches!(self.current_token(), Some(Token::Require) | Some(Token::Assert));
+        let found_keyword = matches!(
+            self.current_token(),
+            Some(Token::Require) | Some(Token::Assert)
+        );
 
         if !found_keyword {
             let expected = if has_for { "REQUIRE" } else { "ASSERT" };
@@ -2437,7 +2444,9 @@ impl TokenParser {
             self.advance();
             label
         } else {
-            return Err(ProtocolError::CypherError("Expected node label".to_string()));
+            return Err(ProtocolError::CypherError(
+                "Expected node label".to_string(),
+            ));
         };
 
         self.expect_token(Token::RightParen)?;

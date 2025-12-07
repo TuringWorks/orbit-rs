@@ -922,12 +922,16 @@ impl CqlAdapter {
                                     CqlValue::Double(f) => f.to_string(),
                                     CqlValue::Timestamp(ts) => (ts / 1000).to_string(),
                                     CqlValue::Null => "NULL".to_string(),
-                                    CqlValue::List(values) if cond.operator == ComparisonOperator::In => {
+                                    CqlValue::List(values)
+                                        if cond.operator == ComparisonOperator::In =>
+                                    {
                                         // Format IN operator with proper parentheses
                                         let formatted_values: Vec<String> = values
                                             .iter()
                                             .map(|v| match v {
-                                                CqlValue::Text(s) => format!("'{}'", s.replace('\'', "''")),
+                                                CqlValue::Text(s) => {
+                                                    format!("'{}'", s.replace('\'', "''"))
+                                                }
                                                 CqlValue::Int(i) => i.to_string(),
                                                 CqlValue::Bigint(i) => i.to_string(),
                                                 CqlValue::Boolean(b) => b.to_string(),
@@ -1061,10 +1065,8 @@ impl CqlAdapter {
                 let val_str = if values.is_empty() {
                     "".to_string()
                 } else {
-                    let val_parts: Vec<String> = values
-                        .iter()
-                        .map(Self::cql_value_to_sql_string)
-                        .collect();
+                    let val_parts: Vec<String> =
+                        values.iter().map(Self::cql_value_to_sql_string).collect();
                     format!(" VALUES ({})", val_parts.join(", "))
                 };
 

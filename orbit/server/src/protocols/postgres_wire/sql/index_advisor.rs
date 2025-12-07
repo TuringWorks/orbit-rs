@@ -553,7 +553,8 @@ impl IndexAdvisor {
                         columns: vec![column.clone()],
                         index_type,
                         improvement_ratio: improvement,
-                        storage_cost: self.estimate_storage(table_stats, std::slice::from_ref(column)),
+                        storage_cost: self
+                            .estimate_storage(table_stats, std::slice::from_ref(column)),
                         write_overhead: 1.1, // 10% write overhead for single column
                         benefiting_queries: pattern.count,
                         reason: format!("Frequently filtered by {} with {:?}", column, operator),

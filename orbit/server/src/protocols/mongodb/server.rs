@@ -532,17 +532,26 @@ async fn handle_command(
                     else if let Some(unset_value) = stage_doc.get("$unset") {
                         match unset_value {
                             Bson::String(field) => {
-                                docs = docs.into_iter().map(|mut d| { d.remove(field); d }).collect();
+                                docs = docs
+                                    .into_iter()
+                                    .map(|mut d| {
+                                        d.remove(field);
+                                        d
+                                    })
+                                    .collect();
                             }
                             Bson::Array(fields) => {
-                                docs = docs.into_iter().map(|mut d| {
-                                    for field in fields {
-                                        if let Bson::String(f) = field {
-                                            d.remove(f);
+                                docs = docs
+                                    .into_iter()
+                                    .map(|mut d| {
+                                        for field in fields {
+                                            if let Bson::String(f) = field {
+                                                d.remove(f);
+                                            }
                                         }
-                                    }
-                                    d
-                                }).collect();
+                                        d
+                                    })
+                                    .collect();
                             }
                             _ => {}
                         }
@@ -555,12 +564,14 @@ async fn handle_command(
                         for doc in &docs {
                             let key = evaluate_expression(sort_by_count_expr, doc);
                             let key_str = format!("{:?}", key);
-                            counts.entry(key_str)
+                            counts
+                                .entry(key_str)
                                 .and_modify(|(_, count)| *count += 1)
                                 .or_insert((key, 1));
                         }
 
-                        let mut result: Vec<Document> = counts.into_values()
+                        let mut result: Vec<Document> = counts
+                            .into_values()
                             .map(|(id, count)| doc! { "_id": id, "count": count })
                             .collect();
 
@@ -628,21 +639,26 @@ async fn handle_command(
                                 }
                             }
 
-                            docs = buckets.into_iter().map(|(key_str, bucket_docs)| {
-                                let mut result = doc! { "_id": key_str, "count": bucket_docs.len() as i64 };
-                                if let Some(output) = output_spec {
-                                    for (field, acc) in output {
-                                        if let Bson::Document(acc_doc) = acc {
-                                            let doc_refs: Vec<&Document> = bucket_docs.to_vec();
-                                            if let Some((op, expr)) = acc_doc.iter().next() {
-                                                let value = apply_accumulator(op, expr, &doc_refs);
-                                                result.insert(field, value);
+                            docs = buckets
+                                .into_iter()
+                                .map(|(key_str, bucket_docs)| {
+                                    let mut result =
+                                        doc! { "_id": key_str, "count": bucket_docs.len() as i64 };
+                                    if let Some(output) = output_spec {
+                                        for (field, acc) in output {
+                                            if let Bson::Document(acc_doc) = acc {
+                                                let doc_refs: Vec<&Document> = bucket_docs.to_vec();
+                                                if let Some((op, expr)) = acc_doc.iter().next() {
+                                                    let value =
+                                                        apply_accumulator(op, expr, &doc_refs);
+                                                    result.insert(field, value);
+                                                }
                                             }
                                         }
                                     }
-                                }
-                                result
-                            }).collect();
+                                    result
+                                })
+                                .collect();
                         }
                     }
                     // $facet - run multiple pipelines in parallel
@@ -658,33 +674,50 @@ async fn handle_command(
                                     if let Bson::Document(inner_stage) = stage {
                                         // $match
                                         if let Ok(match_doc) = inner_stage.get_document("$match") {
-                                            facet_docs.retain(|d| matches_document_filter(d, match_doc));
+                                            facet_docs
+                                                .retain(|d| matches_document_filter(d, match_doc));
                                         }
                                         // $limit
                                         else if let Ok(limit) = inner_stage.get_i64("$limit") {
-                                            facet_docs = facet_docs.into_iter().take(limit as usize).collect();
-                                        }
-                                        else if let Ok(limit) = inner_stage.get_i32("$limit") {
-                                            facet_docs = facet_docs.into_iter().take(limit as usize).collect();
+                                            facet_docs = facet_docs
+                                                .into_iter()
+                                                .take(limit as usize)
+                                                .collect();
+                                        } else if let Ok(limit) = inner_stage.get_i32("$limit") {
+                                            facet_docs = facet_docs
+                                                .into_iter()
+                                                .take(limit as usize)
+                                                .collect();
                                         }
                                         // $skip
                                         else if let Ok(skip) = inner_stage.get_i64("$skip") {
-                                            facet_docs = facet_docs.into_iter().skip(skip as usize).collect();
-                                        }
-                                        else if let Ok(skip) = inner_stage.get_i32("$skip") {
-                                            facet_docs = facet_docs.into_iter().skip(skip as usize).collect();
+                                            facet_docs = facet_docs
+                                                .into_iter()
+                                                .skip(skip as usize)
+                                                .collect();
+                                        } else if let Ok(skip) = inner_stage.get_i32("$skip") {
+                                            facet_docs = facet_docs
+                                                .into_iter()
+                                                .skip(skip as usize)
+                                                .collect();
                                         }
                                         // $sort
-                                        else if let Ok(sort_doc) = inner_stage.get_document("$sort") {
+                                        else if let Ok(sort_doc) =
+                                            inner_stage.get_document("$sort")
+                                        {
                                             facet_docs = apply_sort(facet_docs, sort_doc);
                                         }
                                         // $count
-                                        else if let Ok(count_field) = inner_stage.get_str("$count") {
+                                        else if let Ok(count_field) =
+                                            inner_stage.get_str("$count")
+                                        {
                                             let count = facet_docs.len() as i64;
                                             facet_docs = vec![doc! { count_field: count }];
                                         }
                                         // $project
-                                        else if let Ok(project_doc) = inner_stage.get_document("$project") {
+                                        else if let Ok(project_doc) =
+                                            inner_stage.get_document("$project")
+                                        {
                                             facet_docs = facet_docs
                                                 .into_iter()
                                                 .map(|d| apply_projection(&d, project_doc))
@@ -693,9 +726,12 @@ async fn handle_command(
                                     }
                                 }
 
-                                facet_result.insert(facet_name, Bson::Array(
-                                    facet_docs.into_iter().map(Bson::Document).collect()
-                                ));
+                                facet_result.insert(
+                                    facet_name,
+                                    Bson::Array(
+                                        facet_docs.into_iter().map(Bson::Document).collect(),
+                                    ),
+                                );
                             }
                         }
 
@@ -703,21 +739,27 @@ async fn handle_command(
                     }
                     // $redact - filter based on document structure
                     else if let Some(redact_expr) = stage_doc.get("$redact") {
-                        docs = docs.into_iter().filter_map(|doc| {
-                            let result = evaluate_expression(redact_expr, &doc);
-                            match result {
-                                Bson::String(s) if s == "$$DESCEND" || s == "$$KEEP" => Some(doc),
-                                Bson::String(s) if s == "$$PRUNE" => None,
-                                _ => Some(doc),
-                            }
-                        }).collect();
+                        docs = docs
+                            .into_iter()
+                            .filter_map(|doc| {
+                                let result = evaluate_expression(redact_expr, &doc);
+                                match result {
+                                    Bson::String(s) if s == "$$DESCEND" || s == "$$KEEP" => {
+                                        Some(doc)
+                                    }
+                                    Bson::String(s) if s == "$$PRUNE" => None,
+                                    _ => Some(doc),
+                                }
+                            })
+                            .collect();
                     }
                     // $merge - write results to a collection
                     else if let Ok(merge_doc) = stage_doc.get_document("$merge") {
                         let into_collection = merge_doc.get_str("into").unwrap_or("");
                         let on_fields = merge_doc.get_array("on").ok();
                         let when_matched = merge_doc.get_str("whenMatched").unwrap_or("replace");
-                        let when_not_matched = merge_doc.get_str("whenNotMatched").unwrap_or("insert");
+                        let when_not_matched =
+                            merge_doc.get_str("whenNotMatched").unwrap_or("insert");
 
                         for doc in &docs {
                             // Build filter from on fields
@@ -744,7 +786,9 @@ async fn handle_command(
                                     }
                                     "merge" => {
                                         let update = doc! { "$set": doc.clone() };
-                                        store.update_one(db, into_collection, &filter, &update).await;
+                                        store
+                                            .update_one(db, into_collection, &filter, &update)
+                                            .await;
                                     }
                                     "keepExisting" => {}
                                     "fail" => {
@@ -764,62 +808,69 @@ async fn handle_command(
                         let connect_from = graph_doc.get_str("connectFromField").unwrap_or("");
                         let connect_to = graph_doc.get_str("connectToField").unwrap_or("");
                         let as_field = graph_doc.get_str("as").unwrap_or("result");
-                        let max_depth = graph_doc.get_i32("maxDepth").ok().or_else(|| graph_doc.get_i64("maxDepth").ok().map(|v| v as i32));
+                        let max_depth = graph_doc
+                            .get_i32("maxDepth")
+                            .ok()
+                            .or_else(|| graph_doc.get_i64("maxDepth").ok().map(|v| v as i32));
                         let depth_field = graph_doc.get_str("depthField").ok();
 
                         // Get all documents from the from collection
                         let (_, from_docs) = store.find(db, from, &doc! {}, None, None, None).await;
 
-                        docs = docs.into_iter().map(|mut d| {
-                            let mut results = Vec::new();
-                            let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
+                        docs = docs
+                            .into_iter()
+                            .map(|mut d| {
+                                let mut results = Vec::new();
+                                let mut visited: std::collections::HashSet<String> =
+                                    std::collections::HashSet::new();
 
-                            // Get starting values
-                            let start_values = if let Some(start) = start_with {
-                                vec![evaluate_expression(start, &d)]
-                            } else {
-                                Vec::new()
-                            };
+                                // Get starting values
+                                let start_values = if let Some(start) = start_with {
+                                    vec![evaluate_expression(start, &d)]
+                                } else {
+                                    Vec::new()
+                                };
 
-                            // BFS traversal
-                            let mut queue: std::collections::VecDeque<(Bson, i32)> =
-                                start_values.into_iter().map(|v| (v, 0)).collect();
+                                // BFS traversal
+                                let mut queue: std::collections::VecDeque<(Bson, i32)> =
+                                    start_values.into_iter().map(|v| (v, 0)).collect();
 
-                            while let Some((current_val, depth)) = queue.pop_front() {
-                                if let Some(max) = max_depth {
-                                    if depth > max {
+                                while let Some((current_val, depth)) = queue.pop_front() {
+                                    if let Some(max) = max_depth {
+                                        if depth > max {
+                                            continue;
+                                        }
+                                    }
+
+                                    let val_key = format!("{:?}", current_val);
+                                    if visited.contains(&val_key) {
                                         continue;
                                     }
-                                }
+                                    visited.insert(val_key);
 
-                                let val_key = format!("{:?}", current_val);
-                                if visited.contains(&val_key) {
-                                    continue;
-                                }
-                                visited.insert(val_key);
+                                    // Find matching documents
+                                    for from_doc in &from_docs {
+                                        if let Some(connect_val) = from_doc.get(connect_to) {
+                                            if *connect_val == current_val {
+                                                let mut result_doc = from_doc.clone();
+                                                if let Some(depth_f) = depth_field {
+                                                    result_doc.insert(depth_f, depth);
+                                                }
+                                                results.push(Bson::Document(result_doc.clone()));
 
-                                // Find matching documents
-                                for from_doc in &from_docs {
-                                    if let Some(connect_val) = from_doc.get(connect_to) {
-                                        if *connect_val == current_val {
-                                            let mut result_doc = from_doc.clone();
-                                            if let Some(depth_f) = depth_field {
-                                                result_doc.insert(depth_f, depth);
-                                            }
-                                            results.push(Bson::Document(result_doc.clone()));
-
-                                            // Add to queue for next level
-                                            if let Some(next_val) = from_doc.get(connect_from) {
-                                                queue.push_back((next_val.clone(), depth + 1));
+                                                // Add to queue for next level
+                                                if let Some(next_val) = from_doc.get(connect_from) {
+                                                    queue.push_back((next_val.clone(), depth + 1));
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
 
-                            d.insert(as_field, Bson::Array(results));
-                            d
-                        }).collect();
+                                d.insert(as_field, Bson::Array(results));
+                                d
+                            })
+                            .collect();
                     }
                     // $bucketAuto - automatically determine bucket boundaries
                     else if let Ok(bucket_doc) = stage_doc.get_document("$bucketAuto") {
@@ -868,12 +919,12 @@ async fn handle_command(
                                     };
 
                                     // Apply granularity if specified
-                                    let (adjusted_min, adjusted_max) = if let Some(gran) = granularity
-                                    {
-                                        apply_granularity(min_val, max_val, gran)
-                                    } else {
-                                        (min_val, max_val)
-                                    };
+                                    let (adjusted_min, adjusted_max) =
+                                        if let Some(gran) = granularity {
+                                            apply_granularity(min_val, max_val, gran)
+                                        } else {
+                                            (min_val, max_val)
+                                        };
 
                                     let mut bucket_doc = doc! {
                                         "_id": {
@@ -887,7 +938,8 @@ async fn handle_command(
                                     if let Some(output_doc) = &output {
                                         for (field, acc_doc) in output_doc.iter() {
                                             if let Bson::Document(acc) = acc_doc {
-                                                if let Some((acc_op, acc_expr)) = acc.iter().next() {
+                                                if let Some((acc_op, acc_expr)) = acc.iter().next()
+                                                {
                                                     let result = apply_accumulator(
                                                         acc_op,
                                                         acc_expr,
@@ -1061,9 +1113,7 @@ async fn handle_command(
                                     // Build a set of existing values
                                     let existing: std::collections::HashSet<i64> = partition
                                         .iter()
-                                        .filter_map(|d| {
-                                            d.get(field).and_then(bson_to_i64)
-                                        })
+                                        .filter_map(|d| d.get(field).and_then(bson_to_i64))
                                         .collect();
 
                                     // Generate densified sequence
@@ -1079,7 +1129,8 @@ async fn handle_command(
                                                 .and_then(bson_to_i64);
                                             if let Some(dv) = doc_val {
                                                 if dv < current {
-                                                    result_docs.push(partition[partition_idx].clone());
+                                                    result_docs
+                                                        .push(partition[partition_idx].clone());
                                                     partition_idx += 1;
                                                 } else {
                                                     break;
@@ -1162,18 +1213,17 @@ async fn handle_command(
                                             for i in 0..docs.len() {
                                                 if values[i].is_none() {
                                                     // Find prev and next non-null values
-                                                    let prev = (0..i).rev().find_map(|j| {
-                                                        values[j].map(|v| (j, v))
-                                                    });
-                                                    let next = ((i + 1)..docs.len()).find_map(|j| {
-                                                        values[j].map(|v| (j, v))
-                                                    });
+                                                    let prev = (0..i)
+                                                        .rev()
+                                                        .find_map(|j| values[j].map(|v| (j, v)));
+                                                    let next = ((i + 1)..docs.len())
+                                                        .find_map(|j| values[j].map(|v| (j, v)));
 
                                                     if let (Some((pi, pv)), Some((ni, nv))) =
                                                         (prev, next)
                                                     {
-                                                        let ratio = (i - pi) as f64
-                                                            / (ni - pi) as f64;
+                                                        let ratio =
+                                                            (i - pi) as f64 / (ni - pi) as f64;
                                                         let interpolated = pv + ratio * (nv - pv);
                                                         docs[i].insert(field, interpolated);
                                                     }
@@ -1186,10 +1236,7 @@ async fn handle_command(
                                                 if doc.get(field).is_none()
                                                     || matches!(doc.get(field), Some(Bson::Null))
                                                 {
-                                                    doc.insert(
-                                                        field,
-                                                        evaluate_expression(v, doc),
-                                                    );
+                                                    doc.insert(field, evaluate_expression(v, doc));
                                                 }
                                             }
                                         }
@@ -1430,14 +1477,7 @@ async fn handle_command(
 
         let result = store
             .find_and_modify(
-                db,
-                collection,
-                &query,
-                sort,
-                update,
-                remove,
-                new_doc,
-                upsert,
+                db, collection, &query, sort, update, remove, new_doc, upsert,
             )
             .await;
 
@@ -1518,7 +1558,10 @@ async fn handle_command(
                 if let Some(op_doc) = op.as_document() {
                     // Insert operation
                     if let Ok(insert_doc) = op_doc.get_document("insert") {
-                        let document = insert_doc.get_document("document").cloned().unwrap_or_default();
+                        let document = insert_doc
+                            .get_document("document")
+                            .cloned()
+                            .unwrap_or_default();
                         match store.insert_one(db, default_collection, document).await {
                             Ok(_) => insert_count += 1,
                             Err(e) => {
@@ -1535,14 +1578,24 @@ async fn handle_command(
                     }
                     // Update operation
                     else if let Ok(update_doc) = op_doc.get_document("update") {
-                        let filter = update_doc.get_document("filter").cloned().unwrap_or_default();
-                        let update_spec = update_doc.get_document("updateMods").cloned().unwrap_or_default();
+                        let filter = update_doc
+                            .get_document("filter")
+                            .cloned()
+                            .unwrap_or_default();
+                        let update_spec = update_doc
+                            .get_document("updateMods")
+                            .cloned()
+                            .unwrap_or_default();
                         let multi = update_doc.get_bool("multi").unwrap_or(false);
 
                         let (matched, modified) = if multi {
-                            store.update_many(db, default_collection, &filter, &update_spec).await
+                            store
+                                .update_many(db, default_collection, &filter, &update_spec)
+                                .await
                         } else {
-                            store.update_one(db, default_collection, &filter, &update_spec).await
+                            store
+                                .update_one(db, default_collection, &filter, &update_spec)
+                                .await
                         };
                         matched_count += matched;
                         modified_count += modified;
@@ -1550,7 +1603,10 @@ async fn handle_command(
                     }
                     // Delete operation
                     else if let Ok(delete_doc) = op_doc.get_document("delete") {
-                        let filter = delete_doc.get_document("filter").cloned().unwrap_or_default();
+                        let filter = delete_doc
+                            .get_document("filter")
+                            .cloned()
+                            .unwrap_or_default();
                         let multi = delete_doc.get_bool("multi").unwrap_or(false);
 
                         let deleted = if multi {
@@ -1818,9 +1874,10 @@ fn apply_projection(doc: &Document, project: &Document) -> Document {
     }
 
     // Always include _id unless explicitly excluded
-    if project.get("_id").is_none_or(|v| {
-        !matches!(v, Bson::Int32(0) | Bson::Int64(0) | Bson::Boolean(false))
-    }) {
+    if project
+        .get("_id")
+        .is_none_or(|v| !matches!(v, Bson::Int32(0) | Bson::Int64(0) | Bson::Boolean(false)))
+    {
         if let Some(id) = doc.get("_id") {
             result.insert("_id", id.clone());
         }
@@ -2107,8 +2164,17 @@ fn apply_granularity(min: f64, max: f64, granularity: &str) -> (f64, f64) {
             let steps = [1.0, 2.0, 5.0, 10.0];
             let normalized_min = min / factor;
             let normalized_max = max / factor;
-            let adjusted_min = steps.iter().rev().find(|&&s| s <= normalized_min).unwrap_or(&1.0) * factor;
-            let adjusted_max = steps.iter().find(|&&s| s >= normalized_max).unwrap_or(&10.0) * factor;
+            let adjusted_min = steps
+                .iter()
+                .rev()
+                .find(|&&s| s <= normalized_min)
+                .unwrap_or(&1.0)
+                * factor;
+            let adjusted_max = steps
+                .iter()
+                .find(|&&s| s >= normalized_max)
+                .unwrap_or(&10.0)
+                * factor;
             (adjusted_min, adjusted_max)
         }
         "E6" | "E12" | "E24" | "E48" | "E96" | "E192" => {
@@ -2379,7 +2445,8 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             if !arr.is_empty() {
                                 let val = evaluate_expression(&arr[0], doc);
                                 let places = if arr.len() > 1 {
-                                    bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(0.0) as i32
+                                    bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(0.0)
+                                        as i32
                                 } else {
                                     0
                                 };
@@ -2424,8 +2491,10 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$pow" => {
                         if let Bson::Array(arr) = args {
                             if arr.len() == 2 {
-                                let base = bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0);
-                                let exp = bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(0.0);
+                                let base =
+                                    bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0);
+                                let exp =
+                                    bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(0.0);
                                 return Bson::Double(base.powf(exp));
                             }
                         }
@@ -2451,8 +2520,10 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$log" => {
                         if let Bson::Array(arr) = args {
                             if arr.len() == 2 {
-                                let num = bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0);
-                                let base = bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(10.0);
+                                let num =
+                                    bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0);
+                                let base =
+                                    bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(10.0);
                                 if num > 0.0 && base > 0.0 {
                                     return Bson::Double(num.log(base));
                                 }
@@ -2472,8 +2543,10 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$mod" => {
                         if let Bson::Array(arr) = args {
                             if arr.len() == 2 {
-                                let a = bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0);
-                                let b = bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(1.0);
+                                let a =
+                                    bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0);
+                                let b =
+                                    bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(1.0);
                                 if b != 0.0 {
                                     return Bson::Double(a % b);
                                 }
@@ -2535,8 +2608,10 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$atan2" => {
                         if let Bson::Array(arr) = args {
                             if arr.len() == 2 {
-                                let y = bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0);
-                                let x = bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(0.0);
+                                let y =
+                                    bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0);
+                                let x =
+                                    bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(0.0);
                                 return Bson::Double(y.atan2(x));
                             }
                         }
@@ -2614,7 +2689,9 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             for item in arr {
                                 let val = evaluate_expression(item, doc);
                                 match val {
-                                    Bson::Boolean(false) | Bson::Null => return Bson::Boolean(false),
+                                    Bson::Boolean(false) | Bson::Null => {
+                                        return Bson::Boolean(false)
+                                    }
                                     _ => {}
                                 }
                             }
@@ -2710,22 +2787,35 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                         if let Bson::Array(arr) = args {
                             if arr.len() >= 2 {
                                 let source = evaluate_expression(&arr[0], doc);
-                                let n = bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(0.0) as i32;
+                                let n = bson_to_f64(&evaluate_expression(&arr[1], doc))
+                                    .unwrap_or(0.0) as i32;
                                 if let Bson::Array(src) = source {
                                     if arr.len() == 2 {
                                         // $slice: [array, n] - first n elements if n > 0, last |n| if n < 0
                                         if n >= 0 {
-                                            return Bson::Array(src.into_iter().take(n as usize).collect());
+                                            return Bson::Array(
+                                                src.into_iter().take(n as usize).collect(),
+                                            );
                                         } else {
                                             let skip = (src.len() as i32 + n).max(0) as usize;
-                                            return Bson::Array(src.into_iter().skip(skip).collect());
+                                            return Bson::Array(
+                                                src.into_iter().skip(skip).collect(),
+                                            );
                                         }
                                     } else if arr.len() == 3 {
                                         // $slice: [array, position, n]
                                         let pos = n;
-                                        let count = bson_to_f64(&evaluate_expression(&arr[2], doc)).unwrap_or(0.0) as usize;
-                                        let start = if pos >= 0 { pos as usize } else { (src.len() as i32 + pos).max(0) as usize };
-                                        return Bson::Array(src.into_iter().skip(start).take(count).collect());
+                                        let count = bson_to_f64(&evaluate_expression(&arr[2], doc))
+                                            .unwrap_or(0.0)
+                                            as usize;
+                                        let start = if pos >= 0 {
+                                            pos as usize
+                                        } else {
+                                            (src.len() as i32 + pos).max(0) as usize
+                                        };
+                                        return Bson::Array(
+                                            src.into_iter().skip(start).take(count).collect(),
+                                        );
                                     }
                                 }
                             }
@@ -2741,11 +2831,17 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             if let (Some(input), Some(cond)) = (input, cond) {
                                 let input_val = evaluate_expression(input, doc);
                                 if let Bson::Array(arr) = input_val {
-                                    let filtered: Vec<Bson> = arr.into_iter().filter(|item| {
-                                        let mut temp_doc = doc.clone();
-                                        temp_doc.insert(as_var.to_string(), item.clone());
-                                        matches!(evaluate_expression(cond, &temp_doc), Bson::Boolean(true))
-                                    }).collect();
+                                    let filtered: Vec<Bson> = arr
+                                        .into_iter()
+                                        .filter(|item| {
+                                            let mut temp_doc = doc.clone();
+                                            temp_doc.insert(as_var.to_string(), item.clone());
+                                            matches!(
+                                                evaluate_expression(cond, &temp_doc),
+                                                Bson::Boolean(true)
+                                            )
+                                        })
+                                        .collect();
                                     return Bson::Array(filtered);
                                 }
                             }
@@ -2761,11 +2857,14 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             if let (Some(input), Some(in_expr)) = (input, in_expr) {
                                 let input_val = evaluate_expression(input, doc);
                                 if let Bson::Array(arr) = input_val {
-                                    let mapped: Vec<Bson> = arr.into_iter().map(|item| {
-                                        let mut temp_doc = doc.clone();
-                                        temp_doc.insert(as_var.to_string(), item);
-                                        evaluate_expression(in_expr, &temp_doc)
-                                    }).collect();
+                                    let mapped: Vec<Bson> = arr
+                                        .into_iter()
+                                        .map(|item| {
+                                            let mut temp_doc = doc.clone();
+                                            temp_doc.insert(as_var.to_string(), item);
+                                            evaluate_expression(in_expr, &temp_doc)
+                                        })
+                                        .collect();
                                     return Bson::Array(mapped);
                                 }
                             }
@@ -2778,7 +2877,9 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             let initial = reduce_doc.get("initialValue");
                             let in_expr = reduce_doc.get("in");
 
-                            if let (Some(input), Some(initial), Some(in_expr)) = (input, initial, in_expr) {
+                            if let (Some(input), Some(initial), Some(in_expr)) =
+                                (input, initial, in_expr)
+                            {
                                 let input_val = evaluate_expression(input, doc);
                                 let mut value = evaluate_expression(initial, doc);
 
@@ -2801,16 +2902,19 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                 let array = evaluate_expression(&arr[0], doc);
                                 let search = evaluate_expression(&arr[1], doc);
                                 let start = if arr.len() > 2 {
-                                    bson_to_f64(&evaluate_expression(&arr[2], doc)).unwrap_or(0.0) as usize
+                                    bson_to_f64(&evaluate_expression(&arr[2], doc)).unwrap_or(0.0)
+                                        as usize
                                 } else {
                                     0
                                 };
                                 let end = if arr.len() > 3 {
-                                    bson_to_f64(&evaluate_expression(&arr[3], doc)).unwrap_or(i64::MAX as f64) as usize
+                                    bson_to_f64(&evaluate_expression(&arr[3], doc))
+                                        .unwrap_or(i64::MAX as f64)
+                                        as usize
                                 } else {
                                     usize::MAX
                                 };
-                                
+
                                 if let Bson::Array(a) = array {
                                     for (i, item) in a.iter().enumerate().skip(start) {
                                         if i >= end {
@@ -2830,27 +2934,26 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             let inputs = zip_doc.get_array("inputs").ok();
                             let use_longest = zip_doc.get_bool("useLongestLength").unwrap_or(false);
                             let defaults = zip_doc.get_array("defaults").ok();
-                            
+
                             if let Some(inputs) = inputs {
-                                let arrays: Vec<Vec<Bson>> = inputs.iter()
-                                    .map(|input| {
-                                        match evaluate_expression(input, doc) {
-                                            Bson::Array(a) => a,
-                                            _ => vec![],
-                                        }
+                                let arrays: Vec<Vec<Bson>> = inputs
+                                    .iter()
+                                    .map(|input| match evaluate_expression(input, doc) {
+                                        Bson::Array(a) => a,
+                                        _ => vec![],
                                     })
                                     .collect();
-                                
+
                                 if arrays.is_empty() {
                                     return Bson::Array(vec![]);
                                 }
-                                
+
                                 let max_len = if use_longest {
                                     arrays.iter().map(|a| a.len()).max().unwrap_or(0)
                                 } else {
                                     arrays.iter().map(|a| a.len()).min().unwrap_or(0)
                                 };
-                                
+
                                 let mut result = Vec::new();
                                 for i in 0..max_len {
                                     let mut tuple = Vec::new();
@@ -2859,7 +2962,9 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                             tuple.push(arr[i].clone());
                                         } else if use_longest {
                                             if let Some(defs) = defaults {
-                                                tuple.push(defs.get(j).cloned().unwrap_or(Bson::Null));
+                                                tuple.push(
+                                                    defs.get(j).cloned().unwrap_or(Bson::Null),
+                                                );
                                             } else {
                                                 tuple.push(Bson::Null);
                                             }
@@ -2875,18 +2980,23 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$range" => {
                         if let Bson::Array(arr) = args {
                             if arr.len() >= 2 {
-                                let start = bson_to_f64(&evaluate_expression(&arr[0], doc)).unwrap_or(0.0) as i32;
-                                let end = bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(0.0) as i32;
+                                let start = bson_to_f64(&evaluate_expression(&arr[0], doc))
+                                    .unwrap_or(0.0)
+                                    as i32;
+                                let end = bson_to_f64(&evaluate_expression(&arr[1], doc))
+                                    .unwrap_or(0.0)
+                                    as i32;
                                 let step = if arr.len() > 2 {
-                                    bson_to_f64(&evaluate_expression(&arr[2], doc)).unwrap_or(1.0) as i32
+                                    bson_to_f64(&evaluate_expression(&arr[2], doc)).unwrap_or(1.0)
+                                        as i32
                                 } else {
                                     1
                                 };
-                                
+
                                 if step == 0 {
                                     return Bson::Null;
                                 }
-                                
+
                                 let mut result = Vec::new();
                                 if step > 0 {
                                     let mut i = start;
@@ -2914,8 +3024,12 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                     Bson::String(s) => s,
                                     _ => return Bson::Null,
                                 };
-                                let start = bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(0.0) as usize;
-                                let len = bson_to_f64(&evaluate_expression(&arr[2], doc)).unwrap_or(0.0) as usize;
+                                let start = bson_to_f64(&evaluate_expression(&arr[1], doc))
+                                    .unwrap_or(0.0)
+                                    as usize;
+                                let len = bson_to_f64(&evaluate_expression(&arr[2], doc))
+                                    .unwrap_or(0.0)
+                                    as usize;
                                 let result: String = s.chars().skip(start).take(len).collect();
                                 return Bson::String(result);
                             }
@@ -2933,7 +3047,10 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                     Bson::String(s) => s,
                                     _ => return Bson::Null,
                                 };
-                                let parts: Vec<Bson> = s.split(&delim).map(|p| Bson::String(p.to_string())).collect();
+                                let parts: Vec<Bson> = s
+                                    .split(&delim)
+                                    .map(|p| Bson::String(p.to_string()))
+                                    .collect();
                                 return Bson::Array(parts);
                             }
                         }
@@ -2988,7 +3105,11 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$regexMatch" => {
                         if let Bson::Document(regex_doc) = args {
                             let input = regex_doc.get("input").and_then(|v| {
-                                if let Bson::String(s) = evaluate_expression(v, doc) { Some(s) } else { None }
+                                if let Bson::String(s) = evaluate_expression(v, doc) {
+                                    Some(s)
+                                } else {
+                                    None
+                                }
                             });
                             let regex = regex_doc.get_str("regex").ok();
                             if let (Some(input), Some(regex)) = (input, regex) {
@@ -3002,11 +3123,17 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$replaceOne" => {
                         if let Bson::Document(replace_doc) = args {
                             let input = replace_doc.get("input").and_then(|v| {
-                                if let Bson::String(s) = evaluate_expression(v, doc) { Some(s) } else { None }
+                                if let Bson::String(s) = evaluate_expression(v, doc) {
+                                    Some(s)
+                                } else {
+                                    None
+                                }
                             });
                             let find = replace_doc.get_str("find").ok();
                             let replacement = replace_doc.get_str("replacement").ok();
-                            if let (Some(input), Some(find), Some(replacement)) = (input, find, replacement) {
+                            if let (Some(input), Some(find), Some(replacement)) =
+                                (input, find, replacement)
+                            {
                                 return Bson::String(input.replacen(find, replacement, 1));
                             }
                         }
@@ -3015,11 +3142,17 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$replaceAll" => {
                         if let Bson::Document(replace_doc) = args {
                             let input = replace_doc.get("input").and_then(|v| {
-                                if let Bson::String(s) = evaluate_expression(v, doc) { Some(s) } else { None }
+                                if let Bson::String(s) = evaluate_expression(v, doc) {
+                                    Some(s)
+                                } else {
+                                    None
+                                }
                             });
                             let find = replace_doc.get_str("find").ok();
                             let replacement = replace_doc.get_str("replacement").ok();
-                            if let (Some(input), Some(find), Some(replacement)) = (input, find, replacement) {
+                            if let (Some(input), Some(find), Some(replacement)) =
+                                (input, find, replacement)
+                            {
                                 return Bson::String(input.replace(find, replacement));
                             }
                         }
@@ -3037,19 +3170,22 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                     _ => return Bson::Null,
                                 };
                                 let start = if arr.len() > 2 {
-                                    bson_to_f64(&evaluate_expression(&arr[2], doc)).unwrap_or(0.0) as usize
+                                    bson_to_f64(&evaluate_expression(&arr[2], doc)).unwrap_or(0.0)
+                                        as usize
                                 } else {
                                     0
                                 };
                                 let end = if arr.len() > 3 {
-                                    bson_to_f64(&evaluate_expression(&arr[3], doc)).unwrap_or(string.len() as f64) as usize
+                                    bson_to_f64(&evaluate_expression(&arr[3], doc))
+                                        .unwrap_or(string.len() as f64)
+                                        as usize
                                 } else {
                                     string.len()
                                 };
-                                
+
                                 let bytes = string.as_bytes();
                                 let search_bytes = substring.as_bytes();
-                                
+
                                 if start < bytes.len() && end <= bytes.len() {
                                     if let Some(pos) = bytes[start..end]
                                         .windows(search_bytes.len())
@@ -3074,20 +3210,23 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                     _ => return Bson::Null,
                                 };
                                 let start = if arr.len() > 2 {
-                                    bson_to_f64(&evaluate_expression(&arr[2], doc)).unwrap_or(0.0) as usize
+                                    bson_to_f64(&evaluate_expression(&arr[2], doc)).unwrap_or(0.0)
+                                        as usize
                                 } else {
                                     0
                                 };
                                 let end = if arr.len() > 3 {
                                     let chars: Vec<char> = string.chars().collect();
-                                    bson_to_f64(&evaluate_expression(&arr[3], doc)).unwrap_or(chars.len() as f64) as usize
+                                    bson_to_f64(&evaluate_expression(&arr[3], doc))
+                                        .unwrap_or(chars.len() as f64)
+                                        as usize
                                 } else {
                                     string.chars().count()
                                 };
-                                
+
                                 let chars: Vec<char> = string.chars().collect();
                                 let search_chars: Vec<char> = substring.chars().collect();
-                                
+
                                 if start < chars.len() && end <= chars.len() {
                                     if let Some(pos) = chars[start..end]
                                         .windows(search_chars.len())
@@ -3111,7 +3250,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                     Bson::String(s) => s.to_lowercase(),
                                     _ => return Bson::Null,
                                 };
-                                
+
                                 return Bson::Int32(match s1.cmp(&s2) {
                                     std::cmp::Ordering::Less => -1,
                                     std::cmp::Ordering::Equal => 0,
@@ -3128,9 +3267,13 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                     Bson::String(s) => s,
                                     _ => return Bson::Null,
                                 };
-                                let start = bson_to_f64(&evaluate_expression(&arr[1], doc)).unwrap_or(0.0) as usize;
-                                let len = bson_to_f64(&evaluate_expression(&arr[2], doc)).unwrap_or(0.0) as usize;
-                                
+                                let start = bson_to_f64(&evaluate_expression(&arr[1], doc))
+                                    .unwrap_or(0.0)
+                                    as usize;
+                                let len = bson_to_f64(&evaluate_expression(&arr[2], doc))
+                                    .unwrap_or(0.0)
+                                    as usize;
+
                                 let chars: Vec<char> = s.chars().collect();
                                 let result: String = chars.iter().skip(start).take(len).collect();
                                 return Bson::String(result);
@@ -3172,7 +3315,9 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             Bson::Int32(n) => Bson::Int64(n as i64),
                             Bson::Int64(n) => Bson::Int64(n),
                             Bson::Double(n) => Bson::Int64(n as i64),
-                            Bson::String(s) => s.parse::<i64>().map(Bson::Int64).unwrap_or(Bson::Null),
+                            Bson::String(s) => {
+                                s.parse::<i64>().map(Bson::Int64).unwrap_or(Bson::Null)
+                            }
                             _ => Bson::Null,
                         }
                     }
@@ -3190,7 +3335,10 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     }
                     "$isNumber" => {
                         let val = evaluate_expression(args, doc);
-                        Bson::Boolean(matches!(val, Bson::Int32(_) | Bson::Int64(_) | Bson::Double(_)))
+                        Bson::Boolean(matches!(
+                            val,
+                            Bson::Int32(_) | Bson::Int64(_) | Bson::Double(_)
+                        ))
                     }
                     // Date operators
                     "$year" => {
@@ -3256,7 +3404,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$dayOfWeek" => {
                         let val = evaluate_expression(args, doc);
                         if let Bson::DateTime(dt) = val {
-                            use chrono::{TimeZone, Utc, Datelike};
+                            use chrono::{Datelike, TimeZone, Utc};
                             let datetime = Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
                             // MongoDB uses 1 (Sunday) to 7 (Saturday)
                             let dow = datetime.weekday().num_days_from_sunday() + 1;
@@ -3268,7 +3416,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$dayOfYear" => {
                         let val = evaluate_expression(args, doc);
                         if let Bson::DateTime(dt) = val {
-                            use chrono::{TimeZone, Utc, Datelike};
+                            use chrono::{Datelike, TimeZone, Utc};
                             let datetime = Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
                             Bson::Int32(datetime.ordinal() as i32)
                         } else {
@@ -3278,10 +3426,13 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$dateToString" => {
                         if let Bson::Document(date_doc) = args {
                             let date = date_doc.get("date").map(|d| evaluate_expression(d, doc));
-                            let format = date_doc.get_str("format").unwrap_or("%Y-%m-%dT%H:%M:%S%.3fZ");
+                            let format = date_doc
+                                .get_str("format")
+                                .unwrap_or("%Y-%m-%dT%H:%M:%S%.3fZ");
                             if let Some(Bson::DateTime(dt)) = date {
                                 use chrono::{TimeZone, Utc};
-                                let datetime = Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
+                                let datetime =
+                                    Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
                                 return Bson::String(datetime.format(format).to_string());
                             }
                         }
@@ -3290,7 +3441,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$dateFromParts" => {
                         if let Bson::Document(parts_doc) = args {
                             use chrono::{TimeZone, Utc};
-                            
+
                             let year = parts_doc.get_i32("year").unwrap_or(1970);
                             let month = parts_doc.get_i32("month").unwrap_or(1) as u32;
                             let day = parts_doc.get_i32("day").unwrap_or(1) as u32;
@@ -3298,10 +3449,16 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             let minute = parts_doc.get_i32("minute").unwrap_or(0) as u32;
                             let second = parts_doc.get_i32("second").unwrap_or(0) as u32;
                             let millisecond = parts_doc.get_i32("millisecond").unwrap_or(0) as u32;
-                            
-                            if let Some(dt) = Utc.with_ymd_and_hms(year, month, day, hour, minute, second).single() {
-                                let dt_with_ms = dt + chrono::Duration::milliseconds(millisecond as i64);
-                                return Bson::DateTime(bson::DateTime::from_millis(dt_with_ms.timestamp_millis()));
+
+                            if let Some(dt) = Utc
+                                .with_ymd_and_hms(year, month, day, hour, minute, second)
+                                .single()
+                            {
+                                let dt_with_ms =
+                                    dt + chrono::Duration::milliseconds(millisecond as i64);
+                                return Bson::DateTime(bson::DateTime::from_millis(
+                                    dt_with_ms.timestamp_millis(),
+                                ));
                             }
                         }
                         Bson::Null
@@ -3312,11 +3469,15 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             if let Some(date_str) = date_string {
                                 use chrono::{DateTime, Utc};
                                 if let Ok(dt) = DateTime::parse_from_rfc3339(date_str) {
-                                    return Bson::DateTime(bson::DateTime::from_millis(dt.timestamp_millis()));
+                                    return Bson::DateTime(bson::DateTime::from_millis(
+                                        dt.timestamp_millis(),
+                                    ));
                                 }
                                 // Try ISO 8601 without timezone
                                 if let Ok(dt) = date_str.parse::<DateTime<Utc>>() {
-                                    return Bson::DateTime(bson::DateTime::from_millis(dt.timestamp_millis()));
+                                    return Bson::DateTime(bson::DateTime::from_millis(
+                                        dt.timestamp_millis(),
+                                    ));
                                 }
                             }
                         }
@@ -3327,9 +3488,10 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             if let Some(date) = date_doc.get("date") {
                                 let date_val = evaluate_expression(date, doc);
                                 if let Bson::DateTime(dt) = date_val {
-                                    use chrono::{TimeZone, Utc, Datelike, Timelike};
-                                    let datetime = Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
-                                    
+                                    use chrono::{Datelike, TimeZone, Timelike, Utc};
+                                    let datetime =
+                                        Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
+
                                     return Bson::Document(doc! {
                                         "year": datetime.year(),
                                         "month": datetime.month() as i32,
@@ -3346,34 +3508,50 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     }
                     "$dateAdd" => {
                         if let Bson::Document(add_doc) = args {
-                            if let (Some(start_date), Some(unit), Some(amount)) = 
-                                (add_doc.get("startDate"), add_doc.get_str("unit").ok(), add_doc.get("amount")) {
+                            if let (Some(start_date), Some(unit), Some(amount)) = (
+                                add_doc.get("startDate"),
+                                add_doc.get_str("unit").ok(),
+                                add_doc.get("amount"),
+                            ) {
                                 let date_val = evaluate_expression(start_date, doc);
-                                let amount_val = bson_to_f64(&evaluate_expression(amount, doc)).unwrap_or(0.0) as i64;
-                                
+                                let amount_val = bson_to_f64(&evaluate_expression(amount, doc))
+                                    .unwrap_or(0.0)
+                                    as i64;
+
                                 if let Bson::DateTime(dt) = date_val {
-                                    use chrono::{TimeZone, Utc, Duration, Datelike};
-                                    let datetime = Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
-                                    
+                                    use chrono::{Datelike, Duration, TimeZone, Utc};
+                                    let datetime =
+                                        Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
+
                                     let new_dt = match unit {
-                                        "year" => datetime.with_year(datetime.year() + amount_val as i32),
+                                        "year" => {
+                                            datetime.with_year(datetime.year() + amount_val as i32)
+                                        }
                                         "month" => {
-                                            let total_months = datetime.year() * 12 + datetime.month() as i32 + amount_val as i32;
+                                            let total_months = datetime.year() * 12
+                                                + datetime.month() as i32
+                                                + amount_val as i32;
                                             let new_year = total_months / 12;
                                             let new_month = (total_months % 12) as u32;
-                                            datetime.with_year(new_year).and_then(|d| d.with_month(new_month))
+                                            datetime
+                                                .with_year(new_year)
+                                                .and_then(|d| d.with_month(new_month))
                                         }
                                         "week" => Some(datetime + Duration::weeks(amount_val)),
                                         "day" => Some(datetime + Duration::days(amount_val)),
                                         "hour" => Some(datetime + Duration::hours(amount_val)),
                                         "minute" => Some(datetime + Duration::minutes(amount_val)),
                                         "second" => Some(datetime + Duration::seconds(amount_val)),
-                                        "millisecond" => Some(datetime + Duration::milliseconds(amount_val)),
+                                        "millisecond" => {
+                                            Some(datetime + Duration::milliseconds(amount_val))
+                                        }
                                         _ => None,
                                     };
-                                    
+
                                     if let Some(new_datetime) = new_dt {
-                                        return Bson::DateTime(bson::DateTime::from_millis(new_datetime.timestamp_millis()));
+                                        return Bson::DateTime(bson::DateTime::from_millis(
+                                            new_datetime.timestamp_millis(),
+                                        ));
                                     }
                                 }
                             }
@@ -3382,20 +3560,33 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     }
                     "$dateDiff" => {
                         if let Bson::Document(diff_doc) = args {
-                            if let (Some(start_date), Some(end_date), Some(unit)) = 
-                                (diff_doc.get("startDate"), diff_doc.get("endDate"), diff_doc.get_str("unit").ok()) {
+                            if let (Some(start_date), Some(end_date), Some(unit)) = (
+                                diff_doc.get("startDate"),
+                                diff_doc.get("endDate"),
+                                diff_doc.get_str("unit").ok(),
+                            ) {
                                 let start_val = evaluate_expression(start_date, doc);
                                 let end_val = evaluate_expression(end_date, doc);
-                                
-                                if let (Bson::DateTime(start_dt), Bson::DateTime(end_dt)) = (start_val, end_val) {
-                                    use chrono::{TimeZone, Utc, Datelike};
-                                    let start = Utc.timestamp_millis_opt(start_dt.timestamp_millis()).unwrap();
-                                    let end = Utc.timestamp_millis_opt(end_dt.timestamp_millis()).unwrap();
+
+                                if let (Bson::DateTime(start_dt), Bson::DateTime(end_dt)) =
+                                    (start_val, end_val)
+                                {
+                                    use chrono::{Datelike, TimeZone, Utc};
+                                    let start = Utc
+                                        .timestamp_millis_opt(start_dt.timestamp_millis())
+                                        .unwrap();
+                                    let end = Utc
+                                        .timestamp_millis_opt(end_dt.timestamp_millis())
+                                        .unwrap();
                                     let duration = end.signed_duration_since(start);
-                                    
+
                                     let diff = match unit {
                                         "year" => (end.year() - start.year()) as i64,
-                                        "month" => ((end.year() - start.year()) * 12 + (end.month() as i32 - start.month() as i32)) as i64,
+                                        "month" => {
+                                            ((end.year() - start.year()) * 12
+                                                + (end.month() as i32 - start.month() as i32))
+                                                as i64
+                                        }
                                         "week" => duration.num_weeks(),
                                         "day" => duration.num_days(),
                                         "hour" => duration.num_hours(),
@@ -3404,7 +3595,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                         "millisecond" => duration.num_milliseconds(),
                                         _ => 0,
                                     };
-                                    
+
                                     return Bson::Int64(diff);
                                 }
                             }
@@ -3413,34 +3604,50 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     }
                     "$dateSubtract" => {
                         if let Bson::Document(sub_doc) = args {
-                            if let (Some(start_date), Some(unit), Some(amount)) = 
-                                (sub_doc.get("startDate"), sub_doc.get_str("unit").ok(), sub_doc.get("amount")) {
+                            if let (Some(start_date), Some(unit), Some(amount)) = (
+                                sub_doc.get("startDate"),
+                                sub_doc.get_str("unit").ok(),
+                                sub_doc.get("amount"),
+                            ) {
                                 let date_val = evaluate_expression(start_date, doc);
-                                let amount_val = -(bson_to_f64(&evaluate_expression(amount, doc)).unwrap_or(0.0) as i64);
-                                
+                                let amount_val = -(bson_to_f64(&evaluate_expression(amount, doc))
+                                    .unwrap_or(0.0)
+                                    as i64);
+
                                 if let Bson::DateTime(dt) = date_val {
-                                    use chrono::{TimeZone, Utc, Duration, Datelike};
-                                    let datetime = Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
-                                    
+                                    use chrono::{Datelike, Duration, TimeZone, Utc};
+                                    let datetime =
+                                        Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
+
                                     let new_dt = match unit {
-                                        "year" => datetime.with_year(datetime.year() + amount_val as i32),
+                                        "year" => {
+                                            datetime.with_year(datetime.year() + amount_val as i32)
+                                        }
                                         "month" => {
-                                            let total_months = datetime.year() * 12 + datetime.month() as i32 + amount_val as i32;
+                                            let total_months = datetime.year() * 12
+                                                + datetime.month() as i32
+                                                + amount_val as i32;
                                             let new_year = total_months / 12;
                                             let new_month = (total_months % 12) as u32;
-                                            datetime.with_year(new_year).and_then(|d| d.with_month(new_month))
+                                            datetime
+                                                .with_year(new_year)
+                                                .and_then(|d| d.with_month(new_month))
                                         }
                                         "week" => Some(datetime + Duration::weeks(amount_val)),
                                         "day" => Some(datetime + Duration::days(amount_val)),
                                         "hour" => Some(datetime + Duration::hours(amount_val)),
                                         "minute" => Some(datetime + Duration::minutes(amount_val)),
                                         "second" => Some(datetime + Duration::seconds(amount_val)),
-                                        "millisecond" => Some(datetime + Duration::milliseconds(amount_val)),
+                                        "millisecond" => {
+                                            Some(datetime + Duration::milliseconds(amount_val))
+                                        }
                                         _ => None,
                                     };
-                                    
+
                                     if let Some(new_datetime) = new_dt {
-                                        return Bson::DateTime(bson::DateTime::from_millis(new_datetime.timestamp_millis()));
+                                        return Bson::DateTime(bson::DateTime::from_millis(
+                                            new_datetime.timestamp_millis(),
+                                        ));
                                     }
                                 }
                             }
@@ -3449,26 +3656,68 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     }
                     "$dateTrunc" => {
                         if let Bson::Document(trunc_doc) = args {
-                            if let (Some(date), Some(unit)) = 
-                                (trunc_doc.get("date"), trunc_doc.get_str("unit").ok()) {
+                            if let (Some(date), Some(unit)) =
+                                (trunc_doc.get("date"), trunc_doc.get_str("unit").ok())
+                            {
                                 let date_val = evaluate_expression(date, doc);
-                                
+
                                 if let Bson::DateTime(dt) = date_val {
-                                    use chrono::{TimeZone, Utc, Datelike, Timelike};
-                                    let datetime = Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
-                                    
+                                    use chrono::{Datelike, TimeZone, Timelike, Utc};
+                                    let datetime =
+                                        Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
+
                                     let truncated = match unit {
-                                        "year" => Utc.with_ymd_and_hms(datetime.year(), 1, 1, 0, 0, 0).single(),
-                                        "month" => Utc.with_ymd_and_hms(datetime.year(), datetime.month(), 1, 0, 0, 0).single(),
-                                        "day" => Utc.with_ymd_and_hms(datetime.year(), datetime.month(), datetime.day(), 0, 0, 0).single(),
-                                        "hour" => Utc.with_ymd_and_hms(datetime.year(), datetime.month(), datetime.day(), datetime.hour(), 0, 0).single(),
-                                        "minute" => Utc.with_ymd_and_hms(datetime.year(), datetime.month(), datetime.day(), datetime.hour(), datetime.minute(), 0).single(),
+                                        "year" => Utc
+                                            .with_ymd_and_hms(datetime.year(), 1, 1, 0, 0, 0)
+                                            .single(),
+                                        "month" => Utc
+                                            .with_ymd_and_hms(
+                                                datetime.year(),
+                                                datetime.month(),
+                                                1,
+                                                0,
+                                                0,
+                                                0,
+                                            )
+                                            .single(),
+                                        "day" => Utc
+                                            .with_ymd_and_hms(
+                                                datetime.year(),
+                                                datetime.month(),
+                                                datetime.day(),
+                                                0,
+                                                0,
+                                                0,
+                                            )
+                                            .single(),
+                                        "hour" => Utc
+                                            .with_ymd_and_hms(
+                                                datetime.year(),
+                                                datetime.month(),
+                                                datetime.day(),
+                                                datetime.hour(),
+                                                0,
+                                                0,
+                                            )
+                                            .single(),
+                                        "minute" => Utc
+                                            .with_ymd_and_hms(
+                                                datetime.year(),
+                                                datetime.month(),
+                                                datetime.day(),
+                                                datetime.hour(),
+                                                datetime.minute(),
+                                                0,
+                                            )
+                                            .single(),
                                         "second" => Some(datetime.with_nanosecond(0).unwrap()),
                                         _ => None,
                                     };
-                                    
+
                                     if let Some(trunc_dt) = truncated {
-                                        return Bson::DateTime(bson::DateTime::from_millis(trunc_dt.timestamp_millis()));
+                                        return Bson::DateTime(bson::DateTime::from_millis(
+                                            trunc_dt.timestamp_millis(),
+                                        ));
                                     }
                                 }
                             }
@@ -3478,7 +3727,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$isoWeek" => {
                         let val = evaluate_expression(args, doc);
                         if let Bson::DateTime(dt) = val {
-                            use chrono::{TimeZone, Utc, Datelike};
+                            use chrono::{Datelike, TimeZone, Utc};
                             let datetime = Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
                             Bson::Int32(datetime.iso_week().week() as i32)
                         } else {
@@ -3488,7 +3737,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$isoWeekYear" => {
                         let val = evaluate_expression(args, doc);
                         if let Bson::DateTime(dt) = val {
-                            use chrono::{TimeZone, Utc, Datelike};
+                            use chrono::{Datelike, TimeZone, Utc};
                             let datetime = Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
                             Bson::Int32(datetime.iso_week().year())
                         } else {
@@ -3498,7 +3747,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$isoDayOfWeek" => {
                         let val = evaluate_expression(args, doc);
                         if let Bson::DateTime(dt) = val {
-                            use chrono::{TimeZone, Utc, Datelike};
+                            use chrono::{Datelike, TimeZone, Utc};
                             let datetime = Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
                             // ISO: Monday = 1, Sunday = 7
                             Bson::Int32(datetime.weekday().number_from_monday() as i32)
@@ -3510,7 +3759,9 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                         let val = evaluate_expression(args, doc);
                         if let Bson::DateTime(dt) = val {
                             use chrono::TimeZone;
-                            let datetime = chrono::Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
+                            let datetime = chrono::Utc
+                                .timestamp_millis_opt(dt.timestamp_millis())
+                                .unwrap();
                             Bson::Int32(datetime.timestamp_subsec_millis() as i32)
                         } else {
                             Bson::Null
@@ -3519,7 +3770,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$week" => {
                         let val = evaluate_expression(args, doc);
                         if let Bson::DateTime(dt) = val {
-                            use chrono::{TimeZone, Utc, Datelike};
+                            use chrono::{Datelike, TimeZone, Utc};
                             let datetime = Utc.timestamp_millis_opt(dt.timestamp_millis()).unwrap();
                             // Week of year (0-53)
                             let ordinal = datetime.ordinal();
@@ -3549,7 +3800,8 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$objectToArray" => {
                         let val = evaluate_expression(args, doc);
                         if let Bson::Document(d) = val {
-                            let arr: Vec<Bson> = d.into_iter()
+                            let arr: Vec<Bson> = d
+                                .into_iter()
                                 .map(|(k, v)| Bson::Document(doc! { "k": k, "v": v }))
                                 .collect();
                             Bson::Array(arr)
@@ -3563,7 +3815,9 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             let mut result = Document::new();
                             for item in arr {
                                 if let Bson::Document(d) = item {
-                                    if let (Some(Bson::String(k)), Some(v)) = (d.get("k"), d.get("v")) {
+                                    if let (Some(Bson::String(k)), Some(v)) =
+                                        (d.get("k"), d.get("v"))
+                                    {
                                         result.insert(k.clone(), v.clone());
                                     }
                                 } else if let Bson::Array(pair) = item {
@@ -3604,7 +3858,11 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                 return Bson::Array(vec![]);
                             }
                             let first = evaluate_expression(&arr[0], doc);
-                            let mut result = if let Bson::Array(a) = first { a } else { vec![] };
+                            let mut result = if let Bson::Array(a) = first {
+                                a
+                            } else {
+                                vec![]
+                            };
 
                             for item in arr.iter().skip(1) {
                                 let val = evaluate_expression(item, doc);
@@ -3623,7 +3881,8 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                 let first = evaluate_expression(&arr[0], doc);
                                 let second = evaluate_expression(&arr[1], doc);
                                 if let (Bson::Array(a), Bson::Array(b)) = (first, second) {
-                                    let result: Vec<Bson> = a.into_iter().filter(|v| !b.contains(v)).collect();
+                                    let result: Vec<Bson> =
+                                        a.into_iter().filter(|v| !b.contains(v)).collect();
                                     return Bson::Array(result);
                                 }
                             }
@@ -3633,16 +3892,29 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     "$setEquals" => {
                         if let Bson::Array(arr) = args {
                             if arr.len() >= 2 {
-                                let sets: Vec<Vec<Bson>> = arr.iter().filter_map(|a| {
-                                    if let Bson::Array(v) = evaluate_expression(a, doc) { Some(v) } else { None }
-                                }).collect();
+                                let sets: Vec<Vec<Bson>> = arr
+                                    .iter()
+                                    .filter_map(|a| {
+                                        if let Bson::Array(v) = evaluate_expression(a, doc) {
+                                            Some(v)
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .collect();
 
-                                if sets.is_empty() { return Bson::Boolean(false); }
+                                if sets.is_empty() {
+                                    return Bson::Boolean(false);
+                                }
                                 let first = &sets[0];
                                 for set in sets.iter().skip(1) {
-                                    if set.len() != first.len() { return Bson::Boolean(false); }
+                                    if set.len() != first.len() {
+                                        return Bson::Boolean(false);
+                                    }
                                     for v in first {
-                                        if !set.contains(v) { return Bson::Boolean(false); }
+                                        if !set.contains(v) {
+                                            return Bson::Boolean(false);
+                                        }
                                     }
                                 }
                                 return Bson::Boolean(true);
@@ -3672,9 +3944,15 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                             Bson::Boolean(true) => return Bson::Boolean(true),
                                             Bson::Int32(n) if n != 0 => return Bson::Boolean(true),
                                             Bson::Int64(n) if n != 0 => return Bson::Boolean(true),
-                                            Bson::Double(n) if n != 0.0 => return Bson::Boolean(true),
-                                            Bson::String(s) if !s.is_empty() => return Bson::Boolean(true),
-                                            Bson::Document(_) | Bson::Array(_) => return Bson::Boolean(true),
+                                            Bson::Double(n) if n != 0.0 => {
+                                                return Bson::Boolean(true)
+                                            }
+                                            Bson::String(s) if !s.is_empty() => {
+                                                return Bson::Boolean(true)
+                                            }
+                                            Bson::Document(_) | Bson::Array(_) => {
+                                                return Bson::Boolean(true)
+                                            }
                                             _ => {}
                                         }
                                     }
@@ -3690,8 +3968,12 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                 if let Bson::Array(a) = val {
                                     for v in a {
                                         match v {
-                                            Bson::Boolean(false) | Bson::Null => return Bson::Boolean(false),
-                                            Bson::Int32(0) | Bson::Int64(0) => return Bson::Boolean(false),
+                                            Bson::Boolean(false) | Bson::Null => {
+                                                return Bson::Boolean(false)
+                                            }
+                                            Bson::Int32(0) | Bson::Int64(0) => {
+                                                return Bson::Boolean(false)
+                                            }
                                             Bson::Double(0.0) => return Bson::Boolean(false),
                                             _ => {}
                                         }
@@ -3775,7 +4057,8 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                     Bson::Document(d) => d,
                                     _ => return Bson::Null,
                                 };
-                                result.insert(field_name.to_string(), evaluate_expression(val, doc));
+                                result
+                                    .insert(field_name.to_string(), evaluate_expression(val, doc));
                                 return Bson::Document(result);
                             }
                         }
@@ -3853,8 +4136,10 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                                 caps.iter()
                                                     .skip(1)
                                                     .map(|m| {
-                                                        m.map(|m| Bson::String(m.as_str().to_string()))
-                                                            .unwrap_or(Bson::Null)
+                                                        m.map(|m| {
+                                                            Bson::String(m.as_str().to_string())
+                                                        })
+                                                        .unwrap_or(Bson::Null)
                                                     })
                                                     .collect()
                                             })
@@ -3992,12 +4277,14 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                     }
                                     "date" => {
                                         if let Bson::String(s) = &input_val {
-                                            if let Ok(dt) =
-                                                chrono::DateTime::parse_from_rfc3339(s)
+                                            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s)
                                             {
-                                                return Bson::DateTime(bson::DateTime::from_millis(
-                                                    dt.with_timezone(&chrono::Utc).timestamp_millis(),
-                                                ));
+                                                return Bson::DateTime(
+                                                    bson::DateTime::from_millis(
+                                                        dt.with_timezone(&chrono::Utc)
+                                                            .timestamp_millis(),
+                                                    ),
+                                                );
                                             }
                                         } else if let Some(n) = bson_to_i64(&input_val) {
                                             return Bson::DateTime(bson::DateTime::from_millis(n));
@@ -4055,9 +4342,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                 }
                             }
                             Bson::Int64(n) => Bson::DateTime(bson::DateTime::from_millis(n)),
-                            Bson::Int32(n) => {
-                                Bson::DateTime(bson::DateTime::from_millis(n as i64))
-                            }
+                            Bson::Int32(n) => Bson::DateTime(bson::DateTime::from_millis(n as i64)),
                             Bson::Double(n) => {
                                 Bson::DateTime(bson::DateTime::from_millis(n as i64))
                             }
@@ -4102,14 +4387,14 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                     // Return index key used
                                     doc.get("$indexKey").cloned().unwrap_or(Bson::Null)
                                 }
-                                "searchScore" => {
-                                    doc.get("$searchScore").cloned().unwrap_or(Bson::Double(0.0))
-                                }
-                                "searchHighlights" => {
-                                    doc.get("$searchHighlights")
-                                        .cloned()
-                                        .unwrap_or(Bson::Array(vec![]))
-                                }
+                                "searchScore" => doc
+                                    .get("$searchScore")
+                                    .cloned()
+                                    .unwrap_or(Bson::Double(0.0)),
+                                "searchHighlights" => doc
+                                    .get("$searchHighlights")
+                                    .cloned()
+                                    .unwrap_or(Bson::Array(vec![])),
                                 _ => Bson::Null,
                             }
                         } else {
@@ -4210,7 +4495,8 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                             Some(Bson::Null)
                                         };
 
-                                        let cmp = compare_bson_values(val_a.as_ref(), val_b.as_ref());
+                                        let cmp =
+                                            compare_bson_values(val_a.as_ref(), val_b.as_ref());
                                         if cmp != std::cmp::Ordering::Equal {
                                             return if *direction >= 0 {
                                                 cmp

@@ -446,14 +446,16 @@ impl MySqlAdapter {
         }
 
         // Handle SHOW INDEX FROM
-        if query_upper.starts_with("SHOW INDEX FROM") || query_upper.starts_with("SHOW INDEXES FROM")
+        if query_upper.starts_with("SHOW INDEX FROM")
+            || query_upper.starts_with("SHOW INDEXES FROM")
         {
             println!("[MySQL] Handling SHOW INDEX");
             return Some(self.build_show_index_result(query).await);
         }
 
         // Handle SHOW PROCESSLIST
-        if query_upper.starts_with("SHOW PROCESSLIST") || query_upper.starts_with("SHOW FULL PROCESSLIST")
+        if query_upper.starts_with("SHOW PROCESSLIST")
+            || query_upper.starts_with("SHOW FULL PROCESSLIST")
         {
             println!("[MySQL] Handling SHOW PROCESSLIST");
             return Some(self.build_show_processlist_result());
@@ -466,7 +468,9 @@ impl MySqlAdapter {
         }
 
         // Handle SHOW CREATE DATABASE
-        if query_upper.starts_with("SHOW CREATE DATABASE") || query_upper.starts_with("SHOW CREATE SCHEMA") {
+        if query_upper.starts_with("SHOW CREATE DATABASE")
+            || query_upper.starts_with("SHOW CREATE SCHEMA")
+        {
             println!("[MySQL] Handling SHOW CREATE DATABASE");
             return Some(self.build_show_create_database_result(query));
         }
@@ -484,7 +488,9 @@ impl MySqlAdapter {
         }
 
         // Handle SHOW ENGINES
-        if query_upper.starts_with("SHOW ENGINES") || query_upper.starts_with("SHOW STORAGE ENGINES") {
+        if query_upper.starts_with("SHOW ENGINES")
+            || query_upper.starts_with("SHOW STORAGE ENGINES")
+        {
             println!("[MySQL] Handling SHOW ENGINES");
             return Some(self.build_show_engines_result());
         }
@@ -746,10 +752,12 @@ impl MySqlAdapter {
     fn build_show_status_result(&self) -> ProtocolResult<Vec<Bytes>> {
         use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
 
-        let status = [("Uptime", "0"),
+        let status = [
+            ("Uptime", "0"),
             ("Threads_connected", "1"),
             ("Connections", "1"),
-            ("Questions", "0")];
+            ("Questions", "0"),
+        ];
 
         let rows: Vec<Vec<Option<String>>> = status
             .iter()
@@ -770,11 +778,13 @@ impl MySqlAdapter {
     fn build_show_collation_result(&self) -> ProtocolResult<Vec<Bytes>> {
         use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
 
-        let collations = [("utf8mb4_general_ci", "utf8mb4", "45", "Yes", "Yes", "1"),
+        let collations = [
+            ("utf8mb4_general_ci", "utf8mb4", "45", "Yes", "Yes", "1"),
             ("utf8mb4_bin", "utf8mb4", "46", "", "Yes", "1"),
             ("utf8mb4_unicode_ci", "utf8mb4", "224", "", "Yes", "8"),
             ("utf8_general_ci", "utf8", "33", "Yes", "Yes", "1"),
-            ("latin1_swedish_ci", "latin1", "8", "Yes", "Yes", "1")];
+            ("latin1_swedish_ci", "latin1", "8", "Yes", "Yes", "1"),
+        ];
 
         let rows: Vec<Vec<Option<String>>> = collations
             .iter()
@@ -811,10 +821,12 @@ impl MySqlAdapter {
     fn build_show_charset_result(&self) -> ProtocolResult<Vec<Bytes>> {
         use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
 
-        let charsets = [("utf8mb4", "UTF-8 Unicode", "utf8mb4_general_ci", "4"),
+        let charsets = [
+            ("utf8mb4", "UTF-8 Unicode", "utf8mb4_general_ci", "4"),
             ("utf8", "UTF-8 Unicode", "utf8_general_ci", "3"),
             ("latin1", "cp1252 West European", "latin1_swedish_ci", "1"),
-            ("ascii", "US ASCII", "ascii_general_ci", "1")];
+            ("ascii", "US ASCII", "ascii_general_ci", "1"),
+        ];
 
         let rows: Vec<Vec<Option<String>>> = charsets
             .iter()
@@ -877,30 +889,40 @@ impl MySqlAdapter {
 
         // Extract table name from query
         let query_upper = query.to_uppercase();
-        let table_name = if query_upper.starts_with("DESCRIBE ") || query_upper.starts_with("DESC ") {
-            query.split_whitespace().nth(1).unwrap_or("").trim_end_matches(';')
+        let table_name = if query_upper.starts_with("DESCRIBE ") || query_upper.starts_with("DESC ")
+        {
+            query
+                .split_whitespace()
+                .nth(1)
+                .unwrap_or("")
+                .trim_end_matches(';')
         } else {
             // SHOW COLUMNS FROM table or SHOW FIELDS FROM table
-            query.split_whitespace().nth(3).unwrap_or("").trim_end_matches(';')
+            query
+                .split_whitespace()
+                .nth(3)
+                .unwrap_or("")
+                .trim_end_matches(';')
         };
 
         // Query table structure using SQL engine
         let schema_query = format!("SELECT * FROM {} LIMIT 0", table_name);
         match self.sql_engine.write().await.execute(&schema_query).await {
             Ok(crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select {
-                columns, ..
+                columns,
+                ..
             }) => {
                 // Build columns info
                 let rows: Vec<Vec<Option<String>>> = columns
                     .iter()
                     .map(|col| {
                         vec![
-                            Some(col.clone()),                    // Field
-                            Some("varchar(255)".to_string()),     // Type
-                            Some("YES".to_string()),              // Null
-                            Some("".to_string()),                 // Key
-                            Some("NULL".to_string()),             // Default
-                            Some("".to_string()),                 // Extra
+                            Some(col.clone()),                // Field
+                            Some("varchar(255)".to_string()), // Type
+                            Some("YES".to_string()),          // Null
+                            Some("".to_string()),             // Key
+                            Some("NULL".to_string()),         // Default
+                            Some("".to_string()),             // Extra
                         ]
                     })
                     .collect();
@@ -933,13 +955,18 @@ impl MySqlAdapter {
         use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
 
         // Extract table name from query: SHOW CREATE TABLE table_name
-        let table_name = query.split_whitespace().nth(3).unwrap_or("").trim_end_matches(';');
+        let table_name = query
+            .split_whitespace()
+            .nth(3)
+            .unwrap_or("")
+            .trim_end_matches(';');
 
         // Query table structure using SQL engine
         let schema_query = format!("SELECT * FROM {} LIMIT 0", table_name);
         match self.sql_engine.write().await.execute(&schema_query).await {
             Ok(crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select {
-                columns, ..
+                columns,
+                ..
             }) => {
                 // Build CREATE TABLE statement
                 let column_defs: Vec<String> = columns
@@ -955,10 +982,7 @@ impl MySqlAdapter {
 
                 let result = UnifiedExecutionResult::Select {
                     columns: vec!["Table".to_string(), "Create Table".to_string()],
-                    rows: vec![vec![
-                        Some(table_name.to_string()),
-                        Some(create_statement),
-                    ]],
+                    rows: vec![vec![Some(table_name.to_string()), Some(create_statement)]],
                     row_count: 1,
                     transaction_id: None,
                 };
@@ -977,7 +1001,11 @@ impl MySqlAdapter {
         use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
 
         // Extract table name from query: SHOW INDEX FROM table_name
-        let table_name = query.split_whitespace().nth(3).unwrap_or("").trim_end_matches(';');
+        let table_name = query
+            .split_whitespace()
+            .nth(3)
+            .unwrap_or("")
+            .trim_end_matches(';');
 
         // Return empty result (no indexes by default)
         let result = UnifiedExecutionResult::Select {
@@ -1053,9 +1081,10 @@ impl MySqlAdapter {
 
         let result = UnifiedExecutionResult::Select {
             columns: vec![format!("Grants for {}", user)],
-            rows: vec![
-                vec![Some(format!("GRANT ALL PRIVILEGES ON *.* TO '{}'", user))],
-            ],
+            rows: vec![vec![Some(format!(
+                "GRANT ALL PRIVILEGES ON *.* TO '{}'",
+                user
+            ))]],
             row_count: 1,
             transaction_id: None,
         };
@@ -1078,7 +1107,11 @@ impl MySqlAdapter {
             .trim_matches('\'')
             .to_string();
 
-        let db_name = if db_name.is_empty() { "orbit".to_string() } else { db_name.to_lowercase() };
+        let db_name = if db_name.is_empty() {
+            "orbit".to_string()
+        } else {
+            db_name.to_lowercase()
+        };
 
         let result = UnifiedExecutionResult::Select {
             columns: vec!["Database".to_string(), "Create Database".to_string()],
@@ -1099,7 +1132,11 @@ impl MySqlAdapter {
 
         // Return empty warnings (no warnings)
         let result = UnifiedExecutionResult::Select {
-            columns: vec!["Level".to_string(), "Code".to_string(), "Message".to_string()],
+            columns: vec![
+                "Level".to_string(),
+                "Code".to_string(),
+                "Message".to_string(),
+            ],
             rows: vec![],
             row_count: 0,
             transaction_id: None,
@@ -1114,7 +1151,11 @@ impl MySqlAdapter {
 
         // Return empty errors (no errors)
         let result = UnifiedExecutionResult::Select {
-            columns: vec!["Level".to_string(), "Code".to_string(), "Message".to_string()],
+            columns: vec![
+                "Level".to_string(),
+                "Code".to_string(),
+                "Message".to_string(),
+            ],
             rows: vec![],
             row_count: 0,
             transaction_id: None,
@@ -2470,17 +2511,38 @@ mod tests {
         assert_eq!(MySqlCommand::from_u8(0x01).unwrap(), MySqlCommand::Quit);
         assert_eq!(MySqlCommand::from_u8(0x02).unwrap(), MySqlCommand::InitDb);
         assert_eq!(MySqlCommand::from_u8(0x03).unwrap(), MySqlCommand::Query);
-        assert_eq!(MySqlCommand::from_u8(0x04).unwrap(), MySqlCommand::FieldList);
+        assert_eq!(
+            MySqlCommand::from_u8(0x04).unwrap(),
+            MySqlCommand::FieldList
+        );
         assert_eq!(MySqlCommand::from_u8(0x05).unwrap(), MySqlCommand::CreateDb);
         assert_eq!(MySqlCommand::from_u8(0x06).unwrap(), MySqlCommand::DropDb);
         assert_eq!(MySqlCommand::from_u8(0x07).unwrap(), MySqlCommand::Refresh);
         assert_eq!(MySqlCommand::from_u8(0x0E).unwrap(), MySqlCommand::Ping);
-        assert_eq!(MySqlCommand::from_u8(0x16).unwrap(), MySqlCommand::StmtPrepare);
-        assert_eq!(MySqlCommand::from_u8(0x17).unwrap(), MySqlCommand::StmtExecute);
-        assert_eq!(MySqlCommand::from_u8(0x19).unwrap(), MySqlCommand::StmtClose);
-        assert_eq!(MySqlCommand::from_u8(0x1A).unwrap(), MySqlCommand::StmtReset);
-        assert_eq!(MySqlCommand::from_u8(0x1B).unwrap(), MySqlCommand::SetOption);
-        assert_eq!(MySqlCommand::from_u8(0x1F).unwrap(), MySqlCommand::ResetConnection);
+        assert_eq!(
+            MySqlCommand::from_u8(0x16).unwrap(),
+            MySqlCommand::StmtPrepare
+        );
+        assert_eq!(
+            MySqlCommand::from_u8(0x17).unwrap(),
+            MySqlCommand::StmtExecute
+        );
+        assert_eq!(
+            MySqlCommand::from_u8(0x19).unwrap(),
+            MySqlCommand::StmtClose
+        );
+        assert_eq!(
+            MySqlCommand::from_u8(0x1A).unwrap(),
+            MySqlCommand::StmtReset
+        );
+        assert_eq!(
+            MySqlCommand::from_u8(0x1B).unwrap(),
+            MySqlCommand::SetOption
+        );
+        assert_eq!(
+            MySqlCommand::from_u8(0x1F).unwrap(),
+            MySqlCommand::ResetConnection
+        );
 
         // Test invalid command
         assert!(MySqlCommand::from_u8(0xFF).is_err());
@@ -2635,7 +2697,10 @@ mod tests {
 
         // Test authentication error mapping
         let error = ProtocolError::AuthenticationError("bad credentials".to_string());
-        assert_eq!(map_error_to_mysql_code(&error), error_codes::ER_ACCESS_DENIED);
+        assert_eq!(
+            map_error_to_mysql_code(&error),
+            error_codes::ER_ACCESS_DENIED
+        );
 
         // Test invalid opcode mapping
         let error = ProtocolError::InvalidOpcode(0xFF);
@@ -2663,7 +2728,7 @@ mod tests {
         // Test OK packet structure
         let ok = MySqlPacketBuilder::ok(5, 10);
         assert_eq!(ok[0], 0x00); // OK packet header
-        // The rest contains affected_rows, last_insert_id, status, warnings
+                                 // The rest contains affected_rows, last_insert_id, status, warnings
     }
 
     #[test]
@@ -2673,7 +2738,7 @@ mod tests {
         // Test ERROR packet structure
         let err = MySqlPacketBuilder::error(1045, "Access denied");
         assert_eq!(err[0], 0xFF); // ERR packet header
-        // Error code is little-endian at bytes 1-2
+                                  // Error code is little-endian at bytes 1-2
         assert_eq!(u16::from_le_bytes([err[1], err[2]]), 1045);
         // SQL state marker
         assert_eq!(err[3], b'#');

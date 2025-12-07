@@ -110,7 +110,10 @@ impl RestApiServer {
             .route("/sql/batch", post(handlers::execute_batch_sql))
             .route("/tables", get(handlers::list_tables))
             .route("/tables/{schema}/{table}", get(handlers::describe_table))
-            .route("/tables/{schema}/{table}/indexes", get(handlers::list_indexes))
+            .route(
+                "/tables/{schema}/{table}/indexes",
+                get(handlers::list_indexes),
+            )
             .route("/schemas", get(handlers::list_schemas))
             .route("/queries/history", get(handlers::get_query_history))
             .route("/stats", get(handlers::get_database_stats))

@@ -811,7 +811,12 @@ impl CqlParser {
             let after_group = &query[group_idx + 8..];
 
             // Find the end of GROUP BY clause (ORDER BY, LIMIT, PER PARTITION LIMIT, ALLOW FILTERING, or end)
-            let end_keywords = ["ORDER BY", "LIMIT", "PER PARTITION LIMIT", "ALLOW FILTERING"];
+            let end_keywords = [
+                "ORDER BY",
+                "LIMIT",
+                "PER PARTITION LIMIT",
+                "ALLOW FILTERING",
+            ];
             let end_idx = end_keywords
                 .iter()
                 .filter_map(|kw| after_group.to_uppercase().find(kw))
@@ -904,12 +909,12 @@ impl CqlParser {
             for item in order_part.split(',') {
                 let parts: Vec<&str> = item.split_whitespace().collect();
                 if let Some(col) = parts.first() {
-                    let order = if parts.get(1).map(|s| s.to_uppercase()) == Some("DESC".to_string())
-                    {
-                        ClusteringOrder::Desc
-                    } else {
-                        ClusteringOrder::Asc
-                    };
+                    let order =
+                        if parts.get(1).map(|s| s.to_uppercase()) == Some("DESC".to_string()) {
+                            ClusteringOrder::Desc
+                        } else {
+                            ClusteringOrder::Asc
+                        };
                     order_items.push((col.to_string(), order));
                 }
             }
@@ -1163,7 +1168,12 @@ impl CqlParser {
                 // Could be set add: column + {values}
                 if right.starts_with('{') && right.ends_with('}') {
                     let set_values = self.parse_set_values(&right[1..right.len() - 1])?;
-                    if set_values.iter().all(|v| matches!(v, CqlValue::Text(_) | CqlValue::Int(_) | CqlValue::Bigint(_))) {
+                    if set_values.iter().all(|v| {
+                        matches!(
+                            v,
+                            CqlValue::Text(_) | CqlValue::Int(_) | CqlValue::Bigint(_)
+                        )
+                    }) {
                         return Ok(Some(CqlAssignment::SetAdd(set_values)));
                     }
                     // Map put: {key: value, ...}
@@ -1371,7 +1381,8 @@ impl CqlParser {
                             if let Some(pk_end) = col_def.rfind(')') {
                                 let pk_cols = &col_def[pk_start + 1..pk_end];
                                 for pk_col in pk_cols.split(',') {
-                                    let col_name = pk_col.trim().trim_matches(|c| c == '(' || c == ')');
+                                    let col_name =
+                                        pk_col.trim().trim_matches(|c| c == '(' || c == ')');
                                     if !col_name.is_empty() {
                                         primary_key.push(col_name.to_string());
                                     }
@@ -2358,10 +2369,15 @@ impl CqlParser {
         let password = if let Some(pwd_pos) = query_upper.find("PASSWORD") {
             let after_pwd = query[pwd_pos + 8..].trim_start();
             // Skip '=' if present
-            let pwd_start = after_pwd.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(after_pwd);
+            let pwd_start = after_pwd
+                .strip_prefix('=')
+                .map(|s| s.trim_start())
+                .unwrap_or(after_pwd);
             // Extract quoted password
             if let Some(unquoted) = pwd_start.strip_prefix('\'') {
-                unquoted.find('\'').map(|end_pos| unquoted[..end_pos].to_string())
+                unquoted
+                    .find('\'')
+                    .map(|end_pos| unquoted[..end_pos].to_string())
             } else {
                 pwd_start.split_whitespace().next().map(|s| s.to_string())
             }
@@ -2410,9 +2426,14 @@ impl CqlParser {
 
         let password = if let Some(pwd_pos) = query_upper.find("PASSWORD") {
             let after_pwd = query[pwd_pos + 8..].trim_start();
-            let pwd_start = after_pwd.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(after_pwd);
+            let pwd_start = after_pwd
+                .strip_prefix('=')
+                .map(|s| s.trim_start())
+                .unwrap_or(after_pwd);
             if let Some(unquoted) = pwd_start.strip_prefix('\'') {
-                unquoted.find('\'').map(|end_pos| unquoted[..end_pos].to_string())
+                unquoted
+                    .find('\'')
+                    .map(|end_pos| unquoted[..end_pos].to_string())
             } else {
                 pwd_start.split_whitespace().next().map(|s| s.to_string())
             }
@@ -3082,10 +3103,14 @@ mod tests {
     #[test]
     fn test_select_with_allow_filtering() {
         let parser = CqlParser::new();
-        let stmt = parser.parse("SELECT * FROM users WHERE name = 'test' ALLOW FILTERING").unwrap();
+        let stmt = parser
+            .parse("SELECT * FROM users WHERE name = 'test' ALLOW FILTERING")
+            .unwrap();
 
         match stmt {
-            CqlStatement::Select { allow_filtering, .. } => {
+            CqlStatement::Select {
+                allow_filtering, ..
+            } => {
                 assert!(allow_filtering);
             }
             _ => panic!("Expected SELECT statement"),
@@ -3103,7 +3128,12 @@ mod tests {
         };
 
         match trigger {
-            CqlStatement::CreateTrigger { name, if_not_exists, table, trigger_class } => {
+            CqlStatement::CreateTrigger {
+                name,
+                if_not_exists,
+                table,
+                trigger_class,
+            } => {
                 assert_eq!(name, "my_trigger");
                 assert!(if_not_exists);
                 assert_eq!(table, "users");
@@ -3123,7 +3153,11 @@ mod tests {
         };
 
         match trigger {
-            CqlStatement::DropTrigger { name, if_exists, table } => {
+            CqlStatement::DropTrigger {
+                name,
+                if_exists,
+                table,
+            } => {
                 assert_eq!(name, "my_trigger");
                 assert!(if_exists);
                 assert_eq!(table, "users");
@@ -3180,7 +3214,12 @@ mod tests {
         };
 
         match stmt {
-            CqlStatement::CreateUser { name, if_not_exists, password, superuser } => {
+            CqlStatement::CreateUser {
+                name,
+                if_not_exists,
+                password,
+                superuser,
+            } => {
                 assert_eq!(name, "testuser");
                 assert!(if_not_exists);
                 assert_eq!(password, Some("secret".to_string()));
@@ -3218,8 +3257,7 @@ mod tests {
             } => {
                 assert_eq!(counter_assignments.len(), 1);
                 assert!(counter_assignments.contains_key("count"));
-                if let Some(CqlAssignment::CounterIncrement(val)) =
-                    counter_assignments.get("count")
+                if let Some(CqlAssignment::CounterIncrement(val)) = counter_assignments.get("count")
                 {
                     assert_eq!(*val, 1);
                 } else {
@@ -3298,8 +3336,8 @@ mod tests {
     #[test]
     fn test_vector_ann_search() {
         let parser = CqlParser::new();
-        let result =
-            parser.parse("SELECT * FROM products ORDER BY embedding ANN OF [0.1, 0.2, 0.3] LIMIT 10");
+        let result = parser
+            .parse("SELECT * FROM products ORDER BY embedding ANN OF [0.1, 0.2, 0.3] LIMIT 10");
         assert!(result.is_ok());
 
         match result.unwrap() {
@@ -3319,9 +3357,8 @@ mod tests {
         let parser = CqlParser::new();
 
         // Test VECTOR type in CREATE TABLE
-        let result = parser.parse(
-            "CREATE TABLE items (id uuid PRIMARY KEY, embedding vector<float, 128>)",
-        );
+        let result =
+            parser.parse("CREATE TABLE items (id uuid PRIMARY KEY, embedding vector<float, 128>)");
         assert!(result.is_ok());
 
         match result.unwrap() {
@@ -3398,7 +3435,10 @@ mod tests {
     fn test_vector_ann_search_high_dimension() {
         let parser = CqlParser::new();
         // Test with higher dimension vector (common for embeddings like text-embedding-ada-002 which is 1536)
-        let vector_str = (0..10).map(|i| format!("{}.0", i)).collect::<Vec<_>>().join(", ");
+        let vector_str = (0..10)
+            .map(|i| format!("{}.0", i))
+            .collect::<Vec<_>>()
+            .join(", ");
         let query = format!(
             "SELECT * FROM items ORDER BY vector_col ANN OF [{}] LIMIT 5",
             vector_str
@@ -3407,7 +3447,9 @@ mod tests {
         assert!(result.is_ok());
 
         match result.unwrap() {
-            CqlStatement::Select { ann_search, limit, .. } => {
+            CqlStatement::Select {
+                ann_search, limit, ..
+            } => {
                 assert!(ann_search.is_some());
                 let ann = ann_search.unwrap();
                 assert_eq!(ann.query_vector.len(), 10);

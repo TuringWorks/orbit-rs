@@ -357,9 +357,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     };
 
                     // Generate index name if not provided
-                    let index_name = name
-                        .clone()
-                        .unwrap_or_else(|| format!("idx_{}_{}", label_or_type, properties.join("_")));
+                    let index_name = name.clone().unwrap_or_else(|| {
+                        format!("idx_{}_{}", label_or_type, properties.join("_"))
+                    });
 
                     let index = GraphIndex::new(
                         index_name.clone(),
@@ -370,9 +370,16 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     );
 
                     // Check if exists and handle if_not_exists
-                    let exists = self.storage.index_exists(&index_name).await.unwrap_or(false);
+                    let exists = self
+                        .storage
+                        .index_exists(&index_name)
+                        .await
+                        .unwrap_or(false);
                     if exists && *if_not_exists {
-                        info!("Index {} already exists, skipping due to IF NOT EXISTS", index_name);
+                        info!(
+                            "Index {} already exists, skipping due to IF NOT EXISTS",
+                            index_name
+                        );
                     } else if exists {
                         // Return error for duplicate index
                         warn!("Index {} already exists", index_name);
@@ -385,9 +392,15 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                                     let mut props = HashMap::new();
                                     props.insert(
                                         "message".to_string(),
-                                        serde_json::Value::String(format!("Index {} created", index_name)),
+                                        serde_json::Value::String(format!(
+                                            "Index {} created",
+                                            index_name
+                                        )),
                                     );
-                                    result_nodes.push(GraphNode::new(vec!["_DDLResult".to_string()], props));
+                                    result_nodes.push(GraphNode::new(
+                                        vec!["_DDLResult".to_string()],
+                                        props,
+                                    ));
                                 }
                             }
                             Err(e) => {
@@ -426,9 +439,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     };
 
                     // Generate constraint name if not provided
-                    let constraint_name = name
-                        .clone()
-                        .unwrap_or_else(|| format!("constraint_{}_{}", label_or_type, properties.join("_")));
+                    let constraint_name = name.clone().unwrap_or_else(|| {
+                        format!("constraint_{}_{}", label_or_type, properties.join("_"))
+                    });
 
                     let constraint = GraphConstraint::new(
                         constraint_name.clone(),
@@ -439,9 +452,16 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     );
 
                     // Check if exists and handle if_not_exists
-                    let exists = self.storage.constraint_exists(&constraint_name).await.unwrap_or(false);
+                    let exists = self
+                        .storage
+                        .constraint_exists(&constraint_name)
+                        .await
+                        .unwrap_or(false);
                     if exists && *if_not_exists {
-                        info!("Constraint {} already exists, skipping due to IF NOT EXISTS", constraint_name);
+                        info!(
+                            "Constraint {} already exists, skipping due to IF NOT EXISTS",
+                            constraint_name
+                        );
                     } else if exists {
                         warn!("Constraint {} already exists", constraint_name);
                     } else {
@@ -452,9 +472,15 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                                     let mut props = HashMap::new();
                                     props.insert(
                                         "message".to_string(),
-                                        serde_json::Value::String(format!("Constraint {} created", constraint_name)),
+                                        serde_json::Value::String(format!(
+                                            "Constraint {} created",
+                                            constraint_name
+                                        )),
                                     );
-                                    result_nodes.push(GraphNode::new(vec!["_DDLResult".to_string()], props));
+                                    result_nodes.push(GraphNode::new(
+                                        vec!["_DDLResult".to_string()],
+                                        props,
+                                    ));
                                 }
                             }
                             Err(e) => {
@@ -479,9 +505,15 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                                     let mut props = HashMap::new();
                                     props.insert(
                                         "message".to_string(),
-                                        serde_json::Value::String(format!("Index {} dropped", name)),
+                                        serde_json::Value::String(format!(
+                                            "Index {} dropped",
+                                            name
+                                        )),
                                     );
-                                    result_nodes.push(GraphNode::new(vec!["_DDLResult".to_string()], props));
+                                    result_nodes.push(GraphNode::new(
+                                        vec!["_DDLResult".to_string()],
+                                        props,
+                                    ));
                                 }
                             }
                             Err(e) => {
@@ -495,7 +527,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
 
                     let exists = self.storage.constraint_exists(name).await.unwrap_or(false);
                     if !exists && *if_exists {
-                        info!("Constraint {} does not exist, skipping due to IF EXISTS", name);
+                        info!(
+                            "Constraint {} does not exist, skipping due to IF EXISTS",
+                            name
+                        );
                     } else if !exists {
                         warn!("Constraint {} does not exist", name);
                     } else {
@@ -506,9 +541,15 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                                     let mut props = HashMap::new();
                                     props.insert(
                                         "message".to_string(),
-                                        serde_json::Value::String(format!("Constraint {} dropped", name)),
+                                        serde_json::Value::String(format!(
+                                            "Constraint {} dropped",
+                                            name
+                                        )),
                                     );
-                                    result_nodes.push(GraphNode::new(vec!["_DDLResult".to_string()], props));
+                                    result_nodes.push(GraphNode::new(
+                                        vec!["_DDLResult".to_string()],
+                                        props,
+                                    ));
                                 }
                             }
                             Err(e) => {
@@ -524,7 +565,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                         Ok(indexes) => {
                             for idx in indexes {
                                 let mut props = HashMap::new();
-                                props.insert("name".to_string(), serde_json::Value::String(idx.name.clone()));
+                                props.insert(
+                                    "name".to_string(),
+                                    serde_json::Value::String(idx.name.clone()),
+                                );
                                 props.insert(
                                     "type".to_string(),
                                     serde_json::Value::String(format!("{:?}", idx.index_type)),
@@ -540,10 +584,14 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                                 props.insert(
                                     "properties".to_string(),
                                     serde_json::Value::Array(
-                                        idx.properties.iter().map(|p| serde_json::Value::String(p.clone())).collect(),
+                                        idx.properties
+                                            .iter()
+                                            .map(|p| serde_json::Value::String(p.clone()))
+                                            .collect(),
                                     ),
                                 );
-                                result_nodes.push(GraphNode::new(vec!["_Index".to_string()], props));
+                                result_nodes
+                                    .push(GraphNode::new(vec!["_Index".to_string()], props));
                             }
                             info!("Listed {} indexes", result_nodes.len());
                         }
@@ -559,7 +607,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                         Ok(constraints) => {
                             for c in constraints {
                                 let mut props = HashMap::new();
-                                props.insert("name".to_string(), serde_json::Value::String(c.name.clone()));
+                                props.insert(
+                                    "name".to_string(),
+                                    serde_json::Value::String(c.name.clone()),
+                                );
                                 props.insert(
                                     "type".to_string(),
                                     serde_json::Value::String(format!("{:?}", c.constraint_type)),
@@ -575,10 +626,14 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                                 props.insert(
                                     "properties".to_string(),
                                     serde_json::Value::Array(
-                                        c.properties.iter().map(|p| serde_json::Value::String(p.clone())).collect(),
+                                        c.properties
+                                            .iter()
+                                            .map(|p| serde_json::Value::String(p.clone()))
+                                            .collect(),
                                     ),
                                 );
-                                result_nodes.push(GraphNode::new(vec!["_Constraint".to_string()], props));
+                                result_nodes
+                                    .push(GraphNode::new(vec!["_Constraint".to_string()], props));
                             }
                             info!("Listed {} constraints", result_nodes.len());
                         }
