@@ -93,23 +93,24 @@ impl RestApiServer {
         };
 
         // API v1 routes
+        // Note: Axum 0.7+ uses {param} syntax instead of :param
         let api_routes = Router::new()
             // Actor management
             .route("/actors", get(handlers::list_actors))
             .route("/actors", post(handlers::create_actor))
-            .route("/actors/:actor_type/:key", get(handlers::get_actor))
-            .route("/actors/:actor_type/:key", put(handlers::update_actor))
-            .route("/actors/:actor_type/:key", delete(handlers::delete_actor))
+            .route("/actors/{actor_type}/{key}", get(handlers::get_actor))
+            .route("/actors/{actor_type}/{key}", put(handlers::update_actor))
+            .route("/actors/{actor_type}/{key}", delete(handlers::delete_actor))
             .route(
-                "/actors/:actor_type/:key/invoke",
+                "/actors/{actor_type}/{key}/invoke",
                 post(handlers::invoke_actor),
             )
             // SQL Query endpoints
             .route("/sql", post(handlers::execute_sql_query))
             .route("/sql/batch", post(handlers::execute_batch_sql))
             .route("/tables", get(handlers::list_tables))
-            .route("/tables/:schema/:table", get(handlers::describe_table))
-            .route("/tables/:schema/:table/indexes", get(handlers::list_indexes))
+            .route("/tables/{schema}/{table}", get(handlers::describe_table))
+            .route("/tables/{schema}/{table}/indexes", get(handlers::list_indexes))
             .route("/schemas", get(handlers::list_schemas))
             .route("/queries/history", get(handlers::get_query_history))
             .route("/stats", get(handlers::get_database_stats))
@@ -120,11 +121,11 @@ impl RestApiServer {
             // Transactions
             .route("/transactions", post(handlers::begin_transaction))
             .route(
-                "/transactions/:transaction_id/commit",
+                "/transactions/{transaction_id}/commit",
                 post(handlers::commit_transaction),
             )
             .route(
-                "/transactions/:transaction_id/abort",
+                "/transactions/{transaction_id}/abort",
                 post(handlers::abort_transaction),
             )
             // Natural Language Queries (disabled - handlers not implemented)
@@ -138,7 +139,7 @@ impl RestApiServer {
             // )
             // WebSocket endpoints
             .route(
-                "/ws/actors/:actor_type/:key",
+                "/ws/actors/{actor_type}/{key}",
                 get(WebSocketHandler::handle_actor_socket),
             )
             .route("/ws/events", get(WebSocketHandler::handle_events_socket))

@@ -41,6 +41,8 @@ use orbit_server::protocols::mysql::MySqlConfig;
 use orbit_server::protocols::persistence::redis_data::RedisDataProvider;
 use orbit_server::protocols::postgres_wire::sql::execution::hybrid::HybridStorageConfig;
 use orbit_server::protocols::postgres_wire::{QueryEngine, RocksDbTableStorage};
+use orbit_server::protocols::mongodb::MongoDbServer;
+use orbit_server::protocols::rest::{RestApiServer, server::RestApiConfig};
 use orbit_server::protocols::{CqlServer, MySqlServer, PostgresServer, RespServer};
 use orbit_server::unified_storage::{UnifiedStorageIntegration, UnifiedStorageIntegrationConfig};
 use orbit_server::OrbitServerBuilder;
@@ -333,6 +335,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_port(args.grpc_port)
         .with_postgres_enabled(false)
         .with_redis_enabled(false)
+        .with_mongodb_enabled(false)
         .build()
         .await?;
 
@@ -767,17 +770,58 @@ async fn main() -> Result<(), Box<dyn Error>> {
     protocol_handles.push(aql_handle);
     debug!("[AQL] AQL/ArangoDB protocol adapter started on port 8529");
 
+    // Start REST API server (port 8080 by default)
+    let rest_bind_addr = format!("{}:{}", args.bind, args.http_port);
+    let rest_config = RestApiConfig {
+        bind_address: rest_bind_addr.clone(),
+        enable_cors: true,
+        enable_tracing: true,
+        api_prefix: "/api/v1".to_string(),
+    };
+
+    // Create OrbitClient for REST API
+    let rest_client_config = orbit_client::OrbitClientConfig {
+        server_urls: vec![format!("http://{}:{}", args.bind, args.grpc_port)],
+        namespace: "default".to_string(),
+        ..Default::default()
+    };
+    let rest_orbit_client = orbit_client::OrbitClient::new_offline(rest_client_config).await?;
+
+    let rest_server = RestApiServer::new(rest_orbit_client, rest_config);
+    let rest_handle = tokio::spawn(async move {
+        rest_server
+            .run()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+    });
+    protocol_handles.push(rest_handle);
+    info!("[REST] REST API server started on port {}", args.http_port);
+
+    // Start MongoDB server (port 27017)
+    let mongodb_bind_addr = format!("{}:27017", args.bind);
+    let mongodb_server = MongoDbServer::new(mongodb_bind_addr);
+    let mongodb_handle = tokio::spawn(async move {
+        mongodb_server
+            .run()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+    });
+    protocol_handles.push(mongodb_handle);
+    info!("[MongoDB] MongoDB protocol server started on port 27017");
+
     info!("=========================================");
     info!("    Orbit Server Ready!");
     info!("=========================================");
-    debug!("  gRPC:       {}:{}", args.bind, args.grpc_port);
-    debug!("  PostgreSQL: {}:{}", args.bind, args.postgres_port);
-    debug!("  Redis:      {}:{}", args.bind, args.redis_port);
-    debug!("  MySQL:      {}:{}", args.bind, args.mysql_port);
-    debug!("  CQL:        {}:{}", args.bind, args.cql_port);
-    debug!("  Cypher:     {}:7687", args.bind);
-    debug!("  AQL:        {}:8529", args.bind);
-    debug!("  Metrics:    {}:{}/metrics", args.bind, args.metrics_port);
+    info!("  gRPC:       {}:{}", args.bind, args.grpc_port);
+    info!("  REST API:   {}:{}", args.bind, args.http_port);
+    info!("  PostgreSQL: {}:{}", args.bind, args.postgres_port);
+    info!("  MySQL:      {}:{}", args.bind, args.mysql_port);
+    info!("  Redis:      {}:{}", args.bind, args.redis_port);
+    info!("  CQL:        {}:{}", args.bind, args.cql_port);
+    info!("  Cypher:     {}:7687", args.bind);
+    info!("  AQL:        {}:8529", args.bind);
+    info!("  MongoDB:    {}:27017", args.bind);
+    info!("  Metrics:    {}:{}/metrics", args.bind, args.metrics_port);
 
     // Initialize MCP server if enabled
     if toml_config
