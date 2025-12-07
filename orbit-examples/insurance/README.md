@@ -14,7 +14,7 @@ This directory contains comprehensive, real-world insurance industry examples de
 
 ## Architecture
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────┐
 │                  Insurance Platform Architecture               │
 ├────────────────────────────────────────────────────────────────┤
@@ -52,7 +52,7 @@ This directory contains comprehensive, real-world insurance industry examples de
 
 ## Directory Structure
 
-```
+```text
 insurance/
 ├── README.md                          # This file
 ├── ARCHITECTURE.md                    # Detailed architecture

@@ -1,0 +1,381 @@
+# ============================================================================
+# OrbitRS Telco Examples - Redis Real-Time Operations
+# ============================================================================
+# Active sessions, usage metering, rate limiting, network status, bandwidth bidding
+# ============================================================================
+
+# ============================================================================
+# ACTIVE VOICE CALL SESSIONS
+# ============================================================================
+
+# Track active voice call (TTL: 2 hours = 7200 seconds)
+# Key pattern: session:voice:{msisdn}
+
+HSET session:voice:+14155551234 session_id "call-20241206-001"
+HSET session:voice:+14155551234 subscriber_id "sub-001"
+HSET session:voice:+14155551234 called_number "+14155559999"
+HSET session:voice:+14155551234 call_type "VOICE"
+HSET session:voice:+14155551234 start_time "2024-12-06T18:54:00Z"
+HSET session:voice:+14155551234 cell_tower_id "tower-sf-001"
+HSET session:voice:+14155551234 codec "AMR-WB"
+HSET session:voice:+14155551234 status "ACTIVE"
+EXPIRE session:voice:+14155551234 7200
+
+# Get all session details
+HGETALL session:voice:+14155551234
+
+# Update session status
+HSET session:voice:+14155551234 status "COMPLETED"
+HSET session:voice:+14155551234 end_time "2024-12-06T19:00:00Z"
+HSET session:voice:+14155551234 duration_seconds "360"
+
+# ============================================================================
+# ACTIVE DATA SESSIONS (4G/5G)
+# ============================================================================
+
+# Track active data session
+HSET session:data:+14155551234 session_id "data-20241206-001"
+HSET session:data:+14155551234 subscriber_id "sub-001"
+HSET session:data:+14155551234 session_type "5G"
+HSET session:data:+14155551234 start_time "2024-12-06T18:54:00Z"
+HSET session:data:+14155551234 cell_tower_id "tower-sf-001"
+HSET session:data:+14155551234 ip_address "10.20.30.40"
+HSET session:data:+14155551234 data_used_mb "0"
+HSET session:data:+14155551234 status "ACTIVE"
+EXPIRE session:data:+14155551234 86400  # 24 hours
+
+# Increment data usage in real-time
+HINCRBYFLOAT session:data:+14155551234 data_used_mb 15.5
+
+# Get current data usage
+HGET session:data:+14155551234 data_used_mb
+
+# ============================================================================
+# USAGE METERING - REAL-TIME COUNTERS
+# ============================================================================
+
+# Voice minutes counter (monthly)
+# Key pattern: usage:voice:{subscriber_id}:{YYYY-MM}
+
+INCRBYFLOAT usage:voice:sub-001:2024-12 6.0  # Add 6 minutes
+EXPIRE usage:voice:sub-001:2024-12 2678400  # 31 days
+
+# Data usage counter (monthly, in MB)
+INCRBYFLOAT usage:data:sub-001:2024-12 150.5  # Add 150.5 MB
+EXPIRE usage:data:sub-001:2024-12 2678400
+
+# SMS counter (monthly)
+INCR usage:sms:sub-001:2024-12
+EXPIRE usage:sms:sub-001:2024-12 2678400
+
+# Get all usage for current month
+GET usage:voice:sub-001:2024-12
+GET usage:data:sub-001:2024-12
+GET usage:sms:sub-001:2024-12
+
+# Roaming usage (separate counter)
+INCRBYFLOAT usage:roaming:data:sub-001:2024-12 50.0
+EXPIRE usage:roaming:data:sub-001:2024-12 2678400
+
+# ============================================================================
+# PLAN LIMITS AND QUOTAS
+# ============================================================================
+
+# Cache plan limits (TTL: 1 hour)
+HSET plan:limits:sub-001 voice_minutes "1000"
+HSET plan:limits:sub-001 data_gb "50"
+HSET plan:limits:sub-001 sms_count "unlimited"
+HSET plan:limits:sub-001 roaming_data_gb "5"
+EXPIRE plan:limits:sub-001 3600
+
+# Check if user exceeded limits
+# Compare usage vs limits in application logic
+
+# ============================================================================
+# RATE LIMITING
+# ============================================================================
+
+# API rate limiting (max 100 requests per minute)
+INCR ratelimit:api:subscriber:sub-001
+EXPIRE ratelimit:api:subscriber:sub-001 60
+
+# Check rate limit
+GET ratelimit:api:subscriber:sub-001
+
+# Data speed throttling (after exceeding quota)
+SET throttle:data:sub-001 "true"
+EXPIRE throttle:data:sub-001 86400  # Until end of day
+
+# SMS rate limit (max 10 per minute to prevent spam)
+INCR ratelimit:sms:sub-001
+EXPIRE ratelimit:sms:sub-001 60
+
+# ============================================================================
+# NETWORK STATUS AND ALERTS
+# ============================================================================
+
+# Tower status (real-time)
+HSET tower:status:tower-sf-001 status "ACTIVE"
+HSET tower:status:tower-sf-001 load_percentage "65"
+HSET tower:status:tower-sf-001 active_connections "1250"
+HSET tower:status:tower-sf-001 bandwidth_used_gbps "6.5"
+HSET tower:status:tower-sf-001 last_updated "2024-12-06T18:54:00Z"
+EXPIRE tower:status:tower-sf-001 300  # 5 minutes
+
+# Get tower status
+HGETALL tower:status:tower-sf-001
+
+# Network alert
+LPUSH alerts:network:critical '{
+  "alert_id": "alert-001",
+  "tower_id": "tower-sf-002",
+  "alert_type": "HIGH_LOAD",
+  "severity": "CRITICAL",
+  "load_percentage": 95,
+  "timestamp": "2024-12-06T18:54:00Z"
+}'
+
+# Process alerts (FIFO queue)
+RPOP alerts:network:critical
+
+# Count pending alerts
+LLEN alerts:network:critical
+
+# ============================================================================
+# SUBSCRIBER PRESENCE AND LOCATION
+# ============================================================================
+
+# Track subscriber's current cell tower
+SET presence:location:sub-001 "tower-sf-001"
+EXPIRE presence:location:sub-001 3600  # 1 hour
+
+# Track last seen time
+SET presence:lastseen:sub-001 "2024-12-06T18:54:00Z"
+EXPIRE presence:lastseen:sub-001 86400  # 24 hours
+
+# Geofence - subscribers in specific area
+SADD geofence:downtown-sf sub-001 sub-002 sub-003
+
+# Check if subscriber in geofence
+SISMEMBER geofence:downtown-sf sub-001
+
+# Get all subscribers in area
+SMEMBERS geofence:downtown-sf
+
+# ============================================================================
+# BANDWIDTH BIDDING SYSTEM
+# ============================================================================
+
+# Real-time bandwidth auction
+# Sorted set with bid amount as score
+
+# Place bid (higher score = higher bid)
+ZADD bandwidth:auction:tower-sf-001 1500.00 "bid:sub-001:1500"
+ZADD bandwidth:auction:tower-sf-001 1750.00 "bid:sub-002:1750"
+ZADD bandwidth:auction:tower-sf-001 1250.00 "bid:sub-003:1250"
+
+# Get highest bids
+ZREVRANGE bandwidth:auction:tower-sf-001 0 2 WITHSCORES
+
+# Get bid rank
+ZREVRANK bandwidth:auction:tower-sf-001 "bid:sub-001:1500"
+
+# Remove bid
+ZREM bandwidth:auction:tower-sf-001 "bid:sub-003:1250"
+
+# Current price discovery (average of top 3 bids)
+ZREVRANGE bandwidth:auction:tower-sf-001 0 2 WITHSCORES
+
+# Bandwidth allocation tracking
+HSET bandwidth:allocated:tower-sf-001 subscriber_id "sub-002"
+HSET bandwidth:allocated:tower-sf-001 bandwidth_mhz "20"
+HSET bandwidth:allocated:tower-sf-001 price "1750.00"
+HSET bandwidth:allocated:tower-sf-001 start_time "2024-12-06T19:00:00Z"
+HSET bandwidth:allocated:tower-sf-001 end_time "2024-12-06T20:00:00Z"
+EXPIRE bandwidth:allocated:tower-sf-001 3600
+
+# ============================================================================
+# CALL ROUTING CACHE
+# ============================================================================
+
+# Cache subscriber routing info (HLR/HSS data)
+HSET routing:sub-001 current_msc "msc-sf-01"
+HSET routing:sub-001 current_vlr "vlr-sf-01"
+HSET routing:sub-001 imsi "310150123456789"
+HSET routing:sub-001 msisdn "+14155551234"
+HSET routing:sub-001 roaming_status "HOME"
+EXPIRE routing:sub-001 3600
+
+# Get routing info for call setup
+HGETALL routing:sub-001
+
+# ============================================================================
+# MARKETING CAMPAIGN TRACKING
+# ============================================================================
+
+# Track campaign impressions
+INCR campaign:impressions:campaign-001
+EXPIRE campaign:impressions:campaign-001 2592000  # 30 days
+
+# Track campaign clicks
+INCR campaign:clicks:campaign-001
+EXPIRE campaign:clicks:campaign-001 2592000
+
+# Track conversions
+SADD campaign:conversions:campaign-001 sub-001 sub-002
+EXPIRE campaign:conversions:campaign-001 2592000
+
+# Get campaign metrics
+GET campaign:impressions:campaign-001
+GET campaign:clicks:campaign-001
+SCARD campaign:conversions:campaign-001
+
+# Calculate CTR (in application)
+# CTR = clicks / impressions * 100
+
+# ============================================================================
+# SUBSCRIBER SEGMENTS (AUDIENCE MANAGEMENT)
+# ============================================================================
+
+# High-value subscribers
+SADD segment:high-value sub-001 sub-005 sub-010
+EXPIRE segment:high-value 86400
+
+# Churn risk subscribers
+SADD segment:churn-risk sub-003 sub-007
+EXPIRE segment:churn-risk 86400
+
+# New subscribers (last 30 days)
+SADD segment:new-subscribers sub-015 sub-016
+EXPIRE segment:new-subscribers 2592000
+
+# Check segment membership
+SISMEMBER segment:high-value sub-001
+
+# Get segment size
+SCARD segment:high-value
+
+# Find subscribers in multiple segments (intersection)
+SINTER segment:high-value segment:churn-risk
+
+# ============================================================================
+# REAL-TIME NOTIFICATIONS
+# ============================================================================
+
+# Publish network event
+PUBLISH notifications:network '{
+  "event_type": "TOWER_OVERLOAD",
+  "tower_id": "tower-sf-001",
+  "load_percentage": 92,
+  "timestamp": "2024-12-06T18:54:00Z"
+}'
+
+# Publish billing event
+PUBLISH notifications:billing '{
+  "event_type": "PAYMENT_RECEIVED",
+  "subscriber_id": "sub-001",
+  "amount": 85.00,
+  "timestamp": "2024-12-06T18:54:00Z"
+}'
+
+# Subscribe to notifications (in separate connection)
+# SUBSCRIBE notifications:network
+# SUBSCRIBE notifications:billing
+
+# ============================================================================
+# SESSION MANAGEMENT (SELF-SERVICE PORTAL)
+# ============================================================================
+
+# User session (TTL: 30 minutes)
+SETEX session:portal:sess-abc123 1800 '{
+  "subscriber_id": "sub-001",
+  "msisdn": "+14155551234",
+  "login_time": "2024-12-06T18:54:00Z",
+  "last_activity": "2024-12-06T18:54:00Z",
+  "permissions": ["view_usage", "pay_bill", "change_plan"]
+}'
+
+# Get session
+GET session:portal:sess-abc123
+
+# Update last activity
+EXPIRE session:portal:sess-abc123 1800  # Reset TTL
+
+# ============================================================================
+# FRAUD DETECTION FLAGS
+# ============================================================================
+
+# Flag suspicious activity
+SETEX fraud:flag:sub-003 86400 '{
+  "subscriber_id": "sub-003",
+  "fraud_type": "UNUSUAL_ROAMING",
+  "details": "Roaming in 5 countries in 24 hours",
+  "risk_score": 85,
+  "flagged_at": "2024-12-06T18:54:00Z"
+}'
+
+# Add to fraud investigation queue
+LPUSH queue:fraud:investigation sub-003
+
+# ============================================================================
+# PERFORMANCE METRICS
+# ============================================================================
+
+# Track API response times (rolling average)
+LPUSH metrics:api:response_time 45 52 38 41 49
+LTRIM metrics:api:response_time 0 99  # Keep last 100
+
+# Get average (in application)
+LRANGE metrics:api:response_time 0 -1
+
+# Track successful calls
+INCR metrics:calls:successful:2024-12-06
+EXPIRE metrics:calls:successful:2024-12-06 604800  # 7 days
+
+# Track failed calls
+INCR metrics:calls:failed:2024-12-06
+EXPIRE metrics:calls:failed:2024-12-06 604800
+
+# ============================================================================
+# LEADERBOARDS
+# ============================================================================
+
+# Top data users (sorted set)
+ZADD leaderboard:data:usage 50000 "sub-001"
+ZADD leaderboard:data:usage 75000 "sub-002"
+ZADD leaderboard:data:usage 45000 "sub-003"
+
+# Get top 10 data users
+ZREVRANGE leaderboard:data:usage 0 9 WITHSCORES
+
+# Get user's rank
+ZREVRANK leaderboard:data:usage "sub-001"
+
+# ============================================================================
+# CLEANUP
+# ============================================================================
+
+# Delete expired sessions
+DEL session:voice:+14155551234
+
+# Clear all sessions (use with caution!)
+# KEYS session:* | xargs redis-cli DEL
+
+# ============================================================================
+# MONITORING
+# ============================================================================
+
+# Monitor all commands
+# MONITOR
+
+# Get server info
+INFO
+
+# Get memory usage
+MEMORY STATS
+
+# Get key count
+DBSIZE
+
+# Check specific key TTL
+TTL session:voice:+14155551234
