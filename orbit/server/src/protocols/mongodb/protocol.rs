@@ -371,3 +371,570 @@ impl Encoder<MongoMessage> for MongoCodec {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ============ Constants Tests ============
+
+    #[test]
+    fn test_opcode_constants() {
+        assert_eq!(OP_REPLY, 1);
+        assert_eq!(OP_UPDATE, 2001);
+        assert_eq!(OP_INSERT, 2002);
+        assert_eq!(OP_QUERY, 2004);
+        assert_eq!(OP_GET_MORE, 2005);
+        assert_eq!(OP_DELETE, 2006);
+        assert_eq!(OP_KILL_CURSORS, 2007);
+        assert_eq!(OP_MSG, 2013);
+    }
+
+    #[test]
+    fn test_section_kind_constants() {
+        assert_eq!(KIND_BODY, 0);
+        assert_eq!(KIND_DOCUMENT_SEQUENCE, 1);
+    }
+
+    // ============ MongoHeader Tests ============
+
+    #[test]
+    fn test_mongo_header_creation() {
+        let header = MongoHeader {
+            message_length: 100,
+            request_id: 1,
+            response_to: 0,
+            op_code: OP_MSG,
+        };
+        assert_eq!(header.message_length, 100);
+        assert_eq!(header.request_id, 1);
+        assert_eq!(header.response_to, 0);
+        assert_eq!(header.op_code, OP_MSG);
+    }
+
+    #[test]
+    fn test_mongo_header_clone() {
+        let header = MongoHeader {
+            message_length: 50,
+            request_id: 123,
+            response_to: 456,
+            op_code: OP_QUERY,
+        };
+        let cloned = header.clone();
+        assert_eq!(header.message_length, cloned.message_length);
+        assert_eq!(header.request_id, cloned.request_id);
+        assert_eq!(header.response_to, cloned.response_to);
+        assert_eq!(header.op_code, cloned.op_code);
+    }
+
+    // ============ MsgSection Tests ============
+
+    #[test]
+    fn test_msg_section_body() {
+        let doc = bson::doc! { "test": "value" };
+        let section = MsgSection::Body(doc.clone());
+        match section {
+            MsgSection::Body(d) => assert_eq!(d.get_str("test").unwrap(), "value"),
+            _ => panic!("Expected Body section"),
+        }
+    }
+
+    #[test]
+    fn test_msg_section_document_sequence() {
+        let docs = vec![bson::doc! { "a": 1 }, bson::doc! { "b": 2 }];
+        let section = MsgSection::DocumentSequence {
+            identifier: "documents".to_string(),
+            documents: docs.clone(),
+        };
+        match section {
+            MsgSection::DocumentSequence {
+                identifier,
+                documents,
+            } => {
+                assert_eq!(identifier, "documents");
+                assert_eq!(documents.len(), 2);
+            }
+            _ => panic!("Expected DocumentSequence section"),
+        }
+    }
+
+    // ============ MongoMessage Tests ============
+
+    #[test]
+    fn test_mongo_message_reply() {
+        let header = MongoHeader {
+            message_length: 100,
+            request_id: 1,
+            response_to: 2,
+            op_code: OP_REPLY,
+        };
+        let msg = MongoMessage::Reply {
+            header: header.clone(),
+            response_flags: 0,
+            cursor_id: 0,
+            starting_from: 0,
+            number_returned: 1,
+            documents: vec![bson::doc! { "ok": 1 }],
+        };
+
+        match msg {
+            MongoMessage::Reply {
+                number_returned,
+                documents,
+                ..
+            } => {
+                assert_eq!(number_returned, 1);
+                assert_eq!(documents.len(), 1);
+            }
+            _ => panic!("Expected Reply message"),
+        }
+    }
+
+    #[test]
+    fn test_mongo_message_msg() {
+        let header = MongoHeader {
+            message_length: 100,
+            request_id: 1,
+            response_to: 0,
+            op_code: OP_MSG,
+        };
+        let msg = MongoMessage::Msg {
+            header,
+            flag_bits: 0,
+            sections: vec![MsgSection::Body(bson::doc! { "find": "test" })],
+            checksum: None,
+        };
+
+        match msg {
+            MongoMessage::Msg {
+                sections,
+                checksum,
+                ..
+            } => {
+                assert_eq!(sections.len(), 1);
+                assert!(checksum.is_none());
+            }
+            _ => panic!("Expected Msg message"),
+        }
+    }
+
+    #[test]
+    fn test_mongo_message_query() {
+        let header = MongoHeader {
+            message_length: 100,
+            request_id: 1,
+            response_to: 0,
+            op_code: OP_QUERY,
+        };
+        let msg = MongoMessage::Query {
+            header,
+            flags: 0,
+            full_collection_name: "test.collection".to_string(),
+            number_to_skip: 0,
+            number_to_return: 10,
+            query: bson::doc! { "field": "value" },
+            return_fields_selector: None,
+        };
+
+        match msg {
+            MongoMessage::Query {
+                full_collection_name,
+                number_to_return,
+                query,
+                ..
+            } => {
+                assert_eq!(full_collection_name, "test.collection");
+                assert_eq!(number_to_return, 10);
+                assert_eq!(query.get_str("field").unwrap(), "value");
+            }
+            _ => panic!("Expected Query message"),
+        }
+    }
+
+    #[test]
+    fn test_mongo_message_unknown() {
+        let header = MongoHeader {
+            message_length: 20,
+            request_id: 1,
+            response_to: 0,
+            op_code: 9999, // Unknown opcode
+        };
+        let msg = MongoMessage::Unknown {
+            header,
+            body: vec![1, 2, 3, 4],
+        };
+
+        match msg {
+            MongoMessage::Unknown { body, .. } => {
+                assert_eq!(body, vec![1, 2, 3, 4]);
+            }
+            _ => panic!("Expected Unknown message"),
+        }
+    }
+
+    // ============ MongoCodec Tests ============
+
+    #[test]
+    fn test_mongo_codec_new() {
+        let _codec = MongoCodec::new();
+    }
+
+    #[test]
+    fn test_mongo_codec_default() {
+        let _codec = MongoCodec::default();
+    }
+
+    #[test]
+    fn test_decode_incomplete_header() {
+        let mut codec = MongoCodec::new();
+        let mut buf = BytesMut::from(&[0u8; 10][..]); // Less than 16 bytes
+        let result = codec.decode(&mut buf).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_decode_incomplete_message() {
+        let mut codec = MongoCodec::new();
+        let mut buf = BytesMut::new();
+        // Write header indicating 100 byte message, but only provide 16
+        buf.put_i32_le(100); // message_length
+        buf.put_i32_le(1); // request_id
+        buf.put_i32_le(0); // response_to
+        buf.put_i32_le(OP_MSG); // op_code
+
+        let result = codec.decode(&mut buf).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_encode_reply() {
+        let mut codec = MongoCodec::new();
+        let header = MongoHeader {
+            message_length: 0, // Will be calculated
+            request_id: 1,
+            response_to: 2,
+            op_code: OP_REPLY,
+        };
+        let msg = MongoMessage::Reply {
+            header,
+            response_flags: 8, // AWAIT_CAPABLE
+            cursor_id: 0,
+            starting_from: 0,
+            number_returned: 1,
+            documents: vec![bson::doc! { "ok": 1 }],
+        };
+
+        let mut dst = BytesMut::new();
+        codec.encode(msg, &mut dst).unwrap();
+
+        // Verify header
+        let mut cursor = Cursor::new(&dst[..]);
+        let msg_len = cursor.get_i32_le();
+        assert!(msg_len > 16); // At least header size
+
+        let req_id = cursor.get_i32_le();
+        assert_eq!(req_id, 1);
+
+        let resp_to = cursor.get_i32_le();
+        assert_eq!(resp_to, 2);
+
+        let op_code = cursor.get_i32_le();
+        assert_eq!(op_code, OP_REPLY);
+    }
+
+    #[test]
+    fn test_encode_msg_with_body() {
+        let mut codec = MongoCodec::new();
+        let header = MongoHeader {
+            message_length: 0,
+            request_id: 10,
+            response_to: 5,
+            op_code: OP_MSG,
+        };
+        let msg = MongoMessage::Msg {
+            header,
+            flag_bits: 0,
+            sections: vec![MsgSection::Body(bson::doc! {
+                "ok": 1,
+                "cursor": {
+                    "firstBatch": [],
+                    "id": 0_i64,
+                    "ns": "test.collection"
+                }
+            })],
+            checksum: None,
+        };
+
+        let mut dst = BytesMut::new();
+        codec.encode(msg, &mut dst).unwrap();
+
+        // Verify it's a valid message
+        let mut cursor = Cursor::new(&dst[..]);
+        let msg_len = cursor.get_i32_le();
+        assert!(msg_len > 16);
+
+        cursor.get_i32_le(); // request_id
+        cursor.get_i32_le(); // response_to
+        let op_code = cursor.get_i32_le();
+        assert_eq!(op_code, OP_MSG);
+
+        // Verify flag_bits
+        let flag_bits = cursor.get_u32_le();
+        assert_eq!(flag_bits, 0);
+
+        // Verify section kind
+        let kind = cursor.get_u8();
+        assert_eq!(kind, KIND_BODY);
+    }
+
+    #[test]
+    fn test_encode_msg_with_document_sequence() {
+        let mut codec = MongoCodec::new();
+        let header = MongoHeader {
+            message_length: 0,
+            request_id: 20,
+            response_to: 10,
+            op_code: OP_MSG,
+        };
+        let msg = MongoMessage::Msg {
+            header,
+            flag_bits: 0,
+            sections: vec![MsgSection::DocumentSequence {
+                identifier: "documents".to_string(),
+                documents: vec![bson::doc! { "a": 1 }, bson::doc! { "b": 2 }],
+            }],
+            checksum: None,
+        };
+
+        let mut dst = BytesMut::new();
+        codec.encode(msg, &mut dst).unwrap();
+
+        // Just verify it encodes without error
+        assert!(dst.len() > 16);
+    }
+
+    #[test]
+    fn test_encode_msg_with_checksum() {
+        let mut codec = MongoCodec::new();
+        let header = MongoHeader {
+            message_length: 0,
+            request_id: 30,
+            response_to: 15,
+            op_code: OP_MSG,
+        };
+        let msg = MongoMessage::Msg {
+            header,
+            flag_bits: 1, // checksumPresent flag
+            sections: vec![MsgSection::Body(bson::doc! { "ping": 1 })],
+            checksum: Some(0xDEADBEEF),
+        };
+
+        let mut dst = BytesMut::new();
+        codec.encode(msg, &mut dst).unwrap();
+
+        // Verify checksum is at the end
+        assert!(dst.len() > 20);
+    }
+
+    #[test]
+    fn test_encode_unsupported_message_type() {
+        let mut codec = MongoCodec::new();
+        let header = MongoHeader {
+            message_length: 0,
+            request_id: 1,
+            response_to: 0,
+            op_code: OP_QUERY,
+        };
+        let msg = MongoMessage::Query {
+            header,
+            flags: 0,
+            full_collection_name: "test.col".to_string(),
+            number_to_skip: 0,
+            number_to_return: 10,
+            query: bson::doc! {},
+            return_fields_selector: None,
+        };
+
+        let mut dst = BytesMut::new();
+        let result = codec.encode(msg, &mut dst);
+        assert!(result.is_err());
+    }
+
+    // ============ Roundtrip Tests ============
+
+    #[test]
+    fn test_roundtrip_op_msg() {
+        let mut codec = MongoCodec::new();
+
+        // Create and encode a message
+        let original_header = MongoHeader {
+            message_length: 0,
+            request_id: 42,
+            response_to: 21,
+            op_code: OP_MSG,
+        };
+        let original = MongoMessage::Msg {
+            header: original_header.clone(),
+            flag_bits: 0,
+            sections: vec![MsgSection::Body(bson::doc! {
+                "ismaster": 1
+            })],
+            checksum: None,
+        };
+
+        let mut encoded = BytesMut::new();
+        codec.encode(original, &mut encoded).unwrap();
+
+        // Decode it back
+        let decoded = codec.decode(&mut encoded).unwrap().unwrap();
+
+        match decoded {
+            MongoMessage::Msg {
+                header,
+                flag_bits,
+                sections,
+                ..
+            } => {
+                assert_eq!(header.request_id, 42);
+                assert_eq!(header.response_to, 21);
+                assert_eq!(header.op_code, OP_MSG);
+                assert_eq!(flag_bits, 0);
+                assert_eq!(sections.len(), 1);
+                match &sections[0] {
+                    MsgSection::Body(doc) => {
+                        assert_eq!(doc.get_i32("ismaster").unwrap(), 1);
+                    }
+                    _ => panic!("Expected Body section"),
+                }
+            }
+            _ => panic!("Expected Msg message"),
+        }
+    }
+
+    // ============ Edge Case Tests ============
+
+    #[test]
+    fn test_empty_documents_reply() {
+        let mut codec = MongoCodec::new();
+        let header = MongoHeader {
+            message_length: 0,
+            request_id: 1,
+            response_to: 0,
+            op_code: OP_REPLY,
+        };
+        let msg = MongoMessage::Reply {
+            header,
+            response_flags: 0,
+            cursor_id: 0,
+            starting_from: 0,
+            number_returned: 0,
+            documents: vec![],
+        };
+
+        let mut dst = BytesMut::new();
+        codec.encode(msg, &mut dst).unwrap();
+
+        // Header + response_flags(4) + cursor_id(8) + starting_from(4) + number_returned(4)
+        // = 16 + 20 = 36 bytes
+        assert_eq!(dst.len(), 36);
+    }
+
+    #[test]
+    fn test_multiple_documents_reply() {
+        let mut codec = MongoCodec::new();
+        let header = MongoHeader {
+            message_length: 0,
+            request_id: 1,
+            response_to: 0,
+            op_code: OP_REPLY,
+        };
+        let msg = MongoMessage::Reply {
+            header,
+            response_flags: 0,
+            cursor_id: 12345,
+            starting_from: 0,
+            number_returned: 3,
+            documents: vec![
+                bson::doc! { "a": 1 },
+                bson::doc! { "b": 2 },
+                bson::doc! { "c": 3 },
+            ],
+        };
+
+        let mut dst = BytesMut::new();
+        codec.encode(msg, &mut dst).unwrap();
+        assert!(dst.len() > 36);
+    }
+
+    #[test]
+    fn test_large_document() {
+        let mut codec = MongoCodec::new();
+        let header = MongoHeader {
+            message_length: 0,
+            request_id: 1,
+            response_to: 0,
+            op_code: OP_MSG,
+        };
+
+        // Create a document with a large string
+        let large_string = "x".repeat(10000);
+        let msg = MongoMessage::Msg {
+            header,
+            flag_bits: 0,
+            sections: vec![MsgSection::Body(bson::doc! {
+                "data": large_string
+            })],
+            checksum: None,
+        };
+
+        let mut dst = BytesMut::new();
+        codec.encode(msg, &mut dst).unwrap();
+        assert!(dst.len() > 10000);
+    }
+
+    #[test]
+    fn test_nested_document() {
+        let mut codec = MongoCodec::new();
+        let header = MongoHeader {
+            message_length: 0,
+            request_id: 1,
+            response_to: 0,
+            op_code: OP_MSG,
+        };
+
+        let nested = bson::doc! {
+            "level1": {
+                "level2": {
+                    "level3": {
+                        "value": 42
+                    }
+                }
+            }
+        };
+
+        let msg = MongoMessage::Msg {
+            header,
+            flag_bits: 0,
+            sections: vec![MsgSection::Body(nested)],
+            checksum: None,
+        };
+
+        let mut dst = BytesMut::new();
+        codec.encode(msg, &mut dst).unwrap();
+
+        // Decode and verify structure
+        let decoded = codec.decode(&mut dst).unwrap().unwrap();
+        match decoded {
+            MongoMessage::Msg { sections, .. } => match &sections[0] {
+                MsgSection::Body(doc) => {
+                    let level1 = doc.get_document("level1").unwrap();
+                    let level2 = level1.get_document("level2").unwrap();
+                    let level3 = level2.get_document("level3").unwrap();
+                    assert_eq!(level3.get_i32("value").unwrap(), 42);
+                }
+                _ => panic!("Expected Body section"),
+            },
+            _ => panic!("Expected Msg message"),
+        }
+    }
+}
