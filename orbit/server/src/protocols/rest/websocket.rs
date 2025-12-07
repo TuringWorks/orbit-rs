@@ -363,7 +363,10 @@ mod tests {
             .await;
 
         let received = rx.recv().await.unwrap();
-        assert!(matches!(received, WebSocketMessage::ActorStateChanged { .. }));
+        assert!(matches!(
+            received,
+            WebSocketMessage::ActorStateChanged { .. }
+        ));
     }
 
     #[tokio::test]
@@ -390,7 +393,10 @@ mod tests {
             .await;
 
         let received = rx.recv().await.unwrap();
-        assert!(matches!(received, WebSocketMessage::ActorDeactivated { .. }));
+        assert!(matches!(
+            received,
+            WebSocketMessage::ActorDeactivated { .. }
+        ));
     }
 
     #[tokio::test]

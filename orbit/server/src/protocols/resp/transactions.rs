@@ -72,7 +72,7 @@ impl TransactionState {
         RespValue::SimpleString("QUEUED".to_string())
     }
 
-/// Discard the transaction (DISCARD command)
+    /// Discard the transaction (DISCARD command)
     pub fn discard_transaction(&mut self) -> ProtocolResult<RespValue> {
         if !self.in_transaction {
             return Err(ProtocolError::RespError(

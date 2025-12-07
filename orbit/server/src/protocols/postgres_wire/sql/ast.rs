@@ -58,6 +58,13 @@ pub enum Statement {
 
     // Functions
     CreateFunction(CreateFunctionStatement),
+
+    // Triggers
+    CreateTrigger(CreateTriggerStatement),
+    DropTrigger(DropTriggerStatement),
+
+    // Comments
+    CommentOn(CommentOnStatement),
 }
 
 // ===== DDL Statements =====
@@ -691,8 +698,7 @@ pub enum CopyOption {
 }
 
 /// COPY format types
-#[derive(Debug, Clone, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum CopyFormat {
     #[default]
     Text,
@@ -701,8 +707,7 @@ pub enum CopyFormat {
 }
 
 /// COPY HEADER option values
-#[derive(Debug, Clone, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum CopyHeaderOption {
     /// No header processing
     #[default]
@@ -714,8 +719,7 @@ pub enum CopyHeaderOption {
 }
 
 /// COPY ON_ERROR behavior
-#[derive(Debug, Clone, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum CopyOnError {
     /// Stop on error (default)
     #[default]
@@ -730,9 +734,6 @@ pub enum CopyLogVerbosity {
     Default,
     Verbose,
 }
-
-
-
 
 // ===== Expressions =====
 
@@ -1198,6 +1199,74 @@ pub struct DropExtensionStatement {
     pub if_exists: bool,
     pub names: Vec<String>,
     pub cascade: bool,
+}
+
+// ===== Trigger Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTriggerStatement {
+    pub or_replace: bool,
+    pub name: String,
+    pub timing: TriggerTiming,
+    pub events: Vec<TriggerEvent>,
+    pub table: TableName,
+    pub for_each: TriggerForEach,
+    pub when_clause: Option<Expression>,
+    pub function: FunctionName,
+    pub function_args: Vec<Expression>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TriggerTiming {
+    Before,
+    After,
+    InsteadOf,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TriggerEvent {
+    Insert,
+    Update(Option<Vec<String>>), // Optional column list for UPDATE OF
+    Delete,
+    Truncate,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TriggerForEach {
+    Row,
+    Statement,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropTriggerStatement {
+    pub if_exists: bool,
+    pub name: String,
+    pub table: TableName,
+    pub cascade: bool,
+}
+
+// ===== Comment Statement =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommentOnStatement {
+    pub object_type: CommentObjectType,
+    pub object_name: String,
+    pub column_name: Option<String>, // For COMMENT ON COLUMN table.column
+    pub comment: Option<String>,     // None means NULL (remove comment)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CommentObjectType {
+    Table,
+    Column,
+    Index,
+    View,
+    Schema,
+    Extension,
+    Function,
+    Trigger,
+    Constraint,
+    Database,
 }
 
 // Helper implementations

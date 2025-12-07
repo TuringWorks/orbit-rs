@@ -236,7 +236,9 @@ impl AqlQueryEngine {
                     options: _,
                 } => {
                     // Execute INSERT clause - create new document
-                    let doc_result = self.execute_insert(storage, document, collection, &context).await?;
+                    let doc_result = self
+                        .execute_insert(storage, document, collection, &context)
+                        .await?;
                     result_data.push(doc_result);
                 }
                 AqlClause::Update {
@@ -251,13 +253,18 @@ impl AqlQueryEngine {
                         for doc in &for_documents {
                             let mut ctx = context.clone();
                             ctx.insert(var.clone(), self.document_to_value(doc));
-                            if let Ok(updated) = self.execute_update(storage, key, document, collection, &ctx).await {
+                            if let Ok(updated) = self
+                                .execute_update(storage, key, document, collection, &ctx)
+                                .await
+                            {
                                 result_data.push(updated);
                             }
                         }
                     } else {
                         // Direct update
-                        let updated = self.execute_update(storage, key, document, collection, &context).await?;
+                        let updated = self
+                            .execute_update(storage, key, document, collection, &context)
+                            .await?;
                         result_data.push(updated);
                     }
                 }
@@ -271,12 +278,17 @@ impl AqlQueryEngine {
                         for doc in &for_documents {
                             let mut ctx = context.clone();
                             ctx.insert(var.clone(), self.document_to_value(doc));
-                            if let Ok(replaced) = self.execute_replace(storage, key, document, collection, &ctx).await {
+                            if let Ok(replaced) = self
+                                .execute_replace(storage, key, document, collection, &ctx)
+                                .await
+                            {
                                 result_data.push(replaced);
                             }
                         }
                     } else {
-                        let replaced = self.execute_replace(storage, key, document, collection, &context).await?;
+                        let replaced = self
+                            .execute_replace(storage, key, document, collection, &context)
+                            .await?;
                         result_data.push(replaced);
                     }
                 }
@@ -286,12 +298,16 @@ impl AqlQueryEngine {
                         for doc in &for_documents {
                             let mut ctx = context.clone();
                             ctx.insert(var.clone(), self.document_to_value(doc));
-                            if let Ok(removed) = self.execute_remove(storage, key, collection, &ctx).await {
+                            if let Ok(removed) =
+                                self.execute_remove(storage, key, collection, &ctx).await
+                            {
                                 result_data.push(removed);
                             }
                         }
                     } else {
-                        let removed = self.execute_remove(storage, key, collection, &context).await?;
+                        let removed = self
+                            .execute_remove(storage, key, collection, &context)
+                            .await?;
                         result_data.push(removed);
                     }
                 }
@@ -302,10 +318,22 @@ impl AqlQueryEngine {
                     collection,
                 } => {
                     // Execute UPSERT clause - insert or update/replace
-                    let upserted = self.execute_upsert(storage, search, insert, update_or_replace, collection, &context).await?;
+                    let upserted = self
+                        .execute_upsert(
+                            storage,
+                            search,
+                            insert,
+                            update_or_replace,
+                            collection,
+                            &context,
+                        )
+                        .await?;
                     result_data.push(upserted);
                 }
-                AqlClause::Let { variable, expression } => {
+                AqlClause::Let {
+                    variable,
+                    expression,
+                } => {
                     // Execute LET clause - bind variable to expression result
                     let value = self.evaluate_expression(expression, &context)?;
                     context.insert(variable.clone(), value);
@@ -421,7 +449,10 @@ impl AqlQueryEngine {
             .update_document(collection, &key, updates)
             .await?
             .ok_or_else(|| {
-                ProtocolError::AqlError(format!("Document {}/{} not found for UPDATE", collection, key))
+                ProtocolError::AqlError(format!(
+                    "Document {}/{} not found for UPDATE",
+                    collection, key
+                ))
             })?;
 
         info!("AQL UPDATE: Updated document {}/{}", collection, key);
@@ -563,7 +594,10 @@ impl AqlQueryEngine {
                                 collection, key
                             ))
                         })?;
-                    info!("AQL UPSERT: Updated existing document {}/{}", collection, key);
+                    info!(
+                        "AQL UPSERT: Updated existing document {}/{}",
+                        collection, key
+                    );
                     Ok(self.document_to_value(&updated_doc))
                 }
                 UpsertAction::Replace(replace_expr) => {
@@ -586,7 +620,10 @@ impl AqlQueryEngine {
                     }
                     let doc = AqlDocument::new(collection, key.clone(), data);
                     storage.store_document(doc.clone()).await?;
-                    info!("AQL UPSERT: Replaced existing document {}/{}", collection, key);
+                    info!(
+                        "AQL UPSERT: Replaced existing document {}/{}",
+                        collection, key
+                    );
                     Ok(self.document_to_value(&doc))
                 }
             }
@@ -983,7 +1020,9 @@ impl AqlQueryEngine {
                             if cmp != std::cmp::Ordering::Equal {
                                 return match item.direction {
                                     crate::protocols::aql::aql_parser::SortDirection::Asc => cmp,
-                                    crate::protocols::aql::aql_parser::SortDirection::Desc => cmp.reverse(),
+                                    crate::protocols::aql::aql_parser::SortDirection::Desc => {
+                                        cmp.reverse()
+                                    }
                                 };
                             }
                         }
@@ -1372,11 +1411,7 @@ impl AqlQueryEngine {
     }
 
     /// Evaluate built-in AQL functions
-    fn evaluate_builtin_function(
-        &self,
-        name: &str,
-        args: &[AqlValue],
-    ) -> ProtocolResult<AqlValue> {
+    fn evaluate_builtin_function(&self, name: &str, args: &[AqlValue]) -> ProtocolResult<AqlValue> {
         match name.to_uppercase().as_str() {
             // ============ String Functions ============
             "LENGTH" => {
@@ -1566,9 +1601,7 @@ impl AqlQueryEngine {
                     (args.first(), args.get(1))
                 {
                     // Simple LIKE pattern matching (% = any, _ = single char)
-                    let regex_pattern = pattern
-                        .replace('%', ".*")
-                        .replace('_', ".");
+                    let regex_pattern = pattern.replace('%', ".*").replace('_', ".");
                     if let Ok(re) = regex::Regex::new(&format!("^{}$", regex_pattern)) {
                         Ok(AqlValue::Bool(re.is_match(text)))
                     } else {
@@ -1599,7 +1632,9 @@ impl AqlQueryEngine {
                 ) = (args.first(), args.get(1), args.get(2))
                 {
                     if let Ok(re) = regex::Regex::new(pattern) {
-                        Ok(AqlValue::String(re.replace_all(text, replacement.as_str()).to_string()))
+                        Ok(AqlValue::String(
+                            re.replace_all(text, replacement.as_str()).to_string(),
+                        ))
                     } else {
                         Ok(AqlValue::String(text.clone()))
                     }
@@ -1611,7 +1646,11 @@ impl AqlQueryEngine {
                 // Hash functions - return placeholder for now
                 if let Some(AqlValue::String(s)) = args.first() {
                     // Simple hash placeholder - would need actual crypto lib
-                    Ok(AqlValue::String(format!("{}_{}", name.to_lowercase(), s.len())))
+                    Ok(AqlValue::String(format!(
+                        "{}_{}",
+                        name.to_lowercase(),
+                        s.len()
+                    )))
                 } else {
                     Ok(AqlValue::Null)
                 }
@@ -1803,8 +1842,7 @@ impl AqlQueryEngine {
                         _ => 0.0,
                     };
                     Ok(AqlValue::Number(
-                        serde_json::Number::from_f64(result)
-                            .unwrap_or(serde_json::Number::from(0)),
+                        serde_json::Number::from_f64(result).unwrap_or(serde_json::Number::from(0)),
                     ))
                 } else {
                     Ok(AqlValue::Null)
@@ -2147,16 +2185,14 @@ impl AqlQueryEngine {
             "SORTED" | "SORTED_UNIQUE" => {
                 if let Some(AqlValue::Array(arr)) = args.first() {
                     let mut sorted = arr.clone();
-                    sorted.sort_by(|a, b| {
-                        match (a, b) {
-                            (AqlValue::Number(n1), AqlValue::Number(n2)) => {
-                                let f1 = n1.as_f64().unwrap_or(0.0);
-                                let f2 = n2.as_f64().unwrap_or(0.0);
-                                f1.partial_cmp(&f2).unwrap_or(std::cmp::Ordering::Equal)
-                            }
-                            (AqlValue::String(s1), AqlValue::String(s2)) => s1.cmp(s2),
-                            _ => std::cmp::Ordering::Equal,
+                    sorted.sort_by(|a, b| match (a, b) {
+                        (AqlValue::Number(n1), AqlValue::Number(n2)) => {
+                            let f1 = n1.as_f64().unwrap_or(0.0);
+                            let f2 = n2.as_f64().unwrap_or(0.0);
+                            f1.partial_cmp(&f2).unwrap_or(std::cmp::Ordering::Equal)
                         }
+                        (AqlValue::String(s1), AqlValue::String(s2)) => s1.cmp(s2),
+                        _ => std::cmp::Ordering::Equal,
                     });
                     if name.to_uppercase() == "SORTED_UNIQUE" {
                         let mut seen = std::collections::HashSet::new();
@@ -2355,16 +2391,30 @@ impl AqlQueryEngine {
             }
 
             // ============ Type Functions ============
-            "IS_NULL" => Ok(AqlValue::Bool(matches!(args.first(), Some(AqlValue::Null) | None))),
-            "IS_BOOL" => Ok(AqlValue::Bool(matches!(args.first(), Some(AqlValue::Bool(_))))),
-            "IS_NUMBER" => Ok(AqlValue::Bool(matches!(args.first(), Some(AqlValue::Number(_))))),
-            "IS_STRING" => Ok(AqlValue::Bool(matches!(args.first(), Some(AqlValue::String(_))))),
-            "IS_ARRAY" | "IS_LIST" => {
-                Ok(AqlValue::Bool(matches!(args.first(), Some(AqlValue::Array(_)))))
-            }
-            "IS_OBJECT" | "IS_DOCUMENT" => {
-                Ok(AqlValue::Bool(matches!(args.first(), Some(AqlValue::Object(_)))))
-            }
+            "IS_NULL" => Ok(AqlValue::Bool(matches!(
+                args.first(),
+                Some(AqlValue::Null) | None
+            ))),
+            "IS_BOOL" => Ok(AqlValue::Bool(matches!(
+                args.first(),
+                Some(AqlValue::Bool(_))
+            ))),
+            "IS_NUMBER" => Ok(AqlValue::Bool(matches!(
+                args.first(),
+                Some(AqlValue::Number(_))
+            ))),
+            "IS_STRING" => Ok(AqlValue::Bool(matches!(
+                args.first(),
+                Some(AqlValue::String(_))
+            ))),
+            "IS_ARRAY" | "IS_LIST" => Ok(AqlValue::Bool(matches!(
+                args.first(),
+                Some(AqlValue::Array(_))
+            ))),
+            "IS_OBJECT" | "IS_DOCUMENT" => Ok(AqlValue::Bool(matches!(
+                args.first(),
+                Some(AqlValue::Object(_))
+            ))),
             "TYPENAME" => {
                 let type_name = match args.first() {
                     Some(AqlValue::Null) => "null",
@@ -2463,11 +2513,9 @@ impl AqlQueryEngine {
                         let ts = n.as_i64().unwrap_or(0);
                         chrono::DateTime::from_timestamp_millis(ts).unwrap_or_else(chrono::Utc::now)
                     }
-                    Some(AqlValue::String(s)) => {
-                        chrono::DateTime::parse_from_rfc3339(s)
-                            .map(|d| d.with_timezone(&chrono::Utc))
-                            .unwrap_or_else(|_| chrono::Utc::now())
-                    }
+                    Some(AqlValue::String(s)) => chrono::DateTime::parse_from_rfc3339(s)
+                        .map(|d| d.with_timezone(&chrono::Utc))
+                        .unwrap_or_else(|_| chrono::Utc::now()),
                     _ => chrono::Utc::now(),
                 };
                 let value = match name.to_uppercase().as_str() {
@@ -2485,8 +2533,11 @@ impl AqlQueryEngine {
             }
             "DATE_ADD" | "DATE_SUBTRACT" => {
                 use chrono::Duration;
-                if let (Some(AqlValue::Number(ts)), Some(AqlValue::Number(amount)), Some(AqlValue::String(unit))) =
-                    (args.first(), args.get(1), args.get(2))
+                if let (
+                    Some(AqlValue::Number(ts)),
+                    Some(AqlValue::Number(amount)),
+                    Some(AqlValue::String(unit)),
+                ) = (args.first(), args.get(1), args.get(2))
                 {
                     let timestamp = ts.as_i64().unwrap_or(0);
                     let amt = amount.as_i64().unwrap_or(0);
@@ -2510,8 +2561,11 @@ impl AqlQueryEngine {
                 }
             }
             "DATE_DIFF" => {
-                if let (Some(AqlValue::Number(ts1)), Some(AqlValue::Number(ts2)), Some(AqlValue::String(unit))) =
-                    (args.first(), args.get(1), args.get(2))
+                if let (
+                    Some(AqlValue::Number(ts1)),
+                    Some(AqlValue::Number(ts2)),
+                    Some(AqlValue::String(unit)),
+                ) = (args.first(), args.get(1), args.get(2))
                 {
                     let t1 = ts1.as_i64().unwrap_or(0);
                     let t2 = ts2.as_i64().unwrap_or(0);
@@ -2591,9 +2645,7 @@ impl AqlQueryEngine {
                 // Pass-through functions
                 Ok(args.first().cloned().unwrap_or(AqlValue::Null))
             }
-            "UUID" => {
-                Ok(AqlValue::String(uuid::Uuid::new_v4().to_string()))
-            }
+            "UUID" => Ok(AqlValue::String(uuid::Uuid::new_v4().to_string())),
             "HASH" => {
                 // Simple hash - return a numeric hash
                 let input = format!("{:?}", args);
@@ -2601,7 +2653,9 @@ impl AqlQueryEngine {
                 use std::hash::{Hash, Hasher};
                 let mut hasher = DefaultHasher::new();
                 input.hash(&mut hasher);
-                Ok(AqlValue::Number(serde_json::Number::from(hasher.finish() as i64)))
+                Ok(AqlValue::Number(serde_json::Number::from(
+                    hasher.finish() as i64
+                )))
             }
 
             // ============ Default Case ============

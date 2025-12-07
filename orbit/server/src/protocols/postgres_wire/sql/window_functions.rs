@@ -63,15 +63,13 @@ impl WindowFunctionEvaluator {
 
             for (index, row_values) in rows.into_iter().enumerate() {
                 // Evaluate partition key as string
-                let partition_key = self.evaluate_partition_key_string(&row_values, partition_by)?;
+                let partition_key =
+                    self.evaluate_partition_key_string(&row_values, partition_by)?;
 
-                partition_map
-                    .entry(partition_key)
-                    .or_default()
-                    .push(Row {
-                        index,
-                        values: row_values,
-                    });
+                partition_map.entry(partition_key).or_default().push(Row {
+                    index,
+                    values: row_values,
+                });
             }
 
             // Sort each partition and add to partitions list
@@ -100,10 +98,7 @@ impl WindowFunctionEvaluator {
             match expr {
                 Expression::Column(col_ref) => {
                     let col_name = col_ref.name.clone();
-                    let value = row
-                        .get(&col_name)
-                        .cloned()
-                        .unwrap_or(SqlValue::Null);
+                    let value = row.get(&col_name).cloned().unwrap_or(SqlValue::Null);
                     // Convert to string representation for hashing
                     key_parts.push(format!("{:?}", value));
                 }
@@ -117,11 +112,7 @@ impl WindowFunctionEvaluator {
     }
 
     /// Sort rows within a partition
-    fn sort_rows(
-        &self,
-        rows: &mut [Row],
-        order_by: &[OrderByItem],
-    ) -> ProtocolResult<()> {
+    fn sort_rows(&self, rows: &mut [Row], order_by: &[OrderByItem]) -> ProtocolResult<()> {
         rows.sort_by(|a, b| {
             for order_item in order_by {
                 // Simplified comparison - in real implementation would handle all expression types
@@ -155,9 +146,7 @@ impl WindowFunctionEvaluator {
             (SqlValue::DoublePrecision(a), SqlValue::DoublePrecision(b)) => {
                 a.partial_cmp(b).unwrap_or(Ordering::Equal)
             }
-            (SqlValue::Real(a), SqlValue::Real(b)) => {
-                a.partial_cmp(b).unwrap_or(Ordering::Equal)
-            }
+            (SqlValue::Real(a), SqlValue::Real(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
             (SqlValue::Text(a), SqlValue::Text(b)) => a.cmp(b),
             (SqlValue::Varchar(a), SqlValue::Varchar(b)) => a.cmp(b),
             _ => Ordering::Equal,
@@ -226,7 +215,11 @@ impl WindowFunctionEvaluator {
                     }
                 }
             }
-            WindowFunctionType::Lag { offset: _, default: _, .. } => {
+            WindowFunctionType::Lag {
+                offset: _,
+                default: _,
+                ..
+            } => {
                 let offset_val: usize = 1; // Simplified - should evaluate offset expression
                 for (idx, row) in partition.rows.iter().enumerate() {
                     let value = if idx >= offset_val {
@@ -239,7 +232,11 @@ impl WindowFunctionEvaluator {
                     results.push((row.index, value));
                 }
             }
-            WindowFunctionType::Lead { offset: _, default: _, .. } => {
+            WindowFunctionType::Lead {
+                offset: _,
+                default: _,
+                ..
+            } => {
                 let offset_val: usize = 1; // Simplified
                 for (idx, row) in partition.rows.iter().enumerate() {
                     let value = if idx + offset_val < partition.rows.len() {
@@ -288,9 +285,7 @@ mod tests {
 
         evaluator.partition_rows(rows, &[], &[]).unwrap();
 
-        let results = evaluator
-            .evaluate(&WindowFunctionType::RowNumber)
-            .unwrap();
+        let results = evaluator.evaluate(&WindowFunctionType::RowNumber).unwrap();
 
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].1, SqlValue::BigInt(1));

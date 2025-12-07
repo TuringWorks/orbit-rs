@@ -50,7 +50,7 @@ pub use commands::CommandHandler;
 pub use spatial_commands::{
     GeofenceDefinition, GeofenceEngine, RedisSpatialCommands, RedisValue, SpatialDataSet,
 };
-pub use transactions::{TransactionManager, TransactionState, QueuedCommand};
+pub use transactions::{QueuedCommand, TransactionManager, TransactionState};
 pub use types::{RespArray, RespValue};
 // pub use local_invocation::{LocalActorRegistry, RespInvocationSystem, create_resp_orbit_client};  // Disabled
 pub use simple_local::SimpleLocalRegistry;

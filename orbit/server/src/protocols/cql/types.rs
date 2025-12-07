@@ -362,7 +362,9 @@ mod tests {
     #[test]
     fn test_cql_value_integer_conversions() {
         assert_eq!(
-            CqlValue::Bigint(9223372036854775807).to_sql_value().unwrap(),
+            CqlValue::Bigint(9223372036854775807)
+                .to_sql_value()
+                .unwrap(),
             SqlValue::BigInt(9223372036854775807)
         );
         assert_eq!(
@@ -431,11 +433,7 @@ mod tests {
 
     #[test]
     fn test_cql_value_list_conversion() {
-        let list = CqlValue::List(vec![
-            CqlValue::Int(1),
-            CqlValue::Int(2),
-            CqlValue::Int(3),
-        ]);
+        let list = CqlValue::List(vec![CqlValue::Int(1), CqlValue::Int(2), CqlValue::Int(3)]);
         let val = list.to_sql_value().unwrap();
         match val {
             SqlValue::Text(json) => {
@@ -583,10 +581,7 @@ mod tests {
 
     #[test]
     fn test_encode_map() {
-        let map = CqlValue::Map(vec![(
-            CqlValue::Text("key".to_string()),
-            CqlValue::Int(42),
-        )]);
+        let map = CqlValue::Map(vec![(CqlValue::Text("key".to_string()), CqlValue::Int(42))]);
         let encoded = map.encode().unwrap();
         assert!(!encoded.is_empty());
     }

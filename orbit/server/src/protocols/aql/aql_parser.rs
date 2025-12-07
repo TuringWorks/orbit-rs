@@ -495,7 +495,10 @@ impl AqlTokenizer {
             self.tokens.push(AqlToken::Range);
         } else if !self.current_token.is_empty()
             && self.current_token.chars().all(|c| c.is_ascii_digit())
-            && self.peek_char().map(|c| c.is_ascii_digit()).unwrap_or(false)
+            && self
+                .peek_char()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
         {
             // This is a decimal number like 19.99 - keep the dot in the current token
             self.current_token.push('.');
@@ -971,7 +974,7 @@ impl AqlTokenParser {
 
     fn parse_filter_clause(&mut self) -> ProtocolResult<AqlClause> {
         self.advance(); // consume FILTER
-        // Parse expression which can contain comparisons, AND, OR, NOT
+                        // Parse expression which can contain comparisons, AND, OR, NOT
         let expression = self.parse_expression()?;
         Ok(AqlClause::Filter {
             condition: AqlCondition::Expression(expression),

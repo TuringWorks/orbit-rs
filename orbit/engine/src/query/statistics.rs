@@ -204,7 +204,7 @@ mod tests {
         };
 
         collector.update_table_stats(table_stats);
-        
+
         // Selectivity should be 1.0 for unique column
         let selectivity = collector.estimate_selectivity("users", "id");
         assert!((selectivity - 1.0).abs() < 0.001);

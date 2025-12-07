@@ -617,7 +617,9 @@ impl GraphActor {
                     estimated_cost += step.estimated_cost;
                     steps.push(step);
                 }
-                crate::protocols::cypher::cypher_parser::CypherClause::DropIndex { name, .. } => {
+                crate::protocols::cypher::cypher_parser::CypherClause::DropIndex {
+                    name, ..
+                } => {
                     let step = PlanStep {
                         operation: "DropIndex".to_string(),
                         description: format!("Drop index {}", name),

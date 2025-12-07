@@ -3,8 +3,8 @@
 
 #[cfg(test)]
 mod aql_data_modification_tests {
-    use crate::protocols::aql::{AqlCollection, AqlQueryEngine, AqlStorage, AqlValue};
     use crate::protocols::aql::data_model::{CollectionStatus, CollectionType};
+    use crate::protocols::aql::{AqlCollection, AqlQueryEngine, AqlStorage, AqlValue};
     use std::sync::Arc;
     use tempfile::TempDir;
 
@@ -78,7 +78,11 @@ mod aql_data_modification_tests {
         let query = r#"INSERT { name: "Widget", price: 19.99 } INTO products"#;
         let result = engine.execute_query(query).await;
 
-        assert!(result.is_ok(), "INSERT with auto-key should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "INSERT with auto-key should succeed: {:?}",
+            result.err()
+        );
         let result = result.unwrap();
         assert_eq!(result.data.len(), 1);
 
@@ -170,14 +174,11 @@ mod aql_data_modification_tests {
             .expect("INSERT failed");
 
         // Replace the document (should remove old fields)
-        let replace_query = r#"REPLACE "user1" WITH { name: "Alice Smith", email: "alice@example.com" } IN users"#;
+        let replace_query =
+            r#"REPLACE "user1" WITH { name: "Alice Smith", email: "alice@example.com" } IN users"#;
         let result = engine.execute_query(replace_query).await;
 
-        assert!(
-            result.is_ok(),
-            "REPLACE should succeed: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "REPLACE should succeed: {:?}", result.err());
 
         // Verify the replacement
         let doc = storage
@@ -219,9 +220,7 @@ mod aql_data_modification_tests {
 
         // Verify it exists
         assert!(
-            storage
-                .document_exists("users", "user1")
-                .await,
+            storage.document_exists("users", "user1").await,
             "Document should exist before removal"
         );
 
@@ -229,11 +228,7 @@ mod aql_data_modification_tests {
         let remove_query = r#"REMOVE "user1" IN users"#;
         let result = engine.execute_query(remove_query).await;
 
-        assert!(
-            result.is_ok(),
-            "REMOVE should succeed: {:?}",
-            result.err()
-        );
+        assert!(result.is_ok(), "REMOVE should succeed: {:?}", result.err());
 
         // Verify it's gone
         assert!(

@@ -257,9 +257,10 @@ impl GraphRelationship {
 }
 
 /// Type of index
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum IndexType {
     /// B-tree index for ordered data
+    #[default]
     BTree,
     /// Range index for range queries
     Range,
@@ -271,12 +272,6 @@ pub enum IndexType {
     Point,
     /// Vector index for similarity search
     Vector,
-}
-
-impl Default for IndexType {
-    fn default() -> Self {
-        Self::BTree
-    }
 }
 
 /// Entity type for indexes and constraints

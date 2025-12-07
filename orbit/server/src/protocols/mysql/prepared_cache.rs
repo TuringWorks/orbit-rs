@@ -65,12 +65,7 @@ impl PreparedStatementCache {
     }
 
     /// Get or create a prepared statement
-    pub fn get_or_prepare(
-        &self,
-        query: &str,
-        param_count: u16,
-        column_count: u16,
-    ) -> u32 {
+    pub fn get_or_prepare(&self, query: &str, param_count: u16, column_count: u16) -> u32 {
         // Check if statement already exists
         {
             let query_map = self.query_to_id.read().unwrap();
@@ -107,8 +102,14 @@ impl PreparedStatementCache {
         self.maybe_evict();
 
         // Insert new statement
-        self.statements.write().unwrap().insert(statement_id, cached_stmt);
-        self.query_to_id.write().unwrap().insert(query.to_string(), statement_id);
+        self.statements
+            .write()
+            .unwrap()
+            .insert(statement_id, cached_stmt);
+        self.query_to_id
+            .write()
+            .unwrap()
+            .insert(query.to_string(), statement_id);
 
         statement_id
     }
@@ -156,9 +157,7 @@ impl PreparedStatementCache {
 
             // Find LRU statement
             let statements = self.statements.read().unwrap();
-            if let Some((&lru_id, _)) = statements
-                .iter()
-                .min_by_key(|(_, stmt)| stmt.last_accessed)
+            if let Some((&lru_id, _)) = statements.iter().min_by_key(|(_, stmt)| stmt.last_accessed)
             {
                 drop(statements); // Release read lock
                 self.remove(lru_id);
@@ -205,13 +204,13 @@ mod tests {
     #[test]
     fn test_get_or_prepare() {
         let cache = PreparedStatementCache::new(PreparedStatementCacheConfig::default());
-        
+
         let id1 = cache.get_or_prepare("SELECT * FROM users", 0, 3);
         let id2 = cache.get_or_prepare("SELECT * FROM users", 0, 3);
-        
+
         // Same query should return same ID
         assert_eq!(id1, id2);
-        
+
         let stats = cache.stats();
         assert_eq!(stats.size, 1);
         assert_eq!(stats.total_accesses, 2);
@@ -225,11 +224,11 @@ mod tests {
             enable_lru: true,
         };
         let cache = PreparedStatementCache::new(config);
-        
+
         cache.get_or_prepare("SELECT 1", 0, 1);
         cache.get_or_prepare("SELECT 2", 0, 1);
         cache.get_or_prepare("SELECT 3", 0, 1);
-        
+
         let stats = cache.stats();
         assert_eq!(stats.size, 2); // Should evict oldest
     }
@@ -237,10 +236,10 @@ mod tests {
     #[test]
     fn test_statement_removal() {
         let cache = PreparedStatementCache::new(PreparedStatementCacheConfig::default());
-        
+
         let id = cache.get_or_prepare("SELECT * FROM users", 0, 3);
         assert!(cache.get(id).is_some());
-        
+
         cache.remove(id);
         assert!(cache.get(id).is_none());
     }
