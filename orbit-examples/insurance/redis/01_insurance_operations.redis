@@ -1,0 +1,418 @@
+# ============================================================================
+# OrbitRS Insurance Examples - Redis Caching & Real-Time Operations
+# ============================================================================
+# Quote caching, risk scoring, and session management using Redis
+# ============================================================================
+
+# ============================================================================
+# AUTO INSURANCE QUOTE CACHING
+# ============================================================================
+
+# Cache auto insurance quote (TTL: 30 minutes = 1800 seconds)
+# Key pattern: quote:auto:{customer_id}:{vin}
+
+SETEX quote:auto:550e8400-e29b-41d4-a716-446655440000:1HGCM82633A123456 1800 '{
+  "quote_id": "Q-2024-001234",
+  "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+  "vin": "1HGCM82633A123456",
+  "vehicle": {
+    "year": 2023,
+    "make": "Honda",
+    "model": "Accord",
+    "trim": "EX-L"
+  },
+  "driver": {
+    "age": 35,
+    "years_licensed": 17,
+    "violations": 0,
+    "accidents": 0
+  },
+  "coverage": {
+    "liability_bi_per_person": 250000,
+    "liability_bi_per_accident": 500000,
+    "liability_pd": 100000,
+    "collision_deductible": 500,
+    "comprehensive_deductible": 500
+  },
+  "premium": {
+    "monthly": 145.50,
+    "semi_annual": 850.00,
+    "annual": 1650.00
+  },
+  "discounts": ["multi_policy", "good_driver", "anti_theft"],
+  "quote_expires_at": "2024-12-07T18:16:00Z",
+  "generated_at": "2024-12-06T18:16:00Z"
+}'
+
+# Retrieve cached quote
+GET quote:auto:550e8400-e29b-41d4-a716-446655440000:1HGCM82633A123456
+
+# Check if quote exists
+EXISTS quote:auto:550e8400-e29b-41d4-a716-446655440000:1HGCM82633A123456
+
+# Get remaining TTL
+TTL quote:auto:550e8400-e29b-41d4-a716-446655440000:1HGCM82633A123456
+
+# ============================================================================
+# HOME INSURANCE QUOTE CACHING
+# ============================================================================
+
+# Cache home insurance quote
+SETEX quote:home:550e8400-e29b-41d4-a716-446655440001:94102 1800 '{
+  "quote_id": "Q-2024-001235",
+  "customer_id": "550e8400-e29b-41d4-a716-446655440001",
+  "property": {
+    "address": "123 Main St, San Francisco, CA 94102",
+    "property_type": "SINGLE_FAMILY",
+    "year_built": 1985,
+    "square_footage": 2500,
+    "construction_type": "FRAME",
+    "roof_age": 5
+  },
+  "coverage": {
+    "dwelling": 750000,
+    "personal_property": 375000,
+    "liability": 300000,
+    "deductible": 2500
+  },
+  "premium": {
+    "monthly": 285.00,
+    "annual": 3300.00
+  },
+  "discounts": ["security_system", "new_roof", "multi_policy"],
+  "risk_factors": {
+    "flood_zone": "X",
+    "wildfire_zone": false,
+    "earthquake_zone": true,
+    "fire_protection_class": 3
+  },
+  "quote_expires_at": "2024-12-07T18:16:00Z"
+}'
+
+# ============================================================================
+# RISK SCORE CACHING
+# ============================================================================
+
+# Cache customer risk score (TTL: 1 hour = 3600 seconds)
+# Key pattern: risk:customer:{customer_id}
+
+SETEX risk:customer:550e8400-e29b-41d4-a716-446655440000 3600 '{
+  "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+  "overall_risk_score": 72,
+  "risk_tier": "STANDARD",
+  "factors": {
+    "credit_score": 720,
+    "claims_history": 1,
+    "years_as_customer": 5,
+    "payment_history": "EXCELLENT",
+    "policy_count": 3
+  },
+  "auto_risk_score": 68,
+  "home_risk_score": 75,
+  "calculated_at": "2024-12-06T18:16:00Z"
+}'
+
+# Increment risk score when violation occurs
+HINCRBY risk:customer:550e8400-e29b-41d4-a716-446655440000 violations 1
+
+# Cache driver risk score
+SETEX risk:driver:1HGCM82633A123456 3600 '{
+  "driver_id": "driver-001",
+  "risk_score": 85,
+  "age": 35,
+  "violations_3yr": 0,
+  "accidents_3yr": 0,
+  "years_licensed": 17,
+  "tier": "PREFERRED"
+}'
+
+# Cache property risk score
+SETEX risk:property:prop-001 3600 '{
+  "property_id": "prop-001",
+  "risk_score": 65,
+  "fire_protection_class": 3,
+  "distance_to_fire_station": 1.2,
+  "roof_age": 5,
+  "security_system": true,
+  "flood_zone": "X",
+  "wildfire_risk": "LOW"
+}'
+
+# ============================================================================
+# PREMIUM CALCULATION CACHING
+# ============================================================================
+
+# Cache rate table (TTL: 24 hours = 86400 seconds)
+SETEX rates:auto:CA:2024 86400 '{
+  "state": "CA",
+  "effective_date": "2024-01-01",
+  "base_rates": {
+    "liability": {
+      "100_300_100": 450.00,
+      "250_500_100": 520.00,
+      "500_1000_100": 650.00
+    },
+    "collision": {
+      "500_deductible": 380.00,
+      "1000_deductible": 280.00
+    },
+    "comprehensive": {
+      "500_deductible": 180.00,
+      "1000_deductible": 120.00
+    }
+  },
+  "age_factors": {
+    "16-20": 2.5,
+    "21-24": 1.8,
+    "25-29": 1.3,
+    "30-49": 1.0,
+    "50-64": 0.9,
+    "65+": 1.1
+  },
+  "vehicle_factors": {
+    "sedan": 1.0,
+    "suv": 1.15,
+    "truck": 1.2,
+    "sports_car": 1.8
+  }
+}'
+
+# Cache calculated premium
+SETEX premium:calc:auto:hash123 900 '{
+  "base_premium": 1200.00,
+  "age_factor": 1.0,
+  "vehicle_factor": 1.0,
+  "territory_factor": 1.15,
+  "discounts": {
+    "multi_policy": -120.00,
+    "good_driver": -60.00,
+    "anti_theft": -30.00
+  },
+  "final_premium": 1150.00
+}'
+
+# ============================================================================
+# SESSION MANAGEMENT
+# ============================================================================
+
+# Agent session (TTL: 8 hours = 28800 seconds)
+SETEX session:agent:agent-001 28800 '{
+  "agent_id": "agent-001",
+  "agent_name": "John Smith",
+  "login_time": "2024-12-06T10:00:00Z",
+  "last_activity": "2024-12-06T18:16:00Z",
+  "active_quotes": ["Q-2024-001234", "Q-2024-001235"],
+  "permissions": ["quote", "bind", "endorse", "view_claims"]
+}'
+
+# Customer portal session (TTL: 2 hours = 7200 seconds)
+SETEX session:customer:550e8400-e29b-41d4-a716-446655440000 7200 '{
+  "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+  "session_id": "sess-abc123",
+  "login_time": "2024-12-06T17:00:00Z",
+  "last_activity": "2024-12-06T18:16:00Z",
+  "viewed_policies": ["POL-001", "POL-002"],
+  "cart": {
+    "quote_id": "Q-2024-001234",
+    "selected_payment": "MONTHLY"
+  }
+}'
+
+# Check active sessions
+KEYS session:agent:*
+KEYS session:customer:*
+
+# ============================================================================
+# CLAIMS PROCESSING QUEUE
+# ============================================================================
+
+# New claims queue (FIFO)
+LPUSH queue:claims:new '{
+  "claim_id": "CLM-2024-001",
+  "claim_number": "2024-AUTO-001234",
+  "policy_id": "POL-001",
+  "claim_type": "AUTO",
+  "incident_date": "2024-12-05T14:30:00Z",
+  "reported_date": "2024-12-06T09:00:00Z",
+  "priority": "NORMAL",
+  "estimated_amount": 5000.00
+}'
+
+# Priority claims queue (for disasters, injuries, etc.)
+LPUSH queue:claims:priority '{
+  "claim_id": "CLM-2024-002",
+  "claim_number": "2024-HOME-005678",
+  "policy_id": "POL-002",
+  "claim_type": "HOME",
+  "incident_date": "2024-12-06T02:00:00Z",
+  "reported_date": "2024-12-06T08:00:00Z",
+  "priority": "HIGH",
+  "reason": "FIRE",
+  "property_habitable": false,
+  "estimated_amount": 250000.00
+}'
+
+# Process claim from queue (adjuster picks up)
+RPOP queue:claims:new
+
+# Check queue length
+LLEN queue:claims:new
+LLEN queue:claims:priority
+
+# View next claims without removing
+LRANGE queue:claims:new 0 4
+LRANGE queue:claims:priority 0 4
+
+# ============================================================================
+# CLAIM STATUS TRACKING
+# ============================================================================
+
+# Track claim status with hash
+HSET claim:CLM-2024-001 status "INVESTIGATING"
+HSET claim:CLM-2024-001 adjuster_id "adj-001"
+HSET claim:CLM-2024-001 assigned_at "2024-12-06T18:16:00Z"
+HSET claim:CLM-2024-001 estimated_amount "5000.00"
+HSET claim:CLM-2024-001 last_updated "2024-12-06T18:16:00Z"
+
+# Get all claim details
+HGETALL claim:CLM-2024-001
+
+# Get specific field
+HGET claim:CLM-2024-001 status
+
+# Update status
+HSET claim:CLM-2024-001 status "APPROVED"
+HSET claim:CLM-2024-001 approved_amount "4500.00"
+HSET claim:CLM-2024-001 last_updated "2024-12-06T19:00:00Z"
+
+# ============================================================================
+# REAL-TIME NOTIFICATIONS
+# ============================================================================
+
+# Publish claim status update
+PUBLISH notifications:claims '{
+  "claim_id": "CLM-2024-001",
+  "status": "APPROVED",
+  "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+  "message": "Your claim has been approved for $4,500.00",
+  "timestamp": "2024-12-06T19:00:00Z"
+}'
+
+# Subscribe to claim notifications (in separate connection)
+# SUBSCRIBE notifications:claims
+
+# Publish policy renewal reminder
+PUBLISH notifications:renewals '{
+  "policy_id": "POL-001",
+  "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+  "renewal_date": "2025-01-15",
+  "days_until_renewal": 40,
+  "message": "Your auto policy renews in 40 days"
+}'
+
+# ============================================================================
+# DISASTER EVENT TRACKING
+# ============================================================================
+
+# Track active disaster
+SETEX disaster:active:CAT-2024-001 604800 '{
+  "disaster_id": "CAT-2024-001",
+  "disaster_type": "WILDFIRE",
+  "disaster_name": "Northern California Wildfire",
+  "start_date": "2024-12-01T00:00:00Z",
+  "affected_zip_codes": ["95401", "95403", "95404"],
+  "severity": "MAJOR",
+  "claims_expected": 500,
+  "claims_received": 127,
+  "status": "ACTIVE"
+}'
+
+# Track affected policies
+SADD disaster:CAT-2024-001:policies POL-100 POL-101 POL-102 POL-103
+
+# Check if policy affected
+SISMEMBER disaster:CAT-2024-001:policies POL-100
+
+# Get all affected policies
+SMEMBERS disaster:CAT-2024-001:policies
+
+# Count affected policies
+SCARD disaster:CAT-2024-001:policies
+
+# ============================================================================
+# FRAUD DETECTION FLAGS
+# ============================================================================
+
+# Flag suspicious claim for review
+SETEX fraud:flag:CLM-2024-003 86400 '{
+  "claim_id": "CLM-2024-003",
+  "fraud_score": 85,
+  "flags": [
+    "MULTIPLE_CLAIMS_SHORT_PERIOD",
+    "SUSPICIOUS_TIMING",
+    "HIGH_CLAIM_AMOUNT"
+  ],
+  "requires_investigation": true,
+  "flagged_at": "2024-12-06T18:16:00Z"
+}'
+
+# Track fraud investigation queue
+LPUSH queue:fraud:investigation CLM-2024-003
+
+# ============================================================================
+# ANALYTICS COUNTERS
+# ============================================================================
+
+# Increment daily quote counter
+INCR stats:quotes:daily:2024-12-06
+INCRBY stats:quotes:daily:2024-12-06:auto 1
+INCRBY stats:quotes:daily:2024-12-06:home 1
+
+# Get quote counts
+GET stats:quotes:daily:2024-12-06
+GET stats:quotes:daily:2024-12-06:auto
+
+# Track claims by type
+HINCRBY stats:claims:by_type AUTO 1
+HINCRBY stats:claims:by_type HOME 1
+HINCRBY stats:claims:by_type LIFE 1
+
+# Get all claim type counts
+HGETALL stats:claims:by_type
+
+# ============================================================================
+# RATE LIMITING
+# ============================================================================
+
+# Rate limit quote requests (max 10 per minute)
+INCR ratelimit:quote:customer:550e8400-e29b-41d4-a716-446655440000
+EXPIRE ratelimit:quote:customer:550e8400-e29b-41d4-a716-446655440000 60
+
+# Check rate limit
+GET ratelimit:quote:customer:550e8400-e29b-41d4-a716-446655440000
+
+# ============================================================================
+# CLEANUP
+# ============================================================================
+
+# Delete expired quotes
+DEL quote:auto:550e8400-e29b-41d4-a716-446655440000:1HGCM82633A123456
+
+# Clear all quotes (use with caution!)
+# KEYS quote:* | xargs redis-cli DEL
+
+# ============================================================================
+# MONITORING
+# ============================================================================
+
+# Monitor all commands in real-time
+# MONITOR
+
+# Get server info
+INFO
+
+# Get memory usage
+MEMORY STATS
+
+# Get key count
+DBSIZE

@@ -1,0 +1,2658 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>OrbitRS vs ClickHouse: Technical Comparison</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    code {
+      white-space: pre-wrap;
+    }
+
+    span.smallcaps {
+      font-variant: small-caps;
+    }
+
+    div.columns {
+      display: flex;
+      gap: min(4vw, 1.5em);
+    }
+
+    div.column {
+      flex: auto;
+      overflow-x: auto;
+    }
+
+    div.hanging-indent {
+      margin-left: 1.5em;
+      text-indent: -1.5em;
+    }
+
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class] {
+      list-style: none;
+    }
+
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+
+    .display.math {
+      display: block;
+      text-align: center;
+      margin: 0.5rem auto;
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.2.0/github-markdown.min.css" />
+</head>
+
+<body>
+  <header id="title-block-header">
+    <h1 class="title">OrbitRS vs ClickHouse: Technical Comparison</h1>
+  </header>
+  <nav id="TOC" role="doc-toc">
+    <ul>
+      <li><a href="#orbitrs-vs-clickhouse-a-comprehensive-technical-comparison"
+          id="toc-orbitrs-vs-clickhouse-a-comprehensive-technical-comparison">OrbitRS
+          vs ClickHouse: A Comprehensive Technical Comparison</a>
+        <ul>
+          <li><a href="#database-architecture-whitepaper" id="toc-database-architecture-whitepaper">Database
+              Architecture
+              Whitepaper</a></li>
+          <li><a href="#executive-summary" id="toc-executive-summary">Executive
+              Summary</a></li>
+          <li><a href="#table-of-contents" id="toc-table-of-contents">Table of
+              Contents</a></li>
+          <li><a href="#architecture-overview" id="toc-architecture-overview">1.
+              Architecture Overview</a>
+            <ul>
+              <li><a href="#orbitrs-architecture" id="toc-orbitrs-architecture">1.1
+                  OrbitRS Architecture</a></li>
+              <li><a href="#clickhouse-architecture" id="toc-clickhouse-architecture">1.2 ClickHouse Architecture</a>
+              </li>
+              <li><a href="#architecture-comparison-matrix" id="toc-architecture-comparison-matrix">1.3 Architecture
+                  Comparison
+                  Matrix</a></li>
+            </ul>
+          </li>
+          <li><a href="#storage-engine-comparison" id="toc-storage-engine-comparison">2. Storage Engine Comparison</a>
+            <ul>
+              <li><a href="#orbitrs-storage-architecture" id="toc-orbitrs-storage-architecture">2.1 OrbitRS Storage
+                  Architecture</a></li>
+              <li><a href="#clickhouse-storage-architecture" id="toc-clickhouse-storage-architecture">2.2 ClickHouse
+                  Storage
+                  Architecture</a></li>
+              <li><a href="#storage-comparison-matrix" id="toc-storage-comparison-matrix">2.3 Storage Comparison
+                  Matrix</a></li>
+            </ul>
+          </li>
+          <li><a href="#query-processing" id="toc-query-processing">3. Query
+              Processing</a>
+            <ul>
+              <li><a href="#orbitrs-query-engine" id="toc-orbitrs-query-engine">3.1
+                  OrbitRS Query Engine</a></li>
+              <li><a href="#clickhouse-query-engine" id="toc-clickhouse-query-engine">3.2 ClickHouse Query Engine</a>
+              </li>
+              <li><a href="#query-processing-comparison" id="toc-query-processing-comparison">3.3 Query Processing
+                  Comparison</a></li>
+            </ul>
+          </li>
+          <li><a href="#protocol-support" id="toc-protocol-support">4. Protocol
+              Support</a>
+            <ul>
+              <li><a href="#orbitrs-protocol-matrix" id="toc-orbitrs-protocol-matrix">4.1 OrbitRS Protocol Matrix</a>
+              </li>
+              <li><a href="#clickhouse-protocol-support" id="toc-clickhouse-protocol-support">4.2 ClickHouse Protocol
+                  Support</a></li>
+              <li><a href="#protocol-comparison" id="toc-protocol-comparison">4.3
+                  Protocol Comparison</a></li>
+            </ul>
+          </li>
+          <li><a href="#data-model-support" id="toc-data-model-support">5. Data
+              Model Support</a>
+            <ul>
+              <li><a href="#orbitrs-multi-model-capabilities" id="toc-orbitrs-multi-model-capabilities">5.1 OrbitRS
+                  Multi-Model
+                  Capabilities</a></li>
+              <li><a href="#clickhouse-data-model" id="toc-clickhouse-data-model">5.2
+                  ClickHouse Data Model</a></li>
+              <li><a href="#data-model-comparison" id="toc-data-model-comparison">5.3
+                  Data Model Comparison</a></li>
+            </ul>
+          </li>
+          <li><a href="#distributed-computing" id="toc-distributed-computing">6.
+              Distributed Computing</a>
+            <ul>
+              <li><a href="#orbitrs-distributed-features" id="toc-orbitrs-distributed-features">6.1 OrbitRS Distributed
+                  Features</a></li>
+              <li><a href="#clickhouse-distributed-features" id="toc-clickhouse-distributed-features">6.2 ClickHouse
+                  Distributed
+                  Features</a></li>
+              <li><a href="#distribution-comparison" id="toc-distribution-comparison">6.3 Distribution Comparison</a>
+              </li>
+            </ul>
+          </li>
+          <li><a href="#performance-optimization" id="toc-performance-optimization">7. Performance Optimization</a>
+            <ul>
+              <li><a href="#orbitrs-performance-features" id="toc-orbitrs-performance-features">7.1 OrbitRS Performance
+                  Features</a></li>
+              <li><a href="#clickhouse-performance-features" id="toc-clickhouse-performance-features">7.2 ClickHouse
+                  Performance
+                  Features</a></li>
+              <li><a href="#performance-comparison" id="toc-performance-comparison">7.3 Performance Comparison</a></li>
+            </ul>
+          </li>
+          <li><a href="#aiml-integration" id="toc-aiml-integration">8. AI/ML
+              Integration</a>
+            <ul>
+              <li><a href="#orbitrs-ai-native-database" id="toc-orbitrs-ai-native-database">8.1 OrbitRS AI-Native
+                  Database</a></li>
+              <li><a href="#clickhouse-aiml-features" id="toc-clickhouse-aiml-features">8.2 ClickHouse AI/ML
+                  Features</a></li>
+              <li><a href="#aiml-comparison" id="toc-aiml-comparison">8.3 AI/ML
+                  Comparison</a></li>
+            </ul>
+          </li>
+          <li><a href="#vector-database-capabilities" id="toc-vector-database-capabilities">9. Vector Database
+              Capabilities</a>
+            <ul>
+              <li><a href="#orbitrs-vector-features" id="toc-orbitrs-vector-features">9.1 OrbitRS Vector Features</a>
+              </li>
+              <li><a href="#clickhouse-vector-features" id="toc-clickhouse-vector-features">9.2 ClickHouse Vector
+                  Features</a></li>
+              <li><a href="#vector-comparison" id="toc-vector-comparison">9.3 Vector
+                  Comparison</a></li>
+            </ul>
+          </li>
+          <li><a href="#time-series-features" id="toc-time-series-features">10.
+              Time-Series Features</a>
+            <ul>
+              <li><a href="#orbitrs-time-series" id="toc-orbitrs-time-series">10.1
+                  OrbitRS Time-Series</a></li>
+              <li><a href="#clickhouse-time-series" id="toc-clickhouse-time-series">10.2 ClickHouse Time-Series</a></li>
+              <li><a href="#time-series-comparison" id="toc-time-series-comparison">10.3 Time-Series Comparison</a></li>
+            </ul>
+          </li>
+          <li><a href="#graph-database-features" id="toc-graph-database-features">11. Graph Database Features</a>
+            <ul>
+              <li><a href="#orbitrs-graph-capabilities" id="toc-orbitrs-graph-capabilities">11.1 OrbitRS Graph
+                  Capabilities</a></li>
+              <li><a href="#clickhouse-graph-support" id="toc-clickhouse-graph-support">11.2 ClickHouse Graph
+                  Support</a></li>
+              <li><a href="#graph-comparison" id="toc-graph-comparison">11.3 Graph
+                  Comparison</a></li>
+            </ul>
+          </li>
+          <li><a href="#transaction-support" id="toc-transaction-support">12.
+              Transaction Support</a>
+            <ul>
+              <li><a href="#orbitrs-transaction-features" id="toc-orbitrs-transaction-features">12.1 OrbitRS Transaction
+                  Features</a></li>
+              <li><a href="#clickhouse-transaction-support" id="toc-clickhouse-transaction-support">12.2 ClickHouse
+                  Transaction
+                  Support</a></li>
+              <li><a href="#transaction-comparison" id="toc-transaction-comparison">12.3 Transaction Comparison</a></li>
+            </ul>
+          </li>
+          <li><a href="#geospatial-capabilities" id="toc-geospatial-capabilities">13. Geospatial Capabilities</a>
+            <ul>
+              <li><a href="#orbitrs-geospatial" id="toc-orbitrs-geospatial">13.1
+                  OrbitRS Geospatial</a></li>
+              <li><a href="#clickhouse-geospatial" id="toc-clickhouse-geospatial">13.2
+                  ClickHouse Geospatial</a></li>
+              <li><a href="#geospatial-comparison" id="toc-geospatial-comparison">13.3
+                  Geospatial Comparison</a></li>
+            </ul>
+          </li>
+          <li><a href="#security-compliance" id="toc-security-compliance">14.
+              Security &amp; Compliance</a>
+            <ul>
+              <li><a href="#orbitrs-security" id="toc-orbitrs-security">14.1 OrbitRS
+                  Security</a></li>
+              <li><a href="#clickhouse-security" id="toc-clickhouse-security">14.2
+                  ClickHouse Security</a></li>
+              <li><a href="#security-comparison" id="toc-security-comparison">14.3
+                  Security Comparison</a></li>
+            </ul>
+          </li>
+          <li><a href="#deployment-operations" id="toc-deployment-operations">15.
+              Deployment &amp; Operations</a>
+            <ul>
+              <li><a href="#orbitrs-deployment" id="toc-orbitrs-deployment">15.1
+                  OrbitRS Deployment</a></li>
+              <li><a href="#clickhouse-deployment" id="toc-clickhouse-deployment">15.2
+                  ClickHouse Deployment</a></li>
+              <li><a href="#deployment-comparison" id="toc-deployment-comparison">15.3
+                  Deployment Comparison</a></li>
+            </ul>
+          </li>
+          <li><a href="#use-case-analysis" id="toc-use-case-analysis">16. Use Case
+              Analysis</a>
+            <ul>
+              <li><a href="#orbitrs-ideal-use-cases" id="toc-orbitrs-ideal-use-cases">16.1 OrbitRS Ideal Use Cases</a>
+              </li>
+              <li><a href="#clickhouse-ideal-use-cases" id="toc-clickhouse-ideal-use-cases">16.2 ClickHouse Ideal Use
+                  Cases</a></li>
+              <li><a href="#complementary-deployment" id="toc-complementary-deployment">16.3 Complementary
+                  Deployment</a></li>
+            </ul>
+          </li>
+          <li><a href="#performance-benchmarks" id="toc-performance-benchmarks">17. Performance Benchmarks</a>
+            <ul>
+              <li><a href="#analytical-query-performance" id="toc-analytical-query-performance">17.1 Analytical Query
+                  Performance</a></li>
+              <li><a href="#write-performance" id="toc-write-performance">17.2 Write
+                  Performance</a></li>
+              <li><a href="#memory-resource-efficiency" id="toc-memory-resource-efficiency">17.3 Memory &amp; Resource
+                  Efficiency</a></li>
+            </ul>
+          </li>
+          <li><a href="#conclusion" id="toc-conclusion">18. Conclusion</a>
+            <ul>
+              <li><a href="#summary-comparison" id="toc-summary-comparison">18.1
+                  Summary Comparison</a></li>
+              <li><a href="#choosing-the-right-database" id="toc-choosing-the-right-database">18.2 Choosing the Right
+                  Database</a></li>
+              <li><a href="#future-outlook" id="toc-future-outlook">18.3 Future
+                  Outlook</a></li>
+            </ul>
+          </li>
+          <li><a href="#references" id="toc-references">References</a></li>
+          <li><a href="#appendix-a-feature-matrix" id="toc-appendix-a-feature-matrix">Appendix A: Feature Matrix</a>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </nav>
+  <h1 id="orbitrs-vs-clickhouse-a-comprehensive-technical-comparison">OrbitRS
+    vs ClickHouse: A Comprehensive Technical Comparison</h1>
+  <h2 id="database-architecture-whitepaper">Database Architecture
+    Whitepaper</h2>
+  <p><strong>Version:</strong> 1.0 <strong>Date:</strong> December 2025
+    <strong>Authors:</strong> Orbit-RS Development Team
+  </p>
+  <hr />
+  <h2 id="executive-summary">Executive Summary</h2>
+  <p>This whitepaper provides a comprehensive feature-by-feature
+    comparison between <strong>OrbitRS</strong>, a unified multi-protocol
+    database system written in Rust, and <strong>ClickHouse</strong>, a
+    high-performance columnar OLAP database written in C++. While both
+    systems excel in analytical workloads, they serve fundamentally
+    different architectural philosophies and use cases.</p>
+  <p><strong>OrbitRS</strong> is designed as a unified multi-model,
+    multi-protocol database that consolidates 9+ protocols (PostgreSQL,
+    MySQL, Redis, Cassandra, MongoDB, Neo4j, ArangoDB, REST, gRPC) into a
+    single process with shared storage, AI-native optimization, and
+    heterogeneous compute acceleration.</p>
+  <p><strong>ClickHouse</strong> is purpose-built as a columnar OLAP
+    database optimized for real-time analytics on massive datasets,
+    excelling in time-series analysis, log analytics, and high-throughput
+    analytical queries.</p>
+  <hr />
+  <h2 id="table-of-contents">Table of Contents</h2>
+  <ol type="1">
+    <li><a href="#1-architecture-overview">Architecture Overview</a></li>
+    <li><a href="#2-storage-engine-comparison">Storage Engine
+        Comparison</a></li>
+    <li><a href="#3-query-processing">Query Processing</a></li>
+    <li><a href="#4-protocol-support">Protocol Support</a></li>
+    <li><a href="#5-data-model-support">Data Model Support</a></li>
+    <li><a href="#6-distributed-computing">Distributed Computing</a></li>
+    <li><a href="#7-performance-optimization">Performance
+        Optimization</a></li>
+    <li><a href="#8-aiml-integration">AI/ML Integration</a></li>
+    <li><a href="#9-vector-database-capabilities">Vector Database
+        Capabilities</a></li>
+    <li><a href="#10-time-series-features">Time-Series Features</a></li>
+    <li><a href="#11-graph-database-features">Graph Database
+        Features</a></li>
+    <li><a href="#12-transaction-support">Transaction Support</a></li>
+    <li><a href="#13-geospatial-capabilities">Geospatial
+        Capabilities</a></li>
+    <li><a href="#14-security--compliance">Security &amp;
+        Compliance</a></li>
+    <li><a href="#15-deployment--operations">Deployment &amp;
+        Operations</a></li>
+    <li><a href="#16-use-case-analysis">Use Case Analysis</a></li>
+    <li><a href="#17-performance-benchmarks">Performance Benchmarks</a></li>
+    <li><a href="#18-conclusion">Conclusion</a></li>
+  </ol>
+  <hr />
+  <h2 id="architecture-overview">1. Architecture Overview</h2>
+  <h3 id="orbitrs-architecture">1.1 OrbitRS Architecture</h3>
+  <p>OrbitRS employs a <strong>unified multi-protocol
+      architecture</strong> built on the following core principles:</p>
+  <pre><code>
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                      OrbitRS Architecture                       │
+    ├─────────────────────────────────────────────────────────────────┤
+    │  ┌───────-──┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │
+    │  │PostgreSQL│ │  MySQL  │ │  Redis  │ │Cassandra│ │ Neo4j   │   │
+    │  │  :5432   │ │  :3306  │ │  :6379  │ │  :9042  │ │  :7687  │   │
+    │  └────┬──-──┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘   │
+    │       │            │           │           │           │        │
+    │  ┌────┴─────────-──┴───────────┴───────────┴───────────┴───┐    │
+    │  │              Unified Query Engine Layer                 │    │
+    │  │    ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │    │
+    │  │    │ SQL Engine  │  │Graph Engine │  │ KV Engine   │    │    │
+    │  │    └─────────────┘  └─────────────┘  └─────────────┘    │    │
+    │  └──────────────────────────┬──────────────────────────────┘    │
+    │                             │                                   │
+    │  ┌──────────────────────────┴──────────────────────────────┐    │
+    │  │              AI-Native Optimization Layer               │    │
+    │  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐        │    │
+    │  │  │Optimizer│ │Resource │ │Storage  │ │Learning │        │    │
+    │  │  │ Engine  │ │ Manager │ │ Manager │ │ Engine  │        │    │
+    │  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘        │    │
+    │  └──────────────────────────┬──────────────────────────────┘    │
+    │                             │                                   │
+    │  ┌──────────────────────────┴──────────────────────────────┐    │
+    │  │                 Unified Storage Layer                   │    │
+    │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐      │    │
+    │  │  │  Hot Tier   │  │  Warm Tier  │  │  Cold Tier  │      │    │
+    │  │  │  (RocksDB)  │  │ (Columnar)  │  │  (Iceberg)  │      │    │
+    │  │  └─────────────┘  └─────────────┘  └─────────────┘      │    │
+    │  └─────────────────────────────────────────────────────────┘    │
+    └─────────────────────────────────────────────────────────────────┘
+  </code></pre>
+  <p><strong>Key Architectural Components:</strong></p>
+  <table>
+    <colgroup>
+      <col style="width: 45%" />
+      <col style="width: 54%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Component</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Virtual Actor System</strong></td>
+        <td>Addressable, on-demand actors with automatic state persistence</td>
+      </tr>
+      <tr>
+        <td><strong>Multi-Protocol Layer</strong></td>
+        <td>9+ protocols sharing unified storage</td>
+      </tr>
+      <tr>
+        <td><strong>AI Master Controller</strong></td>
+        <td>Autonomous optimization with 8 subsystems</td>
+      </tr>
+      <tr>
+        <td><strong>Tiered Storage</strong></td>
+        <td>Hot/Warm/Cold automatic data management</td>
+      </tr>
+      <tr>
+        <td><strong>Heterogeneous Compute</strong></td>
+        <td>SIMD, GPU (Metal/CUDA/Vulkan) acceleration</td>
+      </tr>
+    </tbody>
+  </table>
+  <p><strong>Implementation:</strong> 651,350+ lines of Rust code across
+    15 workspace crates</p>
+  <h3 id="clickhouse-architecture">1.2 ClickHouse Architecture</h3>
+  <p>ClickHouse employs a <strong>columnar OLAP architecture</strong>
+    optimized for analytical workloads:</p>
+  <pre><code>
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                    ClickHouse Architecture                      │
+    ├─────────────────────────────────────────────────────────────────┤
+    │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+    │  │   Native    │  │    HTTP     │  │ MySQL/PG    │              │
+    │  │  Protocol   │  │    API      │  │   Wire      │              │
+    │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘              │
+    │         │                │                │                     │
+    │  ┌──────┴────────────────┴────────────────┴──────┐              │
+    │  │              Query Processing Layer           │              │
+    │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐       │              │
+    │  │  │  Parser  │ │Optimizer │ │ Executor │       │              │
+    │  │  └──────────┘ └──────────┘ └──────────┘       │              │
+    │  └────────────────────────┬──────────────────────┘              │
+    │                           │                                     │
+    │  ┌────────────────────────┴──────────────────────┐              │
+    │  │              MergeTree Storage Engine         │              │
+    │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐       │              │
+    │  │  │  Parts   │ │ Granules │ │  Merges  │       │              │
+    │  │  └──────────┘ └──────────┘ └──────────┘       │              │
+    │  └────────────────────────┬──────────────────────┘              │
+    │                           │                                     │
+    │  ┌────────────────────────┴──────────────────────┐              │
+    │  │           Distributed Coordination            │              │
+    │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐       │              │
+    │  │  │  Keeper  │ │Replication│ │ Sharding │      │              │
+    │  │  └──────────┘ └──────────┘ └──────────┘       │              │
+    │  └───────────────────────────────────────────────┘              │
+    └─────────────────────────────────────────────────────────────────┘
+  </code></pre>
+  <p><strong>Key Architectural Components:</strong></p>
+  <table>
+    <colgroup>
+      <col style="width: 45%" />
+      <col style="width: 54%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Component</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>MergeTree Engine</strong></td>
+        <td>LSM-tree based columnar storage with continuous merging</td>
+      </tr>
+      <tr>
+        <td><strong>Vectorized Execution</strong></td>
+        <td>MonetDB/X100-style batch processing</td>
+      </tr>
+      <tr>
+        <td><strong>Distributed Coordination</strong></td>
+        <td>Raft-based ClickHouse Keeper</td>
+      </tr>
+      <tr>
+        <td><strong>SIMD Optimization</strong></td>
+        <td>Hardware-level instruction parallelism</td>
+      </tr>
+    </tbody>
+  </table>
+  <p><strong>Implementation:</strong> C++ single statically-linked
+    binary</p>
+  <h3 id="architecture-comparison-matrix">1.3 Architecture Comparison
+    Matrix</h3>
+  <table>
+    <colgroup>
+      <col style="width: 27%" />
+      <col style="width: 31%" />
+      <col style="width: 41%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Aspect</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Primary Language</strong></td>
+        <td>Rust</td>
+        <td>C++</td>
+      </tr>
+      <tr>
+        <td><strong>Architecture Style</strong></td>
+        <td>Multi-model, multi-protocol</td>
+        <td>Single-model OLAP</td>
+      </tr>
+      <tr>
+        <td><strong>Storage Model</strong></td>
+        <td>Hybrid (Row + Columnar + Tiered)</td>
+        <td>Columnar (MergeTree)</td>
+      </tr>
+      <tr>
+        <td><strong>Concurrency Model</strong></td>
+        <td>Virtual Actors + Async I/O</td>
+        <td>Thread-per-query</td>
+      </tr>
+      <tr>
+        <td><strong>Memory Safety</strong></td>
+        <td>Guaranteed (Rust)</td>
+        <td>Manual management</td>
+      </tr>
+      <tr>
+        <td><strong>Protocol Support</strong></td>
+        <td>9+ native protocols</td>
+        <td>Native + MySQL/PG wire</td>
+      </tr>
+      <tr>
+        <td><strong>Deployment Binary</strong></td>
+        <td>Multiple crates</td>
+        <td>Single binary</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="storage-engine-comparison">2. Storage Engine Comparison</h2>
+  <h3 id="orbitrs-storage-architecture">2.1 OrbitRS Storage
+    Architecture</h3>
+  <p>OrbitRS implements a <strong>tiered storage architecture</strong>
+    with multiple backends:</p>
+  <h4 id="hot-tier-0-48-hours">Hot Tier (0-48 hours)</h4>
+  <ul>
+    <li><strong>Engine:</strong> RocksDB with LSM-tree</li>
+    <li><strong>Format:</strong> Row-based for OLTP workloads</li>
+    <li><strong>Indexing:</strong> HashMap primary key indexing</li>
+    <li><strong>Use Case:</strong> Real-time writes, point queries</li>
+  </ul>
+  <h4 id="warm-tier-2-30-days">Warm Tier (2-30 days)</h4>
+  <ul>
+    <li><strong>Engine:</strong> In-memory columnar batches</li>
+    <li><strong>Format:</strong> Hybrid columnar for mixed workloads</li>
+    <li><strong>Use Case:</strong> Analytics on recent data</li>
+  </ul>
+  <h4 id="cold-tier-30-days">Cold Tier (30+ days)</h4>
+  <ul>
+    <li><strong>Engine:</strong> Apache Iceberg on object storage</li>
+    <li><strong>Format:</strong> Parquet with Zstd compression</li>
+    <li><strong>Features:</strong> Time travel, schema evolution, metadata
+      pruning</li>
+    <li><strong>Storage:</strong> S3, Azure Blob, MinIO, local
+      filesystem</li>
+  </ul>
+  <p><strong>Storage Backend Support:</strong></p>
+  <table>
+    <thead>
+      <tr>
+        <th>Backend</th>
+        <th>Use Case</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>RocksDB</td>
+        <td>Production persistence</td>
+        <td>✅ Production</td>
+      </tr>
+      <tr>
+        <td>In-Memory</td>
+        <td>Development/caching</td>
+        <td>✅ Production</td>
+      </tr>
+      <tr>
+        <td>COW B-Tree</td>
+        <td>Copy-on-write semantics</td>
+        <td>✅ Production</td>
+      </tr>
+      <tr>
+        <td>LSM Tree</td>
+        <td>Log-structured storage</td>
+        <td>✅ Production</td>
+      </tr>
+      <tr>
+        <td>Apache Iceberg</td>
+        <td>Cold storage analytics</td>
+        <td>✅ Production</td>
+      </tr>
+      <tr>
+        <td>Parquet</td>
+        <td>Columnar analytics</td>
+        <td>✅ Production</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="clickhouse-storage-architecture">2.2 ClickHouse Storage
+    Architecture</h3>
+  <p>ClickHouse uses the <strong>MergeTree family</strong> as its primary
+    storage engine:</p>
+  <h4 id="mergetree-engine">MergeTree Engine</h4>
+  <ul>
+    <li><strong>Structure:</strong> Immutable parts with continuous
+      background merging</li>
+    <li><strong>Granules:</strong> 8,192 records as smallest processing
+      unit</li>
+    <li><strong>Blocks:</strong> Multiple granules (default 1 MB) with
+      compression</li>
+    <li><strong>Compression:</strong> LZ4, ZSTD, Delta encoding</li>
+  </ul>
+  <h4 id="data-pruning-techniques">Data Pruning Techniques</h4>
+  <table>
+    <colgroup>
+      <col style="width: 45%" />
+      <col style="width: 54%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Technique</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Primary Key Index</strong></td>
+        <td>Sparse index with one entry per granule</td>
+      </tr>
+      <tr>
+        <td><strong>Table Projections</strong></td>
+        <td>Alternative sort orders for different query patterns</td>
+      </tr>
+      <tr>
+        <td><strong>Skipping Indices</strong></td>
+        <td>Min-max, set, Bloom filter at multi-granule level</td>
+      </tr>
+    </tbody>
+  </table>
+  <h4 id="merge-time-transformations">Merge-Time Transformations</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Merge Type</th>
+        <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Replacing Merges</strong></td>
+        <td>Keep latest version based on timestamp</td>
+      </tr>
+      <tr>
+        <td><strong>Aggregating Merges</strong></td>
+        <td>Collapse rows with equal primary keys</td>
+      </tr>
+      <tr>
+        <td><strong>TTL Merges</strong></td>
+        <td>Age-based deletion, compression, rollup</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="storage-comparison-matrix">2.3 Storage Comparison Matrix</h3>
+  <table>
+    <colgroup>
+      <col style="width: 30%" />
+      <col style="width: 30%" />
+      <col style="width: 40%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Primary Storage</strong></td>
+        <td>RocksDB + Iceberg</td>
+        <td>MergeTree</td>
+      </tr>
+      <tr>
+        <td><strong>Storage Format</strong></td>
+        <td>Row + Columnar (hybrid)</td>
+        <td>Columnar only</td>
+      </tr>
+      <tr>
+        <td><strong>Compression</strong></td>
+        <td>Zstd, LZ4</td>
+        <td>LZ4, ZSTD, Delta</td>
+      </tr>
+      <tr>
+        <td><strong>Tiered Storage</strong></td>
+        <td>✅ Automatic (Hot/Warm/Cold)</td>
+        <td>✅ TTL-based</td>
+      </tr>
+      <tr>
+        <td><strong>Time Travel</strong></td>
+        <td>✅ Iceberg snapshots</td>
+        <td>❌ Limited</td>
+      </tr>
+      <tr>
+        <td><strong>Schema Evolution</strong></td>
+        <td>✅ Non-blocking</td>
+        <td>✅ ALTER TABLE</td>
+      </tr>
+      <tr>
+        <td><strong>Data Lake Integration</strong></td>
+        <td>✅ Native Iceberg</td>
+        <td>✅ Iceberg, Delta, Hudi</td>
+      </tr>
+      <tr>
+        <td><strong>Object Storage</strong></td>
+        <td>✅ S3, Azure, MinIO</td>
+        <td>✅ S3, GCS, Azure</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="query-processing">3. Query Processing</h2>
+  <h3 id="orbitrs-query-engine">3.1 OrbitRS Query Engine</h3>
+  <p>OrbitRS implements a <strong>unified query engine</strong> supporting
+    multiple query languages:</p>
+  <h4 id="sql-engine-features">SQL Engine Features</h4>
+  <ul>
+    <li><strong>Parser:</strong> Complete SQL lexer + recursive descent
+      parser</li>
+    <li><strong>Optimizer:</strong> Cost-based with cardinality
+      estimation</li>
+    <li><strong>Executor:</strong> Vectorized batch processing (1024-row
+      batches)</li>
+    <li><strong>Caching:</strong> Query plan caching with dependency
+      tracking</li>
+  </ul>
+  <h4 id="supported-sql-constructs">Supported SQL Constructs</h4>
+  <table>
+    <colgroup>
+      <col style="width: 50%" />
+      <col style="width: 50%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Category</th>
+        <th>Features</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>DML</strong></td>
+        <td>SELECT, INSERT, UPDATE, DELETE</td>
+      </tr>
+      <tr>
+        <td><strong>DDL</strong></td>
+        <td>CREATE/ALTER/DROP TABLE, CREATE/DROP INDEX</td>
+      </tr>
+      <tr>
+        <td><strong>Clauses</strong></td>
+        <td>WHERE, GROUP BY, HAVING, ORDER BY, LIMIT/OFFSET, DISTINCT</td>
+      </tr>
+      <tr>
+        <td><strong>Joins</strong></td>
+        <td>INNER, LEFT, RIGHT, FULL OUTER, CROSS</td>
+      </tr>
+      <tr>
+        <td><strong>Set Operations</strong></td>
+        <td>UNION, INTERSECT, EXCEPT</td>
+      </tr>
+      <tr>
+        <td><strong>Advanced</strong></td>
+        <td>CTEs, Window Functions, Subqueries, Correlated Queries</td>
+      </tr>
+      <tr>
+        <td><strong>Functions</strong></td>
+        <td>50+ aggregate, scalar, window, temporal functions</td>
+      </tr>
+    </tbody>
+  </table>
+  <h4 id="query-optimization-pipeline">Query Optimization Pipeline</h4>
+  <pre><code>
+  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+  │  Parse   │───▶│ Analyze  │───▶│ Optimize │───▶│ Execute  │
+  └──────────┘    └──────────┘    └──────────┘    └──────────┘
+                                      │
+                      ┌───────────────┼───────────────┐
+                      ▼               ▼               ▼
+               ┌──────────┐    ┌──────────┐    ┌──────────┐
+               │Cost-Based│    │  Index   │    │  Query   │
+               │Optimizer │    │ Advisor  │    │  Cache   │
+               └──────────┘    └──────────┘    └──────────┘</code></pre>
+  <h3 id="clickhouse-query-engine">3.2 ClickHouse Query Engine</h3>
+  <p>ClickHouse implements a <strong>vectorized OLAP query
+      engine</strong>:</p>
+  <h4 id="optimization-pipeline">Optimization Pipeline</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Stage</th>
+        <th>Optimizations</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Semantic</strong></td>
+        <td>Constant folding, CSE, IN-list transformation</td>
+      </tr>
+      <tr>
+        <td><strong>Logical</strong></td>
+        <td>Filter pushdown, operation reordering</td>
+      </tr>
+      <tr>
+        <td><strong>Physical</strong></td>
+        <td>Table-engine-specific optimizations</td>
+      </tr>
+    </tbody>
+  </table>
+  <h4 id="parallelization-hierarchy">Parallelization Hierarchy</h4>
+  <ol type="1">
+    <li><strong>SIMD Level:</strong> Multiple data elements per
+      instruction</li>
+    <li><strong>Multi-Core:</strong> Independent execution lanes per
+      thread</li>
+    <li><strong>Multi-Node:</strong> Distributed execution across
+      shards</li>
+  </ol>
+  <h4 id="advanced-features">Advanced Features</h4>
+  <ul>
+    <li><strong>Query Compilation:</strong> LLVM-based operator fusion</li>
+    <li><strong>Sort Aggregation:</strong> Memory-efficient GROUP BY on
+      sorted data</li>
+    <li><strong>Partitioned Hash Joins:</strong> Non-blocking shared
+      partition algorithm</li>
+  </ul>
+  <h3 id="query-processing-comparison">3.3 Query Processing
+    Comparison</h3>
+  <table>
+    <colgroup>
+      <col style="width: 30%" />
+      <col style="width: 30%" />
+      <col style="width: 40%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Execution Model</strong></td>
+        <td>Vectorized (1024-row batches)</td>
+        <td>Vectorized (data chunks)</td>
+      </tr>
+      <tr>
+        <td><strong>SIMD Support</strong></td>
+        <td>✅ AVX2, AVX-512, NEON, SVE</td>
+        <td>✅ Intrinsics + auto-vectorization</td>
+      </tr>
+      <tr>
+        <td><strong>JIT Compilation</strong></td>
+        <td>❌ Planned</td>
+        <td>✅ LLVM-based</td>
+      </tr>
+      <tr>
+        <td><strong>Parallel Execution</strong></td>
+        <td>✅ Multi-threaded</td>
+        <td>✅ Multi-threaded + distributed</td>
+      </tr>
+      <tr>
+        <td><strong>Query Caching</strong></td>
+        <td>✅ With dependency tracking</td>
+        <td>✅ Result caching</td>
+      </tr>
+      <tr>
+        <td><strong>Prepared Statements</strong></td>
+        <td>✅ Full support</td>
+        <td>✅ Full support</td>
+      </tr>
+      <tr>
+        <td><strong>Cost-Based Optimizer</strong></td>
+        <td>✅ With AI advisor</td>
+        <td>✅ Traditional CBO</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="protocol-support">4. Protocol Support</h2>
+  <h3 id="orbitrs-protocol-matrix">4.1 OrbitRS Protocol Matrix</h3>
+  <p>OrbitRS natively implements <strong>9+ database protocols</strong> in
+    a single process:</p>
+  <table>
+    <colgroup>
+      <col style="width: 23%" />
+      <col style="width: 13%" />
+      <col style="width: 18%" />
+      <col style="width: 44%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Protocol</th>
+        <th>Port</th>
+        <th>Status</th>
+        <th>Commands/Features</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>PostgreSQL</strong></td>
+        <td>5432</td>
+        <td>✅ Production</td>
+        <td>Full v3.0 wire protocol, pgvector, JSONB</td>
+      </tr>
+      <tr>
+        <td><strong>MySQL</strong></td>
+        <td>3306</td>
+        <td>✅ Production</td>
+        <td>4.1+ wire protocol, 68+ tests</td>
+      </tr>
+      <tr>
+        <td><strong>Redis (RESP)</strong></td>
+        <td>6379</td>
+        <td>✅ Production</td>
+        <td>124+ commands, Pub/Sub, Transactions</td>
+      </tr>
+      <tr>
+        <td><strong>CQL (Cassandra)</strong></td>
+        <td>9042</td>
+        <td>✅ Production</td>
+        <td>CQL 3.x v4, Batch, Collections</td>
+      </tr>
+      <tr>
+        <td><strong>Bolt (Neo4j)</strong></td>
+        <td>7687</td>
+        <td>✅ Production</td>
+        <td>v4.4 protocol, 70+ Cypher functions</td>
+      </tr>
+      <tr>
+        <td><strong>AQL (ArangoDB)</strong></td>
+        <td>8529</td>
+        <td>✅ Production</td>
+        <td>Multi-model queries</td>
+      </tr>
+      <tr>
+        <td><strong>REST API</strong></td>
+        <td>8080</td>
+        <td>✅ Production</td>
+        <td>OpenAPI, WebSocket</td>
+      </tr>
+      <tr>
+        <td><strong>gRPC</strong></td>
+        <td>50051</td>
+        <td>✅ Production</td>
+        <td>Actor management</td>
+      </tr>
+      <tr>
+        <td><strong>MCP</strong></td>
+        <td>-</td>
+        <td>✅ Production</td>
+        <td>LLM integration, NL queries</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="clickhouse-protocol-support">4.2 ClickHouse Protocol
+    Support</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Protocol</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Native Binary</strong></td>
+        <td>High-performance proprietary protocol</td>
+      </tr>
+      <tr>
+        <td><strong>HTTP</strong></td>
+        <td>REST API for queries and management</td>
+      </tr>
+      <tr>
+        <td><strong>MySQL Wire</strong></td>
+        <td>Compatibility mode for MySQL clients</td>
+      </tr>
+      <tr>
+        <td><strong>PostgreSQL Wire</strong></td>
+        <td>Compatibility mode for PostgreSQL clients</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="protocol-comparison">4.3 Protocol Comparison</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Capability</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Native Protocols</strong></td>
+        <td>9+</td>
+        <td>2 (Native + HTTP)</td>
+      </tr>
+      <tr>
+        <td><strong>Redis Compatible</strong></td>
+        <td>✅ Full (124+ commands)</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>Cassandra Compatible</strong></td>
+        <td>✅ CQL 3.x</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>Neo4j Compatible</strong></td>
+        <td>✅ Bolt v4.4</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>MongoDB Compatible</strong></td>
+        <td>✅ Wire protocol</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>PostgreSQL Compatible</strong></td>
+        <td>✅ Full v3.0</td>
+        <td>✅ Limited</td>
+      </tr>
+      <tr>
+        <td><strong>MySQL Compatible</strong></td>
+        <td>✅ Full 4.1+</td>
+        <td>✅ Limited</td>
+      </tr>
+      <tr>
+        <td><strong>GraphQL Support</strong></td>
+        <td>✅ Planned</td>
+        <td>❌</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="data-model-support">5. Data Model Support</h2>
+  <h3 id="orbitrs-multi-model-capabilities">5.1 OrbitRS Multi-Model
+    Capabilities</h3>
+  <p>OrbitRS supports <strong>5 data models</strong> through unified
+    storage:</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Description</th>
+        <th>Query Language</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Relational</strong></td>
+        <td>Tables, joins, SQL</td>
+        <td>SQL, OrbitQL</td>
+      </tr>
+      <tr>
+        <td><strong>Document</strong></td>
+        <td>JSON/BSON documents</td>
+        <td>MongoDB wire, AQL</td>
+      </tr>
+      <tr>
+        <td><strong>Key-Value</strong></td>
+        <td>Redis-compatible</td>
+        <td>RESP protocol</td>
+      </tr>
+      <tr>
+        <td><strong>Graph</strong></td>
+        <td>Nodes, relationships</td>
+        <td>Cypher, AQL</td>
+      </tr>
+      <tr>
+        <td><strong>Time-Series</strong></td>
+        <td>Temporal data</td>
+        <td>TS.* commands, SQL</td>
+      </tr>
+      <tr>
+        <td><strong>Vector</strong></td>
+        <td>Embeddings, similarity</td>
+        <td>pgvector, VECTOR.*</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="clickhouse-data-model">5.2 ClickHouse Data Model</h3>
+  <p>ClickHouse primarily supports the <strong>relational/columnar
+      model</strong>:</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Support Level</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Relational</strong></td>
+        <td>✅ Primary model</td>
+      </tr>
+      <tr>
+        <td><strong>Semi-Structured</strong></td>
+        <td>✅ JSON, nested arrays</td>
+      </tr>
+      <tr>
+        <td><strong>Time-Series</strong></td>
+        <td>✅ Optimized with TTL</td>
+      </tr>
+      <tr>
+        <td><strong>Key-Value</strong></td>
+        <td>⚠️ Via Dictionary tables</td>
+      </tr>
+      <tr>
+        <td><strong>Graph</strong></td>
+        <td>❌ Not supported</td>
+      </tr>
+      <tr>
+        <td><strong>Vector</strong></td>
+        <td>✅ Basic ANN support</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="data-model-comparison">5.3 Data Model Comparison</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Relational SQL</strong></td>
+        <td>✅ Full</td>
+        <td>✅ Full</td>
+      </tr>
+      <tr>
+        <td><strong>Document Store</strong></td>
+        <td>✅ MongoDB/ArangoDB</td>
+        <td>⚠️ JSON columns</td>
+      </tr>
+      <tr>
+        <td><strong>Key-Value</strong></td>
+        <td>✅ Redis-compatible</td>
+        <td>⚠️ Dictionary tables</td>
+      </tr>
+      <tr>
+        <td><strong>Wide-Column</strong></td>
+        <td>✅ Cassandra-compatible</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>Graph Database</strong></td>
+        <td>✅ Native Cypher</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>Time-Series</strong></td>
+        <td>✅ Native + Redis TS</td>
+        <td>✅ Optimized</td>
+      </tr>
+      <tr>
+        <td><strong>Vector Store</strong></td>
+        <td>✅ pgvector + RESP</td>
+        <td>✅ Basic ANN</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="distributed-computing">6. Distributed Computing</h2>
+  <h3 id="orbitrs-distributed-features">6.1 OrbitRS Distributed
+    Features</h3>
+  <h4 id="clustering-architecture">Clustering Architecture</h4>
+  <ul>
+    <li><strong>Consensus:</strong> Raft-based leader election</li>
+    <li><strong>Membership:</strong> Dynamic node discovery and health
+      monitoring</li>
+    <li><strong>Replication:</strong> Configurable factor (default 3x)</li>
+    <li><strong>Consistency:</strong> Strong, eventual, quorum-based
+      options</li>
+  </ul>
+  <h4 id="distributed-transactions">Distributed Transactions</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Pattern</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>2-Phase Commit</strong></td>
+        <td>Coordinator-based distributed ACID</td>
+      </tr>
+      <tr>
+        <td><strong>Saga Pattern</strong></td>
+        <td>Long-running with compensation</td>
+      </tr>
+      <tr>
+        <td><strong>Distributed Locks</strong></td>
+        <td>Cross-node coordination</td>
+      </tr>
+    </tbody>
+  </table>
+  <h4 id="change-data-capture-cdc">Change Data Capture (CDC)</h4>
+  <ul>
+    <li>Event types: Insert, Update, Delete, DDL</li>
+    <li>Streaming integration: Kafka, Pulsar compatible</li>
+    <li>Guaranteed ordering per partition</li>
+  </ul>
+  <h3 id="clickhouse-distributed-features">6.2 ClickHouse Distributed
+    Features</h3>
+  <h4 id="replication">Replication</h4>
+  <ul>
+    <li><strong>Consensus:</strong> ClickHouse Keeper (Raft-based)</li>
+    <li><strong>Model:</strong> Eventually consistent, multi-master</li>
+    <li><strong>Coordination:</strong> Three-node ensemble typical</li>
+  </ul>
+  <h4 id="sharding">Sharding</h4>
+  <ul>
+    <li><strong>Strategy:</strong> Hash or range-based distribution</li>
+    <li><strong>Distributed Tables:</strong> Virtual tables spanning
+      shards</li>
+    <li><strong>Query Routing:</strong> Automatic or manual shard
+      selection</li>
+  </ul>
+  <h3 id="distribution-comparison">6.3 Distribution Comparison</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Consensus Protocol</strong></td>
+        <td>Raft</td>
+        <td>Raft (Keeper)</td>
+      </tr>
+      <tr>
+        <td><strong>Replication Model</strong></td>
+        <td>Synchronous + Async</td>
+        <td>Eventually consistent</td>
+      </tr>
+      <tr>
+        <td><strong>Sharding</strong></td>
+        <td>✅ Hash, range, round-robin</td>
+        <td>✅ Hash, range</td>
+      </tr>
+      <tr>
+        <td><strong>Distributed Transactions</strong></td>
+        <td>✅ 2PC, Saga</td>
+        <td>⚠️ Limited</td>
+      </tr>
+      <tr>
+        <td><strong>CDC</strong></td>
+        <td>✅ Native</td>
+        <td>⚠️ Via MaterializedMySQL</td>
+      </tr>
+      <tr>
+        <td><strong>Cross-DC Replication</strong></td>
+        <td>✅ Planned</td>
+        <td>✅ Supported</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="performance-optimization">7. Performance Optimization</h2>
+  <h3 id="orbitrs-performance-features">7.1 OrbitRS Performance
+    Features</h3>
+  <h4 id="simd-acceleration">SIMD Acceleration</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Architecture</th>
+        <th>Support</th>
+        <th>Vector Width</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>AVX2</strong> (x86-64)</td>
+        <td>✅</td>
+        <td>256-bit (8× i32)</td>
+      </tr>
+      <tr>
+        <td><strong>AVX-512</strong> (x86-64)</td>
+        <td>✅</td>
+        <td>512-bit (16× i32)</td>
+      </tr>
+      <tr>
+        <td><strong>ARM NEON</strong> (aarch64)</td>
+        <td>✅</td>
+        <td>128-bit</td>
+      </tr>
+      <tr>
+        <td><strong>ARM SVE</strong> (aarch64)</td>
+        <td>✅</td>
+        <td>Up to 2048-bit</td>
+      </tr>
+    </tbody>
+  </table>
+  <p><strong>Measured Improvements:</strong> - Filter operations: 5-8x
+    speedup (AVX2) - Aggregations (SUM): 4-6x speedup - MIN/MAX: 3-5x
+    speedup</p>
+  <h4 id="gpu-acceleration">GPU Acceleration</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Platform</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Metal</strong> (Apple Silicon)</td>
+        <td>✅ Production</td>
+      </tr>
+      <tr>
+        <td><strong>CUDA</strong> (NVIDIA)</td>
+        <td>✅ Optional</td>
+      </tr>
+      <tr>
+        <td><strong>Vulkan</strong></td>
+        <td>🔄 Planned</td>
+      </tr>
+      <tr>
+        <td><strong>ROCm</strong> (AMD)</td>
+        <td>🔄 Planned</td>
+      </tr>
+    </tbody>
+  </table>
+  <p><strong>GPU-Accelerated Operations:</strong> - Vector similarity
+    search - Spatial distance calculations - Clustering (DBSCAN, K-means) -
+    Graph traversal</p>
+  <h4 id="columnar-analytics-performance">Columnar Analytics
+    Performance</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Dataset Size</th>
+        <th>Improvement vs Row</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1,000 rows</td>
+        <td><strong>6.8x faster</strong></td>
+      </tr>
+      <tr>
+        <td>10,000 rows</td>
+        <td><strong>15.1x faster</strong></td>
+      </tr>
+      <tr>
+        <td>100,000 rows</td>
+        <td><strong>14.8x faster</strong></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="clickhouse-performance-features">7.2 ClickHouse Performance
+    Features</h3>
+  <h4 id="simd-optimization">SIMD Optimization</h4>
+  <ul>
+    <li>Manually written intrinsics for critical paths</li>
+    <li>Compiler auto-vectorization</li>
+    <li>Runtime CPU feature detection</li>
+  </ul>
+  <h4 id="memory-management">Memory Management</h4>
+  <ul>
+    <li>Column-oriented memory layout</li>
+    <li>Efficient cache utilization</li>
+    <li>Configurable memory limits per query</li>
+  </ul>
+  <h4 id="io-optimization">I/O Optimization</h4>
+  <ul>
+    <li>Vectorized decompression</li>
+    <li>Parallel disk reads</li>
+    <li>Direct I/O support</li>
+  </ul>
+  <h3 id="performance-comparison">7.3 Performance Comparison</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Optimization</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>SIMD</strong></td>
+        <td>✅ AVX2/512, NEON, SVE</td>
+        <td>✅ Intrinsics + auto</td>
+      </tr>
+      <tr>
+        <td><strong>GPU Acceleration</strong></td>
+        <td>✅ Metal, CUDA</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>Vectorized Execution</strong></td>
+        <td>✅ 1024-row batches</td>
+        <td>✅ Data chunks</td>
+      </tr>
+      <tr>
+        <td><strong>Columnar Processing</strong></td>
+        <td>✅ Warm/Cold tiers</td>
+        <td>✅ Native</td>
+      </tr>
+      <tr>
+        <td><strong>Memory Bandwidth</strong></td>
+        <td>4.5-6.0 GB/s</td>
+        <td>High (varies)</td>
+      </tr>
+      <tr>
+        <td><strong>JIT Compilation</strong></td>
+        <td>❌ Planned</td>
+        <td>✅ LLVM</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="aiml-integration">8. AI/ML Integration</h2>
+  <h3 id="orbitrs-ai-native-database">8.1 OrbitRS AI-Native Database</h3>
+  <p>OrbitRS implements <strong>8 autonomous AI subsystems</strong>
+    (3,925+ lines):</p>
+  <h4 id="ai-master-controller">AI Master Controller</h4>
+  <ul>
+    <li>Central orchestration for all subsystems</li>
+    <li>10-second control loop for continuous optimization</li>
+    <li>Real-time metrics and subsystem lifecycle management</li>
+  </ul>
+  <h4 id="intelligent-query-optimizer">Intelligent Query Optimizer</h4>
+  <ul>
+    <li>Cost estimation (CPU, memory, I/O)</li>
+    <li>Pattern classification and opportunity identification</li>
+    <li>AI-powered index advisor</li>
+    <li>Confidence scoring for decisions</li>
+  </ul>
+  <h4 id="predictive-resource-manager">Predictive Resource Manager</h4>
+  <ul>
+    <li>Workload forecasting (CPU, memory, I/O)</li>
+    <li>Daily/weekly pattern analysis</li>
+    <li>Proactive scaling before demand spikes</li>
+    <li>Anomaly detection</li>
+  </ul>
+  <h4 id="smart-storage-manager">Smart Storage Manager</h4>
+  <ul>
+    <li>Automatic hot/warm/cold tiering</li>
+    <li>Access pattern analysis</li>
+    <li>Benefit-cost optimization</li>
+    <li>Zero-downtime reorganization</li>
+  </ul>
+  <h4 id="learning-engine">Learning Engine</h4>
+  <ul>
+    <li>Continuous and batch learning modes</li>
+    <li>Pattern-outcome correlation</li>
+    <li>Automatic model retraining</li>
+  </ul>
+  <h3 id="clickhouse-aiml-features">8.2 ClickHouse AI/ML Features</h3>
+  <h4 id="vector-search">Vector Search</h4>
+  <ul>
+    <li>Basic ANN (Approximate Nearest Neighbor)</li>
+    <li>Vector indexing for embeddings</li>
+    <li>Semantic search capabilities</li>
+  </ul>
+  <h4 id="external-ml-integration">External ML Integration</h4>
+  <ul>
+    <li>UDFs for ML model serving</li>
+    <li>Integration with external ML platforms</li>
+    <li>Feature engineering in SQL</li>
+  </ul>
+  <h3 id="aiml-comparison">8.3 AI/ML Comparison</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>AI Query Optimization</strong></td>
+        <td>✅ 8 subsystems</td>
+        <td>❌ Traditional CBO</td>
+      </tr>
+      <tr>
+        <td><strong>Automatic Tuning</strong></td>
+        <td>✅ Self-learning</td>
+        <td>⚠️ Manual tuning</td>
+      </tr>
+      <tr>
+        <td><strong>Predictive Scaling</strong></td>
+        <td>✅ Native</td>
+        <td>❌ External tools</td>
+      </tr>
+      <tr>
+        <td><strong>Auto-Tiering</strong></td>
+        <td>✅ AI-driven</td>
+        <td>✅ TTL-based</td>
+      </tr>
+      <tr>
+        <td><strong>ML Framework</strong></td>
+        <td>✅ Candle (neural nets)</td>
+        <td>❌ External</td>
+      </tr>
+      <tr>
+        <td><strong>In-Database ML</strong></td>
+        <td>✅ SQL-integrated</td>
+        <td>⚠️ UDFs only</td>
+      </tr>
+      <tr>
+        <td><strong>LLM Integration</strong></td>
+        <td>✅ MCP protocol</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>GraphRAG</strong></td>
+        <td>✅ Native</td>
+        <td>❌</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="vector-database-capabilities">9. Vector Database
+    Capabilities</h2>
+  <h3 id="orbitrs-vector-features">9.1 OrbitRS Vector Features</h3>
+  <h4 id="vector-storage">Vector Storage</h4>
+  <ul>
+    <li>pgvector-compatible type system</li>
+    <li>Multiple distance metrics</li>
+    <li>Native RESP commands</li>
+  </ul>
+  <h4 id="vector-operations">Vector Operations</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>VECTOR.SET</code></td>
+        <td>Store embedding</td>
+      </tr>
+      <tr>
+        <td><code>VECTOR.GET</code></td>
+        <td>Retrieve vector</td>
+      </tr>
+      <tr>
+        <td><code>VECTOR.SIMILARITY</code></td>
+        <td>Calculate similarity</td>
+      </tr>
+      <tr>
+        <td><code>VECTOR.SEARCH</code></td>
+        <td>ANN search</td>
+      </tr>
+    </tbody>
+  </table>
+  <h4 id="distance-metrics">Distance Metrics</h4>
+  <ul>
+    <li>Cosine similarity</li>
+    <li>Euclidean distance</li>
+    <li>Manhattan distance</li>
+    <li>Dot product</li>
+  </ul>
+  <h4 id="indexing-planned">Indexing (Planned)</h4>
+  <ul>
+    <li>IVFFlat</li>
+    <li>HNSW</li>
+  </ul>
+  <h3 id="clickhouse-vector-features">9.2 ClickHouse Vector Features</h3>
+  <h4 id="vector-support">Vector Support</h4>
+  <ul>
+    <li>Array-based vector storage</li>
+    <li>ANN index (approximate)</li>
+    <li>Multithreaded search</li>
+  </ul>
+  <h4 id="use-cases">Use Cases</h4>
+  <ul>
+    <li>Semantic search</li>
+    <li>Embedding clustering</li>
+    <li>RAG applications</li>
+  </ul>
+  <h3 id="vector-comparison">9.3 Vector Comparison</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>pgvector Compatible</strong></td>
+        <td>✅</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>Redis VECTOR.* Commands</strong></td>
+        <td>✅</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>ANN Search</strong></td>
+        <td>✅</td>
+        <td>✅</td>
+      </tr>
+      <tr>
+        <td><strong>Distance Metrics</strong></td>
+        <td>4+</td>
+        <td>3+</td>
+      </tr>
+      <tr>
+        <td><strong>Vector Indexing</strong></td>
+        <td>✅ IVFFlat, HNSW</td>
+        <td>✅ ANN index</td>
+      </tr>
+      <tr>
+        <td><strong>SQL Integration</strong></td>
+        <td>✅</td>
+        <td>✅</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="time-series-features">10. Time-Series Features</h2>
+  <h3 id="orbitrs-time-series">10.1 OrbitRS Time-Series</h3>
+  <h4 id="redis-timeseries-compatible">Redis TimeSeries Compatible</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>TS.CREATE</code></td>
+        <td>Create series</td>
+      </tr>
+      <tr>
+        <td><code>TS.ADD</code></td>
+        <td>Add data point</td>
+      </tr>
+      <tr>
+        <td><code>TS.GET</code></td>
+        <td>Get latest value</td>
+      </tr>
+      <tr>
+        <td><code>TS.RANGE</code></td>
+        <td>Query range</td>
+      </tr>
+      <tr>
+        <td><code>TS.MRANGE</code></td>
+        <td>Multi-series query</td>
+      </tr>
+    </tbody>
+  </table>
+  <h4 id="features">Features</h4>
+  <ul>
+    <li>Automatic aggregation (SUM, AVG, MIN, MAX, COUNT)</li>
+    <li>Data retention policies</li>
+    <li>Downsampling and compaction</li>
+    <li>Gorilla-style compression</li>
+  </ul>
+  <h3 id="clickhouse-time-series">10.2 ClickHouse Time-Series</h3>
+  <h4 id="optimizations">Optimizations</h4>
+  <ul>
+    <li>MergeTree with DateTime partitioning</li>
+    <li>TTL for automatic data aging</li>
+    <li>Codec compression for time-series</li>
+    <li>Specialized time functions</li>
+  </ul>
+  <h4 id="features-1">Features</h4>
+  <ul>
+    <li>High-cardinality handling</li>
+    <li>Efficient range queries</li>
+    <li>Rollup aggregations</li>
+  </ul>
+  <h3 id="time-series-comparison">10.3 Time-Series Comparison</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Redis TS Compatible</strong></td>
+        <td>✅</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>SQL Time Functions</strong></td>
+        <td>✅</td>
+        <td>✅ Extensive</td>
+      </tr>
+      <tr>
+        <td><strong>Auto Aggregation</strong></td>
+        <td>✅</td>
+        <td>✅</td>
+      </tr>
+      <tr>
+        <td><strong>Retention Policies</strong></td>
+        <td>✅</td>
+        <td>✅ TTL</td>
+      </tr>
+      <tr>
+        <td><strong>Downsampling</strong></td>
+        <td>✅</td>
+        <td>✅</td>
+      </tr>
+      <tr>
+        <td><strong>Compression</strong></td>
+        <td>✅ Gorilla-style</td>
+        <td>✅ DoubleDelta, Gorilla</td>
+      </tr>
+      <tr>
+        <td><strong>High Cardinality</strong></td>
+        <td>✅</td>
+        <td>✅ Optimized</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="graph-database-features">11. Graph Database Features</h2>
+  <h3 id="orbitrs-graph-capabilities">11.1 OrbitRS Graph Capabilities</h3>
+  <h4 id="native-graph-support">Native Graph Support</h4>
+  <ul>
+    <li><strong>Protocol:</strong> Bolt v4.4 (Neo4j compatible)</li>
+    <li><strong>Query Language:</strong> Cypher with 70+ functions</li>
+    <li><strong>Storage:</strong> RocksDB with graph-specific column
+      families</li>
+  </ul>
+  <h4 id="cypher-language-support">Cypher Language Support</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Clause</th>
+        <th>Support</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>MATCH</td>
+        <td>✅ Full pattern matching</td>
+      </tr>
+      <tr>
+        <td>CREATE</td>
+        <td>✅ Nodes and relationships</td>
+      </tr>
+      <tr>
+        <td>MERGE</td>
+        <td>✅ Upsert semantics</td>
+      </tr>
+      <tr>
+        <td>DELETE/SET/REMOVE</td>
+        <td>✅ Full support</td>
+      </tr>
+      <tr>
+        <td>WITH/WHERE</td>
+        <td>✅ Full support</td>
+      </tr>
+      <tr>
+        <td>Variable-length paths</td>
+        <td>✅ <code>*1..3</code> syntax</td>
+      </tr>
+    </tbody>
+  </table>
+  <h4 id="graph-algorithms">Graph Algorithms</h4>
+  <ul>
+    <li>Traversal: BFS, DFS, shortest path</li>
+    <li>Analytics: PageRank, community detection</li>
+    <li>Pattern matching</li>
+  </ul>
+  <h4 id="graphrag-integration">GraphRAG Integration</h4>
+  <ul>
+    <li>Entity/relationship extraction</li>
+    <li>Knowledge graph construction</li>
+    <li>Multi-hop reasoning</li>
+    <li>LLM integration</li>
+  </ul>
+  <h3 id="clickhouse-graph-support">11.2 ClickHouse Graph Support</h3>
+  <p>ClickHouse <strong>does not natively support graph
+      databases</strong>. Graph workloads require: - External graph database -
+    Recursive CTEs (limited) - Adjacency list workarounds</p>
+  <h3 id="graph-comparison">11.3 Graph Comparison</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Native Graph DB</strong></td>
+        <td>✅</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>Cypher Support</strong></td>
+        <td>✅ 70+ functions</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>Bolt Protocol</strong></td>
+        <td>✅ v4.4</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>Graph Algorithms</strong></td>
+        <td>✅ Native</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>Knowledge Graphs</strong></td>
+        <td>✅ GraphRAG</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>Pattern Matching</strong></td>
+        <td>✅</td>
+        <td>❌</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="transaction-support">12. Transaction Support</h2>
+  <h3 id="orbitrs-transaction-features">12.1 OrbitRS Transaction
+    Features</h3>
+  <h4 id="mvcc-implementation">MVCC Implementation</h4>
+  <ul>
+    <li>Snapshot isolation</li>
+    <li>Row versioning (xmin/xmax)</li>
+    <li>No read-write conflicts</li>
+  </ul>
+  <h4 id="distributed-transactions-1">Distributed Transactions</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Pattern</th>
+        <th>Overhead</th>
+        <th>Use Case</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>2-Phase Commit</strong></td>
+        <td>~5-10ms</td>
+        <td>Distributed ACID</td>
+      </tr>
+      <tr>
+        <td><strong>Saga</strong></td>
+        <td>Variable</td>
+        <td>Long-running</td>
+      </tr>
+      <tr>
+        <td><strong>Distributed Locks</strong></td>
+        <td>&lt;1ms</td>
+        <td>Cross-node coordination</td>
+      </tr>
+    </tbody>
+  </table>
+  <h4 id="deadlock-detection">Deadlock Detection</h4>
+  <ul>
+    <li>Wait-for graph analysis</li>
+    <li>DFS cycle detection (O(N))</li>
+    <li>Automatic resolution (abort youngest)</li>
+  </ul>
+  <h3 id="clickhouse-transaction-support">12.2 ClickHouse Transaction
+    Support</h3>
+  <h4 id="acid-properties">ACID Properties</h4>
+  <ul>
+    <li>Snapshot isolation via MVCC on parts</li>
+    <li><strong>Generally not ACID-compliant</strong> for concurrent
+      writes</li>
+    <li>Deferred fsync for write optimization</li>
+  </ul>
+  <h4 id="limitations">Limitations</h4>
+  <ul>
+    <li>No distributed transactions</li>
+    <li>Limited isolation guarantees</li>
+    <li>Optimized for append-only workloads</li>
+  </ul>
+  <h3 id="transaction-comparison">12.3 Transaction Comparison</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>ACID Compliance</strong></td>
+        <td>✅ Full</td>
+        <td>⚠️ Limited</td>
+      </tr>
+      <tr>
+        <td><strong>MVCC</strong></td>
+        <td>✅ Row-level</td>
+        <td>✅ Part-level</td>
+      </tr>
+      <tr>
+        <td><strong>Snapshot Isolation</strong></td>
+        <td>✅</td>
+        <td>✅</td>
+      </tr>
+      <tr>
+        <td><strong>Distributed Transactions</strong></td>
+        <td>✅ 2PC, Saga</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>Deadlock Detection</strong></td>
+        <td>✅ Automatic</td>
+        <td>N/A</td>
+      </tr>
+      <tr>
+        <td><strong>Concurrent Updates</strong></td>
+        <td>✅</td>
+        <td>⚠️ Limited</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="geospatial-capabilities">13. Geospatial Capabilities</h2>
+  <h3 id="orbitrs-geospatial">13.1 OrbitRS Geospatial</h3>
+  <h4 id="spatial-data-types">Spatial Data Types</h4>
+  <ul>
+    <li>Point (2D/3D with M coordinate)</li>
+    <li>LineString, Polygon</li>
+    <li>WKT/GeoJSON serialization</li>
+  </ul>
+  <h4 id="postgis-compatible-functions-25">PostGIS-Compatible Functions
+    (25+)</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Category</th>
+        <th>Functions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Construction</strong></td>
+        <td>ST_Point, ST_MakePoint, ST_GeomFromText</td>
+      </tr>
+      <tr>
+        <td><strong>Measurement</strong></td>
+        <td>ST_Distance, ST_Area, ST_Length</td>
+      </tr>
+      <tr>
+        <td><strong>Relationships</strong></td>
+        <td>ST_Contains, ST_Within, ST_Intersects</td>
+      </tr>
+      <tr>
+        <td><strong>Transformations</strong></td>
+        <td>ST_Transform, ST_SetSRID</td>
+      </tr>
+    </tbody>
+  </table>
+  <h4 id="spatial-indexing">Spatial Indexing</h4>
+  <ul>
+    <li>R-Tree (quadratic split)</li>
+    <li>QuadTree (hierarchical partitioning)</li>
+    <li>O(log n) range queries</li>
+  </ul>
+  <h4 id="real-time-geofencing">Real-Time Geofencing</h4>
+  <ul>
+    <li>Add/remove geofences dynamically</li>
+    <li>Real-time enter/exit detection</li>
+    <li>&lt;10ms latency for checks</li>
+  </ul>
+  <h3 id="clickhouse-geospatial">13.2 ClickHouse Geospatial</h3>
+  <h4 id="support">Support</h4>
+  <ul>
+    <li>Basic geo functions</li>
+    <li>H3 hexagonal indexing</li>
+    <li>Point-in-polygon operations</li>
+  </ul>
+  <h3 id="geospatial-comparison">13.3 Geospatial Comparison</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>PostGIS Compatible</strong></td>
+        <td>✅ 25+ functions</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>Spatial Indexing</strong></td>
+        <td>✅ R-Tree, QuadTree</td>
+        <td>⚠️ H3</td>
+      </tr>
+      <tr>
+        <td><strong>Real-Time Geofencing</strong></td>
+        <td>✅ Native</td>
+        <td>❌</td>
+      </tr>
+      <tr>
+        <td><strong>WKT/GeoJSON</strong></td>
+        <td>✅</td>
+        <td>✅</td>
+      </tr>
+      <tr>
+        <td><strong>Complex Geometries</strong></td>
+        <td>✅</td>
+        <td>⚠️ Limited</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="security-compliance">14. Security &amp; Compliance</h2>
+  <h3 id="orbitrs-security">14.1 OrbitRS Security</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>Implementation</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Authentication</strong></td>
+        <td>Token-based (JWT-style), multi-provider</td>
+      </tr>
+      <tr>
+        <td><strong>Authorization</strong></td>
+        <td>Scope-based with inheritance</td>
+      </tr>
+      <tr>
+        <td><strong>Encryption at Rest</strong></td>
+        <td>AES-256-GCM</td>
+      </tr>
+      <tr>
+        <td><strong>Encryption in Transit</strong></td>
+        <td>TLS/SSL</td>
+      </tr>
+      <tr>
+        <td><strong>Audit Logging</strong></td>
+        <td>Immutable trail with compliance queries</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="clickhouse-security">14.2 ClickHouse Security</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>Implementation</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Authentication</strong></td>
+        <td>Password, LDAP, Kerberos</td>
+      </tr>
+      <tr>
+        <td><strong>Authorization</strong></td>
+        <td>RBAC</td>
+      </tr>
+      <tr>
+        <td><strong>Encryption at Rest</strong></td>
+        <td>TDE (Enterprise)</td>
+      </tr>
+      <tr>
+        <td><strong>Encryption in Transit</strong></td>
+        <td>TLS</td>
+      </tr>
+      <tr>
+        <td><strong>Audit Logging</strong></td>
+        <td>Query logs</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="security-comparison">14.3 Security Comparison</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>RBAC</strong></td>
+        <td>✅ Scope-based</td>
+        <td>✅</td>
+      </tr>
+      <tr>
+        <td><strong>Encryption at Rest</strong></td>
+        <td>✅ AES-256-GCM</td>
+        <td>✅ TDE (Enterprise)</td>
+      </tr>
+      <tr>
+        <td><strong>TLS</strong></td>
+        <td>✅</td>
+        <td>✅</td>
+      </tr>
+      <tr>
+        <td><strong>Audit Logging</strong></td>
+        <td>✅ Immutable</td>
+        <td>✅</td>
+      </tr>
+      <tr>
+        <td><strong>LDAP/Kerberos</strong></td>
+        <td>🔄 Planned</td>
+        <td>✅</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="deployment-operations">15. Deployment &amp; Operations</h2>
+  <h3 id="orbitrs-deployment">15.1 OrbitRS Deployment</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Mode</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Single Binary</strong></td>
+        <td>All protocols in one process</td>
+      </tr>
+      <tr>
+        <td><strong>Kubernetes</strong></td>
+        <td>Native operator, StatefulSets</td>
+      </tr>
+      <tr>
+        <td><strong>Docker</strong></td>
+        <td>Complete containerization</td>
+      </tr>
+      <tr>
+        <td><strong>Helm Charts</strong></td>
+        <td>Pre-built K8s deployments</td>
+      </tr>
+    </tbody>
+  </table>
+  <h4 id="monitoring">Monitoring</h4>
+  <ul>
+    <li>Prometheus metrics integration</li>
+    <li>Structured logging (tracing)</li>
+    <li>Health check endpoints</li>
+  </ul>
+  <h3 id="clickhouse-deployment">15.2 ClickHouse Deployment</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Mode</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>On-Premise</strong></td>
+        <td>Single or multi-node clusters</td>
+      </tr>
+      <tr>
+        <td><strong>ClickHouse Cloud</strong></td>
+        <td>Managed DBaaS</td>
+      </tr>
+      <tr>
+        <td><strong>Standalone</strong></td>
+        <td>CLI utility mode</td>
+      </tr>
+      <tr>
+        <td><strong>Kubernetes</strong></td>
+        <td>Operator available</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="deployment-comparison">15.3 Deployment Comparison</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Single Binary</strong></td>
+        <td>✅ Multi-protocol</td>
+        <td>✅ Single binary</td>
+      </tr>
+      <tr>
+        <td><strong>Kubernetes Operator</strong></td>
+        <td>✅ Native</td>
+        <td>✅</td>
+      </tr>
+      <tr>
+        <td><strong>Managed Cloud</strong></td>
+        <td>🔄 Planned</td>
+        <td>✅ ClickHouse Cloud</td>
+      </tr>
+      <tr>
+        <td><strong>Prometheus Integration</strong></td>
+        <td>✅</td>
+        <td>✅</td>
+      </tr>
+      <tr>
+        <td><strong>Auto-Scaling</strong></td>
+        <td>✅ Predicted</td>
+        <td>✅ Cloud</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="use-case-analysis">16. Use Case Analysis</h2>
+  <h3 id="orbitrs-ideal-use-cases">16.1 OrbitRS Ideal Use Cases</h3>
+  <table>
+    <colgroup>
+      <col style="width: 43%" />
+      <col style="width: 56%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Use Case</th>
+        <th>Why OrbitRS</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Unified Data Platform</strong></td>
+        <td>Single system for SQL, KV, Graph, Documents</td>
+      </tr>
+      <tr>
+        <td><strong>Polyglot Applications</strong></td>
+        <td>Use Redis, PostgreSQL, Neo4j from same backend</td>
+      </tr>
+      <tr>
+        <td><strong>AI-Native Applications</strong></td>
+        <td>Built-in ML, GraphRAG, LLM integration</td>
+      </tr>
+      <tr>
+        <td><strong>Real-Time + Analytics</strong></td>
+        <td>OLTP hot tier + OLAP cold tier</td>
+      </tr>
+      <tr>
+        <td><strong>IoT &amp; Edge</strong></td>
+        <td>Rust efficiency, multi-protocol</td>
+      </tr>
+      <tr>
+        <td><strong>Knowledge Graphs</strong></td>
+        <td>Native Cypher + GraphRAG</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="clickhouse-ideal-use-cases">16.2 ClickHouse Ideal Use Cases</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Use Case</th>
+        <th>Why ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Log Analytics</strong></td>
+        <td>Petabyte-scale log ingestion</td>
+      </tr>
+      <tr>
+        <td><strong>Observability</strong></td>
+        <td>Metrics, traces, APM</td>
+      </tr>
+      <tr>
+        <td><strong>Ad Tech</strong></td>
+        <td>Real-time bidding analytics</td>
+      </tr>
+      <tr>
+        <td><strong>Time-Series at Scale</strong></td>
+        <td>Billions of data points</td>
+      </tr>
+      <tr>
+        <td><strong>Data Warehousing</strong></td>
+        <td>OLAP workloads</td>
+      </tr>
+      <tr>
+        <td><strong>Real-Time Dashboards</strong></td>
+        <td>Sub-second queries</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="complementary-deployment">16.3 Complementary Deployment</h3>
+  <p>In many architectures, <strong>OrbitRS and ClickHouse can be
+      complementary</strong>:</p>
+  <pre><code>
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                    Hybrid Architecture                          │
+    ├─────────────────────────────────────────────────────────────────┤
+    │                                                                 │
+    │  ┌─────────────────┐                    ┌─────────────────┐     │
+    │  │    OrbitRS      │                    │   ClickHouse    │     │
+    │  │                 │                    │                 │     │
+    │  │ • OLTP workloads│    CDC/Streaming   │ • OLAP analytics│     │
+    │  │ • Multi-protocol│ ──────────────────▶│ • Log analytics │     │
+    │  │ • Graph queries │                    │ • Time-series   │     │
+    │  │ • Real-time KV  │                    │ • Dashboards    │     │
+    │  │ • AI/ML serving │                    │                 │     │
+    │  └─────────────────┘                    └─────────────────┘     │
+    │                                                                 │
+    └─────────────────────────────────────────────────────────────────┘
+  </code></pre>
+  <hr />
+  <h2 id="performance-benchmarks">17. Performance Benchmarks</h2>
+  <h3 id="analytical-query-performance">17.1 Analytical Query
+    Performance</h3>
+  <table>
+    <colgroup>
+      <col style="width: 26%" />
+      <col style="width: 23%" />
+      <col style="width: 31%" />
+      <col style="width: 18%" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Workload</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Columnar SUM (100K rows)</strong></td>
+        <td>14.8x vs row</td>
+        <td>Baseline</td>
+        <td>Both use columnar</td>
+      </tr>
+      <tr>
+        <td><strong>Filter operations</strong></td>
+        <td>5-8x (SIMD)</td>
+        <td>Similar</td>
+        <td>SIMD optimized</td>
+      </tr>
+      <tr>
+        <td><strong>Complex JOINs</strong></td>
+        <td>Good</td>
+        <td>Excellent (2025)</td>
+        <td>CH improved in 2025</td>
+      </tr>
+      <tr>
+        <td><strong>Point queries</strong></td>
+        <td>Excellent</td>
+        <td>Good</td>
+        <td>OrbitRS hot tier</td>
+      </tr>
+      <tr>
+        <td><strong>Graph traversal</strong></td>
+        <td>Native</td>
+        <td>N/A</td>
+        <td>OrbitRS only</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="write-performance">17.2 Write Performance</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Workload</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Single row insert</strong></td>
+        <td>&lt;1ms</td>
+        <td>&lt;1ms (async)</td>
+      </tr>
+      <tr>
+        <td><strong>Batch insert (1M rows)</strong></td>
+        <td>Fast</td>
+        <td>Very fast</td>
+      </tr>
+      <tr>
+        <td><strong>UPDATE/DELETE</strong></td>
+        <td>Full ACID</td>
+        <td>Improved in 2025</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="memory-resource-efficiency">17.3 Memory &amp; Resource
+    Efficiency</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Memory bandwidth</strong></td>
+        <td>4.5-6.0 GB/s</td>
+        <td>High</td>
+      </tr>
+      <tr>
+        <td><strong>Compression ratio</strong></td>
+        <td>20-40% (Zstd)</td>
+        <td>10-30x typical</td>
+      </tr>
+      <tr>
+        <td><strong>Memory safety</strong></td>
+        <td>Guaranteed (Rust)</td>
+        <td>Manual (C++)</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <h2 id="conclusion">18. Conclusion</h2>
+  <h3 id="summary-comparison">18.1 Summary Comparison</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Dimension</th>
+        <th>OrbitRS</th>
+        <th>ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Philosophy</strong></td>
+        <td>Unified multi-model</td>
+        <td>Specialized OLAP</td>
+      </tr>
+      <tr>
+        <td><strong>Protocols</strong></td>
+        <td>9+ native</td>
+        <td>2 + compatibility</td>
+      </tr>
+      <tr>
+        <td><strong>Data Models</strong></td>
+        <td>5+ (SQL, KV, Graph, Doc, TS)</td>
+        <td>Columnar SQL</td>
+      </tr>
+      <tr>
+        <td><strong>AI Integration</strong></td>
+        <td>Native (8 subsystems)</td>
+        <td>External</td>
+      </tr>
+      <tr>
+        <td><strong>Transaction Support</strong></td>
+        <td>Full ACID, 2PC, Saga</td>
+        <td>Limited</td>
+      </tr>
+      <tr>
+        <td><strong>Graph Database</strong></td>
+        <td>Native Cypher</td>
+        <td>None</td>
+      </tr>
+      <tr>
+        <td><strong>Geospatial</strong></td>
+        <td>PostGIS-compatible</td>
+        <td>Basic</td>
+      </tr>
+      <tr>
+        <td><strong>Vector DB</strong></td>
+        <td>pgvector + Redis</td>
+        <td>Basic ANN</td>
+      </tr>
+      <tr>
+        <td><strong>Best For</strong></td>
+        <td>Unified platforms, AI apps</td>
+        <td>Analytics at scale</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="choosing-the-right-database">18.2 Choosing the Right
+    Database</h3>
+  <p><strong>Choose OrbitRS when:</strong> - You need multiple protocols
+    (Redis, PostgreSQL, Neo4j) in one system - AI/ML integration is a core
+    requirement - Graph database capabilities are needed - You want a
+    unified data platform - Memory safety and Rust ecosystem benefits
+    matter</p>
+  <p><strong>Choose ClickHouse when:</strong> - Petabyte-scale OLAP is the
+    primary workload - Log analytics and observability at massive scale -
+    Maximum columnar query performance is critical - You need a mature,
+    battle-tested analytics engine - Real-time dashboards on billions of
+    rows</p>
+  <p><strong>Consider Both when:</strong> - You have diverse workload
+    requirements - OLTP (OrbitRS) + OLAP (ClickHouse) separation makes sense
+    - Different teams need different interfaces</p>
+  <h3 id="future-outlook">18.3 Future Outlook</h3>
+  <p><strong>OrbitRS Roadmap:</strong> - Enhanced GPU acceleration
+    (Vulkan, ROCm) - Expanded AI subsystem capabilities - GraphQL protocol
+    support - ClickHouse integration for analytics offload</p>
+  <p><strong>ClickHouse Roadmap (2025):</strong> - Enhanced data lake
+    integration (Iceberg, Delta) - Improved JOIN performance - Expanded
+    AI/ML capabilities - Continued performance optimizations</p>
+  <hr />
+  <h2 id="references">References</h2>
+  <ol type="1">
+    <li>OrbitRS Documentation - <a href="../specifications/PRD.md">specifications/PRD.md</a></li>
+    <li>OrbitRS Architecture - <a
+        href="content/architecture/ORBIT_ARCHITECTURE.md">docs/content/architecture/ORBIT_ARCHITECTURE.md</a></li>
+    <li><a href="https://clickhouse.com/docs/academic_overview">ClickHouse
+        Architecture Overview</a></li>
+    <li><a href="https://www.chaosgenius.io/blog/clickhouse-architecture/">ClickHouse
+        Architecture 101</a></li>
+    <li><a
+        href="https://clickhouse.com/blog/evolution-of-clickhouse-cloud-new-features-superior-performance-tailored-offerings">ClickHouse
+        2025 Features</a></li>
+    <li><a href="https://clickhouse.com/blog/climbing-the-iceberg-with-clickhouse">ClickHouse
+        Iceberg Integration</a></li>
+  </ol>
+  <hr />
+  <h2 id="appendix-a-feature-matrix">Appendix A: Feature Matrix</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th style="text-align: center;">OrbitRS</th>
+        <th style="text-align: center;">ClickHouse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>PostgreSQL Protocol</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">⚠️</td>
+      </tr>
+      <tr>
+        <td>MySQL Protocol</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">⚠️</td>
+      </tr>
+      <tr>
+        <td>Redis Protocol</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">❌</td>
+      </tr>
+      <tr>
+        <td>Cassandra Protocol</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">❌</td>
+      </tr>
+      <tr>
+        <td>Neo4j/Bolt Protocol</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">❌</td>
+      </tr>
+      <tr>
+        <td>MongoDB Protocol</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">❌</td>
+      </tr>
+      <tr>
+        <td>REST API</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">✅</td>
+      </tr>
+      <tr>
+        <td>gRPC</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">❌</td>
+      </tr>
+      <tr>
+        <td>Columnar Storage</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">✅</td>
+      </tr>
+      <tr>
+        <td>Row Storage</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">❌</td>
+      </tr>
+      <tr>
+        <td>Tiered Storage</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">✅</td>
+      </tr>
+      <tr>
+        <td>Apache Iceberg</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">✅</td>
+      </tr>
+      <tr>
+        <td>SIMD Optimization</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">✅</td>
+      </tr>
+      <tr>
+        <td>GPU Acceleration</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">❌</td>
+      </tr>
+      <tr>
+        <td>AI Query Optimizer</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">❌</td>
+      </tr>
+      <tr>
+        <td>Distributed Transactions</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">❌</td>
+      </tr>
+      <tr>
+        <td>Graph Database</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">❌</td>
+      </tr>
+      <tr>
+        <td>Vector Search</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">✅</td>
+      </tr>
+      <tr>
+        <td>Time-Series</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">✅</td>
+      </tr>
+      <tr>
+        <td>Geospatial</td>
+        <td style="text-align: center;">✅</td>
+        <td style="text-align: center;">⚠️</td>
+      </tr>
+      <tr>
+        <td>JIT Compilation</td>
+        <td style="text-align: center;">❌</td>
+        <td style="text-align: center;">✅</td>
+      </tr>
+      <tr>
+        <td>Managed Cloud</td>
+        <td style="text-align: center;">❌</td>
+        <td style="text-align: center;">✅</td>
+      </tr>
+    </tbody>
+  </table>
+  <hr />
+  <p><em>© 2025 Orbit-RS Development Team. All rights reserved.</em></p>
+</body>
+
+</html>
