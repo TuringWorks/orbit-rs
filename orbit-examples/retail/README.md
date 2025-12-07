@@ -6,7 +6,7 @@ Comprehensive retail industry examples demonstrating OrbitRS's multi-protocol ca
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────-──┐
 │              Retail & E-Commerce Platform on OrbitRS                   │
 ├──────────────────────────────────────────────────────────────────────-─┤
@@ -193,7 +193,7 @@ node 01_inventory_dashboard.js --port 3000
 
 ## Directory Structure
 
-```
+```text
 retail/
 ├── sql/                    # PostgreSQL schemas
 ├── redis/                  # Redis operations

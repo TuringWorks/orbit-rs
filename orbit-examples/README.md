@@ -51,7 +51,7 @@ grpcurl -plaintext localhost:50051 list
 
 ## 📁 Directory Structure
 
-```
+```text
 orbit-examples/
 ├── README.md                          # This file
 ├── QUICK_START.md                     # Quick start guide
