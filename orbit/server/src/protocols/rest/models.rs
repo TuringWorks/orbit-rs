@@ -389,3 +389,412 @@ impl<T> PagedResponse<T> {
         }
     }
 }
+
+// ============ SQL Query Endpoint Models ============
+
+/// SQL query execution request
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SqlQueryRequest {
+    /// SQL query to execute
+    #[schema(example = "SELECT * FROM users WHERE status = $1 LIMIT 10")]
+    pub query: String,
+
+    /// Query parameters for prepared statements
+    #[schema(example = json!(["active"]))]
+    pub parameters: Option<Vec<serde_json::Value>>,
+
+    /// Maximum number of rows to return (default: 1000)
+    #[schema(example = 1000)]
+    pub limit: Option<usize>,
+
+    /// Query timeout in milliseconds (default: 30000)
+    #[schema(example = 30000)]
+    pub timeout_ms: Option<u64>,
+
+    /// Return query plan instead of executing (EXPLAIN)
+    #[schema(example = false)]
+    pub explain: Option<bool>,
+}
+
+/// SQL query response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SqlQueryResponse {
+    /// Column names
+    pub columns: Vec<ColumnInfo>,
+
+    /// Query result rows
+    pub rows: Vec<Vec<serde_json::Value>>,
+
+    /// Number of rows returned
+    pub row_count: usize,
+
+    /// Number of rows affected (for INSERT/UPDATE/DELETE)
+    pub rows_affected: Option<u64>,
+
+    /// Query execution time in milliseconds
+    pub execution_time_ms: u64,
+
+    /// Whether more rows are available (limit reached)
+    pub has_more: bool,
+
+    /// Query plan (if explain=true)
+    pub query_plan: Option<serde_json::Value>,
+}
+
+/// Column information
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ColumnInfo {
+    /// Column name
+    pub name: String,
+
+    /// Column data type
+    #[schema(example = "varchar")]
+    pub data_type: String,
+
+    /// Whether column is nullable
+    pub nullable: bool,
+}
+
+/// Batch SQL query request (for multiple queries)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct BatchSqlQueryRequest {
+    /// List of SQL queries to execute
+    pub queries: Vec<SqlQueryRequest>,
+
+    /// Whether to run in a transaction
+    #[schema(example = true)]
+    pub transaction: Option<bool>,
+
+    /// Stop on first error (default: true)
+    #[schema(example = true)]
+    pub stop_on_error: Option<bool>,
+}
+
+/// Batch SQL query response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct BatchSqlQueryResponse {
+    /// Results for each query
+    pub results: Vec<BatchQueryResult>,
+
+    /// Total execution time in milliseconds
+    pub total_execution_time_ms: u64,
+
+    /// Number of successful queries
+    pub successful: usize,
+
+    /// Number of failed queries
+    pub failed: usize,
+}
+
+/// Individual query result in batch
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct BatchQueryResult {
+    /// Query index (0-based)
+    pub index: usize,
+
+    /// Whether query succeeded
+    pub success: bool,
+
+    /// Query result (if success)
+    pub result: Option<SqlQueryResponse>,
+
+    /// Error message (if failed)
+    pub error: Option<String>,
+}
+
+/// Table listing response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct TableInfo {
+    /// Table name
+    pub name: String,
+
+    /// Schema name
+    #[schema(example = "public")]
+    pub schema: String,
+
+    /// Table type (TABLE, VIEW, etc.)
+    #[schema(example = "TABLE")]
+    pub table_type: String,
+
+    /// Estimated row count
+    pub estimated_rows: Option<u64>,
+
+    /// Column count
+    pub column_count: usize,
+}
+
+/// Database statistics
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DatabaseStats {
+    /// Total number of tables
+    pub table_count: usize,
+
+    /// Total number of indexes
+    pub index_count: usize,
+
+    /// Total database size in bytes
+    pub size_bytes: Option<u64>,
+
+    /// Active connections
+    pub active_connections: usize,
+
+    /// Server uptime in seconds
+    pub uptime_seconds: u64,
+
+    /// Database version
+    pub version: String,
+}
+
+// ============ Schema Management Models ============
+
+/// Schema information
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SchemaInfo {
+    /// Schema name
+    #[schema(example = "public")]
+    pub name: String,
+
+    /// Schema owner
+    #[schema(example = "postgres")]
+    pub owner: String,
+
+    /// Number of tables in schema
+    pub table_count: usize,
+
+    /// Number of views in schema
+    pub view_count: usize,
+}
+
+/// Table column information
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct TableColumn {
+    /// Column name
+    #[schema(example = "id")]
+    pub name: String,
+
+    /// Column data type
+    #[schema(example = "integer")]
+    pub data_type: String,
+
+    /// Whether column allows NULL
+    pub nullable: bool,
+
+    /// Default value expression
+    pub default_value: Option<String>,
+
+    /// Whether column is part of primary key
+    pub is_primary_key: bool,
+}
+
+/// Index information
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct IndexInfo {
+    /// Index name
+    #[schema(example = "users_pkey")]
+    pub name: String,
+
+    /// Columns in the index
+    pub columns: Vec<String>,
+
+    /// Whether index enforces uniqueness
+    pub unique: bool,
+
+    /// Index type (btree, hash, gin, gist, etc.)
+    #[schema(example = "btree")]
+    pub index_type: String,
+}
+
+/// Detailed table description
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct TableDescription {
+    /// Schema name
+    #[schema(example = "public")]
+    pub schema: String,
+
+    /// Table name
+    #[schema(example = "users")]
+    pub name: String,
+
+    /// Table type (TABLE, VIEW, MATERIALIZED VIEW)
+    #[schema(example = "TABLE")]
+    pub table_type: String,
+
+    /// Column definitions
+    pub columns: Vec<TableColumn>,
+
+    /// Primary key columns
+    pub primary_key: Option<Vec<String>>,
+
+    /// Table indexes
+    pub indexes: Vec<IndexInfo>,
+
+    /// Estimated row count
+    pub estimated_rows: Option<u64>,
+
+    /// Table size in bytes
+    pub size_bytes: Option<u64>,
+}
+
+// ============ Cluster Management Models ============
+
+/// Cluster node information
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ClusterNodeInfo {
+    /// Unique node identifier
+    #[schema(example = "node-1")]
+    pub node_id: String,
+
+    /// Node address
+    #[schema(example = "192.168.1.10:50051")]
+    pub address: String,
+
+    /// Node status (healthy, unhealthy, unreachable)
+    #[schema(example = "healthy")]
+    pub status: String,
+
+    /// Node role (leader, follower)
+    #[schema(example = "leader")]
+    pub role: String,
+
+    /// CPU usage percentage
+    pub cpu_usage: Option<f64>,
+
+    /// Memory usage percentage
+    pub memory_usage: Option<f64>,
+
+    /// Disk usage percentage
+    pub disk_usage: Option<f64>,
+
+    /// Node uptime in seconds
+    pub uptime_seconds: u64,
+
+    /// Number of actors on this node
+    pub actor_count: usize,
+
+    /// Number of active connections
+    pub connection_count: usize,
+}
+
+/// Cluster status information
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ClusterStatus {
+    /// Cluster identifier
+    #[schema(example = "orbit-cluster-1")]
+    pub cluster_id: String,
+
+    /// Overall cluster health
+    pub healthy: bool,
+
+    /// Total number of nodes
+    pub total_nodes: usize,
+
+    /// Number of healthy nodes
+    pub healthy_nodes: usize,
+
+    /// Number of unhealthy nodes
+    pub unhealthy_nodes: usize,
+
+    /// Total actors across cluster
+    pub total_actors: usize,
+
+    /// Replication factor
+    pub replication_factor: usize,
+
+    /// Consistency level
+    #[schema(example = "quorum")]
+    pub consistency_level: String,
+}
+
+// ============ Query History Models ============
+
+/// Query history entry
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct QueryHistoryEntry {
+    /// Unique query identifier
+    pub query_id: String,
+
+    /// SQL query text
+    #[schema(example = "SELECT * FROM users WHERE status = 'active'")]
+    pub query: String,
+
+    /// Execution time in milliseconds
+    pub execution_time_ms: u64,
+
+    /// Number of rows returned
+    pub rows_returned: usize,
+
+    /// Query execution timestamp (ISO 8601)
+    pub timestamp: String,
+
+    /// Query status (completed, failed, cancelled)
+    #[schema(example = "completed")]
+    pub status: String,
+
+    /// User who executed the query
+    pub user: Option<String>,
+}
+
+// ============ Configuration Models ============
+
+/// Protocol configuration
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ProtocolConfig {
+    /// Protocol name
+    #[schema(example = "PostgreSQL")]
+    pub name: String,
+
+    /// Port number
+    #[schema(example = 5432)]
+    pub port: u16,
+
+    /// Whether protocol is enabled
+    pub enabled: bool,
+}
+
+/// Storage configuration
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct StorageConfig {
+    /// Storage engine type
+    #[schema(example = "RocksDB")]
+    pub engine: String,
+
+    /// Data directory path
+    #[schema(example = "/var/lib/orbit/data")]
+    pub data_dir: String,
+
+    /// Cache size in MB
+    pub cache_size_mb: usize,
+
+    /// Whether WAL is enabled
+    pub wal_enabled: bool,
+}
+
+/// Cluster configuration
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ClusterConfig {
+    /// Whether clustering is enabled
+    pub enabled: bool,
+
+    /// Node identifier
+    #[schema(example = "node-1")]
+    pub node_id: String,
+
+    /// Replication factor
+    pub replication_factor: usize,
+}
+
+/// Server configuration
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ServerConfig {
+    /// Server version
+    pub version: String,
+
+    /// Protocol configurations
+    pub protocols: Vec<ProtocolConfig>,
+
+    /// Storage configuration
+    pub storage: StorageConfig,
+
+    /// Cluster configuration
+    pub cluster: ClusterConfig,
+}

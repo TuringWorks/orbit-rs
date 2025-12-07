@@ -1830,6 +1830,12 @@ impl SqlExecutor {
                     .handle_information_schema_query(table_name, where_clause, columns)
                     .await;
             }
+            // Check for pg_catalog queries
+            if schema.to_lowercase() == "pg_catalog" {
+                return self
+                    .handle_pg_catalog_query(table_name, where_clause, columns)
+                    .await;
+            }
         }
 
         // Check if table exists in schema
@@ -2697,6 +2703,670 @@ impl SqlExecutor {
             }
             SqlType::Domain { domain_name, .. } => domain_name.clone(),
         }
+    }
+
+    /// Convert SqlType to PostgreSQL OID
+    fn sql_type_to_oid(sql_type: &SqlType) -> i32 {
+        match sql_type {
+            SqlType::Boolean => 16,
+            SqlType::SmallInt => 21,
+            SqlType::Integer => 23,
+            SqlType::BigInt => 20,
+            SqlType::Real => 700,
+            SqlType::DoublePrecision => 701,
+            SqlType::Decimal { .. } | SqlType::Numeric { .. } => 1700,
+            SqlType::Char(_) => 1042,
+            SqlType::Varchar(_) => 1043,
+            SqlType::Text => 25,
+            SqlType::Date => 1082,
+            SqlType::Time { .. } => 1083,
+            SqlType::Timestamp { with_timezone } => {
+                if *with_timezone { 1184 } else { 1114 }
+            }
+            SqlType::Interval => 1186,
+            SqlType::Json => 114,
+            SqlType::Jsonb => 3802,
+            SqlType::Uuid => 2950,
+            SqlType::Bytea => 17,
+            SqlType::Inet => 869,
+            SqlType::Cidr => 650,
+            SqlType::Macaddr => 829,
+            SqlType::Macaddr8 => 774,
+            SqlType::Point => 600,
+            SqlType::Line => 628,
+            SqlType::Lseg => 601,
+            SqlType::Box => 603,
+            SqlType::Path => 602,
+            SqlType::Polygon => 604,
+            SqlType::Circle => 718,
+            SqlType::Xml => 142,
+            SqlType::Tsvector => 3614,
+            SqlType::Tsquery => 3615,
+            SqlType::Vector { .. } => 16385, // Custom OID for pgvector
+            SqlType::HalfVec { .. } => 16386,
+            SqlType::SparseVec { .. } => 16387,
+            _ => 25, // Default to text OID
+        }
+    }
+
+    // ============ pg_catalog Support ============
+
+    /// Handle pg_catalog queries
+    async fn handle_pg_catalog_query(
+        &self,
+        table_name: &TableName,
+        _where_clause: &Option<Expression>,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let table_name_lower = table_name.name.to_lowercase();
+
+        match table_name_lower.as_str() {
+            "pg_class" => self.query_pg_class(columns).await,
+            "pg_attribute" => self.query_pg_attribute(columns).await,
+            "pg_type" => self.query_pg_type(columns).await,
+            "pg_namespace" => self.query_pg_namespace(columns).await,
+            "pg_index" => self.query_pg_index(columns).await,
+            "pg_constraint" => self.query_pg_constraint(columns).await,
+            "pg_database" => self.query_pg_database(columns).await,
+            "pg_tables" => self.query_pg_tables(columns).await,
+            "pg_views" => self.query_pg_views(columns).await,
+            "pg_indexes" => self.query_pg_indexes(columns).await,
+            "pg_settings" => self.query_pg_settings(columns).await,
+            "pg_stat_user_tables" => self.query_pg_stat_user_tables(columns).await,
+            "pg_proc" => self.query_pg_proc(columns).await,
+            _ => Err(ProtocolError::PostgresError(format!(
+                "pg_catalog table '{}' is not supported",
+                table_name.name
+            ))),
+        }
+    }
+
+    /// Query pg_catalog.pg_class - table/index/view definitions
+    async fn query_pg_class(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let tables = self.tables.read().await;
+        let views = self.views.read().await;
+        let mut rows = Vec::new();
+        let mut oid = 16384; // Start OID for user tables
+
+        // Add user tables
+        for (table_name, table_schema) in tables.iter() {
+            let mut row_data = HashMap::new();
+            row_data.insert("oid".to_string(), oid.to_string());
+            row_data.insert("relname".to_string(), table_name.clone());
+            row_data.insert("relnamespace".to_string(), "2200".to_string()); // public schema OID
+            row_data.insert("reltype".to_string(), "0".to_string());
+            row_data.insert("reloftype".to_string(), "0".to_string());
+            row_data.insert("relowner".to_string(), "10".to_string()); // postgres user OID
+            row_data.insert("relam".to_string(), "2".to_string()); // heap
+            row_data.insert("relfilenode".to_string(), oid.to_string());
+            row_data.insert("reltablespace".to_string(), "0".to_string());
+            row_data.insert("relpages".to_string(), "0".to_string());
+            row_data.insert("reltuples".to_string(), "-1".to_string());
+            row_data.insert("relallvisible".to_string(), "0".to_string());
+            row_data.insert("reltoastrelid".to_string(), "0".to_string());
+            row_data.insert("relhasindex".to_string(), "f".to_string());
+            row_data.insert("relisshared".to_string(), "f".to_string());
+            row_data.insert("relpersistence".to_string(), "p".to_string()); // permanent
+            row_data.insert("relkind".to_string(), "r".to_string()); // ordinary table
+            row_data.insert("relnatts".to_string(), table_schema.columns.len().to_string());
+            row_data.insert("relchecks".to_string(), "0".to_string());
+            row_data.insert("relhasrules".to_string(), "f".to_string());
+            row_data.insert("relhastriggers".to_string(), "f".to_string());
+            row_data.insert("relhassubclass".to_string(), "f".to_string());
+            row_data.insert("relrowsecurity".to_string(), "f".to_string());
+            row_data.insert("relforcerowsecurity".to_string(), "f".to_string());
+            row_data.insert("relispopulated".to_string(), "t".to_string());
+            row_data.insert("relreplident".to_string(), "d".to_string()); // default
+            row_data.insert("relispartition".to_string(), "f".to_string());
+
+            let mut result_row = Vec::new();
+            for col_name in columns {
+                let value = row_data.get(col_name).cloned().unwrap_or_default();
+                result_row.push(Some(value));
+            }
+            rows.push(result_row);
+            oid += 1;
+        }
+
+        // Add views
+        for (view_name, _view_schema) in views.iter() {
+            let mut row_data = HashMap::new();
+            row_data.insert("oid".to_string(), oid.to_string());
+            row_data.insert("relname".to_string(), view_name.clone());
+            row_data.insert("relnamespace".to_string(), "2200".to_string());
+            row_data.insert("relkind".to_string(), "v".to_string()); // view
+            row_data.insert("relowner".to_string(), "10".to_string());
+            row_data.insert("relpersistence".to_string(), "p".to_string());
+
+            let mut result_row = Vec::new();
+            for col_name in columns {
+                let value = row_data.get(col_name).cloned().unwrap_or_default();
+                result_row.push(Some(value));
+            }
+            rows.push(result_row);
+            oid += 1;
+        }
+
+        Ok(rows)
+    }
+
+    /// Query pg_catalog.pg_attribute - column definitions
+    async fn query_pg_attribute(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let tables = self.tables.read().await;
+        let mut rows = Vec::new();
+        let mut table_oid = 16384;
+
+        for (_table_name, table_schema) in tables.iter() {
+            for (attnum, column) in table_schema.columns.iter().enumerate() {
+                let mut row_data = HashMap::new();
+                row_data.insert("attrelid".to_string(), table_oid.to_string());
+                row_data.insert("attname".to_string(), column.name.clone());
+                row_data.insert("atttypid".to_string(), Self::sql_type_to_oid(&column.data_type).to_string());
+                row_data.insert("attstattarget".to_string(), "-1".to_string());
+                row_data.insert("attlen".to_string(), "-1".to_string());
+                row_data.insert("attnum".to_string(), (attnum + 1).to_string());
+                row_data.insert("attndims".to_string(), "0".to_string());
+                row_data.insert("attcacheoff".to_string(), "-1".to_string());
+                row_data.insert("atttypmod".to_string(), "-1".to_string());
+                row_data.insert("attbyval".to_string(), "f".to_string());
+                row_data.insert("attstorage".to_string(), "x".to_string()); // extended
+                row_data.insert("attalign".to_string(), "i".to_string()); // int align
+                row_data.insert("attnotnull".to_string(), if column.nullable { "f" } else { "t" }.to_string());
+                row_data.insert("atthasdef".to_string(), if column.default.is_some() { "t" } else { "f" }.to_string());
+                row_data.insert("atthasmissing".to_string(), "f".to_string());
+                row_data.insert("attidentity".to_string(), "".to_string());
+                row_data.insert("attgenerated".to_string(), "".to_string());
+                row_data.insert("attisdropped".to_string(), "f".to_string());
+                row_data.insert("attislocal".to_string(), "t".to_string());
+                row_data.insert("attinhcount".to_string(), "0".to_string());
+                row_data.insert("attcollation".to_string(), "0".to_string());
+
+                let mut result_row = Vec::new();
+                for col_name in columns {
+                    let value = row_data.get(col_name).cloned().unwrap_or_default();
+                    result_row.push(Some(value));
+                }
+                rows.push(result_row);
+            }
+            table_oid += 1;
+        }
+
+        Ok(rows)
+    }
+
+    /// Query pg_catalog.pg_type - type information
+    async fn query_pg_type(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let mut rows = Vec::new();
+
+        // Standard PostgreSQL types
+        let types = vec![
+            (16, "bool", "b", "boolean"),
+            (17, "bytea", "b", "bytea"),
+            (20, "int8", "b", "bigint"),
+            (21, "int2", "b", "smallint"),
+            (23, "int4", "b", "integer"),
+            (25, "text", "b", "text"),
+            (114, "json", "b", "json"),
+            (142, "xml", "b", "xml"),
+            (700, "float4", "b", "real"),
+            (701, "float8", "b", "double precision"),
+            (869, "inet", "b", "inet"),
+            (1042, "bpchar", "b", "character"),
+            (1043, "varchar", "b", "character varying"),
+            (1082, "date", "b", "date"),
+            (1083, "time", "b", "time"),
+            (1114, "timestamp", "b", "timestamp"),
+            (1184, "timestamptz", "b", "timestamp with time zone"),
+            (1186, "interval", "b", "interval"),
+            (1700, "numeric", "b", "numeric"),
+            (2950, "uuid", "b", "uuid"),
+            (3802, "jsonb", "b", "jsonb"),
+            (3614, "tsvector", "b", "tsvector"),
+            (3615, "tsquery", "b", "tsquery"),
+            (16385, "vector", "b", "vector"),
+        ];
+
+        for (oid, typname, typtype, typname_full) in types {
+            let mut row_data = HashMap::new();
+            row_data.insert("oid".to_string(), oid.to_string());
+            row_data.insert("typname".to_string(), typname.to_string());
+            row_data.insert("typnamespace".to_string(), "11".to_string()); // pg_catalog namespace
+            row_data.insert("typowner".to_string(), "10".to_string());
+            row_data.insert("typlen".to_string(), "-1".to_string());
+            row_data.insert("typbyval".to_string(), "f".to_string());
+            row_data.insert("typtype".to_string(), typtype.to_string());
+            row_data.insert("typcategory".to_string(), "S".to_string()); // String category
+            row_data.insert("typispreferred".to_string(), "f".to_string());
+            row_data.insert("typisdefined".to_string(), "t".to_string());
+            row_data.insert("typdelim".to_string(), ",".to_string());
+            row_data.insert("typrelid".to_string(), "0".to_string());
+            row_data.insert("typelem".to_string(), "0".to_string());
+            row_data.insert("typarray".to_string(), "0".to_string());
+            row_data.insert("typinput".to_string(), format!("{typname}in"));
+            row_data.insert("typoutput".to_string(), format!("{typname}out"));
+            row_data.insert("typreceive".to_string(), format!("{typname}recv"));
+            row_data.insert("typsend".to_string(), format!("{typname}send"));
+            row_data.insert("typmodin".to_string(), "-".to_string());
+            row_data.insert("typmodout".to_string(), "-".to_string());
+            row_data.insert("typanalyze".to_string(), "-".to_string());
+            row_data.insert("typalign".to_string(), "i".to_string());
+            row_data.insert("typstorage".to_string(), "x".to_string());
+            row_data.insert("typnotnull".to_string(), "f".to_string());
+            row_data.insert("typbasetype".to_string(), "0".to_string());
+            row_data.insert("typtypmod".to_string(), "-1".to_string());
+            row_data.insert("typndims".to_string(), "0".to_string());
+            row_data.insert("typcollation".to_string(), "0".to_string());
+            row_data.insert("description".to_string(), typname_full.to_string());
+
+            let mut result_row = Vec::new();
+            for col_name in columns {
+                let value = row_data.get(col_name).cloned().unwrap_or_default();
+                result_row.push(Some(value));
+            }
+            rows.push(result_row);
+        }
+
+        Ok(rows)
+    }
+
+    /// Query pg_catalog.pg_namespace - schema information
+    async fn query_pg_namespace(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let mut rows = Vec::new();
+
+        // Standard namespaces
+        let namespaces = vec![
+            (11, "pg_catalog"),
+            (2200, "public"),
+            (13187, "information_schema"),
+        ];
+
+        for (oid, nspname) in namespaces {
+            let mut row_data = HashMap::new();
+            row_data.insert("oid".to_string(), oid.to_string());
+            row_data.insert("nspname".to_string(), nspname.to_string());
+            row_data.insert("nspowner".to_string(), "10".to_string());
+            row_data.insert("nspacl".to_string(), "".to_string());
+
+            let mut result_row = Vec::new();
+            for col_name in columns {
+                let value = row_data.get(col_name).cloned().unwrap_or_default();
+                result_row.push(Some(value));
+            }
+            rows.push(result_row);
+        }
+
+        Ok(rows)
+    }
+
+    /// Query pg_catalog.pg_index - index information
+    /// Note: Without an indexes field, we return an empty result set
+    async fn query_pg_index(
+        &self,
+        _columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        // Indexes are not tracked separately in this executor
+        // Return empty result set
+        Ok(Vec::new())
+    }
+
+    /// Query pg_catalog.pg_constraint - constraint definitions
+    async fn query_pg_constraint(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let tables = self.tables.read().await;
+        let mut rows = Vec::new();
+        let mut oid = 30000;
+        let mut table_oid = 16384;
+
+        for (_table_name, table_schema) in tables.iter() {
+            for constraint in &table_schema.constraints {
+                let mut row_data = HashMap::new();
+                row_data.insert("oid".to_string(), oid.to_string());
+                row_data.insert("conname".to_string(), constraint.name.clone().unwrap_or_default());
+                row_data.insert("connamespace".to_string(), "2200".to_string());
+                row_data.insert("contype".to_string(), match constraint.constraint_type.as_str() {
+                    "PRIMARY KEY" => "p",
+                    "FOREIGN KEY" => "f",
+                    "UNIQUE" => "u",
+                    "CHECK" => "c",
+                    "EXCLUDE" => "x",
+                    _ => "c",
+                }.to_string());
+                row_data.insert("condeferrable".to_string(), "f".to_string());
+                row_data.insert("condeferred".to_string(), "f".to_string());
+                row_data.insert("convalidated".to_string(), "t".to_string());
+                row_data.insert("conrelid".to_string(), table_oid.to_string());
+                row_data.insert("contypid".to_string(), "0".to_string());
+                row_data.insert("conindid".to_string(), "0".to_string());
+                row_data.insert("conparentid".to_string(), "0".to_string());
+                row_data.insert("confrelid".to_string(), "0".to_string());
+                row_data.insert("confupdtype".to_string(), " ".to_string());
+                row_data.insert("confdeltype".to_string(), " ".to_string());
+                row_data.insert("confmatchtype".to_string(), " ".to_string());
+                row_data.insert("conislocal".to_string(), "t".to_string());
+                row_data.insert("coninhcount".to_string(), "0".to_string());
+                row_data.insert("connoinherit".to_string(), "f".to_string());
+
+                let mut result_row = Vec::new();
+                for col_name in columns {
+                    let value = row_data.get(col_name).cloned().unwrap_or_default();
+                    result_row.push(Some(value));
+                }
+                rows.push(result_row);
+                oid += 1;
+            }
+            table_oid += 1;
+        }
+
+        Ok(rows)
+    }
+
+    /// Query pg_catalog.pg_database - database list
+    async fn query_pg_database(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let mut rows = Vec::new();
+
+        let databases = vec![
+            (1, "template1", "10", "6", "en_US.UTF-8", "en_US.UTF-8", "t"),
+            (12345, "template0", "10", "6", "en_US.UTF-8", "en_US.UTF-8", "f"),
+            (16384, "orbit_demo", "10", "6", "en_US.UTF-8", "en_US.UTF-8", "t"),
+        ];
+
+        for (oid, datname, datdba, encoding, datcollate, datctype, datistemplate) in databases {
+            let mut row_data = HashMap::new();
+            row_data.insert("oid".to_string(), oid.to_string());
+            row_data.insert("datname".to_string(), datname.to_string());
+            row_data.insert("datdba".to_string(), datdba.to_string());
+            row_data.insert("encoding".to_string(), encoding.to_string());
+            row_data.insert("datcollate".to_string(), datcollate.to_string());
+            row_data.insert("datctype".to_string(), datctype.to_string());
+            row_data.insert("datistemplate".to_string(), datistemplate.to_string());
+            row_data.insert("datallowconn".to_string(), "t".to_string());
+            row_data.insert("datconnlimit".to_string(), "-1".to_string());
+            row_data.insert("datlastsysoid".to_string(), "12000".to_string());
+            row_data.insert("datfrozenxid".to_string(), "722".to_string());
+            row_data.insert("datminmxid".to_string(), "1".to_string());
+            row_data.insert("dattablespace".to_string(), "1663".to_string());
+
+            let mut result_row = Vec::new();
+            for col_name in columns {
+                let value = row_data.get(col_name).cloned().unwrap_or_default();
+                result_row.push(Some(value));
+            }
+            rows.push(result_row);
+        }
+
+        Ok(rows)
+    }
+
+    /// Query pg_catalog.pg_tables - user tables (simplified view)
+    async fn query_pg_tables(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let tables = self.tables.read().await;
+        let mut rows = Vec::new();
+
+        for (table_name, _table_schema) in tables.iter() {
+            let mut row_data = HashMap::new();
+            row_data.insert("schemaname".to_string(), "public".to_string());
+            row_data.insert("tablename".to_string(), table_name.clone());
+            row_data.insert("tableowner".to_string(), "postgres".to_string());
+            row_data.insert("tablespace".to_string(), "".to_string());
+            row_data.insert("hasindexes".to_string(), "f".to_string());
+            row_data.insert("hasrules".to_string(), "f".to_string());
+            row_data.insert("hastriggers".to_string(), "f".to_string());
+            row_data.insert("rowsecurity".to_string(), "f".to_string());
+
+            let mut result_row = Vec::new();
+            for col_name in columns {
+                let value = row_data.get(col_name).cloned().unwrap_or_default();
+                result_row.push(Some(value));
+            }
+            rows.push(result_row);
+        }
+
+        Ok(rows)
+    }
+
+    /// Query pg_catalog.pg_views - view definitions
+    async fn query_pg_views(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let views = self.views.read().await;
+        let mut rows = Vec::new();
+
+        for (view_name, view_schema) in views.iter() {
+            let mut row_data = HashMap::new();
+            row_data.insert("schemaname".to_string(), "public".to_string());
+            row_data.insert("viewname".to_string(), view_name.clone());
+            row_data.insert("viewowner".to_string(), "postgres".to_string());
+            row_data.insert("definition".to_string(), view_schema.query.clone());
+
+            let mut result_row = Vec::new();
+            for col_name in columns {
+                let value = row_data.get(col_name).cloned().unwrap_or_default();
+                result_row.push(Some(value));
+            }
+            rows.push(result_row);
+        }
+
+        Ok(rows)
+    }
+
+    /// Query pg_catalog.pg_indexes - index details
+    /// Note: Without an indexes field, we return an empty result set
+    async fn query_pg_indexes(
+        &self,
+        _columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        // Indexes are not tracked separately in this executor
+        // Return empty result set
+        Ok(Vec::new())
+    }
+
+    /// Query pg_catalog.pg_settings - configuration parameters
+    async fn query_pg_settings(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let mut rows = Vec::new();
+
+        // Common PostgreSQL settings that clients often query
+        let settings = vec![
+            ("server_version", "16.0", "PostgreSQL server version", "internal"),
+            ("server_version_num", "160000", "Server version number", "internal"),
+            ("server_encoding", "UTF8", "Server character set encoding", "preset"),
+            ("client_encoding", "UTF8", "Client character set encoding", "user"),
+            ("lc_collate", "en_US.UTF-8", "Database locale for collation", "preset"),
+            ("lc_ctype", "en_US.UTF-8", "Database locale for character classification", "preset"),
+            ("is_superuser", "on", "Whether current user is a superuser", "internal"),
+            ("session_authorization", "postgres", "Session authorization", "internal"),
+            ("standard_conforming_strings", "on", "Standard conforming strings", "user"),
+            ("DateStyle", "ISO, MDY", "Date format style", "user"),
+            ("TimeZone", "UTC", "Time zone", "user"),
+            ("IntervalStyle", "postgres", "Interval display style", "user"),
+            ("max_connections", "100", "Maximum number of connections", "postmaster"),
+            ("shared_buffers", "128MB", "Shared memory buffers", "postmaster"),
+            ("work_mem", "4MB", "Work memory", "user"),
+            ("maintenance_work_mem", "64MB", "Maintenance work memory", "user"),
+            ("default_transaction_isolation", "read committed", "Default transaction isolation level", "user"),
+            ("default_transaction_read_only", "off", "Default read-only transactions", "user"),
+            ("statement_timeout", "0", "Statement timeout (ms)", "user"),
+            ("lock_timeout", "0", "Lock timeout (ms)", "user"),
+            ("idle_in_transaction_session_timeout", "0", "Idle in transaction timeout", "user"),
+            ("application_name", "", "Application name", "user"),
+            ("search_path", "\"$user\", public", "Search path", "user"),
+        ];
+
+        for (name, setting, short_desc, context) in settings {
+            let mut row_data = HashMap::new();
+            row_data.insert("name".to_string(), name.to_string());
+            row_data.insert("setting".to_string(), setting.to_string());
+            row_data.insert("unit".to_string(), "".to_string());
+            row_data.insert("category".to_string(), "General".to_string());
+            row_data.insert("short_desc".to_string(), short_desc.to_string());
+            row_data.insert("extra_desc".to_string(), "".to_string());
+            row_data.insert("context".to_string(), context.to_string());
+            row_data.insert("vartype".to_string(), "string".to_string());
+            row_data.insert("source".to_string(), "default".to_string());
+            row_data.insert("min_val".to_string(), "".to_string());
+            row_data.insert("max_val".to_string(), "".to_string());
+            row_data.insert("enumvals".to_string(), "".to_string());
+            row_data.insert("boot_val".to_string(), setting.to_string());
+            row_data.insert("reset_val".to_string(), setting.to_string());
+            row_data.insert("sourcefile".to_string(), "".to_string());
+            row_data.insert("sourceline".to_string(), "".to_string());
+            row_data.insert("pending_restart".to_string(), "f".to_string());
+
+            let mut result_row = Vec::new();
+            for col_name in columns {
+                let value = row_data.get(col_name).cloned().unwrap_or_default();
+                result_row.push(Some(value));
+            }
+            rows.push(result_row);
+        }
+
+        Ok(rows)
+    }
+
+    /// Query pg_catalog.pg_stat_user_tables - table statistics
+    async fn query_pg_stat_user_tables(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let tables = self.tables.read().await;
+        let table_data = self.table_data.read().await;
+        let mut rows = Vec::new();
+        let mut relid = 16384;
+
+        for (table_name, _table_schema) in tables.iter() {
+            let row_count = table_data.get(table_name).map(|d| d.len()).unwrap_or(0);
+
+            let mut row_data = HashMap::new();
+            row_data.insert("relid".to_string(), relid.to_string());
+            row_data.insert("schemaname".to_string(), "public".to_string());
+            row_data.insert("relname".to_string(), table_name.clone());
+            row_data.insert("seq_scan".to_string(), "0".to_string());
+            row_data.insert("seq_tup_read".to_string(), "0".to_string());
+            row_data.insert("idx_scan".to_string(), "0".to_string());
+            row_data.insert("idx_tup_fetch".to_string(), "0".to_string());
+            row_data.insert("n_tup_ins".to_string(), row_count.to_string());
+            row_data.insert("n_tup_upd".to_string(), "0".to_string());
+            row_data.insert("n_tup_del".to_string(), "0".to_string());
+            row_data.insert("n_tup_hot_upd".to_string(), "0".to_string());
+            row_data.insert("n_live_tup".to_string(), row_count.to_string());
+            row_data.insert("n_dead_tup".to_string(), "0".to_string());
+            row_data.insert("n_mod_since_analyze".to_string(), "0".to_string());
+            row_data.insert("last_vacuum".to_string(), "".to_string());
+            row_data.insert("last_autovacuum".to_string(), "".to_string());
+            row_data.insert("last_analyze".to_string(), "".to_string());
+            row_data.insert("last_autoanalyze".to_string(), "".to_string());
+            row_data.insert("vacuum_count".to_string(), "0".to_string());
+            row_data.insert("autovacuum_count".to_string(), "0".to_string());
+            row_data.insert("analyze_count".to_string(), "0".to_string());
+            row_data.insert("autoanalyze_count".to_string(), "0".to_string());
+
+            let mut result_row = Vec::new();
+            for col_name in columns {
+                let value = row_data.get(col_name).cloned().unwrap_or_default();
+                result_row.push(Some(value));
+            }
+            rows.push(result_row);
+            relid += 1;
+        }
+
+        Ok(rows)
+    }
+
+    /// Query pg_catalog.pg_proc - function definitions
+    async fn query_pg_proc(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let mut rows = Vec::new();
+
+        // Common built-in functions that clients might query
+        let procs = vec![
+            (1242, "avg", "pg_catalog", "11", "a"),
+            (1243, "sum", "pg_catalog", "11", "a"),
+            (1244, "count", "pg_catalog", "11", "a"),
+            (1245, "min", "pg_catalog", "11", "a"),
+            (1246, "max", "pg_catalog", "11", "a"),
+            (2000, "now", "pg_catalog", "11", "f"),
+            (2001, "current_timestamp", "pg_catalog", "11", "f"),
+            (2002, "current_date", "pg_catalog", "11", "f"),
+            (2003, "current_time", "pg_catalog", "11", "f"),
+            (2010, "length", "pg_catalog", "11", "f"),
+            (2011, "upper", "pg_catalog", "11", "f"),
+            (2012, "lower", "pg_catalog", "11", "f"),
+            (2013, "substr", "pg_catalog", "11", "f"),
+            (2014, "replace", "pg_catalog", "11", "f"),
+            (2015, "concat", "pg_catalog", "11", "f"),
+            (2020, "abs", "pg_catalog", "11", "f"),
+            (2021, "round", "pg_catalog", "11", "f"),
+            (2022, "ceil", "pg_catalog", "11", "f"),
+            (2023, "floor", "pg_catalog", "11", "f"),
+            (2024, "sqrt", "pg_catalog", "11", "f"),
+        ];
+
+        for (oid, proname, pronamespace, proowner, prokind) in procs {
+            let mut row_data = HashMap::new();
+            row_data.insert("oid".to_string(), oid.to_string());
+            row_data.insert("proname".to_string(), proname.to_string());
+            row_data.insert("pronamespace".to_string(), pronamespace.to_string());
+            row_data.insert("proowner".to_string(), proowner.to_string());
+            row_data.insert("prolang".to_string(), "12".to_string()); // internal
+            row_data.insert("procost".to_string(), "1".to_string());
+            row_data.insert("prorows".to_string(), "0".to_string());
+            row_data.insert("provariadic".to_string(), "0".to_string());
+            row_data.insert("prosupport".to_string(), "-".to_string());
+            row_data.insert("prokind".to_string(), prokind.to_string());
+            row_data.insert("prosecdef".to_string(), "f".to_string());
+            row_data.insert("proleakproof".to_string(), "f".to_string());
+            row_data.insert("proisstrict".to_string(), "f".to_string());
+            row_data.insert("proretset".to_string(), "f".to_string());
+            row_data.insert("provolatile".to_string(), "i".to_string()); // immutable
+            row_data.insert("proparallel".to_string(), "s".to_string()); // safe
+            row_data.insert("pronargs".to_string(), "1".to_string());
+            row_data.insert("pronargdefaults".to_string(), "0".to_string());
+            row_data.insert("prorettype".to_string(), "25".to_string()); // text
+            row_data.insert("proargtypes".to_string(), "".to_string());
+            row_data.insert("proallargtypes".to_string(), "".to_string());
+            row_data.insert("proargmodes".to_string(), "".to_string());
+            row_data.insert("proargnames".to_string(), "".to_string());
+            row_data.insert("proargdefaults".to_string(), "".to_string());
+            row_data.insert("protrftypes".to_string(), "".to_string());
+            row_data.insert("prosrc".to_string(), "internal".to_string());
+            row_data.insert("probin".to_string(), "".to_string());
+            row_data.insert("proconfig".to_string(), "".to_string());
+            row_data.insert("proacl".to_string(), "".to_string());
+
+            let mut result_row = Vec::new();
+            for col_name in columns {
+                let value = row_data.get(col_name).cloned().unwrap_or_default();
+                result_row.push(Some(value));
+            }
+            rows.push(result_row);
+        }
+
+        Ok(rows)
     }
 
     // DCL Implementation methods
