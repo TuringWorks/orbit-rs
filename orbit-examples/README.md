@@ -77,46 +77,63 @@ orbit-examples/
 │   ├── 02_wide_column_modeling.cql
 │   └── python/
 │
-├── redis/                             # Redis RESP protocol examples
-│   ├── README.md
-│   ├── 01_data_structures.sh
-│   ├── 02_streams.sh
-│   └── python/
-│
-├── grpc/                              # gRPC protocol examples
-│   ├── README.md
-│   ├── rust/
-│   └── python/
-│
-├── orbitql/                           # OrbitQL multi-model examples
-│   ├── README.md
-│   ├── 01_basic_queries.orbitql
-│   └── python/
-│
 ├── cross-protocol/                    # Cross-protocol integration
 │   ├── README.md
 │   ├── 01_write_postgres_read_redis.py
 │   └── 02_multi_protocol_transaction.py
 │
-├── ml-protocol-examples/              # ML/AI examples (existing)
+├── ml-protocol-examples/              # ML/AI examples
 │   ├── README.md
 │   ├── 01_healthcare_ml.sql
 │   ├── python/
 │   ├── cypher/
 │   └── aql/
 │
-├── graphrag/                          # GraphRAG examples (existing)
+├── graphrag/                          # GraphRAG examples
 │   ├── README.md
 │   ├── python/
 │   ├── cypher/
 │   └── aql/
 │
-└── scenarios/                         # Complete industry scenarios
-    ├── healthcare/
-    ├── ecommerce/
-    ├── finance/
-    └── iot/
+├── insurance/                         # Insurance industry examples
+│   ├── README.md
+│   ├── sql/                           # 9 insurance schemas
+│   ├── redis/                         # Quote caching, risk scoring
+│   ├── mongodb/                       # Policy documents
+│   ├── cypher/                        # Fraud detection graphs
+│   ├── cql/                           # Premium history
+│   └── workflows/                     # End-to-end workflows
+│
+├── telco/                             # Telecommunications examples
+│   ├── README.md
+│   ├── sql/                           # Network, billing schemas
+│   ├── redis/                         # Real-time operations
+│   └── python/                        # Subscriber onboarding
+│
+├── retail/                            # Retail & E-commerce examples
+│   ├── README.md
+│   ├── sql/                           # Products, orders, customers
+│   ├── redis/                         # Shopping cart, inventory
+│   ├── mongodb/                       # Product catalog
+│   ├── cypher/                        # Recommendations
+│   ├── cql/                           # Sales analytics
+│   └── python/                        # Order processing
+│
+├── hospitality/                       # Coffeehouse & Restaurant examples
+│   ├── README.md
+│   ├── sql/                           # Menu, POS schemas
+│   ├── redis/                         # Order queue, loyalty
+│   └── python/                        # Mobile ordering
+│
+└── manufacturing/                     # Electronics Manufacturing examples
+    ├── README.md
+    ├── sql/                           # Products, BOM, production
+    ├── redis/                         # ML predictions, real-time ops
+    ├── orbitql/                       # Analytics queries
+    ├── python/                        # Work order processing
+    └── run_tests.sh                   # Test automation
 ```
+
 
 ## 🎯 Examples by Protocol
 
@@ -393,35 +410,63 @@ print(response.json())
 
 ---
 
-## 🏭 Industry Scenarios
+## 🏭 Industry Examples
 
-Complete end-to-end scenarios using multiple protocols:
+Complete end-to-end industry examples using multiple protocols:
+
+### Insurance
+- **9 insurance types**: Auto, Home, Life, Health, Property, Travel, Disability, Umbrella, Industrial
+- Multi-protocol integration (PostgreSQL, Redis, MongoDB, Neo4j, Cassandra)
+- Fraud detection with graph analytics
+- Real-time quote caching and risk scoring
+- **[View Insurance Examples](insurance/)**
+
+### Telecommunications
+- Network infrastructure and subscriber management
+- Billing and usage tracking
+- Real-time network monitoring
+- Multi-protocol subscriber onboarding
+- **[View Telco Examples](telco/)**
+
+### Retail & E-Commerce
+- Product catalog with variants and categories
+- Inventory management across warehouses
+- Order processing and fulfillment
+- Customer loyalty programs
+- Real-time recommendations (Neo4j)
+- Sales analytics (Cassandra)
+- **[View Retail Examples](retail/)**
+
+### Hospitality (Coffeehouses & Restaurants)
+- Menu management with modifiers and recipes
+- Point-of-sale operations
+- Mobile order ahead
+- Loyalty programs with tiers
+- Kitchen display system
+- Real-time wait time estimation
+- **[View Hospitality Examples](hospitality/)**
+
+### Manufacturing (Electronics Assembly)
+- Bill of Materials (BOM) with multi-level dependencies
+- Work order processing with ML predictions
+- Assembly line operations (50+ stations)
+- **8 ML models**: Predictive maintenance, quality prediction, demand forecasting
+- Supply chain management
+- Real-time quality control
+- OrbitQL analytics queries
+- **[View Manufacturing Examples](manufacturing/)**
 
 ### Healthcare
 - Patient risk prediction (PostgreSQL + ML)
 - Real-time vital signs monitoring (Redis + Time-series)
 - Medical knowledge graph (Cypher)
-- **[View Healthcare Scenario](scenarios/healthcare/)**
-
-### E-Commerce
-- Product catalog (MongoDB)
-- Recommendation engine (PostgreSQL + pgvector)
-- Shopping cart (Redis)
-- Order processing (MySQL transactions)
-- **[View E-Commerce Scenario](scenarios/ecommerce/)**
+- **[View Healthcare Scenario](ml-protocol-examples/01_healthcare_ml.sql)**
 
 ### Financial Services
 - Fraud detection (PostgreSQL + ML)
 - Transaction graph analysis (Cypher)
 - Market data time-series (CQL)
-- **[View Finance Scenario](scenarios/finance/)**
-
-### IoT & Manufacturing
-- Sensor data ingestion (MongoDB + CQL)
-- Predictive maintenance (PostgreSQL + ML)
-- Device relationships (AQL)
-- Real-time alerts (Redis Pub/Sub)
-- **[View IoT Scenario](scenarios/iot/)**
+- **[View Finance Scenario](ml-protocol-examples/02_finance_ml.sql)**
 
 ---
 
