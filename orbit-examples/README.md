@@ -414,6 +414,47 @@ print(response.json())
 
 Complete end-to-end industry examples using multiple protocols:
 
+### Banking
+- Account management and transactions
+- **ML-powered fraud detection** (Random Forest, 95% accuracy)
+- Credit scoring (XGBoost, 92% accuracy)
+- KYC/AML compliance and regulatory reporting
+- Loan origination and servicing
+- OrbitQL analytics queries
+- **[View Banking Examples](banking/)**
+
+### Financial Markets
+- Trading and order execution (<1ms latency)
+- Market data analytics (Cassandra time-series)
+- **ML price prediction** (LSTM) and trading signals (RL)
+- Risk management and VaR calculation
+- Regulatory compliance (MiFID II, Dodd-Frank)
+- **[View Financial Markets Examples](financial-markets/)**
+
+### Defense & Aerospace
+- Asset tracking and logistics
+- Mission planning and operations
+- Intelligence analysis (Neo4j graphs)
+- **ML threat detection** and predictive maintenance
+- Security: RBAC, data classification, audit trails
+- **[View Defense Examples](defense/)**
+
+### Space Operations
+- Satellite tracking and telemetry (<10ms ingestion)
+- Mission control operations
+- Orbital mechanics and collision prediction
+- **ML anomaly detection**
+- Space debris tracking
+- **[View Space Examples](space/)**
+
+### Government Services
+- Citizen services and permits
+- Tax collection and processing
+- Emergency response coordination
+- **ML fraud detection** and service optimization
+- GDPR compliance and data privacy
+- **[View Government Examples](government/)**
+
 ### Insurance
 - **9 insurance types**: Auto, Home, Life, Health, Property, Travel, Disability, Umbrella, Industrial
 - Multi-protocol integration (PostgreSQL, Redis, MongoDB, Neo4j, Cassandra)
