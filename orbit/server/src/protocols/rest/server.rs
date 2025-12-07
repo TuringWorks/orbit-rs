@@ -104,6 +104,19 @@ impl RestApiServer {
                 "/actors/:actor_type/:key/invoke",
                 post(handlers::invoke_actor),
             )
+            // SQL Query endpoints
+            .route("/sql", post(handlers::execute_sql_query))
+            .route("/sql/batch", post(handlers::execute_batch_sql))
+            .route("/tables", get(handlers::list_tables))
+            .route("/tables/:schema/:table", get(handlers::describe_table))
+            .route("/tables/:schema/:table/indexes", get(handlers::list_indexes))
+            .route("/schemas", get(handlers::list_schemas))
+            .route("/queries/history", get(handlers::get_query_history))
+            .route("/stats", get(handlers::get_database_stats))
+            .route("/config", get(handlers::get_server_config))
+            // Cluster management
+            .route("/cluster/nodes", get(handlers::list_cluster_nodes))
+            .route("/cluster/status", get(handlers::get_cluster_status))
             // Transactions
             .route("/transactions", post(handlers::begin_transaction))
             .route(

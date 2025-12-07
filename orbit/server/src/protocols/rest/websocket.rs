@@ -241,3 +241,193 @@ impl EventBroadcaster {
         self.ws_handler.broadcast_event(event).await;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_websocket_handler_new() {
+        let handler = WebSocketHandler::new();
+        // Just verify it can be created without panicking
+        let _rx = handler.subscribe();
+    }
+
+    #[test]
+    fn test_websocket_handler_default() {
+        let handler = WebSocketHandler::default();
+        let _rx = handler.subscribe();
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_event() {
+        let handler = WebSocketHandler::new();
+        let mut rx = handler.subscribe();
+
+        let event = WebSocketMessage::SystemEvent {
+            event_type: "test".to_string(),
+            data: serde_json::json!({"message": "hello"}),
+        };
+
+        handler.broadcast_event(event.clone()).await;
+
+        // Receive the event
+        let received = rx.recv().await.unwrap();
+        match received {
+            WebSocketMessage::SystemEvent { event_type, data } => {
+                assert_eq!(event_type, "test");
+                assert_eq!(data["message"], "hello");
+            }
+            _ => panic!("Expected SystemEvent"),
+        }
+    }
+
+    #[test]
+    fn test_websocket_message_serialization() {
+        // Test ActorStateChanged
+        let msg = WebSocketMessage::ActorStateChanged {
+            actor_type: "TestActor".to_string(),
+            key: serde_json::json!("key-1"),
+            state: serde_json::json!({"count": 42}),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("actor_state_changed"));
+        assert!(json.contains("TestActor"));
+
+        // Test ActorActivated
+        let msg = WebSocketMessage::ActorActivated {
+            actor_type: "TestActor".to_string(),
+            key: serde_json::json!("key-1"),
+            node_id: "node-1".to_string(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("actor_activated"));
+        assert!(json.contains("node-1"));
+
+        // Test ActorDeactivated
+        let msg = WebSocketMessage::ActorDeactivated {
+            actor_type: "TestActor".to_string(),
+            key: serde_json::json!("key-1"),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("actor_deactivated"));
+
+        // Test TransactionEvent
+        let msg = WebSocketMessage::TransactionEvent {
+            transaction_id: "tx-123".to_string(),
+            status: "committed".to_string(),
+            message: Some("Success".to_string()),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("transaction_event"));
+        assert!(json.contains("tx-123"));
+
+        // Test Error
+        let msg = WebSocketMessage::Error {
+            code: "ACTOR_NOT_FOUND".to_string(),
+            message: "Actor not found".to_string(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("error"));
+        assert!(json.contains("ACTOR_NOT_FOUND"));
+    }
+
+    #[test]
+    fn test_subscribe_request_deserialization() {
+        let json = r#"{"event_types": ["actor_state_changed", "actor_activated"], "filters": {"actor_type": "TestActor"}}"#;
+        let request: SubscribeRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.event_types.len(), 2);
+        assert!(request.filters.is_some());
+    }
+
+    #[test]
+    fn test_event_broadcaster() {
+        let handler = Arc::new(WebSocketHandler::new());
+        let broadcaster = EventBroadcaster::new(handler);
+        // Just verify it can be created
+        let _ = broadcaster;
+    }
+
+    #[tokio::test]
+    async fn test_event_broadcaster_actor_state_changed() {
+        let handler = Arc::new(WebSocketHandler::new());
+        let mut rx = handler.subscribe();
+        let broadcaster = EventBroadcaster::new(handler);
+
+        broadcaster
+            .actor_state_changed(
+                "TestActor".to_string(),
+                serde_json::json!("key-1"),
+                serde_json::json!({"value": 100}),
+            )
+            .await;
+
+        let received = rx.recv().await.unwrap();
+        assert!(matches!(received, WebSocketMessage::ActorStateChanged { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_event_broadcaster_actor_lifecycle() {
+        let handler = Arc::new(WebSocketHandler::new());
+        let mut rx = handler.subscribe();
+        let broadcaster = EventBroadcaster::new(handler);
+
+        // Test activation
+        broadcaster
+            .actor_activated(
+                "TestActor".to_string(),
+                serde_json::json!("key-1"),
+                "node-1".to_string(),
+            )
+            .await;
+
+        let received = rx.recv().await.unwrap();
+        assert!(matches!(received, WebSocketMessage::ActorActivated { .. }));
+
+        // Test deactivation
+        broadcaster
+            .actor_deactivated("TestActor".to_string(), serde_json::json!("key-1"))
+            .await;
+
+        let received = rx.recv().await.unwrap();
+        assert!(matches!(received, WebSocketMessage::ActorDeactivated { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_event_broadcaster_transaction_event() {
+        let handler = Arc::new(WebSocketHandler::new());
+        let mut rx = handler.subscribe();
+        let broadcaster = EventBroadcaster::new(handler);
+
+        broadcaster
+            .transaction_event(
+                "tx-123".to_string(),
+                "committed".to_string(),
+                Some("Success".to_string()),
+            )
+            .await;
+
+        let received = rx.recv().await.unwrap();
+        assert!(matches!(
+            received,
+            WebSocketMessage::TransactionEvent { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_event_broadcaster_system_event() {
+        let handler = Arc::new(WebSocketHandler::new());
+        let mut rx = handler.subscribe();
+        let broadcaster = EventBroadcaster::new(handler);
+
+        broadcaster
+            .system_event(
+                "cluster_update".to_string(),
+                serde_json::json!({"nodes": 3}),
+            )
+            .await;
+
+        let received = rx.recv().await.unwrap();
+        assert!(matches!(received, WebSocketMessage::SystemEvent { .. }));
+    }
+}

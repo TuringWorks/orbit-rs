@@ -35,14 +35,17 @@ pub mod websocket;
 
 pub use handlers::{
     abort_transaction, begin_transaction, commit_transaction, create_actor, delete_actor,
-    get_actor, health_check, invoke_actor, list_actors, openapi_spec, update_actor, ApiState,
-    PaginationParams,
+    describe_table, get_actor, get_cluster_status, get_database_stats, get_query_history,
+    get_server_config, health_check, invoke_actor, list_actors, list_cluster_nodes, list_indexes,
+    list_schemas, list_tables, openapi_spec, update_actor, ApiState, PaginationParams,
 };
 pub use models::{
-    ActorInfo, BeginTransactionRequest, CreateActorRequest, ErrorResponse, InvokeActorRequest,
-    NaturalLanguageQueryRequest, NaturalLanguageQueryResponse, PagedResponse, QueryMetadata,
-    QueryResults, SubscribeRequest, SuccessResponse, TransactionInfo, TransactionOperation,
-    UpdateActorStateRequest, VisualizationHint, WebSocketMessage,
+    ActorInfo, BeginTransactionRequest, ClusterConfig, ClusterNodeInfo, ClusterStatus,
+    CreateActorRequest, ErrorResponse, IndexInfo, InvokeActorRequest, NaturalLanguageQueryRequest,
+    NaturalLanguageQueryResponse, PagedResponse, ProtocolConfig, QueryHistoryEntry, QueryMetadata,
+    QueryResults, SchemaInfo, ServerConfig, StorageConfig, SubscribeRequest, SuccessResponse,
+    TableColumn, TableDescription, TransactionInfo, TransactionOperation, UpdateActorStateRequest,
+    VisualizationHint, WebSocketMessage,
 };
 pub use server::RestApiServer;
 pub use sse::{handle_cdc_events, handle_query_stream, QueryStreamParams, SseMessage, SseParams};
