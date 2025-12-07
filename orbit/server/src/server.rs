@@ -197,6 +197,12 @@ impl OrbitServerBuilder {
         self
     }
 
+    /// Enable or disable MongoDB protocol server
+    pub fn with_mongodb_enabled(mut self, enabled: bool) -> Self {
+        self.config.protocols.mongodb_enabled = enabled;
+        self
+    }
+
     pub async fn build(self) -> OrbitResult<OrbitServer> {
         OrbitServer::new(self.config).await
     }
@@ -512,43 +518,10 @@ impl OrbitServer {
                 self.config.protocols.postgres_port
             );
         }
-        if self.config.protocols.mysql_enabled {
-            tracing::info!(
-                "  - MySQL: {}:{}",
-                self.config.protocols.mysql_bind_address,
-                self.config.protocols.mysql_port
-            );
-        }
-        if self.config.protocols.cql_enabled {
-            tracing::info!(
-                "  - CQL/Cassandra: {}:{}",
-                self.config.protocols.cql_bind_address,
-                self.config.protocols.cql_port
-            );
-        }
-        if self.config.protocols.cypher_enabled {
-            tracing::info!(
-                "  - Cypher/Neo4j: {}:{}",
-                self.config.protocols.cypher_bind_address,
-                self.config.protocols.cypher_port
-            );
-        }
-        if self.config.protocols.aql_enabled {
-            tracing::info!(
-                "  - AQL/ArangoDB: {}:{}",
-                self.config.protocols.aql_bind_address,
-                self.config.protocols.aql_port
-            );
-        }
-        if self.config.protocols.mongodb_enabled {
-            tracing::info!(
-                "  - MongoDB: {}:{}",
-                self.config.protocols.mongodb_bind_address,
-                self.config.protocols.mongodb_port
-            );
-        }
+        // Note: MySQL, CQL, Cypher, AQL, REST, and MongoDB protocols are started in main.rs
+        // with unified storage configuration. The status messages are printed there.
 
-        // Start MongoDB server if enabled
+        // Start MongoDB server if enabled (only used when running via OrbitServerBuilder directly)
         if self.config.protocols.mongodb_enabled {
             let mongo_addr = format!(
                 "{}:{}",
