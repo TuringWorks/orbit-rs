@@ -32,7 +32,7 @@ REST API   ──┘
 
 ## Examples Structure
 
-```
+```text
 cross-protocol/
 ├── README.md                              # This file
 ├── 01_write_postgres_read_redis.py        # SQL write, Redis read
