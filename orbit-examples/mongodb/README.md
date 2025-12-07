@@ -43,7 +43,7 @@ mongosh mongodb://localhost:27017/mydb
 mongodb/
 ├── README.md                          # This file
 ├── 01_basic_crud.js                   # Basic CRUD operations
-├── 02_aggregation_pipeline.js        # Aggregation framework
+├── 02_aggregation_pipeline.js         # Aggregation framework
 ├── 03_ml_integration.js               # ML functions via MongoDB
 ├── 04_transactions.js                 # Multi-document transactions
 ├── 05_indexes.js                      # Index creation and management

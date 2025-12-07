@@ -39,7 +39,7 @@ mysql -h localhost -P 3306 -u orbit -D mydb
 
 ## Examples Structure
 
-```
+```text
 mysql/
 ├── README.md                          # This file
 ├── 01_basic_sql.sql                   # Basic SQL operations

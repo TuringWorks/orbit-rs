@@ -54,10 +54,10 @@ This directory contains comprehensive, real-world insurance industry examples de
 
 ```text
 insurance/
-├── README.md                          # This file
-├── ARCHITECTURE.md                    # Detailed architecture
+├── README.md                         # This file
+├── ARCHITECTURE.md                   # Detailed architecture
 │
-├── sql/                               # PostgreSQL schemas & queries
+├── sql/                              # PostgreSQL schemas & queries
 │   ├── 01_schema_core.sql            # Core insurance tables
 │   ├── 02_schema_auto.sql            # Auto insurance
 │   ├── 03_schema_home.sql            # Home insurance
@@ -68,20 +68,20 @@ insurance/
 │   ├── 08_schema_industrial.sql      # Industrial insurance
 │   └── 09_sample_data.sql            # Sample data inserts
 │
-├── redis/                             # Redis commands & caching
+├── redis/                            # Redis commands & caching
 │   ├── 01_quote_caching.redis        # Quote generation cache
 │   ├── 02_risk_scoring.redis         # Real-time risk scores
 │   ├── 03_session_management.redis   # Agent sessions
 │   ├── 04_claims_queue.redis         # Claims processing queue
 │   └── 05_premium_calc.redis         # Premium calculations
 │
-├── mongodb/                           # Document storage
+├── mongodb/                          # Document storage
 │   ├── 01_policy_documents.js        # Policy PDFs, images
 │   ├── 02_claims_documentation.js    # Claims photos, reports
 │   ├── 03_inspection_reports.js      # Property inspections
 │   └── 04_customer_communications.js # Emails, notes
 │
-├── cypher/                            # Neo4j graph queries
+├── cypher/                           # Neo4j graph queries
 │   ├── 01_fraud_detection.cypher     # Fraud pattern detection
 │   ├── 02_customer_networks.cypher   # Customer relationships
 │   ├── 03_claims_investigation.cypher # Claims investigation
@@ -97,19 +97,19 @@ insurance/
 │   ├── openapi.yaml                  # API specification
 │   └── examples.http                 # HTTP request examples
 │
-├── python/                            # Python integration examples
+├── python/                           # Python integration examples
 │   ├── 01_policy_creation.py         # End-to-end policy workflow
 │   ├── 02_claims_processing.py       # Claims pipeline
 │   ├── 03_risk_assessment.py         # Risk scoring system
 │   ├── 04_fraud_detection.py         # Fraud detection ML
 │   └── 05_premium_optimization.py    # Premium calculation
 │
-├── javascript/                        # JavaScript examples
+├── javascript/                       # JavaScript examples
 │   ├── 01_customer_portal.js         # Customer self-service
 │   ├── 02_agent_dashboard.js         # Agent interface
 │   └── 03_claims_submission.js       # Claims submission
 │
-└── workflows/                         # Cross-protocol workflows
+└── workflows/                        # Cross-protocol workflows
     ├── 01_auto_policy_creation.md    # Auto insurance workflow
     ├── 02_home_claims_process.md     # Home claims workflow
     ├── 03_life_underwriting.md       # Life underwriting
