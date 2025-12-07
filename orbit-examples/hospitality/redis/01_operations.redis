@@ -1,0 +1,375 @@
+# ============================================================================
+# OrbitRS Hospitality Examples - Redis Real-Time Operations
+# ============================================================================
+# Order queue, mobile orders, loyalty points, wait times, inventory
+# ============================================================================
+
+# ============================================================================
+# ORDER QUEUE MANAGEMENT
+# ============================================================================
+
+# In-store order queue (FIFO)
+LPUSH queue:orders:in-store order-001 order-002 order-003
+
+# Process next order
+RPOP queue:orders:in-store
+
+# Mobile order queue (with priority)
+ZADD queue:orders:mobile 1733600000 "order-mobile-001"
+ZADD queue:orders:mobile 1733600030 "order-mobile-002"
+ZADD queue:orders:mobile 1733600060 "order-mobile-003"
+
+# Get next mobile orders
+ZRANGE queue:orders:mobile 0 4 WITHSCORES
+
+# Delivery order queue
+LPUSH queue:orders:delivery order-delivery-001
+
+# Queue length
+LLEN queue:orders:in-store
+
+# ============================================================================
+# KITCHEN DISPLAY SYSTEM
+# ============================================================================
+
+# Orders by prep station
+LPUSH queue:station:espresso-bar "order-001:item-1:Grande Latte"
+LPUSH queue:station:espresso-bar "order-002:item-1:Cappuccino"
+
+LPUSH queue:station:cold-bar "order-001:item-2:Iced Coffee"
+
+LPUSH queue:station:food "order-003:item-1:Breakfast Sandwich"
+
+# Get next item for station
+RPOP queue:station:espresso-bar
+
+# Station queue length
+LLEN queue:station:espresso-bar
+
+# Order status tracking
+HSET order:status:order-001 status "PREPARING"
+HSET order:status:order-001 started_at "2024-12-07T11:22:00Z"
+HSET order:status:order-001 promised_at "2024-12-07T11:27:00Z"
+HSET order:status:order-001 items_total "3"
+HSET order:status:order-001 items_ready "1"
+
+# Get order status
+HGETALL order:status:order-001
+
+# ============================================================================
+# MOBILE ORDER AHEAD
+# ============================================================================
+
+# Customer places mobile order
+SETEX mobile:order:order-mobile-001 3600 '{
+  "order_id": "order-mobile-001",
+  "customer_id": "cust-001",
+  "store_id": "store-sf-001",
+  "items": [
+    {"item": "Grande Latte", "modifiers": ["Oat Milk", "Extra Shot"]},
+    {"item": "Blueberry Muffin"}
+  ],
+  "total": 8.95,
+  "pickup_time": "2024-12-07T11:30:00Z",
+  "status": "CONFIRMED"
+}'
+
+# Get mobile order
+GET mobile:order:order-mobile-001
+
+# Mobile orders by store
+SADD mobile:orders:store-sf-001 order-mobile-001 order-mobile-002
+
+# Get all mobile orders for store
+SMEMBERS mobile:orders:store-sf-001
+
+# ============================================================================
+# WAIT TIME ESTIMATION
+# ============================================================================
+
+# Average wait time by store
+SETEX wait:time:store-sf-001 300 '{
+  "current_wait_minutes": 8,
+  "orders_in_queue": 12,
+  "avg_prep_time_minutes": 4
+}'
+
+# Get wait time
+GET wait:time:store-sf-001
+
+# Wait time by item type
+HSET wait:time:items espresso "3"
+HSET wait:time:items food "7"
+HSET wait:time:items cold-drink "2"
+EXPIRE wait:time:items 300
+
+# ============================================================================
+# LOYALTY POINTS
+# ============================================================================
+
+# Customer loyalty balance
+HSET loyalty:balance:cust-001 points "450"
+HSET loyalty:balance:cust-001 tier "GOLD"
+HSET loyalty:balance:cust-001 lifetime_points "2450"
+
+# Get loyalty balance
+HGETALL loyalty:balance:cust-001
+
+# Add points for purchase
+HINCRBY loyalty:balance:cust-001 points 10
+HINCRBY loyalty:balance:cust-001 lifetime_points 10
+
+# Redeem points
+HINCRBY loyalty:balance:cust-001 points -50
+
+# Loyalty tier thresholds
+HSET loyalty:tiers BRONZE "0"
+HSET loyalty:tiers SILVER "500"
+HSET loyalty:tiers GOLD "1500"
+HSET loyalty:tiers PLATINUM "3000"
+
+# ============================================================================
+# PERSONALIZED OFFERS
+# ============================================================================
+
+# Customer-specific offers
+SADD offers:customer:cust-001 "offer-free-drink" "offer-50pct-food"
+
+# Get customer offers
+SMEMBERS offers:customer:cust-001
+
+# Offer details
+SETEX offer:free-drink 86400 '{
+  "offer_id": "offer-free-drink",
+  "description": "Free drink with purchase",
+  "expires_at": "2024-12-14T23:59:59Z",
+  "min_purchase": 10.00
+}'
+
+# Check if offer valid
+GET offer:free-drink
+
+# ============================================================================
+# FAVORITE ORDERS
+# ============================================================================
+
+# Customer favorites
+LPUSH favorites:cust-001 '{
+  "name": "My Usual",
+  "items": [
+    {"item": "Grande Latte", "modifiers": ["Oat Milk", "Extra Shot"]}
+  ]
+}'
+
+LPUSH favorites:cust-001 '{
+  "name": "Breakfast Combo",
+  "items": [
+    {"item": "Medium Coffee"},
+    {"item": "Breakfast Sandwich"}
+  ]
+}'
+
+# Get favorites
+LRANGE favorites:cust-001 0 -1
+
+# ============================================================================
+# REAL-TIME INVENTORY
+# ============================================================================
+
+# Ingredient stock levels
+SET inventory:ingredient:oat-milk 45
+SET inventory:ingredient:espresso-beans 120
+SET inventory:ingredient:croissants 18
+
+# Decrement on use
+DECRBY inventory:ingredient:oat-milk 1
+
+# Low stock alert
+SET inventory:alert:oat-milk "LOW_STOCK"
+EXPIRE inventory:alert:oat-milk 3600
+
+# Out of stock items
+SADD inventory:out-of-stock "Pumpkin Spice Syrup" "Gluten-Free Bread"
+
+# Check if item available
+SISMEMBER inventory:out-of-stock "Oat Milk"
+
+# ============================================================================
+# MENU ITEM AVAILABILITY
+# ============================================================================
+
+# Temporarily unavailable items
+SADD menu:unavailable:store-sf-001 "item-seasonal-001" "item-limited-002"
+EXPIRE menu:unavailable:store-sf-001 3600
+
+# Check availability
+SISMEMBER menu:unavailable:store-sf-001 "item-seasonal-001"
+
+# ============================================================================
+# POPULAR ITEMS (TRENDING)
+# ============================================================================
+
+# Track item popularity (sorted set)
+ZINCRBY popular:items 1 "Grande Latte"
+ZINCRBY popular:items 1 "Iced Coffee"
+ZINCRBY popular:items 1 "Breakfast Sandwich"
+
+# Get top 10 popular items
+ZREVRANGE popular:items 0 9 WITHSCORES
+
+# Popular items by time of day
+ZINCRBY popular:morning 1 "Breakfast Sandwich"
+ZINCRBY popular:afternoon 1 "Iced Coffee"
+
+# ============================================================================
+# CUSTOMER SESSIONS
+# ============================================================================
+
+# Mobile app session
+SETEX session:app:sess-abc123 1800 '{
+  "customer_id": "cust-001",
+  "login_time": "2024-12-07T11:22:00Z",
+  "last_activity": "2024-12-07T11:22:00Z",
+  "current_store": "store-sf-001"
+}'
+
+# Get session
+GET session:app:sess-abc123
+
+# Update last activity
+EXPIRE session:app:sess-abc123 1800
+
+# ============================================================================
+# STORE CAPACITY
+# ============================================================================
+
+# Current customer count in store
+INCR capacity:store-sf-001:current
+EXPIRE capacity:store-sf-001:current 3600
+
+# Decrement when customer leaves
+DECR capacity:store-sf-001:current
+
+# Max capacity
+SET capacity:store-sf-001:max 50
+
+# Get current vs max
+GET capacity:store-sf-001:current
+GET capacity:store-sf-001:max
+
+# ============================================================================
+# DELIVERY INTEGRATION
+# ============================================================================
+
+# Active delivery orders
+HSET delivery:order:del-001 order_id "order-001"
+HSET delivery:order:del-001 driver_id "driver-123"
+HSET delivery:order:del-001 status "PICKED_UP"
+HSET delivery:order:del-001 eta_minutes "15"
+EXPIRE delivery:order:del-001 7200
+
+# Get delivery status
+HGETALL delivery:order:del-001
+
+# ============================================================================
+# STAFF COORDINATION
+# ============================================================================
+
+# Staff on duty
+SADD staff:on-duty:store-sf-001 staff-001 staff-002 staff-003
+
+# Get staff count
+SCARD staff:on-duty:store-sf-001
+
+# Staff assigned to station
+HSET staff:stations staff-001 "ESPRESSO_BAR"
+HSET staff:stations staff-002 "COLD_BAR"
+HSET staff:stations staff-003 "FOOD_STATION"
+
+# ============================================================================
+# REAL-TIME ANALYTICS
+# ============================================================================
+
+# Today's sales count
+INCR analytics:sales:count:2024-12-07
+EXPIRE analytics:sales:count:2024-12-07 604800
+
+# Today's revenue
+INCRBYFLOAT analytics:sales:revenue:2024-12-07 8.95
+EXPIRE analytics:sales:revenue:2024-12-07 604800
+
+# Orders by hour
+INCR analytics:orders:hour:2024-12-07:11
+EXPIRE analytics:orders:hour:2024-12-07:11 604800
+
+# Average order value
+LPUSH analytics:aov:2024-12-07 8.95 12.50 6.75
+LTRIM analytics:aov:2024-12-07 0 999
+EXPIRE analytics:aov:2024-12-07 604800
+
+# ============================================================================
+# NOTIFICATIONS
+# ============================================================================
+
+# Publish order ready notification
+PUBLISH notifications:orders '{
+  "order_id": "order-001",
+  "order_number": "1234",
+  "status": "READY",
+  "customer_name": "John"
+}'
+
+# Publish inventory alert
+PUBLISH notifications:inventory '{
+  "ingredient": "Oat Milk",
+  "status": "LOW_STOCK",
+  "current_quantity": 10
+}'
+
+# Subscribe to notifications (in separate connection)
+# SUBSCRIBE notifications:orders
+# SUBSCRIBE notifications:inventory
+
+# ============================================================================
+# RATE LIMITING
+# ============================================================================
+
+# API rate limit for mobile app
+INCR ratelimit:api:customer:cust-001
+EXPIRE ratelimit:api:customer:cust-001 60
+
+# Check rate limit
+GET ratelimit:api:customer:cust-001
+
+# ============================================================================
+# CACHE
+# ============================================================================
+
+# Menu cache
+SETEX cache:menu:store-sf-001 3600 '{
+  "categories": [...],
+  "items": [...],
+  "modifiers": [...]
+}'
+
+# Customer profile cache
+SETEX cache:customer:cust-001 1800 '{
+  "customer_id": "cust-001",
+  "name": "John Doe",
+  "loyalty_tier": "GOLD",
+  "points": 450
+}'
+
+# ============================================================================
+# CLEANUP
+# ============================================================================
+
+# Clear completed orders
+DEL order:status:order-001
+
+# Monitor
+# MONITOR
+
+# Get stats
+INFO
+DBSIZE
