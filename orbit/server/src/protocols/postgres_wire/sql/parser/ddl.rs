@@ -471,8 +471,13 @@ pub fn parse_create_extension(parser: &mut SqlParser) -> ParseResult<Statement> 
         false
     };
 
-    // Parse extension name
+    // Parse extension name (can be identifier, quoted identifier, or string literal)
     let name = if let Some(Token::Identifier(ext_name)) = &parser.current_token {
+        let name = ext_name.clone();
+        parser.advance()?;
+        name
+    } else if let Some(Token::QuotedIdentifier(ext_name)) = &parser.current_token {
+        // Handle double-quoted identifiers like "uuid-ossp"
         let name = ext_name.clone();
         parser.advance()?;
         name
@@ -856,11 +861,15 @@ pub fn parse_drop_extension(parser: &mut SqlParser) -> ParseResult<Statement> {
         false
     };
 
-    // Parse extension names
+    // Parse extension names (can be identifier, quoted identifier, or string literal)
     let mut names = Vec::new();
 
     loop {
         if let Some(Token::Identifier(ext_name)) = &parser.current_token {
+            names.push(ext_name.clone());
+            parser.advance()?;
+        } else if let Some(Token::QuotedIdentifier(ext_name)) = &parser.current_token {
+            // Handle double-quoted identifiers like "uuid-ossp"
             names.push(ext_name.clone());
             parser.advance()?;
         } else if let Some(Token::StringLiteral(ext_name)) = &parser.current_token {
