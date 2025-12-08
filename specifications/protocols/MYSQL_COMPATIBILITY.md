@@ -32,20 +32,120 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 
 ### Data Definition Language (DDL)
 
+#### Database Commands
+
 | Command | Status | Notes |
 |---------|--------|-------|
 | CREATE DATABASE | 🔶 | Basic creation |
-| CREATE TABLE | ✅ | Full support with constraints |
-| CREATE INDEX | ✅ | B-Tree, Hash indexes |
-| CREATE VIEW | ✅ | Regular views |
-| ALTER TABLE | 🔶 | Basic column operations |
+| CREATE SCHEMA | 🔶 | Alias for CREATE DATABASE |
 | ALTER DATABASE | ❌ | Not implemented |
+| ALTER SCHEMA | ❌ | Not implemented |
 | DROP DATABASE | ✅ | With IF EXISTS |
+| DROP SCHEMA | ✅ | Alias for DROP DATABASE |
+
+#### Table Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| CREATE TABLE | ✅ | Full support with constraints |
+| CREATE TEMPORARY TABLE | ✅ | Temporary tables |
+| ALTER TABLE | 🔶 | Basic column operations |
+| ALTER TABLE ... ADD COLUMN | ✅ | Add columns |
+| ALTER TABLE ... DROP COLUMN | ✅ | Drop columns |
+| ALTER TABLE ... MODIFY COLUMN | 🔶 | Modify column definition |
+| ALTER TABLE ... CHANGE COLUMN | 🔶 | Rename and modify |
+| ALTER TABLE ... RENAME COLUMN | ✅ | Rename column (MySQL 8.0) |
+| ALTER TABLE ... ADD CONSTRAINT | ✅ | Add constraints |
+| ALTER TABLE ... DROP CONSTRAINT | ✅ | Drop constraints |
+| ALTER TABLE ... ADD INDEX | ✅ | Add index |
+| ALTER TABLE ... DROP INDEX | ✅ | Drop index |
+| ALTER TABLE ... RENAME TO | ✅ | Rename table |
+| ALTER TABLE ... ENGINE | ❌ | Not implemented |
+| ALTER TABLE ... AUTO_INCREMENT | 🔶 | Basic support |
 | DROP TABLE | ✅ | CASCADE support |
-| DROP INDEX | ✅ | With IF EXISTS |
-| DROP VIEW | ✅ | Regular views |
+| DROP TEMPORARY TABLE | ✅ | Drop temp tables |
+| RENAME TABLE | ✅ | Rename tables |
 | TRUNCATE TABLE | ✅ | Full support |
-| RENAME TABLE | ❌ | Not implemented |
+
+#### Index Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| CREATE INDEX | ✅ | B-Tree, Hash indexes |
+| CREATE UNIQUE INDEX | ✅ | Unique constraints |
+| CREATE FULLTEXT INDEX | ❌ | Not implemented |
+| CREATE SPATIAL INDEX | ❌ | Not implemented |
+| ALTER TABLE ... ADD INDEX | ✅ | Add index |
+| ALTER TABLE ... ADD UNIQUE | ✅ | Add unique index |
+| ALTER TABLE ... ADD FULLTEXT | ❌ | Not implemented |
+| ALTER TABLE ... ADD SPATIAL | ❌ | Not implemented |
+| DROP INDEX | ✅ | With IF EXISTS |
+
+#### View Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| CREATE VIEW | ✅ | Regular views |
+| CREATE OR REPLACE VIEW | ✅ | Replace existing |
+| ALTER VIEW | 🔶 | Basic support |
+| DROP VIEW | ✅ | Regular views |
+| DROP VIEW IF EXISTS | ✅ | Conditional drop |
+
+#### Stored Procedures & Functions
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| CREATE PROCEDURE | 🔶 | Parsing only, no execution |
+| CREATE FUNCTION | 🔶 | Parsing only, no execution |
+| ALTER PROCEDURE | ❌ | Not implemented |
+| ALTER FUNCTION | ❌ | Not implemented |
+| DROP PROCEDURE | 🔶 | Basic support |
+| DROP FUNCTION | 🔶 | Basic support |
+| CALL | ❌ | Not implemented |
+
+#### Trigger Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| CREATE TRIGGER | 🔶 | Parsing only, no execution |
+| DROP TRIGGER | ✅ | Full support |
+| SHOW TRIGGERS | 🔶 | Basic support |
+
+#### Event Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| CREATE EVENT | ❌ | Not implemented |
+| ALTER EVENT | ❌ | Not implemented |
+| DROP EVENT | ❌ | Not implemented |
+| SHOW EVENTS | ❌ | Not implemented |
+
+#### User & Privilege Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| CREATE USER | 🔶 | Basic user creation |
+| ALTER USER | 🔶 | Basic modifications |
+| DROP USER | ✅ | Delete users |
+| RENAME USER | ❌ | Not implemented |
+| SET PASSWORD | 🔶 | Basic support |
+| GRANT | 🔶 | Basic privileges |
+| REVOKE | 🔶 | Basic privileges |
+| SHOW GRANTS | 🔶 | Show user privileges |
+
+#### Other DDL Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| CREATE TABLESPACE | ❌ | Not implemented |
+| ALTER TABLESPACE | ❌ | Not implemented |
+| DROP TABLESPACE | ❌ | Not implemented |
+| CREATE LOGFILE GROUP | ❌ | Not implemented |
+| ALTER LOGFILE GROUP | ❌ | Not implemented |
+| DROP LOGFILE GROUP | ❌ | Not implemented |
+| CREATE SERVER | ❌ | Not implemented |
+| ALTER SERVER | ❌ | Not implemented |
+| DROP SERVER | ❌ | Not implemented |
 
 ### Data Manipulation Language (DML)
 
@@ -53,10 +153,21 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 |---------|--------|-------|
 | SELECT | ✅ | Full support with JOINs, subqueries |
 | INSERT | ✅ | VALUES, SELECT, ON DUPLICATE KEY |
+| INSERT ... ON DUPLICATE KEY UPDATE | ✅ | Upsert support |
+| INSERT IGNORE | ✅ | Ignore duplicates |
 | UPDATE | ✅ | SET, WHERE, LIMIT |
+| UPDATE ... JOIN | 🔶 | Basic support |
 | DELETE | ✅ | WHERE, LIMIT |
+| DELETE ... JOIN | 🔶 | Basic support |
 | REPLACE | 🔶 | Basic support |
+| REPLACE INTO | 🔶 | Basic support |
 | LOAD DATA | ❌ | Not implemented |
+| LOAD DATA INFILE | ❌ | Not implemented |
+| LOAD XML | ❌ | Not implemented |
+| SELECT ... INTO OUTFILE | ❌ | Not implemented |
+| SELECT ... INTO DUMPFILE | ❌ | Not implemented |
+| IMPORT TABLE | ❌ | Not implemented |
+| TABLE | ✅ | Shorthand for SELECT * |
 
 ### Transaction Control
 
@@ -222,6 +333,126 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 | JSON_CONTAINS() | ❌ | Not implemented |
 | JSON_KEYS() | ❌ | Not implemented |
 | JSON_TYPE() | ❌ | Not implemented |
+
+### Administration Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| ANALYZE TABLE | 🔶 | Basic support |
+| CHECK TABLE | 🔶 | Basic support |
+| CHECKSUM TABLE | ❌ | Not implemented |
+| OPTIMIZE TABLE | 🔶 | Basic support |
+| REPAIR TABLE | ❌ | Not implemented |
+| FLUSH | 🔶 | Basic support |
+| FLUSH TABLES | 🔶 | Flush table cache |
+| FLUSH PRIVILEGES | 🔶 | Reload privileges |
+| FLUSH LOGS | ❌ | Not implemented |
+| RESET | ❌ | Not implemented |
+| KILL | 🔶 | Kill connection/query |
+| SHUTDOWN | 🔶 | Shutdown server |
+
+### SHOW Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| SHOW DATABASES | ✅ | List databases |
+| SHOW SCHEMAS | ✅ | Alias for SHOW DATABASES |
+| SHOW TABLES | ✅ | List tables |
+| SHOW COLUMNS | ✅ | Show table columns |
+| SHOW FIELDS | ✅ | Alias for SHOW COLUMNS |
+| SHOW INDEX | ✅ | Show table indexes |
+| SHOW KEYS | ✅ | Alias for SHOW INDEX |
+| SHOW CREATE TABLE | ✅ | Show CREATE TABLE |
+| SHOW CREATE DATABASE | 🔶 | Basic support |
+| SHOW CREATE VIEW | 🔶 | Basic support |
+| SHOW CREATE PROCEDURE | ❌ | Not implemented |
+| SHOW CREATE FUNCTION | ❌ | Not implemented |
+| SHOW CREATE TRIGGER | ❌ | Not implemented |
+| SHOW CREATE EVENT | ❌ | Not implemented |
+| SHOW TABLE STATUS | 🔶 | Basic support |
+| SHOW VARIABLES | 🔶 | Show system variables |
+| SHOW GLOBAL VARIABLES | 🔶 | Global variables |
+| SHOW SESSION VARIABLES | 🔶 | Session variables |
+| SHOW STATUS | 🔶 | Show status variables |
+| SHOW GLOBAL STATUS | 🔶 | Global status |
+| SHOW SESSION STATUS | 🔶 | Session status |
+| SHOW PROCESSLIST | 🔶 | Show processes |
+| SHOW FULL PROCESSLIST | 🔶 | Full process list |
+| SHOW GRANTS | 🔶 | Show user privileges |
+| SHOW PRIVILEGES | 🔶 | Show available privileges |
+| SHOW ENGINES | 🔶 | Show storage engines |
+| SHOW ENGINE | 🔶 | Engine-specific info |
+| SHOW WARNINGS | ✅ | Show warnings |
+| SHOW ERRORS | ✅ | Show errors |
+| SHOW COUNT(*) WARNINGS | ✅ | Warning count |
+| SHOW COUNT(*) ERRORS | ✅ | Error count |
+| SHOW MASTER STATUS | ❌ | Replication status |
+| SHOW SLAVE STATUS | ❌ | Replication status |
+| SHOW REPLICA STATUS | ❌ | Replication status |
+| SHOW BINARY LOGS | ❌ | Binary log files |
+| SHOW BINLOG EVENTS | ❌ | Binary log events |
+| SHOW RELAYLOG EVENTS | ❌ | Relay log events |
+| SHOW CHARACTER SET | 🔶 | Character sets |
+| SHOW COLLATION | 🔶 | Collations |
+| SHOW PLUGINS | ❌ | Installed plugins |
+| SHOW PROCEDURE STATUS | ❌ | Stored procedures |
+| SHOW FUNCTION STATUS | ❌ | Stored functions |
+| SHOW TRIGGERS | 🔶 | Table triggers |
+| SHOW EVENTS | ❌ | Scheduled events |
+| SHOW OPEN TABLES | ❌ | Open tables |
+| SHOW PROFILES | ❌ | Profiling info |
+| SHOW PROFILE | ❌ | Query profile |
+
+### DESCRIBE/EXPLAIN Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| DESCRIBE | ✅ | Describe table |
+| DESC | ✅ | Alias for DESCRIBE |
+| EXPLAIN | ✅ | Query execution plan |
+| EXPLAIN ANALYZE | 🔶 | Analyze query execution |
+| EXPLAIN FORMAT=JSON | 🔶 | JSON format |
+| EXPLAIN FORMAT=TREE | ❌ | Tree format |
+
+### Utility Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| USE | ✅ | Select database |
+| HELP | ❌ | Not implemented |
+| SET | ✅ | Set variables |
+| SET NAMES | ✅ | Set character set |
+| SET CHARACTER SET | ✅ | Set character set |
+| SET GLOBAL | 🔶 | Set global variable |
+| SET SESSION | ✅ | Set session variable |
+| SET TRANSACTION | 🔶 | Set transaction isolation |
+| DO | ❌ | Execute expression |
+| HANDLER | ❌ | Low-level table access |
+| CACHE INDEX | ❌ | Not implemented |
+| LOAD INDEX INTO CACHE | ❌ | Not implemented |
+
+### Replication Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| CHANGE MASTER TO | ❌ | Not implemented |
+| CHANGE REPLICATION SOURCE TO | ❌ | Not implemented |
+| START SLAVE | ❌ | Not implemented |
+| START REPLICA | ❌ | Not implemented |
+| STOP SLAVE | ❌ | Not implemented |
+| STOP REPLICA | ❌ | Not implemented |
+| RESET SLAVE | ❌ | Not implemented |
+| RESET REPLICA | ❌ | Not implemented |
+| PURGE BINARY LOGS | ❌ | Not implemented |
+
+### Prepared Statement Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| PREPARE | 🔶 | Prepare statement |
+| EXECUTE | 🔶 | Execute prepared |
+| DEALLOCATE PREPARE | 🔶 | Deallocate statement |
+| DROP PREPARE | 🔶 | Alias for DEALLOCATE |
 
 ---
 
