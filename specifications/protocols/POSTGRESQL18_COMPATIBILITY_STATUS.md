@@ -1,6 +1,6 @@
 # PostgreSQL 18 Compatibility Status
 
-**Last Updated**: 2025-12-07
+**Last Updated**: 2025-12-08
 **Purpose**: Track OrbitRS implementation status of PostgreSQL 18 features
 **Reference**: See [postgresql18-reference-rust.md](./Protocol-specs/postgresql18-reference-rust.md) for full PostgreSQL 18 specification
 
@@ -13,8 +13,8 @@ OrbitRS implements PostgreSQL wire protocol (v3.0) with extensive SQL support. T
 | Category | Implemented | Partial | Not Started | Total |
 |----------|-------------|---------|-------------|-------|
 | Wire Protocol | 15 | 2 | 1 | 18 |
-| SQL Syntax (PG18 New) | 4 | 1 | 2 | 7 |
-| Functions (PG18 New) | 6 | 0 | 0 | 6 |
+| SQL Syntax (PG18 New) | 5 | 1 | 1 | 7 |
+| Functions (PG18 New) | 10 | 0 | 0 | 10 |
 | Data Types | 25+ | 3 | 2 | 30+ |
 
 ---
@@ -255,6 +255,47 @@ WHEN NOT MATCHED THEN
 
 ---
 
+### 2.6 Sequence Functions
+
+**Status**: ✅ Fully Implemented
+
+```sql
+-- Create a sequence
+CREATE SEQUENCE order_seq START WITH 1000 INCREMENT BY 1;
+
+-- Get next value (advances sequence)
+SELECT nextval('order_seq');
+
+-- Get current value (requires prior nextval in session)
+SELECT currval('order_seq');
+
+-- Set sequence value
+SELECT setval('order_seq', 5000);
+SELECT setval('order_seq', 5000, false);  -- Next nextval returns 5000
+
+-- Get last value from any sequence in session
+SELECT lastval();
+```
+
+**Implementation Status**:
+| Component | Status | Notes |
+|-----------|--------|-------|
+| SequenceAccessor trait | ✅ Done | `expression_evaluator.rs` |
+| ExecutorSequenceAccessor | ✅ Done | `executor.rs` |
+| nextval() function | ✅ Done | Advances and returns next value |
+| currval() function | ✅ Done | Returns current value (requires prior nextval) |
+| setval() function | ✅ Done | Sets sequence value, optional is_called |
+| lastval() function | ✅ Done | Returns last sequence value in session |
+| Sequence storage | ✅ Done | std::sync::RwLock for sync access |
+| Unit tests | ✅ Done | 17 sequence tests |
+
+**Implementation Location**:
+- Trait: `orbit/server/src/protocols/postgres_wire/sql/expression_evaluator.rs`
+- Executor: `orbit/server/src/protocols/postgres_wire/sql/executor.rs`
+- Tests: `orbit/server/src/protocols/postgres_wire/sql/tests.rs`
+
+---
+
 ## 3. Protocol Version 3.2 Changes
 
 ### 3.1 Variable-Length Cancellation Keys
@@ -424,6 +465,9 @@ cargo test -p orbit-server -- generated_column
 
 | Date | Changes |
 |------|---------|
+| 2025-12-08 | Added sequence functions (nextval, currval, setval, lastval) with SequenceAccessor trait |
+| 2025-12-08 | Added math functions (cbrt, div, factorial, gcd, lcm, sign) |
+| 2025-12-08 | Added 17 sequence-related tests |
 | 2025-12-07 | Integrated NegotiateProtocolVersion into startup flow (protocol 3.2) |
 | 2025-12-07 | Implemented temporal constraint overlap checking (INSERT/UPDATE validation) |
 | 2025-12-07 | Added NegotiateProtocolVersion message type (protocol 3.2) |
