@@ -244,3 +244,5 @@ cluster-data/
 orbit-compatibility/data/
 test-data/
 tests/orbit-compatibility/data/
+# Protocol reference PDFs (large files)
+specifications/protocols/docs/*.pdf
