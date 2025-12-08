@@ -2,16 +2,17 @@
 
 **Last Updated**: 2025-12-07
 **Purpose**: Document protocol support across OrbitRS client tools (CLI, Desktop, SDKs)
+**Related**: See [PROTOCOL_STATUS.md](./PROTOCOL_STATUS.md) for server-side protocol implementation status
 
 ---
 
 ## Executive Summary
 
-OrbitRS provides multiple client tools for interacting with the database server. Each tool has different protocol support levels, creating gaps that affect developer experience.
+OrbitRS provides multiple client tools for interacting with the database server. The CLI has achieved near-parity with the Desktop app for core protocols.
 
 | Client Tool | Protocols Supported | Primary Use Case |
 |-------------|---------------------|------------------|
-| orbit/cli | PostgreSQL only | Terminal/scripting |
+| orbit/cli | 5 protocols (PostgreSQL, MySQL, Redis, OrbitQL, CQL) | Terminal/scripting |
 | orbit/desktop | 7 protocols | GUI management |
 | orbit-python-client | REST API | Python applications |
 | orbit-vscode-extension | LSP | IDE integration |
@@ -21,58 +22,97 @@ OrbitRS provides multiple client tools for interacting with the database server.
 ## 1. orbit/cli (Terminal CLI)
 
 **Location**: `orbit/cli/src/main.rs`
-**Technology**: Rust CLI with `rustyline`, `tokio-postgres`, `syntect`
+**Technology**: Rust CLI with `rustyline`, `tokio-postgres`, `mysql_async`, `redis`, `reqwest`, `syntect`
 
 ### Current Protocol Support
 
 | Protocol | Status | Implementation | Default Port |
 |----------|--------|----------------|--------------|
 | PostgreSQL | ✅ Fully implemented | `tokio-postgres` wire protocol | 5432 |
-| MySQL | ❌ Declared only | Enum exists, returns error | 3306 |
-| CQL | ❌ Declared only | Enum exists, returns error | 9042 |
-| Redis | ❌ Not supported | Not in enum | - |
-| OrbitQL | ❌ Not supported | Not in enum | - |
+| MySQL | ✅ Fully implemented | `mysql_async` driver | 3306 |
+| Redis | ✅ Fully implemented | `redis` crate with async | 6379 |
+| OrbitQL | ✅ Fully implemented | HTTP REST (`/api/v1/sql`) | 8080 |
+| CQL | ✅ Implemented | HTTP REST fallback | 9042 |
 | Cypher | ❌ Not supported | Not in enum | - |
 | AQL | ❌ Not supported | Not in enum | - |
 
 ### Usage Examples
 
 ```bash
-# Working - PostgreSQL
+# PostgreSQL (default)
 orbit --protocol postgres -H localhost -p 5432 -d mydb -u user
 
-# Declared but NOT working
-orbit --protocol mysql -H localhost -p 3306   # Returns error
-orbit --protocol cql -H localhost -p 9042     # Returns error
+# MySQL
+orbit --protocol mysql -H localhost -p 3306 -d mydb -u user
+
+# Redis
+orbit --protocol redis -H localhost -p 6379
+
+# OrbitQL via REST
+orbit --protocol orbitql -H localhost -p 8080
+
+# CQL via REST
+orbit --protocol cql -H localhost -p 9042
+
+# Execute single command
+orbit --protocol postgres -e "SELECT * FROM users;"
+
+# Execute file
+orbit --protocol postgres -f queries.sql
+
+# JSON output format
+orbit --protocol postgres -o json -e "SELECT * FROM users;"
 ```
 
 ### Features
 
 - Syntax highlighting (SQL via `syntect`)
-- Command history (persistent)
-- Multi-line query support
+- Command history (persistent to `~/.orbit_history`)
+- Multi-line query support (for SQL protocols)
 - Output formats: Table, JSON, CSV, Plain
-- Meta commands: `\q`, `\?`, `\d`, `\dt`, `\l`
+- Meta commands: `\q`, `\?`, `\d`, `\dt`, `\l`, `\format`, `\timing`
 - File execution mode (`-f`)
 - Single command mode (`-e`)
+- Protocol-specific command handling (Redis commands execute immediately)
 
-### Implementation Gaps
+### Protocol-Specific Behavior
+
+| Protocol | Query Terminator | Multi-line | Special Handling |
+|----------|------------------|------------|------------------|
+| PostgreSQL | Semicolon (`;`) | Yes | Standard SQL |
+| MySQL | Semicolon (`;`) | Yes | Standard SQL |
+| OrbitQL | Semicolon (`;`) | Yes | REST API with JSON body |
+| CQL | Semicolon (`;`) | Yes | REST API with protocol hint |
+| Redis | Newline | No | Commands execute immediately |
+
+### ReplState Architecture
+
+```rust
+struct ReplState {
+    protocol: Protocol,
+    host: String,
+    port: u16,
+    database: String,
+    username: String,
+    password: Option<String>,
+    format: OutputFormat,
+    syntax_set: SyntaxSet,
+    theme_set: ThemeSet,
+    // Protocol-specific connections
+    pg_client: Option<Client>,                    // PostgreSQL
+    mysql_pool: Option<mysql_async::Pool>,        // MySQL
+    redis_client: Option<redis::Client>,          // Redis
+    http_client: Option<reqwest::Client>,         // OrbitQL/CQL
+}
+```
+
+### Remaining Gaps
 
 | Gap | Priority | Effort | Notes |
 |-----|----------|--------|-------|
-| MySQL query execution | High | Medium | Add `mysql_async` driver |
-| CQL query execution | High | Medium | Add `cdrs-tokio` or HTTP REST |
-| Redis commands | Medium | Low | Add `redis` crate |
-| OrbitQL support | High | Medium | HTTP REST to `/api/v1/sql` |
 | Cypher support | Low | Medium | HTTP REST to Bolt endpoint |
 | AQL support | Low | Medium | HTTP REST to ArangoDB API |
-
-### Recommended Implementation Order
-
-1. **OrbitQL via REST** - Highest value, enables full query language
-2. **MySQL** - Common protocol, good driver availability
-3. **Redis** - Simple command interface
-4. **CQL** - Enterprise use cases
+| Native CQL driver | Low | Medium | Replace REST with `cdrs-tokio` |
 
 ---
 
@@ -147,7 +187,7 @@ OrbitRS has **two completely independent parsers**:
 
 **Location**: `orbit/server/src/protocols/postgres_wire/sql/`
 
-```
+```text
 orbit/server/src/protocols/postgres_wire/sql/
 ├── lexer.rs           # Token definitions
 ├── parser/
@@ -173,7 +213,7 @@ orbit/server/src/protocols/postgres_wire/sql/
 
 **Location**: `orbit/shared/src/orbitql/`
 
-```
+```text
 orbit/shared/src/orbitql/
 ├── lexer.rs           # OrbitQL tokens
 ├── parser.rs          # OrbitQL parser
@@ -213,27 +253,29 @@ orbit/shared/src/orbitql/
 
 ### Server-Side Protocol Ports
 
-| Protocol | Port | Parser Used | Client Support |
-|----------|------|-------------|----------------|
-| PostgreSQL Wire | 5432 | PostgreSQL | CLI ✅, Desktop ✅ |
-| MySQL Wire | 3306 | MySQL | CLI ❌, Desktop ✅ |
-| Redis RESP | 6379 | RESP | CLI ❌, Desktop ✅ |
-| CQL | 9042 | CQL | CLI ❌, Desktop ✅ |
-| Cypher/Bolt | 7687 | Cypher | CLI ❌, Desktop ✅ |
-| AQL | 8529 | AQL | CLI ❌, Desktop ✅ |
-| REST API | 8080 | PostgreSQL | SDK ✅ |
-| OrbitQL | 8081 | OrbitQL | Desktop ✅ |
-| gRPC | 50051 | Protobuf | Internal |
+| Protocol | Port | Parser Used | CLI Support | Desktop Support |
+|----------|------|-------------|-------------|-----------------|
+| PostgreSQL Wire | 5432 | PostgreSQL | ✅ | ✅ |
+| MySQL Wire | 3306 | MySQL | ✅ | ✅ |
+| Redis RESP | 6379 | RESP | ✅ | ✅ |
+| CQL | 9042 | CQL | ✅ (REST) | ✅ |
+| Cypher/Bolt | 7687 | Cypher | ❌ | ✅ |
+| AQL | 8529 | AQL | ❌ | ✅ |
+| REST API | 8080 | PostgreSQL | ✅ (OrbitQL) | ✅ |
+| OrbitQL | 8081 | OrbitQL | ✅ | ✅ |
+| gRPC | 50051 | Protobuf | ❌ | Internal |
 
-### Gap Matrix
+### Feature Matrix
 
 | Feature | CLI | Desktop | Python SDK |
 |---------|-----|---------|------------|
 | PostgreSQL queries | ✅ | ✅ | ✅ (via REST) |
-| MySQL queries | ❌ | ✅ | ❌ |
-| Redis commands | ❌ | ✅ | ❌ |
-| OrbitQL queries | ❌ | ✅ | ❌ |
-| Graph queries | ❌ | ✅ | ❌ |
+| MySQL queries | ✅ | ✅ | ❌ |
+| Redis commands | ✅ | ✅ | ❌ |
+| OrbitQL queries | ✅ | ✅ | ❌ |
+| CQL queries | ✅ | ✅ | ❌ |
+| Graph queries (Cypher) | ❌ | ✅ | ❌ |
+| AQL queries | ❌ | ✅ | ❌ |
 | Syntax highlighting | ✅ | ✅ | N/A |
 | Connection management | Basic | Full | Basic |
 | Query history | ✅ | ✅ | ❌ |
@@ -241,81 +283,42 @@ orbit/shared/src/orbitql/
 
 ---
 
-## 5. Implementation Roadmap
+## 5. Future Enhancements
 
-### Phase 1: CLI Protocol Parity (High Priority)
+### Phase 1: Complete CLI Protocol Parity (Low Priority)
 
-**Goal**: Match desktop protocol support in CLI
+**Goal**: Add remaining protocols to CLI
 
-#### Task 1.1: Add OrbitQL to CLI
+#### Task 1.1: Add Cypher to CLI
 ```rust
 // Add to Protocol enum
 enum Protocol {
     Postgres,
     Mysql,
     Cql,
-    OrbitQL,  // NEW
+    Redis,
+    Orbitql,
+    Cypher,  // NEW
 }
 
-// Implement OrbitQL via HTTP REST
+// Implement Cypher via HTTP REST (Bolt endpoint)
 impl ReplState {
-    async fn execute_orbitql(&self, query: &str) -> Result<()> {
-        let url = format!("http://{}:{}/api/v1/sql", self.host, self.port);
-        // HTTP POST with JSON body
+    async fn execute_cypher(&self, query: &str) -> Result<()> {
+        let url = format!("http://{}:{}/db/neo4j/tx/commit", self.host, self.port);
+        // HTTP POST with Cypher query in JSON body
     }
 }
 ```
 
 **Effort**: Medium (2-3 days)
 
-#### Task 1.2: Add MySQL to CLI
+#### Task 1.2: Add AQL to CLI
 ```rust
-// Add mysql_async dependency
-// Implement MySqlConnection similar to desktop
-
-async fn connect_mysql(&mut self) -> Result<()> {
-    let opts = mysql_async::OptsBuilder::default()
-        .ip_or_hostname(Some(&self.host))
-        .tcp_port(self.port)
-        .user(Some(&self.username))
-        .pass(self.password.as_deref())
-        .db_name(Some(&self.database));
-
-    let pool = mysql_async::Pool::new(opts);
-    self.mysql_pool = Some(pool);
-    Ok(())
+// Add AQL support via ArangoDB REST API
+async fn execute_aql(&self, query: &str) -> Result<()> {
+    let url = format!("http://{}:{}/_api/cursor", self.host, self.port);
+    // HTTP POST with AQL query
 }
-```
-
-**Effort**: Medium (2-3 days)
-
-#### Task 1.3: Add Redis to CLI
-```rust
-// Add redis dependency
-// Implement Redis REPL mode
-
-async fn execute_redis(&self, command: &str) -> Result<()> {
-    let mut conn = self.redis_client.get_async_connection().await?;
-    let parts: Vec<&str> = command.split_whitespace().collect();
-    let cmd = parts[0];
-    let args = &parts[1..];
-
-    let result: redis::Value = redis::cmd(cmd)
-        .arg(args)
-        .query_async(&mut conn)
-        .await?;
-
-    self.format_redis_result(result)?;
-    Ok(())
-}
-```
-
-**Effort**: Low (1-2 days)
-
-#### Task 1.4: Add CQL to CLI
-```rust
-// Use cdrs-tokio or HTTP REST fallback
-// Implement CQL query execution
 ```
 
 **Effort**: Medium (2-3 days)
@@ -385,10 +388,24 @@ async fn test_cli_mysql_connection() {
 }
 
 #[tokio::test]
+async fn test_cli_redis_connection() {
+    let cli = Cli::parse_from(&["orbit", "--protocol", "redis"]);
+    let mut state = ReplState::new(&cli);
+    assert!(state.connect_redis().await.is_ok());
+}
+
+#[tokio::test]
 async fn test_cli_orbitql_via_rest() {
     let cli = Cli::parse_from(&["orbit", "--protocol", "orbitql"]);
     let mut state = ReplState::new(&cli);
     assert!(state.connect_orbitql().await.is_ok());
+}
+
+#[tokio::test]
+async fn test_cli_cql_via_rest() {
+    let cli = Cli::parse_from(&["orbit", "--protocol", "cql"]);
+    let mut state = ReplState::new(&cli);
+    assert!(state.connect_cql().await.is_ok());
 }
 ```
 
@@ -404,22 +421,33 @@ cargo test -p orbit-cli -- --test-threads=1
 
 ---
 
-## 7. Dependencies to Add
+## 7. Dependencies
 
 ### orbit/cli Cargo.toml
 
 ```toml
 [dependencies]
-# Existing
-tokio-postgres = "0.7"
+# Core
+tokio = { version = "1.48", features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Terminal UI
 rustyline = "14"
 syntect = "5"
+comfy-table = "7"
+owo-colors = "4"
+dirs = "5"
 
-# New for protocol support
-mysql_async = "0.34"           # MySQL protocol
-redis = { version = "0.25", features = ["tokio-comp"] }  # Redis
-reqwest = { version = "0.12", features = ["json"] }      # HTTP for OrbitQL/CQL
-cdrs-tokio = "8"               # Optional: native CQL
+# Protocol drivers
+tokio-postgres = "0.7"                                    # PostgreSQL
+mysql_async = "0.34"                                      # MySQL
+redis = { version = "0.25", features = ["tokio-comp"] }   # Redis
+reqwest = { version = "0.12", features = ["json"] }       # HTTP for OrbitQL/CQL
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 ```
 
 ---
@@ -428,4 +456,5 @@ cdrs-tokio = "8"               # Optional: native CQL
 
 | Date | Changes |
 |------|---------|
+| 2025-12-07 | Updated to reflect full CLI protocol implementation (PostgreSQL, MySQL, Redis, OrbitQL, CQL) |
 | 2025-12-07 | Initial specification |
