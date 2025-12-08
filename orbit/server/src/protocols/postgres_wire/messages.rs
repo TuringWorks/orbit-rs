@@ -44,6 +44,8 @@ pub enum BackendMessageType {
     DataRow = b'D' as isize,
     EmptyQueryResponse = b'I' as isize,
     ErrorResponse = b'E' as isize,
+    /// PostgreSQL 18 (protocol 3.2): Protocol version negotiation
+    NegotiateProtocolVersion = b'v' as isize,
     NoData = b'n' as isize,
     NoticeResponse = b'N' as isize,
     ParameterDescription = b't' as isize,
@@ -131,6 +133,14 @@ pub enum BackendMessage {
     EmptyQueryResponse,
     /// Error response
     ErrorResponse { fields: HashMap<u8, String> },
+    /// PostgreSQL 18 (protocol 3.2): Protocol version negotiation
+    /// Sent when client requests unsupported protocol version or options
+    NegotiateProtocolVersion {
+        /// Newest minor protocol version supported by server
+        newest_minor_version: i32,
+        /// List of protocol options not recognized
+        unrecognized_options: Vec<String>,
+    },
     /// No data
     NoData,
     /// Notice response
@@ -531,6 +541,29 @@ impl BackendMessage {
                 buf.put_i16(param_types.len() as i16);
                 for oid in param_types {
                     buf.put_i32(*oid);
+                }
+
+                let len = buf.len() - pos;
+                buf[pos..pos + 4].copy_from_slice(&(len as i32).to_be_bytes());
+            }
+            BackendMessage::NegotiateProtocolVersion {
+                newest_minor_version,
+                unrecognized_options,
+            } => {
+                // PostgreSQL 18 (protocol 3.2): NegotiateProtocolVersion message
+                buf.put_u8(b'v');
+                let pos = buf.len();
+                buf.put_i32(0); // Placeholder for length
+
+                // Newest minor protocol version this server supports
+                buf.put_i32(*newest_minor_version);
+
+                // Number of protocol options not recognized
+                buf.put_i32(unrecognized_options.len() as i32);
+
+                // List of unrecognized option names (null-terminated strings)
+                for option in unrecognized_options {
+                    write_cstring(buf, option);
                 }
 
                 let len = buf.len() - pos;

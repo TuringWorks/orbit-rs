@@ -175,10 +175,10 @@ CREATE TABLE salary_history (
 | AST types (without_overlaps field) | ✅ Done | Added to `TableConstraint::PrimaryKey` and `Unique` |
 | DDL parsing (PRIMARY KEY/UNIQUE) | ✅ Done | Parses `column WITHOUT OVERLAPS` syntax |
 | AST types (period_column for FK) | ✅ Done | Added to `TableConstraint::ForeignKey` |
-| DDL parsing (PERIOD in FK) | ❌ Pending | PERIOD keyword parsing not yet implemented |
+| DDL parsing (PERIOD in FK) | ✅ Done | Parses `PERIOD column` syntax in FK |
 | Overlap checking execution | ❌ Pending | Constraint validation at INSERT/UPDATE |
 | Range type operations | ⚠️ Partial | Basic TSTZRANGE support exists |
-| Unit tests | ✅ Done | 4 parsing tests, all passing |
+| Unit tests | ✅ Done | 7 parsing tests (4 WITHOUT OVERLAPS + 3 PERIOD FK) |
 
 **Implementation Location**:
 - Lexer: `orbit/server/src/protocols/postgres_wire/sql/lexer.rs`
@@ -288,9 +288,19 @@ PostgreSQL 18 introduces OAuth-based authentication.
 
 ### 3.3 Protocol Negotiation
 
-**Status**: ❌ Not Started
+**Status**: ✅ Implemented (Message Type)
 
 PostgreSQL 18 supports protocol version negotiation via `NegotiateProtocolVersion` message.
+
+**Implementation Status**:
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Message type definition | ✅ Done | `BackendMessage::NegotiateProtocolVersion` |
+| Message encoding | ✅ Done | Encodes newest_minor_version and unrecognized_options |
+| Protocol handler integration | ⚠️ Partial | Message available but not sent in startup flow |
+
+**Implementation Location**:
+- Message types: `orbit/server/src/protocols/postgres_wire/messages.rs`
 
 ---
 
@@ -408,6 +418,8 @@ cargo test -p orbit-server -- generated_column
 
 | Date | Changes |
 |------|---------|
+| 2025-12-07 | Added NegotiateProtocolVersion message type (protocol 3.2) |
+| 2025-12-07 | Added PERIOD keyword parsing for temporal foreign keys |
 | 2025-12-07 | Implemented variable-length cancellation keys (protocol 3.2 compatibility) |
 | 2025-12-07 | Added WITHOUT OVERLAPS temporal constraint parsing for PRIMARY KEY and UNIQUE |
 | 2025-12-07 | Added MERGE with RETURNING clause parsing (3 unit tests) |

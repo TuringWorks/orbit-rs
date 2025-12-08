@@ -3086,4 +3086,102 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_temporal_foreign_key_period_parsing() {
+        // Test FOREIGN KEY with PERIOD (PostgreSQL 18 temporal foreign key)
+        let sql = "CREATE TABLE salary_history (
+            employee_id INT,
+            valid_period TSTZRANGE,
+            salary NUMERIC(10, 2),
+            FOREIGN KEY (employee_id, PERIOD valid_period)
+                REFERENCES employee_positions (employee_id, PERIOD valid_period)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "FOREIGN KEY with PERIOD should parse: {:?}",
+            result
+        );
+
+        // Verify the constraint has period_column set
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let fk_constraint = stmt.constraints.iter().find(|c| {
+                matches!(c, TableConstraint::ForeignKey { .. })
+            });
+            assert!(fk_constraint.is_some(), "FOREIGN KEY constraint should exist");
+
+            if let Some(TableConstraint::ForeignKey {
+                period_column,
+                references_period,
+                columns,
+                references_columns,
+                ..
+            }) = fk_constraint {
+                assert!(period_column.is_some(), "period_column should be set");
+                assert_eq!(period_column.as_ref().unwrap(), "valid_period", "period_column should be valid_period");
+                assert!(references_period.is_some(), "references_period should be set");
+                assert_eq!(references_period.as_ref().unwrap(), "valid_period", "references_period should be valid_period");
+                assert_eq!(columns.len(), 2, "should have 2 columns");
+                assert_eq!(references_columns.len(), 2, "should have 2 referenced columns");
+            }
+        }
+    }
+
+    #[test]
+    fn test_temporal_foreign_key_period_only_local() {
+        // Test FOREIGN KEY with PERIOD only on local side
+        let sql = "CREATE TABLE events (
+            room_id INT,
+            event_period TSTZRANGE,
+            FOREIGN KEY (room_id, PERIOD event_period)
+                REFERENCES rooms (room_id, valid_range)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "FOREIGN KEY with local PERIOD should parse: {:?}",
+            result
+        );
+
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let fk_constraint = stmt.constraints.iter().find(|c| {
+                matches!(c, TableConstraint::ForeignKey { .. })
+            });
+            if let Some(TableConstraint::ForeignKey { period_column, references_period, .. }) = fk_constraint {
+                assert!(period_column.is_some(), "period_column should be set");
+                assert!(references_period.is_none(), "references_period should be None");
+            }
+        }
+    }
+
+    #[test]
+    fn test_standard_foreign_key_no_period() {
+        // Test standard FOREIGN KEY (without PERIOD) still works
+        let sql = "CREATE TABLE orders (
+            id INT,
+            customer_id INT,
+            FOREIGN KEY (customer_id) REFERENCES customers (id)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Standard FOREIGN KEY should still parse: {:?}",
+            result
+        );
+
+        // Verify period_column is None
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let fk_constraint = stmt.constraints.iter().find(|c| {
+                matches!(c, TableConstraint::ForeignKey { .. })
+            });
+            if let Some(TableConstraint::ForeignKey { period_column, references_period, .. }) = fk_constraint {
+                assert!(period_column.is_none(), "period_column should be None for standard FK");
+                assert!(references_period.is_none(), "references_period should be None for standard FK");
+            }
+        }
+    }
 }

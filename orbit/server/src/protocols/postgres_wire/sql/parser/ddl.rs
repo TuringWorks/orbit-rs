@@ -1351,18 +1351,28 @@ fn parse_table_constraint(parser: &mut SqlParser) -> ParseResult<TableConstraint
             parser.expect(Token::Key)?;
             parser.expect(Token::LeftParen)?;
 
-            // Parse column list
+            // Parse column list with PostgreSQL 18 PERIOD support
             let mut columns = Vec::new();
+            let mut period_column = None;
+
             while !parser.matches(&[Token::RightParen]) {
-                if let Some(Token::Identifier(col_name)) = &parser.current_token {
+                // PostgreSQL 18: Check for PERIOD keyword for temporal FK
+                if parser.matches(&[Token::Period]) {
+                    parser.advance()?;
+                    if let Some(Token::Identifier(col_name)) = &parser.current_token {
+                        period_column = Some(col_name.clone());
+                        columns.push(col_name.clone());
+                        parser.advance()?;
+                    }
+                } else if let Some(Token::Identifier(col_name)) = &parser.current_token {
                     columns.push(col_name.clone());
                     parser.advance()?;
+                } else {
+                    break;
+                }
 
-                    if parser.matches(&[Token::Comma]) {
-                        parser.advance()?;
-                    } else {
-                        break;
-                    }
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
                 } else {
                     break;
                 }
@@ -1374,19 +1384,29 @@ fn parse_table_constraint(parser: &mut SqlParser) -> ParseResult<TableConstraint
             // Parse referenced table
             let references_table = utilities::parse_table_name(parser)?;
 
-            // Parse referenced columns
+            // Parse referenced columns with PostgreSQL 18 PERIOD support
             parser.expect(Token::LeftParen)?;
             let mut references_columns = Vec::new();
+            let mut references_period = None;
+
             while !parser.matches(&[Token::RightParen]) {
-                if let Some(Token::Identifier(col_name)) = &parser.current_token {
+                // PostgreSQL 18: Check for PERIOD keyword in referenced columns
+                if parser.matches(&[Token::Period]) {
+                    parser.advance()?;
+                    if let Some(Token::Identifier(col_name)) = &parser.current_token {
+                        references_period = Some(col_name.clone());
+                        references_columns.push(col_name.clone());
+                        parser.advance()?;
+                    }
+                } else if let Some(Token::Identifier(col_name)) = &parser.current_token {
                     references_columns.push(col_name.clone());
                     parser.advance()?;
+                } else {
+                    break;
+                }
 
-                    if parser.matches(&[Token::Comma]) {
-                        parser.advance()?;
-                    } else {
-                        break;
-                    }
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
                 } else {
                     break;
                 }
@@ -1419,9 +1439,8 @@ fn parse_table_constraint(parser: &mut SqlParser) -> ParseResult<TableConstraint
                 references_columns,
                 on_delete,
                 on_update,
-                // PostgreSQL 18: PERIOD support (not yet parsed, placeholder)
-                period_column: None,
-                references_period: None,
+                period_column,
+                references_period,
             })
         }
         _ => Err(ParseError {
