@@ -116,7 +116,9 @@ pub enum BackendMessage {
     /// Authentication response
     Authentication(AuthenticationResponse),
     /// Backend key data for cancellation
-    BackendKeyData { process_id: i32, secret_key: i32 },
+    /// PostgreSQL 18 (protocol 3.2): supports variable-length keys (4-256 bytes)
+    /// For backward compatibility with protocol 3.0, use 4-byte keys by default
+    BackendKeyData { process_id: i32, secret_key: Vec<u8> },
     /// Bind complete
     BindComplete,
     /// Close complete
@@ -514,9 +516,12 @@ impl BackendMessage {
                 secret_key,
             } => {
                 buf.put_u8(b'K');
-                buf.put_i32(12);
+                // PostgreSQL 18 (protocol 3.2): Variable-length cancel keys
+                // Message length = 4 (length field) + 4 (process_id) + key_length
+                let msg_len = 4 + 4 + secret_key.len() as i32;
+                buf.put_i32(msg_len);
                 buf.put_i32(*process_id);
-                buf.put_i32(*secret_key);
+                buf.put_slice(secret_key);
             }
             BackendMessage::ParameterDescription { param_types } => {
                 buf.put_u8(b't');

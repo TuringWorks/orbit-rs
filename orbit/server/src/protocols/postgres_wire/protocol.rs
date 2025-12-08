@@ -33,7 +33,9 @@ pub struct PostgresWireProtocol {
     parameters: HashMap<String, String>,
     query_engine: Arc<QueryEngine>,
     process_id: i32,
-    secret_key: i32,
+    /// PostgreSQL 18 (protocol 3.2): Variable-length cancel key (4-256 bytes)
+    /// Default: 4 bytes for backward compatibility with protocol 3.0
+    secret_key: Vec<u8>,
     prepared_statements: HashMap<String, String>,
     portals: HashMap<String, (String, Vec<Option<bytes::Bytes>>)>,
 }
@@ -64,7 +66,7 @@ impl PostgresWireProtocol {
             parameters: HashMap::new(),
             query_engine: Arc::new(QueryEngine::new()),
             process_id: std::process::id() as i32,
-            secret_key: Self::random(),
+            secret_key: Self::random_secret_key(),
             prepared_statements: HashMap::new(),
             portals: HashMap::new(),
         }
@@ -80,7 +82,7 @@ impl PostgresWireProtocol {
             parameters: HashMap::new(),
             query_engine,
             process_id: std::process::id() as i32,
-            secret_key: Self::random(),
+            secret_key: Self::random_secret_key(),
             prepared_statements: HashMap::new(),
             portals: HashMap::new(),
         }
@@ -300,10 +302,10 @@ impl PostgresWireProtocol {
         }
         .encode(buf);
 
-        // Send backend key data
+        // Send backend key data (PostgreSQL 18: supports variable-length keys)
         BackendMessage::BackendKeyData {
             process_id: self.process_id,
-            secret_key: self.secret_key,
+            secret_key: self.secret_key.clone(),
         }
         .encode(buf);
 
@@ -601,7 +603,12 @@ impl Default for PostgresWireProtocol {
 // Add rand dependency for secret_key generation
 use rand::Rng;
 impl PostgresWireProtocol {
-    fn random() -> i32 {
-        rand::thread_rng().gen()
+    /// Generate a random cancel key
+    /// PostgreSQL 18 (protocol 3.2): Supports 4-256 bytes
+    /// Default: 4 bytes for backward compatibility with protocol 3.0 clients
+    fn random_secret_key() -> Vec<u8> {
+        let mut key = vec![0u8; 4]; // 4 bytes for compatibility
+        rand::thread_rng().fill(&mut key[..]);
+        key
     }
 }

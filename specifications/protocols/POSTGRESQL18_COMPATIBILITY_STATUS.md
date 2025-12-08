@@ -257,23 +257,21 @@ WHEN NOT MATCHED THEN
 
 ### 3.1 Variable-Length Cancellation Keys
 
-**Status**: ❌ Not Started
+**Status**: ✅ Implemented
 
-PostgreSQL 18 (protocol 3.2) allows cancellation keys of 4-256 bytes. OrbitRS currently uses fixed 4-byte keys.
+PostgreSQL 18 (protocol 3.2) allows cancellation keys of 4-256 bytes. OrbitRS now supports variable-length keys while maintaining backward compatibility with protocol 3.0 clients by default using 4-byte keys.
 
 ```rust
-// Current implementation (fixed 4 bytes)
+// OrbitRS implementation (variable length, compatible)
 pub struct BackendKeyData {
     pub process_id: i32,
-    pub secret_key: i32,  // Fixed 4 bytes
-}
-
-// PostgreSQL 18 (variable length)
-pub struct BackendKeyData {
-    pub process_id: i32,
-    pub secret_key: Vec<u8>,  // 4-256 bytes
+    pub secret_key: Vec<u8>,  // 4-256 bytes (default: 4 for compatibility)
 }
 ```
+
+**Implementation Location**:
+- Message types: `orbit/server/src/protocols/postgres_wire/messages.rs`
+- Protocol handler: `orbit/server/src/protocols/postgres_wire/protocol.rs`
 
 ### 3.2 OAuth Authentication
 
@@ -410,6 +408,7 @@ cargo test -p orbit-server -- generated_column
 
 | Date | Changes |
 |------|---------|
+| 2025-12-07 | Implemented variable-length cancellation keys (protocol 3.2 compatibility) |
 | 2025-12-07 | Added WITHOUT OVERLAPS temporal constraint parsing for PRIMARY KEY and UNIQUE |
 | 2025-12-07 | Added MERGE with RETURNING clause parsing (3 unit tests) |
 | 2025-12-07 | Implemented VIRTUAL generated columns (compute on SELECT) |
