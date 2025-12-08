@@ -35,6 +35,9 @@ pub fn token_to_identifier_name(token: &Token) -> Option<String> {
         Token::Sequence => Some("sequence".to_string()),
         Token::Key => Some("key".to_string()),
         Token::Add => Some("add".to_string()),
+        // PostgreSQL 18 - OLD/NEW table references in RETURNING clause
+        Token::Old => Some("OLD".to_string()),
+        Token::New => Some("NEW".to_string()),
         _ => None,
     }
 }

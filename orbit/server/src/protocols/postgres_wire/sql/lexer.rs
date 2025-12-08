@@ -72,6 +72,9 @@ pub enum Token {
     Values,
     Set,
     Where,
+    // PostgreSQL 18 - OLD/NEW table references in RETURNING
+    Old,
+    New,
     Group,
     By,
     Having,
@@ -401,6 +404,9 @@ impl Lexer {
             ("UPDATE", Token::Update),
             ("DELETE", Token::Delete),
             ("MERGE", Token::Merge),
+            // PostgreSQL 18 - OLD/NEW table references in RETURNING
+            ("OLD", Token::Old),
+            ("NEW", Token::New),
             ("COPY", Token::Copy),
             ("STDIN", Token::Stdin),
             ("STDOUT", Token::Stdout),

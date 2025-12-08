@@ -1182,13 +1182,13 @@ impl SqlExecutor {
                     }
                     SelectItem::Wildcard => {
                         // Return all columns in the row
-                        for (_col_name, value) in row {
+                        for value in row.values() {
                             result_row.push(Some(self.sql_value_to_string(value)));
                         }
                     }
                     SelectItem::QualifiedWildcard { .. } => {
                         // Return all columns in the row
-                        for (_col_name, value) in row {
+                        for value in row.values() {
                             result_row.push(Some(self.sql_value_to_string(value)));
                         }
                     }
@@ -1207,20 +1207,40 @@ impl SqlExecutor {
         expr: &Expression,
         row: &HashMap<String, SqlValue>,
     ) -> ProtocolResult<Option<String>> {
+        self.evaluate_returning_expr_with_old_new(expr, row, None)
+    }
+
+    /// Evaluate a single expression in RETURNING clause with OLD/NEW support (PostgreSQL 18)
+    /// For UPDATE: old_row contains pre-update values, row contains post-update values
+    /// For DELETE: old_row contains deleted values, row is same as old_row
+    /// For INSERT: old_row is None, row contains inserted values
+    fn evaluate_returning_expr_with_old_new(
+        &self,
+        expr: &Expression,
+        new_row: &HashMap<String, SqlValue>,
+        old_row: Option<&HashMap<String, SqlValue>>,
+    ) -> ProtocolResult<Option<String>> {
         match expr {
             Expression::Column(col_ref) => {
-                // Look up column value in the row
-                if let Some(value) = row.get(&col_ref.name) {
-                    Ok(Some(self.sql_value_to_string(value)))
-                } else {
-                    // Try case-insensitive match
-                    for (col_name, value) in row {
-                        if col_name.eq_ignore_ascii_case(&col_ref.name) {
-                            return Ok(Some(self.sql_value_to_string(value)));
+                // Check for OLD.column or NEW.column syntax (PostgreSQL 18)
+                if let Some(table_qualifier) = &col_ref.table {
+                    let qualifier_upper = table_qualifier.to_uppercase();
+                    if qualifier_upper == "OLD" {
+                        // Return value from old row
+                        if let Some(old) = old_row {
+                            return self.lookup_column_value(&col_ref.name, old);
+                        } else {
+                            // OLD not available (e.g., in INSERT)
+                            return Ok(None);
                         }
+                    } else if qualifier_upper == "NEW" {
+                        // Return value from new row
+                        return self.lookup_column_value(&col_ref.name, new_row);
                     }
-                    Ok(None)
                 }
+
+                // Default: look up in new_row (standard behavior)
+                self.lookup_column_value(&col_ref.name, new_row)
             }
             Expression::Literal(sql_val) => Ok(Some(self.sql_value_to_string(sql_val))),
             _ => {
@@ -1229,6 +1249,87 @@ impl SqlExecutor {
                 Ok(Some("expr".to_string()))
             }
         }
+    }
+
+    /// Helper to look up a column value in a row (case-insensitive)
+    fn lookup_column_value(
+        &self,
+        col_name: &str,
+        row: &HashMap<String, SqlValue>,
+    ) -> ProtocolResult<Option<String>> {
+        if let Some(value) = row.get(col_name) {
+            Ok(Some(self.sql_value_to_string(value)))
+        } else {
+            // Try case-insensitive match
+            for (name, value) in row {
+                if name.eq_ignore_ascii_case(col_name) {
+                    return Ok(Some(self.sql_value_to_string(value)));
+                }
+            }
+            Ok(None)
+        }
+    }
+
+    /// Evaluate RETURNING clause with OLD/NEW support (PostgreSQL 18)
+    /// Each entry in row_pairs is (old_row, new_row)
+    /// For INSERT: old_row is None
+    /// For UPDATE: old_row is pre-update, new_row is post-update
+    /// For DELETE: old_row is deleted row, new_row is same as old_row
+    fn evaluate_returning_clause_with_old_new(
+        &self,
+        returning_items: &[SelectItem],
+        row_pairs: &[(Option<HashMap<String, SqlValue>>, HashMap<String, SqlValue>)],
+        _table_schema: &TableSchema,
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let mut result_rows = Vec::new();
+
+        for (old_row, new_row) in row_pairs {
+            let mut result_row = Vec::new();
+
+            for item in returning_items {
+                match item {
+                    SelectItem::Expression { expr, .. } => {
+                        let value = self.evaluate_returning_expr_with_old_new(
+                            expr,
+                            new_row,
+                            old_row.as_ref(),
+                        )?;
+                        result_row.push(value);
+                    }
+                    SelectItem::Wildcard => {
+                        // Return all columns from new_row
+                        for value in new_row.values() {
+                            result_row.push(Some(self.sql_value_to_string(value)));
+                        }
+                    }
+                    SelectItem::QualifiedWildcard { qualifier } => {
+                        let qualifier_upper = qualifier.to_uppercase();
+                        if qualifier_upper == "OLD" {
+                            // OLD.* - return all columns from old row
+                            if let Some(old) = old_row {
+                                for value in old.values() {
+                                    result_row.push(Some(self.sql_value_to_string(value)));
+                                }
+                            }
+                        } else if qualifier_upper == "NEW" {
+                            // NEW.* - return all columns from new row
+                            for value in new_row.values() {
+                                result_row.push(Some(self.sql_value_to_string(value)));
+                            }
+                        } else {
+                            // Regular qualified wildcard
+                            for value in new_row.values() {
+                                result_row.push(Some(self.sql_value_to_string(value)));
+                            }
+                        }
+                    }
+                }
+            }
+
+            result_rows.push(result_row);
+        }
+
+        Ok(result_rows)
     }
 
     /// Convert SqlValue to string representation
@@ -1581,7 +1682,9 @@ impl SqlExecutor {
         drop(tables);
 
         let mut count = 0;
-        let mut updated_rows: Vec<HashMap<String, SqlValue>> = Vec::new();
+        // PostgreSQL 18: Track (old_row, new_row) pairs for OLD/NEW in RETURNING
+        let mut row_pairs: Vec<(Option<HashMap<String, SqlValue>>, HashMap<String, SqlValue>)> =
+            Vec::new();
         let mut table_data = self.table_data.write().await;
 
         if let Some(data) = table_data.get_mut(&table_name) {
@@ -1602,6 +1705,13 @@ impl SqlExecutor {
                 }
 
                 if should_update {
+                    // PostgreSQL 18: Save old row values before modification for OLD reference
+                    let old_row = if stmt.returning.is_some() {
+                        Some(row.clone())
+                    } else {
+                        None
+                    };
+
                     // Apply updates
                     for assignment in &stmt.set {
                         // Get the column name being updated
@@ -1648,20 +1758,23 @@ impl SqlExecutor {
                     // Recompute STORED generated column values after update
                     self.compute_generated_columns(&table_schema, row)?;
 
-                    // Collect updated row for RETURNING clause
+                    // Collect (old_row, new_row) pair for RETURNING clause with OLD/NEW support
                     if stmt.returning.is_some() {
-                        updated_rows.push(row.clone());
+                        row_pairs.push((old_row, row.clone()));
                     }
                     count += 1;
                 }
             }
         }
 
-        // Process RETURNING clause if present
+        // Process RETURNING clause if present (with PostgreSQL 18 OLD/NEW support)
         let (returning_columns, returning_rows) = if let Some(returning_items) = &stmt.returning {
             let columns = self.extract_returning_columns(returning_items);
-            let rows =
-                self.evaluate_returning_clause(returning_items, &updated_rows, &table_schema)?;
+            let rows = self.evaluate_returning_clause_with_old_new(
+                returning_items,
+                &row_pairs,
+                &table_schema,
+            )?;
             (Some(columns), Some(rows))
         } else {
             (None, None)
@@ -1686,7 +1799,10 @@ impl SqlExecutor {
         drop(tables);
 
         let mut count = 0;
-        let mut deleted_rows: Vec<HashMap<String, SqlValue>> = Vec::new();
+        // PostgreSQL 18: Track (old_row, new_row) pairs for OLD/NEW in RETURNING
+        // For DELETE: old_row is the deleted row, new_row is same as old_row
+        let mut row_pairs: Vec<(Option<HashMap<String, SqlValue>>, HashMap<String, SqlValue>)> =
+            Vec::new();
         let mut table_data = self.table_data.write().await;
 
         if let Some(data) = table_data.get_mut(&table_name) {
@@ -1709,9 +1825,9 @@ impl SqlExecutor {
                 }
 
                 if should_delete {
-                    // Collect the row before deletion for RETURNING clause
+                    // PostgreSQL 18: For DELETE, OLD is the deleted row, NEW is same as OLD
                     if stmt.returning.is_some() {
-                        deleted_rows.push(row.clone());
+                        row_pairs.push((Some(row.clone()), row.clone()));
                     }
                     indices_to_remove.push(i);
                 }
@@ -1724,11 +1840,14 @@ impl SqlExecutor {
             }
         }
 
-        // Process RETURNING clause if present
+        // Process RETURNING clause if present (with PostgreSQL 18 OLD/NEW support)
         let (returning_columns, returning_rows) = if let Some(returning_items) = &stmt.returning {
             let columns = self.extract_returning_columns(returning_items);
-            let rows =
-                self.evaluate_returning_clause(returning_items, &deleted_rows, &table_schema)?;
+            let rows = self.evaluate_returning_clause_with_old_new(
+                returning_items,
+                &row_pairs,
+                &table_schema,
+            )?;
             (Some(columns), Some(rows))
         } else {
             (None, None)

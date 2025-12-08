@@ -2856,4 +2856,71 @@ mod tests {
             result
         );
     }
+
+    // ===== PostgreSQL 18 OLD/NEW in RETURNING Tests =====
+
+    #[test]
+    fn test_old_new_in_update_returning_parsing() {
+        // Test PostgreSQL 18 OLD/NEW syntax in UPDATE RETURNING
+        let sql = "UPDATE users SET email = 'new@example.com' WHERE id = 1 RETURNING OLD.email AS previous_email, NEW.email AS current_email";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "UPDATE with OLD/NEW in RETURNING should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_old_wildcard_in_delete_returning_parsing() {
+        // Test PostgreSQL 18 OLD.* syntax in DELETE RETURNING
+        let sql = "DELETE FROM users WHERE id = 1 RETURNING OLD.*";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "DELETE with OLD.* in RETURNING should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_new_wildcard_in_update_returning_parsing() {
+        // Test PostgreSQL 18 NEW.* syntax in UPDATE RETURNING
+        let sql = "UPDATE users SET status = 'active' WHERE id = 1 RETURNING NEW.*";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "UPDATE with NEW.* in RETURNING should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_mixed_old_new_columns_in_returning_parsing() {
+        // Test mix of OLD and NEW columns with regular columns
+        let sql = "UPDATE products SET price = price * 1.1 WHERE id = 1 RETURNING id, OLD.price AS old_price, NEW.price AS new_price, name";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "UPDATE with mixed OLD/NEW/regular columns should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_old_new_case_insensitive_parsing() {
+        // Test that OLD/NEW are case-insensitive
+        let sql = "UPDATE users SET email = 'test' WHERE id = 1 RETURNING old.email, new.email";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "OLD/NEW should be case-insensitive: {:?}",
+            result
+        );
+    }
 }

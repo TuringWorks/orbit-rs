@@ -714,6 +714,9 @@ impl ExpressionParser {
             // Other keywords that can be used as identifiers
             Token::Sequence => Some("sequence".to_string()),
             Token::Key => Some("key".to_string()),
+            // PostgreSQL 18 - OLD/NEW table references in RETURNING clause
+            Token::Old => Some("OLD".to_string()),
+            Token::New => Some("NEW".to_string()),
             _ => None,
         }
     }

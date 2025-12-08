@@ -13,7 +13,7 @@ OrbitRS implements PostgreSQL wire protocol (v3.0) with extensive SQL support. T
 | Category | Implemented | Partial | Not Started | Total |
 |----------|-------------|---------|-------------|-------|
 | Wire Protocol | 15 | 2 | 1 | 18 |
-| SQL Syntax (PG18 New) | 3 | 1 | 3 | 7 |
+| SQL Syntax (PG18 New) | 4 | 1 | 2 | 7 |
 | Functions (PG18 New) | 6 | 0 | 0 | 6 |
 | Data Types | 25+ | 3 | 2 | 30+ |
 
@@ -178,7 +178,7 @@ CREATE TABLE salary_history (
 
 ### 2.4 OLD/NEW in RETURNING Clause
 
-**Status**: ❌ Not Started
+**Status**: ✅ Implemented
 
 ```sql
 -- PostgreSQL 18: Access OLD values in UPDATE RETURNING
@@ -195,10 +195,24 @@ WHERE id = 1
 RETURNING OLD.*;
 ```
 
-**Implementation Required**:
-1. Add `OLD` and `NEW` as special table references in RETURNING context
-2. Track pre-update values during UPDATE/DELETE execution
-3. Make OLD/NEW available in expression evaluation
+**Implementation Status**:
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Lexer tokens (OLD, NEW) | ✅ Done | Added to `lexer.rs` |
+| Parser support for OLD.column/NEW.column | ✅ Done | Added to expression parser and RETURNING clause parser |
+| Parser support for OLD.*/NEW.* | ✅ Done | QualifiedWildcard handling in RETURNING |
+| Executor tracking of old row values | ✅ Done | execute_update/execute_delete track pre-modification values |
+| evaluate_returning_expr_with_old_new | ✅ Done | Expression evaluation with OLD/NEW context |
+| evaluate_returning_clause_with_old_new | ✅ Done | Full RETURNING clause evaluation |
+| Unit tests | ✅ Done | 5 parsing tests |
+
+**Implementation Location**:
+- Lexer: `orbit/server/src/protocols/postgres_wire/sql/lexer.rs`
+- Expression Parser: `orbit/server/src/protocols/postgres_wire/sql/parser/expressions.rs`
+- DML Parser (RETURNING): `orbit/server/src/protocols/postgres_wire/sql/parser/dml.rs`
+- Utilities: `orbit/server/src/protocols/postgres_wire/sql/parser/utilities.rs`
+- Executor: `orbit/server/src/protocols/postgres_wire/sql/executor.rs`
+- Tests: `orbit/server/src/protocols/postgres_wire/sql/tests.rs`
 
 ---
 
@@ -222,7 +236,7 @@ WHEN NOT MATCHED THEN
 - ✅ Basic MERGE syntax parsed
 - ✅ WHEN MATCHED / WHEN NOT MATCHED
 - ❌ RETURNING clause in MERGE
-- ❌ OLD/NEW references
+- ✅ OLD/NEW references (implemented for UPDATE/DELETE, pending for MERGE)
 
 ---
 
@@ -337,7 +351,7 @@ PostgreSQL 18 supports protocol version negotiation via `NegotiateProtocolVersio
 | Task | Status | Effort |
 |------|--------|--------|
 | VIRTUAL generated columns | Planned | Medium |
-| OLD/NEW in RETURNING | Planned | Medium |
+| OLD/NEW in RETURNING | ✅ Done | - |
 | MERGE with RETURNING | Planned | Medium |
 
 ### Phase 3: PostgreSQL 18 Temporal (Lower Priority)
@@ -372,6 +386,7 @@ cargo test -p orbit-server -- generated_column
 | Wire protocol | ✅ | ✅ |
 | GENERATED columns (parsing) | ✅ | ❌ |
 | GENERATED columns (STORED exec) | ✅ | ❌ |
+| OLD/NEW in RETURNING | ✅ | ❌ |
 | Temporal constraints | ❌ | ❌ |
 
 ---
@@ -380,6 +395,7 @@ cargo test -p orbit-server -- generated_column
 
 | Date | Changes |
 |------|---------|
+| 2025-12-07 | Implemented OLD/NEW table references in UPDATE/DELETE RETURNING |
 | 2025-12-07 | Implemented STORED generated column execution (INSERT, UPDATE) |
 | 2025-12-07 | Added unit tests for GENERATED columns and UUID functions |
 | 2025-12-07 | Added GENERATED ALWAYS AS parsing (STORED and VIRTUAL) |

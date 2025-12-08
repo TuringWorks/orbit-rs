@@ -11,13 +11,13 @@ use super::expressions::ExpressionParser;
 use super::{utilities, ParseError, ParseResult, SqlParser};
 use crate::protocols::postgres_wire::sql::{
     ast::{
-        Assignment, AssignmentTarget, ConflictAction, ConflictTarget, CopyDirection, CopyFormat,
-        CopyHeaderOption, CopyOnError, CopyOption, CopySource, CopyStatement, CopyTarget,
-        DeleteStatement, DistinctClause, Expression, FromClause, InsertSource, InsertStatement,
-        JsonTable, JsonTableColumn, LimitClause, MergeAction, MergeInsert, MergeInsertValues,
-        MergeStatement, MergeUpdate, MergeWhenClause, NullsOrder, OnConflictClause, OrderByItem,
-        SelectItem, SelectStatement, SetOperation, SetOperator, SortDirection, Statement,
-        TableAlias, TraverseClause, TraverseDirection, UpdateStatement,
+        Assignment, AssignmentTarget, ColumnRef, ConflictAction, ConflictTarget, CopyDirection,
+        CopyFormat, CopyHeaderOption, CopyOnError, CopyOption, CopySource, CopyStatement,
+        CopyTarget, DeleteStatement, DistinctClause, Expression, FromClause, InsertSource,
+        InsertStatement, JsonTable, JsonTableColumn, LimitClause, MergeAction, MergeInsert,
+        MergeInsertValues, MergeStatement, MergeUpdate, MergeWhenClause, NullsOrder,
+        OnConflictClause, OrderByItem, SelectItem, SelectStatement, SetOperation, SetOperator,
+        SortDirection, Statement, TableAlias, TraverseClause, TraverseDirection, UpdateStatement,
     },
     lexer::Token,
     types::SqlValue,
@@ -1460,6 +1460,72 @@ fn parse_returning_clause(parser: &mut SqlParser) -> ParseResult<Vec<SelectItem>
         if parser.matches(&[Token::Multiply]) {
             parser.advance()?;
             items.push(SelectItem::Wildcard);
+        } else if parser.matches(&[Token::Old, Token::New]) {
+            // PostgreSQL 18 - OLD.* and NEW.* qualified wildcards
+            let qualifier = match &parser.current_token {
+                Some(Token::Old) => "OLD".to_string(),
+                Some(Token::New) => "NEW".to_string(),
+                _ => unreachable!(),
+            };
+            parser.advance()?;
+
+            // Check for qualified wildcard (OLD.* or NEW.*)
+            if parser.matches(&[Token::Dot]) {
+                parser.advance()?;
+                if parser.matches(&[Token::Multiply]) {
+                    parser.advance()?;
+                    items.push(SelectItem::QualifiedWildcard { qualifier });
+                } else {
+                    // OLD.column or NEW.column - parse as expression
+                    // Need to rewind and re-parse as a complete expression
+                    // Actually, we've already consumed OLD. and the column name is next
+                    if let Some(col_name) = parser
+                        .current_token
+                        .as_ref()
+                        .and_then(utilities::token_to_identifier_name)
+                    {
+                        parser.advance()?;
+                        let expr = Expression::Column(ColumnRef {
+                            table: Some(qualifier),
+                            name: col_name,
+                        });
+
+                        let alias = if parser.matches(&[Token::As]) {
+                            parser.advance()?;
+                            if let Some(Token::Identifier(alias_name)) = &parser.current_token {
+                                let alias = alias_name.clone();
+                                parser.advance()?;
+                                Some(alias)
+                            } else {
+                                None
+                            }
+                        } else if let Some(Token::Identifier(alias_name)) = &parser.current_token {
+                            // Allow alias without AS keyword
+                            let alias = alias_name.clone();
+                            parser.advance()?;
+                            Some(alias)
+                        } else {
+                            None
+                        };
+
+                        items.push(SelectItem::Expression { expr, alias });
+                    } else {
+                        return Err(ParseError {
+                            message: "Expected column name or * after OLD./NEW.".to_string(),
+                            position: parser.position,
+                            expected: vec!["column name".to_string(), "*".to_string()],
+                            found: parser.current_token.clone(),
+                        });
+                    }
+                }
+            } else {
+                // Just OLD or NEW without dot - treat as column reference
+                let expr = Expression::Column(ColumnRef {
+                    table: None,
+                    name: qualifier,
+                });
+                items.push(SelectItem::Expression { expr, alias: None });
+            }
         } else {
             let expr = utilities::parse_expression(parser)?;
 
