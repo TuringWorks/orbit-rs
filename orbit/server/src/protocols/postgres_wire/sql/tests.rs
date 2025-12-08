@@ -2964,4 +2964,126 @@ mod tests {
             result
         );
     }
+
+    // ===== PostgreSQL 18 Temporal Constraints Tests =====
+
+    #[test]
+    fn test_primary_key_without_overlaps_parsing() {
+        // Test PRIMARY KEY with WITHOUT OVERLAPS (PostgreSQL 18 temporal constraint)
+        let sql = "CREATE TABLE employee_positions (
+            employee_id INT,
+            department_id INT,
+            valid_period TSTZRANGE,
+            PRIMARY KEY (employee_id, valid_period WITHOUT OVERLAPS)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "PRIMARY KEY with WITHOUT OVERLAPS should parse: {:?}",
+            result
+        );
+
+        // Verify the constraint has without_overlaps set
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let pk_constraint = stmt.constraints.iter().find(|c| {
+                matches!(c, TableConstraint::PrimaryKey { .. })
+            });
+            assert!(pk_constraint.is_some(), "PRIMARY KEY constraint should exist");
+
+            if let Some(TableConstraint::PrimaryKey { without_overlaps, columns, .. }) = pk_constraint {
+                assert!(without_overlaps.is_some(), "without_overlaps should be set");
+                assert_eq!(without_overlaps.as_ref().unwrap(), "valid_period", "without_overlaps column should be valid_period");
+                assert_eq!(columns.len(), 2, "should have 2 columns");
+                assert!(columns.contains(&"employee_id".to_string()), "should contain employee_id");
+                assert!(columns.contains(&"valid_period".to_string()), "should contain valid_period");
+            }
+        }
+    }
+
+    #[test]
+    fn test_unique_without_overlaps_parsing() {
+        // Test UNIQUE with WITHOUT OVERLAPS (PostgreSQL 18 temporal constraint)
+        let sql = "CREATE TABLE room_bookings (
+            room_id INT,
+            booking_period TSTZRANGE,
+            UNIQUE (room_id, booking_period WITHOUT OVERLAPS)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "UNIQUE with WITHOUT OVERLAPS should parse: {:?}",
+            result
+        );
+
+        // Verify the constraint has without_overlaps set
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let unique_constraint = stmt.constraints.iter().find(|c| {
+                matches!(c, TableConstraint::Unique { .. })
+            });
+            assert!(unique_constraint.is_some(), "UNIQUE constraint should exist");
+
+            if let Some(TableConstraint::Unique { without_overlaps, columns, .. }) = unique_constraint {
+                assert!(without_overlaps.is_some(), "without_overlaps should be set");
+                assert_eq!(without_overlaps.as_ref().unwrap(), "booking_period", "without_overlaps column should be booking_period");
+                assert_eq!(columns.len(), 2, "should have 2 columns");
+            }
+        }
+    }
+
+    #[test]
+    fn test_named_constraint_without_overlaps_parsing() {
+        // Test named constraint with WITHOUT OVERLAPS
+        let sql = "CREATE TABLE schedules (
+            id INT,
+            valid_range TSTZRANGE,
+            CONSTRAINT pk_schedules PRIMARY KEY (id, valid_range WITHOUT OVERLAPS)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Named constraint with WITHOUT OVERLAPS should parse: {:?}",
+            result
+        );
+
+        // Verify constraint name is preserved
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let pk_constraint = stmt.constraints.iter().find(|c| {
+                matches!(c, TableConstraint::PrimaryKey { .. })
+            });
+            if let Some(TableConstraint::PrimaryKey { name, without_overlaps, .. }) = pk_constraint {
+                assert_eq!(name.as_ref().unwrap(), "pk_schedules", "constraint name should be pk_schedules");
+                assert!(without_overlaps.is_some(), "without_overlaps should be set");
+            }
+        }
+    }
+
+    #[test]
+    fn test_standard_primary_key_no_overlaps() {
+        // Test standard PRIMARY KEY (without WITHOUT OVERLAPS) still works
+        let sql = "CREATE TABLE users (
+            id INT,
+            name VARCHAR(100),
+            PRIMARY KEY (id)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Standard PRIMARY KEY should still parse: {:?}",
+            result
+        );
+
+        // Verify without_overlaps is None
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let pk_constraint = stmt.constraints.iter().find(|c| {
+                matches!(c, TableConstraint::PrimaryKey { .. })
+            });
+            if let Some(TableConstraint::PrimaryKey { without_overlaps, .. }) = pk_constraint {
+                assert!(without_overlaps.is_none(), "without_overlaps should be None for standard PK");
+            }
+        }
+    }
 }

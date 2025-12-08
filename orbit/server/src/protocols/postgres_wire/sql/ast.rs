@@ -377,10 +377,15 @@ pub enum TableConstraint {
     PrimaryKey {
         name: Option<String>,
         columns: Vec<String>,
+        /// PostgreSQL 18: WITHOUT OVERLAPS for temporal primary keys
+        /// The column name that should use WITHOUT OVERLAPS (must be a range type)
+        without_overlaps: Option<String>,
     },
     Unique {
         name: Option<String>,
         columns: Vec<String>,
+        /// PostgreSQL 18: WITHOUT OVERLAPS for temporal unique constraints
+        without_overlaps: Option<String>,
     },
     ForeignKey {
         name: Option<String>,
@@ -389,6 +394,9 @@ pub enum TableConstraint {
         references_columns: Vec<String>,
         on_delete: Option<ReferentialAction>,
         on_update: Option<ReferentialAction>,
+        /// PostgreSQL 18: PERIOD for temporal foreign keys
+        period_column: Option<String>,
+        references_period: Option<String>,
     },
     Check {
         name: Option<String>,

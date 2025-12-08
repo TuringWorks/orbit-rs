@@ -738,9 +738,14 @@ impl SqlExecutor {
                 TableConstraint::PrimaryKey {
                     name,
                     columns: cols,
+                    without_overlaps,
                 } => TableConstraintSchema {
                     name: name.clone(),
-                    constraint_type: "PRIMARY KEY".to_string(),
+                    constraint_type: if without_overlaps.is_some() {
+                        "PRIMARY KEY (TEMPORAL)".to_string()
+                    } else {
+                        "PRIMARY KEY".to_string()
+                    },
                     columns: cols.clone(),
                     referenced_table: None,
                     referenced_columns: None,
@@ -748,9 +753,14 @@ impl SqlExecutor {
                 TableConstraint::Unique {
                     name,
                     columns: cols,
+                    without_overlaps,
                 } => TableConstraintSchema {
                     name: name.clone(),
-                    constraint_type: "UNIQUE".to_string(),
+                    constraint_type: if without_overlaps.is_some() {
+                        "UNIQUE (TEMPORAL)".to_string()
+                    } else {
+                        "UNIQUE".to_string()
+                    },
                     columns: cols.clone(),
                     referenced_table: None,
                     referenced_columns: None,

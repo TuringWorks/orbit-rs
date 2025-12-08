@@ -147,7 +147,7 @@ CREATE TABLE products (
 
 ### 2.3 Temporal Constraints (WITHOUT OVERLAPS)
 
-**Status**: ❌ Not Started
+**Status**: ⚠️ Parsing Implemented, Execution Pending
 
 ```sql
 -- PostgreSQL 18 temporal PRIMARY KEY
@@ -168,11 +168,23 @@ CREATE TABLE salary_history (
 );
 ```
 
-**Implementation Required**:
-1. Add `WithoutOverlaps` flag to `TableConstraint::PrimaryKey`
-2. Add `PERIOD` keyword support for temporal foreign keys
-3. Implement overlap checking in constraint validation
-4. Range type support for temporal columns
+**Implementation Status**:
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Lexer tokens (WITHOUT, OVERLAPS, PERIOD) | ✅ Done | Added to `lexer.rs` |
+| AST types (without_overlaps field) | ✅ Done | Added to `TableConstraint::PrimaryKey` and `Unique` |
+| DDL parsing (PRIMARY KEY/UNIQUE) | ✅ Done | Parses `column WITHOUT OVERLAPS` syntax |
+| AST types (period_column for FK) | ✅ Done | Added to `TableConstraint::ForeignKey` |
+| DDL parsing (PERIOD in FK) | ❌ Pending | PERIOD keyword parsing not yet implemented |
+| Overlap checking execution | ❌ Pending | Constraint validation at INSERT/UPDATE |
+| Range type operations | ⚠️ Partial | Basic TSTZRANGE support exists |
+| Unit tests | ✅ Done | 4 parsing tests, all passing |
+
+**Implementation Location**:
+- Lexer: `orbit/server/src/protocols/postgres_wire/sql/lexer.rs`
+- AST: `orbit/server/src/protocols/postgres_wire/sql/ast.rs`
+- Parser: `orbit/server/src/protocols/postgres_wire/sql/parser/ddl.rs`
+- Tests: `orbit/server/src/protocols/postgres_wire/sql/tests.rs`
 
 ---
 
@@ -389,7 +401,8 @@ cargo test -p orbit-server -- generated_column
 | GENERATED columns (STORED exec) | ✅ | ❌ |
 | GENERATED columns (VIRTUAL exec) | ✅ | ❌ |
 | OLD/NEW in RETURNING | ✅ | ❌ |
-| Temporal constraints | ❌ | ❌ |
+| Temporal constraints (parsing) | ✅ | ❌ |
+| Temporal constraints (execution) | ❌ | ❌ |
 
 ---
 
@@ -397,6 +410,7 @@ cargo test -p orbit-server -- generated_column
 
 | Date | Changes |
 |------|---------|
+| 2025-12-07 | Added WITHOUT OVERLAPS temporal constraint parsing for PRIMARY KEY and UNIQUE |
 | 2025-12-07 | Added MERGE with RETURNING clause parsing (3 unit tests) |
 | 2025-12-07 | Implemented VIRTUAL generated columns (compute on SELECT) |
 | 2025-12-07 | Implemented OLD/NEW table references in UPDATE/DELETE RETURNING |

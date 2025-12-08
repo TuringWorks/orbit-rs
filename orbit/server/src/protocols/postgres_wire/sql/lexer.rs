@@ -59,6 +59,9 @@ pub enum Token {
     Always,
     Stored,
     Virtual,
+    // PostgreSQL 18 - Temporal constraints
+    Overlaps,
+    Period,
 
     // Keywords - DML
     Select,
@@ -577,6 +580,9 @@ impl Lexer {
             ("WITH", Token::With),
             ("WITHOUT", Token::Without),
             ("ZONE", Token::Zone),
+            // PostgreSQL 18 - Temporal constraints
+            ("OVERLAPS", Token::Overlaps),
+            ("PERIOD", Token::Period),
             // Vector Types
             ("VECTOR", Token::Vector),
             ("HALFVEC", Token::HalfVec),

@@ -1262,16 +1262,29 @@ fn parse_table_constraint(parser: &mut SqlParser) -> ParseResult<TableConstraint
             parser.expect(Token::LeftParen)?;
 
             let mut columns = Vec::new();
+            let mut without_overlaps = None;
+
             while !parser.matches(&[Token::RightParen]) {
                 if let Some(Token::Identifier(col_name)) = &parser.current_token {
-                    columns.push(col_name.clone());
+                    let col = col_name.clone();
                     parser.advance()?;
+
+                    // PostgreSQL 18: Check for WITHOUT OVERLAPS
+                    if parser.matches(&[Token::Without]) {
+                        parser.advance()?;
+                        parser.expect(Token::Overlaps)?;
+                        without_overlaps = Some(col.clone());
+                    }
+
+                    columns.push(col);
 
                     if parser.matches(&[Token::Comma]) {
                         parser.advance()?;
                     } else {
                         break;
                     }
+                } else {
+                    break;
                 }
             }
 
@@ -1280,6 +1293,7 @@ fn parse_table_constraint(parser: &mut SqlParser) -> ParseResult<TableConstraint
             Ok(TableConstraint::PrimaryKey {
                 name: constraint_name,
                 columns,
+                without_overlaps,
             })
         }
         Some(Token::Unique) => {
@@ -1287,16 +1301,29 @@ fn parse_table_constraint(parser: &mut SqlParser) -> ParseResult<TableConstraint
             parser.expect(Token::LeftParen)?;
 
             let mut columns = Vec::new();
+            let mut without_overlaps = None;
+
             while !parser.matches(&[Token::RightParen]) {
                 if let Some(Token::Identifier(col_name)) = &parser.current_token {
-                    columns.push(col_name.clone());
+                    let col = col_name.clone();
                     parser.advance()?;
+
+                    // PostgreSQL 18: Check for WITHOUT OVERLAPS
+                    if parser.matches(&[Token::Without]) {
+                        parser.advance()?;
+                        parser.expect(Token::Overlaps)?;
+                        without_overlaps = Some(col.clone());
+                    }
+
+                    columns.push(col);
 
                     if parser.matches(&[Token::Comma]) {
                         parser.advance()?;
                     } else {
                         break;
                     }
+                } else {
+                    break;
                 }
             }
 
@@ -1305,6 +1332,7 @@ fn parse_table_constraint(parser: &mut SqlParser) -> ParseResult<TableConstraint
             Ok(TableConstraint::Unique {
                 name: constraint_name,
                 columns,
+                without_overlaps,
             })
         }
         Some(Token::Check) => {
@@ -1391,6 +1419,9 @@ fn parse_table_constraint(parser: &mut SqlParser) -> ParseResult<TableConstraint
                 references_columns,
                 on_delete,
                 on_update,
+                // PostgreSQL 18: PERIOD support (not yet parsed, placeholder)
+                period_column: None,
+                references_period: None,
             })
         }
         _ => Err(ParseError {
