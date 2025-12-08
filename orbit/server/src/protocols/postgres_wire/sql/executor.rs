@@ -13,14 +13,16 @@ use crate::protocols::postgres_wire::sql::{
         ColumnConstraint, CommitStatement, CopyDirection, CopySource, CopyStatement, CopyTarget,
         CreateDatabaseStatement, CreateExtensionStatement, CreateFunctionStatement,
         CreateIndexStatement, CreateSchemaStatement, CreateSequenceStatement, CreateTableStatement,
-        CreateViewStatement, DeleteStatement, DescribeStatement, DropDatabaseStatement,
-        DropExtensionStatement, DropIndexStatement, DropSchemaStatement, DropSequenceStatement,
-        DropTableStatement, DropViewStatement, ExplainStatement, Expression, FromClause,
-        GeneratedColumnStorage, GrantStatement, IndexType, InsertSource, InsertStatement,
-        IsolationLevel, JoinCondition, JoinType, MergeStatement, Privilege,
-        ReleaseSavepointStatement, RevokeStatement, RollbackStatement, SavepointStatement,
-        SelectItem, SelectStatement, SetStatement, ShowStatement, ShowVariable, Statement,
-        TableConstraint, TableName, TruncateStatement, UpdateStatement, UseStatement,
+        CreateTriggerStatement, CreateViewStatement, DeleteStatement, DescribeStatement,
+        DropDatabaseStatement, DropExtensionStatement, DropIndexStatement, DropSchemaStatement,
+        DropSequenceStatement, DropTableStatement, DropTriggerStatement, DropViewStatement,
+        ExplainStatement, Expression,
+        FromClause, FunctionLanguage, FunctionVolatility, GeneratedColumnStorage, GrantStatement,
+        IndexType, InsertSource, InsertStatement, IsolationLevel, JoinCondition, JoinType,
+        MergeStatement, ParameterMode, Privilege, ReleaseSavepointStatement, RevokeStatement,
+        RollbackStatement, SavepointStatement, SelectItem, SelectStatement, SetStatement,
+        ShowStatement, ShowVariable, Statement, TableConstraint, TableName, TriggerEvent,
+        TriggerForEach, TriggerTiming, TruncateStatement, UpdateStatement, UseStatement,
     },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator, SequenceAccessor},
     parser::SqlParser,
@@ -266,6 +268,93 @@ pub struct SequenceMetadata {
     pub is_called: bool,
 }
 
+/// Stored function definition
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StoredFunction {
+    pub name: String,
+    pub schema: Option<String>,
+    pub parameters: Vec<FunctionParameterDef>,
+    pub return_type: Option<String>,
+    pub language: FunctionLanguageType,
+    pub body: String,
+    pub volatility: FunctionVolatilityType,
+    pub or_replace: bool,
+}
+
+/// Function parameter definition (serializable)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FunctionParameterDef {
+    pub name: Option<String>,
+    pub data_type: String,
+    pub mode: ParameterModeType,
+    pub default_value: Option<String>,
+}
+
+/// Function language type (serializable)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum FunctionLanguageType {
+    Sql,
+    PlPgSql,
+    Internal,
+}
+
+/// Function volatility type (serializable)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum FunctionVolatilityType {
+    Immutable,
+    Stable,
+    Volatile,
+}
+
+/// Parameter mode type (serializable)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ParameterModeType {
+    In,
+    Out,
+    InOut,
+    Variadic,
+}
+
+/// Stored trigger definition
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StoredTrigger {
+    pub name: String,
+    pub table_name: String,
+    pub table_schema: Option<String>,
+    pub timing: TriggerTimingType,
+    pub events: Vec<TriggerEventType>,
+    pub for_each: TriggerForEachType,
+    pub when_clause: Option<String>,
+    pub function_name: String,
+    pub function_schema: Option<String>,
+    pub function_args: Vec<String>,
+    pub enabled: bool,
+}
+
+/// Trigger timing type (serializable)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum TriggerTimingType {
+    Before,
+    After,
+    InsteadOf,
+}
+
+/// Trigger event type (serializable)
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum TriggerEventType {
+    Insert,
+    Update(Option<Vec<String>>),
+    Delete,
+    Truncate,
+}
+
+/// Trigger for each type (serializable)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum TriggerForEachType {
+    Row,
+    Statement,
+}
+
 /// Sequence accessor implementation that directly wraps the executor's sequence storage
 /// This allows expression evaluators to call nextval, currval, setval, lastval
 /// with real-time updates to the underlying storage.
@@ -485,6 +574,12 @@ pub struct SqlExecutor {
     /// Sequences use std::sync::RwLock for synchronous access in expression evaluation
     sequences: Arc<std::sync::RwLock<HashMap<String, SequenceMetadata>>>,
 
+    /// Stored functions (CREATE FUNCTION)
+    functions: Arc<RwLock<HashMap<String, StoredFunction>>>,
+
+    /// Stored triggers (CREATE TRIGGER)
+    triggers: Arc<RwLock<HashMap<String, StoredTrigger>>>,
+
     // Data storage (in-memory for demonstration)
     // In production, this would integrate with OrbitClient
     table_data: TableData,
@@ -616,6 +711,8 @@ impl SqlExecutor {
             schemas: Arc::new(RwLock::new(HashMap::new())),
             extensions: Arc::new(RwLock::new(HashMap::new())),
             sequences: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            functions: Arc::new(RwLock::new(HashMap::new())),
+            triggers: Arc::new(RwLock::new(HashMap::new())),
             table_data: Arc::new(RwLock::new(HashMap::new())),
             current_transaction: Arc::new(RwLock::new(None)),
             transaction_log: Arc::new(RwLock::new(Vec::new())),
@@ -723,15 +820,9 @@ impl SqlExecutor {
             // COPY operations
             Statement::Copy(stmt) => self.execute_copy(stmt).await,
 
-            // Trigger operations (no-op for now, just return success)
-            Statement::CreateTrigger(_stmt) => Ok(ExecutionResult::Show {
-                variable: "CREATE TRIGGER".to_string(),
-                value: "OK".to_string(),
-            }),
-            Statement::DropTrigger(_stmt) => Ok(ExecutionResult::Show {
-                variable: "DROP TRIGGER".to_string(),
-                value: "OK".to_string(),
-            }),
+            // Trigger operations
+            Statement::CreateTrigger(stmt) => self.execute_create_trigger(stmt).await,
+            Statement::DropTrigger(stmt) => self.execute_drop_trigger(stmt).await,
 
             // Comment operations (no-op for now, just return success)
             Statement::CommentOn(_stmt) => Ok(ExecutionResult::Show {
@@ -751,14 +842,247 @@ impl SqlExecutor {
 
     async fn execute_create_function(
         &self,
-        _stmt: CreateFunctionStatement,
+        stmt: CreateFunctionStatement,
     ) -> ProtocolResult<ExecutionResult> {
-        // TODO: Implement function creation logic
-        // For now, just return success to satisfy the parser test
+        // Get function name and schema from FunctionName enum
+        let (function_name, schema) = match &stmt.name {
+            crate::protocols::postgres_wire::sql::ast::FunctionName::Simple(name) => {
+                (name.clone(), None)
+            }
+            crate::protocols::postgres_wire::sql::ast::FunctionName::Qualified { schema, name } => {
+                (name.clone(), Some(schema.clone()))
+            }
+        };
+
+        // Generate a unique key for the function (name + parameter types for overloading)
+        let param_types: Vec<String> = stmt
+            .args
+            .as_ref()
+            .map(|args| {
+                args.iter()
+                    .map(|p| format!("{:?}", p.data_type))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let function_key = format!("{}({})", function_name, param_types.join(","));
+
+        // Check if function already exists (unless OR REPLACE)
+        let mut functions = self.functions.write().await;
+        if functions.contains_key(&function_key) && !stmt.or_replace {
+            return Err(ProtocolError::already_exists("Function", &function_name));
+        }
+
+        // Convert parameters
+        let parameters: Vec<FunctionParameterDef> = stmt
+            .args
+            .as_ref()
+            .map(|args| {
+                args.iter()
+                    .map(|p| FunctionParameterDef {
+                        name: p.name.clone(),
+                        data_type: format!("{:?}", p.data_type),
+                        mode: p.mode.as_ref().map(|m| match m {
+                            ParameterMode::In => ParameterModeType::In,
+                            ParameterMode::Out => ParameterModeType::Out,
+                            ParameterMode::InOut => ParameterModeType::InOut,
+                            ParameterMode::Variadic => ParameterModeType::Variadic,
+                        }).unwrap_or(ParameterModeType::In),
+                        default_value: p.default.as_ref().map(|e| format!("{:?}", e)),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Convert language
+        let language = stmt.language.as_ref().map(|l| match l {
+            FunctionLanguage::Sql => FunctionLanguageType::Sql,
+            FunctionLanguage::PlPgSql => FunctionLanguageType::PlPgSql,
+            FunctionLanguage::Other(_) => FunctionLanguageType::Internal,
+        }).unwrap_or(FunctionLanguageType::Sql);
+
+        // Convert volatility
+        let volatility = stmt.volatility.as_ref().map(|v| match v {
+            FunctionVolatility::Immutable => FunctionVolatilityType::Immutable,
+            FunctionVolatility::Stable => FunctionVolatilityType::Stable,
+            FunctionVolatility::Volatile => FunctionVolatilityType::Volatile,
+        }).unwrap_or(FunctionVolatilityType::Volatile);
+
+        // Create stored function
+        let stored_function = StoredFunction {
+            name: function_name.clone(),
+            schema,
+            parameters,
+            return_type: stmt.return_type.map(|t| format!("{:?}", t)),
+            language,
+            body: stmt.body.clone(),
+            volatility,
+            or_replace: stmt.or_replace,
+        };
+
+        functions.insert(function_key, stored_function);
+
         Ok(ExecutionResult::Show {
             variable: "CREATE FUNCTION".to_string(),
-            value: "OK".to_string(),
+            value: function_name,
         })
+    }
+
+    async fn execute_create_trigger(
+        &self,
+        stmt: CreateTriggerStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let trigger_name = stmt.name.clone();
+        let table_name = stmt.table.name.clone();
+        let table_schema = stmt.table.schema.clone();
+
+        // Generate unique key for trigger (trigger_name + table_name)
+        let trigger_key = format!("{}_{}", trigger_name, table_name);
+
+        // Check if trigger already exists (unless OR REPLACE)
+        let mut triggers = self.triggers.write().await;
+        if triggers.contains_key(&trigger_key) && !stmt.or_replace {
+            return Err(ProtocolError::already_exists("Trigger", &trigger_name));
+        }
+
+        // Convert timing
+        let timing = match stmt.timing {
+            TriggerTiming::Before => TriggerTimingType::Before,
+            TriggerTiming::After => TriggerTimingType::After,
+            TriggerTiming::InsteadOf => TriggerTimingType::InsteadOf,
+        };
+
+        // Convert events
+        let events: Vec<TriggerEventType> = stmt
+            .events
+            .iter()
+            .map(|e| match e {
+                TriggerEvent::Insert => TriggerEventType::Insert,
+                TriggerEvent::Update(cols) => TriggerEventType::Update(cols.clone()),
+                TriggerEvent::Delete => TriggerEventType::Delete,
+                TriggerEvent::Truncate => TriggerEventType::Truncate,
+            })
+            .collect();
+
+        // Convert for_each
+        let for_each = match stmt.for_each {
+            TriggerForEach::Row => TriggerForEachType::Row,
+            TriggerForEach::Statement => TriggerForEachType::Statement,
+        };
+
+        // Get function name from FunctionName enum
+        let (function_name, function_schema) = match &stmt.function {
+            crate::protocols::postgres_wire::sql::ast::FunctionName::Simple(name) => {
+                (name.clone(), None)
+            }
+            crate::protocols::postgres_wire::sql::ast::FunctionName::Qualified { schema, name } => {
+                (name.clone(), Some(schema.clone()))
+            }
+        };
+
+        // Convert function args to strings
+        let function_args: Vec<String> = stmt
+            .function_args
+            .iter()
+            .map(|e| format!("{:?}", e))
+            .collect();
+
+        // Create stored trigger
+        let stored_trigger = StoredTrigger {
+            name: trigger_name.clone(),
+            table_name,
+            table_schema,
+            timing,
+            events,
+            for_each,
+            when_clause: stmt.when_clause.map(|e| format!("{:?}", e)),
+            function_name,
+            function_schema,
+            function_args,
+            enabled: true,
+        };
+
+        triggers.insert(trigger_key, stored_trigger);
+
+        Ok(ExecutionResult::Show {
+            variable: "CREATE TRIGGER".to_string(),
+            value: trigger_name,
+        })
+    }
+
+    async fn execute_drop_trigger(
+        &self,
+        stmt: DropTriggerStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let trigger_name = stmt.name.clone();
+        let table_name = stmt.table.name.clone();
+        let trigger_key = format!("{}_{}", trigger_name, table_name);
+
+        let mut triggers = self.triggers.write().await;
+
+        if triggers.remove(&trigger_key).is_none() && !stmt.if_exists {
+            return Err(ProtocolError::not_found("Trigger", &trigger_name));
+        }
+
+        Ok(ExecutionResult::Show {
+            variable: "DROP TRIGGER".to_string(),
+            value: trigger_name,
+        })
+    }
+
+    /// Get triggers for a specific table (used during DML operations)
+    #[allow(dead_code)]
+    async fn get_triggers_for_table(
+        &self,
+        table_name: &str,
+        event: &TriggerEventType,
+        timing: TriggerTimingType,
+    ) -> Vec<StoredTrigger> {
+        let triggers = self.triggers.read().await;
+        triggers
+            .values()
+            .filter(|t| {
+                t.table_name == table_name
+                    && t.timing == timing
+                    && t.enabled
+                    && t.events.iter().any(|e| {
+                        match (e, event) {
+                            (TriggerEventType::Insert, TriggerEventType::Insert) => true,
+                            (TriggerEventType::Delete, TriggerEventType::Delete) => true,
+                            (TriggerEventType::Truncate, TriggerEventType::Truncate) => true,
+                            (TriggerEventType::Update(_), TriggerEventType::Update(_)) => true,
+                            _ => false,
+                        }
+                    })
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Get a stored function by name (used for function calls)
+    #[allow(dead_code)]
+    pub async fn get_function(&self, name: &str) -> Option<StoredFunction> {
+        let functions = self.functions.read().await;
+        // Try exact match first, then try without parameter types
+        functions.get(name).cloned().or_else(|| {
+            functions
+                .iter()
+                .find(|(k, _)| k.starts_with(&format!("{}(", name)))
+                .map(|(_, v)| v.clone())
+        })
+    }
+
+    /// List all stored functions
+    #[allow(dead_code)]
+    pub async fn list_functions(&self) -> Vec<StoredFunction> {
+        let functions = self.functions.read().await;
+        functions.values().cloned().collect()
+    }
+
+    /// List all stored triggers
+    #[allow(dead_code)]
+    pub async fn list_triggers(&self) -> Vec<StoredTrigger> {
+        let triggers = self.triggers.read().await;
+        triggers.values().cloned().collect()
     }
 
     // DDL Implementation methods

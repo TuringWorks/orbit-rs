@@ -3749,4 +3749,173 @@ mod tests {
             assert_eq!(rows[0][0], Some("100".to_string()), "After RESTART, nextval should return 100");
         }
     }
+
+    // ============================================================================
+    // CREATE FUNCTION Tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_create_function_simple() {
+        let mut engine = SqlEngine::new();
+
+        // Create a simple SQL function
+        let result = engine.execute(
+            "CREATE FUNCTION add_one(x integer) RETURNS integer AS $$ SELECT x + 1 $$ LANGUAGE SQL"
+        ).await;
+        assert!(result.is_ok(), "Failed to create simple function: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_function_different_name() {
+        let mut engine = SqlEngine::new();
+
+        // Create another SQL function with a different name
+        let result = engine.execute(
+            "CREATE FUNCTION subtract_one(val integer) RETURNS integer AS $$ SELECT val - 1 $$ LANGUAGE SQL"
+        ).await;
+        assert!(result.is_ok(), "Failed to create function: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_function_with_volatility() {
+        let mut engine = SqlEngine::new();
+
+        // Create an immutable function
+        let result = engine.execute(
+            "CREATE FUNCTION double_it(x integer) RETURNS integer AS $$ SELECT x * 2 $$ LANGUAGE SQL IMMUTABLE"
+        ).await;
+        assert!(result.is_ok(), "Failed to create immutable function: {:?}", result);
+
+        // Create a stable function
+        let result = engine.execute(
+            "CREATE FUNCTION get_current_value() RETURNS integer AS $$ SELECT 42 $$ LANGUAGE SQL STABLE"
+        ).await;
+        assert!(result.is_ok(), "Failed to create stable function: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_or_replace_function() {
+        let mut engine = SqlEngine::new();
+
+        // Create a function
+        let result = engine.execute(
+            "CREATE FUNCTION replaceable(x integer) RETURNS integer AS $$ SELECT x $$ LANGUAGE SQL"
+        ).await;
+        assert!(result.is_ok(), "Failed to create function: {:?}", result);
+
+        // Replace the function
+        let result = engine.execute(
+            "CREATE OR REPLACE FUNCTION replaceable(x integer) RETURNS integer AS $$ SELECT x * 2 $$ LANGUAGE SQL"
+        ).await;
+        assert!(result.is_ok(), "Failed to replace function: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_function_multiple_parameters() {
+        let mut engine = SqlEngine::new();
+
+        // Create a function with multiple parameters
+        let result = engine.execute(
+            "CREATE FUNCTION add_three(a integer, b integer, c integer) RETURNS integer AS $$ SELECT a + b + c $$ LANGUAGE SQL"
+        ).await;
+        assert!(result.is_ok(), "Failed to create multi-param function: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_function_no_return() {
+        let mut engine = SqlEngine::new();
+
+        // Create a void function (procedure-like)
+        let result = engine.execute(
+            "CREATE FUNCTION do_nothing() RETURNS void AS $$ SELECT 1 $$ LANGUAGE SQL"
+        ).await;
+        assert!(result.is_ok(), "Failed to create void function: {:?}", result);
+    }
+
+    // ============================================================================
+    // CREATE TRIGGER Tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_create_trigger_before_insert() {
+        let mut engine = SqlEngine::new();
+
+        // Create the table
+        engine.execute("CREATE TABLE audit_test (id INTEGER PRIMARY KEY, name TEXT)").await.unwrap();
+
+        // Create a BEFORE INSERT trigger (function doesn't need to exist for storage test)
+        let result = engine.execute(
+            "CREATE TRIGGER audit_trigger BEFORE INSERT ON audit_test FOR EACH ROW EXECUTE FUNCTION audit_insert()"
+        ).await;
+        assert!(result.is_ok(), "Failed to create BEFORE INSERT trigger: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_trigger_after_update() {
+        let mut engine = SqlEngine::new();
+
+        // Create the table
+        engine.execute("CREATE TABLE update_test (id INTEGER PRIMARY KEY, value INTEGER)").await.unwrap();
+
+        // Create an AFTER UPDATE trigger
+        let result = engine.execute(
+            "CREATE TRIGGER update_trigger AFTER UPDATE ON update_test FOR EACH ROW EXECUTE FUNCTION log_update()"
+        ).await;
+        assert!(result.is_ok(), "Failed to create AFTER UPDATE trigger: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_trigger_for_each_statement() {
+        let mut engine = SqlEngine::new();
+
+        // Create the table
+        engine.execute("CREATE TABLE stmt_test (id INTEGER PRIMARY KEY)").await.unwrap();
+
+        // Create a FOR EACH STATEMENT trigger
+        let result = engine.execute(
+            "CREATE TRIGGER stmt_trigger AFTER INSERT ON stmt_test FOR EACH STATEMENT EXECUTE FUNCTION statement_trigger_fn()"
+        ).await;
+        assert!(result.is_ok(), "Failed to create FOR EACH STATEMENT trigger: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_drop_trigger() {
+        let mut engine = SqlEngine::new();
+
+        // Create table and trigger
+        engine.execute("CREATE TABLE drop_trigger_test (id INTEGER PRIMARY KEY)").await.unwrap();
+        engine.execute(
+            "CREATE TRIGGER to_drop BEFORE INSERT ON drop_trigger_test FOR EACH ROW EXECUTE FUNCTION drop_trigger_fn()"
+        ).await.unwrap();
+
+        // Drop the trigger
+        let result = engine.execute("DROP TRIGGER to_drop ON drop_trigger_test").await;
+        assert!(result.is_ok(), "Failed to drop trigger: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_drop_trigger_if_exists() {
+        let mut engine = SqlEngine::new();
+
+        // Create table
+        engine.execute("CREATE TABLE if_exists_test (id INTEGER PRIMARY KEY)").await.unwrap();
+
+        // Try to drop a non-existent trigger with IF EXISTS (should succeed)
+        let result = engine.execute("DROP TRIGGER IF EXISTS nonexistent ON if_exists_test").await;
+        assert!(result.is_ok(), "DROP TRIGGER IF EXISTS should succeed for non-existent trigger: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_trigger_multiple_events() {
+        let mut engine = SqlEngine::new();
+
+        // Create table
+        engine.execute("CREATE TABLE multi_event_test (id INTEGER PRIMARY KEY, name TEXT)").await.unwrap();
+
+        // Create a trigger for multiple events
+        let result = engine.execute(
+            "CREATE TRIGGER multi_trigger BEFORE INSERT OR UPDATE OR DELETE ON multi_event_test FOR EACH ROW EXECUTE FUNCTION multi_event_fn()"
+        ).await;
+        assert!(result.is_ok(), "Failed to create multi-event trigger: {:?}", result);
+    }
 }

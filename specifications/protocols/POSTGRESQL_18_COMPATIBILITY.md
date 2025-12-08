@@ -44,9 +44,10 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | CREATE MATERIALIZED VIEW | ✅ | Basic support |
 | CREATE SCHEMA | ✅ | With authorization |
 | CREATE EXTENSION | ✅ | Stub implementation |
-| CREATE FUNCTION | 🔶 | PL/pgSQL parsing, no execution |
+| CREATE FUNCTION | ✅ | SQL/PL/pgSQL parsing and storage, no execution |
 | CREATE PROCEDURE | 🔶 | Parsing only |
-| CREATE TRIGGER | 🔶 | Parsing only, no execution |
+| CREATE TRIGGER | ✅ | Parsing and storage, no execution |
+| DROP TRIGGER | ✅ | Full support with IF EXISTS |
 | CREATE SEQUENCE | ✅ | Full support with START, INCREMENT, MINVALUE, MAXVALUE, CYCLE |
 | CREATE TYPE | ❌ | Enum/composite types |
 | CREATE DOMAIN | ❌ | Domain types |

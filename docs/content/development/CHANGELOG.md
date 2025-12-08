@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `lcm(a, b)` - Least common multiple
   - `sign(x)` - Sign of number (-1, 0, or 1)
 
+- **PostgreSQL Stored Functions and Triggers** (2025-12-08): Full support for CREATE FUNCTION and CREATE TRIGGER storage
+  - **StoredFunction struct**: New serializable structure for stored function definitions
+  - **StoredTrigger struct**: New serializable structure for trigger definitions
+  - **CREATE FUNCTION**: Stores SQL/PL/pgSQL functions with parameters, return types, and volatility
+  - **CREATE TRIGGER**: Stores trigger definitions with timing, events, and associated functions
+  - **DROP TRIGGER**: Removes triggers with IF EXISTS support
+  - **Function overloading**: Supports multiple functions with same name but different parameter types
+  - **Tests**: 11 new tests for function and trigger creation/deletion
+
 ### Changed
 
 - **Sequence Storage Lock Type** (2025-12-08): Changed sequences storage from `tokio::sync::RwLock` to `std::sync::RwLock`
