@@ -412,102 +412,105 @@ print(response.json())
 
 ## 🏭 Industry Examples
 
-Complete end-to-end industry examples using multiple protocols:
+Complete end-to-end industry examples using multiple protocols - **17 industries covered**:
 
 ### Banking
 - Account management and transactions
 - **ML-powered fraud detection** (Random Forest, 95% accuracy)
 - Credit scoring (XGBoost, 92% accuracy)
 - KYC/AML compliance and regulatory reporting
-- Loan origination and servicing
-- OrbitQL analytics queries
 - **[View Banking Examples](banking/)**
 
 ### Financial Markets
 - Trading and order execution (<1ms latency)
-- Market data analytics (Cassandra time-series)
 - **ML price prediction** (LSTM) and trading signals (RL)
 - Risk management and VaR calculation
-- Regulatory compliance (MiFID II, Dodd-Frank)
 - **[View Financial Markets Examples](financial-markets/)**
 
+### Healthcare & Medical Records
+- Electronic Health Records (EHR) with HIPAA compliance
+- **ML diagnosis prediction** (89% accuracy) and readmission risk
+- Patient management and prescriptions
+- **[View Healthcare Examples](healthcare/)**
+
+### Logistics & Supply Chain
+- Warehouse and transportation management
+- **ML demand forecasting** (Prophet, 92% accuracy)
+- Route optimization and real-time tracking
+- **[View Logistics Examples](logistics/)**
+
+### Energy & Utilities
+- Smart grid management (10M+ meters, 1B+ readings/day)
+- **ML load forecasting** (LSTM, 94% accuracy)
+- Renewable energy and outage prediction
+- **[View Energy Examples](energy/)**
+
+### Media & Entertainment
+- Streaming platform and content delivery
+- **ML recommendations** (91% accuracy) and churn prediction
+- Ad targeting and content moderation
+- **[View Media Examples](media/)**
+
+### Education & EdTech
+- Learning Management System (LMS)
+- **ML performance prediction** (87% accuracy) and dropout risk
+- Personalized learning paths
+- **[View Education Examples](education/)**
+
+### Real Estate & PropTech
+- Property management and smart buildings
+- **ML property valuation** (92% accuracy)
+- Market analytics and tenant screening
+- **[View Real Estate Examples](real-estate/)**
+
+### Agriculture & AgTech
+- Precision farming and crop monitoring
+- **ML yield prediction** (89% accuracy) and disease detection (92%)
+- IoT sensors (1M+) and supply chain
+- **[View Agriculture Examples](agriculture/)**
+
 ### Defense & Aerospace
-- Asset tracking and logistics
-- Mission planning and operations
-- Intelligence analysis (Neo4j graphs)
+- Asset tracking and mission planning
 - **ML threat detection** and predictive maintenance
-- Security: RBAC, data classification, audit trails
+- Security: RBAC, data classification
 - **[View Defense Examples](defense/)**
 
 ### Space Operations
-- Satellite tracking and telemetry (<10ms ingestion)
-- Mission control operations
-- Orbital mechanics and collision prediction
-- **ML anomaly detection**
-- Space debris tracking
+- Satellite tracking and telemetry (<10ms)
+- **ML anomaly detection** and collision prediction
+- Mission control and orbital mechanics
 - **[View Space Examples](space/)**
 
 ### Government Services
 - Citizen services and permits
-- Tax collection and processing
-- Emergency response coordination
 - **ML fraud detection** and service optimization
-- GDPR compliance and data privacy
+- GDPR compliance and emergency response
 - **[View Government Examples](government/)**
 
 ### Insurance
 - **9 insurance types**: Auto, Home, Life, Health, Property, Travel, Disability, Umbrella, Industrial
-- Multi-protocol integration (PostgreSQL, Redis, MongoDB, Neo4j, Cassandra)
 - Fraud detection with graph analytics
-- Real-time quote caching and risk scoring
 - **[View Insurance Examples](insurance/)**
 
 ### Telecommunications
-- Network infrastructure and subscriber management
-- Billing and usage tracking
-- Real-time network monitoring
-- Multi-protocol subscriber onboarding
+- Network infrastructure and billing
+- Real-time monitoring and subscriber management
 - **[View Telco Examples](telco/)**
 
 ### Retail & E-Commerce
-- Product catalog with variants and categories
-- Inventory management across warehouses
-- Order processing and fulfillment
-- Customer loyalty programs
-- Real-time recommendations (Neo4j)
-- Sales analytics (Cassandra)
+- Inventory and order processing
+- **ML recommendations** (Neo4j) and sales analytics
 - **[View Retail Examples](retail/)**
 
 ### Hospitality (Coffeehouses & Restaurants)
-- Menu management with modifiers and recipes
-- Point-of-sale operations
-- Mobile order ahead
-- Loyalty programs with tiers
-- Kitchen display system
-- Real-time wait time estimation
+- POS and mobile ordering
+- Loyalty programs and kitchen operations
 - **[View Hospitality Examples](hospitality/)**
 
 ### Manufacturing (Electronics Assembly)
-- Bill of Materials (BOM) with multi-level dependencies
-- Work order processing with ML predictions
-- Assembly line operations (50+ stations)
-- **8 ML models**: Predictive maintenance, quality prediction, demand forecasting
-- Supply chain management
-- Real-time quality control
-- OrbitQL analytics queries
+- **8 ML models**: Predictive maintenance, quality, demand forecasting
+- BOM management and assembly lines
 - **[View Manufacturing Examples](manufacturing/)**
-
-### Healthcare
-- Patient risk prediction (PostgreSQL + ML)
-- Real-time vital signs monitoring (Redis + Time-series)
-- Medical knowledge graph (Cypher)
-- **[View Healthcare Scenario](ml-protocol-examples/01_healthcare_ml.sql)**
-
-### Financial Services
-- Fraud detection (PostgreSQL + ML)
-- Transaction graph analysis (Cypher)
-- Market data time-series (CQL)
-- **[View Finance Scenario](ml-protocol-examples/02_finance_ml.sql)**
 
 ---
 
