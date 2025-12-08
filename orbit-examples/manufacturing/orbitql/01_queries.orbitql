@@ -1,0 +1,293 @@
+-- ============================================================================
+-- OrbitRS Manufacturing Examples - OrbitQL Queries
+-- ============================================================================
+-- Comprehensive OrbitQL examples for manufacturing operations
+-- ============================================================================
+
+-- ============================================================================
+-- PRODUCT & BOM QUERIES
+-- ============================================================================
+
+-- Get all active products with their BOMs
+SELECT 
+    p.product_code,
+    p.name,
+    p.product_type,
+    p.standard_cost,
+    bh.bom_number,
+    bh.revision
+FROM products p
+LEFT JOIN bom_headers bh ON p.product_id = bh.product_id AND bh.status = 'ACTIVE'
+WHERE p.is_active = TRUE
+ORDER BY p.product_code;
+
+-- BOM explosion for a specific product
+SELECT 
+    p.product_code AS product,
+    c.component_code,
+    c.name AS component_name,
+    c.component_type,
+    bi.quantity,
+    c.standard_cost,
+    (bi.quantity * c.standard_cost) AS extended_cost
+FROM products p
+JOIN bom_headers bh ON p.product_id = bh.product_id
+JOIN bom_items bi ON bh.bom_id = bi.bom_id
+JOIN components c ON bi.component_id = c.component_id
+WHERE p.product_code = 'SMARTPHONE-X1'
+    AND bh.status = 'ACTIVE'
+ORDER BY bi.assembly_sequence;
+
+-- Total BOM cost rollup
+SELECT 
+    p.product_code,
+    p.name,
+    SUM(bi.quantity * c.standard_cost) AS total_bom_cost,
+    p.target_price,
+    (p.target_price - SUM(bi.quantity * c.standard_cost)) AS margin
+FROM products p
+JOIN bom_headers bh ON p.product_id = bh.product_id
+JOIN bom_items bi ON bh.bom_id = bi.bom_id
+JOIN components c ON bi.component_id = c.component_id
+WHERE bh.status = 'ACTIVE'
+GROUP BY p.product_id, p.product_code, p.name, p.target_price
+ORDER BY margin DESC;
+
+-- ============================================================================
+-- WORK ORDER QUERIES
+-- ============================================================================
+
+-- Active work orders with completion percentage
+SELECT 
+    wo.work_order_number,
+    p.product_code,
+    wo.quantity_ordered,
+    wo.quantity_completed,
+    wo.quantity_scrapped,
+    ROUND((wo.quantity_completed::DECIMAL / wo.quantity_ordered) * 100, 2) AS completion_pct,
+    wo.status,
+    al.line_code,
+    wo.scheduled_start_date
+FROM work_orders wo
+JOIN products p ON wo.product_id = p.product_id
+LEFT JOIN assembly_lines al ON wo.line_id = al.line_id
+WHERE wo.status IN ('RELEASED', 'IN_PROGRESS')
+ORDER BY wo.priority, wo.scheduled_start_date;
+
+-- Work order material requirements
+SELECT 
+    wo.work_order_number,
+    c.component_code,
+    c.name AS component_name,
+    woi.quantity_required,
+    woi.quantity_issued,
+    woi.quantity_consumed,
+    (woi.quantity_required - woi.quantity_issued) AS quantity_pending,
+    woi.status
+FROM work_orders wo
+JOIN work_order_items woi ON wo.work_order_id = woi.work_order_id
+JOIN components c ON woi.component_id = c.component_id
+WHERE wo.work_order_number = 'WO-2024-001'
+ORDER BY c.component_code;
+
+-- Work orders by product and date range
+SELECT 
+    p.product_code,
+    COUNT(*) AS order_count,
+    SUM(wo.quantity_ordered) AS total_quantity,
+    SUM(wo.quantity_completed) AS total_completed,
+    AVG(EXTRACT(EPOCH FROM (wo.actual_end_date - wo.actual_start_date)) / 3600) AS avg_hours
+FROM work_orders wo
+JOIN products p ON wo.product_id = p.product_id
+WHERE wo.scheduled_start_date >= '2024-12-01'
+    AND wo.scheduled_start_date < '2025-01-01'
+GROUP BY p.product_code
+ORDER BY total_quantity DESC;
+
+-- ============================================================================
+-- PRODUCTION LINE QUERIES
+-- ============================================================================
+
+-- Assembly line status and current work
+SELECT 
+    al.line_code,
+    al.name,
+    al.status,
+    al.target_units_per_hour,
+    wo.work_order_number,
+    p.product_code,
+    wo.quantity_ordered,
+    wo.quantity_completed
+FROM assembly_lines al
+LEFT JOIN work_orders wo ON al.line_id = wo.line_id 
+    AND wo.status = 'IN_PROGRESS'
+LEFT JOIN products p ON wo.product_id = p.product_id
+WHERE al.is_active = TRUE
+ORDER BY al.line_code;
+
+-- Production run performance
+SELECT 
+    pr.run_number,
+    al.line_code,
+    wo.work_order_number,
+    pr.quantity_planned,
+    pr.quantity_produced,
+    pr.quantity_passed,
+    pr.quantity_failed,
+    ROUND((pr.quantity_passed::DECIMAL / NULLIF(pr.quantity_produced, 0)) * 100, 2) AS yield_pct,
+    pr.actual_cycle_time_seconds,
+    pr.target_cycle_time_seconds,
+    pr.status
+FROM production_runs pr
+JOIN assembly_lines al ON pr.line_id = al.line_id
+JOIN work_orders wo ON pr.work_order_id = wo.work_order_id
+WHERE pr.started_at >= CURRENT_DATE - INTERVAL '7 days'
+ORDER BY pr.started_at DESC;
+
+-- Station cycle time analysis
+SELECT 
+    as2.station_code,
+    as2.name,
+    COUNT(*) AS completions,
+    AVG(sc.cycle_time_seconds) AS avg_cycle_time,
+    MIN(sc.cycle_time_seconds) AS min_cycle_time,
+    MAX(sc.cycle_time_seconds) AS max_cycle_time,
+    as2.standard_cycle_time_seconds,
+    ROUND((AVG(sc.cycle_time_seconds) / NULLIF(as2.standard_cycle_time_seconds, 0)) * 100, 2) AS efficiency_pct
+FROM station_completions sc
+JOIN assembly_stations as2 ON sc.station_id = as2.station_id
+WHERE sc.completed_at >= CURRENT_DATE - INTERVAL '1 day'
+    AND sc.status = 'COMPLETED'
+GROUP BY as2.station_id, as2.station_code, as2.name, as2.standard_cycle_time_seconds
+ORDER BY as2.station_code;
+
+-- ============================================================================
+-- INVENTORY & SUPPLY CHAIN QUERIES
+-- ============================================================================
+
+-- Component inventory levels
+SELECT 
+    c.component_code,
+    c.name,
+    c.component_type,
+    SUM(i.quantity_on_hand) AS total_on_hand,
+    SUM(i.quantity_available) AS total_available,
+    SUM(i.quantity_reserved) AS total_reserved,
+    c.lead_time_days
+FROM components c
+LEFT JOIN inventory i ON c.component_id = i.component_id
+GROUP BY c.component_id, c.component_code, c.name, c.component_type, c.lead_time_days
+ORDER BY total_available;
+
+-- Low stock components
+SELECT 
+    c.component_code,
+    c.name,
+    SUM(i.quantity_available) AS available,
+    i.reorder_point,
+    i.reorder_quantity,
+    cs.supplier_id,
+    s.name AS supplier_name,
+    cs.lead_time_days
+FROM components c
+JOIN inventory i ON c.component_id = i.component_id
+LEFT JOIN component_suppliers cs ON c.component_id = cs.component_id AND cs.is_preferred = TRUE
+LEFT JOIN suppliers s ON cs.supplier_id = s.supplier_id
+WHERE i.quantity_available <= i.reorder_point
+GROUP BY c.component_code, c.name, i.reorder_point, i.reorder_quantity, 
+         cs.supplier_id, s.name, cs.lead_time_days
+ORDER BY available;
+
+-- Supplier performance
+SELECT 
+    s.supplier_code,
+    s.name,
+    s.supplier_type,
+    COUNT(DISTINCT cs.component_id) AS components_supplied,
+    s.quality_rating,
+    s.delivery_rating,
+    AVG(cs.lead_time_days) AS avg_lead_time
+FROM suppliers s
+JOIN component_suppliers cs ON s.supplier_id = cs.supplier_id
+WHERE s.is_active = TRUE
+GROUP BY s.supplier_id, s.supplier_code, s.name, s.supplier_type, 
+         s.quality_rating, s.delivery_rating
+ORDER BY s.quality_rating DESC, s.delivery_rating DESC;
+
+-- ============================================================================
+-- QUALITY & DEFECT QUERIES
+-- ============================================================================
+
+-- Quality inspection summary
+SELECT 
+    qi.inspection_type,
+    COUNT(*) AS total_inspections,
+    SUM(CASE WHEN qi.result = 'PASS' THEN 1 ELSE 0 END) AS passed,
+    SUM(CASE WHEN qi.result = 'FAIL' THEN 1 ELSE 0 END) AS failed,
+    ROUND((SUM(CASE WHEN qi.result = 'PASS' THEN 1 ELSE 0 END)::DECIMAL / COUNT(*)) * 100, 2) AS pass_rate
+FROM quality_inspections qi
+WHERE qi.inspection_date >= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY qi.inspection_type
+ORDER BY total_inspections DESC;
+
+-- Defects by type and product
+SELECT 
+    p.product_code,
+    dt.defect_code,
+    dt.name AS defect_name,
+    COUNT(*) AS defect_count,
+    dt.severity
+FROM defects d
+JOIN defect_types dt ON d.defect_type_id = dt.defect_type_id
+JOIN work_orders wo ON d.work_order_id = wo.work_order_id
+JOIN products p ON wo.product_id = p.product_id
+WHERE d.detected_at >= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY p.product_code, dt.defect_code, dt.name, dt.severity
+ORDER BY defect_count DESC;
+
+-- ============================================================================
+-- ANALYTICS & REPORTING QUERIES
+-- ============================================================================
+
+-- Daily production summary
+SELECT 
+    DATE(pr.started_at) AS production_date,
+    COUNT(DISTINCT pr.run_id) AS runs,
+    SUM(pr.quantity_produced) AS units_produced,
+    SUM(pr.quantity_passed) AS units_passed,
+    SUM(pr.quantity_failed) AS units_failed,
+    ROUND((SUM(pr.quantity_passed)::DECIMAL / NULLIF(SUM(pr.quantity_produced), 0)) * 100, 2) AS yield_pct
+FROM production_runs pr
+WHERE pr.started_at >= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY DATE(pr.started_at)
+ORDER BY production_date DESC;
+
+-- Machine downtime analysis
+SELECT 
+    al.line_code,
+    md.downtime_type,
+    COUNT(*) AS incidents,
+    SUM(md.duration_minutes) AS total_minutes,
+    AVG(md.duration_minutes) AS avg_minutes
+FROM machine_downtime md
+JOIN assembly_lines al ON md.line_id = al.line_id
+WHERE md.started_at >= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY al.line_code, md.downtime_type
+ORDER BY total_minutes DESC;
+
+-- Overall Equipment Effectiveness (OEE) calculation
+SELECT 
+    al.line_code,
+    -- Availability
+    ROUND((1 - (SUM(md.duration_minutes) / (24.0 * 60 * 30))) * 100, 2) AS availability_pct,
+    -- Performance (actual vs target)
+    ROUND((AVG(pr.actual_cycle_time_seconds) / NULLIF(AVG(pr.target_cycle_time_seconds), 0)) * 100, 2) AS performance_pct,
+    -- Quality (passed vs produced)
+    ROUND((SUM(pr.quantity_passed)::DECIMAL / NULLIF(SUM(pr.quantity_produced), 0)) * 100, 2) AS quality_pct
+FROM assembly_lines al
+LEFT JOIN machine_downtime md ON al.line_id = md.line_id 
+    AND md.started_at >= CURRENT_DATE - INTERVAL '30 days'
+LEFT JOIN production_runs pr ON al.line_id = pr.line_id 
+    AND pr.started_at >= CURRENT_DATE - INTERVAL '30 days'
+WHERE al.is_active = TRUE
+GROUP BY al.line_id, al.line_code;

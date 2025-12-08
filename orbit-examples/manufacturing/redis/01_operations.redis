@@ -1,0 +1,405 @@
+# ============================================================================
+# OrbitRS Manufacturing Examples - Redis Real-Time Operations with ML
+# ============================================================================
+# Production monitoring, ML predictions, quality alerts, inventory tracking
+# ============================================================================
+
+# ============================================================================
+# PRODUCTION LINE STATUS
+# ============================================================================
+
+# Real-time line status
+HSET line:status:line-001 status "RUNNING"
+HSET line:status:line-001 current_wo "WO-2024-001"
+HSET line:status:line-001 units_produced "1247"
+HSET line:status:line-001 target_rate "1000"
+HSET line:status:line-001 actual_rate "1040"
+HSET line:status:line-001 efficiency "104.0"
+HSET line:status:line-001 updated_at "2024-12-07T14:21:00Z"
+
+# Get line status
+HGETALL line:status:line-001
+
+# All active lines
+SADD lines:active line-001 line-002 line-003
+
+# ============================================================================
+# ML: PREDICTIVE MAINTENANCE
+# ============================================================================
+
+# Machine health score (ML prediction)
+SETEX ml:health:station-001 300 '{
+  "station_id": "station-001",
+  "health_score": 0.87,
+  "predicted_failure_hours": 168,
+  "confidence": 0.92,
+  "model": "lstm_v2",
+  "features": {
+    "vibration": 2.3,
+    "temperature": 68.5,
+    "cycle_count": 45230,
+    "error_rate": 0.02
+  },
+  "recommendation": "SCHEDULE_MAINTENANCE"
+}'
+
+# Maintenance prediction alert
+LPUSH alerts:maintenance '{
+  "station_id": "station-001",
+  "alert_type": "PREDICTIVE_MAINTENANCE",
+  "severity": "MEDIUM",
+  "predicted_failure": "2024-12-14T14:21:00Z",
+  "confidence": 0.92
+}'
+
+# Get maintenance alerts
+LRANGE alerts:maintenance 0 9
+
+# ============================================================================
+# ML: QUALITY PREDICTION
+# ============================================================================
+
+# Real-time quality prediction for current unit
+SETEX ml:quality:unit-12470 60 '{
+  "unit_serial": "SN-2024-12470",
+  "predicted_quality": "PASS",
+  "confidence": 0.95,
+  "defect_probability": 0.05,
+  "risk_factors": {
+    "component_variance": 0.02,
+    "process_deviation": 0.01,
+    "environmental": 0.02
+  },
+  "model": "random_forest_v3"
+}'
+
+# Quality trend prediction
+SETEX ml:quality:trend:line-001 300 '{
+  "line_id": "line-001",
+  "predicted_yield_24h": 0.982,
+  "current_yield": 0.985,
+  "trend": "STABLE",
+  "confidence": 0.88
+}'
+
+# ============================================================================
+# ML: DEMAND FORECASTING
+# ============================================================================
+
+# Product demand forecast
+SETEX ml:demand:SMARTPHONE-X1 3600 '{
+  "product_code": "SMARTPHONE-X1",
+  "forecast_horizon_days": 30,
+  "predicted_demand": 125000,
+  "confidence_interval": [118000, 132000],
+  "seasonality_factor": 1.15,
+  "trend": "INCREASING",
+  "model": "prophet_v1"
+}'
+
+# Inventory optimization recommendation
+SETEX ml:inventory:opt:COMP-PCB-001 3600 '{
+  "component_code": "COMP-PCB-001",
+  "recommended_order_qty": 50000,
+  "reorder_point": 15000,
+  "safety_stock": 5000,
+  "lead_time_days": 14,
+  "stockout_probability": 0.02,
+  "holding_cost_optimized": true
+}'
+
+# ============================================================================
+# ML: PRODUCTION OPTIMIZATION
+# ============================================================================
+
+# Optimal production schedule (ML-generated)
+SETEX ml:schedule:optimal 1800 '{
+  "schedule_date": "2024-12-08",
+  "line_assignments": [
+    {"line": "line-001", "product": "SMARTPHONE-X1", "quantity": 2000, "priority": 1},
+    {"line": "line-002", "product": "TABLET-Y2", "quantity": 1500, "priority": 2},
+    {"line": "line-003", "product": "LAPTOP-Z3", "quantity": 800, "priority": 3}
+  ],
+  "expected_completion": "2024-12-08T22:00:00Z",
+  "utilization": 0.94,
+  "model": "genetic_algorithm_v2"
+}'
+
+# Cycle time prediction
+SETEX ml:cycletime:station-005 300 '{
+  "station_id": "station-005",
+  "predicted_cycle_time": 42.5,
+  "standard_cycle_time": 45.0,
+  "variance": 2.1,
+  "factors": {
+    "operator_experience": 0.95,
+    "component_complexity": 1.02,
+    "time_of_day": 0.98
+  }
+}'
+
+# ============================================================================
+# WORK ORDER QUEUE
+# ============================================================================
+
+# Priority queue (sorted set by priority and date)
+ZADD queue:work-orders 1733600000 "WO-2024-001"
+ZADD queue:work-orders 1733603600 "WO-2024-002"
+ZADD queue:work-orders 1733607200 "WO-2024-003"
+
+# Get next work orders
+ZRANGE queue:work-orders 0 4 WITHSCORES
+
+# Work order status
+HSET wo:status:WO-2024-001 status "IN_PROGRESS"
+HSET wo:status:WO-2024-001 line_id "line-001"
+HSET wo:status:WO-2024-001 quantity_ordered "2000"
+HSET wo:status:WO-2024-001 quantity_completed "1247"
+HSET wo:status:WO-2024-001 completion_pct "62.35"
+
+# ============================================================================
+# REAL-TIME INVENTORY
+# ============================================================================
+
+# Component stock levels
+SET inventory:COMP-PCB-001 45230
+SET inventory:COMP-DISPLAY-002 18750
+SET inventory:COMP-BATTERY-003 32100
+
+# Decrement on consumption
+DECRBY inventory:COMP-PCB-001 50
+
+# Low stock alert
+LPUSH alerts:inventory:low '{
+  "component_code": "COMP-DISPLAY-002",
+  "current_stock": 18750,
+  "reorder_point": 20000,
+  "lead_time_days": 14,
+  "urgency": "MEDIUM"
+}'
+
+# Reserved inventory for work orders
+SETEX inventory:reserved:WO-2024-001:COMP-PCB-001 3600 2000
+
+# ============================================================================
+# ML: ANOMALY DETECTION
+# ============================================================================
+
+# Real-time anomaly detection
+LPUSH alerts:anomaly '{
+  "timestamp": "2024-12-07T14:21:00Z",
+  "type": "CYCLE_TIME_ANOMALY",
+  "station_id": "station-003",
+  "metric": "cycle_time_seconds",
+  "expected": 45.0,
+  "actual": 67.5,
+  "deviation": 50.0,
+  "severity": "HIGH",
+  "ml_confidence": 0.94
+}'
+
+# Process anomaly score
+SETEX ml:anomaly:line-001 300 '{
+  "line_id": "line-001",
+  "anomaly_score": 0.23,
+  "threshold": 0.75,
+  "status": "NORMAL",
+  "contributing_factors": [
+    {"factor": "temperature", "score": 0.15},
+    {"factor": "vibration", "score": 0.08}
+  ]
+}'
+
+# ============================================================================
+# QUALITY ALERTS
+# ============================================================================
+
+# Real-time quality alert
+LPUSH alerts:quality '{
+  "timestamp": "2024-12-07T14:21:00Z",
+  "alert_type": "DEFECT_DETECTED",
+  "serial_number": "SN-2024-12470",
+  "defect_type": "COSMETIC",
+  "station_id": "station-008",
+  "severity": "LOW",
+  "action": "REWORK"
+}'
+
+# Get recent quality alerts
+LRANGE alerts:quality 0 9
+
+# Quality metrics (rolling window)
+INCR quality:defects:today
+INCR quality:inspections:today
+EXPIRE quality:defects:today 86400
+EXPIRE quality:inspections:today 86400
+
+# ============================================================================
+# ML: ROOT CAUSE ANALYSIS
+# ============================================================================
+
+# Defect root cause prediction
+SETEX ml:rootcause:defect-12345 3600 '{
+  "defect_id": "defect-12345",
+  "defect_type": "DISPLAY_DEAD_PIXEL",
+  "predicted_causes": [
+    {"cause": "COMPONENT_QUALITY", "probability": 0.65, "supplier": "SUP-001"},
+    {"cause": "ASSEMBLY_PRESSURE", "probability": 0.25, "station": "station-006"},
+    {"cause": "ENVIRONMENTAL", "probability": 0.10, "factor": "humidity"}
+  ],
+  "recommendation": "INSPECT_SUPPLIER_BATCH",
+  "model": "xgboost_v2"
+}'
+
+# ============================================================================
+# IOT SENSOR DATA
+# ============================================================================
+
+# Machine sensor readings
+HSET sensor:station-001 temperature "68.5"
+HSET sensor:station-001 vibration "2.3"
+HSET sensor:station-001 pressure "145.2"
+HSET sensor:station-001 humidity "45.0"
+HSET sensor:station-001 timestamp "2024-12-07T14:21:00Z"
+EXPIRE sensor:station-001 300
+
+# Sensor time series (list)
+LPUSH timeseries:temp:station-001 '{"timestamp": "2024-12-07T14:21:00Z", "value": 68.5}'
+LTRIM timeseries:temp:station-001 0 999  # Keep last 1000 readings
+
+# ============================================================================
+# ML: YIELD OPTIMIZATION
+# ============================================================================
+
+# Process parameter recommendations
+SETEX ml:params:optimal:line-001 1800 '{
+  "line_id": "line-001",
+  "product": "SMARTPHONE-X1",
+  "optimal_parameters": {
+    "temperature": 68.0,
+    "pressure": 145.0,
+    "speed": 1.05,
+    "humidity": 42.0
+  },
+  "predicted_yield": 0.988,
+  "current_yield": 0.982,
+  "improvement": 0.006,
+  "model": "bayesian_optimization_v1"
+}'
+
+# ============================================================================
+# PERFORMANCE METRICS
+# ============================================================================
+
+# Real-time OEE (Overall Equipment Effectiveness)
+HSET metrics:oee:line-001 availability "0.95"
+HSET metrics:oee:line-001 performance "1.04"
+HSET metrics:oee:line-001 quality "0.985"
+HSET metrics:oee:line-001 oee "0.973"
+EXPIRE metrics:oee:line-001 300
+
+# Throughput tracking
+INCR metrics:throughput:line-001:2024-12-07
+EXPIRE metrics:throughput:line-001:2024-12-07 604800
+
+# ============================================================================
+# ML: SUPPLIER QUALITY PREDICTION
+# ============================================================================
+
+# Supplier quality forecast
+SETEX ml:supplier:quality:SUP-001 3600 '{
+  "supplier_code": "SUP-001",
+  "predicted_defect_rate": 0.015,
+  "confidence": 0.89,
+  "trend": "IMPROVING",
+  "risk_level": "LOW",
+  "factors": {
+    "historical_quality": 0.98,
+    "delivery_performance": 0.95,
+    "recent_audits": 0.92
+  },
+  "recommendation": "CONTINUE"
+}'
+
+# ============================================================================
+# NOTIFICATIONS
+# ============================================================================
+
+# Publish production event
+PUBLISH notifications:production '{
+  "event": "WORK_ORDER_COMPLETED",
+  "work_order": "WO-2024-001",
+  "quantity": 2000,
+  "yield": 0.985
+}'
+
+# Publish quality alert
+PUBLISH notifications:quality '{
+  "event": "QUALITY_ALERT",
+  "severity": "HIGH",
+  "station": "station-003",
+  "defect_rate": 0.05
+}'
+
+# Subscribe to events (in separate connection)
+# SUBSCRIBE notifications:production
+# SUBSCRIBE notifications:quality
+
+# ============================================================================
+# ML MODEL METADATA
+# ============================================================================
+
+# Track ML model versions
+HSET ml:models:predictive_maintenance version "2.1"
+HSET ml:models:predictive_maintenance accuracy "0.94"
+HSET ml:models:predictive_maintenance last_trained "2024-12-01"
+HSET ml:models:predictive_maintenance features "vibration,temperature,cycle_count,error_rate"
+
+HSET ml:models:quality_prediction version "3.0"
+HSET ml:models:quality_prediction accuracy "0.96"
+HSET ml:models:quality_prediction last_trained "2024-12-05"
+
+# ============================================================================
+# LEADERBOARDS
+# ============================================================================
+
+# Top performing lines
+ZADD leaderboard:lines:efficiency 97.3 "line-001"
+ZADD leaderboard:lines:efficiency 95.8 "line-002"
+ZADD leaderboard:lines:efficiency 94.2 "line-003"
+
+# Get top lines
+ZREVRANGE leaderboard:lines:efficiency 0 9 WITHSCORES
+
+# Top quality stations
+ZADD leaderboard:stations:quality 99.2 "station-001"
+ZADD leaderboard:stations:quality 98.7 "station-005"
+
+# ============================================================================
+# CACHE
+# ============================================================================
+
+# BOM cache
+SETEX cache:bom:SMARTPHONE-X1 3600 '{
+  "product_code": "SMARTPHONE-X1",
+  "components": [...],
+  "total_cost": 245.50
+}'
+
+# Product specs cache
+SETEX cache:product:SMARTPHONE-X1 3600 '{
+  "product_code": "SMARTPHONE-X1",
+  "name": "Premium Smartphone X1",
+  "specifications": {...}
+}'
+
+# ============================================================================
+# CLEANUP
+# ============================================================================
+
+# Monitor
+# MONITOR
+
+# Get stats
+INFO
+DBSIZE

@@ -1,0 +1,260 @@
+-- ============================================================================
+-- OrbitRS Banking Examples - OrbitQL Queries
+-- ============================================================================
+-- Comprehensive banking queries for accounts, transactions, fraud detection
+-- ============================================================================
+
+-- ============================================================================
+-- ACCOUNT QUERIES
+-- ============================================================================
+
+-- Customer account summary
+SELECT 
+    c.customer_number,
+    c.first_name,
+    c.last_name,
+    c.credit_score,
+    COUNT(a.account_id) AS total_accounts,
+    SUM(a.balance) AS total_balance
+FROM customers c
+LEFT JOIN accounts a ON c.customer_id = a.customer_id
+WHERE c.status = 'ACTIVE'
+GROUP BY c.customer_id, c.customer_number, c.first_name, c.last_name, c.credit_score
+ORDER BY total_balance DESC;
+
+-- High-value accounts
+SELECT 
+    a.account_number,
+    a.account_type,
+    a.balance,
+    c.customer_number,
+    c.first_name || ' ' || c.last_name AS customer_name
+FROM accounts a
+JOIN customers c ON a.customer_id = c.customer_id
+WHERE a.balance > 100000
+    AND a.status = 'ACTIVE'
+ORDER BY a.balance DESC;
+
+-- ============================================================================
+-- TRANSACTION QUERIES
+-- ============================================================================
+
+-- Recent transactions
+SELECT 
+    t.transaction_number,
+    t.transaction_type,
+    t.amount,
+    t.description,
+    t.fraud_score,
+    t.status,
+    a.account_number,
+    t.transaction_date
+FROM transactions t
+JOIN accounts a ON t.account_id = a.account_id
+WHERE t.transaction_date >= CURRENT_DATE - INTERVAL '7 days'
+ORDER BY t.transaction_date DESC
+LIMIT 100;
+
+-- Large transactions
+SELECT 
+    t.transaction_number,
+    t.amount,
+    t.transaction_type,
+    c.customer_number,
+    c.first_name || ' ' || c.last_name AS customer_name,
+    t.fraud_score,
+    t.transaction_date
+FROM transactions t
+JOIN accounts a ON t.account_id = a.account_id
+JOIN customers c ON a.customer_id = c.customer_id
+WHERE t.amount > 10000
+    AND t.transaction_date >= CURRENT_DATE - INTERVAL '30 days'
+ORDER BY t.amount DESC;
+
+-- Daily transaction volume
+SELECT 
+    DATE(transaction_date) AS transaction_day,
+    COUNT(*) AS transaction_count,
+    SUM(amount) AS total_volume,
+    AVG(amount) AS avg_amount,
+    SUM(CASE WHEN fraud_status != 'CLEAR' THEN 1 ELSE 0 END) AS flagged_count
+FROM transactions
+WHERE transaction_date >= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY DATE(transaction_date)
+ORDER BY transaction_day DESC;
+
+-- ============================================================================
+-- FRAUD DETECTION QUERIES
+-- ============================================================================
+
+-- High-risk transactions
+SELECT 
+    t.transaction_number,
+    t.amount,
+    t.fraud_score,
+    t.fraud_status,
+    c.customer_number,
+    c.risk_rating,
+    t.location_city,
+    t.location_state,
+    t.transaction_date
+FROM transactions t
+JOIN accounts a ON t.account_id = a.account_id
+JOIN customers c ON a.customer_id = c.customer_id
+WHERE t.fraud_score > 0.7
+    OR t.fraud_status IN ('REVIEW', 'BLOCKED')
+ORDER BY t.fraud_score DESC, t.transaction_date DESC;
+
+-- Fraud alerts summary
+SELECT 
+    fa.alert_type,
+    COUNT(*) AS alert_count,
+    AVG(fa.fraud_score) AS avg_fraud_score,
+    SUM(CASE WHEN fa.status = 'CONFIRMED' THEN 1 ELSE 0 END) AS confirmed_fraud,
+    SUM(CASE WHEN fa.status = 'FALSE_POSITIVE' THEN 1 ELSE 0 END) AS false_positives
+FROM fraud_alerts fa
+WHERE fa.created_at >= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY fa.alert_type
+ORDER BY alert_count DESC;
+
+-- Customers with multiple fraud alerts
+SELECT 
+    c.customer_number,
+    c.first_name,
+    c.last_name,
+    c.risk_rating,
+    COUNT(fa.alert_id) AS alert_count,
+    MAX(fa.fraud_score) AS max_fraud_score
+FROM customers c
+JOIN fraud_alerts fa ON c.customer_id = fa.customer_id
+WHERE fa.created_at >= CURRENT_DATE - INTERVAL '90 days'
+GROUP BY c.customer_id, c.customer_number, c.first_name, c.last_name, c.risk_rating
+HAVING COUNT(fa.alert_id) > 2
+ORDER BY alert_count DESC;
+
+-- ============================================================================
+-- LOAN QUERIES
+-- ============================================================================
+
+-- Active loans summary
+SELECT 
+    l.loan_type,
+    COUNT(*) AS loan_count,
+    SUM(l.outstanding_balance) AS total_outstanding,
+    AVG(l.interest_rate) AS avg_interest_rate,
+    AVG(l.default_probability) AS avg_default_prob
+FROM loans l
+WHERE l.status = 'ACTIVE'
+GROUP BY l.loan_type
+ORDER BY total_outstanding DESC;
+
+-- High-risk loans
+SELECT 
+    l.loan_number,
+    l.loan_type,
+    l.outstanding_balance,
+    l.default_probability,
+    c.customer_number,
+    c.credit_score,
+    l.origination_date
+FROM loans l
+JOIN customers c ON l.customer_id = c.customer_id
+WHERE l.default_probability > 0.3
+    AND l.status = 'ACTIVE'
+ORDER BY l.default_probability DESC;
+
+-- ============================================================================
+-- CUSTOMER ANALYTICS
+-- ============================================================================
+
+-- Customer segmentation by credit score
+SELECT 
+    CASE 
+        WHEN credit_score >= 750 THEN 'EXCELLENT'
+        WHEN credit_score >= 700 THEN 'GOOD'
+        WHEN credit_score >= 650 THEN 'FAIR'
+        ELSE 'POOR'
+    END AS credit_tier,
+    COUNT(*) AS customer_count,
+    AVG(credit_score) AS avg_score,
+    SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) AS active_customers
+FROM customers
+WHERE credit_score IS NOT NULL
+GROUP BY credit_tier
+ORDER BY avg_score DESC;
+
+-- Customer lifetime value
+SELECT 
+    c.customer_number,
+    c.first_name || ' ' || c.last_name AS customer_name,
+    SUM(a.balance) AS total_deposits,
+    COUNT(DISTINCT t.transaction_id) AS transaction_count,
+    SUM(CASE WHEN t.transaction_type = 'FEE' THEN t.amount ELSE 0 END) AS total_fees,
+    EXTRACT(YEAR FROM AGE(CURRENT_DATE, c.created_at)) AS customer_years
+FROM customers c
+LEFT JOIN accounts a ON c.customer_id = a.customer_id
+LEFT JOIN transactions t ON a.account_id = t.account_id
+WHERE c.status = 'ACTIVE'
+GROUP BY c.customer_id, c.customer_number, c.first_name, c.last_name, c.created_at
+ORDER BY total_fees DESC
+LIMIT 100;
+
+-- ============================================================================
+-- COMPLIANCE & AUDIT QUERIES
+-- ============================================================================
+
+-- Large cash transactions (CTR reporting)
+SELECT 
+    t.transaction_number,
+    t.amount,
+    t.transaction_type,
+    c.customer_number,
+    c.first_name || ' ' || c.last_name AS customer_name,
+    t.transaction_date
+FROM transactions t
+JOIN accounts a ON t.account_id = a.account_id
+JOIN customers c ON a.customer_id = c.customer_id
+WHERE t.amount > 10000
+    AND t.transaction_type IN ('DEPOSIT', 'WITHDRAWAL')
+    AND t.transaction_date >= CURRENT_DATE - INTERVAL '1 day'
+ORDER BY t.amount DESC;
+
+-- KYC expiring soon
+SELECT 
+    customer_number,
+    first_name,
+    last_name,
+    kyc_status,
+    kyc_verified_at,
+    kyc_verified_at + INTERVAL '1 year' AS kyc_expires_at
+FROM customers
+WHERE kyc_status = 'VERIFIED'
+    AND kyc_verified_at + INTERVAL '1 year' <= CURRENT_DATE + INTERVAL '30 days'
+ORDER BY kyc_verified_at;
+
+-- ============================================================================
+-- PERFORMANCE METRICS
+-- ============================================================================
+
+-- Account growth
+SELECT 
+    DATE_TRUNC('month', opened_at) AS month,
+    account_type,
+    COUNT(*) AS new_accounts,
+    SUM(balance) AS total_deposits
+FROM accounts
+WHERE opened_at >= CURRENT_DATE - INTERVAL '12 months'
+GROUP BY DATE_TRUNC('month', opened_at), account_type
+ORDER BY month DESC, account_type;
+
+-- Transaction success rate
+SELECT 
+    transaction_type,
+    COUNT(*) AS total_transactions,
+    SUM(CASE WHEN status = 'POSTED' THEN 1 ELSE 0 END) AS successful,
+    SUM(CASE WHEN status = 'DECLINED' THEN 1 ELSE 0 END) AS declined,
+    ROUND((SUM(CASE WHEN status = 'POSTED' THEN 1 ELSE 0 END)::DECIMAL / COUNT(*)) * 100, 2) AS success_rate
+FROM transactions
+WHERE transaction_date >= CURRENT_DATE - INTERVAL '7 days'
+GROUP BY transaction_type
+ORDER BY total_transactions DESC;

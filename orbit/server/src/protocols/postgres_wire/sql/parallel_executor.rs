@@ -10,18 +10,18 @@
 //!
 //! ```text
 //! ┌─────────────────────────────────────────────────────────┐
-//! │                  ParallelCoordinator                     │
-//! │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
-//! │  │  Partitioner │  │  Scheduler  │  │   Merger    │     │
-//! │  └─────────────┘  └─────────────┘  └─────────────┘     │
+//! │                  ParallelCoordinator                    │
+//! │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐      │
+//! │  │ Partitioner │  │  Scheduler  │  │   Merger    │      │
+//! │  └─────────────┘  └─────────────┘  └─────────────┘      │
 //! │         │                │                │             │
 //! │         ▼                ▼                ▼             │
-//! │  ┌─────────────────────────────────────────────┐       │
-//! │  │              Worker Pool (Tokio)             │       │
-//! │  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐│       │
-//! │  │  │Worker 1│ │Worker 2│ │Worker 3│ │Worker N││       │
-//! │  │  └────────┘ └────────┘ └────────┘ └────────┘│       │
-//! │  └─────────────────────────────────────────────┘       │
+//! │  ┌─────────────────────────────────────────────┐        │
+//! │  │              Worker Pool (Tokio)            │        │
+//! │  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐│        │
+//! │  │  │Worker 1│ │Worker 2│ │Worker 3│ │Worker N││        │
+//! │  │  └────────┘ └────────┘ └────────┘ └────────┘│        │
+//! │  └─────────────────────────────────────────────┘        │
 //! └─────────────────────────────────────────────────────────┘
 //! ```
 
@@ -661,6 +661,11 @@ pub enum AggregateFunction {
     Avg,
     Min,
     Max,
+    // New aggregate functions
+    ArrayAgg,
+    StringAgg { delimiter: String },
+    BoolAnd,
+    BoolOr,
 }
 
 /// Accumulator for parallel aggregation
@@ -671,6 +676,9 @@ struct AggregateAccumulator {
     sum: f64,
     min: Option<SqlValue>,
     max: Option<SqlValue>,
+    // New aggregate state
+    values: Vec<SqlValue>,   // For ARRAY_AGG
+    bool_result: Option<bool>, // For BOOL_AND/BOOL_OR
 }
 
 impl AggregateAccumulator {
@@ -681,6 +689,8 @@ impl AggregateAccumulator {
             sum: 0.0,
             min: None,
             max: None,
+            values: Vec::new(),
+            bool_result: None,
         }
     }
 
@@ -705,6 +715,26 @@ impl AggregateAccumulator {
         {
             self.max = Some(value.clone());
         }
+
+        // Accumulate for ARRAY_AGG and STRING_AGG (skip NULLs)
+        if !value.is_null() {
+            match &self.function {
+                AggregateFunction::ArrayAgg | AggregateFunction::StringAgg { .. } => {
+                    self.values.push(value.clone());
+                }
+                AggregateFunction::BoolAnd => {
+                    if let SqlValue::Boolean(b) = value {
+                        self.bool_result = Some(self.bool_result.unwrap_or(true) && *b);
+                    }
+                }
+                AggregateFunction::BoolOr => {
+                    if let SqlValue::Boolean(b) = value {
+                        self.bool_result = Some(self.bool_result.unwrap_or(false) || *b);
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 
     fn compare_values(a: &SqlValue, b: &SqlValue) -> std::cmp::Ordering {
@@ -712,7 +742,7 @@ impl AggregateAccumulator {
     }
 
     fn finalize(&self) -> SqlValue {
-        match self.function {
+        match &self.function {
             AggregateFunction::Count => SqlValue::BigInt(self.count),
             AggregateFunction::Sum => SqlValue::DoublePrecision(self.sum),
             AggregateFunction::Avg => {
@@ -724,6 +754,30 @@ impl AggregateAccumulator {
             }
             AggregateFunction::Min => self.min.clone().unwrap_or(SqlValue::Null),
             AggregateFunction::Max => self.max.clone().unwrap_or(SqlValue::Null),
+            AggregateFunction::ArrayAgg => {
+                if self.values.is_empty() {
+                    SqlValue::Null
+                } else {
+                    SqlValue::Array(self.values.clone())
+                }
+            }
+            AggregateFunction::StringAgg { delimiter } => {
+                if self.values.is_empty() {
+                    SqlValue::Null
+                } else {
+                    let strings: Vec<String> = self.values
+                        .iter()
+                        .map(|v| v.to_postgres_string())
+                        .collect();
+                    SqlValue::Text(strings.join(delimiter))
+                }
+            }
+            AggregateFunction::BoolAnd => {
+                self.bool_result.map(SqlValue::Boolean).unwrap_or(SqlValue::Null)
+            }
+            AggregateFunction::BoolOr => {
+                self.bool_result.map(SqlValue::Boolean).unwrap_or(SqlValue::Null)
+            }
         }
     }
 

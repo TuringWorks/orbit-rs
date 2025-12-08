@@ -1039,15 +1039,15 @@ impl TraditionalExecutionStrategy {
                 row_count,
                 transaction_id,
             },
-            ExecutionResult::Insert { count } => UnifiedExecutionResult::Insert {
+            ExecutionResult::Insert { count, .. } => UnifiedExecutionResult::Insert {
                 count,
                 transaction_id,
             },
-            ExecutionResult::Update { count } => UnifiedExecutionResult::Update {
+            ExecutionResult::Update { count, .. } => UnifiedExecutionResult::Update {
                 count,
                 transaction_id,
             },
-            ExecutionResult::Delete { count } => UnifiedExecutionResult::Delete {
+            ExecutionResult::Delete { count, .. } => UnifiedExecutionResult::Delete {
                 count,
                 transaction_id,
             },

@@ -123,6 +123,9 @@ impl SqlParser {
             // COMMENT ON statement
             Some(Token::CommentKeyword) => ddl::parse_comment_on(self),
 
+            // TRUNCATE statement
+            Some(Token::Truncate) => ddl::parse_truncate(self),
+
             // Handle EXPLAIN as identifier (not a keyword yet)
             Some(Token::Identifier(name)) if name.to_uppercase() == "EXPLAIN" => {
                 self.advance()?; // consume EXPLAIN
@@ -276,6 +279,7 @@ impl SqlParser {
                 }
                 Ok(stmt)
             },
+            Some(Token::Sequence) => ddl::parse_create_sequence(self),
 
             Some(token) => Err(ParseError {
                 message: format!("Unexpected token after CREATE: {token:?}"),
@@ -291,6 +295,7 @@ impl SqlParser {
                     "EXTENSION".to_string(),
                     "FUNCTION".to_string(),
                     "TRIGGER".to_string(),
+                    "SEQUENCE".to_string(),
                 ],
                 found: Some(token.clone()),
             }),
@@ -298,7 +303,7 @@ impl SqlParser {
             None => Err(ParseError {
                 message: "Expected object type after CREATE".to_string(),
                 position: self.position,
-                expected: vec!["DATABASE, TABLE, UNIQUE INDEX, INDEX, OR REPLACE VIEW, VIEW, SCHEMA, EXTENSION, FUNCTION, or TRIGGER".to_string()],
+                expected: vec!["DATABASE, TABLE, UNIQUE INDEX, INDEX, OR REPLACE VIEW, VIEW, SCHEMA, EXTENSION, FUNCTION, TRIGGER, or SEQUENCE".to_string()],
                 found: None,
             }),
         }
@@ -310,18 +315,19 @@ impl SqlParser {
 
         match &self.current_token {
             Some(Token::Table) => ddl::parse_alter_table(self),
+            Some(Token::Sequence) => ddl::parse_alter_sequence(self),
 
             Some(token) => Err(ParseError {
                 message: format!("Unexpected token after ALTER: {token:?}"),
                 position: self.position,
-                expected: vec!["TABLE".to_string()],
+                expected: vec!["TABLE".to_string(), "SEQUENCE".to_string()],
                 found: Some(token.clone()),
             }),
 
             None => Err(ParseError {
                 message: "Expected object type after ALTER".to_string(),
                 position: self.position,
-                expected: vec!["TABLE".to_string()],
+                expected: vec!["TABLE".to_string(), "SEQUENCE".to_string()],
                 found: None,
             }),
         }
@@ -339,6 +345,7 @@ impl SqlParser {
             Some(Token::Schema) => ddl::parse_drop_schema(self),
             Some(Token::Extension) => ddl::parse_drop_extension(self),
             Some(Token::Trigger) => ddl::parse_drop_trigger(self),
+            Some(Token::Sequence) => ddl::parse_drop_sequence(self),
 
             Some(token) => Err(ParseError {
                 message: format!("Unexpected token after DROP: {token:?}"),
@@ -351,6 +358,7 @@ impl SqlParser {
                     "SCHEMA".to_string(),
                     "EXTENSION".to_string(),
                     "TRIGGER".to_string(),
+                    "SEQUENCE".to_string(),
                 ],
                 found: Some(token.clone()),
             }),
@@ -359,7 +367,7 @@ impl SqlParser {
                 message: "Expected object type after DROP".to_string(),
                 position: self.position,
                 expected: vec![
-                    "DATABASE, TABLE, INDEX, VIEW, SCHEMA, EXTENSION, or TRIGGER".to_string(),
+                    "DATABASE, TABLE, INDEX, VIEW, SCHEMA, EXTENSION, TRIGGER, or SEQUENCE".to_string(),
                 ],
                 found: None,
             }),

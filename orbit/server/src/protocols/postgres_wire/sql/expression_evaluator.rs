@@ -76,6 +76,10 @@ pub struct WindowFrameContext {
     pub current_row_index: usize,
     pub partition_rows: Vec<usize>, // Row indices in current partition
     pub ordered_rows: Vec<usize>,   // Row indices in current order
+    /// ORDER BY values for each row in the partition (for RANGE mode)
+    pub order_by_values: Vec<SqlValue>,
+    /// Peer group boundaries - each entry is (start_idx, end_idx) in partition_rows
+    pub peer_groups: Vec<(usize, usize)>,
 }
 
 /// Aggregate function state
@@ -86,6 +90,11 @@ pub enum AggregateState {
     Min(SqlValue),
     Max(SqlValue),
     Avg { sum: SqlValue, count: i64 },
+    // New aggregate function states
+    ArrayAgg(Vec<SqlValue>),
+    StringAgg { values: Vec<String>, delimiter: String },
+    BoolAnd(Option<bool>),
+    BoolOr(Option<bool>),
 }
 
 /// Expression evaluator
@@ -362,14 +371,42 @@ impl ExpressionEvaluator {
             "AVG" => self.evaluate_avg(&args),
             "MIN" => self.evaluate_min(&args),
             "MAX" => self.evaluate_max(&args),
+            "ARRAY_AGG" => self.evaluate_array_agg(&args),
+            "STRING_AGG" => self.evaluate_string_agg(&args),
+            "BOOL_AND" | "EVERY" => self.evaluate_bool_and(&args),
+            "BOOL_OR" => self.evaluate_bool_or(&args),
 
             // String functions
-            "LENGTH" | "CHAR_LENGTH" => self.evaluate_length(&args),
+            "LENGTH" | "CHAR_LENGTH" | "CHARACTER_LENGTH" => self.evaluate_length(&args),
             "UPPER" => self.evaluate_upper(&args),
             "LOWER" => self.evaluate_lower(&args),
-            "SUBSTRING" => self.evaluate_substring(&args),
+            "SUBSTRING" | "SUBSTR" => self.evaluate_substring(&args),
             "REPLACE" => self.evaluate_replace(&args),
             "CONCAT" => self.evaluate_concat(&args),
+            "LEFT" => self.evaluate_left(&args),
+            "RIGHT" => self.evaluate_right(&args),
+            "LPAD" => self.evaluate_lpad(&args),
+            "RPAD" => self.evaluate_rpad(&args),
+            "REVERSE" => self.evaluate_reverse(&args),
+            "SPLIT_PART" => self.evaluate_split_part(&args),
+            "TRIM" | "BTRIM" => self.evaluate_trim(&args),
+            "LTRIM" => self.evaluate_ltrim(&args),
+            "RTRIM" => self.evaluate_rtrim(&args),
+            "POSITION" | "STRPOS" => self.evaluate_position(&args),
+            "INITCAP" => self.evaluate_initcap(&args),
+            "REPEAT" => self.evaluate_repeat(&args),
+            "ASCII" => self.evaluate_ascii(&args),
+            "CHR" => self.evaluate_chr(&args),
+            "MD5" => self.evaluate_md5(&args),
+            "ENCODE" => self.evaluate_encode(&args),
+            "DECODE" => self.evaluate_decode(&args),
+            "OCTET_LENGTH" => self.evaluate_octet_length(&args),
+            "BIT_LENGTH" => self.evaluate_bit_length(&args),
+            "OVERLAY" => self.evaluate_overlay(&args),
+            "TRANSLATE" => self.evaluate_translate(&args),
+            "QUOTE_LITERAL" => self.evaluate_quote_literal(&args),
+            "QUOTE_IDENT" => self.evaluate_quote_ident(&args),
+            "FORMAT" => self.evaluate_format(&args),
 
             // Math functions
             "ABS" => self.evaluate_abs(&args),
@@ -377,6 +414,23 @@ impl ExpressionEvaluator {
             "CEILING" | "CEIL" => self.evaluate_ceiling(&args),
             "FLOOR" => self.evaluate_floor(&args),
             "SQRT" => self.evaluate_sqrt(&args),
+            "POWER" | "POW" => self.evaluate_power(&args),
+            "EXP" => self.evaluate_exp(&args),
+            "LN" => self.evaluate_ln(&args),
+            "LOG" | "LOG10" => self.evaluate_log(&args),
+            "MOD" => self.evaluate_mod(&args),
+            "PI" => self.evaluate_pi(&args),
+            "RADIANS" => self.evaluate_radians(&args),
+            "DEGREES" => self.evaluate_degrees(&args),
+            "SIN" => self.evaluate_sin(&args),
+            "COS" => self.evaluate_cos(&args),
+            "TAN" => self.evaluate_tan(&args),
+            "ASIN" => self.evaluate_asin(&args),
+            "ACOS" => self.evaluate_acos(&args),
+            "ATAN" => self.evaluate_atan(&args),
+            "ATAN2" => self.evaluate_atan2(&args),
+            "SIGN" => self.evaluate_sign(&args),
+            "TRUNC" | "TRUNCATE" => self.evaluate_trunc(&args),
 
             // Date functions
             "NOW" => self.evaluate_now(&args),
@@ -386,6 +440,15 @@ impl ExpressionEvaluator {
             "YEAR" => self.evaluate_year(&args),
             "MONTH" => self.evaluate_month(&args),
             "DAY" | "DAYOFMONTH" => self.evaluate_day(&args),
+            "EXTRACT" | "DATE_PART" => self.evaluate_extract(&args),
+            "DATE_TRUNC" => self.evaluate_date_trunc(&args),
+            "HOUR" => self.evaluate_hour(&args),
+            "MINUTE" => self.evaluate_minute(&args),
+            "SECOND" => self.evaluate_second(&args),
+            "WEEK" => self.evaluate_week(&args),
+            "QUARTER" => self.evaluate_quarter(&args),
+            "DAYOFWEEK" | "DOW" => self.evaluate_day_of_week(&args),
+            "DAYOFYEAR" | "DOY" => self.evaluate_day_of_year(&args),
 
             // Vector functions
             "VECTOR_DIMS" => self.evaluate_vector_dims(&args),
@@ -977,6 +1040,81 @@ impl ExpressionEvaluator {
         Ok(args[0].clone()) // This would be computed by the query engine
     }
 
+    fn evaluate_array_agg(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_AGG requires exactly one argument".to_string(),
+            ));
+        }
+
+        // In single-row evaluation, return the value in an array
+        // The query engine accumulates all values during aggregation
+        if args[0].is_null() {
+            Ok(SqlValue::Array(vec![]))
+        } else {
+            Ok(SqlValue::Array(vec![args[0].clone()]))
+        }
+    }
+
+    fn evaluate_string_agg(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 1 || args.len() > 2 {
+            return Err(ProtocolError::PostgresError(
+                "STRING_AGG requires one or two arguments".to_string(),
+            ));
+        }
+
+        // First arg is the value, second arg is the delimiter (default ',')
+        let _delimiter = if args.len() == 2 {
+            match &args[1] {
+                SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.clone(),
+                SqlValue::Null => return Ok(SqlValue::Null),
+                _ => ",".to_string(),
+            }
+        } else {
+            ",".to_string()
+        };
+
+        // In single-row evaluation, return the value as-is
+        // The query engine accumulates and joins all values during aggregation
+        if args[0].is_null() {
+            Ok(SqlValue::Null)
+        } else {
+            Ok(SqlValue::Text(args[0].to_postgres_string()))
+        }
+    }
+
+    fn evaluate_bool_and(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "BOOL_AND requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Boolean(b) => Ok(SqlValue::Boolean(*b)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "BOOL_AND requires boolean argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_bool_or(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "BOOL_OR requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Boolean(b) => Ok(SqlValue::Boolean(*b)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "BOOL_OR requires boolean argument".to_string(),
+            )),
+        }
+    }
+
     // String function implementations
     fn evaluate_length(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         if args.len() != 1 {
@@ -1271,6 +1409,379 @@ impl ExpressionEvaluator {
         }
     }
 
+    fn evaluate_power(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "POWER requires exactly two arguments".to_string(),
+            ));
+        }
+
+        let base = Self::to_f64_static(&args[0])?;
+        let exp = Self::to_f64_static(&args[1])?;
+
+        if base.is_none() || exp.is_none() {
+            return Ok(SqlValue::Null);
+        }
+
+        Ok(SqlValue::DoublePrecision(base.unwrap().powf(exp.unwrap())))
+    }
+
+    fn evaluate_exp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "EXP requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => Ok(SqlValue::DoublePrecision(f.exp())),
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_ln(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "LN requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => {
+                if f <= 0.0 {
+                    Err(ProtocolError::PostgresError(
+                        "LN requires positive argument".to_string(),
+                    ))
+                } else {
+                    Ok(SqlValue::DoublePrecision(f.ln()))
+                }
+            }
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_log(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.is_empty() || args.len() > 2 {
+            return Err(ProtocolError::PostgresError(
+                "LOG requires one or two arguments".to_string(),
+            ));
+        }
+
+        if args.len() == 1 {
+            // LOG(x) = log10(x)
+            match Self::to_f64_static(&args[0])? {
+                Some(f) => {
+                    if f <= 0.0 {
+                        Err(ProtocolError::PostgresError(
+                            "LOG requires positive argument".to_string(),
+                        ))
+                    } else {
+                        Ok(SqlValue::DoublePrecision(f.log10()))
+                    }
+                }
+                None => Ok(SqlValue::Null),
+            }
+        } else {
+            // LOG(base, x) = log_base(x)
+            let base = Self::to_f64_static(&args[0])?;
+            let x = Self::to_f64_static(&args[1])?;
+
+            if base.is_none() || x.is_none() {
+                return Ok(SqlValue::Null);
+            }
+
+            let base = base.unwrap();
+            let x = x.unwrap();
+
+            if base <= 0.0 || base == 1.0 || x <= 0.0 {
+                Err(ProtocolError::PostgresError(
+                    "LOG requires positive arguments and base != 1".to_string(),
+                ))
+            } else {
+                Ok(SqlValue::DoublePrecision(x.log(base)))
+            }
+        }
+    }
+
+    fn evaluate_mod(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "MOD requires exactly two arguments".to_string(),
+            ));
+        }
+
+        match (&args[0], &args[1]) {
+            (SqlValue::Integer(a), SqlValue::Integer(b)) => {
+                if *b == 0 {
+                    Err(ProtocolError::PostgresError("Division by zero".to_string()))
+                } else {
+                    Ok(SqlValue::Integer(a % b))
+                }
+            }
+            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => {
+                if *b == 0 {
+                    Err(ProtocolError::PostgresError("Division by zero".to_string()))
+                } else {
+                    Ok(SqlValue::BigInt(a % b))
+                }
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => {
+                let a = Self::to_f64_static(&args[0])?;
+                let b = Self::to_f64_static(&args[1])?;
+                match (a, b) {
+                    (Some(a), Some(b)) => {
+                        if b == 0.0 {
+                            Err(ProtocolError::PostgresError("Division by zero".to_string()))
+                        } else {
+                            Ok(SqlValue::DoublePrecision(a % b))
+                        }
+                    }
+                    _ => Ok(SqlValue::Null),
+                }
+            }
+        }
+    }
+
+    fn evaluate_pi(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if !args.is_empty() {
+            return Err(ProtocolError::PostgresError(
+                "PI requires no arguments".to_string(),
+            ));
+        }
+        Ok(SqlValue::DoublePrecision(std::f64::consts::PI))
+    }
+
+    fn evaluate_radians(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "RADIANS requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => Ok(SqlValue::DoublePrecision(f.to_radians())),
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_degrees(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "DEGREES requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => Ok(SqlValue::DoublePrecision(f.to_degrees())),
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_sin(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "SIN requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => Ok(SqlValue::DoublePrecision(f.sin())),
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_cos(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "COS requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => Ok(SqlValue::DoublePrecision(f.cos())),
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_tan(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "TAN requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => Ok(SqlValue::DoublePrecision(f.tan())),
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_asin(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "ASIN requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => {
+                if f < -1.0 || f > 1.0 {
+                    Err(ProtocolError::PostgresError(
+                        "ASIN argument must be between -1 and 1".to_string(),
+                    ))
+                } else {
+                    Ok(SqlValue::DoublePrecision(f.asin()))
+                }
+            }
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_acos(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "ACOS requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => {
+                if f < -1.0 || f > 1.0 {
+                    Err(ProtocolError::PostgresError(
+                        "ACOS argument must be between -1 and 1".to_string(),
+                    ))
+                } else {
+                    Ok(SqlValue::DoublePrecision(f.acos()))
+                }
+            }
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_atan(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "ATAN requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => Ok(SqlValue::DoublePrecision(f.atan())),
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_atan2(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ATAN2 requires exactly two arguments".to_string(),
+            ));
+        }
+
+        let y = Self::to_f64_static(&args[0])?;
+        let x = Self::to_f64_static(&args[1])?;
+
+        match (y, x) {
+            (Some(y), Some(x)) => Ok(SqlValue::DoublePrecision(y.atan2(x))),
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_sign(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "SIGN requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Integer(i) => Ok(SqlValue::Integer(i.signum())),
+            SqlValue::BigInt(i) => Ok(SqlValue::BigInt(i.signum())),
+            SqlValue::DoublePrecision(f) => {
+                if f.is_nan() {
+                    Ok(SqlValue::DoublePrecision(f64::NAN))
+                } else if *f > 0.0 {
+                    Ok(SqlValue::DoublePrecision(1.0))
+                } else if *f < 0.0 {
+                    Ok(SqlValue::DoublePrecision(-1.0))
+                } else {
+                    Ok(SqlValue::DoublePrecision(0.0))
+                }
+            }
+            SqlValue::Real(f) => {
+                if f.is_nan() {
+                    Ok(SqlValue::Real(f32::NAN))
+                } else if *f > 0.0 {
+                    Ok(SqlValue::Real(1.0))
+                } else if *f < 0.0 {
+                    Ok(SqlValue::Real(-1.0))
+                } else {
+                    Ok(SqlValue::Real(0.0))
+                }
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "SIGN requires numeric argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_trunc(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.is_empty() || args.len() > 2 {
+            return Err(ProtocolError::PostgresError(
+                "TRUNC requires 1 or 2 arguments".to_string(),
+            ));
+        }
+
+        let scale = if args.len() == 2 {
+            match &args[1] {
+                SqlValue::Integer(i) => *i,
+                SqlValue::BigInt(i) => *i as i32,
+                _ => {
+                    return Err(ProtocolError::PostgresError(
+                        "TRUNC scale must be an integer".to_string(),
+                    ))
+                }
+            }
+        } else {
+            0
+        };
+
+        match &args[0] {
+            SqlValue::DoublePrecision(f) => {
+                let factor = 10_f64.powi(scale);
+                Ok(SqlValue::DoublePrecision((f * factor).trunc() / factor))
+            }
+            SqlValue::Real(f) => {
+                let factor = 10_f32.powi(scale);
+                Ok(SqlValue::Real((f * factor).trunc() / factor))
+            }
+            SqlValue::Integer(i) => Ok(SqlValue::Integer(*i)),
+            SqlValue::BigInt(i) => Ok(SqlValue::BigInt(*i)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "TRUNC requires numeric argument".to_string(),
+            )),
+        }
+    }
+
+    /// Helper to convert SqlValue to f64
+    fn to_f64_static(value: &SqlValue) -> ProtocolResult<Option<f64>> {
+        match value {
+            SqlValue::SmallInt(i) => Ok(Some(*i as f64)),
+            SqlValue::Integer(i) => Ok(Some(*i as f64)),
+            SqlValue::BigInt(i) => Ok(Some(*i as f64)),
+            SqlValue::Real(f) => Ok(Some(*f as f64)),
+            SqlValue::DoublePrecision(f) => Ok(Some(*f)),
+            SqlValue::Decimal(d) => Ok(d.to_string().parse().ok()),
+            SqlValue::Null => Ok(None),
+            _ => Err(ProtocolError::PostgresError(
+                "Expected numeric argument".to_string(),
+            )),
+        }
+    }
+
     // Additional function implementations would continue here...
     // Date, vector, and other specialized functions
 
@@ -1369,6 +1880,712 @@ impl ExpressionEvaluator {
         Ok(SqlValue::Text(result))
     }
 
+    fn evaluate_left(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "LEFT requires exactly two arguments".to_string(),
+            ));
+        }
+
+        let s = Self::get_string_arg(&args[0])?;
+        let n = Self::get_int_arg(&args[1])?;
+
+        match (s, n) {
+            (Some(s), Some(n)) => {
+                let chars: Vec<char> = s.chars().collect();
+                let len = if n >= 0 { n as usize } else { 0 };
+                let result: String = chars.into_iter().take(len).collect();
+                Ok(SqlValue::Text(result))
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_right(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "RIGHT requires exactly two arguments".to_string(),
+            ));
+        }
+
+        let s = Self::get_string_arg(&args[0])?;
+        let n = Self::get_int_arg(&args[1])?;
+
+        match (s, n) {
+            (Some(s), Some(n)) => {
+                let chars: Vec<char> = s.chars().collect();
+                let len = if n >= 0 { n as usize } else { 0 };
+                let start = chars.len().saturating_sub(len);
+                let result: String = chars.into_iter().skip(start).collect();
+                Ok(SqlValue::Text(result))
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_lpad(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(ProtocolError::PostgresError(
+                "LPAD requires 2 or 3 arguments".to_string(),
+            ));
+        }
+
+        let s = Self::get_string_arg(&args[0])?;
+        let len = Self::get_int_arg(&args[1])?;
+        let fill = if args.len() == 3 {
+            Self::get_string_arg(&args[2])?
+        } else {
+            Some(" ".to_string())
+        };
+
+        match (s, len, fill) {
+            (Some(s), Some(len), Some(fill)) => {
+                let target_len = if len >= 0 { len as usize } else { 0 };
+                let current_len = s.chars().count();
+
+                if current_len >= target_len {
+                    let result: String = s.chars().take(target_len).collect();
+                    Ok(SqlValue::Text(result))
+                } else if fill.is_empty() {
+                    Ok(SqlValue::Text(s))
+                } else {
+                    let padding_needed = target_len - current_len;
+                    let fill_chars: Vec<char> = fill.chars().collect();
+                    let mut padding = String::new();
+                    let mut i = 0;
+                    while padding.chars().count() < padding_needed {
+                        padding.push(fill_chars[i % fill_chars.len()]);
+                        i += 1;
+                    }
+                    Ok(SqlValue::Text(format!("{}{}", padding, s)))
+                }
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_rpad(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(ProtocolError::PostgresError(
+                "RPAD requires 2 or 3 arguments".to_string(),
+            ));
+        }
+
+        let s = Self::get_string_arg(&args[0])?;
+        let len = Self::get_int_arg(&args[1])?;
+        let fill = if args.len() == 3 {
+            Self::get_string_arg(&args[2])?
+        } else {
+            Some(" ".to_string())
+        };
+
+        match (s, len, fill) {
+            (Some(s), Some(len), Some(fill)) => {
+                let target_len = if len >= 0 { len as usize } else { 0 };
+                let current_len = s.chars().count();
+
+                if current_len >= target_len {
+                    let result: String = s.chars().take(target_len).collect();
+                    Ok(SqlValue::Text(result))
+                } else if fill.is_empty() {
+                    Ok(SqlValue::Text(s))
+                } else {
+                    let padding_needed = target_len - current_len;
+                    let fill_chars: Vec<char> = fill.chars().collect();
+                    let mut padding = String::new();
+                    let mut i = 0;
+                    while padding.chars().count() < padding_needed {
+                        padding.push(fill_chars[i % fill_chars.len()]);
+                        i += 1;
+                    }
+                    Ok(SqlValue::Text(format!("{}{}", s, padding)))
+                }
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_reverse(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "REVERSE requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::get_string_arg(&args[0])? {
+            Some(s) => Ok(SqlValue::Text(s.chars().rev().collect())),
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_split_part(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 3 {
+            return Err(ProtocolError::PostgresError(
+                "SPLIT_PART requires exactly three arguments".to_string(),
+            ));
+        }
+
+        let s = Self::get_string_arg(&args[0])?;
+        let delimiter = Self::get_string_arg(&args[1])?;
+        let field = Self::get_int_arg(&args[2])?;
+
+        match (s, delimiter, field) {
+            (Some(s), Some(delimiter), Some(field)) => {
+                if field <= 0 {
+                    return Err(ProtocolError::PostgresError(
+                        "SPLIT_PART field position must be positive".to_string(),
+                    ));
+                }
+
+                let parts: Vec<&str> = if delimiter.is_empty() {
+                    vec![&s[..]]
+                } else {
+                    s.split(&delimiter).collect()
+                };
+
+                let idx = (field - 1) as usize;
+                if idx < parts.len() {
+                    Ok(SqlValue::Text(parts[idx].to_string()))
+                } else {
+                    Ok(SqlValue::Text(String::new()))
+                }
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_trim(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.is_empty() || args.len() > 2 {
+            return Err(ProtocolError::PostgresError(
+                "TRIM requires 1 or 2 arguments".to_string(),
+            ));
+        }
+
+        let s = Self::get_string_arg(&args[0])?;
+        let chars_to_trim = if args.len() == 2 {
+            Self::get_string_arg(&args[1])?
+        } else {
+            Some(" \t\n\r".to_string())
+        };
+
+        match (s, chars_to_trim) {
+            (Some(s), Some(chars)) => {
+                let char_set: Vec<char> = chars.chars().collect();
+                let result: String = s.trim_matches(|c| char_set.contains(&c)).to_string();
+                Ok(SqlValue::Text(result))
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_ltrim(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.is_empty() || args.len() > 2 {
+            return Err(ProtocolError::PostgresError(
+                "LTRIM requires 1 or 2 arguments".to_string(),
+            ));
+        }
+
+        let s = Self::get_string_arg(&args[0])?;
+        let chars_to_trim = if args.len() == 2 {
+            Self::get_string_arg(&args[1])?
+        } else {
+            Some(" \t\n\r".to_string())
+        };
+
+        match (s, chars_to_trim) {
+            (Some(s), Some(chars)) => {
+                let char_set: Vec<char> = chars.chars().collect();
+                let result: String = s.trim_start_matches(|c| char_set.contains(&c)).to_string();
+                Ok(SqlValue::Text(result))
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_rtrim(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.is_empty() || args.len() > 2 {
+            return Err(ProtocolError::PostgresError(
+                "RTRIM requires 1 or 2 arguments".to_string(),
+            ));
+        }
+
+        let s = Self::get_string_arg(&args[0])?;
+        let chars_to_trim = if args.len() == 2 {
+            Self::get_string_arg(&args[1])?
+        } else {
+            Some(" \t\n\r".to_string())
+        };
+
+        match (s, chars_to_trim) {
+            (Some(s), Some(chars)) => {
+                let char_set: Vec<char> = chars.chars().collect();
+                let result: String = s.trim_end_matches(|c| char_set.contains(&c)).to_string();
+                Ok(SqlValue::Text(result))
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_position(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "POSITION requires exactly two arguments".to_string(),
+            ));
+        }
+
+        let substring = Self::get_string_arg(&args[0])?;
+        let s = Self::get_string_arg(&args[1])?;
+
+        match (substring, s) {
+            (Some(substring), Some(s)) => {
+                // POSITION returns 1-based index, 0 if not found
+                match s.find(&substring) {
+                    Some(pos) => {
+                        // Convert byte position to char position (1-based)
+                        let char_pos = s[..pos].chars().count() + 1;
+                        Ok(SqlValue::Integer(char_pos as i32))
+                    }
+                    None => Ok(SqlValue::Integer(0)),
+                }
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_initcap(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "INITCAP requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::get_string_arg(&args[0])? {
+            Some(s) => {
+                let mut result = String::new();
+                let mut capitalize_next = true;
+
+                for c in s.chars() {
+                    if c.is_whitespace() || !c.is_alphanumeric() {
+                        result.push(c);
+                        capitalize_next = true;
+                    } else if capitalize_next {
+                        result.extend(c.to_uppercase());
+                        capitalize_next = false;
+                    } else {
+                        result.extend(c.to_lowercase());
+                    }
+                }
+
+                Ok(SqlValue::Text(result))
+            }
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_repeat(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "REPEAT requires exactly two arguments".to_string(),
+            ));
+        }
+
+        let s = Self::get_string_arg(&args[0])?;
+        let n = Self::get_int_arg(&args[1])?;
+
+        match (s, n) {
+            (Some(s), Some(n)) => {
+                let count = if n >= 0 { n as usize } else { 0 };
+                Ok(SqlValue::Text(s.repeat(count)))
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_ascii(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "ASCII requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::get_string_arg(&args[0])? {
+            Some(s) => {
+                if s.is_empty() {
+                    Ok(SqlValue::Integer(0))
+                } else {
+                    Ok(SqlValue::Integer(s.chars().next().unwrap() as i32))
+                }
+            }
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_chr(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "CHR requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::get_int_arg(&args[0])? {
+            Some(n) => {
+                if n < 0 || n > 0x10FFFF {
+                    Err(ProtocolError::PostgresError(
+                        "CHR argument out of valid Unicode range".to_string(),
+                    ))
+                } else {
+                    match char::from_u32(n as u32) {
+                        Some(c) => Ok(SqlValue::Text(c.to_string())),
+                        None => Err(ProtocolError::PostgresError(
+                            "CHR argument is not a valid Unicode code point".to_string(),
+                        )),
+                    }
+                }
+            }
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_md5(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "MD5 requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::get_string_arg(&args[0])? {
+            Some(s) => {
+                let digest = md5::compute(s.as_bytes());
+                Ok(SqlValue::Text(format!("{:x}", digest)))
+            }
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_encode(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ENCODE requires exactly two arguments".to_string(),
+            ));
+        }
+
+        let data = Self::get_string_arg(&args[0])?;
+        let format = Self::get_string_arg(&args[1])?;
+
+        match (data, format) {
+            (Some(data), Some(format)) => {
+                match format.to_lowercase().as_str() {
+                    "base64" => {
+                        use base64::{Engine as _, engine::general_purpose};
+                        Ok(SqlValue::Text(general_purpose::STANDARD.encode(data.as_bytes())))
+                    }
+                    "hex" => {
+                        Ok(SqlValue::Text(hex::encode(data.as_bytes())))
+                    }
+                    "escape" => {
+                        // Simple escape encoding
+                        Ok(SqlValue::Text(data.escape_default().to_string()))
+                    }
+                    _ => Err(ProtocolError::PostgresError(
+                        format!("Unknown encoding format: {}", format),
+                    )),
+                }
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_decode(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "DECODE requires exactly two arguments".to_string(),
+            ));
+        }
+
+        let data = Self::get_string_arg(&args[0])?;
+        let format = Self::get_string_arg(&args[1])?;
+
+        match (data, format) {
+            (Some(data), Some(format)) => {
+                match format.to_lowercase().as_str() {
+                    "base64" => {
+                        use base64::{Engine as _, engine::general_purpose};
+                        match general_purpose::STANDARD.decode(&data) {
+                            Ok(bytes) => match String::from_utf8(bytes) {
+                                Ok(s) => Ok(SqlValue::Text(s)),
+                                Err(_) => Ok(SqlValue::Bytea(general_purpose::STANDARD.decode(&data).unwrap())),
+                            },
+                            Err(e) => Err(ProtocolError::PostgresError(
+                                format!("Invalid base64 data: {}", e),
+                            )),
+                        }
+                    }
+                    "hex" => {
+                        match hex::decode(&data) {
+                            Ok(bytes) => match String::from_utf8(bytes) {
+                                Ok(s) => Ok(SqlValue::Text(s)),
+                                Err(_) => Ok(SqlValue::Bytea(hex::decode(&data).unwrap())),
+                            },
+                            Err(e) => Err(ProtocolError::PostgresError(
+                                format!("Invalid hex data: {}", e),
+                            )),
+                        }
+                    }
+                    _ => Err(ProtocolError::PostgresError(
+                        format!("Unknown decoding format: {}", format),
+                    )),
+                }
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_octet_length(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "OCTET_LENGTH requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => {
+                Ok(SqlValue::Integer(s.len() as i32))
+            }
+            SqlValue::Bytea(b) => Ok(SqlValue::Integer(b.len() as i32)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "OCTET_LENGTH requires string or bytea argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_bit_length(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "BIT_LENGTH requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => {
+                Ok(SqlValue::Integer((s.len() * 8) as i32))
+            }
+            SqlValue::Bytea(b) => Ok(SqlValue::Integer((b.len() * 8) as i32)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "BIT_LENGTH requires string or bytea argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_overlay(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 3 || args.len() > 4 {
+            return Err(ProtocolError::PostgresError(
+                "OVERLAY requires 3 or 4 arguments".to_string(),
+            ));
+        }
+
+        let s = Self::get_string_arg(&args[0])?;
+        let replacement = Self::get_string_arg(&args[1])?;
+        let start = Self::get_int_arg(&args[2])?;
+        let len = if args.len() == 4 {
+            Self::get_int_arg(&args[3])?
+        } else {
+            replacement.as_ref().map(|r| r.chars().count() as i32)
+        };
+
+        match (s, replacement, start, len) {
+            (Some(s), Some(replacement), Some(start), Some(len)) => {
+                let chars: Vec<char> = s.chars().collect();
+                let start_idx = if start > 0 { (start - 1) as usize } else { 0 };
+                let end_idx = (start_idx + len as usize).min(chars.len());
+
+                let mut result = String::new();
+                result.extend(chars.iter().take(start_idx));
+                result.push_str(&replacement);
+                result.extend(chars.iter().skip(end_idx));
+
+                Ok(SqlValue::Text(result))
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_translate(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 3 {
+            return Err(ProtocolError::PostgresError(
+                "TRANSLATE requires exactly three arguments".to_string(),
+            ));
+        }
+
+        let s = Self::get_string_arg(&args[0])?;
+        let from = Self::get_string_arg(&args[1])?;
+        let to = Self::get_string_arg(&args[2])?;
+
+        match (s, from, to) {
+            (Some(s), Some(from), Some(to)) => {
+                let from_chars: Vec<char> = from.chars().collect();
+                let to_chars: Vec<char> = to.chars().collect();
+
+                let result: String = s.chars().filter_map(|c| {
+                    if let Some(pos) = from_chars.iter().position(|&fc| fc == c) {
+                        if pos < to_chars.len() {
+                            Some(to_chars[pos])
+                        } else {
+                            None // Remove character if no corresponding replacement
+                        }
+                    } else {
+                        Some(c)
+                    }
+                }).collect();
+
+                Ok(SqlValue::Text(result))
+            }
+            _ => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_quote_literal(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "QUOTE_LITERAL requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Null => Ok(SqlValue::Text("NULL".to_string())),
+            _ => {
+                let s = args[0].to_postgres_string();
+                // Escape single quotes by doubling them
+                let escaped = s.replace('\'', "''");
+                Ok(SqlValue::Text(format!("'{}'", escaped)))
+            }
+        }
+    }
+
+    fn evaluate_quote_ident(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "QUOTE_IDENT requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::get_string_arg(&args[0])? {
+            Some(s) => {
+                // Check if quoting is needed
+                let needs_quoting = s.is_empty()
+                    || s.chars().next().map(|c| c.is_numeric()).unwrap_or(false)
+                    || s.chars().any(|c| !c.is_alphanumeric() && c != '_')
+                    || s.to_lowercase() != s;
+
+                if needs_quoting {
+                    // Escape double quotes by doubling them
+                    let escaped = s.replace('"', "\"\"");
+                    Ok(SqlValue::Text(format!("\"{}\"", escaped)))
+                } else {
+                    Ok(SqlValue::Text(s))
+                }
+            }
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn evaluate_format(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.is_empty() {
+            return Err(ProtocolError::PostgresError(
+                "FORMAT requires at least one argument".to_string(),
+            ));
+        }
+
+        let format_str = Self::get_string_arg(&args[0])?;
+
+        match format_str {
+            Some(format_str) => {
+                // Simple format implementation supporting %s, %I, %L
+                let mut result = format_str.clone();
+                let mut arg_idx = 1;
+
+                // Process format specifiers
+                let mut i = 0;
+                while i < result.len() {
+                    if result[i..].starts_with('%') && i + 1 < result.len() {
+                        let spec = result.chars().nth(i + 1).unwrap();
+                        match spec {
+                            's' => {
+                                if arg_idx < args.len() {
+                                    let val = args[arg_idx].to_postgres_string();
+                                    result = format!("{}{}{}", &result[..i], val, &result[i+2..]);
+                                    i += val.len();
+                                    arg_idx += 1;
+                                } else {
+                                    i += 2;
+                                }
+                            }
+                            'I' => {
+                                if arg_idx < args.len() {
+                                    let s = args[arg_idx].to_postgres_string();
+                                    let escaped = s.replace('"', "\"\"");
+                                    let val = format!("\"{}\"", escaped);
+                                    result = format!("{}{}{}", &result[..i], val, &result[i+2..]);
+                                    i += val.len();
+                                    arg_idx += 1;
+                                } else {
+                                    i += 2;
+                                }
+                            }
+                            'L' => {
+                                if arg_idx < args.len() {
+                                    let s = args[arg_idx].to_postgres_string();
+                                    let escaped = s.replace('\'', "''");
+                                    let val = format!("'{}'", escaped);
+                                    result = format!("{}{}{}", &result[..i], val, &result[i+2..]);
+                                    i += val.len();
+                                    arg_idx += 1;
+                                } else {
+                                    i += 2;
+                                }
+                            }
+                            '%' => {
+                                result = format!("{}{}", &result[..i], &result[i+1..]);
+                                i += 1;
+                            }
+                            _ => {
+                                i += 2;
+                            }
+                        }
+                    } else {
+                        i += 1;
+                    }
+                }
+
+                Ok(SqlValue::Text(result))
+            }
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    /// Helper to extract string from SqlValue
+    fn get_string_arg(value: &SqlValue) -> ProtocolResult<Option<String>> {
+        match value {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => Ok(Some(s.clone())),
+            SqlValue::Null => Ok(None),
+            _ => Ok(Some(value.to_postgres_string())),
+        }
+    }
+
+    /// Helper to extract integer from SqlValue
+    fn get_int_arg(value: &SqlValue) -> ProtocolResult<Option<i32>> {
+        match value {
+            SqlValue::SmallInt(i) => Ok(Some(*i as i32)),
+            SqlValue::Integer(i) => Ok(Some(*i)),
+            SqlValue::BigInt(i) => Ok(Some(*i as i32)),
+            SqlValue::Null => Ok(None),
+            _ => Err(ProtocolError::PostgresError(
+                "Expected integer argument".to_string(),
+            )),
+        }
+    }
+
     fn evaluate_year(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         if args.len() != 1 {
             return Err(ProtocolError::PostgresError(
@@ -1458,6 +2675,564 @@ impl ExpressionEvaluator {
             SqlValue::Null => Ok(SqlValue::Null),
             _ => Err(ProtocolError::PostgresError(
                 "DAY requires date argument".to_string(),
+            )),
+        }
+    }
+
+    /// EXTRACT(field FROM source) or DATE_PART(field, source)
+    /// Extracts a component (year, month, day, hour, etc.) from a timestamp/date/time
+    fn evaluate_extract(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "EXTRACT/DATE_PART requires exactly two arguments: field and source".to_string(),
+            ));
+        }
+
+        // First arg is the field name (as text)
+        let field = match &args[0] {
+            SqlValue::Text(s) => s.to_uppercase(),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "EXTRACT field must be a string (year, month, day, etc.)".to_string(),
+                ))
+            }
+        };
+
+        let source = &args[1];
+
+        // Handle NULL source
+        if source.is_null() {
+            return Ok(SqlValue::Null);
+        }
+
+        self.extract_field_from_value(&field, source)
+    }
+
+    /// Internal helper to extract a field from a date/time value
+    fn extract_field_from_value(
+        &self,
+        field: &str,
+        value: &SqlValue,
+    ) -> ProtocolResult<SqlValue> {
+        use chrono::{Datelike, Timelike};
+
+        match value {
+            SqlValue::Date(date) => match field {
+                "YEAR" => Ok(SqlValue::Integer(date.year())),
+                "MONTH" => Ok(SqlValue::Integer(date.month() as i32)),
+                "DAY" => Ok(SqlValue::Integer(date.day() as i32)),
+                "DOW" | "DAYOFWEEK" => {
+                    // PostgreSQL: Sunday=0 to Saturday=6
+                    Ok(SqlValue::Integer(
+                        date.weekday().num_days_from_sunday() as i32
+                    ))
+                }
+                "DOY" | "DAYOFYEAR" => Ok(SqlValue::Integer(date.ordinal() as i32)),
+                "WEEK" | "ISOWEEK" => Ok(SqlValue::Integer(date.iso_week().week() as i32)),
+                "QUARTER" => Ok(SqlValue::Integer(((date.month() - 1) / 3 + 1) as i32)),
+                "EPOCH" => {
+                    // Seconds since 1970-01-01
+                    let datetime =
+                        date.and_hms_opt(0, 0, 0).unwrap_or_default();
+                    Ok(SqlValue::DoublePrecision(datetime.and_utc().timestamp() as f64))
+                }
+                _ => Err(ProtocolError::PostgresError(format!(
+                    "Cannot extract '{}' from DATE",
+                    field
+                ))),
+            },
+            SqlValue::Time(time) => match field {
+                "HOUR" => Ok(SqlValue::Integer(time.hour() as i32)),
+                "MINUTE" => Ok(SqlValue::Integer(time.minute() as i32)),
+                "SECOND" => Ok(SqlValue::DoublePrecision(
+                    time.second() as f64 + time.nanosecond() as f64 / 1_000_000_000.0,
+                )),
+                "MILLISECOND" | "MILLISECONDS" => Ok(SqlValue::DoublePrecision(
+                    time.second() as f64 * 1000.0 + time.nanosecond() as f64 / 1_000_000.0,
+                )),
+                "MICROSECOND" | "MICROSECONDS" => Ok(SqlValue::DoublePrecision(
+                    time.second() as f64 * 1_000_000.0 + time.nanosecond() as f64 / 1_000.0,
+                )),
+                _ => Err(ProtocolError::PostgresError(format!(
+                    "Cannot extract '{}' from TIME",
+                    field
+                ))),
+            },
+            SqlValue::TimeWithTimezone(ts) => {
+                let time = ts.time();
+                match field {
+                    "HOUR" => Ok(SqlValue::Integer(time.hour() as i32)),
+                    "MINUTE" => Ok(SqlValue::Integer(time.minute() as i32)),
+                    "SECOND" => Ok(SqlValue::DoublePrecision(
+                        time.second() as f64 + time.nanosecond() as f64 / 1_000_000_000.0,
+                    )),
+                    "TIMEZONE" | "TIMEZONE_HOUR" | "TIMEZONE_MINUTE" => {
+                        // UTC timezone = 0
+                        Ok(SqlValue::Integer(0))
+                    }
+                    _ => Err(ProtocolError::PostgresError(format!(
+                        "Cannot extract '{}' from TIME WITH TIMEZONE",
+                        field
+                    ))),
+                }
+            }
+            SqlValue::Timestamp(ts) => {
+                let date = ts.date();
+                let time = ts.time();
+                match field {
+                    "YEAR" => Ok(SqlValue::Integer(date.year())),
+                    "MONTH" => Ok(SqlValue::Integer(date.month() as i32)),
+                    "DAY" => Ok(SqlValue::Integer(date.day() as i32)),
+                    "HOUR" => Ok(SqlValue::Integer(time.hour() as i32)),
+                    "MINUTE" => Ok(SqlValue::Integer(time.minute() as i32)),
+                    "SECOND" => Ok(SqlValue::DoublePrecision(
+                        time.second() as f64 + time.nanosecond() as f64 / 1_000_000_000.0,
+                    )),
+                    "MILLISECOND" | "MILLISECONDS" => Ok(SqlValue::DoublePrecision(
+                        time.second() as f64 * 1000.0 + time.nanosecond() as f64 / 1_000_000.0,
+                    )),
+                    "MICROSECOND" | "MICROSECONDS" => Ok(SqlValue::DoublePrecision(
+                        time.second() as f64 * 1_000_000.0 + time.nanosecond() as f64 / 1_000.0,
+                    )),
+                    "DOW" | "DAYOFWEEK" => Ok(SqlValue::Integer(
+                        date.weekday().num_days_from_sunday() as i32,
+                    )),
+                    "DOY" | "DAYOFYEAR" => Ok(SqlValue::Integer(date.ordinal() as i32)),
+                    "WEEK" | "ISOWEEK" => Ok(SqlValue::Integer(date.iso_week().week() as i32)),
+                    "QUARTER" => Ok(SqlValue::Integer(((date.month() - 1) / 3 + 1) as i32)),
+                    "EPOCH" => Ok(SqlValue::DoublePrecision(ts.and_utc().timestamp() as f64)),
+                    _ => Err(ProtocolError::PostgresError(format!(
+                        "Cannot extract '{}' from TIMESTAMP",
+                        field
+                    ))),
+                }
+            }
+            SqlValue::TimestampWithTimezone(ts) => {
+                let date = ts.date_naive();
+                let time = ts.time();
+                match field {
+                    "YEAR" => Ok(SqlValue::Integer(date.year())),
+                    "MONTH" => Ok(SqlValue::Integer(date.month() as i32)),
+                    "DAY" => Ok(SqlValue::Integer(date.day() as i32)),
+                    "HOUR" => Ok(SqlValue::Integer(time.hour() as i32)),
+                    "MINUTE" => Ok(SqlValue::Integer(time.minute() as i32)),
+                    "SECOND" => Ok(SqlValue::DoublePrecision(
+                        time.second() as f64 + time.nanosecond() as f64 / 1_000_000_000.0,
+                    )),
+                    "MILLISECOND" | "MILLISECONDS" => Ok(SqlValue::DoublePrecision(
+                        time.second() as f64 * 1000.0 + time.nanosecond() as f64 / 1_000_000.0,
+                    )),
+                    "MICROSECOND" | "MICROSECONDS" => Ok(SqlValue::DoublePrecision(
+                        time.second() as f64 * 1_000_000.0 + time.nanosecond() as f64 / 1_000.0,
+                    )),
+                    "DOW" | "DAYOFWEEK" => Ok(SqlValue::Integer(
+                        date.weekday().num_days_from_sunday() as i32,
+                    )),
+                    "DOY" | "DAYOFYEAR" => Ok(SqlValue::Integer(date.ordinal() as i32)),
+                    "WEEK" | "ISOWEEK" => Ok(SqlValue::Integer(date.iso_week().week() as i32)),
+                    "QUARTER" => Ok(SqlValue::Integer(((date.month() - 1) / 3 + 1) as i32)),
+                    "EPOCH" => Ok(SqlValue::DoublePrecision(ts.timestamp() as f64)),
+                    "TIMEZONE" => Ok(SqlValue::Integer(0)), // UTC
+                    "TIMEZONE_HOUR" => Ok(SqlValue::Integer(0)),
+                    "TIMEZONE_MINUTE" => Ok(SqlValue::Integer(0)),
+                    _ => Err(ProtocolError::PostgresError(format!(
+                        "Cannot extract '{}' from TIMESTAMP WITH TIMEZONE",
+                        field
+                    ))),
+                }
+            }
+            SqlValue::Interval(interval) => match field {
+                "YEAR" => Ok(SqlValue::Integer(interval.months / 12)),
+                "MONTH" => Ok(SqlValue::Integer(interval.months % 12)),
+                "DAY" => Ok(SqlValue::Integer(interval.days)),
+                "HOUR" => Ok(SqlValue::Integer(
+                    (interval.microseconds / 3_600_000_000) as i32,
+                )),
+                "MINUTE" => Ok(SqlValue::Integer(
+                    ((interval.microseconds / 60_000_000) % 60) as i32,
+                )),
+                "SECOND" => Ok(SqlValue::DoublePrecision(
+                    (interval.microseconds % 60_000_000) as f64 / 1_000_000.0,
+                )),
+                "EPOCH" => {
+                    // Total seconds in the interval
+                    let total_seconds = (interval.months as f64 * 30.0 * 24.0 * 3600.0)
+                        + (interval.days as f64 * 24.0 * 3600.0)
+                        + (interval.microseconds as f64 / 1_000_000.0);
+                    Ok(SqlValue::DoublePrecision(total_seconds))
+                }
+                _ => Err(ProtocolError::PostgresError(format!(
+                    "Cannot extract '{}' from INTERVAL",
+                    field
+                ))),
+            },
+            SqlValue::Text(s) => {
+                // Try to parse as timestamp or date
+                if let Ok(ts) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
+                    return self.extract_field_from_value(field, &SqlValue::Timestamp(ts));
+                }
+                if let Ok(ts) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S") {
+                    return self.extract_field_from_value(field, &SqlValue::Timestamp(ts));
+                }
+                if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+                    return self.extract_field_from_value(field, &SqlValue::Date(date));
+                }
+                Err(ProtocolError::PostgresError(format!(
+                    "Cannot parse '{}' as date/time for EXTRACT",
+                    s
+                )))
+            }
+            _ => Err(ProtocolError::PostgresError(format!(
+                "EXTRACT requires date/time value, got: {:?}",
+                value
+            ))),
+        }
+    }
+
+    /// DATE_TRUNC(field, source) - Truncate to specified precision
+    fn evaluate_date_trunc(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "DATE_TRUNC requires exactly two arguments: precision and source".to_string(),
+            ));
+        }
+
+        // First arg is the precision (as text)
+        let precision = match &args[0] {
+            SqlValue::Text(s) => s.to_uppercase(),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "DATE_TRUNC precision must be a string".to_string(),
+                ))
+            }
+        };
+
+        let source = &args[1];
+
+        // Handle NULL source
+        if source.is_null() {
+            return Ok(SqlValue::Null);
+        }
+
+        self.truncate_to_precision(&precision, source)
+    }
+
+    /// Internal helper to truncate a date/time to a specified precision
+    fn truncate_to_precision(
+        &self,
+        precision: &str,
+        value: &SqlValue,
+    ) -> ProtocolResult<SqlValue> {
+        use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
+
+        match value {
+            SqlValue::Date(date) => {
+                let truncated = match precision {
+                    "MILLENNIUM" => {
+                        let millennium = (date.year() - 1) / 1000 * 1000 + 1;
+                        NaiveDate::from_ymd_opt(millennium, 1, 1).unwrap_or(*date)
+                    }
+                    "CENTURY" => {
+                        let century = (date.year() - 1) / 100 * 100 + 1;
+                        NaiveDate::from_ymd_opt(century, 1, 1).unwrap_or(*date)
+                    }
+                    "DECADE" => {
+                        let decade = date.year() / 10 * 10;
+                        NaiveDate::from_ymd_opt(decade, 1, 1).unwrap_or(*date)
+                    }
+                    "YEAR" => NaiveDate::from_ymd_opt(date.year(), 1, 1).unwrap_or(*date),
+                    "QUARTER" => {
+                        let quarter_start = ((date.month() - 1) / 3) * 3 + 1;
+                        NaiveDate::from_ymd_opt(date.year(), quarter_start, 1).unwrap_or(*date)
+                    }
+                    "MONTH" => NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(*date),
+                    "WEEK" => {
+                        let days_from_monday = date.weekday().num_days_from_monday();
+                        *date - chrono::Duration::days(days_from_monday as i64)
+                    }
+                    "DAY" => *date,
+                    _ => {
+                        return Err(ProtocolError::PostgresError(format!(
+                            "Invalid DATE_TRUNC precision '{}' for DATE",
+                            precision
+                        )))
+                    }
+                };
+                Ok(SqlValue::Date(truncated))
+            }
+            SqlValue::Timestamp(ts) => {
+                let date = ts.date();
+                let time = ts.time();
+                let truncated = match precision {
+                    "MILLENNIUM" => {
+                        let millennium = (date.year() - 1) / 1000 * 1000 + 1;
+                        NaiveDateTime::new(
+                            NaiveDate::from_ymd_opt(millennium, 1, 1).unwrap_or(date),
+                            NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                        )
+                    }
+                    "CENTURY" => {
+                        let century = (date.year() - 1) / 100 * 100 + 1;
+                        NaiveDateTime::new(
+                            NaiveDate::from_ymd_opt(century, 1, 1).unwrap_or(date),
+                            NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                        )
+                    }
+                    "DECADE" => {
+                        let decade = date.year() / 10 * 10;
+                        NaiveDateTime::new(
+                            NaiveDate::from_ymd_opt(decade, 1, 1).unwrap_or(date),
+                            NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                        )
+                    }
+                    "YEAR" => NaiveDateTime::new(
+                        NaiveDate::from_ymd_opt(date.year(), 1, 1).unwrap_or(date),
+                        NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                    ),
+                    "QUARTER" => {
+                        let quarter_start = ((date.month() - 1) / 3) * 3 + 1;
+                        NaiveDateTime::new(
+                            NaiveDate::from_ymd_opt(date.year(), quarter_start, 1).unwrap_or(date),
+                            NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                        )
+                    }
+                    "MONTH" => NaiveDateTime::new(
+                        NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date),
+                        NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                    ),
+                    "WEEK" => {
+                        let days_from_monday = date.weekday().num_days_from_monday();
+                        let week_start = date - chrono::Duration::days(days_from_monday as i64);
+                        NaiveDateTime::new(week_start, NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+                    }
+                    "DAY" => NaiveDateTime::new(date, NaiveTime::from_hms_opt(0, 0, 0).unwrap()),
+                    "HOUR" => NaiveDateTime::new(
+                        date,
+                        NaiveTime::from_hms_opt(time.hour(), 0, 0).unwrap(),
+                    ),
+                    "MINUTE" => NaiveDateTime::new(
+                        date,
+                        NaiveTime::from_hms_opt(time.hour(), time.minute(), 0).unwrap(),
+                    ),
+                    "SECOND" => NaiveDateTime::new(
+                        date,
+                        NaiveTime::from_hms_opt(time.hour(), time.minute(), time.second()).unwrap(),
+                    ),
+                    "MILLISECOND" | "MILLISECONDS" => {
+                        let ms = (time.nanosecond() / 1_000_000) * 1_000_000;
+                        NaiveDateTime::new(
+                            date,
+                            NaiveTime::from_hms_nano_opt(time.hour(), time.minute(), time.second(), ms)
+                                .unwrap_or(time),
+                        )
+                    }
+                    "MICROSECOND" | "MICROSECONDS" => {
+                        let us = (time.nanosecond() / 1_000) * 1_000;
+                        NaiveDateTime::new(
+                            date,
+                            NaiveTime::from_hms_nano_opt(time.hour(), time.minute(), time.second(), us)
+                                .unwrap_or(time),
+                        )
+                    }
+                    _ => {
+                        return Err(ProtocolError::PostgresError(format!(
+                            "Invalid DATE_TRUNC precision '{}' for TIMESTAMP",
+                            precision
+                        )))
+                    }
+                };
+                Ok(SqlValue::Timestamp(truncated))
+            }
+            SqlValue::TimestampWithTimezone(ts) => {
+                let naive = ts.naive_utc();
+                let truncated_naive = self.truncate_to_precision(precision, &SqlValue::Timestamp(naive))?;
+                if let SqlValue::Timestamp(t) = truncated_naive {
+                    Ok(SqlValue::TimestampWithTimezone(
+                        chrono::DateTime::from_naive_utc_and_offset(t, chrono::Utc),
+                    ))
+                } else {
+                    Err(ProtocolError::PostgresError(
+                        "Unexpected result from timestamp truncation".to_string(),
+                    ))
+                }
+            }
+            SqlValue::Text(s) => {
+                // Try to parse as timestamp or date
+                if let Ok(ts) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
+                    return self.truncate_to_precision(precision, &SqlValue::Timestamp(ts));
+                }
+                if let Ok(ts) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S") {
+                    return self.truncate_to_precision(precision, &SqlValue::Timestamp(ts));
+                }
+                if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+                    return self.truncate_to_precision(precision, &SqlValue::Date(date));
+                }
+                Err(ProtocolError::PostgresError(format!(
+                    "Cannot parse '{}' as date/time for DATE_TRUNC",
+                    s
+                )))
+            }
+            _ => Err(ProtocolError::PostgresError(format!(
+                "DATE_TRUNC requires date/time value, got: {:?}",
+                value
+            ))),
+        }
+    }
+
+    fn evaluate_hour(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "HOUR requires exactly one argument".to_string(),
+            ));
+        }
+
+        use chrono::Timelike;
+        match &args[0] {
+            SqlValue::Time(time) => Ok(SqlValue::Integer(time.hour() as i32)),
+            SqlValue::TimeWithTimezone(ts) => Ok(SqlValue::Integer(ts.time().hour() as i32)),
+            SqlValue::Timestamp(ts) => Ok(SqlValue::Integer(ts.time().hour() as i32)),
+            SqlValue::TimestampWithTimezone(ts) => Ok(SqlValue::Integer(ts.time().hour() as i32)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "HOUR requires time/timestamp argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_minute(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "MINUTE requires exactly one argument".to_string(),
+            ));
+        }
+
+        use chrono::Timelike;
+        match &args[0] {
+            SqlValue::Time(time) => Ok(SqlValue::Integer(time.minute() as i32)),
+            SqlValue::TimeWithTimezone(ts) => Ok(SqlValue::Integer(ts.time().minute() as i32)),
+            SqlValue::Timestamp(ts) => Ok(SqlValue::Integer(ts.time().minute() as i32)),
+            SqlValue::TimestampWithTimezone(ts) => Ok(SqlValue::Integer(ts.time().minute() as i32)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "MINUTE requires time/timestamp argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_second(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "SECOND requires exactly one argument".to_string(),
+            ));
+        }
+
+        use chrono::Timelike;
+        match &args[0] {
+            SqlValue::Time(time) => Ok(SqlValue::DoublePrecision(
+                time.second() as f64 + time.nanosecond() as f64 / 1_000_000_000.0,
+            )),
+            SqlValue::TimeWithTimezone(ts) => Ok(SqlValue::DoublePrecision(
+                ts.time().second() as f64 + ts.time().nanosecond() as f64 / 1_000_000_000.0,
+            )),
+            SqlValue::Timestamp(ts) => Ok(SqlValue::DoublePrecision(
+                ts.time().second() as f64 + ts.time().nanosecond() as f64 / 1_000_000_000.0,
+            )),
+            SqlValue::TimestampWithTimezone(ts) => Ok(SqlValue::DoublePrecision(
+                ts.time().second() as f64 + ts.time().nanosecond() as f64 / 1_000_000_000.0,
+            )),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "SECOND requires time/timestamp argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_week(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "WEEK requires exactly one argument".to_string(),
+            ));
+        }
+
+        use chrono::Datelike;
+        match &args[0] {
+            SqlValue::Date(date) => Ok(SqlValue::Integer(date.iso_week().week() as i32)),
+            SqlValue::Timestamp(ts) => Ok(SqlValue::Integer(ts.date().iso_week().week() as i32)),
+            SqlValue::TimestampWithTimezone(ts) => {
+                Ok(SqlValue::Integer(ts.date_naive().iso_week().week() as i32))
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "WEEK requires date/timestamp argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_quarter(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "QUARTER requires exactly one argument".to_string(),
+            ));
+        }
+
+        use chrono::Datelike;
+        match &args[0] {
+            SqlValue::Date(date) => Ok(SqlValue::Integer(((date.month() - 1) / 3 + 1) as i32)),
+            SqlValue::Timestamp(ts) => {
+                Ok(SqlValue::Integer(((ts.date().month() - 1) / 3 + 1) as i32))
+            }
+            SqlValue::TimestampWithTimezone(ts) => {
+                Ok(SqlValue::Integer(((ts.date_naive().month() - 1) / 3 + 1) as i32))
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "QUARTER requires date/timestamp argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_day_of_week(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "DAYOFWEEK requires exactly one argument".to_string(),
+            ));
+        }
+
+        use chrono::Datelike;
+        match &args[0] {
+            SqlValue::Date(date) => {
+                Ok(SqlValue::Integer(date.weekday().num_days_from_sunday() as i32))
+            }
+            SqlValue::Timestamp(ts) => Ok(SqlValue::Integer(
+                ts.date().weekday().num_days_from_sunday() as i32,
+            )),
+            SqlValue::TimestampWithTimezone(ts) => Ok(SqlValue::Integer(
+                ts.date_naive().weekday().num_days_from_sunday() as i32,
+            )),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "DAYOFWEEK requires date/timestamp argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_day_of_year(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "DAYOFYEAR requires exactly one argument".to_string(),
+            ));
+        }
+
+        use chrono::Datelike;
+        match &args[0] {
+            SqlValue::Date(date) => Ok(SqlValue::Integer(date.ordinal() as i32)),
+            SqlValue::Timestamp(ts) => Ok(SqlValue::Integer(ts.date().ordinal() as i32)),
+            SqlValue::TimestampWithTimezone(ts) => {
+                Ok(SqlValue::Integer(ts.date_naive().ordinal() as i32))
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "DAYOFYEAR requires date/timestamp argument".to_string(),
             )),
         }
     }
@@ -2546,24 +4321,38 @@ impl ExpressionEvaluator {
         let partition_rows = &window_context.partition_rows;
         let current_idx = window_context.current_row_index;
 
-        // Determine frame bounds
+        // Find current position within partition
+        let current_partition_pos = partition_rows
+            .iter()
+            .position(|&idx| idx == current_idx)
+            .unwrap_or(0);
+
+        // Determine frame bounds based on mode (ROWS, RANGE, GROUPS)
         let (start_offset, end_offset) = if let Some(window_frame) = frame {
-            self.get_frame_bounds(window_frame, partition_rows.len(), current_idx)?
+            self.get_frame_bounds_with_context(window_frame, window_context, current_partition_pos)?
         } else {
             // Default frame: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-            // For simplicity, we'll use the entire partition up to current row
-            let pos = partition_rows
-                .iter()
-                .position(|&idx| idx == current_idx)
-                .unwrap_or(0);
-            (0, pos)
+            (0, current_partition_pos)
         };
 
-        // Collect values from frame rows
+        // Collect values from frame rows, applying exclusion if specified
         let mut frame_values = Vec::new();
+        let exclusion = frame.as_ref().and_then(|f| f.exclusion.as_ref());
+
         for i in start_offset..=end_offset {
             if i < partition_rows.len() {
                 let row_idx = partition_rows[i];
+
+                // Apply EXCLUDE clause
+                if self.should_exclude_row(
+                    exclusion,
+                    i,
+                    current_partition_pos,
+                    window_context,
+                ) {
+                    continue;
+                }
+
                 let row = &window_context.all_rows[row_idx];
 
                 let mut row_context = context.clone();
@@ -2654,15 +4443,13 @@ impl ExpressionEvaluator {
     }
 
     /// Get frame bounds from WindowFrame specification
+    /// Now properly handles ROWS, RANGE, and GROUPS modes
     fn get_frame_bounds(
         &mut self,
         frame: &WindowFrame,
         partition_size: usize,
         current_pos: usize,
     ) -> ProtocolResult<(usize, usize)> {
-        #[allow(unused_imports)]
-        use crate::protocols::postgres_wire::sql::ast::FrameBound;
-
         let pos = current_pos.min(partition_size.saturating_sub(1));
         let empty_context = EvaluationContext::empty();
 
@@ -2680,6 +4467,387 @@ impl ExpressionEvaluator {
             .unwrap_or(pos); // Default to CURRENT ROW
 
         Ok((start, end))
+    }
+
+    /// Get frame bounds with full context for RANGE and GROUPS modes
+    fn get_frame_bounds_with_context(
+        &mut self,
+        frame: &WindowFrame,
+        window_context: &WindowFrameContext,
+        current_partition_pos: usize,
+    ) -> ProtocolResult<(usize, usize)> {
+        use crate::protocols::postgres_wire::sql::ast::WindowFrameMode;
+
+        let partition_size = window_context.partition_rows.len();
+        let pos = current_partition_pos.min(partition_size.saturating_sub(1));
+        let empty_context = EvaluationContext::empty();
+
+        match &frame.mode {
+            WindowFrameMode::Rows => {
+                // ROWS mode: use simple position-based calculation
+                let start = self.frame_bound_to_pos(
+                    &frame.start_bound,
+                    pos,
+                    partition_size,
+                    &empty_context,
+                    true,
+                );
+                let end = frame
+                    .end_bound
+                    .as_ref()
+                    .map(|b| self.frame_bound_to_pos(b, pos, partition_size, &empty_context, false))
+                    .unwrap_or(pos);
+                Ok((start, end))
+            }
+            WindowFrameMode::Range => {
+                // RANGE mode: use ORDER BY values for comparison
+                self.get_range_frame_bounds(frame, window_context, pos)
+            }
+            WindowFrameMode::Groups => {
+                // GROUPS mode: use peer groups
+                self.get_groups_frame_bounds(frame, window_context, pos)
+            }
+        }
+    }
+
+    /// Get frame bounds for RANGE mode based on ORDER BY values
+    fn get_range_frame_bounds(
+        &mut self,
+        frame: &WindowFrame,
+        window_context: &WindowFrameContext,
+        current_pos: usize,
+    ) -> ProtocolResult<(usize, usize)> {
+        use crate::protocols::postgres_wire::sql::ast::FrameBound;
+
+        let partition_size = window_context.partition_rows.len();
+        if partition_size == 0 {
+            return Ok((0, 0));
+        }
+
+        // Get current ORDER BY value
+        let current_value = if current_pos < window_context.order_by_values.len() {
+            &window_context.order_by_values[current_pos]
+        } else {
+            return Ok((0, current_pos));
+        };
+
+        // For RANGE mode with UNBOUNDED bounds, same as ROWS
+        let start = match &frame.start_bound {
+            FrameBound::UnboundedPreceding => 0,
+            FrameBound::CurrentRow => {
+                // Find first row with same ORDER BY value (peer group start)
+                self.find_range_peer_start(window_context, current_pos, current_value)
+            }
+            FrameBound::Preceding(expr) => {
+                // Find rows where ORDER BY value >= current - offset
+                let empty_ctx = EvaluationContext::empty();
+                if let Ok(offset_val) = self.evaluate(expr, &empty_ctx) {
+                    self.find_range_start_with_offset(
+                        window_context,
+                        current_value,
+                        &offset_val,
+                    )
+                } else {
+                    0
+                }
+            }
+            FrameBound::Following(_) => current_pos, // Invalid for start, use current
+            FrameBound::UnboundedFollowing => current_pos, // Invalid for start
+        };
+
+        let end = match frame.end_bound.as_ref().unwrap_or(&FrameBound::CurrentRow) {
+            FrameBound::UnboundedFollowing => partition_size.saturating_sub(1),
+            FrameBound::CurrentRow => {
+                // Find last row with same ORDER BY value (peer group end)
+                self.find_range_peer_end(window_context, current_pos, current_value)
+            }
+            FrameBound::Following(expr) => {
+                // Find rows where ORDER BY value <= current + offset
+                let empty_ctx = EvaluationContext::empty();
+                if let Ok(offset_val) = self.evaluate(expr, &empty_ctx) {
+                    self.find_range_end_with_offset(window_context, current_value, &offset_val)
+                } else {
+                    partition_size.saturating_sub(1)
+                }
+            }
+            FrameBound::Preceding(_) => current_pos, // Invalid for end, use current
+            FrameBound::UnboundedPreceding => current_pos, // Invalid for end
+        };
+
+        Ok((start.min(partition_size.saturating_sub(1)), end.min(partition_size.saturating_sub(1))))
+    }
+
+    /// Find start of peer group (rows with same ORDER BY value)
+    fn find_range_peer_start(
+        &self,
+        window_context: &WindowFrameContext,
+        current_pos: usize,
+        current_value: &SqlValue,
+    ) -> usize {
+        let mut start = current_pos;
+        while start > 0 {
+            if let Some(prev_val) = window_context.order_by_values.get(start - 1) {
+                if self.compare_values(prev_val, current_value).unwrap_or(Ordering::Less) == Ordering::Equal {
+                    start -= 1;
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        start
+    }
+
+    /// Find end of peer group (rows with same ORDER BY value)
+    fn find_range_peer_end(
+        &self,
+        window_context: &WindowFrameContext,
+        current_pos: usize,
+        current_value: &SqlValue,
+    ) -> usize {
+        let partition_size = window_context.partition_rows.len();
+        let mut end = current_pos;
+        while end < partition_size.saturating_sub(1) {
+            if let Some(next_val) = window_context.order_by_values.get(end + 1) {
+                if self.compare_values(next_val, current_value).unwrap_or(Ordering::Less) == Ordering::Equal {
+                    end += 1;
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        end
+    }
+
+    /// Find start position for RANGE with PRECEDING offset
+    fn find_range_start_with_offset(
+        &self,
+        window_context: &WindowFrameContext,
+        current_value: &SqlValue,
+        offset: &SqlValue,
+    ) -> usize {
+        // Calculate target value = current - offset
+        let target_value = self.subtract_values(current_value, offset);
+
+        // Find first row >= target value
+        for (i, val) in window_context.order_by_values.iter().enumerate() {
+            if let Ok(ordering) = self.compare_values(val, &target_value) {
+                if ordering != Ordering::Less {
+                    return i;
+                }
+            }
+        }
+        0
+    }
+
+    /// Find end position for RANGE with FOLLOWING offset
+    fn find_range_end_with_offset(
+        &self,
+        window_context: &WindowFrameContext,
+        current_value: &SqlValue,
+        offset: &SqlValue,
+    ) -> usize {
+        // Calculate target value = current + offset
+        let target_value = self.add_values(current_value, offset);
+
+        let partition_size = window_context.partition_rows.len();
+
+        // Find last row <= target value
+        let mut last_valid = 0;
+        for (i, val) in window_context.order_by_values.iter().enumerate() {
+            if let Ok(ordering) = self.compare_values(val, &target_value) {
+                if ordering != Ordering::Greater {
+                    last_valid = i;
+                }
+            }
+        }
+        last_valid.min(partition_size.saturating_sub(1))
+    }
+
+    /// Get frame bounds for GROUPS mode based on peer groups
+    fn get_groups_frame_bounds(
+        &mut self,
+        frame: &WindowFrame,
+        window_context: &WindowFrameContext,
+        current_pos: usize,
+    ) -> ProtocolResult<(usize, usize)> {
+        use crate::protocols::postgres_wire::sql::ast::FrameBound;
+
+        let partition_size = window_context.partition_rows.len();
+        if partition_size == 0 {
+            return Ok((0, 0));
+        }
+
+        // Find current peer group index
+        let current_group_idx = self.find_peer_group_index(window_context, current_pos);
+        let num_groups = window_context.peer_groups.len();
+
+        if num_groups == 0 {
+            // No peer groups computed, fall back to ROWS behavior
+            return self.get_frame_bounds(frame, partition_size, current_pos);
+        }
+
+        let empty_ctx = EvaluationContext::empty();
+
+        // Calculate start group index
+        let start_group_idx = match &frame.start_bound {
+            FrameBound::UnboundedPreceding => 0,
+            FrameBound::CurrentRow => current_group_idx,
+            FrameBound::Preceding(expr) => {
+                if let Ok(SqlValue::Integer(n)) = self.evaluate(expr, &empty_ctx) {
+                    current_group_idx.saturating_sub(n as usize)
+                } else {
+                    0
+                }
+            }
+            FrameBound::Following(expr) => {
+                if let Ok(SqlValue::Integer(n)) = self.evaluate(expr, &empty_ctx) {
+                    (current_group_idx + n as usize).min(num_groups.saturating_sub(1))
+                } else {
+                    current_group_idx
+                }
+            }
+            FrameBound::UnboundedFollowing => current_group_idx, // Invalid for start
+        };
+
+        // Calculate end group index
+        let end_group_idx = match frame.end_bound.as_ref().unwrap_or(&FrameBound::CurrentRow) {
+            FrameBound::UnboundedFollowing => num_groups.saturating_sub(1),
+            FrameBound::CurrentRow => current_group_idx,
+            FrameBound::Following(expr) => {
+                if let Ok(SqlValue::Integer(n)) = self.evaluate(expr, &empty_ctx) {
+                    (current_group_idx + n as usize).min(num_groups.saturating_sub(1))
+                } else {
+                    num_groups.saturating_sub(1)
+                }
+            }
+            FrameBound::Preceding(expr) => {
+                if let Ok(SqlValue::Integer(n)) = self.evaluate(expr, &empty_ctx) {
+                    current_group_idx.saturating_sub(n as usize)
+                } else {
+                    current_group_idx
+                }
+            }
+            FrameBound::UnboundedPreceding => current_group_idx, // Invalid for end
+        };
+
+        // Convert group indices to row positions
+        let start_pos = if start_group_idx < window_context.peer_groups.len() {
+            window_context.peer_groups[start_group_idx].0
+        } else {
+            0
+        };
+
+        let end_pos = if end_group_idx < window_context.peer_groups.len() {
+            window_context.peer_groups[end_group_idx].1
+        } else {
+            partition_size.saturating_sub(1)
+        };
+
+        Ok((start_pos, end_pos))
+    }
+
+    /// Find which peer group contains the given position
+    fn find_peer_group_index(&self, window_context: &WindowFrameContext, pos: usize) -> usize {
+        for (idx, (start, end)) in window_context.peer_groups.iter().enumerate() {
+            if pos >= *start && pos <= *end {
+                return idx;
+            }
+        }
+        0
+    }
+
+    /// Add two SqlValues (for RANGE offset calculation)
+    fn add_values(&self, a: &SqlValue, b: &SqlValue) -> SqlValue {
+        match (a, b) {
+            (SqlValue::Integer(x), SqlValue::Integer(y)) => SqlValue::Integer(x + y),
+            (SqlValue::BigInt(x), SqlValue::Integer(y)) => SqlValue::BigInt(x + *y as i64),
+            (SqlValue::Integer(x), SqlValue::BigInt(y)) => SqlValue::BigInt(*x as i64 + y),
+            (SqlValue::BigInt(x), SqlValue::BigInt(y)) => SqlValue::BigInt(x + y),
+            (SqlValue::DoublePrecision(x), SqlValue::DoublePrecision(y)) => {
+                SqlValue::DoublePrecision(x + y)
+            }
+            (SqlValue::DoublePrecision(x), SqlValue::Integer(y)) => {
+                SqlValue::DoublePrecision(x + *y as f64)
+            }
+            (SqlValue::Integer(x), SqlValue::DoublePrecision(y)) => {
+                SqlValue::DoublePrecision(*x as f64 + y)
+            }
+            _ => a.clone(), // Fallback
+        }
+    }
+
+    /// Subtract two SqlValues (for RANGE offset calculation)
+    fn subtract_values(&self, a: &SqlValue, b: &SqlValue) -> SqlValue {
+        match (a, b) {
+            (SqlValue::Integer(x), SqlValue::Integer(y)) => SqlValue::Integer(x - y),
+            (SqlValue::BigInt(x), SqlValue::Integer(y)) => SqlValue::BigInt(x - *y as i64),
+            (SqlValue::Integer(x), SqlValue::BigInt(y)) => SqlValue::BigInt(*x as i64 - y),
+            (SqlValue::BigInt(x), SqlValue::BigInt(y)) => SqlValue::BigInt(x - y),
+            (SqlValue::DoublePrecision(x), SqlValue::DoublePrecision(y)) => {
+                SqlValue::DoublePrecision(x - y)
+            }
+            (SqlValue::DoublePrecision(x), SqlValue::Integer(y)) => {
+                SqlValue::DoublePrecision(x - *y as f64)
+            }
+            (SqlValue::Integer(x), SqlValue::DoublePrecision(y)) => {
+                SqlValue::DoublePrecision(*x as f64 - y)
+            }
+            _ => a.clone(), // Fallback
+        }
+    }
+
+    /// Check if a row should be excluded based on EXCLUDE clause
+    fn should_exclude_row(
+        &self,
+        exclusion: Option<&crate::protocols::postgres_wire::sql::ast::WindowFrameExclusion>,
+        row_pos: usize,
+        current_pos: usize,
+        window_context: &WindowFrameContext,
+    ) -> bool {
+        use crate::protocols::postgres_wire::sql::ast::WindowFrameExclusion;
+
+        match exclusion {
+            None | Some(WindowFrameExclusion::NoOthers) => false,
+            Some(WindowFrameExclusion::CurrentRow) => row_pos == current_pos,
+            Some(WindowFrameExclusion::Group) => {
+                // Exclude all rows in the same peer group as current row
+                self.is_in_same_peer_group(window_context, row_pos, current_pos)
+            }
+            Some(WindowFrameExclusion::Ties) => {
+                // Exclude peers of the current row, but not the current row itself
+                row_pos != current_pos
+                    && self.is_in_same_peer_group(window_context, row_pos, current_pos)
+            }
+        }
+    }
+
+    /// Check if two positions are in the same peer group (same ORDER BY values)
+    fn is_in_same_peer_group(
+        &self,
+        window_context: &WindowFrameContext,
+        pos1: usize,
+        pos2: usize,
+    ) -> bool {
+        // Check using peer_groups if available
+        if !window_context.peer_groups.is_empty() {
+            let group1 = self.find_peer_group_index(window_context, pos1);
+            let group2 = self.find_peer_group_index(window_context, pos2);
+            return group1 == group2;
+        }
+
+        // Otherwise compare ORDER BY values directly
+        if let (Some(val1), Some(val2)) = (
+            window_context.order_by_values.get(pos1),
+            window_context.order_by_values.get(pos2),
+        ) {
+            self.compare_values(val1, val2).unwrap_or(Ordering::Less) == Ordering::Equal
+        } else {
+            false
+        }
     }
 
     /// Convert a frame bound to a position

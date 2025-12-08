@@ -65,6 +65,14 @@ pub enum Statement {
 
     // Comments
     CommentOn(CommentOnStatement),
+
+    // Sequences
+    CreateSequence(CreateSequenceStatement),
+    AlterSequence(AlterSequenceStatement),
+    DropSequence(DropSequenceStatement),
+
+    // Truncate
+    Truncate(TruncateStatement),
 }
 
 // ===== DDL Statements =====
@@ -190,6 +198,97 @@ pub struct DropSchemaStatement {
     pub if_exists: bool,
     pub names: Vec<String>,
     pub cascade: bool,
+}
+
+// ===== Sequence Statements =====
+
+/// CREATE SEQUENCE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateSequenceStatement {
+    pub if_not_exists: bool,
+    pub name: TableName,
+    pub options: SequenceOptions,
+}
+
+/// ALTER SEQUENCE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterSequenceStatement {
+    pub if_exists: bool,
+    pub name: TableName,
+    pub options: SequenceOptions,
+}
+
+/// DROP SEQUENCE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropSequenceStatement {
+    pub if_exists: bool,
+    pub names: Vec<TableName>,
+    pub cascade: bool,
+}
+
+/// Sequence configuration options
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct SequenceOptions {
+    /// AS data_type (smallint, integer, bigint)
+    pub data_type: Option<SqlType>,
+    /// INCREMENT BY value
+    pub increment: Option<i64>,
+    /// MINVALUE or NO MINVALUE
+    pub min_value: Option<SequenceBound>,
+    /// MAXVALUE or NO MAXVALUE
+    pub max_value: Option<SequenceBound>,
+    /// START WITH value
+    pub start: Option<i64>,
+    /// CACHE value
+    pub cache: Option<i64>,
+    /// CYCLE or NO CYCLE
+    pub cycle: Option<bool>,
+    /// OWNED BY table.column or OWNED BY NONE
+    pub owned_by: Option<SequenceOwner>,
+    /// RESTART (for ALTER SEQUENCE)
+    pub restart: Option<Option<i64>>,
+}
+
+/// Sequence bound (min/max value)
+#[derive(Debug, Clone, PartialEq)]
+pub enum SequenceBound {
+    /// Explicit value
+    Value(i64),
+    /// NO MINVALUE / NO MAXVALUE (use type default)
+    None,
+}
+
+/// Sequence ownership
+#[derive(Debug, Clone, PartialEq)]
+pub enum SequenceOwner {
+    /// OWNED BY table.column
+    Column { table: TableName, column: String },
+    /// OWNED BY NONE
+    None,
+}
+
+// ===== Truncate Statement =====
+
+/// TRUNCATE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct TruncateStatement {
+    /// Tables to truncate
+    pub tables: Vec<TableName>,
+    /// RESTART IDENTITY or CONTINUE IDENTITY
+    pub identity: Option<TruncateIdentity>,
+    /// CASCADE or RESTRICT
+    pub cascade: Option<bool>,
+    /// ONLY (don't truncate child tables)
+    pub only: bool,
+}
+
+/// TRUNCATE identity handling
+#[derive(Debug, Clone, PartialEq)]
+pub enum TruncateIdentity {
+    /// RESTART IDENTITY - reset sequences
+    Restart,
+    /// CONTINUE IDENTITY - keep sequence values
+    Continue,
 }
 
 // ===== Column and Constraint Definitions =====
@@ -989,8 +1088,26 @@ pub enum WindowFunctionType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WindowFrame {
+    pub mode: WindowFrameMode,
     pub start_bound: FrameBound,
     pub end_bound: Option<FrameBound>,
+    pub exclusion: Option<WindowFrameExclusion>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum WindowFrameMode {
+    #[default]
+    Range,
+    Rows,
+    Groups,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum WindowFrameExclusion {
+    CurrentRow,
+    Group,
+    Ties,
+    NoOthers,
 }
 
 #[derive(Debug, Clone, PartialEq)]

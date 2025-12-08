@@ -10,30 +10,30 @@ Comprehensive hospitality industry examples demonstrating OrbitRS's multi-protoc
 ┌─────────────────────────────────────────────────────────────────────┐
 │           Hospitality Operations Platform on OrbitRS                │
 ├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────┐ │
-│  │  PostgreSQL  │  │    Redis     │  │   MongoDB    │  │ Neo4j  │ │
-│  │   :5432      │  │    :6379     │  │   :27017     │  │ :7687  │ │
-│  ├──────────────┤  ├──────────────┤  ├──────────────┤  ├────────┤ │
-│  │ Menu Items   │  │ Order Queue  │  │ Recipes      │  │ Recom. │ │
-│  │ POS Orders   │  │ Mobile Orders│  │ Menu Images  │  │ Prefs  │ │
-│  │ Stores       │  │ Loyalty Pts  │  │ Preferences  │  │ Supply │ │
-│  │ Customers    │  │ Wait Times   │  │ Campaigns    │  │ Chain  │ │
-│  │ Inventory    │  │ Real-time    │  │ Delivery     │  │        │ │
-│  │ Staff        │  │ Stock        │  │ Integration  │  │        │ │
-│  └──────────────┘  └──────────────┘  └──────────────┘  └────────┘ │
-│                                                                      │
-│  ┌──────────────┐  ┌──────────────────────────────────────────┐   │
-│  │  Cassandra   │  │      Workflows & Integration             │   │
-│  │   :9042      │  ├──────────────────────────────────────────┤   │
-│  ├──────────────┤  │ • Mobile Order Processing                │   │
-│  │ Sales Trends │  │ • Loyalty Rewards Engine                 │   │
-│  │ Peak Hours   │  │ • Kitchen Display System                 │   │
-│  │ Visit        │  │ • Inventory Replenishment                │   │
-│  │ Patterns     │  │ • Delivery Integration                   │   │
-│  │ Labor Costs  │  │ • Analytics Dashboard                    │   │
-│  └──────────────┘  └──────────────────────────────────────────┘   │
-│                                                                      │
+│                                                                     │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────┐   │
+│  │  PostgreSQL  │  │    Redis     │  │   MongoDB    │  │ Neo4j  │   │
+│  │   :5432      │  │    :6379     │  │   :27017     │  │ :7687  │   │
+│  ├──────────────┤  ├──────────────┤  ├──────────────┤  ├────────┤   │
+│  │ Menu Items   │  │ Order Queue  │  │ Recipes      │  │ Recom. │   │
+│  │ POS Orders   │  │ Mobile Orders│  │ Menu Images  │  │ Prefs  │   │
+│  │ Stores       │  │ Loyalty Pts  │  │ Preferences  │  │ Supply │   │
+│  │ Customers    │  │ Wait Times   │  │ Campaigns    │  │ Chain  │   │
+│  │ Inventory    │  │ Real-time    │  │ Delivery     │  │        │   │
+│  │ Staff        │  │ Stock        │  │ Integration  │  │        │   │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └────────┘   │
+│                                                                     │
+│  ┌──────────────┐  ┌──────────────────────────────────────────┐     │
+│  │  Cassandra   │  │      Workflows & Integration             │     │
+│  │   :9042      │  ├──────────────────────────────────────────┤     │
+│  ├──────────────┤  │ • Mobile Order Processing                │     │
+│  │ Sales Trends │  │ • Loyalty Rewards Engine                 │     │
+│  │ Peak Hours   │  │ • Kitchen Display System                 │     │
+│  │ Visit        │  │ • Inventory Replenishment                │     │
+│  │ Patterns     │  │ • Delivery Integration                   │     │
+│  │ Labor Costs  │  │ • Analytics Dashboard                    │     │
+│  └──────────────┘  └──────────────────────────────────────────┘     │
+│                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 

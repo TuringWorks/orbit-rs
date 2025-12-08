@@ -20,6 +20,7 @@ pub mod string_persistent;
 // pub mod string_simple; // Replaced by full string implementation
 pub mod time_series;
 pub mod traits;
+pub mod transactions;
 pub mod vector;
 
 // Re-export the main command handler
@@ -35,7 +36,8 @@ mod handler {
         functions::FunctionCommands, graph::GraphCommands, graphrag::GraphRAGCommands,
         hash::HashCommands, list::ListCommands, pubsub::PubSubCommands, server::ServerCommands,
         set::SetCommands, sorted_set::SortedSetCommands, stream::StreamCommands,
-        string::StringCommands, time_series::TimeSeriesCommands, vector::VectorCommands,
+        string::StringCommands, time_series::TimeSeriesCommands,
+        transactions::TransactionCommands, vector::VectorCommands,
     };
     use crate::protocols::error::ProtocolResult;
     use crate::protocols::resp::simple_local::SimpleLocalRegistry;
@@ -62,6 +64,7 @@ mod handler {
         Graph,
         GraphRAG,
         Server,
+        Transactions,
         Unknown,
     }
 
@@ -89,6 +92,7 @@ mod handler {
         graph: GraphCommands,
         graphrag: GraphRAGCommands,
         server: ServerCommands,
+        transactions: TransactionCommands,
     }
 
     impl CommandHandler {
@@ -128,6 +132,7 @@ mod handler {
                 graph: GraphCommands::new(orbit_client.clone(), local_registry.clone()),
                 graphrag: GraphRAGCommands::new(orbit_client.clone(), local_registry.clone()),
                 server: ServerCommands::new(orbit_client.clone(), local_registry.clone()),
+                transactions: TransactionCommands::new(orbit_client.clone(), local_registry.clone()),
                 orbit_client,
                 local_registry,
             }
@@ -203,6 +208,9 @@ mod handler {
                 }
                 CommandCategory::Server => {
                     CommandHandlerTrait::handle(&self.server, &command_name, &args).await
+                }
+                CommandCategory::Transactions => {
+                    CommandHandlerTrait::handle(&self.transactions, &command_name, &args).await
                 }
                 CommandCategory::Unknown => {
                     warn!("Unknown command: {}", command_name);
@@ -300,6 +308,9 @@ mod handler {
 
                 // Server commands
                 "INFO" | "DBSIZE" | "FLUSHDB" | "FLUSHALL" | "COMMAND" => CommandCategory::Server,
+
+                // Transaction commands
+                "MULTI" | "EXEC" | "DISCARD" | "WATCH" | "UNWATCH" => CommandCategory::Transactions,
 
                 _ => CommandCategory::Unknown,
             }

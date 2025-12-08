@@ -452,8 +452,55 @@ OrbitRS implements multiple database protocols from a single unified storage lay
 
 ---
 
+## 9. Client Tools Protocol Gaps
+
+**Reference**: See [CLIENT_TOOLS_PROTOCOL_SUPPORT.md](./CLIENT_TOOLS_PROTOCOL_SUPPORT.md) for detailed specification
+
+### orbit/cli vs orbit/desktop Parity
+
+| Protocol | CLI | Desktop | Gap |
+|----------|-----|---------|-----|
+| PostgreSQL | ✅ | ✅ | None |
+| MySQL | ❌ | ✅ | **Critical** |
+| CQL | ❌ | ✅ | **Critical** |
+| Redis | ❌ | ✅ | High |
+| OrbitQL | ❌ | ✅ | **Critical** |
+| Cypher | ❌ | ✅ | Medium |
+| AQL | ❌ | ✅ | Low |
+
+### Parser Architecture Gap
+
+OrbitRS has **two separate parsers** that are not unified:
+
+| Parser | Location | Exposed Via |
+|--------|----------|-------------|
+| PostgreSQL | `orbit-server` | Wire protocol (5432), REST API |
+| OrbitQL | `orbit-shared` | REST API (8081), Desktop HTTP |
+
+**Issue**: No mechanism to switch parsers over PostgreSQL wire protocol.
+
+### Recommended Client Tool Priorities
+
+#### High Priority (Q1)
+1. Add OrbitQL to CLI via HTTP REST
+2. Add MySQL to CLI using `mysql_async`
+3. Add Redis to CLI using `redis` crate
+
+#### Medium Priority (Q2)
+4. Add CQL to CLI (HTTP REST or `cdrs-tokio`)
+5. Unified query routing in CLI
+6. Python SDK protocol expansion
+
+#### Low Priority (Q3)
+7. Cypher support in CLI
+8. AQL support in CLI
+9. Cross-client connection sharing
+
+---
+
 ## Version History
 
 | Date | Changes |
 |------|---------|
+| 2025-12-07 | Added client tools protocol gaps (Section 9) |
 | 2025-01-XX | Initial gap analysis |
