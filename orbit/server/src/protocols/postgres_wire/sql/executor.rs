@@ -2795,12 +2795,8 @@ impl SqlExecutor {
                             MergeInsertValues::DefaultValues => {
                                 // Use default values from schema
                                 for col in &table_schema.columns {
-                                    if let Some(default_expr) = &col.default {
-                                        // Evaluate the default expression with empty context
-                                        let empty_row = HashMap::new();
-                                        let evaluator = self.expression_evaluator.read().await;
-                                        let value = evaluator.evaluate(default_expr, &empty_row).unwrap_or(SqlValue::Null);
-                                        new_row.insert(col.name.clone(), value);
+                                    if let Some(default_value) = &col.default {
+                                        new_row.insert(col.name.clone(), default_value.clone());
                                     }
                                 }
                             }
