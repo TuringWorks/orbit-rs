@@ -252,15 +252,13 @@ impl ReplState {
 
         // Test connection
         match pool.get_conn().await {
-            Ok(mut conn) => {
-                match conn.query_first::<String, _>("SELECT 1").await {
-                    Ok(_) => {
-                        self.mysql_pool = Some(pool);
-                        Ok(())
-                    }
-                    Err(e) => Err(anyhow::anyhow!("MySQL connection test failed: {}", e)),
+            Ok(mut conn) => match conn.query_first::<String, _>("SELECT 1").await {
+                Ok(_) => {
+                    self.mysql_pool = Some(pool);
+                    Ok(())
                 }
-            }
+                Err(e) => Err(anyhow::anyhow!("MySQL connection test failed: {}", e)),
+            },
             Err(e) => Err(anyhow::anyhow!("Failed to connect to MySQL: {}", e)),
         }
     }
@@ -763,13 +761,13 @@ impl ReplState {
                         Err(e) => Err(anyhow::anyhow!("Cypher connection failed: {}", e)),
                     }
                 } else {
-                    Err(anyhow::anyhow!(
-                        "Cypher connection failed: HTTP {}",
-                        status
-                    ))
+                    Err(anyhow::anyhow!("Cypher connection failed: HTTP {}", status))
                 }
             }
-            Err(e) => Err(anyhow::anyhow!("Failed to connect to Cypher endpoint: {}", e)),
+            Err(e) => Err(anyhow::anyhow!(
+                "Failed to connect to Cypher endpoint: {}",
+                e
+            )),
         }
     }
 
@@ -854,17 +852,16 @@ impl ReplState {
 
                     for row_data in data {
                         if let Some(row) = row_data.get("row").and_then(|r| r.as_array()) {
-                            let values: Vec<String> = row
-                                .iter()
-                                .map(|v| match v {
-                                    serde_json::Value::Null => "NULL".to_string(),
-                                    serde_json::Value::String(s) => s.clone(),
-                                    serde_json::Value::Object(_) => {
-                                        serde_json::to_string(v).unwrap_or_else(|_| v.to_string())
-                                    }
-                                    _ => v.to_string(),
-                                })
-                                .collect();
+                            let values: Vec<String> =
+                                row.iter()
+                                    .map(|v| match v {
+                                        serde_json::Value::Null => "NULL".to_string(),
+                                        serde_json::Value::String(s) => s.clone(),
+                                        serde_json::Value::Object(_) => serde_json::to_string(v)
+                                            .unwrap_or_else(|_| v.to_string()),
+                                        _ => v.to_string(),
+                                    })
+                                    .collect();
                             table.add_row(values.iter().map(Cell::new));
                         }
                     }

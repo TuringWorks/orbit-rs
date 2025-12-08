@@ -16,11 +16,11 @@ use crate::protocols::postgres_wire::sql::{
         CreateViewStatement, DeleteStatement, DescribeStatement, DropDatabaseStatement,
         DropExtensionStatement, DropIndexStatement, DropSchemaStatement, DropSequenceStatement,
         DropTableStatement, DropViewStatement, ExplainStatement, Expression, FromClause,
-        GrantStatement, IndexType, InsertSource, InsertStatement, IsolationLevel, JoinCondition,
-        JoinType, MergeStatement, Privilege, ReleaseSavepointStatement, RevokeStatement,
-        RollbackStatement, SavepointStatement, SelectItem, SelectStatement, SetStatement,
-        ShowStatement, ShowVariable, Statement, TableConstraint, TableName, TruncateStatement,
-        UpdateStatement, UseStatement,
+        GeneratedColumnStorage, GrantStatement, IndexType, InsertSource, InsertStatement,
+        IsolationLevel, JoinCondition, JoinType, MergeStatement, Privilege,
+        ReleaseSavepointStatement, RevokeStatement, RollbackStatement, SavepointStatement,
+        SelectItem, SelectStatement, SetStatement, ShowStatement, ShowVariable, Statement,
+        TableConstraint, TableName, TruncateStatement, UpdateStatement, UseStatement,
     },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator},
     parser::SqlParser,
@@ -165,6 +165,34 @@ pub struct ColumnSchema {
     pub nullable: bool,
     pub default: Option<SqlValue>,
     pub constraints: Vec<String>,
+    /// Generated column configuration (PostgreSQL 12+ STORED, PostgreSQL 18+ VIRTUAL)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generated: Option<GeneratedColumnSchema>,
+}
+
+/// Schema for generated columns (GENERATED ALWAYS AS)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GeneratedColumnSchema {
+    /// The expression as a string for serialization
+    pub expression_text: String,
+    /// Storage type: STORED (computed on write) or VIRTUAL (computed on read)
+    pub storage: GeneratedColumnStorageType,
+}
+
+/// Serializable version of GeneratedColumnStorage
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum GeneratedColumnStorageType {
+    Stored,
+    Virtual,
+}
+
+impl From<&GeneratedColumnStorage> for GeneratedColumnStorageType {
+    fn from(storage: &GeneratedColumnStorage) -> Self {
+        match storage {
+            GeneratedColumnStorage::Stored => GeneratedColumnStorageType::Stored,
+            GeneratedColumnStorage::Virtual => GeneratedColumnStorageType::Virtual,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -668,6 +696,18 @@ impl SqlExecutor {
         // Convert AST columns to schema
         let mut columns = Vec::new();
         for col_def in &stmt.columns {
+            // Extract generated column info if present
+            let generated = col_def.constraints.iter().find_map(|c| match c {
+                ColumnConstraint::Generated {
+                    expression,
+                    storage,
+                } => Some(GeneratedColumnSchema {
+                    expression_text: format_expression(expression),
+                    storage: GeneratedColumnStorageType::from(storage),
+                }),
+                _ => None,
+            });
+
             columns.push(ColumnSchema {
                 name: col_def.name.clone(),
                 data_type: col_def.data_type.clone(),
@@ -687,6 +727,7 @@ impl SqlExecutor {
                     .iter()
                     .map(|c| format!("{c:?}"))
                     .collect(),
+                generated,
             });
         }
 
@@ -1039,6 +1080,66 @@ impl SqlExecutor {
         })
     }
 
+    /// Compute values for STORED generated columns
+    /// This parses the stored expression and evaluates it using the row's values
+    fn compute_generated_columns(
+        &self,
+        table_schema: &TableSchema,
+        row: &mut HashMap<String, SqlValue>,
+    ) -> ProtocolResult<()> {
+        for col_schema in &table_schema.columns {
+            if let Some(generated) = &col_schema.generated {
+                // Only compute STORED generated columns (VIRTUAL are computed on read)
+                if generated.storage == GeneratedColumnStorageType::Stored {
+                    // Parse the expression text back into an AST
+                    let expr = self.parse_generated_expression(&generated.expression_text)?;
+
+                    // Create evaluation context from the current row
+                    let context = EvaluationContext {
+                        current_row: row.clone(),
+                        table_data: HashMap::new(),
+                        variables: HashMap::new(),
+                        current_table: None,
+                        window_frame: None,
+                    };
+
+                    // Evaluate the expression
+                    let mut evaluator = ExpressionEvaluator::new();
+                    let value = evaluator.evaluate(&expr, &context)?;
+
+                    // Insert the computed value
+                    row.insert(col_schema.name.clone(), value);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Parse a SQL expression from text
+    fn parse_generated_expression(&self, expr_text: &str) -> ProtocolResult<Expression> {
+        // Wrap in SELECT to make it parseable, then extract the expression
+        let sql = format!("SELECT {}", expr_text);
+        let mut parser = SqlParser::new();
+
+        // Parse as a select statement
+        match parser.parse(&sql) {
+            Ok(Statement::Select(select)) => {
+                // Extract the first select item's expression
+                if let Some(SelectItem::Expression { expr, .. }) = select.select_list.first() {
+                    Ok(expr.clone())
+                } else {
+                    Err(ProtocolError::PostgresError(
+                        "Failed to parse generated column expression".to_string(),
+                    ))
+                }
+            }
+            _ => Err(ProtocolError::PostgresError(format!(
+                "Failed to parse generated column expression: {}",
+                expr_text
+            ))),
+        }
+    }
+
     /// Extract column names from RETURNING clause
     fn extract_returning_columns(&self, returning_items: &[SelectItem]) -> Vec<String> {
         returning_items
@@ -1148,12 +1249,15 @@ impl SqlExecutor {
             SqlValue::TimeWithTimezone(t) => t.to_string(),
             SqlValue::Timestamp(ts) => ts.to_string(),
             SqlValue::TimestampWithTimezone(ts) => ts.to_string(),
-            SqlValue::Interval(interval) => format!("{} months {} days {} microseconds",
-                interval.months, interval.days, interval.microseconds),
+            SqlValue::Interval(interval) => format!(
+                "{} months {} days {} microseconds",
+                interval.months, interval.days, interval.microseconds
+            ),
             SqlValue::Uuid(u) => u.to_string(),
             SqlValue::Json(j) | SqlValue::Jsonb(j) => j.to_string(),
             SqlValue::Array(arr) => {
-                let elements: Vec<String> = arr.iter().map(|v| self.sql_value_to_string(v)).collect();
+                let elements: Vec<String> =
+                    arr.iter().map(|v| self.sql_value_to_string(v)).collect();
                 format!("{{{}}}", elements.join(","))
             }
             SqlValue::Vector(vec) | SqlValue::HalfVec(vec) => {
@@ -1161,23 +1265,35 @@ impl SqlExecutor {
                 format!("[{}]", elements.join(","))
             }
             SqlValue::SparseVec(pairs) => {
-                let elements: Vec<String> = pairs.iter().map(|(i, v)| format!("{}:{}", i, v)).collect();
+                let elements: Vec<String> =
+                    pairs.iter().map(|(i, v)| format!("{}:{}", i, v)).collect();
                 format!("{{{}}}", elements.join(","))
             }
             SqlValue::Inet(addr) => addr.to_string(),
             SqlValue::Cidr(net) => format!("{}/{}", net.addr, net.prefix_len),
-            SqlValue::Macaddr(bytes) => format!("{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]),
-            SqlValue::Macaddr8(bytes) => format!("{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]),
+            SqlValue::Macaddr(bytes) => format!(
+                "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]
+            ),
+            SqlValue::Macaddr8(bytes) => format!(
+                "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]
+            ),
             SqlValue::Xml(s) => s.clone(),
             SqlValue::Point(x, y) => format!("({},{})", x, y),
             SqlValue::Line(a, b, c) => format!("{{{},{},{}}}", a, b, c),
-            SqlValue::Lseg(start, end) => format!("[({},{}),({},{})]", start.0, start.1, end.0, end.1),
+            SqlValue::Lseg(start, end) => {
+                format!("[({},{}),({},{})]", start.0, start.1, end.0, end.1)
+            }
             SqlValue::Box(ur, ll) => format!("(({},{}),({},{}))", ur.0, ur.1, ll.0, ll.1),
-            SqlValue::Circle { center, radius } => format!("<({},{}),{}>", center.0, center.1, radius),
+            SqlValue::Circle { center, radius } => {
+                format!("<({},{}),{}>", center.0, center.1, radius)
+            }
             SqlValue::Path { points, open } => {
-                let pts: Vec<String> = points.iter().map(|(x, y)| format!("({},{})", x, y)).collect();
+                let pts: Vec<String> = points
+                    .iter()
+                    .map(|(x, y)| format!("({},{})", x, y))
+                    .collect();
                 if *open {
                     format!("[{}]", pts.join(","))
                 } else {
@@ -1185,24 +1301,48 @@ impl SqlExecutor {
                 }
             }
             SqlValue::Polygon(points) => {
-                let pts: Vec<String> = points.iter().map(|(x, y)| format!("({},{})", x, y)).collect();
+                let pts: Vec<String> = points
+                    .iter()
+                    .map(|(x, y)| format!("({},{})", x, y))
+                    .collect();
                 format!("({})", pts.join(","))
             }
-            SqlValue::Tsvector(elements) => {
-                elements.iter().map(|e| format!("'{}':{}", e.lexeme,
-                    e.positions.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",")
-                )).collect::<Vec<_>>().join(" ")
-            }
+            SqlValue::Tsvector(elements) => elements
+                .iter()
+                .map(|e| {
+                    format!(
+                        "'{}':{}",
+                        e.lexeme,
+                        e.positions
+                            .iter()
+                            .map(|p| p.to_string())
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" "),
             SqlValue::Tsquery(s) => s.clone(),
             SqlValue::Range(range) => {
-                let lower = range.lower.as_ref().map(|v| self.sql_value_to_string(v)).unwrap_or_default();
-                let upper = range.upper.as_ref().map(|v| self.sql_value_to_string(v)).unwrap_or_default();
+                let lower = range
+                    .lower
+                    .as_ref()
+                    .map(|v| self.sql_value_to_string(v))
+                    .unwrap_or_default();
+                let upper = range
+                    .upper
+                    .as_ref()
+                    .map(|v| self.sql_value_to_string(v))
+                    .unwrap_or_default();
                 let lb = if range.lower_inclusive { "[" } else { "(" };
                 let ub = if range.upper_inclusive { "]" } else { ")" };
                 format!("{}{},{}{}", lb, lower, upper, ub)
             }
             SqlValue::Composite(fields) => {
-                let values: Vec<String> = fields.iter().map(|(_, v)| self.sql_value_to_string(v)).collect();
+                let values: Vec<String> = fields
+                    .iter()
+                    .map(|(_, v)| self.sql_value_to_string(v))
+                    .collect();
                 format!("({})", values.join(","))
             }
             SqlValue::Custom { type_name, data } => format!("{}:{}", type_name, hex::encode(data)),
@@ -1276,6 +1416,18 @@ impl SqlExecutor {
                     if i < insert_columns.len() {
                         let col_name = &insert_columns[i];
 
+                        // Check if this column is a generated column - reject if user tries to insert
+                        if table_schema
+                            .columns
+                            .iter()
+                            .any(|c| c.name.eq_ignore_ascii_case(col_name) && c.generated.is_some())
+                        {
+                            return Err(ProtocolError::PostgresError(format!(
+                                "cannot insert a value into column \"{}\" because it is a generated column",
+                                col_name
+                            )));
+                        }
+
                         // Simple expression evaluation for literals
                         let value = match value_expr {
                             Expression::Literal(sql_val) => sql_val.clone(),
@@ -1289,6 +1441,9 @@ impl SqlExecutor {
                         row.insert(col_name.clone(), value);
                     }
                 }
+
+                // Compute STORED generated column values
+                self.compute_generated_columns(&table_schema, &mut row)?;
 
                 rows_to_insert.push(row);
             }
@@ -1308,15 +1463,22 @@ impl SqlExecutor {
             drop(table_data);
 
             // Handle RETURNING clause if present
-            let (returning_columns, returning_rows) = if let Some(ref returning_items) = stmt.returning {
+            let (returning_columns, returning_rows) = if let Some(ref returning_items) =
+                stmt.returning
+            {
                 let columns = self.extract_returning_columns(returning_items);
-                let rows = self.evaluate_returning_clause(returning_items, &inserted_rows, &table_schema)?;
+                let rows =
+                    self.evaluate_returning_clause(returning_items, &inserted_rows, &table_schema)?;
                 (Some(columns), Some(rows))
             } else {
                 (None, None)
             };
 
-            Ok(ExecutionResult::Insert { count, returning_columns, returning_rows })
+            Ok(ExecutionResult::Insert {
+                count,
+                returning_columns,
+                returning_rows,
+            })
         } else if let InsertSource::Query(select_stmt) = stmt.source {
             // INSERT ... SELECT
             // Execute the SELECT statement first
@@ -1383,15 +1545,22 @@ impl SqlExecutor {
             drop(table_data);
 
             // Handle RETURNING clause if present
-            let (returning_columns, returning_rows) = if let Some(ref returning_items) = stmt.returning {
+            let (returning_columns, returning_rows) = if let Some(ref returning_items) =
+                stmt.returning
+            {
                 let columns = self.extract_returning_columns(returning_items);
-                let rows = self.evaluate_returning_clause(returning_items, &inserted_rows, &table_schema)?;
+                let rows =
+                    self.evaluate_returning_clause(returning_items, &inserted_rows, &table_schema)?;
                 (Some(columns), Some(rows))
             } else {
                 (None, None)
             };
 
-            Ok(ExecutionResult::Insert { count, returning_columns, returning_rows })
+            Ok(ExecutionResult::Insert {
+                count,
+                returning_columns,
+                returning_rows,
+            })
         } else {
             // DefaultValues
             Err(ProtocolError::PostgresError(
@@ -1435,6 +1604,25 @@ impl SqlExecutor {
                 if should_update {
                     // Apply updates
                     for assignment in &stmt.set {
+                        // Get the column name being updated
+                        let col_name = match &assignment.target {
+                            AssignmentTarget::Column(name) => name.clone(),
+                            AssignmentTarget::Columns(names) => {
+                                names.first().cloned().unwrap_or_default()
+                            }
+                        };
+
+                        // Check if this column is a generated column - reject if user tries to update
+                        if table_schema.columns.iter().any(|c| {
+                            c.name.eq_ignore_ascii_case(&col_name) && c.generated.is_some()
+                        }) {
+                            drop(table_data);
+                            return Err(ProtocolError::PostgresError(format!(
+                                "cannot update column \"{}\" because it is a generated column",
+                                col_name
+                            )));
+                        }
+
                         let value = match &assignment.value {
                             Expression::Literal(sql_val) => sql_val.clone(),
                             _ => {
@@ -1457,6 +1645,9 @@ impl SqlExecutor {
                         }
                     }
 
+                    // Recompute STORED generated column values after update
+                    self.compute_generated_columns(&table_schema, row)?;
+
                     // Collect updated row for RETURNING clause
                     if stmt.returning.is_some() {
                         updated_rows.push(row.clone());
@@ -1469,13 +1660,18 @@ impl SqlExecutor {
         // Process RETURNING clause if present
         let (returning_columns, returning_rows) = if let Some(returning_items) = &stmt.returning {
             let columns = self.extract_returning_columns(returning_items);
-            let rows = self.evaluate_returning_clause(returning_items, &updated_rows, &table_schema)?;
+            let rows =
+                self.evaluate_returning_clause(returning_items, &updated_rows, &table_schema)?;
             (Some(columns), Some(rows))
         } else {
             (None, None)
         };
 
-        Ok(ExecutionResult::Update { count, returning_columns, returning_rows })
+        Ok(ExecutionResult::Update {
+            count,
+            returning_columns,
+            returning_rows,
+        })
     }
 
     async fn execute_delete(&self, stmt: DeleteStatement) -> ProtocolResult<ExecutionResult> {
@@ -1531,13 +1727,18 @@ impl SqlExecutor {
         // Process RETURNING clause if present
         let (returning_columns, returning_rows) = if let Some(returning_items) = &stmt.returning {
             let columns = self.extract_returning_columns(returning_items);
-            let rows = self.evaluate_returning_clause(returning_items, &deleted_rows, &table_schema)?;
+            let rows =
+                self.evaluate_returning_clause(returning_items, &deleted_rows, &table_schema)?;
             (Some(columns), Some(rows))
         } else {
             (None, None)
         };
 
-        Ok(ExecutionResult::Delete { count, returning_columns, returning_rows })
+        Ok(ExecutionResult::Delete {
+            count,
+            returning_columns,
+            returning_rows,
+        })
     }
 
     async fn execute_merge(&self, _stmt: MergeStatement) -> ProtocolResult<ExecutionResult> {
@@ -3988,11 +4189,10 @@ impl SqlExecutor {
                 }
             }
         };
-        let start = stmt.options.start.unwrap_or(if increment > 0 {
-            min_value
-        } else {
-            max_value
-        });
+        let start = stmt
+            .options
+            .start
+            .unwrap_or(if increment > 0 { min_value } else { max_value });
         let cache = stmt.options.cache.unwrap_or(1);
         let cycle = stmt.options.cycle.unwrap_or(false);
 
@@ -4155,5 +4355,146 @@ impl Default for SqlExecutor {
     #[allow(deprecated)]
     fn default() -> Self {
         Self::new_in_memory()
+    }
+}
+
+/// Format an expression to a SQL-like string representation for storage
+fn format_expression(expr: &Expression) -> String {
+    use crate::protocols::postgres_wire::sql::ast::{BinaryOperator, FunctionName, UnaryOperator};
+
+    match expr {
+        Expression::Literal(value) => match value {
+            SqlValue::Null => "NULL".to_string(),
+            SqlValue::Boolean(b) => b.to_string(),
+            SqlValue::Integer(i) => i.to_string(),
+            SqlValue::BigInt(i) => i.to_string(),
+            SqlValue::SmallInt(i) => i.to_string(),
+            SqlValue::Real(f) => f.to_string(),
+            SqlValue::DoublePrecision(f) => f.to_string(),
+            SqlValue::Decimal(d) => d.to_string(),
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => format!("'{}'", s),
+            _ => format!("{:?}", value),
+        },
+        Expression::Column(col_ref) => {
+            if let Some(table) = &col_ref.table {
+                format!("{}.{}", table, col_ref.name)
+            } else {
+                col_ref.name.clone()
+            }
+        }
+        Expression::Binary {
+            left,
+            operator,
+            right,
+        } => {
+            let op_str = match operator {
+                BinaryOperator::Plus => "+",
+                BinaryOperator::Minus => "-",
+                BinaryOperator::Multiply => "*",
+                BinaryOperator::Divide => "/",
+                BinaryOperator::Modulo => "%",
+                BinaryOperator::Power => "^",
+                BinaryOperator::Equal => "=",
+                BinaryOperator::NotEqual => "<>",
+                BinaryOperator::LessThan => "<",
+                BinaryOperator::LessThanOrEqual => "<=",
+                BinaryOperator::GreaterThan => ">",
+                BinaryOperator::GreaterThanOrEqual => ">=",
+                BinaryOperator::And => "AND",
+                BinaryOperator::Or => "OR",
+                BinaryOperator::Concat => "||",
+                BinaryOperator::Like => "LIKE",
+                BinaryOperator::ILike => "ILIKE",
+                BinaryOperator::Similar => "SIMILAR TO",
+                BinaryOperator::Contains => "@>",
+                BinaryOperator::ContainedBy => "<@",
+                BinaryOperator::Overlap => "&&",
+                BinaryOperator::JsonExtract => "->",
+                BinaryOperator::JsonExtractText => "->>",
+                BinaryOperator::JsonPathExtract => "#>",
+                BinaryOperator::JsonPathExtractText => "#>>",
+                BinaryOperator::JsonContains => "@>",
+                BinaryOperator::JsonContainedBy => "<@",
+                BinaryOperator::JsonExists => "?",
+                BinaryOperator::JsonExistsAny => "?|",
+                BinaryOperator::JsonExistsAll => "?&",
+                BinaryOperator::JsonConcat => "||",
+                BinaryOperator::JsonDelete => "-",
+                BinaryOperator::JsonDeletePath => "#-",
+                BinaryOperator::Match => "~",
+                BinaryOperator::NotMatch => "!~",
+                BinaryOperator::Is => "IS",
+                BinaryOperator::IsNot => "IS NOT",
+                BinaryOperator::In => "IN",
+                BinaryOperator::NotIn => "NOT IN",
+                _ => "?",
+            };
+            format!(
+                "({} {} {})",
+                format_expression(left),
+                op_str,
+                format_expression(right)
+            )
+        }
+        Expression::Unary { operator, operand } => {
+            let op_str = match operator {
+                UnaryOperator::Not => "NOT ",
+                UnaryOperator::Minus => "-",
+                UnaryOperator::Plus => "+",
+                UnaryOperator::BitwiseNot => "~",
+                UnaryOperator::IsNull => " IS NULL",
+                UnaryOperator::IsNotNull => " IS NOT NULL",
+                UnaryOperator::IsTrue => " IS TRUE",
+                UnaryOperator::IsNotTrue => " IS NOT TRUE",
+                UnaryOperator::IsFalse => " IS FALSE",
+                UnaryOperator::IsNotFalse => " IS NOT FALSE",
+                UnaryOperator::IsUnknown => " IS UNKNOWN",
+                UnaryOperator::IsNotUnknown => " IS NOT UNKNOWN",
+            };
+            // For postfix operators, format differently
+            match operator {
+                UnaryOperator::IsNull
+                | UnaryOperator::IsNotNull
+                | UnaryOperator::IsTrue
+                | UnaryOperator::IsNotTrue
+                | UnaryOperator::IsFalse
+                | UnaryOperator::IsNotFalse
+                | UnaryOperator::IsUnknown
+                | UnaryOperator::IsNotUnknown => {
+                    format!("{}{}", format_expression(operand), op_str)
+                }
+                _ => format!("{}{}", op_str, format_expression(operand)),
+            }
+        }
+        Expression::Function(func) => {
+            let args: Vec<String> = func.args.iter().map(format_expression).collect();
+            let func_name = match &func.name {
+                FunctionName::Simple(name) => name.clone(),
+                FunctionName::Qualified { schema, name } => format!("{}.{}", schema, name),
+            };
+            format!("{}({})", func_name, args.join(", "))
+        }
+        Expression::Cast { expr, target_type } => {
+            format!("CAST({} AS {:?})", format_expression(expr), target_type)
+        }
+        Expression::Case(case_expr) => {
+            let mut s = String::from("CASE");
+            if let Some(operand) = &case_expr.operand {
+                s.push_str(&format!(" {}", format_expression(operand)));
+            }
+            for when in &case_expr.when_clauses {
+                s.push_str(&format!(
+                    " WHEN {} THEN {}",
+                    format_expression(&when.condition),
+                    format_expression(&when.result)
+                ));
+            }
+            if let Some(else_clause) = &case_expr.else_clause {
+                s.push_str(&format!(" ELSE {}", format_expression(else_clause)));
+            }
+            s.push_str(" END");
+            s
+        }
+        _ => format!("{:?}", expr),
     }
 }

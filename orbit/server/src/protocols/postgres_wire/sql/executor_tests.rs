@@ -590,7 +590,11 @@ mod tests {
             .await;
 
         match result {
-            ExecutionResult::Insert { count, returning_columns, returning_rows } => {
+            ExecutionResult::Insert {
+                count,
+                returning_columns,
+                returning_rows,
+            } => {
                 assert_eq!(count, 1);
                 assert!(returning_columns.is_some());
                 assert!(returning_rows.is_some());
@@ -621,7 +625,11 @@ mod tests {
             .await;
 
         match result {
-            ExecutionResult::Insert { count, returning_columns, returning_rows } => {
+            ExecutionResult::Insert {
+                count,
+                returning_columns,
+                returning_rows,
+            } => {
                 assert_eq!(count, 1);
                 assert!(returning_columns.is_some());
                 assert!(returning_rows.is_some());
@@ -645,16 +653,24 @@ mod tests {
             .await;
 
         fixture
-            .execute_sql_ok("INSERT INTO update_returning VALUES (1, 'Alice', 'active'), (2, 'Bob', 'active')")
+            .execute_sql_ok(
+                "INSERT INTO update_returning VALUES (1, 'Alice', 'active'), (2, 'Bob', 'active')",
+            )
             .await;
 
         // Test UPDATE with RETURNING
         let result = fixture
-            .execute_sql_ok("UPDATE update_returning SET status = 'inactive' WHERE id = 1 RETURNING id, status")
+            .execute_sql_ok(
+                "UPDATE update_returning SET status = 'inactive' WHERE id = 1 RETURNING id, status",
+            )
             .await;
 
         match result {
-            ExecutionResult::Update { count, returning_columns, returning_rows } => {
+            ExecutionResult::Update {
+                count,
+                returning_columns,
+                returning_rows,
+            } => {
                 assert_eq!(count, 1);
                 assert!(returning_columns.is_some());
                 assert!(returning_rows.is_some());
@@ -679,7 +695,9 @@ mod tests {
             .await;
 
         fixture
-            .execute_sql_ok("INSERT INTO delete_returning VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')")
+            .execute_sql_ok(
+                "INSERT INTO delete_returning VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')",
+            )
             .await;
 
         // Test DELETE with RETURNING
@@ -688,7 +706,11 @@ mod tests {
             .await;
 
         match result {
-            ExecutionResult::Delete { count, returning_columns, returning_rows } => {
+            ExecutionResult::Delete {
+                count,
+                returning_columns,
+                returning_rows,
+            } => {
                 assert_eq!(count, 1);
                 assert!(returning_columns.is_some());
                 assert!(returning_rows.is_some());
@@ -718,7 +740,11 @@ mod tests {
             .await;
 
         match result {
-            ExecutionResult::Insert { count, returning_columns, returning_rows } => {
+            ExecutionResult::Insert {
+                count,
+                returning_columns,
+                returning_rows,
+            } => {
                 assert_eq!(count, 3);
                 assert!(returning_columns.is_some());
                 assert!(returning_rows.is_some());

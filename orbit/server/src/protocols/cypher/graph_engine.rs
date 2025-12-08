@@ -854,7 +854,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         let mut columns = Vec::new();
 
         for item in items {
-            let alias = item.alias.clone().unwrap_or_else(|| item.expression.clone());
+            let alias = item
+                .alias
+                .clone()
+                .unwrap_or_else(|| item.expression.clone());
             columns.push(alias.clone());
 
             match &item.expr {
@@ -886,8 +889,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     }
                     Expression::CountAll => {
                         let count = nodes.len();
-                        result_row
-                            .insert(alias.clone(), serde_json::Value::Number(count.into()));
+                        result_row.insert(alias.clone(), serde_json::Value::Number(count.into()));
                     }
                     _ => {}
                 }
@@ -942,8 +944,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             }
 
             // Create result node for this group
-            let mut group_result =
-                GraphNode::new(vec!["_GroupResult".to_string()], HashMap::new());
+            let mut group_result = GraphNode::new(vec!["_GroupResult".to_string()], HashMap::new());
 
             // Add grouping key values to result
             for (key, value) in &group_key {
@@ -970,10 +971,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     }
                     Expression::CountAll => {
                         let count = group_indices.len();
-                        group_result.properties.insert(
-                            alias.clone(),
-                            serde_json::Value::Number(count.into()),
-                        );
+                        group_result
+                            .properties
+                            .insert(alias.clone(), serde_json::Value::Number(count.into()));
                     }
                     _ => {}
                 }
@@ -2086,13 +2086,16 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         let mut aggregation_items: Vec<(&WithItem, String)> = Vec::new();
 
         for item in items {
-            let alias = item.alias.clone().unwrap_or_else(|| match &item.expression {
-                Expression::Variable(v) => v.clone(),
-                Expression::PropertyAccess { variable, property } => {
-                    format!("{}_{}", variable, property)
-                }
-                _ => "result".to_string(),
-            });
+            let alias = item
+                .alias
+                .clone()
+                .unwrap_or_else(|| match &item.expression {
+                    Expression::Variable(v) => v.clone(),
+                    Expression::PropertyAccess { variable, property } => {
+                        format!("{}_{}", variable, property)
+                    }
+                    _ => "result".to_string(),
+                });
 
             match &item.expression {
                 Expression::Aggregation { .. } | Expression::CountAll => {
@@ -2183,10 +2186,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     }
                     Expression::CountAll => {
                         let count = group_indices.len();
-                        group_result.properties.insert(
-                            alias.clone(),
-                            serde_json::Value::Number(count.into()),
-                        );
+                        group_result
+                            .properties
+                            .insert(alias.clone(), serde_json::Value::Number(count.into()));
                     }
                     _ => {}
                 }
@@ -2777,7 +2779,9 @@ mod tests {
         let query_result = result.unwrap();
         // Should have exactly one result row with count
         assert_eq!(query_result.nodes.len(), 1);
-        assert!(query_result.nodes[0].labels.contains(&"_AggregateResult".to_string()));
+        assert!(query_result.nodes[0]
+            .labels
+            .contains(&"_AggregateResult".to_string()));
 
         // The count should be 5
         if let Some(count_value) = query_result.nodes[0].properties.get("COUNT(*)") {
@@ -2909,7 +2913,8 @@ mod tests {
         // Test multiple aggregations in RETURN (using "Purchase" instead of "Order" since "Order" is reserved)
         let parser = crate::protocols::cypher::cypher_parser::CypherParser::new();
 
-        let result = parser.parse("MATCH (n:Purchase) RETURN COUNT(n), SUM(n.amount), AVG(n.amount)");
+        let result =
+            parser.parse("MATCH (n:Purchase) RETURN COUNT(n), SUM(n.amount), AVG(n.amount)");
         assert!(result.is_ok());
 
         let parsed = result.unwrap();

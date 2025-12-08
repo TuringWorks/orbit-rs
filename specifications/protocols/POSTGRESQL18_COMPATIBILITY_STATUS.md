@@ -13,7 +13,7 @@ OrbitRS implements PostgreSQL wire protocol (v3.0) with extensive SQL support. T
 | Category | Implemented | Partial | Not Started | Total |
 |----------|-------------|---------|-------------|-------|
 | Wire Protocol | 15 | 2 | 1 | 18 |
-| SQL Syntax (PG18 New) | 2 | 2 | 3 | 7 |
+| SQL Syntax (PG18 New) | 3 | 1 | 3 | 7 |
 | Functions (PG18 New) | 6 | 0 | 0 | 6 |
 | Data Types | 25+ | 3 | 2 | 30+ |
 
@@ -102,10 +102,10 @@ CREATE TABLE orders (
 
 ### 2.2 Generated Columns (STORED and VIRTUAL)
 
-**Status**: ✅ Parsing Implemented (Execution Pending)
+**Status**: ✅ STORED Implemented, ⚠️ VIRTUAL Pending
 
 ```sql
--- PostgreSQL 12+ syntax (STORED)
+-- PostgreSQL 12+ syntax (STORED) - FULLY WORKING
 CREATE TABLE products (
     id SERIAL PRIMARY KEY,
     price NUMERIC(10,2),
@@ -113,7 +113,7 @@ CREATE TABLE products (
     total NUMERIC(10,2) GENERATED ALWAYS AS (price * quantity) STORED
 );
 
--- PostgreSQL 18 syntax (VIRTUAL)
+-- PostgreSQL 18 syntax (VIRTUAL) - PARSING ONLY
 CREATE TABLE products (
     id SERIAL PRIMARY KEY,
     price NUMERIC(10,2),
@@ -128,13 +128,20 @@ CREATE TABLE products (
 | Lexer tokens (GENERATED, ALWAYS, STORED, VIRTUAL) | ✅ Done | Added to `lexer.rs` |
 | AST types (ColumnConstraint::Generated, GeneratedColumnStorage) | ✅ Done | Added to `ast.rs` |
 | DDL parsing | ✅ Done | Parses `GENERATED ALWAYS AS (expr) [STORED|VIRTUAL]` |
-| STORED column execution | ⚠️ Partial | Needs INSERT/UPDATE handling |
+| Schema storage | ✅ Done | `GeneratedColumnSchema` stores expression and storage type |
+| STORED column execution (INSERT) | ✅ Done | Auto-computes value on INSERT |
+| STORED column execution (UPDATE) | ✅ Done | Re-computes value on UPDATE |
+| Reject direct INSERT/UPDATE | ✅ Done | Error if user tries to set generated column |
 | VIRTUAL column execution | ❌ Pending | Compute on read |
+| Unit tests | ✅ Done | Added 4 parsing tests, all passing |
 
 **Implementation Location**:
 - Lexer: `orbit/server/src/protocols/postgres_wire/sql/lexer.rs`
 - AST: `orbit/server/src/protocols/postgres_wire/sql/ast.rs`
 - Parser: `orbit/server/src/protocols/postgres_wire/sql/parser/ddl.rs`
+- Schema: `orbit/server/src/protocols/postgres_wire/sql/executor.rs` (GeneratedColumnSchema, ColumnSchema)
+- Execution: `orbit/server/src/protocols/postgres_wire/sql/executor.rs` (compute_generated_columns, execute_insert, execute_update)
+- Tests: `orbit/server/src/protocols/postgres_wire/sql/tests.rs`
 
 ---
 
@@ -322,7 +329,7 @@ PostgreSQL 18 supports protocol version negotiation via `NegotiateProtocolVersio
 |------|--------|--------|
 | UUIDv7 function | ✅ Done | - |
 | gen_random_uuid | ✅ Done | - |
-| GENERATED ALWAYS AS (STORED) | 🔄 In Progress | Medium |
+| GENERATED ALWAYS AS (STORED) | ✅ Done | - |
 | Variable-length cancel keys | Planned | Low |
 
 ### Phase 2: PostgreSQL 18 Advanced (Medium Priority)
@@ -363,7 +370,8 @@ cargo test -p orbit-server -- generated_column
 | UUIDv7 | ✅ | ✅ |
 | gen_random_uuid | ✅ | ✅ |
 | Wire protocol | ✅ | ✅ |
-| GENERATED columns | ❌ | ❌ |
+| GENERATED columns (parsing) | ✅ | ❌ |
+| GENERATED columns (STORED exec) | ✅ | ❌ |
 | Temporal constraints | ❌ | ❌ |
 
 ---
@@ -372,6 +380,8 @@ cargo test -p orbit-server -- generated_column
 
 | Date | Changes |
 |------|---------|
+| 2025-12-07 | Implemented STORED generated column execution (INSERT, UPDATE) |
+| 2025-12-07 | Added unit tests for GENERATED columns and UUID functions |
 | 2025-12-07 | Added GENERATED ALWAYS AS parsing (STORED and VIRTUAL) |
 | 2025-12-07 | Added UUIDv7, gen_random_uuid, uuid_nil, uuid_max functions |
 | 2025-12-07 | Initial PostgreSQL 18 compatibility status document |

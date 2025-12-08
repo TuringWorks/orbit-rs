@@ -13,10 +13,10 @@ use crate::protocols::postgres_wire::sql::{
         CreateTriggerStatement, CreateViewStatement, DropDatabaseStatement, DropExtensionStatement,
         DropIndexStatement, DropSchemaStatement, DropSequenceStatement, DropTableStatement,
         DropTriggerStatement, DropViewStatement, FunctionLanguage, FunctionName, FunctionParameter,
-        FunctionVolatility, GeneratedColumnStorage, IndexColumn, IndexOption, IndexType, NullsOrder,
-        ParameterMode, ReferentialAction, SequenceBound, SequenceOptions, SequenceOwner,
-        SortDirection, Statement, TableConstraint, TableOption, TriggerEvent, TriggerForEach,
-        TriggerTiming, TruncateIdentity, TruncateStatement,
+        FunctionVolatility, GeneratedColumnStorage, IndexColumn, IndexOption, IndexType,
+        NullsOrder, ParameterMode, ReferentialAction, SequenceBound, SequenceOptions,
+        SequenceOwner, SortDirection, Statement, TableConstraint, TableOption, TriggerEvent,
+        TriggerForEach, TriggerTiming, TruncateIdentity, TruncateStatement,
     },
     lexer::Token,
     types::SqlValue,
@@ -1114,6 +1114,7 @@ fn parse_column_definition(parser: &mut SqlParser) -> ParseResult<ColumnDefiniti
         Token::Unique,
         Token::References,
         Token::Check,
+        Token::Generated, // PostgreSQL 12+ GENERATED ALWAYS AS
     ]) {
         match &parser.current_token {
             Some(Token::Not) => {

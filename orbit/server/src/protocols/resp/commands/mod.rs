@@ -36,8 +36,8 @@ mod handler {
         functions::FunctionCommands, graph::GraphCommands, graphrag::GraphRAGCommands,
         hash::HashCommands, list::ListCommands, pubsub::PubSubCommands, server::ServerCommands,
         set::SetCommands, sorted_set::SortedSetCommands, stream::StreamCommands,
-        string::StringCommands, time_series::TimeSeriesCommands,
-        transactions::TransactionCommands, vector::VectorCommands,
+        string::StringCommands, time_series::TimeSeriesCommands, transactions::TransactionCommands,
+        vector::VectorCommands,
     };
     use crate::protocols::error::ProtocolResult;
     use crate::protocols::resp::simple_local::SimpleLocalRegistry;
@@ -132,7 +132,10 @@ mod handler {
                 graph: GraphCommands::new(orbit_client.clone(), local_registry.clone()),
                 graphrag: GraphRAGCommands::new(orbit_client.clone(), local_registry.clone()),
                 server: ServerCommands::new(orbit_client.clone(), local_registry.clone()),
-                transactions: TransactionCommands::new(orbit_client.clone(), local_registry.clone()),
+                transactions: TransactionCommands::new(
+                    orbit_client.clone(),
+                    local_registry.clone(),
+                ),
                 orbit_client,
                 local_registry,
             }

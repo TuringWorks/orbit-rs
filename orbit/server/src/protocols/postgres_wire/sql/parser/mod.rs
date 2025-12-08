@@ -367,7 +367,8 @@ impl SqlParser {
                 message: "Expected object type after DROP".to_string(),
                 position: self.position,
                 expected: vec![
-                    "DATABASE, TABLE, INDEX, VIEW, SCHEMA, EXTENSION, TRIGGER, or SEQUENCE".to_string(),
+                    "DATABASE, TABLE, INDEX, VIEW, SCHEMA, EXTENSION, TRIGGER, or SEQUENCE"
+                        .to_string(),
                 ],
                 found: None,
             }),

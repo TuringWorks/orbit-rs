@@ -1992,11 +1992,7 @@ mod tests {
         let sql = "SELECT STRING_AGG(name, '; ') FROM employees";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
-        assert!(
-            result.is_ok(),
-            "STRING_AGG should parse: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "STRING_AGG should parse: {:?}", result);
     }
 
     #[test]
@@ -2042,11 +2038,7 @@ mod tests {
         let sql = "SELECT POWER(2, 10) AS result";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
-        assert!(
-            result.is_ok(),
-            "POWER function should parse: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "POWER function should parse: {:?}", result);
     }
 
     #[test]
@@ -2155,11 +2147,7 @@ mod tests {
         let sql = "SELECT TRUNC(123.456), TRUNC(123.456, 2), TRUNC(price, 0) FROM products";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
-        assert!(
-            result.is_ok(),
-            "TRUNC should parse: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "TRUNC should parse: {:?}", result);
     }
 
     // ===== String Function Tests =====
@@ -2218,11 +2206,7 @@ mod tests {
         let sql = "SELECT TRIM(name), LTRIM(name), RTRIM(name), BTRIM(name, ' ') FROM users";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
-        assert!(
-            result.is_ok(),
-            "TRIM functions should parse: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "TRIM functions should parse: {:?}", result);
     }
 
     #[test]
@@ -2231,11 +2215,7 @@ mod tests {
         let sql = "SELECT STRPOS(email, '@'), STRPOS(name, 'test') FROM users";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
-        assert!(
-            result.is_ok(),
-            "STRPOS should parse: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "STRPOS should parse: {:?}", result);
     }
 
     #[test]
@@ -2255,11 +2235,7 @@ mod tests {
         let sql = "SELECT REPEAT('*', 10) AS stars";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
-        assert!(
-            result.is_ok(),
-            "REPEAT function should parse: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "REPEAT function should parse: {:?}", result);
     }
 
     #[test]
@@ -2363,11 +2339,7 @@ mod tests {
         let sql = "SELECT name, salary, SUM(salary) OVER (ORDER BY id ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) FROM employees";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
-        assert!(
-            result.is_ok(),
-            "ROWS BETWEEN should parse: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "ROWS BETWEEN should parse: {:?}", result);
     }
 
     #[test]
@@ -2376,11 +2348,7 @@ mod tests {
         let sql = "SELECT id, value, AVG(value) OVER (ORDER BY id RANGE BETWEEN 7 PRECEDING AND CURRENT ROW) FROM metrics";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
-        assert!(
-            result.is_ok(),
-            "RANGE BETWEEN should parse: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "RANGE BETWEEN should parse: {:?}", result);
     }
 
     #[test]
@@ -2388,11 +2356,7 @@ mod tests {
         let sql = "SELECT cat, value, SUM(value) OVER (ORDER BY cat GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM data";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
-        assert!(
-            result.is_ok(),
-            "GROUPS BETWEEN should parse: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "GROUPS BETWEEN should parse: {:?}", result);
     }
 
     #[test]
@@ -2464,15 +2428,42 @@ mod tests {
         let mut lexer = Lexer::new(sql);
         let tokens = lexer.tokenize();
 
-        assert!(tokens.contains(&Token::Rows), "ROWS token should be recognized");
-        assert!(tokens.contains(&Token::Range), "RANGE token should be recognized");
-        assert!(tokens.contains(&Token::Groups), "GROUPS token should be recognized");
-        assert!(tokens.contains(&Token::Unbounded), "UNBOUNDED token should be recognized");
-        assert!(tokens.contains(&Token::Preceding), "PRECEDING token should be recognized");
-        assert!(tokens.contains(&Token::Following), "FOLLOWING token should be recognized");
-        assert!(tokens.contains(&Token::Exclude), "EXCLUDE token should be recognized");
-        assert!(tokens.contains(&Token::Ties), "TIES token should be recognized");
-        assert!(tokens.contains(&Token::Others), "OTHERS token should be recognized");
+        assert!(
+            tokens.contains(&Token::Rows),
+            "ROWS token should be recognized"
+        );
+        assert!(
+            tokens.contains(&Token::Range),
+            "RANGE token should be recognized"
+        );
+        assert!(
+            tokens.contains(&Token::Groups),
+            "GROUPS token should be recognized"
+        );
+        assert!(
+            tokens.contains(&Token::Unbounded),
+            "UNBOUNDED token should be recognized"
+        );
+        assert!(
+            tokens.contains(&Token::Preceding),
+            "PRECEDING token should be recognized"
+        );
+        assert!(
+            tokens.contains(&Token::Following),
+            "FOLLOWING token should be recognized"
+        );
+        assert!(
+            tokens.contains(&Token::Exclude),
+            "EXCLUDE token should be recognized"
+        );
+        assert!(
+            tokens.contains(&Token::Ties),
+            "TIES token should be recognized"
+        );
+        assert!(
+            tokens.contains(&Token::Others),
+            "OTHERS token should be recognized"
+        );
     }
 
     #[test]
@@ -2483,7 +2474,10 @@ mod tests {
 
         // These should be recognized as identifiers (function names)
         let has_identifiers = tokens.iter().any(|t| matches!(t, Token::Identifier(_)));
-        assert!(has_identifiers, "Aggregate function names should be recognized as identifiers");
+        assert!(
+            has_identifiers,
+            "Aggregate function names should be recognized as identifiers"
+        );
     }
 
     #[test]
@@ -2492,8 +2486,14 @@ mod tests {
         let mut lexer = Lexer::new(sql);
         let tokens = lexer.tokenize();
 
-        let identifier_count = tokens.iter().filter(|t| matches!(t, Token::Identifier(_))).count();
-        assert!(identifier_count >= 10, "Math function names should be recognized as identifiers");
+        let identifier_count = tokens
+            .iter()
+            .filter(|t| matches!(t, Token::Identifier(_)))
+            .count();
+        assert!(
+            identifier_count >= 10,
+            "Math function names should be recognized as identifiers"
+        );
     }
 
     #[test]
@@ -2502,8 +2502,14 @@ mod tests {
         let mut lexer = Lexer::new(sql);
         let tokens = lexer.tokenize();
 
-        let identifier_count = tokens.iter().filter(|t| matches!(t, Token::Identifier(_))).count();
-        assert!(identifier_count >= 10, "String function names should be recognized as identifiers");
+        let identifier_count = tokens
+            .iter()
+            .filter(|t| matches!(t, Token::Identifier(_)))
+            .count();
+        assert!(
+            identifier_count >= 10,
+            "String function names should be recognized as identifiers"
+        );
     }
 
     // ===== Complex Query Tests with New Functions =====
@@ -2639,12 +2645,214 @@ mod tests {
 
     #[test]
     fn test_mathematical_expression_in_function() {
-        let sql = "SELECT POWER(SIN(x) * SIN(x) + COS(x) * COS(x), 0.5) AS should_be_one FROM angles";
+        let sql =
+            "SELECT POWER(SIN(x) * SIN(x) + COS(x) * COS(x), 0.5) AS should_be_one FROM angles";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
         assert!(
             result.is_ok(),
             "Mathematical expression in function should parse: {:?}",
+            result
+        );
+    }
+
+    // ===== PostgreSQL 18 Generated Column Tests =====
+
+    #[test]
+    fn test_generated_column_stored_parsing() {
+        // Test PostgreSQL 12+ syntax: GENERATED ALWAYS AS (expr) STORED
+        let sql = "CREATE TABLE products (
+            id SERIAL PRIMARY KEY,
+            price NUMERIC(10, 2),
+            quantity INTEGER,
+            total NUMERIC(10, 2) GENERATED ALWAYS AS (price * quantity) STORED
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "GENERATED ALWAYS AS (expr) STORED should parse: {:?}",
+            result
+        );
+
+        // Verify the column constraint is parsed correctly
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let total_col = stmt.columns.iter().find(|c| c.name == "total");
+            assert!(total_col.is_some(), "total column should exist");
+            let total_col = total_col.unwrap();
+
+            // Check for Generated constraint
+            let has_generated = total_col.constraints.iter().any(|c| {
+                matches!(c, ColumnConstraint::Generated { storage, .. }
+                    if *storage == GeneratedColumnStorage::Stored)
+            });
+            assert!(
+                has_generated,
+                "total column should have GENERATED STORED constraint"
+            );
+        }
+    }
+
+    #[test]
+    fn test_generated_column_virtual_parsing() {
+        // Test PostgreSQL 18 syntax: GENERATED ALWAYS AS (expr) VIRTUAL
+        let sql = "CREATE TABLE products (
+            id SERIAL PRIMARY KEY,
+            price NUMERIC(10, 2),
+            quantity INTEGER,
+            total NUMERIC(10, 2) GENERATED ALWAYS AS (price * quantity) VIRTUAL
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "GENERATED ALWAYS AS (expr) VIRTUAL should parse: {:?}",
+            result
+        );
+
+        // Verify the column constraint is parsed correctly
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let total_col = stmt.columns.iter().find(|c| c.name == "total");
+            assert!(total_col.is_some(), "total column should exist");
+            let total_col = total_col.unwrap();
+
+            // Check for Generated constraint with VIRTUAL storage
+            let has_virtual = total_col.constraints.iter().any(|c| {
+                matches!(c, ColumnConstraint::Generated { storage, .. }
+                    if *storage == GeneratedColumnStorage::Virtual)
+            });
+            assert!(
+                has_virtual,
+                "total column should have GENERATED VIRTUAL constraint"
+            );
+        }
+    }
+
+    #[test]
+    fn test_generated_column_default_stored() {
+        // Test that without STORED/VIRTUAL keyword, default is STORED
+        let sql = "CREATE TABLE products (
+            id SERIAL PRIMARY KEY,
+            price NUMERIC(10, 2),
+            quantity INTEGER,
+            total NUMERIC(10, 2) GENERATED ALWAYS AS (price * quantity)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "GENERATED ALWAYS AS (expr) without STORED/VIRTUAL should parse: {:?}",
+            result
+        );
+
+        // Verify default is STORED
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let total_col = stmt.columns.iter().find(|c| c.name == "total");
+            assert!(total_col.is_some(), "total column should exist");
+            let total_col = total_col.unwrap();
+
+            let has_stored = total_col.constraints.iter().any(|c| {
+                matches!(c, ColumnConstraint::Generated { storage, .. }
+                    if *storage == GeneratedColumnStorage::Stored)
+            });
+            assert!(has_stored, "Default storage type should be STORED");
+        }
+    }
+
+    #[test]
+    fn test_generated_column_with_function_expression() {
+        // Test generated column with function calls in expression
+        let sql = "CREATE TABLE orders (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            subtotal NUMERIC(10, 2),
+            tax_rate NUMERIC(5, 4),
+            tax_amount NUMERIC(10, 2) GENERATED ALWAYS AS (subtotal * tax_rate) STORED,
+            total NUMERIC(10, 2) GENERATED ALWAYS AS (subtotal + subtotal * tax_rate) STORED
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Generated column with complex expression should parse: {:?}",
+            result
+        );
+    }
+
+    // ===== PostgreSQL 18 UUID Function Tests =====
+
+    #[test]
+    fn test_uuidv7_function_parsing() {
+        let sql = "SELECT uuidv7()";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "uuidv7() function should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_uuid_generate_v7_function_parsing() {
+        let sql = "SELECT uuid_generate_v7()";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "uuid_generate_v7() function should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_gen_random_uuid_function_parsing() {
+        let sql = "SELECT gen_random_uuid()";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "gen_random_uuid() function should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_uuid_nil_function_parsing() {
+        let sql = "SELECT uuid_nil()";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "uuid_nil() function should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_uuid_max_function_parsing() {
+        let sql = "SELECT uuid_max()";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "uuid_max() function should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_uuid_as_default_column() {
+        // Test UUIDv7 as default column value (PostgreSQL 18 pattern)
+        let sql = "CREATE TABLE orders (
+            id UUID PRIMARY KEY DEFAULT uuidv7(),
+            customer_id INTEGER,
+            created_at TIMESTAMP DEFAULT NOW()
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "UUID DEFAULT uuidv7() should parse: {:?}",
             result
         );
     }

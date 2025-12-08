@@ -89,10 +89,16 @@ pub enum AggregateState {
     Sum(SqlValue),
     Min(SqlValue),
     Max(SqlValue),
-    Avg { sum: SqlValue, count: i64 },
+    Avg {
+        sum: SqlValue,
+        count: i64,
+    },
     // New aggregate function states
     ArrayAgg(Vec<SqlValue>),
-    StringAgg { values: Vec<String>, delimiter: String },
+    StringAgg {
+        values: Vec<String>,
+        delimiter: String,
+    },
     BoolAnd(Option<bool>),
     BoolOr(Option<bool>),
 }
@@ -580,9 +586,7 @@ impl ExpressionEvaluator {
             "UUID_GENERATE_V7" | "UUIDV7" => Ok(SqlValue::Uuid(Uuid::now_v7())),
             // UUIDv4 - random UUID (standard PostgreSQL function)
             // gen_random_uuid() is the standard PostgreSQL function name
-            "GEN_RANDOM_UUID" | "UUID_GENERATE_V4" | "UUIDV4" => {
-                Ok(SqlValue::Uuid(Uuid::new_v4()))
-            }
+            "GEN_RANDOM_UUID" | "UUID_GENERATE_V4" | "UUIDV4" => Ok(SqlValue::Uuid(Uuid::new_v4())),
             // UUID nil - all zeros (useful for comparisons)
             "UUID_NIL" => Ok(SqlValue::Uuid(Uuid::nil())),
             // UUID max - all ones
@@ -2287,19 +2291,20 @@ impl ExpressionEvaluator {
             (Some(data), Some(format)) => {
                 match format.to_lowercase().as_str() {
                     "base64" => {
-                        use base64::{Engine as _, engine::general_purpose};
-                        Ok(SqlValue::Text(general_purpose::STANDARD.encode(data.as_bytes())))
+                        use base64::{engine::general_purpose, Engine as _};
+                        Ok(SqlValue::Text(
+                            general_purpose::STANDARD.encode(data.as_bytes()),
+                        ))
                     }
-                    "hex" => {
-                        Ok(SqlValue::Text(hex::encode(data.as_bytes())))
-                    }
+                    "hex" => Ok(SqlValue::Text(hex::encode(data.as_bytes()))),
                     "escape" => {
                         // Simple escape encoding
                         Ok(SqlValue::Text(data.escape_default().to_string()))
                     }
-                    _ => Err(ProtocolError::PostgresError(
-                        format!("Unknown encoding format: {}", format),
-                    )),
+                    _ => Err(ProtocolError::PostgresError(format!(
+                        "Unknown encoding format: {}",
+                        format
+                    ))),
                 }
             }
             _ => Ok(SqlValue::Null),
@@ -2317,36 +2322,37 @@ impl ExpressionEvaluator {
         let format = Self::get_string_arg(&args[1])?;
 
         match (data, format) {
-            (Some(data), Some(format)) => {
-                match format.to_lowercase().as_str() {
-                    "base64" => {
-                        use base64::{Engine as _, engine::general_purpose};
-                        match general_purpose::STANDARD.decode(&data) {
-                            Ok(bytes) => match String::from_utf8(bytes) {
-                                Ok(s) => Ok(SqlValue::Text(s)),
-                                Err(_) => Ok(SqlValue::Bytea(general_purpose::STANDARD.decode(&data).unwrap())),
-                            },
-                            Err(e) => Err(ProtocolError::PostgresError(
-                                format!("Invalid base64 data: {}", e),
+            (Some(data), Some(format)) => match format.to_lowercase().as_str() {
+                "base64" => {
+                    use base64::{engine::general_purpose, Engine as _};
+                    match general_purpose::STANDARD.decode(&data) {
+                        Ok(bytes) => match String::from_utf8(bytes) {
+                            Ok(s) => Ok(SqlValue::Text(s)),
+                            Err(_) => Ok(SqlValue::Bytea(
+                                general_purpose::STANDARD.decode(&data).unwrap(),
                             )),
-                        }
+                        },
+                        Err(e) => Err(ProtocolError::PostgresError(format!(
+                            "Invalid base64 data: {}",
+                            e
+                        ))),
                     }
-                    "hex" => {
-                        match hex::decode(&data) {
-                            Ok(bytes) => match String::from_utf8(bytes) {
-                                Ok(s) => Ok(SqlValue::Text(s)),
-                                Err(_) => Ok(SqlValue::Bytea(hex::decode(&data).unwrap())),
-                            },
-                            Err(e) => Err(ProtocolError::PostgresError(
-                                format!("Invalid hex data: {}", e),
-                            )),
-                        }
-                    }
-                    _ => Err(ProtocolError::PostgresError(
-                        format!("Unknown decoding format: {}", format),
-                    )),
                 }
-            }
+                "hex" => match hex::decode(&data) {
+                    Ok(bytes) => match String::from_utf8(bytes) {
+                        Ok(s) => Ok(SqlValue::Text(s)),
+                        Err(_) => Ok(SqlValue::Bytea(hex::decode(&data).unwrap())),
+                    },
+                    Err(e) => Err(ProtocolError::PostgresError(format!(
+                        "Invalid hex data: {}",
+                        e
+                    ))),
+                },
+                _ => Err(ProtocolError::PostgresError(format!(
+                    "Unknown decoding format: {}",
+                    format
+                ))),
+            },
             _ => Ok(SqlValue::Null),
         }
     }
@@ -2438,17 +2444,20 @@ impl ExpressionEvaluator {
                 let from_chars: Vec<char> = from.chars().collect();
                 let to_chars: Vec<char> = to.chars().collect();
 
-                let result: String = s.chars().filter_map(|c| {
-                    if let Some(pos) = from_chars.iter().position(|&fc| fc == c) {
-                        if pos < to_chars.len() {
-                            Some(to_chars[pos])
+                let result: String = s
+                    .chars()
+                    .filter_map(|c| {
+                        if let Some(pos) = from_chars.iter().position(|&fc| fc == c) {
+                            if pos < to_chars.len() {
+                                Some(to_chars[pos])
+                            } else {
+                                None // Remove character if no corresponding replacement
+                            }
                         } else {
-                            None // Remove character if no corresponding replacement
+                            Some(c)
                         }
-                    } else {
-                        Some(c)
-                    }
-                }).collect();
+                    })
+                    .collect();
 
                 Ok(SqlValue::Text(result))
             }
@@ -2525,7 +2534,7 @@ impl ExpressionEvaluator {
                             's' => {
                                 if arg_idx < args.len() {
                                     let val = args[arg_idx].to_postgres_string();
-                                    result = format!("{}{}{}", &result[..i], val, &result[i+2..]);
+                                    result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
                                     i += val.len();
                                     arg_idx += 1;
                                 } else {
@@ -2537,7 +2546,7 @@ impl ExpressionEvaluator {
                                     let s = args[arg_idx].to_postgres_string();
                                     let escaped = s.replace('"', "\"\"");
                                     let val = format!("\"{}\"", escaped);
-                                    result = format!("{}{}{}", &result[..i], val, &result[i+2..]);
+                                    result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
                                     i += val.len();
                                     arg_idx += 1;
                                 } else {
@@ -2549,7 +2558,7 @@ impl ExpressionEvaluator {
                                     let s = args[arg_idx].to_postgres_string();
                                     let escaped = s.replace('\'', "''");
                                     let val = format!("'{}'", escaped);
-                                    result = format!("{}{}{}", &result[..i], val, &result[i+2..]);
+                                    result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
                                     i += val.len();
                                     arg_idx += 1;
                                 } else {
@@ -2557,7 +2566,7 @@ impl ExpressionEvaluator {
                                 }
                             }
                             '%' => {
-                                result = format!("{}{}", &result[..i], &result[i+1..]);
+                                result = format!("{}{}", &result[..i], &result[i + 1..]);
                                 i += 1;
                             }
                             _ => {
@@ -2720,11 +2729,7 @@ impl ExpressionEvaluator {
     }
 
     /// Internal helper to extract a field from a date/time value
-    fn extract_field_from_value(
-        &self,
-        field: &str,
-        value: &SqlValue,
-    ) -> ProtocolResult<SqlValue> {
+    fn extract_field_from_value(&self, field: &str, value: &SqlValue) -> ProtocolResult<SqlValue> {
         use chrono::{Datelike, Timelike};
 
         match value {
@@ -2743,9 +2748,10 @@ impl ExpressionEvaluator {
                 "QUARTER" => Ok(SqlValue::Integer(((date.month() - 1) / 3 + 1) as i32)),
                 "EPOCH" => {
                     // Seconds since 1970-01-01
-                    let datetime =
-                        date.and_hms_opt(0, 0, 0).unwrap_or_default();
-                    Ok(SqlValue::DoublePrecision(datetime.and_utc().timestamp() as f64))
+                    let datetime = date.and_hms_opt(0, 0, 0).unwrap_or_default();
+                    Ok(SqlValue::DoublePrecision(
+                        datetime.and_utc().timestamp() as f64
+                    ))
                 }
                 _ => Err(ProtocolError::PostgresError(format!(
                     "Cannot extract '{}' from DATE",
@@ -2929,11 +2935,7 @@ impl ExpressionEvaluator {
     }
 
     /// Internal helper to truncate a date/time to a specified precision
-    fn truncate_to_precision(
-        &self,
-        precision: &str,
-        value: &SqlValue,
-    ) -> ProtocolResult<SqlValue> {
+    fn truncate_to_precision(&self, precision: &str, value: &SqlValue) -> ProtocolResult<SqlValue> {
         use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 
         match value {
@@ -2956,7 +2958,9 @@ impl ExpressionEvaluator {
                         let quarter_start = ((date.month() - 1) / 3) * 3 + 1;
                         NaiveDate::from_ymd_opt(date.year(), quarter_start, 1).unwrap_or(*date)
                     }
-                    "MONTH" => NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(*date),
+                    "MONTH" => {
+                        NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(*date)
+                    }
                     "WEEK" => {
                         let days_from_monday = date.weekday().num_days_from_monday();
                         *date - chrono::Duration::days(days_from_monday as i64)
@@ -3033,16 +3037,26 @@ impl ExpressionEvaluator {
                         let ms = (time.nanosecond() / 1_000_000) * 1_000_000;
                         NaiveDateTime::new(
                             date,
-                            NaiveTime::from_hms_nano_opt(time.hour(), time.minute(), time.second(), ms)
-                                .unwrap_or(time),
+                            NaiveTime::from_hms_nano_opt(
+                                time.hour(),
+                                time.minute(),
+                                time.second(),
+                                ms,
+                            )
+                            .unwrap_or(time),
                         )
                     }
                     "MICROSECOND" | "MICROSECONDS" => {
                         let us = (time.nanosecond() / 1_000) * 1_000;
                         NaiveDateTime::new(
                             date,
-                            NaiveTime::from_hms_nano_opt(time.hour(), time.minute(), time.second(), us)
-                                .unwrap_or(time),
+                            NaiveTime::from_hms_nano_opt(
+                                time.hour(),
+                                time.minute(),
+                                time.second(),
+                                us,
+                            )
+                            .unwrap_or(time),
                         )
                     }
                     _ => {
@@ -3056,7 +3070,8 @@ impl ExpressionEvaluator {
             }
             SqlValue::TimestampWithTimezone(ts) => {
                 let naive = ts.naive_utc();
-                let truncated_naive = self.truncate_to_precision(precision, &SqlValue::Timestamp(naive))?;
+                let truncated_naive =
+                    self.truncate_to_precision(precision, &SqlValue::Timestamp(naive))?;
                 if let SqlValue::Timestamp(t) = truncated_naive {
                     Ok(SqlValue::TimestampWithTimezone(
                         chrono::DateTime::from_naive_utc_and_offset(t, chrono::Utc),
@@ -3192,9 +3207,9 @@ impl ExpressionEvaluator {
             SqlValue::Timestamp(ts) => {
                 Ok(SqlValue::Integer(((ts.date().month() - 1) / 3 + 1) as i32))
             }
-            SqlValue::TimestampWithTimezone(ts) => {
-                Ok(SqlValue::Integer(((ts.date_naive().month() - 1) / 3 + 1) as i32))
-            }
+            SqlValue::TimestampWithTimezone(ts) => Ok(SqlValue::Integer(
+                ((ts.date_naive().month() - 1) / 3 + 1) as i32,
+            )),
             SqlValue::Null => Ok(SqlValue::Null),
             _ => Err(ProtocolError::PostgresError(
                 "QUARTER requires date/timestamp argument".to_string(),
@@ -3211,9 +3226,9 @@ impl ExpressionEvaluator {
 
         use chrono::Datelike;
         match &args[0] {
-            SqlValue::Date(date) => {
-                Ok(SqlValue::Integer(date.weekday().num_days_from_sunday() as i32))
-            }
+            SqlValue::Date(date) => Ok(SqlValue::Integer(
+                date.weekday().num_days_from_sunday() as i32
+            )),
             SqlValue::Timestamp(ts) => Ok(SqlValue::Integer(
                 ts.date().weekday().num_days_from_sunday() as i32,
             )),
@@ -4355,12 +4370,7 @@ impl ExpressionEvaluator {
                 let row_idx = partition_rows[i];
 
                 // Apply EXCLUDE clause
-                if self.should_exclude_row(
-                    exclusion,
-                    i,
-                    current_partition_pos,
-                    window_context,
-                ) {
+                if self.should_exclude_row(exclusion, i, current_partition_pos, window_context) {
                     continue;
                 }
 
@@ -4553,11 +4563,7 @@ impl ExpressionEvaluator {
                 // Find rows where ORDER BY value >= current - offset
                 let empty_ctx = EvaluationContext::empty();
                 if let Ok(offset_val) = self.evaluate(expr, &empty_ctx) {
-                    self.find_range_start_with_offset(
-                        window_context,
-                        current_value,
-                        &offset_val,
-                    )
+                    self.find_range_start_with_offset(window_context, current_value, &offset_val)
                 } else {
                     0
                 }
@@ -4585,7 +4591,10 @@ impl ExpressionEvaluator {
             FrameBound::UnboundedPreceding => current_pos, // Invalid for end
         };
 
-        Ok((start.min(partition_size.saturating_sub(1)), end.min(partition_size.saturating_sub(1))))
+        Ok((
+            start.min(partition_size.saturating_sub(1)),
+            end.min(partition_size.saturating_sub(1)),
+        ))
     }
 
     /// Find start of peer group (rows with same ORDER BY value)
@@ -4598,7 +4607,11 @@ impl ExpressionEvaluator {
         let mut start = current_pos;
         while start > 0 {
             if let Some(prev_val) = window_context.order_by_values.get(start - 1) {
-                if self.compare_values(prev_val, current_value).unwrap_or(Ordering::Less) == Ordering::Equal {
+                if self
+                    .compare_values(prev_val, current_value)
+                    .unwrap_or(Ordering::Less)
+                    == Ordering::Equal
+                {
                     start -= 1;
                 } else {
                     break;
@@ -4621,7 +4634,11 @@ impl ExpressionEvaluator {
         let mut end = current_pos;
         while end < partition_size.saturating_sub(1) {
             if let Some(next_val) = window_context.order_by_values.get(end + 1) {
-                if self.compare_values(next_val, current_value).unwrap_or(Ordering::Less) == Ordering::Equal {
+                if self
+                    .compare_values(next_val, current_value)
+                    .unwrap_or(Ordering::Less)
+                    == Ordering::Equal
+                {
                     end += 1;
                 } else {
                     break;
