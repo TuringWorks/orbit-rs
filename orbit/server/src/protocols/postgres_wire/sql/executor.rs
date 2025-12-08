@@ -1091,27 +1091,56 @@ impl SqlExecutor {
             if let Some(generated) = &col_schema.generated {
                 // Only compute STORED generated columns (VIRTUAL are computed on read)
                 if generated.storage == GeneratedColumnStorageType::Stored {
-                    // Parse the expression text back into an AST
-                    let expr = self.parse_generated_expression(&generated.expression_text)?;
-
-                    // Create evaluation context from the current row
-                    let context = EvaluationContext {
-                        current_row: row.clone(),
-                        table_data: HashMap::new(),
-                        variables: HashMap::new(),
-                        current_table: None,
-                        window_frame: None,
-                    };
-
-                    // Evaluate the expression
-                    let mut evaluator = ExpressionEvaluator::new();
-                    let value = evaluator.evaluate(&expr, &context)?;
-
-                    // Insert the computed value
-                    row.insert(col_schema.name.clone(), value);
+                    self.compute_single_generated_column(col_schema, generated, row)?;
                 }
             }
         }
+        Ok(())
+    }
+
+    /// Compute values for VIRTUAL generated columns (PostgreSQL 18)
+    /// Called during SELECT to compute values on-the-fly without storing them
+    fn compute_virtual_columns(
+        &self,
+        table_schema: &TableSchema,
+        row: &mut HashMap<String, SqlValue>,
+    ) -> ProtocolResult<()> {
+        for col_schema in &table_schema.columns {
+            if let Some(generated) = &col_schema.generated {
+                // Only compute VIRTUAL generated columns
+                if generated.storage == GeneratedColumnStorageType::Virtual {
+                    self.compute_single_generated_column(col_schema, generated, row)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Compute a single generated column value
+    fn compute_single_generated_column(
+        &self,
+        col_schema: &ColumnSchema,
+        generated: &GeneratedColumnSchema,
+        row: &mut HashMap<String, SqlValue>,
+    ) -> ProtocolResult<()> {
+        // Parse the expression text back into an AST
+        let expr = self.parse_generated_expression(&generated.expression_text)?;
+
+        // Create evaluation context from the current row
+        let context = EvaluationContext {
+            current_row: row.clone(),
+            table_data: HashMap::new(),
+            variables: HashMap::new(),
+            current_table: None,
+            window_frame: None,
+        };
+
+        // Evaluate the expression
+        let mut evaluator = ExpressionEvaluator::new();
+        let value = evaluator.evaluate(&expr, &context)?;
+
+        // Insert the computed value
+        row.insert(col_schema.name.clone(), value);
         Ok(())
     }
 
@@ -2430,17 +2459,33 @@ impl SqlExecutor {
             }
         }
 
-        // Check if table exists in schema
+        // Check if table exists in schema and get schema for VIRTUAL column support
         let tables = self.tables.read().await;
-        if !tables.contains_key(&table_name_str) {
-            return Err(ProtocolError::relation_not_found(&table_name_str));
-        }
+        let table_schema = tables
+            .get(&table_name_str)
+            .cloned()
+            .ok_or_else(|| ProtocolError::relation_not_found(&table_name_str))?;
         drop(tables);
+
+        // Check if table has VIRTUAL generated columns
+        let has_virtual_columns = table_schema.columns.iter().any(|col| {
+            col.generated
+                .as_ref()
+                .is_some_and(|g| g.storage == GeneratedColumnStorageType::Virtual)
+        });
 
         // Get table data
         let table_data = self.table_data.read().await;
         if let Some(data) = table_data.get(&table_name_str) {
-            for row in data {
+            for stored_row in data {
+                // Clone the row so we can add virtual column values
+                let mut row = stored_row.clone();
+
+                // PostgreSQL 18: Compute VIRTUAL generated columns on read
+                if has_virtual_columns {
+                    self.compute_virtual_columns(&table_schema, &mut row)?;
+                }
+
                 // Apply WHERE clause if present
                 let should_include = if let Some(where_expr) = where_clause {
                     let context =

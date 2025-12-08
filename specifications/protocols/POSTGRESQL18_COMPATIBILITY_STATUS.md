@@ -102,7 +102,7 @@ CREATE TABLE orders (
 
 ### 2.2 Generated Columns (STORED and VIRTUAL)
 
-**Status**: ✅ STORED Implemented, ⚠️ VIRTUAL Pending
+**Status**: ✅ Implemented (STORED and VIRTUAL)
 
 ```sql
 -- PostgreSQL 12+ syntax (STORED) - FULLY WORKING
@@ -132,7 +132,7 @@ CREATE TABLE products (
 | STORED column execution (INSERT) | ✅ Done | Auto-computes value on INSERT |
 | STORED column execution (UPDATE) | ✅ Done | Re-computes value on UPDATE |
 | Reject direct INSERT/UPDATE | ✅ Done | Error if user tries to set generated column |
-| VIRTUAL column execution | ❌ Pending | Compute on read |
+| VIRTUAL column execution (SELECT) | ✅ Done | Computed on-the-fly during query execution |
 | Unit tests | ✅ Done | Added 4 parsing tests, all passing |
 
 **Implementation Location**:
@@ -140,7 +140,7 @@ CREATE TABLE products (
 - AST: `orbit/server/src/protocols/postgres_wire/sql/ast.rs`
 - Parser: `orbit/server/src/protocols/postgres_wire/sql/parser/ddl.rs`
 - Schema: `orbit/server/src/protocols/postgres_wire/sql/executor.rs` (GeneratedColumnSchema, ColumnSchema)
-- Execution: `orbit/server/src/protocols/postgres_wire/sql/executor.rs` (compute_generated_columns, execute_insert, execute_update)
+- Execution: `orbit/server/src/protocols/postgres_wire/sql/executor.rs` (compute_generated_columns, compute_virtual_columns, execute_insert, execute_update, execute_single_table)
 - Tests: `orbit/server/src/protocols/postgres_wire/sql/tests.rs`
 
 ---
@@ -350,7 +350,7 @@ PostgreSQL 18 supports protocol version negotiation via `NegotiateProtocolVersio
 
 | Task | Status | Effort |
 |------|--------|--------|
-| VIRTUAL generated columns | Planned | Medium |
+| VIRTUAL generated columns | ✅ Done | - |
 | OLD/NEW in RETURNING | ✅ Done | - |
 | MERGE with RETURNING | Planned | Medium |
 
@@ -386,6 +386,7 @@ cargo test -p orbit-server -- generated_column
 | Wire protocol | ✅ | ✅ |
 | GENERATED columns (parsing) | ✅ | ❌ |
 | GENERATED columns (STORED exec) | ✅ | ❌ |
+| GENERATED columns (VIRTUAL exec) | ✅ | ❌ |
 | OLD/NEW in RETURNING | ✅ | ❌ |
 | Temporal constraints | ❌ | ❌ |
 
@@ -395,6 +396,7 @@ cargo test -p orbit-server -- generated_column
 
 | Date | Changes |
 |------|---------|
+| 2025-12-07 | Implemented VIRTUAL generated columns (compute on SELECT) |
 | 2025-12-07 | Implemented OLD/NEW table references in UPDATE/DELETE RETURNING |
 | 2025-12-07 | Implemented STORED generated column execution (INSERT, UPDATE) |
 | 2025-12-07 | Added unit tests for GENERATED columns and UUID functions |
