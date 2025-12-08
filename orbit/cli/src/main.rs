@@ -572,14 +572,14 @@ impl ReplState {
         match value {
             redis::Value::Nil => println!("{}(nil)", prefix),
             redis::Value::Int(i) => println!("{}(integer) {}", prefix, i),
-            redis::Value::Data(data) => {
+            redis::Value::BulkString(data) => {
                 if let Ok(s) = String::from_utf8(data.clone()) {
                     println!("{}\"{}\"", prefix, s);
                 } else {
                     println!("{}(binary data, {} bytes)", prefix, data.len());
                 }
             }
-            redis::Value::Bulk(arr) => {
+            redis::Value::Array(arr) => {
                 if arr.is_empty() {
                     println!("{}(empty array)", prefix);
                 } else {
@@ -589,8 +589,34 @@ impl ReplState {
                     }
                 }
             }
-            redis::Value::Status(s) => println!("{}{}", prefix, s),
+            redis::Value::SimpleString(s) => println!("{}{}", prefix, s),
+            // Handle additional RESP3 types
+            redis::Value::Double(d) => println!("{}(double) {}", prefix, d),
+            redis::Value::Boolean(b) => println!("{}(boolean) {}", prefix, b),
+            redis::Value::Map(map) => {
+                if map.is_empty() {
+                    println!("{}(empty map)", prefix);
+                } else {
+                    for (i, (k, v)) in map.iter().enumerate() {
+                        print!("{}{}) key: ", prefix, i + 1);
+                        self.format_redis_value(k, 0);
+                        print!("{}   value: ", prefix);
+                        self.format_redis_value(v, 0);
+                    }
+                }
+            }
+            redis::Value::Set(set) => {
+                if set.is_empty() {
+                    println!("{}(empty set)", prefix);
+                } else {
+                    for (i, item) in set.iter().enumerate() {
+                        print!("{}{}) ", prefix, i + 1);
+                        self.format_redis_value(item, 0);
+                    }
+                }
+            }
             redis::Value::Okay => println!("{}OK", prefix),
+            _ => println!("{}(unsupported redis type)", prefix),
         }
     }
 

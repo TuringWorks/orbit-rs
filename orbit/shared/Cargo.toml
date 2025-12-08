@@ -24,7 +24,7 @@ uuid.workspace = true
 # Repository: https://github.com/TuringWorks/sqlx-no-rsa
 sqlx = { git = "https://github.com/TuringWorks/sqlx-no-rsa.git", default-features = false, features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono", "uuid"] }
 tokio-util = "0.7"
-md5 = "0.7"
+md5 = "0.8"
 tempfile = "3.0"
 tonic = "0.14"
 tonic-prost = "0.14"
@@ -33,7 +33,7 @@ futures.workspace = true
 tower = { version = "0.5", features = ["limit", "load-shed", "timeout"] }
 hyper = "0.14"
 fastrand = "2.0"
-metrics = "0.23"
+metrics = "0.24"
 # LSP dependencies
 tower-lsp = "0.20"
 tokio-stream = { version = "0.1", features = ["sync"] }

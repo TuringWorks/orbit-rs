@@ -31,13 +31,13 @@ anyhow = "1.0"
 # Utilities
 async-trait = "0.1"
 dashmap = "6.1"
-uuid = { version = "1.10", features = ["v4", "serde"] }
+uuid = { version = "1.19", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 rand = "0.8"
 fastrand = "2.0"
 parking_lot = "0.12"
 crossbeam = "0.8"
-md5 = "0.7"
+md5 = "0.8"
 metrics = "0.24"
 regex = "1.10"
 
@@ -58,7 +58,7 @@ arrow-schema = { version = "55.2", default-features = false }
 parquet = { version = "55.2", default-features = false }
 
 # Multi-cloud storage backends
-opendal = { version = "0.51", features = ["services-azblob", "services-memory", "services-s3"] }
+opendal = { version = "0.55", features = ["services-azblob", "services-memory", "services-s3"] }
 
 # Tracing
 tracing = "0.1"
@@ -74,7 +74,7 @@ tonic-prost-build = "0.14"
 
 [dev-dependencies]
 tokio-test = "0.4"
-criterion = "0.5"
+criterion = "0.7"
 tempfile = "3.8"
 
 [features]

@@ -94,7 +94,7 @@ vulkano = { version = "0.35", optional = true }
 
 # Logging and metrics
 tracing = "0.1"
-metrics = "0.23"
+metrics = "0.24"
 
 # Memory management
 memmap2 = "0.9"
@@ -112,7 +112,7 @@ criterion = { version = "0.7", features = ["html_reports"], optional = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 metal = "0.29"
 objc = "0.2"
-core-foundation = "0.9"
+core-foundation = "0.10"
 # core-ml = { version = "0.1", optional = true }
 # metal-performance-shaders = { version = "0.4", optional = true }
 
@@ -146,7 +146,7 @@ windows = { version = "0.52", features = [
     "Win32_System_SystemServices",
 ] }
 wmi = "0.18"
-sysinfo = "0.30"
+sysinfo = "0.37"
 
 [dev-dependencies]
 criterion = { version = "0.7", features = ["html_reports", "async_tokio"] }
