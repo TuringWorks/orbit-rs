@@ -112,7 +112,7 @@ criterion = { version = "0.7", features = ["html_reports"], optional = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 metal = "0.29"
 objc = "0.2"
-core-foundation = "0.9"
+core-foundation = "0.10"
 # core-ml = { version = "0.1", optional = true }
 # metal-performance-shaders = { version = "0.4", optional = true }
 
