@@ -97,7 +97,7 @@ mod tests {
             .await;
 
         match result {
-            ExecutionResult::Insert { count } => {
+            ExecutionResult::Insert { count, .. } => {
                 assert_eq!(count, 1);
             }
             _ => panic!("Expected Insert result"),
@@ -122,7 +122,7 @@ mod tests {
             .await;
 
         match result {
-            ExecutionResult::Insert { count } => {
+            ExecutionResult::Insert { count, .. } => {
                 assert_eq!(count, 3);
             }
             _ => panic!("Expected Insert result with count 3"),
@@ -213,7 +213,7 @@ mod tests {
             .await;
 
         match result {
-            ExecutionResult::Update { count } => {
+            ExecutionResult::Update { count, .. } => {
                 assert_eq!(count, 1);
             }
             _ => panic!("Expected Update result"),
@@ -239,7 +239,7 @@ mod tests {
             .await;
 
         match result {
-            ExecutionResult::Delete { count } => {
+            ExecutionResult::Delete { count, .. } => {
                 assert_eq!(count, 1);
             }
             _ => panic!("Expected Delete result"),
@@ -572,6 +572,160 @@ mod tests {
                 assert!(rows.len() >= 2); // Alice and Charlie definitely, possibly Bob
             }
             _ => panic!("Expected Select result"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_insert_returning() {
+        let fixture = SqlExecutorTestFixture::new().await;
+
+        // Setup table
+        fixture
+            .execute_sql_ok("CREATE TABLE returning_test (id INTEGER, name TEXT, value INTEGER)")
+            .await;
+
+        // Test INSERT with RETURNING
+        let result = fixture
+            .execute_sql_ok("INSERT INTO returning_test (id, name, value) VALUES (1, 'Alice', 100) RETURNING id, name")
+            .await;
+
+        match result {
+            ExecutionResult::Insert { count, returning_columns, returning_rows } => {
+                assert_eq!(count, 1);
+                assert!(returning_columns.is_some());
+                assert!(returning_rows.is_some());
+                let cols = returning_columns.unwrap();
+                let rows = returning_rows.unwrap();
+                assert_eq!(cols, vec!["id", "name"]);
+                assert_eq!(rows.len(), 1);
+                assert_eq!(rows[0].len(), 2);
+                assert_eq!(rows[0][0], Some("1".to_string()));
+                assert_eq!(rows[0][1], Some("Alice".to_string()));
+            }
+            _ => panic!("Expected Insert result"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_insert_returning_star() {
+        let fixture = SqlExecutorTestFixture::new().await;
+
+        // Setup table
+        fixture
+            .execute_sql_ok("CREATE TABLE returning_star (id INTEGER, name TEXT)")
+            .await;
+
+        // Test INSERT with RETURNING *
+        let result = fixture
+            .execute_sql_ok("INSERT INTO returning_star (id, name) VALUES (42, 'Test') RETURNING *")
+            .await;
+
+        match result {
+            ExecutionResult::Insert { count, returning_columns, returning_rows } => {
+                assert_eq!(count, 1);
+                assert!(returning_columns.is_some());
+                assert!(returning_rows.is_some());
+                let cols = returning_columns.unwrap();
+                let rows = returning_rows.unwrap();
+                // Returning * should include all columns
+                assert!(cols.contains(&"id".to_string()) || cols.contains(&"*".to_string()));
+                assert_eq!(rows.len(), 1);
+            }
+            _ => panic!("Expected Insert result"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_update_returning() {
+        let fixture = SqlExecutorTestFixture::new().await;
+
+        // Setup table with data
+        fixture
+            .execute_sql_ok("CREATE TABLE update_returning (id INTEGER, name TEXT, status TEXT)")
+            .await;
+
+        fixture
+            .execute_sql_ok("INSERT INTO update_returning VALUES (1, 'Alice', 'active'), (2, 'Bob', 'active')")
+            .await;
+
+        // Test UPDATE with RETURNING
+        let result = fixture
+            .execute_sql_ok("UPDATE update_returning SET status = 'inactive' WHERE id = 1 RETURNING id, status")
+            .await;
+
+        match result {
+            ExecutionResult::Update { count, returning_columns, returning_rows } => {
+                assert_eq!(count, 1);
+                assert!(returning_columns.is_some());
+                assert!(returning_rows.is_some());
+                let cols = returning_columns.unwrap();
+                let rows = returning_rows.unwrap();
+                assert_eq!(cols, vec!["id", "status"]);
+                assert_eq!(rows.len(), 1);
+                assert_eq!(rows[0][0], Some("1".to_string()));
+                assert_eq!(rows[0][1], Some("inactive".to_string()));
+            }
+            _ => panic!("Expected Update result"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_delete_returning() {
+        let fixture = SqlExecutorTestFixture::new().await;
+
+        // Setup table with data
+        fixture
+            .execute_sql_ok("CREATE TABLE delete_returning (id INTEGER, name TEXT)")
+            .await;
+
+        fixture
+            .execute_sql_ok("INSERT INTO delete_returning VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')")
+            .await;
+
+        // Test DELETE with RETURNING
+        let result = fixture
+            .execute_sql_ok("DELETE FROM delete_returning WHERE id = 2 RETURNING id, name")
+            .await;
+
+        match result {
+            ExecutionResult::Delete { count, returning_columns, returning_rows } => {
+                assert_eq!(count, 1);
+                assert!(returning_columns.is_some());
+                assert!(returning_rows.is_some());
+                let cols = returning_columns.unwrap();
+                let rows = returning_rows.unwrap();
+                assert_eq!(cols, vec!["id", "name"]);
+                assert_eq!(rows.len(), 1);
+                assert_eq!(rows[0][0], Some("2".to_string()));
+                assert_eq!(rows[0][1], Some("Bob".to_string()));
+            }
+            _ => panic!("Expected Delete result"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_insert_multiple_returning() {
+        let fixture = SqlExecutorTestFixture::new().await;
+
+        // Setup table
+        fixture
+            .execute_sql_ok("CREATE TABLE multi_returning (id INTEGER, value TEXT)")
+            .await;
+
+        // Test INSERT multiple rows with RETURNING
+        let result = fixture
+            .execute_sql_ok("INSERT INTO multi_returning VALUES (1, 'one'), (2, 'two'), (3, 'three') RETURNING id, value")
+            .await;
+
+        match result {
+            ExecutionResult::Insert { count, returning_columns, returning_rows } => {
+                assert_eq!(count, 3);
+                assert!(returning_columns.is_some());
+                assert!(returning_rows.is_some());
+                let rows = returning_rows.unwrap();
+                assert_eq!(rows.len(), 3);
+            }
+            _ => panic!("Expected Insert result"),
         }
     }
 }

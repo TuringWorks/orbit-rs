@@ -9,17 +9,18 @@ use crate::protocols::common::storage::{
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::{
     ast::{
-        AccessMode, AlterTableStatement, AssignmentTarget, BeginStatement, ColumnConstraint,
-        CommitStatement, CopyDirection, CopySource, CopyStatement, CopyTarget,
+        AccessMode, AlterSequenceStatement, AlterTableStatement, AssignmentTarget, BeginStatement,
+        ColumnConstraint, CommitStatement, CopyDirection, CopySource, CopyStatement, CopyTarget,
         CreateDatabaseStatement, CreateExtensionStatement, CreateFunctionStatement,
-        CreateIndexStatement, CreateSchemaStatement, CreateTableStatement, CreateViewStatement,
-        DeleteStatement, DescribeStatement, DropDatabaseStatement, DropExtensionStatement,
-        DropIndexStatement, DropSchemaStatement, DropTableStatement, DropViewStatement,
-        ExplainStatement, Expression, FromClause, GrantStatement, IndexType, InsertSource,
-        InsertStatement, IsolationLevel, JoinCondition, JoinType, MergeStatement, Privilege,
-        ReleaseSavepointStatement, RevokeStatement, RollbackStatement, SavepointStatement,
-        SelectItem, SelectStatement, SetStatement, ShowStatement, ShowVariable, Statement,
-        TableConstraint, TableName, UpdateStatement, UseStatement,
+        CreateIndexStatement, CreateSchemaStatement, CreateSequenceStatement, CreateTableStatement,
+        CreateViewStatement, DeleteStatement, DescribeStatement, DropDatabaseStatement,
+        DropExtensionStatement, DropIndexStatement, DropSchemaStatement, DropSequenceStatement,
+        DropTableStatement, DropViewStatement, ExplainStatement, Expression, FromClause,
+        GrantStatement, IndexType, InsertSource, InsertStatement, IsolationLevel, JoinCondition,
+        JoinType, MergeStatement, Privilege, ReleaseSavepointStatement, RevokeStatement,
+        RollbackStatement, SavepointStatement, SelectItem, SelectStatement, SetStatement,
+        ShowStatement, ShowVariable, Statement, TableConstraint, TableName, TruncateStatement,
+        UpdateStatement, UseStatement,
     },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator},
     parser::SqlParser,
@@ -39,12 +40,21 @@ pub enum ExecutionResult {
     },
     Insert {
         count: usize,
+        /// Rows returned by RETURNING clause (if any)
+        returning_columns: Option<Vec<String>>,
+        returning_rows: Option<Vec<Vec<Option<String>>>>,
     },
     Update {
         count: usize,
+        /// Rows returned by RETURNING clause (if any)
+        returning_columns: Option<Vec<String>>,
+        returning_rows: Option<Vec<Vec<Option<String>>>>,
     },
     Delete {
         count: usize,
+        /// Rows returned by RETURNING clause (if any)
+        returning_columns: Option<Vec<String>>,
+        returning_rows: Option<Vec<Vec<Option<String>>>>,
     },
     CreateDatabase {
         database_name: String,
@@ -212,6 +222,19 @@ pub struct DatabaseDefinition {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
+/// Sequence metadata
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SequenceMetadata {
+    pub name: String,
+    pub current_value: i64,
+    pub increment: i64,
+    pub min_value: i64,
+    pub max_value: i64,
+    pub cache: i64,
+    pub cycle: bool,
+    pub is_called: bool,
+}
+
 /// Transaction state
 #[derive(Debug, Clone)]
 pub struct TransactionState {
@@ -298,6 +321,7 @@ pub struct SqlExecutor {
     views: Arc<RwLock<HashMap<String, ViewSchema>>>,
     schemas: Arc<RwLock<HashMap<String, SchemaDefinition>>>,
     extensions: Arc<RwLock<HashMap<String, ExtensionDefinition>>>,
+    sequences: Arc<RwLock<HashMap<String, SequenceMetadata>>>,
 
     // Data storage (in-memory for demonstration)
     // In production, this would integrate with OrbitClient
@@ -426,6 +450,7 @@ impl SqlExecutor {
             views: Arc::new(RwLock::new(HashMap::new())),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             extensions: Arc::new(RwLock::new(HashMap::new())),
+            sequences: Arc::new(RwLock::new(HashMap::new())),
             table_data: Arc::new(RwLock::new(HashMap::new())),
             current_transaction: Arc::new(RwLock::new(None)),
             transaction_log: Arc::new(RwLock::new(Vec::new())),
@@ -534,6 +559,14 @@ impl SqlExecutor {
                 variable: "COMMENT".to_string(),
                 value: "OK".to_string(),
             }),
+
+            // Sequence operations
+            Statement::CreateSequence(stmt) => self.execute_create_sequence(stmt).await,
+            Statement::AlterSequence(stmt) => self.execute_alter_sequence(stmt).await,
+            Statement::DropSequence(stmt) => self.execute_drop_sequence(stmt).await,
+
+            // Truncate operation
+            Statement::Truncate(stmt) => self.execute_truncate(stmt).await,
         }
     }
 
@@ -1006,6 +1039,176 @@ impl SqlExecutor {
         })
     }
 
+    /// Extract column names from RETURNING clause
+    fn extract_returning_columns(&self, returning_items: &[SelectItem]) -> Vec<String> {
+        returning_items
+            .iter()
+            .map(|item| match item {
+                SelectItem::Expression { expr, alias } => {
+                    if let Some(alias_name) = alias {
+                        alias_name.clone()
+                    } else {
+                        // Extract column name from expression
+                        match expr {
+                            Expression::Column(col_ref) => col_ref.name.clone(),
+                            _ => "?column?".to_string(),
+                        }
+                    }
+                }
+                SelectItem::Wildcard => "*".to_string(),
+                SelectItem::QualifiedWildcard { qualifier } => format!("{}.*", qualifier),
+            })
+            .collect()
+    }
+
+    /// Evaluate RETURNING clause against inserted/updated/deleted rows
+    fn evaluate_returning_clause(
+        &self,
+        returning_items: &[SelectItem],
+        rows: &[HashMap<String, SqlValue>],
+        _table_schema: &TableSchema,
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let mut result_rows = Vec::new();
+
+        for row in rows {
+            let mut result_row = Vec::new();
+
+            for item in returning_items {
+                match item {
+                    SelectItem::Expression { expr, .. } => {
+                        let value = self.evaluate_returning_expr(expr, row)?;
+                        result_row.push(value);
+                    }
+                    SelectItem::Wildcard => {
+                        // Return all columns in the row
+                        for (_col_name, value) in row {
+                            result_row.push(Some(self.sql_value_to_string(value)));
+                        }
+                    }
+                    SelectItem::QualifiedWildcard { .. } => {
+                        // Return all columns in the row
+                        for (_col_name, value) in row {
+                            result_row.push(Some(self.sql_value_to_string(value)));
+                        }
+                    }
+                }
+            }
+
+            result_rows.push(result_row);
+        }
+
+        Ok(result_rows)
+    }
+
+    /// Evaluate a single expression in RETURNING clause
+    fn evaluate_returning_expr(
+        &self,
+        expr: &Expression,
+        row: &HashMap<String, SqlValue>,
+    ) -> ProtocolResult<Option<String>> {
+        match expr {
+            Expression::Column(col_ref) => {
+                // Look up column value in the row
+                if let Some(value) = row.get(&col_ref.name) {
+                    Ok(Some(self.sql_value_to_string(value)))
+                } else {
+                    // Try case-insensitive match
+                    for (col_name, value) in row {
+                        if col_name.eq_ignore_ascii_case(&col_ref.name) {
+                            return Ok(Some(self.sql_value_to_string(value)));
+                        }
+                    }
+                    Ok(None)
+                }
+            }
+            Expression::Literal(sql_val) => Ok(Some(self.sql_value_to_string(sql_val))),
+            _ => {
+                // For other expressions, try to evaluate them
+                // For now, return a placeholder
+                Ok(Some("expr".to_string()))
+            }
+        }
+    }
+
+    /// Convert SqlValue to string representation
+    fn sql_value_to_string(&self, value: &SqlValue) -> String {
+        match value {
+            SqlValue::Null => "NULL".to_string(),
+            SqlValue::Boolean(b) => if *b { "t" } else { "f" }.to_string(),
+            SqlValue::SmallInt(i) => i.to_string(),
+            SqlValue::Integer(i) => i.to_string(),
+            SqlValue::BigInt(i) => i.to_string(),
+            SqlValue::Real(f) => f.to_string(),
+            SqlValue::DoublePrecision(f) => f.to_string(),
+            SqlValue::Decimal(d) => d.to_string(),
+            SqlValue::Char(s) | SqlValue::Varchar(s) | SqlValue::Text(s) => s.clone(),
+            SqlValue::Bytea(bytes) => format!("\\x{}", hex::encode(bytes)),
+            SqlValue::Date(d) => d.to_string(),
+            SqlValue::Time(t) => t.to_string(),
+            SqlValue::TimeWithTimezone(t) => t.to_string(),
+            SqlValue::Timestamp(ts) => ts.to_string(),
+            SqlValue::TimestampWithTimezone(ts) => ts.to_string(),
+            SqlValue::Interval(interval) => format!("{} months {} days {} microseconds",
+                interval.months, interval.days, interval.microseconds),
+            SqlValue::Uuid(u) => u.to_string(),
+            SqlValue::Json(j) | SqlValue::Jsonb(j) => j.to_string(),
+            SqlValue::Array(arr) => {
+                let elements: Vec<String> = arr.iter().map(|v| self.sql_value_to_string(v)).collect();
+                format!("{{{}}}", elements.join(","))
+            }
+            SqlValue::Vector(vec) | SqlValue::HalfVec(vec) => {
+                let elements: Vec<String> = vec.iter().map(|f| f.to_string()).collect();
+                format!("[{}]", elements.join(","))
+            }
+            SqlValue::SparseVec(pairs) => {
+                let elements: Vec<String> = pairs.iter().map(|(i, v)| format!("{}:{}", i, v)).collect();
+                format!("{{{}}}", elements.join(","))
+            }
+            SqlValue::Inet(addr) => addr.to_string(),
+            SqlValue::Cidr(net) => format!("{}/{}", net.addr, net.prefix_len),
+            SqlValue::Macaddr(bytes) => format!("{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]),
+            SqlValue::Macaddr8(bytes) => format!("{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]),
+            SqlValue::Xml(s) => s.clone(),
+            SqlValue::Point(x, y) => format!("({},{})", x, y),
+            SqlValue::Line(a, b, c) => format!("{{{},{},{}}}", a, b, c),
+            SqlValue::Lseg(start, end) => format!("[({},{}),({},{})]", start.0, start.1, end.0, end.1),
+            SqlValue::Box(ur, ll) => format!("(({},{}),({},{}))", ur.0, ur.1, ll.0, ll.1),
+            SqlValue::Circle { center, radius } => format!("<({},{}),{}>", center.0, center.1, radius),
+            SqlValue::Path { points, open } => {
+                let pts: Vec<String> = points.iter().map(|(x, y)| format!("({},{})", x, y)).collect();
+                if *open {
+                    format!("[{}]", pts.join(","))
+                } else {
+                    format!("({})", pts.join(","))
+                }
+            }
+            SqlValue::Polygon(points) => {
+                let pts: Vec<String> = points.iter().map(|(x, y)| format!("({},{})", x, y)).collect();
+                format!("({})", pts.join(","))
+            }
+            SqlValue::Tsvector(elements) => {
+                elements.iter().map(|e| format!("'{}':{}", e.lexeme,
+                    e.positions.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",")
+                )).collect::<Vec<_>>().join(" ")
+            }
+            SqlValue::Tsquery(s) => s.clone(),
+            SqlValue::Range(range) => {
+                let lower = range.lower.as_ref().map(|v| self.sql_value_to_string(v)).unwrap_or_default();
+                let upper = range.upper.as_ref().map(|v| self.sql_value_to_string(v)).unwrap_or_default();
+                let lb = if range.lower_inclusive { "[" } else { "(" };
+                let ub = if range.upper_inclusive { "]" } else { ")" };
+                format!("{}{},{}{}", lb, lower, upper, ub)
+            }
+            SqlValue::Composite(fields) => {
+                let values: Vec<String> = fields.iter().map(|(_, v)| self.sql_value_to_string(v)).collect();
+                format!("({})", values.join(","))
+            }
+            SqlValue::Custom { type_name, data } => format!("{}:{}", type_name, hex::encode(data)),
+        }
+    }
+
     async fn execute_insert(&self, stmt: InsertStatement) -> ProtocolResult<ExecutionResult> {
         let table_name = stmt.table.full_name();
 
@@ -1090,18 +1293,30 @@ impl SqlExecutor {
                 rows_to_insert.push(row);
             }
 
-            // Now insert the data
+            // Now insert the data and collect inserted rows for RETURNING
             let mut table_data = self.table_data.write().await;
             let data = table_data
                 .entry(table_name.clone())
                 .or_insert_with(Vec::new);
 
+            let mut inserted_rows = Vec::new();
             for row in rows_to_insert {
+                inserted_rows.push(row.clone());
                 data.push(row);
                 count += 1;
             }
+            drop(table_data);
 
-            Ok(ExecutionResult::Insert { count })
+            // Handle RETURNING clause if present
+            let (returning_columns, returning_rows) = if let Some(ref returning_items) = stmt.returning {
+                let columns = self.extract_returning_columns(returning_items);
+                let rows = self.evaluate_returning_clause(returning_items, &inserted_rows, &table_schema)?;
+                (Some(columns), Some(rows))
+            } else {
+                (None, None)
+            };
+
+            Ok(ExecutionResult::Insert { count, returning_columns, returning_rows })
         } else if let InsertSource::Query(select_stmt) = stmt.source {
             // INSERT ... SELECT
             // Execute the SELECT statement first
@@ -1160,11 +1375,23 @@ impl SqlExecutor {
                 .or_insert_with(Vec::new);
 
             let count = rows_to_insert.len();
+            let mut inserted_rows = Vec::new();
             for row in rows_to_insert {
+                inserted_rows.push(row.clone());
                 data.push(row);
             }
+            drop(table_data);
 
-            Ok(ExecutionResult::Insert { count })
+            // Handle RETURNING clause if present
+            let (returning_columns, returning_rows) = if let Some(ref returning_items) = stmt.returning {
+                let columns = self.extract_returning_columns(returning_items);
+                let rows = self.evaluate_returning_clause(returning_items, &inserted_rows, &table_schema)?;
+                (Some(columns), Some(rows))
+            } else {
+                (None, None)
+            };
+
+            Ok(ExecutionResult::Insert { count, returning_columns, returning_rows })
         } else {
             // DefaultValues
             Err(ProtocolError::PostgresError(
@@ -1178,13 +1405,14 @@ impl SqlExecutor {
 
         // Get table schema
         let tables = self.tables.read().await;
-        let _table_schema = tables
+        let table_schema = tables
             .get(&table_name)
             .ok_or_else(|| ProtocolError::table_not_found(&table_name))?
             .clone();
         drop(tables);
 
         let mut count = 0;
+        let mut updated_rows: Vec<HashMap<String, SqlValue>> = Vec::new();
         let mut table_data = self.table_data.write().await;
 
         if let Some(data) = table_data.get_mut(&table_name) {
@@ -1228,12 +1456,26 @@ impl SqlExecutor {
                             }
                         }
                     }
+
+                    // Collect updated row for RETURNING clause
+                    if stmt.returning.is_some() {
+                        updated_rows.push(row.clone());
+                    }
                     count += 1;
                 }
             }
         }
 
-        Ok(ExecutionResult::Update { count })
+        // Process RETURNING clause if present
+        let (returning_columns, returning_rows) = if let Some(returning_items) = &stmt.returning {
+            let columns = self.extract_returning_columns(returning_items);
+            let rows = self.evaluate_returning_clause(returning_items, &updated_rows, &table_schema)?;
+            (Some(columns), Some(rows))
+        } else {
+            (None, None)
+        };
+
+        Ok(ExecutionResult::Update { count, returning_columns, returning_rows })
     }
 
     async fn execute_delete(&self, stmt: DeleteStatement) -> ProtocolResult<ExecutionResult> {
@@ -1241,13 +1483,14 @@ impl SqlExecutor {
 
         // Get table schema
         let tables = self.tables.read().await;
-        let _table_schema = tables
+        let table_schema = tables
             .get(&table_name)
             .ok_or_else(|| ProtocolError::table_not_found(&table_name))?
             .clone();
         drop(tables);
 
         let mut count = 0;
+        let mut deleted_rows: Vec<HashMap<String, SqlValue>> = Vec::new();
         let mut table_data = self.table_data.write().await;
 
         if let Some(data) = table_data.get_mut(&table_name) {
@@ -1270,6 +1513,10 @@ impl SqlExecutor {
                 }
 
                 if should_delete {
+                    // Collect the row before deletion for RETURNING clause
+                    if stmt.returning.is_some() {
+                        deleted_rows.push(row.clone());
+                    }
                     indices_to_remove.push(i);
                 }
             }
@@ -1281,7 +1528,16 @@ impl SqlExecutor {
             }
         }
 
-        Ok(ExecutionResult::Delete { count })
+        // Process RETURNING clause if present
+        let (returning_columns, returning_rows) = if let Some(returning_items) = &stmt.returning {
+            let columns = self.extract_returning_columns(returning_items);
+            let rows = self.evaluate_returning_clause(returning_items, &deleted_rows, &table_schema)?;
+            (Some(columns), Some(rows))
+        } else {
+            (None, None)
+        };
+
+        Ok(ExecutionResult::Delete { count, returning_columns, returning_rows })
     }
 
     async fn execute_merge(&self, _stmt: MergeStatement) -> ProtocolResult<ExecutionResult> {
@@ -3680,6 +3936,218 @@ impl SqlExecutor {
         // settings.insert(variable.clone(), value.clone());
 
         Ok(ExecutionResult::Set { variable, value })
+    }
+
+    // ===== Sequence Operations =====
+
+    async fn execute_create_sequence(
+        &self,
+        stmt: CreateSequenceStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let sequence_name = stmt.name.to_string();
+
+        // Get defaults based on data type
+        let (min_default, max_default) = match &stmt.options.data_type {
+            Some(SqlType::SmallInt) => (1i64, i16::MAX as i64),
+            Some(SqlType::BigInt) => (1i64, i64::MAX),
+            _ => (1i64, i32::MAX as i64), // Default to INTEGER
+        };
+
+        let increment = stmt.options.increment.unwrap_or(1);
+        let min_value = match &stmt.options.min_value {
+            Some(crate::protocols::postgres_wire::sql::ast::SequenceBound::Value(v)) => *v,
+            Some(crate::protocols::postgres_wire::sql::ast::SequenceBound::None) => {
+                if increment > 0 {
+                    1
+                } else {
+                    i64::MIN
+                }
+            }
+            None => {
+                if increment > 0 {
+                    min_default
+                } else {
+                    i64::MIN
+                }
+            }
+        };
+        let max_value = match &stmt.options.max_value {
+            Some(crate::protocols::postgres_wire::sql::ast::SequenceBound::Value(v)) => *v,
+            Some(crate::protocols::postgres_wire::sql::ast::SequenceBound::None) => {
+                if increment > 0 {
+                    i64::MAX
+                } else {
+                    -1
+                }
+            }
+            None => {
+                if increment > 0 {
+                    max_default
+                } else {
+                    -1
+                }
+            }
+        };
+        let start = stmt.options.start.unwrap_or(if increment > 0 {
+            min_value
+        } else {
+            max_value
+        });
+        let cache = stmt.options.cache.unwrap_or(1);
+        let cycle = stmt.options.cycle.unwrap_or(false);
+
+        // Create sequence metadata
+        let sequence_meta = SequenceMetadata {
+            name: sequence_name.clone(),
+            current_value: start,
+            increment,
+            min_value,
+            max_value,
+            cache,
+            cycle,
+            is_called: false,
+        };
+
+        // Store sequence in our sequences map
+        let mut sequences = self.sequences.write().await;
+        if sequences.contains_key(&sequence_name) && !stmt.if_not_exists {
+            return Err(ProtocolError::already_exists("Sequence", &sequence_name));
+        }
+        sequences.insert(sequence_name.clone(), sequence_meta);
+
+        Ok(ExecutionResult::Show {
+            variable: "CREATE SEQUENCE".to_string(),
+            value: sequence_name,
+        })
+    }
+
+    async fn execute_alter_sequence(
+        &self,
+        stmt: AlterSequenceStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let sequence_name = stmt.name.to_string();
+
+        let mut sequences = self.sequences.write().await;
+        let sequence = sequences.get_mut(&sequence_name);
+
+        match sequence {
+            Some(seq) => {
+                // Apply options
+                if let Some(increment) = stmt.options.increment {
+                    seq.increment = increment;
+                }
+                if let Some(bound) = &stmt.options.min_value {
+                    seq.min_value = match bound {
+                        crate::protocols::postgres_wire::sql::ast::SequenceBound::Value(v) => *v,
+                        crate::protocols::postgres_wire::sql::ast::SequenceBound::None => 1,
+                    };
+                }
+                if let Some(bound) = &stmt.options.max_value {
+                    seq.max_value = match bound {
+                        crate::protocols::postgres_wire::sql::ast::SequenceBound::Value(v) => *v,
+                        crate::protocols::postgres_wire::sql::ast::SequenceBound::None => i64::MAX,
+                    };
+                }
+                if let Some(restart) = &stmt.options.restart {
+                    seq.current_value = restart.unwrap_or(seq.min_value);
+                    seq.is_called = false;
+                }
+                if let Some(cache) = stmt.options.cache {
+                    seq.cache = cache;
+                }
+                if let Some(cycle) = stmt.options.cycle {
+                    seq.cycle = cycle;
+                }
+
+                Ok(ExecutionResult::Show {
+                    variable: "ALTER SEQUENCE".to_string(),
+                    value: sequence_name,
+                })
+            }
+            None => {
+                if stmt.if_exists {
+                    Ok(ExecutionResult::Show {
+                        variable: "ALTER SEQUENCE".to_string(),
+                        value: "OK".to_string(),
+                    })
+                } else {
+                    Err(ProtocolError::not_found("Sequence", &sequence_name))
+                }
+            }
+        }
+    }
+
+    async fn execute_drop_sequence(
+        &self,
+        stmt: DropSequenceStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let mut dropped = Vec::new();
+        let mut sequences = self.sequences.write().await;
+
+        for name in &stmt.names {
+            let sequence_name = name.to_string();
+            if sequences.remove(&sequence_name).is_some() {
+                dropped.push(sequence_name);
+            } else if !stmt.if_exists {
+                return Err(ProtocolError::not_found("Sequence", &sequence_name));
+            }
+        }
+
+        Ok(ExecutionResult::Show {
+            variable: "DROP SEQUENCE".to_string(),
+            value: dropped.join(", "),
+        })
+    }
+
+    // ===== Truncate Operation =====
+
+    async fn execute_truncate(&self, stmt: TruncateStatement) -> ProtocolResult<ExecutionResult> {
+        let mut truncated = Vec::new();
+
+        for table_name in &stmt.tables {
+            let full_name = table_name.to_string();
+
+            // Verify table exists
+            let tables = self.tables.read().await;
+            if !tables.contains_key(&full_name) {
+                return Err(ProtocolError::not_found("Table", &full_name));
+            }
+            drop(tables);
+
+            // Try to truncate using the storage backend first
+            if let Err(_e) = self.storage.truncate_table(&full_name, None).await {
+                // Fall back to clearing in-memory data
+                let mut table_data = self.table_data.write().await;
+                if let Some(data) = table_data.get_mut(&full_name) {
+                    data.clear();
+                }
+            }
+
+            truncated.push(full_name.clone());
+
+            // Handle RESTART IDENTITY - reset associated sequences
+            if matches!(
+                stmt.identity,
+                Some(crate::protocols::postgres_wire::sql::ast::TruncateIdentity::Restart)
+            ) {
+                // Look for sequences owned by this table
+                let mut sequences = self.sequences.write().await;
+                for seq in sequences.values_mut() {
+                    // Reset sequence to start value
+                    seq.current_value = if seq.increment > 0 {
+                        seq.min_value
+                    } else {
+                        seq.max_value
+                    };
+                    seq.is_called = false;
+                }
+            }
+        }
+
+        Ok(ExecutionResult::Show {
+            variable: "TRUNCATE TABLE".to_string(),
+            value: truncated.join(", "),
+        })
     }
 }
 
