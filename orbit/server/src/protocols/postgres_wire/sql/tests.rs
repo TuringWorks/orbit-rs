@@ -3496,4 +3496,257 @@ mod tests {
         // Verify the table schema has the constraint with without_overlaps
         // This tests that TableConstraintSchema properly captures the without_overlaps field
     }
+
+    // ===== Sequence Function Tests =====
+
+    #[tokio::test]
+    async fn test_create_sequence_basic() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a basic sequence
+        let result = engine.execute("CREATE SEQUENCE test_seq").await;
+        assert!(result.is_ok(), "CREATE SEQUENCE should succeed: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_sequence_with_options() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence with options
+        let result = engine
+            .execute("CREATE SEQUENCE counter_seq START WITH 100 INCREMENT BY 5 MINVALUE 1 MAXVALUE 1000")
+            .await;
+        assert!(result.is_ok(), "CREATE SEQUENCE with options should succeed: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_nextval_basic() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence
+        engine.execute("CREATE SEQUENCE my_seq START WITH 1").await.unwrap();
+
+        // Get next value
+        let result = engine.execute("SELECT nextval('my_seq')").await;
+        assert!(result.is_ok(), "nextval should succeed: {:?}", result);
+
+        // Verify we got a result
+        if let Ok(execution_result) = result {
+            if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = execution_result {
+                assert_eq!(rows.len(), 1, "Should return one row");
+                assert!(!rows[0].is_empty(), "Row should have a value");
+                // First call returns start value (1)
+                assert_eq!(rows[0][0], Some("1".to_string()), "First nextval should return 1");
+            } else {
+                panic!("Expected Select result");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_nextval_increments() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence
+        engine.execute("CREATE SEQUENCE inc_seq START WITH 10 INCREMENT BY 5").await.unwrap();
+
+        // Get first value
+        let result1 = engine.execute("SELECT nextval('inc_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result1 {
+            assert_eq!(rows[0][0], Some("10".to_string()), "First nextval should return 10");
+        }
+
+        // Get second value (should increment by 5)
+        let result2 = engine.execute("SELECT nextval('inc_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result2 {
+            assert_eq!(rows[0][0], Some("15".to_string()), "Second nextval should return 15");
+        }
+
+        // Get third value
+        let result3 = engine.execute("SELECT nextval('inc_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result3 {
+            assert_eq!(rows[0][0], Some("20".to_string()), "Third nextval should return 20");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_currval_after_nextval() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence
+        engine.execute("CREATE SEQUENCE curr_seq START WITH 100").await.unwrap();
+
+        // Call nextval first
+        engine.execute("SELECT nextval('curr_seq')").await.unwrap();
+
+        // Now currval should work
+        let result = engine.execute("SELECT currval('curr_seq')").await;
+        assert!(result.is_ok(), "currval after nextval should succeed: {:?}", result);
+
+        if let Ok(crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. }) = result {
+            assert_eq!(rows[0][0], Some("100".to_string()), "currval should return 100");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_currval_before_nextval_fails() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence
+        engine.execute("CREATE SEQUENCE unused_seq").await.unwrap();
+
+        // currval without nextval should fail
+        let result = engine.execute("SELECT currval('unused_seq')").await;
+        assert!(result.is_err(), "currval before nextval should fail");
+    }
+
+    #[tokio::test]
+    async fn test_setval_basic() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence
+        engine.execute("CREATE SEQUENCE setval_seq").await.unwrap();
+
+        // Set the value
+        let result = engine.execute("SELECT setval('setval_seq', 50)").await;
+        assert!(result.is_ok(), "setval should succeed: {:?}", result);
+
+        // Verify currval returns the set value
+        let curr_result = engine.execute("SELECT currval('setval_seq')").await;
+        assert!(curr_result.is_ok(), "currval after setval should succeed");
+
+        if let Ok(crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. }) = curr_result {
+            assert_eq!(rows[0][0], Some("50".to_string()), "currval should return 50");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_setval_with_is_called_false() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence
+        engine.execute("CREATE SEQUENCE setval_uncalled_seq").await.unwrap();
+
+        // Set the value with is_called = false
+        engine.execute("SELECT setval('setval_uncalled_seq', 100, false)").await.unwrap();
+
+        // Next nextval should return 100 (not 101)
+        let result = engine.execute("SELECT nextval('setval_uncalled_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result {
+            assert_eq!(rows[0][0], Some("100".to_string()), "nextval after setval(false) should return 100");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_lastval_basic() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence
+        engine.execute("CREATE SEQUENCE lastval_seq START WITH 42").await.unwrap();
+
+        // Call nextval
+        engine.execute("SELECT nextval('lastval_seq')").await.unwrap();
+
+        // lastval should return the same value
+        let result = engine.execute("SELECT lastval()").await;
+        assert!(result.is_ok(), "lastval should succeed: {:?}", result);
+
+        if let Ok(crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. }) = result {
+            assert_eq!(rows[0][0], Some("42".to_string()), "lastval should return 42");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_lastval_without_nextval_fails() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // lastval without any prior nextval should fail
+        let result = engine.execute("SELECT lastval()").await;
+        assert!(result.is_err(), "lastval without prior nextval should fail");
+    }
+
+    #[tokio::test]
+    async fn test_sequence_cycle() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a small cycling sequence
+        engine
+            .execute("CREATE SEQUENCE cycle_seq START WITH 1 INCREMENT BY 1 MAXVALUE 3 CYCLE")
+            .await
+            .unwrap();
+
+        // Get values 1, 2, 3, then it should cycle back to 1
+        let result1 = engine.execute("SELECT nextval('cycle_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result1 {
+            assert_eq!(rows[0][0], Some("1".to_string()));
+        }
+
+        let result2 = engine.execute("SELECT nextval('cycle_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result2 {
+            assert_eq!(rows[0][0], Some("2".to_string()));
+        }
+
+        let result3 = engine.execute("SELECT nextval('cycle_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result3 {
+            assert_eq!(rows[0][0], Some("3".to_string()));
+        }
+
+        // Should cycle back to min_value (1)
+        let result4 = engine.execute("SELECT nextval('cycle_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result4 {
+            assert_eq!(rows[0][0], Some("1".to_string()), "Should cycle back to 1");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sequence_no_cycle_overflow() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a small non-cycling sequence
+        engine
+            .execute("CREATE SEQUENCE no_cycle_seq START WITH 1 INCREMENT BY 1 MAXVALUE 2")
+            .await
+            .unwrap();
+
+        // Get values 1 and 2
+        engine.execute("SELECT nextval('no_cycle_seq')").await.unwrap();
+        engine.execute("SELECT nextval('no_cycle_seq')").await.unwrap();
+
+        // Third call should fail (overflow)
+        let result = engine.execute("SELECT nextval('no_cycle_seq')").await;
+        assert!(result.is_err(), "nextval on maxed-out non-cycling sequence should fail");
+    }
+
+    #[tokio::test]
+    async fn test_drop_sequence() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create and then drop a sequence
+        engine.execute("CREATE SEQUENCE drop_me_seq").await.unwrap();
+        let result = engine.execute("DROP SEQUENCE drop_me_seq").await;
+        assert!(result.is_ok(), "DROP SEQUENCE should succeed: {:?}", result);
+
+        // Using the dropped sequence should fail
+        let next_result = engine.execute("SELECT nextval('drop_me_seq')").await;
+        assert!(next_result.is_err(), "nextval on dropped sequence should fail");
+    }
+
+    #[tokio::test]
+    async fn test_alter_sequence_restart() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence and use it
+        engine.execute("CREATE SEQUENCE alter_seq START WITH 1").await.unwrap();
+        engine.execute("SELECT nextval('alter_seq')").await.unwrap(); // 1
+        engine.execute("SELECT nextval('alter_seq')").await.unwrap(); // 2
+
+        // Restart the sequence
+        engine.execute("ALTER SEQUENCE alter_seq RESTART WITH 100").await.unwrap();
+
+        // Next value should be 100
+        let result = engine.execute("SELECT nextval('alter_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result {
+            assert_eq!(rows[0][0], Some("100".to_string()), "After RESTART, nextval should return 100");
+        }
+    }
 }

@@ -2,8 +2,8 @@
 
 **Target**: Full PostgreSQL 18 Wire Protocol Compatibility
 **Reference**: https://www.postgresql.org/docs/18/index.html
-**Last Updated**: 2025-12-07
-**Current Estimated Coverage**: ~60%
+**Last Updated**: 2025-12-08
+**Current Estimated Coverage**: ~65%
 
 ---
 
@@ -47,7 +47,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | CREATE FUNCTION | 🔶 | PL/pgSQL parsing, no execution |
 | CREATE PROCEDURE | 🔶 | Parsing only |
 | CREATE TRIGGER | 🔶 | Parsing only, no execution |
-| CREATE SEQUENCE | ❌ | Not implemented |
+| CREATE SEQUENCE | ✅ | Full support with START, INCREMENT, MINVALUE, MAXVALUE, CYCLE |
 | CREATE TYPE | ❌ | Enum/composite types |
 | CREATE DOMAIN | ❌ | Domain types |
 | CREATE ROLE | ❌ | Role management |
@@ -84,7 +84,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | ALTER FUNCTION | ❌ | Function modification |
 | ALTER PROCEDURE | ❌ | Procedure modification |
 | ALTER TRIGGER | ❌ | Trigger modification |
-| ALTER SEQUENCE | ❌ | Sequence modification |
+| ALTER SEQUENCE | ✅ | INCREMENT, MINVALUE, MAXVALUE, RESTART, CYCLE |
 | ALTER TYPE | ❌ | Type modification |
 | ALTER DOMAIN | ❌ | Domain modification |
 | ALTER ROLE | ❌ | Role modification |
@@ -126,7 +126,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | DROP FUNCTION | ❌ | Not implemented |
 | DROP PROCEDURE | ❌ | Not implemented |
 | DROP TRIGGER | 🔶 | Parsing only |
-| DROP SEQUENCE | ❌ | Not implemented |
+| DROP SEQUENCE | ✅ | With IF EXISTS, CASCADE |
 | DROP TYPE | ❌ | Not implemented |
 | DROP DOMAIN | ❌ | Not implemented |
 | DROP ROLE | ❌ | Not implemented |
@@ -160,7 +160,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | DROP OPERATOR FAMILY | ❌ | Not implemented |
 | DROP ROUTINE | ❌ | Not implemented |
 | COMMENT | 🔶 | Parsing only, no storage |
-| TRUNCATE | 🔶 | Parsing only, incomplete execution |
+| TRUNCATE | ✅ | Full execution with RESTART IDENTITY, CASCADE |
 
 ### Data Manipulation Language (DML)
 
@@ -467,20 +467,20 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | floor(x) | ✅ | Round down |
 | round(x) / round(x,s) | ✅ | Round to nearest |
 | trunc(x) / trunc(x,s) | ✅ | Truncate |
-| exp(x) | ❌ | Exponential |
-| ln(x) | ❌ | Natural logarithm |
-| log(x) / log(b,x) | ❌ | Logarithm |
-| power(a,b) | ❌ | Power |
-| sqrt(x) | ❌ | Square root |
-| cbrt(x) | ❌ | Cube root |
+| exp(x) | ✅ | Exponential |
+| ln(x) | ✅ | Natural logarithm |
+| log(x) / log(b,x) | ✅ | Logarithm (base 10, or custom base) |
+| power(a,b) | ✅ | Power |
+| sqrt(x) | ✅ | Square root |
+| cbrt(x) | ✅ | Cube root |
 | mod(x,y) | ✅ | Modulo |
-| div(x,y) | ❌ | Integer quotient |
-| pi() | ❌ | Pi constant |
-| degrees(x) | ❌ | Radians to degrees |
-| radians(x) | ❌ | Degrees to radians |
+| div(x,y) | ✅ | Integer quotient |
+| pi() | ✅ | Pi constant |
+| degrees(x) | ✅ | Radians to degrees |
+| radians(x) | ✅ | Degrees to radians |
 | random() | ✅ | Random value |
 | setseed(x) | ❌ | Set random seed |
-| sign(x) | ❌ | Sign of number |
+| sign(x) | ✅ | Sign of number |
 | factorial(x) | ❌ | Factorial |
 | gcd(a,b) | ❌ | Greatest common divisor |
 | lcm(a,b) | ❌ | Least common multiple |
@@ -493,14 +493,14 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| sin(x) | ❌ | Sine |
-| cos(x) | ❌ | Cosine |
-| tan(x) | ❌ | Tangent |
+| sin(x) | ✅ | Sine |
+| cos(x) | ✅ | Cosine |
+| tan(x) | ✅ | Tangent |
 | cot(x) | ❌ | Cotangent |
-| asin(x) | ❌ | Arc sine |
-| acos(x) | ❌ | Arc cosine |
-| atan(x) | ❌ | Arc tangent |
-| atan2(y,x) | ❌ | Arc tangent |
+| asin(x) | ✅ | Arc sine |
+| acos(x) | ✅ | Arc cosine |
+| atan(x) | ✅ | Arc tangent |
+| atan2(y,x) | ✅ | Two-argument arc tangent |
 | sinh(x) | ❌ | Hyperbolic sine |
 | cosh(x) | ❌ | Hyperbolic cosine |
 | tanh(x) | ❌ | Hyperbolic tangent |
@@ -514,30 +514,30 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 |----------|--------|-------|
 | length(s) | ✅ | String length |
 | char_length(s) | ✅ | Character length |
-| octet_length(s) | ❌ | Byte length |
-| bit_length(s) | ❌ | Bit length |
+| octet_length(s) | ✅ | Byte length |
+| bit_length(s) | ✅ | Bit length |
 | lower(s) | ✅ | Lowercase |
 | upper(s) | ✅ | Uppercase |
-| initcap(s) | ❌ | Title case |
+| initcap(s) | ✅ | Title case |
 | substring(s,start,len) | ✅ | Extract substring |
-| left(s,n) | ❌ | Left n characters |
-| right(s,n) | ❌ | Right n characters |
+| left(s,n) | ✅ | Left n characters |
+| right(s,n) | ✅ | Right n characters |
 | trim(s) | ✅ | Remove whitespace |
-| ltrim(s) | ❌ | Left trim |
-| rtrim(s) | ❌ | Right trim |
-| btrim(s) | ❌ | Both trim |
-| lpad(s,len,fill) | ❌ | Left pad |
-| rpad(s,len,fill) | ❌ | Right pad |
-| position(sub in s) | ❌ | Find position |
-| strpos(s,sub) | ❌ | Find position |
+| ltrim(s) | ✅ | Left trim |
+| rtrim(s) | ✅ | Right trim |
+| btrim(s) | ✅ | Both trim (same as trim) |
+| lpad(s,len,fill) | ✅ | Left pad |
+| rpad(s,len,fill) | ✅ | Right pad |
+| position(sub in s) | ✅ | Find position |
+| strpos(s,sub) | ✅ | Find position |
 | replace(s,from,to) | ✅ | Replace substring |
-| translate(s,from,to) | ❌ | Character translation |
+| translate(s,from,to) | ✅ | Character translation |
 | concat(s1,s2,...) | ✅ | Concatenate strings |
 | concat_ws(sep,s1,...) | ✅ | Concatenate with separator |
-| format(fmt,...) | ❌ | Format string |
-| repeat(s,n) | ❌ | Repeat string |
-| reverse(s) | ❌ | Reverse string |
-| split_part(s,delim,n) | ❌ | Split and get part |
+| format(fmt,...) | ✅ | Format string |
+| repeat(s,n) | ✅ | Repeat string |
+| reverse(s) | ✅ | Reverse string |
+| split_part(s,delim,n) | ✅ | Split and get part |
 | string_to_array(s,delim) | ❌ | Split to array |
 | array_to_string(arr,delim) | ❌ | Join array |
 | regexp_match(s,pattern) | ❌ | Regex match |
@@ -549,14 +549,14 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | regexp_count(s,pattern) | ❌ | Count matches |
 | regexp_instr(s,pattern) | ❌ | Find position |
 | regexp_substr(s,pattern) | ❌ | Extract match |
-| encode(data,format) | ❌ | Encode binary |
-| decode(s,format) | ❌ | Decode to binary |
-| md5(s) | ❌ | MD5 hash |
+| encode(data,format) | ✅ | Encode binary |
+| decode(s,format) | ✅ | Decode to binary |
+| md5(s) | ✅ | MD5 hash |
 | sha224/256/384/512(s) | ❌ | SHA hashes |
-| ascii(s) | ❌ | ASCII code |
-| chr(n) | ❌ | Character from code |
-| quote_ident(s) | ❌ | Quote identifier |
-| quote_literal(s) | ❌ | Quote literal |
+| ascii(s) | ✅ | ASCII code |
+| chr(n) | ✅ | Character from code |
+| quote_ident(s) | ✅ | Quote identifier |
+| quote_literal(s) | ✅ | Quote literal |
 | quote_nullable(s) | ❌ | Quote nullable |
 | normalize(s) | ❌ | Unicode normalize |
 | is_normalized(s) | ❌ | Check normalized |
@@ -727,6 +727,18 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | trim_array(arr,n) | ❌ | Trim from end |
 | unnest(arr) | ❌ | Expand to rows |
 
+### Sequence Functions
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| nextval(regclass) | ✅ | Advance sequence and return new value |
+| currval(regclass) | ✅ | Return current value (after nextval) |
+| setval(regclass, bigint) | ✅ | Set sequence value |
+| setval(regclass, bigint, boolean) | ✅ | Set value with is_called flag |
+| lastval() | ✅ | Return last value from nextval in session |
+| pg_sequence_parameters(regclass) | ❌ | Sequence parameters |
+| pg_sequence_last_value(regclass) | ❌ | Last value from catalog |
+
 ### Conditional Functions
 
 | Function | Status | Notes |
@@ -892,17 +904,17 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 
 **Goal**: Enable standard SQL applications to work without modification
 
-1. **Sequence Support**
+1. **Sequence Support** ✅ COMPLETED
    - CREATE/ALTER/DROP SEQUENCE
    - SERIAL/BIGSERIAL types with actual auto-increment
-   - nextval(), currval(), setval() functions
+   - nextval(), currval(), setval(), lastval() functions
 
 2. **User and Role Management**
    - CREATE/ALTER/DROP ROLE/USER
    - GRANT/REVOKE execution
    - Session authorization
 
-3. **TRUNCATE Execution**
+3. **TRUNCATE Execution** ✅ COMPLETED
    - Full TRUNCATE implementation
    - CASCADE support
    - RESTART IDENTITY

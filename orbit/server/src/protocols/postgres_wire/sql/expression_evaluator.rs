@@ -9,6 +9,7 @@
 //! - Subqueries and EXISTS/IN operations
 //! - Vector similarity operations
 //! - Type casting and conversions
+//! - Sequence functions (nextval, currval, setval, lastval)
 
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::{
@@ -22,7 +23,162 @@ use crate::protocols::postgres_wire::sql::{
 use chrono::Datelike;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 use uuid::Uuid;
+
+/// Sequence accessor trait for sequence function evaluation
+/// This allows the expression evaluator to access and modify sequences
+/// without directly depending on the executor's implementation.
+pub trait SequenceAccessor: Send + Sync {
+    /// Get the next value from a sequence
+    fn nextval(&self, sequence_name: &str) -> ProtocolResult<i64>;
+    /// Get the current value of a sequence (must have been called with nextval first)
+    fn currval(&self, sequence_name: &str) -> ProtocolResult<i64>;
+    /// Set the value of a sequence
+    fn setval(&self, sequence_name: &str, value: i64, is_called: bool) -> ProtocolResult<i64>;
+    /// Get the last value returned by nextval in this session
+    fn lastval(&self) -> ProtocolResult<i64>;
+}
+
+/// A simple sequence accessor implementation that wraps sequence metadata storage
+pub struct SimpleSequenceAccessor {
+    sequences: Arc<RwLock<HashMap<String, SequenceMetadataRef>>>,
+    last_value: Arc<RwLock<Option<(String, i64)>>>,
+}
+
+/// Reference to sequence metadata for the accessor
+#[derive(Debug, Clone)]
+pub struct SequenceMetadataRef {
+    pub name: String,
+    pub current_value: i64,
+    pub increment: i64,
+    pub min_value: i64,
+    pub max_value: i64,
+    pub cycle: bool,
+    pub is_called: bool,
+}
+
+impl SimpleSequenceAccessor {
+    pub fn new(
+        sequences: Arc<RwLock<HashMap<String, SequenceMetadataRef>>>,
+        last_value: Arc<RwLock<Option<(String, i64)>>>,
+    ) -> Self {
+        Self {
+            sequences,
+            last_value,
+        }
+    }
+}
+
+impl SequenceAccessor for SimpleSequenceAccessor {
+    fn nextval(&self, sequence_name: &str) -> ProtocolResult<i64> {
+        let mut sequences = self.sequences.write().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
+
+        let seq = sequences.get_mut(sequence_name).ok_or_else(|| {
+            ProtocolError::not_found("Sequence", sequence_name)
+        })?;
+
+        let next_value = if seq.is_called {
+            let next = seq.current_value + seq.increment;
+            if seq.increment > 0 && next > seq.max_value {
+                if seq.cycle {
+                    seq.min_value
+                } else {
+                    return Err(ProtocolError::PostgresError(format!(
+                        "nextval: reached maximum value of sequence \"{}\" ({})",
+                        sequence_name, seq.max_value
+                    )));
+                }
+            } else if seq.increment < 0 && next < seq.min_value {
+                if seq.cycle {
+                    seq.max_value
+                } else {
+                    return Err(ProtocolError::PostgresError(format!(
+                        "nextval: reached minimum value of sequence \"{}\" ({})",
+                        sequence_name, seq.min_value
+                    )));
+                }
+            } else {
+                next
+            }
+        } else {
+            seq.is_called = true;
+            seq.current_value
+        };
+
+        seq.current_value = next_value;
+
+        // Update last_value for lastval()
+        if let Ok(mut last) = self.last_value.write() {
+            *last = Some((sequence_name.to_string(), next_value));
+        }
+
+        Ok(next_value)
+    }
+
+    fn currval(&self, sequence_name: &str) -> ProtocolResult<i64> {
+        let sequences = self.sequences.read().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
+
+        let seq = sequences.get(sequence_name).ok_or_else(|| {
+            ProtocolError::not_found("Sequence", sequence_name)
+        })?;
+
+        if !seq.is_called {
+            return Err(ProtocolError::PostgresError(format!(
+                "currval of sequence \"{}\" is not yet defined in this session",
+                sequence_name
+            )));
+        }
+
+        Ok(seq.current_value)
+    }
+
+    fn setval(&self, sequence_name: &str, value: i64, is_called: bool) -> ProtocolResult<i64> {
+        let mut sequences = self.sequences.write().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
+
+        let seq = sequences.get_mut(sequence_name).ok_or_else(|| {
+            ProtocolError::not_found("Sequence", sequence_name)
+        })?;
+
+        if value < seq.min_value || value > seq.max_value {
+            return Err(ProtocolError::PostgresError(format!(
+                "setval: value {} is out of bounds for sequence \"{}\" ({} to {})",
+                value, sequence_name, seq.min_value, seq.max_value
+            )));
+        }
+
+        seq.current_value = value;
+        seq.is_called = is_called;
+
+        // Update last_value for lastval()
+        if is_called {
+            if let Ok(mut last) = self.last_value.write() {
+                *last = Some((sequence_name.to_string(), value));
+            }
+        }
+
+        Ok(value)
+    }
+
+    fn lastval(&self) -> ProtocolResult<i64> {
+        let last = self.last_value.read().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire last value lock".to_string())
+        })?;
+
+        match &*last {
+            Some((_, value)) => Ok(*value),
+            None => Err(ProtocolError::PostgresError(
+                "lastval is not yet defined in this session".to_string(),
+            )),
+        }
+    }
+}
 
 /// Expression evaluation context
 #[derive(Debug, Clone)]
@@ -107,13 +263,29 @@ pub enum AggregateState {
 pub struct ExpressionEvaluator {
     #[allow(dead_code)]
     aggregates: HashMap<String, AggregateState>,
+    /// Optional sequence accessor for nextval/currval/setval/lastval functions
+    sequence_accessor: Option<Arc<dyn SequenceAccessor>>,
 }
 
 impl ExpressionEvaluator {
     pub fn new() -> Self {
         Self {
             aggregates: HashMap::new(),
+            sequence_accessor: None,
         }
+    }
+
+    /// Create an expression evaluator with a sequence accessor
+    pub fn with_sequence_accessor(sequence_accessor: Arc<dyn SequenceAccessor>) -> Self {
+        Self {
+            aggregates: HashMap::new(),
+            sequence_accessor: Some(sequence_accessor),
+        }
+    }
+
+    /// Set the sequence accessor
+    pub fn set_sequence_accessor(&mut self, accessor: Arc<dyn SequenceAccessor>) {
+        self.sequence_accessor = Some(accessor);
     }
 
     /// Evaluate an SQL expression
@@ -420,11 +592,16 @@ impl ExpressionEvaluator {
             "CEILING" | "CEIL" => self.evaluate_ceiling(&args),
             "FLOOR" => self.evaluate_floor(&args),
             "SQRT" => self.evaluate_sqrt(&args),
+            "CBRT" => self.evaluate_cbrt(&args),
             "POWER" | "POW" => self.evaluate_power(&args),
             "EXP" => self.evaluate_exp(&args),
             "LN" => self.evaluate_ln(&args),
             "LOG" | "LOG10" => self.evaluate_log(&args),
             "MOD" => self.evaluate_mod(&args),
+            "DIV" => self.evaluate_div(&args),
+            "FACTORIAL" => self.evaluate_factorial(&args),
+            "GCD" => self.evaluate_gcd(&args),
+            "LCM" => self.evaluate_lcm(&args),
             "PI" => self.evaluate_pi(&args),
             "RADIANS" => self.evaluate_radians(&args),
             "DEGREES" => self.evaluate_degrees(&args),
@@ -592,10 +769,144 @@ impl ExpressionEvaluator {
             // UUID max - all ones
             "UUID_MAX" => Ok(SqlValue::Uuid(Uuid::max())),
 
+            // Sequence functions
+            "NEXTVAL" => self.evaluate_nextval(&args),
+            "CURRVAL" => self.evaluate_currval(&args),
+            "SETVAL" => self.evaluate_setval(&args),
+            "LASTVAL" => self.evaluate_lastval(&args),
+
             // JSON functions
             "JSON_TABLE" => Ok(SqlValue::Text("JSON Table".to_string())),
 
             _ => Err(ProtocolError::not_implemented("Function", &func_name)),
+        }
+    }
+
+    // ===== Sequence Functions =====
+
+    /// Evaluate nextval('sequence_name') - advance sequence and return new value
+    fn evaluate_nextval(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "nextval() requires exactly one argument".to_string(),
+            ));
+        }
+
+        let sequence_name = match &args[0] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.clone(),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "nextval() argument must be a text (sequence name)".to_string(),
+                ))
+            }
+        };
+
+        match &self.sequence_accessor {
+            Some(accessor) => {
+                let value = accessor.nextval(&sequence_name)?;
+                Ok(SqlValue::BigInt(value))
+            }
+            None => Err(ProtocolError::PostgresError(
+                "Sequence operations are not available in this context".to_string(),
+            )),
+        }
+    }
+
+    /// Evaluate currval('sequence_name') - return current value (must have called nextval first)
+    fn evaluate_currval(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "currval() requires exactly one argument".to_string(),
+            ));
+        }
+
+        let sequence_name = match &args[0] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.clone(),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "currval() argument must be a text (sequence name)".to_string(),
+                ))
+            }
+        };
+
+        match &self.sequence_accessor {
+            Some(accessor) => {
+                let value = accessor.currval(&sequence_name)?;
+                Ok(SqlValue::BigInt(value))
+            }
+            None => Err(ProtocolError::PostgresError(
+                "Sequence operations are not available in this context".to_string(),
+            )),
+        }
+    }
+
+    /// Evaluate setval('sequence_name', value [, is_called]) - set sequence value
+    fn evaluate_setval(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.is_empty() || args.len() > 3 {
+            return Err(ProtocolError::PostgresError(
+                "setval() requires 2 or 3 arguments".to_string(),
+            ));
+        }
+
+        let sequence_name = match &args[0] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.clone(),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "setval() first argument must be a text (sequence name)".to_string(),
+                ))
+            }
+        };
+
+        let value = match &args[1] {
+            SqlValue::Integer(n) => *n as i64,
+            SqlValue::BigInt(n) => *n,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "setval() second argument must be an integer".to_string(),
+                ))
+            }
+        };
+
+        let is_called = if args.len() == 3 {
+            match &args[2] {
+                SqlValue::Boolean(b) => *b,
+                _ => {
+                    return Err(ProtocolError::PostgresError(
+                        "setval() third argument must be a boolean".to_string(),
+                    ))
+                }
+            }
+        } else {
+            true // Default: is_called = true
+        };
+
+        match &self.sequence_accessor {
+            Some(accessor) => {
+                let result = accessor.setval(&sequence_name, value, is_called)?;
+                Ok(SqlValue::BigInt(result))
+            }
+            None => Err(ProtocolError::PostgresError(
+                "Sequence operations are not available in this context".to_string(),
+            )),
+        }
+    }
+
+    /// Evaluate lastval() - return last value from nextval in this session
+    fn evaluate_lastval(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if !args.is_empty() {
+            return Err(ProtocolError::PostgresError(
+                "lastval() takes no arguments".to_string(),
+            ));
+        }
+
+        match &self.sequence_accessor {
+            Some(accessor) => {
+                let value = accessor.lastval()?;
+                Ok(SqlValue::BigInt(value))
+            }
+            None => Err(ProtocolError::PostgresError(
+                "Sequence operations are not available in this context".to_string(),
+            )),
         }
     }
 
@@ -1424,6 +1735,26 @@ impl ExpressionEvaluator {
         }
     }
 
+    /// Evaluate cbrt(x) - cube root
+    fn evaluate_cbrt(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "CBRT requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::DoublePrecision(f) => Ok(SqlValue::DoublePrecision(f.cbrt())),
+            SqlValue::Real(f) => Ok(SqlValue::Real(f.cbrt())),
+            SqlValue::Integer(i) => Ok(SqlValue::DoublePrecision((*i as f64).cbrt())),
+            SqlValue::BigInt(i) => Ok(SqlValue::DoublePrecision((*i as f64).cbrt())),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "CBRT requires numeric argument".to_string(),
+            )),
+        }
+    }
+
     fn evaluate_power(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         if args.len() != 2 {
             return Err(ProtocolError::PostgresError(
@@ -1555,6 +1886,174 @@ impl ExpressionEvaluator {
                     _ => Ok(SqlValue::Null),
                 }
             }
+        }
+    }
+
+    /// Evaluate div(a, b) - integer division (truncate towards zero)
+    fn evaluate_div(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "DIV requires exactly two arguments".to_string(),
+            ));
+        }
+
+        match (&args[0], &args[1]) {
+            (SqlValue::Integer(a), SqlValue::Integer(b)) => {
+                if *b == 0 {
+                    Err(ProtocolError::PostgresError("Division by zero".to_string()))
+                } else {
+                    Ok(SqlValue::Integer(a / b))
+                }
+            }
+            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => {
+                if *b == 0 {
+                    Err(ProtocolError::PostgresError("Division by zero".to_string()))
+                } else {
+                    Ok(SqlValue::BigInt(a / b))
+                }
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => {
+                let a = Self::to_f64_static(&args[0])?;
+                let b = Self::to_f64_static(&args[1])?;
+                match (a, b) {
+                    (Some(a), Some(b)) => {
+                        if b == 0.0 {
+                            Err(ProtocolError::PostgresError("Division by zero".to_string()))
+                        } else {
+                            Ok(SqlValue::BigInt((a / b).trunc() as i64))
+                        }
+                    }
+                    _ => Ok(SqlValue::Null),
+                }
+            }
+        }
+    }
+
+    /// Evaluate factorial(n) - n!
+    fn evaluate_factorial(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "FACTORIAL requires exactly one argument".to_string(),
+            ));
+        }
+
+        let n = match &args[0] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "FACTORIAL requires integer argument".to_string(),
+                ))
+            }
+        };
+
+        if n < 0 {
+            return Err(ProtocolError::PostgresError(
+                "FACTORIAL of negative number".to_string(),
+            ));
+        }
+
+        if n > 20 {
+            return Err(ProtocolError::PostgresError(
+                "FACTORIAL argument too large (max 20)".to_string(),
+            ));
+        }
+
+        let result: i64 = (1..=n).product();
+        Ok(SqlValue::BigInt(result))
+    }
+
+    /// Evaluate gcd(a, b) - greatest common divisor
+    fn evaluate_gcd(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "GCD requires exactly two arguments".to_string(),
+            ));
+        }
+
+        let a = match &args[0] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "GCD requires integer arguments".to_string(),
+                ))
+            }
+        };
+
+        let b = match &args[1] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "GCD requires integer arguments".to_string(),
+                ))
+            }
+        };
+
+        fn gcd(mut a: i64, mut b: i64) -> i64 {
+            a = a.abs();
+            b = b.abs();
+            while b != 0 {
+                let t = b;
+                b = a % b;
+                a = t;
+            }
+            a
+        }
+
+        Ok(SqlValue::BigInt(gcd(a, b)))
+    }
+
+    /// Evaluate lcm(a, b) - least common multiple
+    fn evaluate_lcm(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "LCM requires exactly two arguments".to_string(),
+            ));
+        }
+
+        let a = match &args[0] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "LCM requires integer arguments".to_string(),
+                ))
+            }
+        };
+
+        let b = match &args[1] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "LCM requires integer arguments".to_string(),
+                ))
+            }
+        };
+
+        fn gcd(mut a: i64, mut b: i64) -> i64 {
+            a = a.abs();
+            b = b.abs();
+            while b != 0 {
+                let t = b;
+                b = a % b;
+                a = t;
+            }
+            a
+        }
+
+        if a == 0 || b == 0 {
+            Ok(SqlValue::BigInt(0))
+        } else {
+            Ok(SqlValue::BigInt((a.abs() / gcd(a, b)) * b.abs()))
         }
     }
 

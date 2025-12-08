@@ -22,7 +22,7 @@ use crate::protocols::postgres_wire::sql::{
         SelectItem, SelectStatement, SetStatement, ShowStatement, ShowVariable, Statement,
         TableConstraint, TableName, TruncateStatement, UpdateStatement, UseStatement,
     },
-    expression_evaluator::{EvaluationContext, ExpressionEvaluator},
+    expression_evaluator::{EvaluationContext, ExpressionEvaluator, SequenceAccessor},
     parser::SqlParser,
     types::{SqlType, SqlValue},
 };
@@ -266,6 +266,136 @@ pub struct SequenceMetadata {
     pub is_called: bool,
 }
 
+/// Sequence accessor implementation that directly wraps the executor's sequence storage
+/// This allows expression evaluators to call nextval, currval, setval, lastval
+/// with real-time updates to the underlying storage.
+pub struct ExecutorSequenceAccessor {
+    sequences: Arc<std::sync::RwLock<HashMap<String, SequenceMetadata>>>,
+    last_value: Arc<std::sync::RwLock<Option<(String, i64)>>>,
+}
+
+impl ExecutorSequenceAccessor {
+    pub fn new(
+        sequences: Arc<std::sync::RwLock<HashMap<String, SequenceMetadata>>>,
+        last_value: Arc<std::sync::RwLock<Option<(String, i64)>>>,
+    ) -> Self {
+        Self {
+            sequences,
+            last_value,
+        }
+    }
+}
+
+impl SequenceAccessor for ExecutorSequenceAccessor {
+    fn nextval(&self, sequence_name: &str) -> ProtocolResult<i64> {
+        let mut sequences = self.sequences.write().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
+
+        let seq = sequences.get_mut(sequence_name).ok_or_else(|| {
+            ProtocolError::not_found("Sequence", sequence_name)
+        })?;
+
+        let next_value = if seq.is_called {
+            let next = seq.current_value + seq.increment;
+            if seq.increment > 0 && next > seq.max_value {
+                if seq.cycle {
+                    seq.min_value
+                } else {
+                    return Err(ProtocolError::PostgresError(format!(
+                        "nextval: reached maximum value of sequence \"{}\" ({})",
+                        sequence_name, seq.max_value
+                    )));
+                }
+            } else if seq.increment < 0 && next < seq.min_value {
+                if seq.cycle {
+                    seq.max_value
+                } else {
+                    return Err(ProtocolError::PostgresError(format!(
+                        "nextval: reached minimum value of sequence \"{}\" ({})",
+                        sequence_name, seq.min_value
+                    )));
+                }
+            } else {
+                next
+            }
+        } else {
+            seq.is_called = true;
+            seq.current_value
+        };
+
+        seq.current_value = next_value;
+
+        // Update last_value for lastval()
+        if let Ok(mut last) = self.last_value.write() {
+            *last = Some((sequence_name.to_string(), next_value));
+        }
+
+        Ok(next_value)
+    }
+
+    fn currval(&self, sequence_name: &str) -> ProtocolResult<i64> {
+        let sequences = self.sequences.read().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
+
+        let seq = sequences.get(sequence_name).ok_or_else(|| {
+            ProtocolError::not_found("Sequence", sequence_name)
+        })?;
+
+        if !seq.is_called {
+            return Err(ProtocolError::PostgresError(format!(
+                "currval of sequence \"{}\" is not yet defined in this session",
+                sequence_name
+            )));
+        }
+
+        Ok(seq.current_value)
+    }
+
+    fn setval(&self, sequence_name: &str, value: i64, is_called: bool) -> ProtocolResult<i64> {
+        let mut sequences = self.sequences.write().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
+
+        let seq = sequences.get_mut(sequence_name).ok_or_else(|| {
+            ProtocolError::not_found("Sequence", sequence_name)
+        })?;
+
+        if value < seq.min_value || value > seq.max_value {
+            return Err(ProtocolError::PostgresError(format!(
+                "setval: value {} is out of bounds for sequence \"{}\" ({} to {})",
+                value, sequence_name, seq.min_value, seq.max_value
+            )));
+        }
+
+        seq.current_value = value;
+        seq.is_called = is_called;
+
+        // Update last_value for lastval()
+        if is_called {
+            if let Ok(mut last) = self.last_value.write() {
+                *last = Some((sequence_name.to_string(), value));
+            }
+        }
+
+        Ok(value)
+    }
+
+    fn lastval(&self) -> ProtocolResult<i64> {
+        let last = self.last_value.read().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire last value lock".to_string())
+        })?;
+
+        match &*last {
+            Some((_, value)) => Ok(*value),
+            None => Err(ProtocolError::PostgresError(
+                "lastval is not yet defined in this session".to_string(),
+            )),
+        }
+    }
+}
+
 /// Transaction state
 #[derive(Debug, Clone)]
 pub struct TransactionState {
@@ -352,7 +482,8 @@ pub struct SqlExecutor {
     views: Arc<RwLock<HashMap<String, ViewSchema>>>,
     schemas: Arc<RwLock<HashMap<String, SchemaDefinition>>>,
     extensions: Arc<RwLock<HashMap<String, ExtensionDefinition>>>,
-    sequences: Arc<RwLock<HashMap<String, SequenceMetadata>>>,
+    /// Sequences use std::sync::RwLock for synchronous access in expression evaluation
+    sequences: Arc<std::sync::RwLock<HashMap<String, SequenceMetadata>>>,
 
     // Data storage (in-memory for demonstration)
     // In production, this would integrate with OrbitClient
@@ -384,6 +515,9 @@ pub struct SqlExecutor {
     // Expression evaluator
     #[allow(dead_code)]
     expression_evaluator: Arc<RwLock<ExpressionEvaluator>>,
+
+    // Session-level sequence state for lastval()
+    sequence_last_value: Arc<std::sync::RwLock<Option<(String, i64)>>>,
 }
 
 impl SqlExecutor {
@@ -481,7 +615,7 @@ impl SqlExecutor {
             views: Arc::new(RwLock::new(HashMap::new())),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             extensions: Arc::new(RwLock::new(HashMap::new())),
-            sequences: Arc::new(RwLock::new(HashMap::new())),
+            sequences: Arc::new(std::sync::RwLock::new(HashMap::new())),
             table_data: Arc::new(RwLock::new(HashMap::new())),
             current_transaction: Arc::new(RwLock::new(None)),
             transaction_log: Arc::new(RwLock::new(Vec::new())),
@@ -494,6 +628,7 @@ impl SqlExecutor {
             current_schema: Arc::new(RwLock::new("public".to_string())),
             vector_extensions: Arc::new(RwLock::new(HashMap::new())),
             expression_evaluator: Arc::new(RwLock::new(ExpressionEvaluator::new())),
+            sequence_last_value: Arc::new(std::sync::RwLock::new(None)),
         }
     }
 
@@ -505,6 +640,19 @@ impl SqlExecutor {
     /// Get storage metrics
     pub async fn storage_metrics(&self) -> crate::protocols::common::storage::StorageMetrics {
         self.storage.metrics().await
+    }
+
+    /// Create a sequence accessor for expression evaluation
+    /// This allows expression evaluators to call nextval, currval, setval, lastval
+    /// The accessor directly uses the executor's sequence storage for real-time updates.
+    pub fn create_sequence_accessor(&self) -> Arc<dyn SequenceAccessor> {
+        // Create a sequence accessor that directly wraps our sequence storage
+        // We need to convert SequenceMetadata to SequenceMetadataRef
+        // Since we're using std::sync::RwLock, we can share the same lock
+        Arc::new(ExecutorSequenceAccessor::new(
+            self.sequences.clone(),
+            self.sequence_last_value.clone(),
+        ))
     }
 
     /// Set the current database context
@@ -1283,6 +1431,9 @@ impl SqlExecutor {
 
         // Evaluate the expression
         let mut evaluator = ExpressionEvaluator::new();
+        // Set sequence accessor for sequence functions in generated columns
+        let seq_accessor = self.create_sequence_accessor();
+        evaluator.set_sequence_accessor(seq_accessor);
         let value = evaluator.evaluate(&expr, &context)?;
 
         // Insert the computed value
@@ -2153,6 +2304,9 @@ impl SqlExecutor {
         context: &EvaluationContext,
     ) -> ProtocolResult<SqlValue> {
         let mut evaluator = self.expression_evaluator.write().await;
+        // Set the sequence accessor for sequence functions (nextval, currval, etc.)
+        let seq_accessor = self.create_sequence_accessor();
+        evaluator.set_sequence_accessor(seq_accessor);
         evaluator.evaluate(expr, context)
     }
 
@@ -2701,6 +2855,9 @@ impl SqlExecutor {
         // Evaluate context item (JSON document)
         let context = EvaluationContext::empty();
         let mut evaluator = self.expression_evaluator.write().await;
+        // Set sequence accessor for sequence functions
+        let seq_accessor = self.create_sequence_accessor();
+        evaluator.set_sequence_accessor(seq_accessor);
         let json_val = evaluator.evaluate(&json_table.context_item, &context)?;
         drop(evaluator);
 
@@ -4543,8 +4700,10 @@ impl SqlExecutor {
             is_called: false,
         };
 
-        // Store sequence in our sequences map
-        let mut sequences = self.sequences.write().await;
+        // Store sequence in our sequences map (using std::sync::RwLock for sync access)
+        let mut sequences = self.sequences.write().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
         if sequences.contains_key(&sequence_name) && !stmt.if_not_exists {
             return Err(ProtocolError::already_exists("Sequence", &sequence_name));
         }
@@ -4562,7 +4721,9 @@ impl SqlExecutor {
     ) -> ProtocolResult<ExecutionResult> {
         let sequence_name = stmt.name.to_string();
 
-        let mut sequences = self.sequences.write().await;
+        let mut sequences = self.sequences.write().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
         let sequence = sequences.get_mut(&sequence_name);
 
         match sequence {
@@ -4617,7 +4778,9 @@ impl SqlExecutor {
         stmt: DropSequenceStatement,
     ) -> ProtocolResult<ExecutionResult> {
         let mut dropped = Vec::new();
-        let mut sequences = self.sequences.write().await;
+        let mut sequences = self.sequences.write().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
 
         for name in &stmt.names {
             let sequence_name = name.to_string();
@@ -4666,15 +4829,16 @@ impl SqlExecutor {
                 Some(crate::protocols::postgres_wire::sql::ast::TruncateIdentity::Restart)
             ) {
                 // Look for sequences owned by this table
-                let mut sequences = self.sequences.write().await;
-                for seq in sequences.values_mut() {
-                    // Reset sequence to start value
-                    seq.current_value = if seq.increment > 0 {
-                        seq.min_value
-                    } else {
-                        seq.max_value
-                    };
-                    seq.is_called = false;
+                if let Ok(mut sequences) = self.sequences.write() {
+                    for seq in sequences.values_mut() {
+                        // Reset sequence to start value
+                        seq.current_value = if seq.increment > 0 {
+                            seq.min_value
+                        } else {
+                            seq.max_value
+                        };
+                        seq.is_called = false;
+                    }
                 }
             }
         }
