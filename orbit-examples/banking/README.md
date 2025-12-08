@@ -6,7 +6,7 @@ Comprehensive banking examples demonstrating OrbitRS's multi-protocol capabiliti
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                Banking Platform on OrbitRS                          │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -15,18 +15,18 @@ Comprehensive banking examples demonstrating OrbitRS's multi-protocol capabiliti
 │  ├─ Transactions & Transfers                                        │
 │  ├─ Loans & Credit                                                  │
 │  └─ Compliance & Audit                                              │
-│                                                                      │
+│                                                                     │
 │  Redis (Real-time + ML)                                             │
 │  ├─ Fraud Detection (Random Forest)                                 │
 │  ├─ Transaction Validation                                          │
 │  ├─ Credit Scoring (XGBoost)                                        │
 │  └─ Session Management                                              │
-│                                                                      │
+│                                                                     │
 │  Neo4j (Fraud Networks)                                             │
 │  ├─ Transaction Graphs                                              │
 │  ├─ Account Relationships                                           │
 │  └─ Fraud Ring Detection                                            │
-│                                                                      │
+│                                                                     │
 │  Cassandra (Transaction History)                                    │
 │  ├─ Transaction Ledger                                              │
 │  ├─ Account History                                                 │

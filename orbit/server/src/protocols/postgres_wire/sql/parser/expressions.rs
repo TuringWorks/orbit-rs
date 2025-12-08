@@ -10,7 +10,7 @@ use crate::protocols::error::ProtocolResult;
 use crate::protocols::postgres_wire::sql::ast::{
     BinaryOperator, CaseExpression, ColumnRef, Expression, FrameBound, FunctionCall, FunctionName,
     InList, NullsOrder, OrderByItem, SortDirection, UnaryOperator, WhenClause, WindowFrame,
-    WindowFunctionType,
+    WindowFrameExclusion, WindowFrameMode, WindowFunctionType,
 };
 use crate::protocols::postgres_wire::sql::lexer::Token;
 use crate::protocols::postgres_wire::sql::types::SqlType;
@@ -1035,6 +1035,7 @@ impl ExpressionParser {
         // Parse optional window frame
         let frame = if self.matches_at(tokens, *pos, &Token::Rows)
             || self.matches_at(tokens, *pos, &Token::Range)
+            || self.matches_at(tokens, *pos, &Token::Groups)
         {
             Some(self.parse_window_frame(tokens, pos)?)
         } else {
@@ -1052,8 +1053,19 @@ impl ExpressionParser {
         tokens: &[Token],
         pos: &mut usize,
     ) -> ProtocolResult<WindowFrame> {
-        // Skip ROWS or RANGE for now, we'll just parse the bounds
-        *pos += 1;
+        // Parse frame mode: ROWS, RANGE, or GROUPS
+        let mode = if self.matches_at(tokens, *pos, &Token::Rows) {
+            *pos += 1;
+            WindowFrameMode::Rows
+        } else if self.matches_at(tokens, *pos, &Token::Range) {
+            *pos += 1;
+            WindowFrameMode::Range
+        } else if self.matches_at(tokens, *pos, &Token::Groups) {
+            *pos += 1;
+            WindowFrameMode::Groups
+        } else {
+            WindowFrameMode::Range // default
+        };
 
         // Check for optional BETWEEN keyword
         if self.matches_at(tokens, *pos, &Token::Between) {
@@ -1069,10 +1081,65 @@ impl ExpressionParser {
             None
         };
 
+        // Parse optional EXCLUDE clause
+        let exclusion = if self.matches_at(tokens, *pos, &Token::Exclude) {
+            *pos += 1;
+            Some(self.parse_frame_exclusion(tokens, pos)?)
+        } else {
+            None
+        };
+
         Ok(WindowFrame {
+            mode,
             start_bound,
             end_bound,
+            exclusion,
         })
+    }
+
+    /// Parse window frame exclusion
+    fn parse_frame_exclusion(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<WindowFrameExclusion> {
+        if self.matches_at(tokens, *pos, &Token::CurrentRow) {
+            *pos += 1;
+            // Skip ROW token if present (CURRENT ROW is two tokens)
+            if self.matches_at(tokens, *pos, &Token::Row) {
+                *pos += 1;
+            }
+            Ok(WindowFrameExclusion::CurrentRow)
+        } else if self.matches_at(tokens, *pos, &Token::Group) {
+            *pos += 1;
+            Ok(WindowFrameExclusion::Group)
+        } else if self.matches_at(tokens, *pos, &Token::Ties) {
+            *pos += 1;
+            Ok(WindowFrameExclusion::Ties)
+        } else if let Some(Token::Identifier(id)) = tokens.get(*pos) {
+            if id.to_uppercase() == "NO" {
+                *pos += 1;
+                if self.matches_at(tokens, *pos, &Token::Others) {
+                    *pos += 1;
+                    Ok(WindowFrameExclusion::NoOthers)
+                } else {
+                    Err(crate::protocols::error::ProtocolError::ParseError(
+                        "Expected OTHERS after NO".to_string(),
+                    )
+                    .into())
+                }
+            } else {
+                Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Expected CURRENT ROW, GROUP, TIES, or NO OTHERS after EXCLUDE".to_string(),
+                )
+                .into())
+            }
+        } else {
+            Err(crate::protocols::error::ProtocolError::ParseError(
+                "Expected CURRENT ROW, GROUP, TIES, or NO OTHERS after EXCLUDE".to_string(),
+            )
+            .into())
+        }
     }
 
     /// Parse window frame bound
@@ -1096,15 +1163,11 @@ impl ExpressionParser {
                 .into())
             }
         } else if self.matches_at(tokens, *pos, &Token::CurrentRow) {
-            // Handle CURRENT ROW as single token (legacy)
+            // CURRENT is tokenized as CurrentRow, ROW is a separate token
             *pos += 1;
-            // Check if next token is ROW (identifier) and skip it
-            if *pos < tokens.len() {
-                if let Some(Token::Identifier(id)) = &tokens.get(*pos) {
-                    if id.to_uppercase() == "ROW" {
-                        *pos += 1;
-                    }
-                }
+            // Skip the ROW token if present (CURRENT ROW is two tokens)
+            if self.matches_at(tokens, *pos, &Token::Row) {
+                *pos += 1;
             }
             Ok(FrameBound::CurrentRow)
         } else {

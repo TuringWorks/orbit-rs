@@ -6,15 +6,17 @@
 use super::{utilities, ParseError, ParseResult, SqlParser};
 use crate::protocols::postgres_wire::sql::{
     ast::{
-        AlterColumnAction, AlterTableAction, AlterTableStatement, ColumnConstraint,
-        ColumnDefinition, CommentObjectType, CommentOnStatement, CreateDatabaseStatement,
-        CreateExtensionStatement, CreateFunctionStatement, CreateIndexStatement,
-        CreateSchemaStatement, CreateTableStatement, CreateTriggerStatement, CreateViewStatement,
-        DropDatabaseStatement, DropExtensionStatement, DropIndexStatement, DropSchemaStatement,
-        DropTableStatement, DropTriggerStatement, DropViewStatement, FunctionLanguage,
-        FunctionName, FunctionParameter, FunctionVolatility, IndexColumn, IndexOption, IndexType,
-        NullsOrder, ParameterMode, ReferentialAction, SortDirection, Statement, TableConstraint,
-        TableOption, TriggerEvent, TriggerForEach, TriggerTiming,
+        AlterColumnAction, AlterSequenceStatement, AlterTableAction, AlterTableStatement,
+        ColumnConstraint, ColumnDefinition, CommentObjectType, CommentOnStatement,
+        CreateDatabaseStatement, CreateExtensionStatement, CreateFunctionStatement,
+        CreateIndexStatement, CreateSchemaStatement, CreateSequenceStatement, CreateTableStatement,
+        CreateTriggerStatement, CreateViewStatement, DropDatabaseStatement, DropExtensionStatement,
+        DropIndexStatement, DropSchemaStatement, DropSequenceStatement, DropTableStatement,
+        DropTriggerStatement, DropViewStatement, FunctionLanguage, FunctionName, FunctionParameter,
+        FunctionVolatility, IndexColumn, IndexOption, IndexType, NullsOrder, ParameterMode,
+        ReferentialAction, SequenceBound, SequenceOptions, SequenceOwner, SortDirection, Statement,
+        TableConstraint, TableOption, TriggerEvent, TriggerForEach, TriggerTiming,
+        TruncateIdentity, TruncateStatement,
     },
     lexer::Token,
     types::SqlValue,
@@ -2164,5 +2166,302 @@ pub fn parse_comment_on(parser: &mut SqlParser) -> ParseResult<Statement> {
         object_name,
         column_name,
         comment,
+    }))
+}
+
+// ===== SEQUENCE Statements =====
+
+/// Parse CREATE SEQUENCE statement
+/// Syntax: CREATE SEQUENCE [IF NOT EXISTS] name [options]
+pub fn parse_create_sequence(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Sequence)?;
+
+    // Check for IF NOT EXISTS
+    let if_not_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Not)?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    // Parse sequence name
+    let name = utilities::parse_table_name(parser)?;
+
+    // Parse sequence options
+    let options = parse_sequence_options(parser)?;
+
+    Ok(Statement::CreateSequence(CreateSequenceStatement {
+        if_not_exists,
+        name,
+        options,
+    }))
+}
+
+/// Parse ALTER SEQUENCE statement
+/// Syntax: ALTER SEQUENCE [IF EXISTS] name [options]
+pub fn parse_alter_sequence(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Sequence)?;
+
+    // Check for IF EXISTS
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    // Parse sequence name
+    let name = utilities::parse_table_name(parser)?;
+
+    // Parse sequence options
+    let options = parse_sequence_options(parser)?;
+
+    Ok(Statement::AlterSequence(AlterSequenceStatement {
+        if_exists,
+        name,
+        options,
+    }))
+}
+
+/// Parse DROP SEQUENCE statement
+/// Syntax: DROP SEQUENCE [IF EXISTS] name [, ...] [CASCADE | RESTRICT]
+pub fn parse_drop_sequence(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Sequence)?;
+
+    // Check for IF EXISTS
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    // Parse sequence names (comma-separated list)
+    let mut names = vec![utilities::parse_table_name(parser)?];
+    while parser.matches(&[Token::Comma]) {
+        parser.advance()?;
+        names.push(utilities::parse_table_name(parser)?);
+    }
+
+    // Check for CASCADE or RESTRICT
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else if parser.matches(&[Token::Restrict]) {
+        parser.advance()?;
+        false
+    } else {
+        false
+    };
+
+    Ok(Statement::DropSequence(DropSequenceStatement {
+        if_exists,
+        names,
+        cascade,
+    }))
+}
+
+/// Parse sequence options for CREATE/ALTER SEQUENCE
+fn parse_sequence_options(parser: &mut SqlParser) -> ParseResult<SequenceOptions> {
+    let mut options = SequenceOptions::default();
+
+    loop {
+        match &parser.current_token {
+            // AS data_type
+            Some(Token::As) => {
+                parser.advance()?;
+                options.data_type = Some(utilities::parse_data_type(parser)?);
+            }
+            // INCREMENT [BY] value
+            Some(Token::Increment) => {
+                parser.advance()?;
+                if parser.matches(&[Token::By]) {
+                    parser.advance()?;
+                }
+                options.increment = Some(parse_signed_integer(parser)?);
+            }
+            // MINVALUE value | NO MINVALUE
+            Some(Token::MinValue) => {
+                parser.advance()?;
+                options.min_value = Some(SequenceBound::Value(parse_signed_integer(parser)?));
+            }
+            Some(Token::No) if parser.peek() == Some(&Token::MinValue) => {
+                parser.advance()?; // consume NO
+                parser.advance()?; // consume MINVALUE
+                options.min_value = Some(SequenceBound::None);
+            }
+            // MAXVALUE value | NO MAXVALUE
+            Some(Token::MaxValue) => {
+                parser.advance()?;
+                options.max_value = Some(SequenceBound::Value(parse_signed_integer(parser)?));
+            }
+            Some(Token::No) if parser.peek() == Some(&Token::MaxValue) => {
+                parser.advance()?; // consume NO
+                parser.advance()?; // consume MAXVALUE
+                options.max_value = Some(SequenceBound::None);
+            }
+            // START [WITH] value
+            Some(Token::Start) => {
+                parser.advance()?;
+                if parser.matches(&[Token::With]) {
+                    parser.advance()?;
+                }
+                options.start = Some(parse_signed_integer(parser)?);
+            }
+            // CACHE value
+            Some(Token::Cache) => {
+                parser.advance()?;
+                options.cache = Some(parse_signed_integer(parser)?);
+            }
+            // CYCLE | NO CYCLE
+            Some(Token::Cycle) => {
+                parser.advance()?;
+                options.cycle = Some(true);
+            }
+            Some(Token::No) if parser.peek() == Some(&Token::Cycle) => {
+                parser.advance()?; // consume NO
+                parser.advance()?; // consume CYCLE
+                options.cycle = Some(false);
+            }
+            // OWNED BY table.column | OWNED BY NONE
+            Some(Token::Owned) => {
+                parser.advance()?;
+                parser.expect(Token::By)?;
+                if parser.matches(&[Token::None]) {
+                    parser.advance()?;
+                    options.owned_by = Some(SequenceOwner::None);
+                } else {
+                    let table = utilities::parse_table_name(parser)?;
+                    parser.expect(Token::Dot)?;
+                    let column = if let Some(Token::Identifier(col)) = &parser.current_token {
+                        let c = col.clone();
+                        parser.advance()?;
+                        c
+                    } else {
+                        return Err(ParseError {
+                            message: "Expected column name after table.".to_string(),
+                            position: parser.position,
+                            expected: vec!["column_name".to_string()],
+                            found: parser.current_token.clone(),
+                        });
+                    };
+                    options.owned_by = Some(SequenceOwner::Column { table, column });
+                }
+            }
+            // RESTART [WITH value] (for ALTER SEQUENCE)
+            Some(Token::Restart) => {
+                parser.advance()?;
+                if parser.matches(&[Token::With]) {
+                    parser.advance()?;
+                    options.restart = Some(Some(parse_signed_integer(parser)?));
+                } else if matches!(
+                    &parser.current_token,
+                    Some(Token::NumericLiteral(_)) | Some(Token::Minus)
+                ) {
+                    options.restart = Some(Some(parse_signed_integer(parser)?));
+                } else {
+                    options.restart = Some(None);
+                }
+            }
+            // End of options
+            _ => break,
+        }
+    }
+
+    Ok(options)
+}
+
+/// Parse a signed integer value (for sequence options)
+fn parse_signed_integer(parser: &mut SqlParser) -> ParseResult<i64> {
+    let negative = if parser.matches(&[Token::Minus]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    if let Some(Token::NumericLiteral(n)) = &parser.current_token {
+        let value: i64 = n.parse().map_err(|_| ParseError {
+            message: format!("Invalid integer value: {}", n),
+            position: parser.position,
+            expected: vec!["integer".to_string()],
+            found: parser.current_token.clone(),
+        })?;
+        parser.advance()?;
+        Ok(if negative { -value } else { value })
+    } else {
+        Err(ParseError {
+            message: "Expected integer value".to_string(),
+            position: parser.position,
+            expected: vec!["integer".to_string()],
+            found: parser.current_token.clone(),
+        })
+    }
+}
+
+// ===== TRUNCATE Statement =====
+
+/// Parse TRUNCATE statement
+/// Syntax: TRUNCATE [TABLE] [ONLY] name [, ...] [RESTART IDENTITY | CONTINUE IDENTITY] [CASCADE | RESTRICT]
+pub fn parse_truncate(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Truncate)?;
+
+    // Optional TABLE keyword
+    if parser.matches(&[Token::Table]) {
+        parser.advance()?;
+    }
+
+    // Check for ONLY
+    let only = if parser.matches(&[Token::Only]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    // Parse table names (comma-separated list)
+    let mut tables = vec![utilities::parse_table_name(parser)?];
+    while parser.matches(&[Token::Comma]) {
+        parser.advance()?;
+        // Handle ONLY before each table name
+        if parser.matches(&[Token::Only]) {
+            parser.advance()?;
+        }
+        tables.push(utilities::parse_table_name(parser)?);
+    }
+
+    // Parse RESTART IDENTITY | CONTINUE IDENTITY
+    let identity = if parser.matches(&[Token::Restart]) {
+        parser.advance()?;
+        parser.expect(Token::Identity)?;
+        Some(TruncateIdentity::Restart)
+    } else if parser.matches(&[Token::Continue]) {
+        parser.advance()?;
+        parser.expect(Token::Identity)?;
+        Some(TruncateIdentity::Continue)
+    } else {
+        None
+    };
+
+    // Parse CASCADE | RESTRICT
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        Some(true)
+    } else if parser.matches(&[Token::Restrict]) {
+        parser.advance()?;
+        Some(false)
+    } else {
+        None
+    };
+
+    Ok(Statement::Truncate(TruncateStatement {
+        tables,
+        identity,
+        cascade,
+        only,
     }))
 }

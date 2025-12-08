@@ -4,6 +4,8 @@
 //! - PostgreSQL Wire Protocol
 //! - MySQL Protocol
 //! - Cassandra Query Language (CQL)
+//! - Redis (RESP Protocol)
+//! - OrbitQL (via REST API)
 //!
 //! Features:
 //! - Syntax highlighting for SQL queries
@@ -84,6 +86,10 @@ enum Protocol {
     Mysql,
     /// Cassandra Query Language (CQL)
     Cql,
+    /// Redis (RESP Protocol)
+    Redis,
+    /// OrbitQL (via REST API)
+    Orbitql,
 }
 
 impl Protocol {
@@ -92,6 +98,8 @@ impl Protocol {
             Protocol::Postgres => 5432,
             Protocol::Mysql => 3306,
             Protocol::Cql => 9042,
+            Protocol::Redis => 6379,
+            Protocol::Orbitql => 8080,
         }
     }
 
@@ -100,6 +108,18 @@ impl Protocol {
             Protocol::Postgres => "PostgreSQL",
             Protocol::Mysql => "MySQL",
             Protocol::Cql => "CQL",
+            Protocol::Redis => "Redis",
+            Protocol::Orbitql => "OrbitQL",
+        }
+    }
+
+    fn prompt_suffix(&self) -> &'static str {
+        match self {
+            Protocol::Postgres => "sql",
+            Protocol::Mysql => "mysql",
+            Protocol::Cql => "cql",
+            Protocol::Redis => "redis",
+            Protocol::Orbitql => "oql",
         }
     }
 }
@@ -142,6 +162,12 @@ struct ReplState {
     // PostgreSQL connection
     pg_client: Option<Client>,
     pg_connection_handle: Option<tokio::task::JoinHandle<()>>,
+    // MySQL connection
+    mysql_pool: Option<mysql_async::Pool>,
+    // Redis connection
+    redis_client: Option<redis::Client>,
+    // OrbitQL/REST HTTP client
+    http_client: Option<reqwest::Client>,
 }
 
 impl ReplState {
@@ -160,6 +186,20 @@ impl ReplState {
             theme_set: ThemeSet::load_defaults(),
             pg_client: None,
             pg_connection_handle: None,
+            mysql_pool: None,
+            redis_client: None,
+            http_client: None,
+        }
+    }
+
+    /// Connect to the database based on protocol
+    async fn connect(&mut self) -> Result<()> {
+        match self.protocol {
+            Protocol::Postgres => self.connect_postgres().await,
+            Protocol::Mysql => self.connect_mysql().await,
+            Protocol::Redis => self.connect_redis().await,
+            Protocol::Orbitql => self.connect_orbitql().await,
+            Protocol::Cql => self.connect_cql().await,
         }
     }
 
@@ -195,14 +235,112 @@ impl ReplState {
         }
     }
 
-    /// Execute a PostgreSQL query
-    async fn execute_query(&self, query: &str) -> Result<()> {
-        if self.protocol != Protocol::Postgres {
-            return Err(anyhow::anyhow!(
-                "Only PostgreSQL protocol is currently supported"
-            ));
-        }
+    /// Connect to MySQL database
+    async fn connect_mysql(&mut self) -> Result<()> {
+        use mysql_async::prelude::*;
 
+        let opts = mysql_async::OptsBuilder::default()
+            .ip_or_hostname(self.host.clone())
+            .tcp_port(self.port)
+            .user(Some(self.username.clone()))
+            .pass(self.password.clone())
+            .db_name(Some(self.database.clone()));
+
+        let pool = mysql_async::Pool::new(opts);
+
+        // Test connection
+        match pool.get_conn().await {
+            Ok(mut conn) => {
+                match conn.query_first::<String, _>("SELECT 1").await {
+                    Ok(_) => {
+                        self.mysql_pool = Some(pool);
+                        Ok(())
+                    }
+                    Err(e) => Err(anyhow::anyhow!("MySQL connection test failed: {}", e)),
+                }
+            }
+            Err(e) => Err(anyhow::anyhow!("Failed to connect to MySQL: {}", e)),
+        }
+    }
+
+    /// Connect to Redis
+    async fn connect_redis(&mut self) -> Result<()> {
+        let redis_url = if let Some(ref pass) = self.password {
+            format!("redis://:{}@{}:{}/", pass, self.host, self.port)
+        } else {
+            format!("redis://{}:{}/", self.host, self.port)
+        };
+
+        match redis::Client::open(redis_url) {
+            Ok(client) => {
+                // Test connection with PING
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Redis connection failed: {}", e))?;
+
+                let pong: String = redis::cmd("PING")
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Redis PING failed: {}", e))?;
+
+                if pong == "PONG" {
+                    self.redis_client = Some(client);
+                    Ok(())
+                } else {
+                    Err(anyhow::anyhow!("Unexpected Redis PING response: {}", pong))
+                }
+            }
+            Err(e) => Err(anyhow::anyhow!("Invalid Redis URL: {}", e)),
+        }
+    }
+
+    /// Connect to OrbitQL via REST API
+    async fn connect_orbitql(&mut self) -> Result<()> {
+        let client = reqwest::Client::new();
+        let health_url = format!("http://{}:{}/health", self.host, self.port);
+
+        match client.get(&health_url).send().await {
+            Ok(response) if response.status().is_success() => {
+                self.http_client = Some(client);
+                Ok(())
+            }
+            Ok(response) => Err(anyhow::anyhow!(
+                "OrbitQL health check failed: HTTP {}",
+                response.status()
+            )),
+            Err(e) => Err(anyhow::anyhow!("Failed to connect to OrbitQL: {}", e)),
+        }
+    }
+
+    /// Connect to CQL (Cassandra) via REST API
+    async fn connect_cql(&mut self) -> Result<()> {
+        // CQL uses HTTP REST API fallback for now
+        let client = reqwest::Client::new();
+        let health_url = format!("http://{}:{}/health", self.host, self.port);
+
+        match client.get(&health_url).send().await {
+            Ok(_) => {
+                self.http_client = Some(client);
+                Ok(())
+            }
+            Err(e) => Err(anyhow::anyhow!("Failed to connect to CQL endpoint: {}", e)),
+        }
+    }
+
+    /// Execute a query based on the current protocol
+    async fn execute_query(&self, query: &str) -> Result<()> {
+        match self.protocol {
+            Protocol::Postgres => self.execute_postgres_query(query).await,
+            Protocol::Mysql => self.execute_mysql_query(query).await,
+            Protocol::Redis => self.execute_redis_command(query).await,
+            Protocol::Orbitql => self.execute_orbitql_query(query).await,
+            Protocol::Cql => self.execute_cql_query(query).await,
+        }
+    }
+
+    /// Execute a PostgreSQL query
+    async fn execute_postgres_query(&self, query: &str) -> Result<()> {
         let client = self
             .pg_client
             .as_ref()
@@ -336,6 +474,250 @@ impl ReplState {
         Ok(())
     }
 
+    /// Execute a MySQL query
+    async fn execute_mysql_query(&self, query: &str) -> Result<()> {
+        use mysql_async::prelude::*;
+
+        let pool = self
+            .mysql_pool
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Not connected to MySQL"))?;
+
+        let mut conn = pool
+            .get_conn()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get MySQL connection: {}", e))?;
+
+        // Execute query and get results
+        let result: Vec<mysql_async::Row> = conn
+            .query(query)
+            .await
+            .map_err(|e| anyhow::anyhow!("MySQL query failed: {}", e))?;
+
+        if result.is_empty() {
+            println!("{}", format_success("Query executed successfully (0 rows)"));
+            return Ok(());
+        }
+
+        // Get column names
+        let columns: Vec<String> = result[0]
+            .columns_ref()
+            .iter()
+            .map(|c| c.name_str().to_string())
+            .collect();
+
+        let mut table = Table::new();
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS);
+        table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
+
+        // Add rows
+        for row in &result {
+            let mut values = Vec::new();
+            for i in 0..row.len() {
+                let value: Option<String> = row.get(i);
+                values.push(value.unwrap_or_else(|| "NULL".to_string()));
+            }
+            table.add_row(values.iter().map(Cell::new));
+        }
+
+        println!("\n{}", table);
+        println!("{}", format_success(&format!("({} rows)", result.len())));
+        Ok(())
+    }
+
+    /// Execute a Redis command
+    async fn execute_redis_command(&self, command: &str) -> Result<()> {
+        let client = self
+            .redis_client
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Not connected to Redis"))?;
+
+        let mut conn = client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get Redis connection: {}", e))?;
+
+        // Parse command into parts
+        let parts: Vec<&str> = command.trim().split_whitespace().collect();
+        if parts.is_empty() {
+            return Err(anyhow::anyhow!("Empty command"));
+        }
+
+        let cmd_name = parts[0].to_uppercase();
+        let args = &parts[1..];
+
+        // Build and execute Redis command
+        let mut cmd = redis::cmd(&cmd_name);
+        for arg in args {
+            cmd.arg(*arg);
+        }
+
+        let result: redis::Value = cmd
+            .query_async(&mut conn)
+            .await
+            .map_err(|e| anyhow::anyhow!("Redis command failed: {}", e))?;
+
+        // Format and display result
+        self.format_redis_value(&result, 0);
+        Ok(())
+    }
+
+    /// Format Redis value for display
+    fn format_redis_value(&self, value: &redis::Value, indent: usize) {
+        let prefix = "  ".repeat(indent);
+        match value {
+            redis::Value::Nil => println!("{}(nil)", prefix),
+            redis::Value::Int(i) => println!("{}(integer) {}", prefix, i),
+            redis::Value::Data(data) => {
+                if let Ok(s) = String::from_utf8(data.clone()) {
+                    println!("{}\"{}\"", prefix, s);
+                } else {
+                    println!("{}(binary data, {} bytes)", prefix, data.len());
+                }
+            }
+            redis::Value::Bulk(arr) => {
+                if arr.is_empty() {
+                    println!("{}(empty array)", prefix);
+                } else {
+                    for (i, item) in arr.iter().enumerate() {
+                        print!("{}{}) ", prefix, i + 1);
+                        self.format_redis_value(item, 0);
+                    }
+                }
+            }
+            redis::Value::Status(s) => println!("{}{}", prefix, s),
+            redis::Value::Okay => println!("{}OK", prefix),
+        }
+    }
+
+    /// Execute an OrbitQL query via REST API
+    async fn execute_orbitql_query(&self, query: &str) -> Result<()> {
+        let client = self
+            .http_client
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Not connected to OrbitQL"))?;
+
+        let url = format!("http://{}:{}/api/v1/sql", self.host, self.port);
+
+        let request_body = serde_json::json!({
+            "query": query,
+            "limit": 1000
+        });
+
+        let response = client
+            .post(&url)
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("OrbitQL request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("OrbitQL error (HTTP {}): {}", status, body));
+        }
+
+        let result: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to parse OrbitQL response: {}", e))?;
+
+        // Display result based on structure
+        if let Some(data) = result.get("data") {
+            if let Some(rows) = data.get("rows").and_then(|r| r.as_array()) {
+                let columns = data
+                    .get("columns")
+                    .and_then(|c| c.as_array())
+                    .map(|cols| {
+                        cols.iter()
+                            .filter_map(|c| c.get("name").and_then(|n| n.as_str()))
+                            .map(String::from)
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+
+                if rows.is_empty() {
+                    println!("{}", format_success("Query executed successfully (0 rows)"));
+                    return Ok(());
+                }
+
+                let mut table = Table::new();
+                table
+                    .load_preset(UTF8_FULL)
+                    .apply_modifier(UTF8_ROUND_CORNERS);
+
+                if !columns.is_empty() {
+                    table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
+                }
+
+                for row in rows {
+                    if let Some(row_arr) = row.as_array() {
+                        let values: Vec<String> = row_arr
+                            .iter()
+                            .map(|v| match v {
+                                serde_json::Value::Null => "NULL".to_string(),
+                                serde_json::Value::String(s) => s.clone(),
+                                _ => v.to_string(),
+                            })
+                            .collect();
+                        table.add_row(values.iter().map(Cell::new));
+                    }
+                }
+
+                println!("\n{}", table);
+                println!("{}", format_success(&format!("({} rows)", rows.len())));
+            } else {
+                // Non-tabular result, just print JSON
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            }
+        } else if let Some(error) = result.get("error") {
+            return Err(anyhow::anyhow!("OrbitQL error: {}", error));
+        } else {
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        }
+
+        Ok(())
+    }
+
+    /// Execute a CQL query via REST API
+    async fn execute_cql_query(&self, query: &str) -> Result<()> {
+        let client = self
+            .http_client
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Not connected to CQL endpoint"))?;
+
+        let url = format!("http://{}:{}/api/v1/sql", self.host, self.port);
+
+        let request_body = serde_json::json!({
+            "query": query,
+            "protocol": "cql"
+        });
+
+        let response = client
+            .post(&url)
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("CQL request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("CQL error (HTTP {}): {}", status, body));
+        }
+
+        let result: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to parse CQL response: {}", e))?;
+
+        // Display result (same format as OrbitQL for now)
+        println!("{}", serde_json::to_string_pretty(&result)?);
+        Ok(())
+    }
+
     /// Highlight SQL query using syntect
     fn highlight_query(&self, query: &str) -> String {
         let syntax = self
@@ -413,29 +795,20 @@ async fn execute_single_command(cli: &Cli, query: &str) -> Result<()> {
         .dimmed()
     );
 
-    // Establish connection
-    if state.protocol == Protocol::Postgres {
-        match state.connect_postgres().await {
-            Ok(()) => {
-                println!("{}", format_success("Connected successfully!"));
-            }
-            Err(e) => {
-                return Err(anyhow::anyhow!("Connection failed: {}", e));
-            }
+    // Establish connection (works for all protocols)
+    match state.connect().await {
+        Ok(()) => {
+            println!("{}", format_success("Connected successfully!"));
+        }
+        Err(e) => {
+            return Err(anyhow::anyhow!("Connection failed: {}", e));
         }
     }
 
     println!("\n{}", state.highlight_query(query));
 
-    // Execute query
-    if state.protocol == Protocol::Postgres {
-        state.execute_query(query).await?;
-    } else {
-        println!(
-            "\n{}",
-            format_error("Only PostgreSQL protocol is currently supported")
-        );
-    }
+    // Execute query (routes to appropriate protocol handler)
+    state.execute_query(query).await?;
 
     Ok(())
 }
@@ -454,15 +827,13 @@ async fn execute_file(cli: &Cli, file_path: &PathBuf) -> Result<()> {
         .dimmed()
     );
 
-    // Establish connection
-    if state.protocol == Protocol::Postgres {
-        match state.connect_postgres().await {
-            Ok(()) => {
-                println!("{}", format_success("Connected successfully!"));
-            }
-            Err(e) => {
-                return Err(anyhow::anyhow!("Connection failed: {}", e));
-            }
+    // Establish connection (works for all protocols)
+    match state.connect().await {
+        Ok(()) => {
+            println!("{}", format_success("Connected successfully!"));
+        }
+        Err(e) => {
+            return Err(anyhow::anyhow!("Connection failed: {}", e));
         }
     }
 
@@ -470,10 +841,15 @@ async fn execute_file(cli: &Cli, file_path: &PathBuf) -> Result<()> {
         .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
 
     // Split into statements (simple split on semicolon for now)
-    let statements: Vec<&str> = content
-        .split(';')
-        .filter(|s| !s.trim().is_empty())
-        .collect();
+    // Note: For Redis, commands don't use semicolons, so split by newlines
+    let statements: Vec<&str> = if cli.protocol == Protocol::Redis {
+        content.lines().filter(|s| !s.trim().is_empty()).collect()
+    } else {
+        content
+            .split(';')
+            .filter(|s| !s.trim().is_empty())
+            .collect()
+    };
 
     println!(
         "{}",
@@ -484,21 +860,14 @@ async fn execute_file(cli: &Cli, file_path: &PathBuf) -> Result<()> {
         println!("\n{}", format!("Statement {}:", i + 1).cyan());
         println!("{}", state.highlight_query(statement.trim()));
 
-        // Execute statement
-        if state.protocol == Protocol::Postgres {
-            match state.execute_query(statement.trim()).await {
-                Ok(()) => {
-                    // Success - results already printed
-                }
-                Err(e) => {
-                    println!("{}", format_error(&format!("Error: {}", e)));
-                }
+        // Execute statement (routes to appropriate protocol handler)
+        match state.execute_query(statement.trim()).await {
+            Ok(()) => {
+                // Success - results already printed
             }
-        } else {
-            println!(
-                "{}",
-                format_error("Only PostgreSQL protocol is currently supported")
-            );
+            Err(e) => {
+                println!("{}", format_error(&format!("Error: {}", e)));
+            }
         }
     }
 
@@ -512,33 +881,22 @@ async fn run_repl(cli: &Cli) -> Result<()> {
     // Print welcome banner
     print_banner(&state);
 
-    // Establish connection
-    if state.protocol == Protocol::Postgres {
-        println!(
-            "{}",
-            format!("Connecting to {}...", state.connection_string()).dimmed()
-        );
-        match state.connect_postgres().await {
-            Ok(()) => {
-                println!("{}", format_success("Connected successfully!"));
-            }
-            Err(e) => {
-                println!("{}", format_error(&format!("Connection failed: {}", e)));
-                println!(
-                    "{}",
-                    "Continuing in offline mode - queries will not execute.".dimmed()
-                );
-            }
+    // Establish connection (works for all protocols)
+    println!(
+        "{}",
+        format!("Connecting to {}...", state.connection_string()).dimmed()
+    );
+    match state.connect().await {
+        Ok(()) => {
+            println!("{}", format_success("Connected successfully!"));
         }
-    } else {
-        println!(
-            "\n{}",
-            format_error("Only PostgreSQL protocol is currently supported for query execution")
-        );
-        println!(
-            "{}",
-            "You can try typing SQL queries to see syntax highlighting.".dimmed()
-        );
+        Err(e) => {
+            println!("{}", format_error(&format!("Connection failed: {}", e)));
+            println!(
+                "{}",
+                "Continuing in offline mode - queries will not execute.".dimmed()
+            );
+        }
     }
 
     // Initialize rustyline editor
@@ -583,39 +941,45 @@ async fn run_repl(cli: &Cli) -> Result<()> {
                     continue;
                 }
 
-                // Add to query buffer
-                query_buffer.push_str(&line);
-                query_buffer.push('\n');
+                // For Redis, execute immediately (no semicolon needed)
+                // For SQL protocols, buffer until semicolon
+                if state.protocol == Protocol::Redis {
+                    // Redis commands are single-line
+                    editor.add_history_entry(trimmed)?;
+                    println!("\n{}", state.highlight_query(trimmed));
 
-                // Show highlighted preview of current query (for multi-line queries)
-                // Note: Real-time highlighting in the input line itself is not supported by rustyline
-                // This preview gives visual feedback as the query is being built
-                if !query_buffer.trim().is_empty() && !trimmed.ends_with(';') {
-                    // Show a preview of the highlighted query (optional, can be disabled if too noisy)
-                    // println!("{}", format!("Preview:").dimmed());
-                    // println!("{}", state.highlight_query(&query_buffer));
-                }
-
-                // Check if query is complete (ends with semicolon)
-                if trimmed.ends_with(';') {
-                    // Add to history
-                    editor.add_history_entry(query_buffer.trim())?;
-
-                    // Show highlighted query
-                    println!("\n{}", state.highlight_query(&query_buffer));
-
-                    // Execute query
-                    match state.execute_query(&query_buffer).await {
-                        Ok(()) => {
-                            // Success - results already printed
-                        }
+                    match state.execute_query(trimmed).await {
+                        Ok(()) => {}
                         Err(e) => {
                             println!("\n{}", format_error(&format!("Error: {}", e)));
                         }
                     }
+                } else {
+                    // SQL-like protocols - buffer until semicolon
+                    query_buffer.push_str(&line);
+                    query_buffer.push('\n');
 
-                    // Clear buffer
-                    query_buffer.clear();
+                    // Check if query is complete (ends with semicolon)
+                    if trimmed.ends_with(';') {
+                        // Add to history
+                        editor.add_history_entry(query_buffer.trim())?;
+
+                        // Show highlighted query
+                        println!("\n{}", state.highlight_query(&query_buffer));
+
+                        // Execute query
+                        match state.execute_query(&query_buffer).await {
+                            Ok(()) => {
+                                // Success - results already printed
+                            }
+                            Err(e) => {
+                                println!("\n{}", format_error(&format!("Error: {}", e)));
+                            }
+                        }
+
+                        // Clear buffer
+                        query_buffer.clear();
+                    }
                 }
             }
             Err(ReadlineError::Interrupted) => {
@@ -726,6 +1090,13 @@ fn print_help() {
 Orbit CLI Help
 ==============
 
+Supported Protocols:
+  --protocol postgres   PostgreSQL wire protocol (port 5432)
+  --protocol mysql      MySQL protocol (port 3306)
+  --protocol redis      Redis RESP protocol (port 6379)
+  --protocol orbitql    OrbitQL via REST API (port 8080)
+  --protocol cql        Cassandra CQL via REST (port 9042)
+
 Meta Commands:
   \?          Show this help
   \q, \quit   Exit the CLI
@@ -736,17 +1107,27 @@ Meta Commands:
   \timing     Toggle query timing display
   \format     Set output format (table, json, csv, plain)
 
-Query Execution:
+Query Execution (SQL protocols):
   - End queries with semicolon (;) to execute
   - Multi-line queries are supported
   - Use Ctrl+C to cancel current query
   - Use Ctrl+D or \q to exit
 
-Examples:
+Redis Commands (--protocol redis):
+  - Commands execute immediately (no semicolon needed)
+  - Examples: GET key, SET key value, LPUSH list item
+
+SQL Examples:
   SELECT * FROM users;
   SELECT id, name
   FROM users
   WHERE age > 18;
+
+Redis Examples:
+  PING
+  SET mykey "Hello World"
+  GET mykey
+  KEYS *
 
 "#;
 
