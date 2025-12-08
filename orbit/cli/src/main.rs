@@ -112,16 +112,6 @@ impl Protocol {
             Protocol::Orbitql => "OrbitQL",
         }
     }
-
-    fn prompt_suffix(&self) -> &'static str {
-        match self {
-            Protocol::Postgres => "sql",
-            Protocol::Mysql => "mysql",
-            Protocol::Cql => "cql",
-            Protocol::Redis => "redis",
-            Protocol::Orbitql => "oql",
-        }
-    }
 }
 
 /// CLI output format options
