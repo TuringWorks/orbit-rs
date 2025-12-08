@@ -304,17 +304,17 @@ impl QueryExecutor {
         let json_value = match value {
             redis::Value::Nil => serde_json::Value::Null,
             redis::Value::Int(i) => serde_json::Value::Number(i.into()),
-            redis::Value::Data(data) => {
+            redis::Value::BulkString(data) => {
                 String::from_utf8(data)
                     .map(serde_json::Value::String)
                     .unwrap_or(serde_json::Value::Null)
             }
-            redis::Value::Bulk(bulk) => {
+            redis::Value::Array(arr) => {
                 serde_json::Value::Array(
-                    bulk.into_iter()
+                    arr.into_iter()
                         .map(|v| match v {
                             redis::Value::Int(i) => serde_json::Value::Number(i.into()),
-                            redis::Value::Data(d) => {
+                            redis::Value::BulkString(d) => {
                                 String::from_utf8(d)
                                     .map(serde_json::Value::String)
                                     .unwrap_or(serde_json::Value::Null)
@@ -324,7 +324,7 @@ impl QueryExecutor {
                         .collect()
                 )
             }
-            redis::Value::Status(s) => serde_json::Value::String(s),
+            redis::Value::SimpleString(s) => serde_json::Value::String(s),
             redis::Value::Okay => serde_json::Value::String("OK".to_string()),
         };
         
