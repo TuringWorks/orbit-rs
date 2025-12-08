@@ -87,7 +87,7 @@ This document provides the authoritative status of protocol implementations in O
 
 ---
 
-## 2. PostgreSQL Wire Protocol (70% Complete)
+## 2. PostgreSQL Wire Protocol (72% Complete)
 
 ### Wire Protocol Support
 
@@ -134,6 +134,18 @@ This document provides the authoritative status of protocol implementations in O
 | PERIOD keyword (FK) | ✅ **DONE** | Temporal foreign key parsing |
 | Temporal overlap checking | ✅ **DONE** | INSERT/UPDATE validation |
 | MERGE with RETURNING | 🔶 **PARTIAL** | Parsing complete |
+| **Sequence Functions** | | |
+| nextval() | ✅ **DONE** | Advance and return next value |
+| currval() | ✅ **DONE** | Return current value |
+| setval() | ✅ **DONE** | Set sequence value |
+| lastval() | ✅ **DONE** | Return last sequence value in session |
+| **Math Functions** | | |
+| cbrt() | ✅ **DONE** | Cube root |
+| div() | ✅ **DONE** | Integer division |
+| factorial() | ✅ **DONE** | Factorial |
+| gcd() | ✅ **DONE** | Greatest common divisor |
+| lcm() | ✅ **DONE** | Least common multiple |
+| sign() | ✅ **DONE** | Sign of number |
 | **Standard Features** | | |
 | RETURNING clause | ✅ **DONE** | INSERT/UPDATE/DELETE |
 | EXTRACT function | ✅ **DONE** | All field types (YEAR, MONTH, DAY, HOUR, etc.) |
@@ -160,8 +172,7 @@ This document provides the authoritative status of protocol implementations in O
 | Feature | Impact | Priority |
 |---------|--------|----------|
 | CREATE ROLE/USER | No user management | Critical |
-| CREATE SEQUENCE | SERIAL columns broken | Critical |
-| TRUNCATE execution | Must use DELETE | Medium |
+| DECLARE CURSOR | Cursor-based iteration | Medium |
 | System catalogs (pg_catalog) | Tool compatibility | High |
 | Stored procedures (PL/pgSQL) | Business logic | High |
 
@@ -427,7 +438,7 @@ This document provides the authoritative status of protocol implementations in O
 | PostgreSQL | Window frame execution | ✅ **DONE** |
 | Redis | MULTI/EXEC transactions | ✅ **DONE** |
 | Cypher | GROUP BY execution | ✅ **DONE** |
-| PostgreSQL | SEQUENCE support | Pending |
+| PostgreSQL | SEQUENCE support | ✅ **DONE** |
 | PostgreSQL | User management | Pending |
 | MySQL | Stored procedures | Pending |
 | MongoDB | Authentication | Pending |
@@ -459,13 +470,13 @@ This document provides the authoritative status of protocol implementations in O
 | Protocol | Unit Tests | Integration | Total |
 |----------|------------|-------------|-------|
 | Redis RESP | 155+ | 35+ | 190+ |
-| PostgreSQL | 390+ | 35+ | 425+ |
+| PostgreSQL | 410+ | 35+ | 445+ |
 | MySQL | 30+ | 5+ | 35+ |
 | CQL | 45+ | 6+ | 51+ |
 | Cypher/Bolt | 95+ | 10+ | 105+ |
 | AQL | 85+ | 5+ | 90+ |
 | MongoDB | 5+ | 1+ | 6+ |
-| **Total** | **805+** | **97+** | **902+** |
+| **Total** | **825+** | **97+** | **922+** |
 
 ---
 
@@ -482,10 +493,11 @@ This document provides the authoritative status of protocol implementations in O
 
 | Date | Changes |
 |------|---------|
+| 2025-12-08 | Added PostgreSQL sequence functions (nextval, currval, setval, lastval) and math functions (cbrt, div, factorial, gcd, lcm, sign) |
 | 2025-12-07 | **Major Update**: Tier 1 features completed - PostgreSQL RETURNING/Date-Time/Window frames, Redis transactions, Cypher GROUP BY |
 | 2025-12-07 | Consolidated from PROTOCOL_GAP_ANALYSIS.md, COMPREHENSIVE_FEATURE_GAP_ANALYSIS.md, PROTOCOL_COMPLETION_ANALYSIS.md |
 | 2025-12-06 | Initial protocol completion analysis |
 
 ---
 
-*Document generated: December 7, 2025*
+*Document generated: December 8, 2025*

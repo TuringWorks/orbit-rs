@@ -6,7 +6,7 @@ category: "architecture"
 permalink: /PRD.html
 ---
 
-> **Last Updated**: December 5, 2025
+> **Last Updated**: December 8, 2025
 > **Status**: Production-Ready Multi-Protocol Database Platform
 > **Architecture Reference**: See [`docs/content/architecture/ORBIT_ARCHITECTURE.md`](content/architecture/ORBIT_ARCHITECTURE.md) for detailed architecture patterns, transaction layer (MVCC, 2PC, Saga), query execution (vectorized, SIMD), network layer (gRPC, Protocol Buffers), and hybrid storage architecture.
 > **Protocol Analysis**: See [`protocols/PROTOCOL_COMPLETION_ANALYSIS.md`](protocols/PROTOCOL_COMPLETION_ANALYSIS.md) for detailed protocol implementation status and gaps.
@@ -47,7 +47,7 @@ permalink: /PRD.html
 |--------|-------|
 | Lines of Code | 365,000+ |
 | Source Files | 530+ |
-| Test Coverage | 2,352+ tests |
+| Test Coverage | 2,400+ tests |
 | Compiler Warnings | 0 (zero warnings policy) |
 | Workspace Crates | 15 |
 
@@ -959,7 +959,7 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | Protocol | Status | Completion | Tests | Key Components |
 |----------|--------|------------|-------|----------------|
 | **Redis RESP** | Complete | 97% | 183 | String, Hash, List, Set, SortedSet, Stream, PubSub, Vector, TimeSeries, Graph, CLUSTER |
-| **PostgreSQL** | Complete | 92% | 440+ | Wire protocol (v3/v3.2), SQL parser, Query engine, JSONB, pgvector, CTEs, Window functions, PG18 features |
+| **PostgreSQL** | Complete | 94% | 460+ | Wire protocol (v3/v3.2), SQL parser, Query engine, JSONB, pgvector, CTEs, Window functions, PG18 features, Sequences |
 | **MySQL** | Complete | 80% | 32 | Wire protocol, Auth, Binary protocol (prepared statements) |
 | **CQL (Cassandra)** | Complete | 75% | 23 | Wire protocol, CQL parser, BATCH operations, LWT |
 | **AQL (ArangoDB)** | Active | 75% | 102 | Parser, Query engine, Graph traversal, PRUNE, OPTIONS, SEARCH |
@@ -996,6 +996,8 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | GENERATED Columns (STORED/VIRTUAL) | Complete | 10 | `sql/executor.rs` |
 | OLD/NEW in RETURNING | Complete | 4 | `sql/executor.rs` |
 | Temporal Constraints (WITHOUT OVERLAPS) | Complete | 13 | `sql/parser/ddl.rs`, `sql/executor.rs` |
+| Sequence Functions (nextval/currval/setval/lastval) | Complete | 17 | `sql/executor.rs`, `sql/expression_evaluator.rs` |
+| Math Functions (cbrt/div/factorial/gcd/lcm/sign) | Complete | - | `sql/expression_evaluator.rs` |
 | MERGE with RETURNING | Partial | 3 | `sql/parser/dml.rs` |
 | **Cypher/Bolt Features** | | | |
 | Bolt Protocol v4/v5 | Complete | - | `bolt_protocol.rs` |
@@ -1015,7 +1017,7 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | **Infrastructure** | | | |
 | Kubernetes Operator | Active | 0 | `orbit-operator/` |
 
-**Total Tests: 2,400+** (as of December 2025)
+**Total Tests: 2,420+** (as of December 2025)
 
 ---
 
