@@ -29,7 +29,7 @@ nom = "7.1"
 postgres-protocol = "0.6"
 postgres-types = "0.2"
 regex = "1.11"
-md5 = "0.7"
+md5 = "0.8"
 sha2 = "0.10"
 hex = "0.4"
 # base64 already defined below

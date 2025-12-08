@@ -37,7 +37,7 @@ rand = "0.8"
 fastrand = "2.0"
 parking_lot = "0.12"
 crossbeam = "0.8"
-md5 = "0.7"
+md5 = "0.8"
 metrics = "0.24"
 regex = "1.10"
 
