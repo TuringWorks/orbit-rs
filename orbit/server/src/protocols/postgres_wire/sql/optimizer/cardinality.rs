@@ -238,6 +238,16 @@ impl CardinalityEstimator {
             | BinaryOperator::JsonExistsAny
             | BinaryOperator::JsonExistsAll => 0.5,
 
+            // Range operators (PostgreSQL range types)
+            BinaryOperator::RangeContains
+            | BinaryOperator::RangeContainedBy
+            | BinaryOperator::RangeOverlaps
+            | BinaryOperator::RangeAdjacent
+            | BinaryOperator::RangeStrictlyLeft
+            | BinaryOperator::RangeStrictlyRight
+            | BinaryOperator::RangeNotExtendRight
+            | BinaryOperator::RangeNotExtendLeft => 0.1,
+
             // Vector similarity operators
             BinaryOperator::VectorDistance
             | BinaryOperator::VectorInnerProduct

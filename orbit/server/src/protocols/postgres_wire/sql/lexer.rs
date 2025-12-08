@@ -378,6 +378,16 @@ pub enum Token {
     JsonPathExtract,     // #> (JSON path extraction)
     JsonPathExtractText, // #>> (JSON path extraction as text)
 
+    // Operators - Range (PostgreSQL range types)
+    RangeContains,        // @> (contains element/range)
+    RangeContainedBy,     // <@ (is contained by)
+    RangeOverlaps,        // && (overlaps)
+    RangeAdjacent,        // -|- (adjacent to)
+    RangeStrictlyLeft,    // << (strictly left of)
+    RangeStrictlyRight,   // >> (strictly right of)
+    RangeNotExtendRight,  // &< (does not extend right of)
+    RangeNotExtendLeft,   // &> (does not extend left of)
+
     // Operators - Other
     Concat,
     BitwiseAnd,
@@ -1112,6 +1122,11 @@ impl Lexer {
                                 } else {
                                     return Token::Arrow;
                                 }
+                            } else if self.current_char == Some('|') && self.peek() == Some('-') {
+                                // -|- (adjacent)
+                                self.advance();
+                                self.advance();
+                                return Token::RangeAdjacent;
                             }
                             return Token::Minus;
                         }
@@ -1171,7 +1186,12 @@ impl Lexer {
                                 }
                                 Some('<') => {
                                     self.advance();
-                                    Token::LeftShift
+                                    Token::RangeStrictlyLeft  // << (strictly left of)
+                                }
+                                Some('@') => {
+                                    // <@ (contained by)
+                                    self.advance();
+                                    Token::RangeContainedBy
                                 }
                                 _ => Token::LessThan,
                             };
@@ -1185,7 +1205,7 @@ impl Lexer {
                                 }
                                 Some('>') => {
                                     self.advance();
-                                    Token::RightShift
+                                    Token::RangeStrictlyRight  // >> (strictly right of)
                                 }
                                 _ => Token::GreaterThan,
                             };
@@ -1202,7 +1222,24 @@ impl Lexer {
                         }
                         '&' => {
                             self.advance();
-                            return Token::BitwiseAnd;
+                            return match self.current_char {
+                                Some('&') => {
+                                    // && (overlaps)
+                                    self.advance();
+                                    Token::RangeOverlaps
+                                }
+                                Some('<') => {
+                                    // &< (does not extend right of)
+                                    self.advance();
+                                    Token::RangeNotExtendRight
+                                }
+                                Some('>') => {
+                                    // &> (does not extend left of)
+                                    self.advance();
+                                    Token::RangeNotExtendLeft
+                                }
+                                _ => Token::BitwiseAnd,
+                            };
                         }
                         '~' => {
                             self.advance();
@@ -1254,16 +1291,23 @@ impl Lexer {
                                     self.advance();
                                     if self.current_char == Some('>') {
                                         self.advance();
-                                        Token::JsonPathExtractText // #>>
+                                        Token::JsonPathExtractText
                                     } else {
-                                        Token::JsonPathExtract // #>
+                                        Token::JsonPathExtract
                                     }
                                 }
-                                _ => {
-                                    // Standalone # - not a valid token in our SQL dialect
-                                    // Skip and continue
-                                    continue;
+                                _ => Token::Identifier("#".to_string()),
+                            };
+                        }
+                        '@' => {
+                            self.advance();
+                            return match self.current_char {
+                                Some('>') => {
+                                    // @> (contains)
+                                    self.advance();
+                                    Token::RangeContains
                                 }
+                                _ => Token::Identifier("@".to_string()),
                             };
                         }
 

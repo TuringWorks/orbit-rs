@@ -1202,6 +1202,24 @@ pub enum BinaryOperator {
     BitwiseXor,
     LeftShift,
     RightShift,
+
+    // Range operators (PostgreSQL range types)
+    /// @> operator: range contains element/range
+    RangeContains,
+    /// <@ operator: element/range is contained by range
+    RangeContainedBy,
+    /// && operator: ranges overlap
+    RangeOverlaps,
+    /// -|- operator: ranges are adjacent
+    RangeAdjacent,
+    /// << operator: range is strictly left of range
+    RangeStrictlyLeft,
+    /// >> operator: range is strictly right of range
+    RangeStrictlyRight,
+    /// &< operator: range does not extend right of range
+    RangeNotExtendRight,
+    /// &> operator: range does not extend left of range
+    RangeNotExtendLeft,
 }
 
 #[derive(Debug, Clone, PartialEq)]
