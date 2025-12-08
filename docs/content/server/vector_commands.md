@@ -299,6 +299,32 @@ FT.SEARCH <index> <vector> <limit> [DISTANCE_METRIC <metric>] [key value ...]
 FT.SEARCH my-ft-index "0.1,0.2,0.3" 5 DISTANCE_METRIC COSINE
 ```
 
+## GraphRAG Hybrid Retrieval
+
+Combine vector similarity with graph traversal to retrieve context-rich results.
+
+```redis
+# Build graph of documents and concepts
+GRAPH.QUERY rag_graph 'CREATE (:Document {id:"doc1", title:"GraphRAG overview"})-[:MENTIONS]->(:Concept {name:"Knowledge Graph"})'
+GRAPH.QUERY rag_graph 'CREATE (:Document {id:"doc2", title:"RAG with Redis"})-[:MENTIONS]->(:Concept {name:"Vector Search"})'
+
+# Create and populate vector index
+FT.CREATE rag_vectors DIM 384 DISTANCE_METRIC COSINE
+VECTOR.ADD rag_vectors doc1 "0.10,0.20,0.30,0.40" title "GraphRAG overview" concept "Knowledge Graph"
+VECTOR.ADD rag_vectors doc2 "0.25,0.10,0.05,0.60" title "RAG with Redis"    concept "Vector Search"
+
+# Retrieve candidates by similarity
+VECTOR.SEARCH rag_vectors "0.12,0.21,0.29,0.39" 5 METRIC COSINE
+
+# Expand candidates via graph neighbors
+GRAPH.RO_QUERY rag_graph 'MATCH (d:Document {id:"doc1"})-[:MENTIONS]->(c:Concept) RETURN d.title, c.name'
+
+# Alternative route via FT.SEARCH
+FT.SEARCH rag_vectors "0.12,0.21,0.29,0.39" 10 DISTANCE_METRIC COSINE
+```
+
+See `docs/content/graph/graph_commands.md` for more graph commands and profiling tools.
+
 **Returns:** Array of search results
 
 ##  Similarity Metrics

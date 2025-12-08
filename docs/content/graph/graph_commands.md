@@ -480,6 +480,42 @@ WHERE k.proficiency IN ['expert', 'advanced']
 RETURN d.name, d.experience, k.proficiency
 ```
 
+### GraphRAG Examples
+
+Combine graph relationships with vector search to retrieve rich, semantically linked context for generation.
+
+```redis
+# Create a knowledge graph linking documents to concepts
+GRAPH.QUERY rag_graph 'CREATE (:Document {id:"doc1", title:"GraphRAG overview"})-[:MENTIONS]->(:Concept {name:"Knowledge Graph"})'
+GRAPH.QUERY rag_graph 'CREATE (:Document {id:"doc2", title:"RAG with Redis"})-[:MENTIONS]->(:Concept {name:"Vector Search"})'
+GRAPH.QUERY rag_graph 'CREATE (:Document {id:"doc3", title:"Hybrid Search"})-[:MENTIONS]->(:Concept {name:"Knowledge Graph"})'
+
+# Create a vector index for document embeddings
+FT.CREATE rag_vectors DIM 384 DISTANCE_METRIC COSINE
+
+# Add embeddings with metadata
+VECTOR.ADD rag_vectors doc1 "0.10,0.20,0.30,0.40" title "GraphRAG overview" concept "Knowledge Graph"
+VECTOR.ADD rag_vectors doc2 "0.25,0.10,0.05,0.60" title "RAG with Redis"    concept "Vector Search"
+VECTOR.ADD rag_vectors doc3 "0.15,0.22,0.35,0.18" title "Hybrid Search"      concept "Knowledge Graph"
+
+# Retrieve candidates using similarity search
+VECTOR.SEARCH rag_vectors "0.12,0.21,0.29,0.39" 5 METRIC COSINE
+
+# Read-only expansion of candidates via graph neighborhood
+GRAPH.RO_QUERY rag_graph 'MATCH (d:Document {id:"doc1"})-[:MENTIONS]->(c:Concept) RETURN d.title, c.name'
+GRAPH.RO_QUERY rag_graph 'MATCH (d:Document {id:"doc3"})-[:MENTIONS]->(c:Concept) RETURN d.title, c.name'
+
+# Optional: full-text compatible vector route
+FT.SEARCH rag_vectors "0.12,0.21,0.29,0.39" 10 DISTANCE_METRIC COSINE
+
+# Maintenance
+GRAPH.LIST
+GRAPH.PROFILE rag_graph 'MATCH (d:Document)-[:MENTIONS]->(c:Concept) RETURN d.id'
+GRAPH.DELETE rag_graph
+```
+
+Use the vector search to get top-k candidates, then use graph traversal to enrich context with explicit relationships such as `MENTIONS`, `DERIVES_FROM`, or `SUPPORTS`. This hybrid approach improves grounding and reduces hallucinations during generation.
+
 ## Performance Considerations
 
 ### Query Optimization

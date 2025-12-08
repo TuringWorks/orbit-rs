@@ -518,23 +518,34 @@ impl PostgresWireProtocol {
     fn send_query_result(&self, result: &QueryResult, buf: &mut BytesMut) {
         match result {
             QueryResult::Select { columns, rows } => {
-                // Send row description
-                let fields: Vec<FieldDescription> = columns
-                    .iter()
-                    .map(|col| FieldDescription {
+                let mut fields: Vec<FieldDescription> = Vec::with_capacity(columns.len());
+                for (i, col) in columns.iter().enumerate() {
+                    let mut oid = type_oids::TEXT;
+                    let mut size: i16 = -1;
+                    if let Some(first_row) = rows.get(0) {
+                        if let Some(Some(val)) = first_row.get(i) {
+                            if val.chars().all(|c| c.is_ascii_digit()) {
+                                oid = type_oids::INT4;
+                                size = 4;
+                            } else if val.parse::<f64>().is_ok() {
+                                oid = type_oids::FLOAT8;
+                                size = 8;
+                            }
+                        }
+                    }
+                    fields.push(FieldDescription {
                         name: col.clone(),
                         table_oid: 0,
                         column_id: 0,
-                        type_oid: type_oids::TEXT, // Default to TEXT
-                        type_size: -1,
+                        type_oid: oid,
+                        type_size: size,
                         type_modifier: -1,
                         format: 0,
-                    })
-                    .collect();
+                    });
+                }
 
                 BackendMessage::RowDescription { fields }.encode(buf);
 
-                // Send data rows
                 for row in rows {
                     let values: Vec<Option<bytes::Bytes>> = row
                         .iter()
@@ -543,7 +554,6 @@ impl PostgresWireProtocol {
                     BackendMessage::DataRow { values }.encode(buf);
                 }
 
-                // Send command complete
                 BackendMessage::CommandComplete {
                     tag: format!("SELECT {}", rows.len()),
                 }

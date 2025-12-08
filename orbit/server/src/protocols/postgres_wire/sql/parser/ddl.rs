@@ -4980,8 +4980,8 @@ pub fn parse_create_operator(parser: &mut SqlParser) -> ParseResult<Statement> {
     Ok(Statement::CreateOperator(CreateOperatorStatement {
         name,
         procedure,
-        left_type: left_type.unwrap_or(SqlType::Integer),
-        right_type: right_type.unwrap_or(SqlType::Integer),
+        left_type: left_type.or(Some(SqlType::Integer)),
+        right_type: right_type.or(Some(SqlType::Integer)),
         options,
     }))
 }
@@ -5244,7 +5244,7 @@ pub fn parse_create_cast(parser: &mut SqlParser) -> ParseResult<Statement> {
     Ok(Statement::CreateCast(CreateCastStatement {
         source_type,
         target_type,
-        function,
+        function: function.map(|tn| tn.name),
         context,
     }))
 }
@@ -5580,7 +5580,7 @@ pub fn parse_create_conversion(parser: &mut SqlParser) -> ParseResult<Statement>
         default: is_default,
         source_encoding,
         dest_encoding,
-        function,
+        function: function.name,
     }))
 }
 
