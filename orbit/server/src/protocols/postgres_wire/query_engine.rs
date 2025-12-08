@@ -582,69 +582,17 @@ impl QueryEngine {
                 rows,
                 columns,
             },
-            UnifiedExecutionResult::CreateTable { table_name, .. } => {
-                // For DDL operations, return an empty select result with a message
-                QueryResult::Select {
-                    columns: vec!["message".to_string()],
-                    rows: vec![vec![Some(format!(
-                        "Table '{}' created successfully",
-                        table_name
-                    ))]],
-                }
-            }
-            UnifiedExecutionResult::CreateIndex {
-                index_name,
-                table_name,
-                ..
-            } => {
-                // Return success message for CREATE INDEX
-                QueryResult::Select {
-                    columns: vec!["message".to_string()],
-                    rows: vec![vec![Some(format!(
-                        "Index '{}' created on table '{}' successfully",
-                        index_name, table_name
-                    ))]],
-                }
-            }
-            UnifiedExecutionResult::Transaction { operation, .. } => {
-                // Return success message for transaction operations
-                QueryResult::Select {
-                    columns: vec!["message".to_string()],
-                    rows: vec![vec![Some(format!("{} completed successfully", operation))]],
-                }
-            }
-            UnifiedExecutionResult::CreateExtension { .. } => QueryResult::Select {
-                columns: vec!["message".to_string()],
-                rows: vec![vec![Some("CREATE EXTENSION".to_string())]],
-            },
-            UnifiedExecutionResult::CreateSchema { .. } => QueryResult::Select {
-                columns: vec!["message".to_string()],
-                rows: vec![vec![Some("CREATE SCHEMA".to_string())]],
-            },
-            UnifiedExecutionResult::CreateView { .. } => QueryResult::Select {
-                columns: vec!["message".to_string()],
-                rows: vec![vec![Some("CREATE VIEW".to_string())]],
-            },
-            UnifiedExecutionResult::DropTable { .. } => QueryResult::Select {
-                columns: vec!["message".to_string()],
-                rows: vec![vec![Some("DROP TABLE".to_string())]],
-            },
-            UnifiedExecutionResult::DropIndex { .. } => QueryResult::Select {
-                columns: vec!["message".to_string()],
-                rows: vec![vec![Some("DROP INDEX".to_string())]],
-            },
-            UnifiedExecutionResult::DropExtension { .. } => QueryResult::Select {
-                columns: vec!["message".to_string()],
-                rows: vec![vec![Some("DROP EXTENSION".to_string())]],
-            },
-            UnifiedExecutionResult::DropSchema { .. } => QueryResult::Select {
-                columns: vec!["message".to_string()],
-                rows: vec![vec![Some("DROP SCHEMA".to_string())]],
-            },
-            UnifiedExecutionResult::DropView { .. } => QueryResult::Select {
-                columns: vec!["message".to_string()],
-                rows: vec![vec![Some("DROP VIEW".to_string())]],
-            },
+            UnifiedExecutionResult::CreateTable { .. } => QueryResult::Update { count: 0 },
+            UnifiedExecutionResult::CreateIndex { .. } => QueryResult::Update { count: 0 },
+            UnifiedExecutionResult::Transaction { .. } => QueryResult::Update { count: 0 },
+            UnifiedExecutionResult::CreateExtension { .. } => QueryResult::Update { count: 0 },
+            UnifiedExecutionResult::CreateSchema { .. } => QueryResult::Update { count: 0 },
+            UnifiedExecutionResult::CreateView { .. } => QueryResult::Update { count: 0 },
+            UnifiedExecutionResult::DropTable { .. } => QueryResult::Update { count: 0 },
+            UnifiedExecutionResult::DropIndex { .. } => QueryResult::Update { count: 0 },
+            UnifiedExecutionResult::DropExtension { .. } => QueryResult::Update { count: 0 },
+            UnifiedExecutionResult::DropSchema { .. } => QueryResult::Update { count: 0 },
+            UnifiedExecutionResult::DropView { .. } => QueryResult::Update { count: 0 },
             UnifiedExecutionResult::Set {
                 variable, value, ..
             } => QueryResult::Set { variable, value },
