@@ -1,9 +1,9 @@
 # Redis (RESP) Protocol Compatibility Specification
 
-**Target**: Redis 7.x RESP3 Protocol
+**Target**: Redis 7.x RESP3 Protocol + Redis Modules
 **Reference**: https://redis.io/docs/reference/protocol-spec/
 **Last Updated**: 2025-12-08
-**Current Estimated Coverage**: ~75%
+**Current Estimated Coverage**: ~65% (Core: ~75%, Modules: ~30%)
 
 ---
 
@@ -359,6 +359,299 @@ This document specifies the Redis RESP (REdis Serialization Protocol) feature se
 | Redis 7.x | ✅ | Target version |
 | Valkey | ✅ | Compatible |
 | KeyDB | ✅ | Compatible |
+
+---
+
+---
+
+## Redis Modules
+
+OrbitRS provides compatibility with popular Redis modules, enabling advanced functionality beyond core Redis commands.
+
+### RedisGraph (Graph Database)
+
+**Status**: 🔶 Partial Support (~40%)
+**Reference**: https://redis.io/docs/stack/graph/
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| GRAPH.QUERY | 🔶 | Basic Cypher queries |
+| GRAPH.RO_QUERY | 🔶 | Read-only queries |
+| GRAPH.EXPLAIN | ❌ | Not implemented |
+| GRAPH.PROFILE | ❌ | Not implemented |
+| GRAPH.DELETE | 🔶 | Delete graph |
+| GRAPH.SLOWLOG | ❌ | Not implemented |
+| GRAPH.CONFIG GET | ❌ | Not implemented |
+| GRAPH.CONFIG SET | ❌ | Not implemented |
+| GRAPH.LIST | 🔶 | List graphs |
+
+#### Cypher Query Support
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| CREATE (nodes) | 🔶 | Basic node creation |
+| CREATE (relationships) | 🔶 | Basic edge creation |
+| MATCH | 🔶 | Pattern matching |
+| WHERE | 🔶 | Filtering |
+| RETURN | ✅ | Return results |
+| SET | 🔶 | Update properties |
+| DELETE | 🔶 | Delete nodes/edges |
+| MERGE | ❌ | Not implemented |
+| WITH | ❌ | Not implemented |
+| UNWIND | ❌ | Not implemented |
+| ORDER BY | 🔶 | Basic sorting |
+| LIMIT/SKIP | ✅ | Pagination |
+| Aggregations | 🔶 | COUNT, SUM, AVG |
+| Path functions | ❌ | Not implemented |
+| Shortest path | ❌ | Not implemented |
+
+### RedisJSON (JSON Document Store)
+
+**Status**: ✅ Full Support (~90%)
+**Reference**: https://redis.io/docs/stack/json/
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| JSON.SET | ✅ | Set JSON value |
+| JSON.GET | ✅ | Get JSON value |
+| JSON.DEL | ✅ | Delete JSON path |
+| JSON.MGET | ✅ | Multiple get |
+| JSON.TYPE | ✅ | Get value type |
+| JSON.NUMINCRBY | ✅ | Increment number |
+| JSON.NUMMULTBY | ✅ | Multiply number |
+| JSON.STRAPPEND | ✅ | Append to string |
+| JSON.STRLEN | ✅ | String length |
+| JSON.ARRAPPEND | ✅ | Append to array |
+| JSON.ARRINDEX | ✅ | Find in array |
+| JSON.ARRINSERT | ✅ | Insert into array |
+| JSON.ARRLEN | ✅ | Array length |
+| JSON.ARRPOP | ✅ | Pop from array |
+| JSON.ARRTRIM | ✅ | Trim array |
+| JSON.OBJKEYS | ✅ | Get object keys |
+| JSON.OBJLEN | ✅ | Object length |
+| JSON.TOGGLE | ✅ | Toggle boolean |
+| JSON.CLEAR | ✅ | Clear value |
+| JSON.DEBUG | 🔶 | Debug commands |
+| JSON.RESP | ✅ | RESP encoding |
+
+### RedisSearch (Full-Text Search & Secondary Indexing)
+
+**Status**: 🔶 Partial Support (~50%)
+**Reference**: https://redis.io/docs/stack/search/
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| FT.CREATE | 🔶 | Create index |
+| FT.SEARCH | 🔶 | Search index |
+| FT.AGGREGATE | 🔶 | Aggregation queries |
+| FT.INFO | 🔶 | Index info |
+| FT.EXPLAIN | ❌ | Not implemented |
+| FT.EXPLAINCLI | ❌ | Not implemented |
+| FT.ALTER | ❌ | Not implemented |
+| FT.DROPINDEX | 🔶 | Drop index |
+| FT.ALIASADD | ❌ | Not implemented |
+| FT.ALIASDEL | ❌ | Not implemented |
+| FT.ALIASUPDATE | ❌ | Not implemented |
+| FT.TAGVALS | ❌ | Not implemented |
+| FT.SUGADD | ❌ | Not implemented |
+| FT.SUGGET | ❌ | Not implemented |
+| FT.SUGDEL | ❌ | Not implemented |
+| FT.SUGLEN | ❌ | Not implemented |
+| FT.SYNUPDATE | ❌ | Not implemented |
+| FT.SYNDUMP | ❌ | Not implemented |
+| FT.SPELLCHECK | ❌ | Not implemented |
+| FT.DICTADD | ❌ | Not implemented |
+| FT.DICTDEL | ❌ | Not implemented |
+| FT.DICTDUMP | ❌ | Not implemented |
+
+#### Field Types
+
+| Type | Status | Notes |
+|------|--------|-------|
+| TEXT | 🔶 | Full-text search |
+| TAG | 🔶 | Exact match tags |
+| NUMERIC | 🔶 | Numeric range |
+| GEO | ❌ | Geospatial |
+| VECTOR | ✅ | Vector similarity |
+
+### RedisTimeSeries (Time Series Data)
+
+**Status**: 🔶 Partial Support (~45%)
+**Reference**: https://redis.io/docs/stack/timeseries/
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| TS.CREATE | 🔶 | Create time series |
+| TS.ADD | 🔶 | Add sample |
+| TS.MADD | 🔶 | Add multiple samples |
+| TS.INCRBY | 🔶 | Increment value |
+| TS.DECRBY | 🔶 | Decrement value |
+| TS.CREATERULE | ❌ | Not implemented |
+| TS.DELETERULE | ❌ | Not implemented |
+| TS.RANGE | 🔶 | Query range |
+| TS.REVRANGE | 🔶 | Reverse range |
+| TS.MRANGE | 🔶 | Multi-key range |
+| TS.MREVRANGE | 🔶 | Multi-key reverse |
+| TS.GET | 🔶 | Get latest sample |
+| TS.MGET | 🔶 | Multi-key get |
+| TS.INFO | 🔶 | Series info |
+| TS.QUERYINDEX | ❌ | Not implemented |
+| TS.DEL | 🔶 | Delete range |
+| TS.ALTER | ❌ | Not implemented |
+
+#### Aggregation Functions
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| AVG | 🔶 | Average |
+| SUM | 🔶 | Sum |
+| MIN | 🔶 | Minimum |
+| MAX | 🔶 | Maximum |
+| RANGE | 🔶 | Range |
+| COUNT | 🔶 | Count |
+| FIRST | 🔶 | First value |
+| LAST | 🔶 | Last value |
+| STD.P | ❌ | Population stddev |
+| STD.S | ❌ | Sample stddev |
+| VAR.P | ❌ | Population variance |
+| VAR.S | ❌ | Sample variance |
+| TWA | ❌ | Time-weighted avg |
+
+### RedisBloom (Probabilistic Data Structures)
+
+**Status**: ❌ Not Implemented (~5%)
+**Reference**: https://redis.io/docs/stack/bloom/
+
+#### Bloom Filters
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| BF.RESERVE | ❌ | Create bloom filter |
+| BF.ADD | ❌ | Add item |
+| BF.MADD | ❌ | Add multiple items |
+| BF.INSERT | ❌ | Insert with options |
+| BF.EXISTS | ❌ | Check existence |
+| BF.MEXISTS | ❌ | Check multiple |
+| BF.SCANDUMP | ❌ | Dump filter |
+| BF.LOADCHUNK | ❌ | Load chunk |
+| BF.INFO | ❌ | Filter info |
+
+#### Cuckoo Filters
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| CF.RESERVE | ❌ | Create cuckoo filter |
+| CF.ADD | ❌ | Add item |
+| CF.ADDNX | ❌ | Add if not exists |
+| CF.INSERT | ❌ | Insert items |
+| CF.INSERTNX | ❌ | Insert if not exists |
+| CF.EXISTS | ❌ | Check existence |
+| CF.DEL | ❌ | Delete item |
+| CF.COUNT | ❌ | Count occurrences |
+| CF.SCANDUMP | ❌ | Dump filter |
+| CF.LOADCHUNK | ❌ | Load chunk |
+| CF.INFO | ❌ | Filter info |
+
+#### Count-Min Sketch
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| CMS.INITBYDIM | ❌ | Init by dimensions |
+| CMS.INITBYPROB | ❌ | Init by probability |
+| CMS.INCRBY | ❌ | Increment count |
+| CMS.QUERY | ❌ | Query count |
+| CMS.MERGE | ❌ | Merge sketches |
+| CMS.INFO | ❌ | Sketch info |
+
+#### Top-K
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| TOPK.RESERVE | ❌ | Create top-k |
+| TOPK.ADD | ❌ | Add items |
+| TOPK.INCRBY | ❌ | Increment items |
+| TOPK.QUERY | ❌ | Query items |
+| TOPK.COUNT | ❌ | Count items |
+| TOPK.LIST | ❌ | List top items |
+| TOPK.INFO | ❌ | Top-k info |
+
+#### T-Digest
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| TDIGEST.CREATE | ❌ | Create t-digest |
+| TDIGEST.RESET | ❌ | Reset digest |
+| TDIGEST.ADD | ❌ | Add values |
+| TDIGEST.MERGE | ❌ | Merge digests |
+| TDIGEST.MIN | ❌ | Get minimum |
+| TDIGEST.MAX | ❌ | Get maximum |
+| TDIGEST.QUANTILE | ❌ | Get quantile |
+| TDIGEST.CDF | ❌ | Cumulative distribution |
+| TDIGEST.TRIMMED_MEAN | ❌ | Trimmed mean |
+| TDIGEST.RANK | ❌ | Get rank |
+| TDIGEST.REVRANK | ❌ | Reverse rank |
+| TDIGEST.BYRANK | ❌ | Value by rank |
+| TDIGEST.BYREVRANK | ❌ | Value by reverse rank |
+| TDIGEST.INFO | ❌ | Digest info |
+
+### RedisGears (Programmable Data Processing)
+
+**Status**: ❌ Not Implemented
+**Reference**: https://redis.io/docs/stack/gears/
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| RG.PYEXECUTE | ❌ | Execute Python |
+| RG.ABORTEXECUTION | ❌ | Abort execution |
+| RG.CONFIGGET | ❌ | Get config |
+| RG.CONFIGSET | ❌ | Set config |
+| RG.DUMPEXECUTIONS | ❌ | Dump executions |
+| RG.DUMPREGISTRATIONS | ❌ | Dump registrations |
+| RG.GETEXECUTION | ❌ | Get execution |
+| RG.GETRESULTS | ❌ | Get results |
+| RG.GETRESULTSBLOCKING | ❌ | Get results blocking |
+| RG.INFOCLUSTER | ❌ | Cluster info |
+| RG.PYSTATS | ❌ | Python stats |
+| RG.PYDUMPREQS | ❌ | Dump requirements |
+| RG.REFRESHCLUSTER | ❌ | Refresh cluster |
+| RG.TRIGGER | ❌ | Trigger execution |
+| RG.UNREGISTER | ❌ | Unregister function |
+
+### RedisAI (Machine Learning)
+
+**Status**: ❌ Not Implemented
+**Reference**: https://redis.io/docs/stack/ai/
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| AI.TENSORSET | ❌ | Set tensor |
+| AI.TENSORGET | ❌ | Get tensor |
+| AI.MODELSTORE | ❌ | Store model |
+| AI.MODELGET | ❌ | Get model |
+| AI.MODELDEL | ❌ | Delete model |
+| AI.MODELEXECUTE | ❌ | Execute model |
+| AI.MODELSCAN | ❌ | Scan models |
+| AI.SCRIPTSET | ❌ | Set script |
+| AI.SCRIPTGET | ❌ | Get script |
+| AI.SCRIPTDEL | ❌ | Delete script |
+| AI.SCRIPTEXECUTE | ❌ | Execute script |
+| AI.SCRIPTSCAN | ❌ | Scan scripts |
+| AI.DAGEXECUTE | ❌ | Execute DAG |
+| AI.DAGEXECUTE_RO | ❌ | Execute DAG read-only |
+| AI.INFO | ❌ | AI info |
+| AI.CONFIG | ❌ | AI config |
+
+### Modules Implementation Summary
+
+| Module | Coverage | Priority | Notes |
+|--------|----------|----------|-------|
+| RedisJSON | ~90% | ✅ High | Nearly complete |
+| RedisGraph | ~40% | 🔶 Medium | Basic Cypher support |
+| RedisSearch | ~50% | 🔶 Medium | Core search works |
+| RedisTimeSeries | ~45% | 🔶 Medium | Basic time series |
+| RedisBloom | ~5% | ❌ Low | Minimal support |
+| RedisGears | 0% | ❌ Low | Not implemented |
+| RedisAI | 0% | ❌ Low | Not implemented |
 
 ---
 
