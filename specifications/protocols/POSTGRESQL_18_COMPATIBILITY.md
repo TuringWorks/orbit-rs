@@ -912,6 +912,299 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 
 ---
 
+---
+
+## PostgreSQL Extensions
+
+OrbitRS provides native support for popular PostgreSQL extensions, enabling advanced functionality for vector search, time-series data, and more.
+
+### pgvector (Vector Similarity Search)
+
+**Status**: ✅ Full Support (~95%)
+**Reference**: https://github.com/pgvector/pgvector
+**Version**: Compatible with pgvector 0.5.x+
+
+#### Vector Data Types
+
+| Type | Status | Notes |
+|------|--------|-------|
+| vector | ✅ | Dense vector (up to 16,000 dimensions) |
+| halfvec | ✅ | Half-precision vector (FP16) |
+| sparsevec | ✅ | Sparse vector |
+
+#### Vector Operators
+
+| Operator | Status | Description |
+|----------|--------|-------------|
+| <-> | ✅ | L2 distance (Euclidean) |
+| <#> | ✅ | Inner product (negative) |
+| <=> | ✅ | Cosine distance |
+| <+> | ✅ | L1 distance (Manhattan) |
+| <~> | ✅ | Hamming distance |
+| <%> | ✅ | Jaccard distance |
+
+#### Vector Functions
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| vector_dims(vector) | ✅ | Get dimensions |
+| vector_norm(vector) | ✅ | Calculate norm |
+| l2_distance(v1, v2) | ✅ | L2 distance |
+| inner_product(v1, v2) | ✅ | Inner product |
+| cosine_distance(v1, v2) | ✅ | Cosine distance |
+| l1_distance(v1, v2) | ✅ | L1 distance |
+| hamming_distance(v1, v2) | ✅ | Hamming distance |
+| jaccard_distance(v1, v2) | ✅ | Jaccard distance |
+| vector_add(v1, v2) | ✅ | Vector addition |
+| vector_sub(v1, v2) | ✅ | Vector subtraction |
+| vector_mul(v, scalar) | ✅ | Scalar multiplication |
+| vector_concat(v1, v2) | ✅ | Concatenate vectors |
+
+#### Vector Index Types
+
+| Index Type | Status | Notes |
+|------------|--------|-------|
+| IVFFlat | ✅ | Inverted file with flat compression |
+| HNSW | ✅ | Hierarchical Navigable Small World |
+| Flat | ✅ | Exact nearest neighbor (brute force) |
+
+**IVFFlat Options**:
+```sql
+CREATE INDEX ON items USING ivfflat (embedding vector_l2_ops) 
+  WITH (lists = 100);
+```
+- ✅ `lists` parameter (number of clusters)
+- ✅ `probes` parameter (search probes)
+
+**HNSW Options**:
+```sql
+CREATE INDEX ON items USING hnsw (embedding vector_l2_ops) 
+  WITH (m = 16, ef_construction = 64);
+```
+- ✅ `m` parameter (max connections)
+- ✅ `ef_construction` parameter (build quality)
+- ✅ `ef_search` parameter (search quality)
+
+#### Distance Metrics
+
+| Metric | Operator | Index Ops | Status |
+|--------|----------|-----------|--------|
+| L2 (Euclidean) | <-> | vector_l2_ops | ✅ |
+| Inner Product | <#> | vector_ip_ops | ✅ |
+| Cosine | <=> | vector_cosine_ops | ✅ |
+| L1 (Manhattan) | <+> | vector_l1_ops | ✅ |
+| Hamming | <~> | bit_hamming_ops | ✅ |
+| Jaccard | <%> | bit_jaccard_ops | ✅ |
+
+#### Vector Aggregates
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| avg(vector) | ✅ | Average vector |
+| sum(vector) | ✅ | Sum vectors |
+
+#### Casting and Conversion
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| CAST(array AS vector) | ✅ | Array to vector |
+| CAST(vector AS array) | ✅ | Vector to array |
+| vector::text | ✅ | Vector to text |
+| text::vector | ✅ | Text to vector |
+
+### TimescaleDB (Time-Series Database)
+
+**Status**: 🔶 Partial Support (~60%)
+**Reference**: https://docs.timescale.com/
+**Version**: Compatible with TimescaleDB 2.x
+
+#### Hypertable Management
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| create_hypertable() | 🔶 | Create hypertable |
+| create_distributed_hypertable() | ❌ | Not implemented |
+| drop_chunks() | 🔶 | Drop old chunks |
+| show_chunks() | 🔶 | Show chunks |
+| add_dimension() | 🔶 | Add partitioning dimension |
+| set_chunk_time_interval() | 🔶 | Set chunk interval |
+| set_integer_now_func() | ❌ | Not implemented |
+| attach_tablespace() | ❌ | Not implemented |
+| detach_tablespace() | ❌ | Not implemented |
+| detach_tablespaces() | ❌ | Not implemented |
+| show_tablespaces() | ❌ | Not implemented |
+
+**create_hypertable() Syntax**:
+```sql
+SELECT create_hypertable(
+  'conditions',
+  'time',
+  chunk_time_interval => INTERVAL '1 day',
+  if_not_exists => TRUE
+);
+```
+- ✅ Basic hypertable creation
+- ✅ `chunk_time_interval` parameter
+- ✅ `if_not_exists` parameter
+- 🔶 `partitioning_column` parameter
+- ❌ `number_partitions` parameter
+- ❌ `create_default_indexes` parameter
+- ❌ `distributed` parameter
+
+#### Continuous Aggregates
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| CREATE MATERIALIZED VIEW (continuous) | 🔶 | Basic support |
+| refresh_continuous_aggregate() | 🔶 | Refresh aggregate |
+| add_continuous_aggregate_policy() | ❌ | Not implemented |
+| remove_continuous_aggregate_policy() | ❌ | Not implemented |
+| alter_policies() | ❌ | Not implemented |
+
+**Continuous Aggregate Syntax**:
+```sql
+CREATE MATERIALIZED VIEW conditions_summary
+WITH (timescaledb.continuous) AS
+SELECT time_bucket('1 hour', time) AS bucket,
+       AVG(temperature) AS avg_temp
+FROM conditions
+GROUP BY bucket;
+```
+- 🔶 Basic continuous aggregates
+- ✅ `time_bucket()` function
+- ❌ Real-time aggregation
+- ❌ Automatic refresh policies
+
+#### Time-Series Functions
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| time_bucket() | ✅ | Time bucketing |
+| time_bucket_gapfill() | 🔶 | Fill gaps in time series |
+| locf() | 🔶 | Last observation carried forward |
+| interpolate() | 🔶 | Linear interpolation |
+| first() | ✅ | First value in group |
+| last() | ✅ | Last value in group |
+| histogram() | ❌ | Not implemented |
+| approx_percentile() | ❌ | Not implemented |
+
+**time_bucket() Examples**:
+```sql
+-- Bucket by 5 minutes
+SELECT time_bucket('5 minutes', time) AS bucket, AVG(value)
+FROM metrics
+GROUP BY bucket;
+
+-- Bucket with offset
+SELECT time_bucket('1 day', time, INTERVAL '6 hours') AS bucket
+FROM metrics;
+```
+- ✅ Basic time bucketing
+- ✅ Custom intervals
+- ✅ Offset parameter
+- ✅ Timezone support
+
+**time_bucket_gapfill() Syntax**:
+```sql
+SELECT time_bucket_gapfill('1 hour', time) AS bucket,
+       locf(AVG(temperature)) AS temp
+FROM conditions
+WHERE time > NOW() - INTERVAL '1 day'
+GROUP BY bucket;
+```
+- 🔶 Basic gap filling
+- 🔶 `locf()` function
+- 🔶 `interpolate()` function
+- ❌ Advanced gap fill options
+
+#### Compression
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| ALTER TABLE ... SET (timescaledb.compress) | 🔶 | Enable compression |
+| compress_chunk() | 🔶 | Compress chunk |
+| decompress_chunk() | 🔶 | Decompress chunk |
+| add_compression_policy() | ❌ | Not implemented |
+| remove_compression_policy() | ❌ | Not implemented |
+| hypertable_compression_stats() | ❌ | Not implemented |
+| chunk_compression_stats() | ❌ | Not implemented |
+
+**Compression Syntax**:
+```sql
+ALTER TABLE conditions SET (
+  timescaledb.compress,
+  timescaledb.compress_segmentby = 'device_id',
+  timescaledb.compress_orderby = 'time DESC'
+);
+```
+- 🔶 Basic compression
+- 🔶 `compress_segmentby` parameter
+- 🔶 `compress_orderby` parameter
+- ❌ Automatic compression policies
+
+#### Data Retention
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| add_retention_policy() | 🔶 | Add retention policy |
+| remove_retention_policy() | 🔶 | Remove policy |
+| alter_job_schedule() | ❌ | Not implemented |
+
+**Retention Policy Syntax**:
+```sql
+SELECT add_retention_policy('conditions', INTERVAL '7 days');
+```
+- 🔶 Basic retention policies
+- 🔶 Automatic chunk dropping
+- ❌ Custom retention schedules
+
+#### Informational Functions
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| hypertable_size() | 🔶 | Hypertable size |
+| hypertable_detailed_size() | 🔶 | Detailed size info |
+| chunks_detailed_size() | 🔶 | Chunk sizes |
+| hypertable_index_size() | 🔶 | Index sizes |
+| timescaledb_information.hypertables | 🔶 | Hypertable catalog |
+| timescaledb_information.chunks | 🔶 | Chunk catalog |
+| timescaledb_information.dimensions | 🔶 | Dimension catalog |
+| timescaledb_information.jobs | ❌ | Jobs catalog |
+| timescaledb_information.continuous_aggregates | 🔶 | Continuous agg catalog |
+
+#### Distributed Hypertables
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| create_distributed_hypertable() | ❌ | Not implemented |
+| add_data_node() | ❌ | Not implemented |
+| attach_data_node() | ❌ | Not implemented |
+| detach_data_node() | ❌ | Not implemented |
+| delete_data_node() | ❌ | Not implemented |
+| distributed_exec() | ❌ | Not implemented |
+
+#### Background Jobs & Automation
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| add_job() | ❌ | Not implemented |
+| delete_job() | ❌ | Not implemented |
+| run_job() | ❌ | Not implemented |
+| alter_job() | ❌ | Not implemented |
+| User-defined actions | ❌ | Not implemented |
+
+### Extensions Implementation Summary
+
+| Extension | Coverage | Priority | Notes |
+|-----------|----------|----------|-------|
+| pgvector | ~95% | ✅ High | Nearly complete, production-ready |
+| TimescaleDB | ~60% | 🔶 Medium | Core features work, missing automation |
+| PostGIS | 0% | ❌ Low | Not implemented |
+| pg_cron | 0% | ❌ Low | Not implemented |
+| pg_partman | 0% | ❌ Low | Not implemented |
+
+---
+
 ## Implementation Roadmap
 
 ### Phase 1: Core SQL Compatibility (Priority: Critical)
