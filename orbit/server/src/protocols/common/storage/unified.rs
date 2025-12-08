@@ -1082,6 +1082,7 @@ mod persistent_storage_impl {
                         nullable: col.nullable,
                         default: None,
                         constraints,
+                        generated: None,
                     }
                 })
                 .collect();
@@ -1431,6 +1432,7 @@ mod redis_provider_impl {
                         nullable: false,
                         default: None,
                         constraints: vec!["PRIMARY KEY".to_string()],
+                        generated: None,
                     },
                     ColumnSchema {
                         name: "value".to_string(),
@@ -1438,6 +1440,7 @@ mod redis_provider_impl {
                         nullable: false,
                         default: None,
                         constraints: vec![],
+                        generated: None,
                     },
                     ColumnSchema {
                         name: "expiration".to_string(),
@@ -1445,6 +1448,7 @@ mod redis_provider_impl {
                         nullable: true,
                         default: None,
                         constraints: vec![],
+                        generated: None,
                     },
                 ],
                 indexes: vec![],
@@ -1781,6 +1785,7 @@ mod aql_storage_impl {
                             nullable: false,
                             default: None,
                             constraints: vec!["PRIMARY KEY".to_string()],
+                            generated: None,
                         },
                         ColumnSchema {
                             name: "data".to_string(),
@@ -1788,6 +1793,7 @@ mod aql_storage_impl {
                             nullable: false,
                             default: None,
                             constraints: vec![],
+                            generated: None,
                         },
                     ],
                     indexes: vec![],
@@ -1806,6 +1812,7 @@ mod aql_storage_impl {
                             nullable: false,
                             default: None,
                             constraints: vec!["PRIMARY KEY".to_string()],
+                            generated: None,
                         },
                         ColumnSchema {
                             name: "collection".to_string(),
@@ -1813,6 +1820,7 @@ mod aql_storage_impl {
                             nullable: false,
                             default: None,
                             constraints: vec![],
+                            generated: None,
                         },
                         ColumnSchema {
                             name: "key".to_string(),
@@ -1820,6 +1828,7 @@ mod aql_storage_impl {
                             nullable: false,
                             default: None,
                             constraints: vec![],
+                            generated: None,
                         },
                         ColumnSchema {
                             name: "data".to_string(),
@@ -1827,6 +1836,7 @@ mod aql_storage_impl {
                             nullable: false,
                             default: None,
                             constraints: vec![],
+                            generated: None,
                         },
                     ],
                     indexes: vec![],
@@ -2250,6 +2260,7 @@ mod cypher_storage_impl {
                             nullable: false,
                             default: None,
                             constraints: vec!["PRIMARY KEY".to_string()],
+                            generated: None,
                         },
                         ColumnSchema {
                             name: "labels".to_string(),
@@ -2257,6 +2268,7 @@ mod cypher_storage_impl {
                             nullable: false,
                             default: None,
                             constraints: vec![],
+                            generated: None,
                         },
                         ColumnSchema {
                             name: "properties".to_string(),
@@ -2264,6 +2276,7 @@ mod cypher_storage_impl {
                             nullable: false,
                             default: None,
                             constraints: vec![],
+                            generated: None,
                         },
                     ],
                     indexes: vec![],
@@ -2282,6 +2295,7 @@ mod cypher_storage_impl {
                             nullable: false,
                             default: None,
                             constraints: vec!["PRIMARY KEY".to_string()],
+                            generated: None,
                         },
                         ColumnSchema {
                             name: "start_node".to_string(),
@@ -2289,6 +2303,7 @@ mod cypher_storage_impl {
                             nullable: false,
                             default: None,
                             constraints: vec![],
+                            generated: None,
                         },
                         ColumnSchema {
                             name: "end_node".to_string(),
@@ -2296,6 +2311,7 @@ mod cypher_storage_impl {
                             nullable: false,
                             default: None,
                             constraints: vec![],
+                            generated: None,
                         },
                         ColumnSchema {
                             name: "rel_type".to_string(),
@@ -2303,6 +2319,7 @@ mod cypher_storage_impl {
                             nullable: false,
                             default: None,
                             constraints: vec![],
+                            generated: None,
                         },
                         ColumnSchema {
                             name: "properties".to_string(),
@@ -2310,6 +2327,7 @@ mod cypher_storage_impl {
                             nullable: false,
                             default: None,
                             constraints: vec![],
+                            generated: None,
                         },
                     ],
                     indexes: vec![],

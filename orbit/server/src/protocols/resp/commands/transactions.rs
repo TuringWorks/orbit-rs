@@ -223,10 +223,7 @@ impl CommandHandler for TransactionCommands {
                         "ERR wrong number of arguments for 'watch' command".to_string(),
                     ));
                 }
-                let keys: Vec<String> = args
-                    .iter()
-                    .filter_map(|v| v.as_string())
-                    .collect();
+                let keys: Vec<String> = args.iter().filter_map(|v| v.as_string()).collect();
                 if keys.is_empty() {
                     return Err(ProtocolError::RespError(
                         "ERR wrong number of arguments for 'watch' command".to_string(),

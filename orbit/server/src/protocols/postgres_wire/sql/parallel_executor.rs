@@ -677,7 +677,7 @@ struct AggregateAccumulator {
     min: Option<SqlValue>,
     max: Option<SqlValue>,
     // New aggregate state
-    values: Vec<SqlValue>,   // For ARRAY_AGG
+    values: Vec<SqlValue>,     // For ARRAY_AGG
     bool_result: Option<bool>, // For BOOL_AND/BOOL_OR
 }
 
@@ -765,19 +765,19 @@ impl AggregateAccumulator {
                 if self.values.is_empty() {
                     SqlValue::Null
                 } else {
-                    let strings: Vec<String> = self.values
-                        .iter()
-                        .map(|v| v.to_postgres_string())
-                        .collect();
+                    let strings: Vec<String> =
+                        self.values.iter().map(|v| v.to_postgres_string()).collect();
                     SqlValue::Text(strings.join(delimiter))
                 }
             }
-            AggregateFunction::BoolAnd => {
-                self.bool_result.map(SqlValue::Boolean).unwrap_or(SqlValue::Null)
-            }
-            AggregateFunction::BoolOr => {
-                self.bool_result.map(SqlValue::Boolean).unwrap_or(SqlValue::Null)
-            }
+            AggregateFunction::BoolAnd => self
+                .bool_result
+                .map(SqlValue::Boolean)
+                .unwrap_or(SqlValue::Null),
+            AggregateFunction::BoolOr => self
+                .bool_result
+                .map(SqlValue::Boolean)
+                .unwrap_or(SqlValue::Null),
         }
     }
 

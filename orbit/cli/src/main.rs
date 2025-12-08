@@ -6,6 +6,8 @@
 //! - Cassandra Query Language (CQL)
 //! - Redis (RESP Protocol)
 //! - OrbitQL (via REST API)
+//! - Cypher (Neo4j graph queries via REST API)
+//! - AQL (ArangoDB queries via REST API)
 //!
 //! Features:
 //! - Syntax highlighting for SQL queries
@@ -90,6 +92,10 @@ enum Protocol {
     Redis,
     /// OrbitQL (via REST API)
     Orbitql,
+    /// Cypher (Neo4j graph queries via REST API)
+    Cypher,
+    /// AQL (ArangoDB queries via REST API)
+    Aql,
 }
 
 impl Protocol {
@@ -100,6 +106,8 @@ impl Protocol {
             Protocol::Cql => 9042,
             Protocol::Redis => 6379,
             Protocol::Orbitql => 8080,
+            Protocol::Cypher => 7474,
+            Protocol::Aql => 8529,
         }
     }
 
@@ -110,16 +118,8 @@ impl Protocol {
             Protocol::Cql => "CQL",
             Protocol::Redis => "Redis",
             Protocol::Orbitql => "OrbitQL",
-        }
-    }
-
-    fn prompt_suffix(&self) -> &'static str {
-        match self {
-            Protocol::Postgres => "sql",
-            Protocol::Mysql => "mysql",
-            Protocol::Cql => "cql",
-            Protocol::Redis => "redis",
-            Protocol::Orbitql => "oql",
+            Protocol::Cypher => "Cypher",
+            Protocol::Aql => "AQL",
         }
     }
 }
@@ -200,6 +200,8 @@ impl ReplState {
             Protocol::Redis => self.connect_redis().await,
             Protocol::Orbitql => self.connect_orbitql().await,
             Protocol::Cql => self.connect_cql().await,
+            Protocol::Cypher => self.connect_cypher().await,
+            Protocol::Aql => self.connect_aql().await,
         }
     }
 
@@ -250,15 +252,13 @@ impl ReplState {
 
         // Test connection
         match pool.get_conn().await {
-            Ok(mut conn) => {
-                match conn.query_first::<String, _>("SELECT 1").await {
-                    Ok(_) => {
-                        self.mysql_pool = Some(pool);
-                        Ok(())
-                    }
-                    Err(e) => Err(anyhow::anyhow!("MySQL connection test failed: {}", e)),
+            Ok(mut conn) => match conn.query_first::<String, _>("SELECT 1").await {
+                Ok(_) => {
+                    self.mysql_pool = Some(pool);
+                    Ok(())
                 }
-            }
+                Err(e) => Err(anyhow::anyhow!("MySQL connection test failed: {}", e)),
+            },
             Err(e) => Err(anyhow::anyhow!("Failed to connect to MySQL: {}", e)),
         }
     }
@@ -336,6 +336,8 @@ impl ReplState {
             Protocol::Redis => self.execute_redis_command(query).await,
             Protocol::Orbitql => self.execute_orbitql_query(query).await,
             Protocol::Cql => self.execute_cql_query(query).await,
+            Protocol::Cypher => self.execute_cypher_query(query).await,
+            Protocol::Aql => self.execute_aql_query(query).await,
         }
     }
 
@@ -718,6 +720,312 @@ impl ReplState {
         Ok(())
     }
 
+    /// Connect to Cypher (Neo4j) via REST API
+    async fn connect_cypher(&mut self) -> Result<()> {
+        let client = reqwest::Client::new();
+        // Neo4j HTTP API endpoint - try to connect to the database
+        let url = format!("http://{}:{}/db/neo4j/tx/commit", self.host, self.port);
+
+        // Send an empty query to test connectivity
+        let request_body = serde_json::json!({
+            "statements": []
+        });
+
+        match client.post(&url).json(&request_body).send().await {
+            Ok(response) if response.status().is_success() => {
+                self.http_client = Some(client);
+                Ok(())
+            }
+            Ok(response) => {
+                // Neo4j might require authentication - try basic auth
+                let status = response.status();
+                if status.as_u16() == 401 {
+                    // Try with basic auth
+                    let auth_client = reqwest::Client::new();
+                    let auth_response = auth_client
+                        .post(&url)
+                        .basic_auth(&self.username, self.password.as_ref())
+                        .json(&request_body)
+                        .send()
+                        .await;
+
+                    match auth_response {
+                        Ok(r) if r.status().is_success() => {
+                            self.http_client = Some(auth_client);
+                            Ok(())
+                        }
+                        Ok(r) => Err(anyhow::anyhow!(
+                            "Cypher authentication failed: HTTP {}",
+                            r.status()
+                        )),
+                        Err(e) => Err(anyhow::anyhow!("Cypher connection failed: {}", e)),
+                    }
+                } else {
+                    Err(anyhow::anyhow!("Cypher connection failed: HTTP {}", status))
+                }
+            }
+            Err(e) => Err(anyhow::anyhow!(
+                "Failed to connect to Cypher endpoint: {}",
+                e
+            )),
+        }
+    }
+
+    /// Execute a Cypher query via Neo4j REST API
+    async fn execute_cypher_query(&self, query: &str) -> Result<()> {
+        let client = self
+            .http_client
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Not connected to Cypher endpoint"))?;
+
+        // Neo4j HTTP API transaction endpoint
+        let url = format!("http://{}:{}/db/neo4j/tx/commit", self.host, self.port);
+
+        let request_body = serde_json::json!({
+            "statements": [{
+                "statement": query.trim().trim_end_matches(';'),
+                "resultDataContents": ["row"]
+            }]
+        });
+
+        let response = client
+            .post(&url)
+            .basic_auth(&self.username, self.password.as_ref())
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("Cypher request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Cypher error (HTTP {}): {}", status, body));
+        }
+
+        let result: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to parse Cypher response: {}", e))?;
+
+        // Check for errors in response
+        if let Some(errors) = result.get("errors").and_then(|e| e.as_array()) {
+            if !errors.is_empty() {
+                let error_msg = errors
+                    .iter()
+                    .filter_map(|e| e.get("message").and_then(|m| m.as_str()))
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                return Err(anyhow::anyhow!("Cypher error: {}", error_msg));
+            }
+        }
+
+        // Parse and display results
+        if let Some(results) = result.get("results").and_then(|r| r.as_array()) {
+            for result_set in results {
+                // Get columns
+                let columns: Vec<String> = result_set
+                    .get("columns")
+                    .and_then(|c| c.as_array())
+                    .map(|cols| {
+                        cols.iter()
+                            .filter_map(|c| c.as_str())
+                            .map(String::from)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                // Get data rows
+                if let Some(data) = result_set.get("data").and_then(|d| d.as_array()) {
+                    if data.is_empty() {
+                        println!("{}", format_success("Query executed successfully (0 rows)"));
+                        continue;
+                    }
+
+                    let mut table = Table::new();
+                    table
+                        .load_preset(UTF8_FULL)
+                        .apply_modifier(UTF8_ROUND_CORNERS);
+
+                    if !columns.is_empty() {
+                        table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
+                    }
+
+                    for row_data in data {
+                        if let Some(row) = row_data.get("row").and_then(|r| r.as_array()) {
+                            let values: Vec<String> =
+                                row.iter()
+                                    .map(|v| match v {
+                                        serde_json::Value::Null => "NULL".to_string(),
+                                        serde_json::Value::String(s) => s.clone(),
+                                        serde_json::Value::Object(_) => serde_json::to_string(v)
+                                            .unwrap_or_else(|_| v.to_string()),
+                                        _ => v.to_string(),
+                                    })
+                                    .collect();
+                            table.add_row(values.iter().map(Cell::new));
+                        }
+                    }
+
+                    println!("\n{}", table);
+                    println!("{}", format_success(&format!("({} rows)", data.len())));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Connect to AQL (ArangoDB) via REST API
+    async fn connect_aql(&mut self) -> Result<()> {
+        let client = reqwest::Client::new();
+        // ArangoDB API version endpoint
+        let url = format!("http://{}:{}/_api/version", self.host, self.port);
+
+        let response = if self.password.is_some() {
+            client
+                .get(&url)
+                .basic_auth(&self.username, self.password.as_ref())
+                .send()
+                .await
+        } else {
+            client.get(&url).send().await
+        };
+
+        match response {
+            Ok(r) if r.status().is_success() => {
+                self.http_client = Some(client);
+                Ok(())
+            }
+            Ok(r) => Err(anyhow::anyhow!(
+                "AQL connection failed: HTTP {}",
+                r.status()
+            )),
+            Err(e) => Err(anyhow::anyhow!("Failed to connect to AQL endpoint: {}", e)),
+        }
+    }
+
+    /// Execute an AQL query via ArangoDB REST API
+    async fn execute_aql_query(&self, query: &str) -> Result<()> {
+        let client = self
+            .http_client
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Not connected to AQL endpoint"))?;
+
+        // ArangoDB cursor API endpoint
+        let url = format!(
+            "http://{}:{}/_db/{}/_api/cursor",
+            self.host, self.port, self.database
+        );
+
+        let request_body = serde_json::json!({
+            "query": query.trim().trim_end_matches(';'),
+            "batchSize": 1000
+        });
+
+        let mut request = client.post(&url).json(&request_body);
+        if self.password.is_some() {
+            request = request.basic_auth(&self.username, self.password.as_ref());
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("AQL request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("AQL error (HTTP {}): {}", status, body));
+        }
+
+        let result: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to parse AQL response: {}", e))?;
+
+        // Check for errors
+        if let Some(error) = result.get("error").and_then(|e| e.as_bool()) {
+            if error {
+                let error_msg = result
+                    .get("errorMessage")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("Unknown error");
+                return Err(anyhow::anyhow!("AQL error: {}", error_msg));
+            }
+        }
+
+        // Parse and display results
+        if let Some(data) = result.get("result").and_then(|r| r.as_array()) {
+            if data.is_empty() {
+                println!("{}", format_success("Query executed successfully (0 rows)"));
+                return Ok(());
+            }
+
+            // For AQL, results can be documents or scalar values
+            // Try to detect if results are documents (objects) or scalars
+            let first_item = &data[0];
+
+            if first_item.is_object() {
+                // Document results - display as table
+                let columns: Vec<String> = first_item
+                    .as_object()
+                    .map(|obj| obj.keys().cloned().collect())
+                    .unwrap_or_default();
+
+                let mut table = Table::new();
+                table
+                    .load_preset(UTF8_FULL)
+                    .apply_modifier(UTF8_ROUND_CORNERS);
+
+                if !columns.is_empty() {
+                    table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
+                }
+
+                for item in data {
+                    if let Some(obj) = item.as_object() {
+                        let values: Vec<String> = columns
+                            .iter()
+                            .map(|col| {
+                                obj.get(col)
+                                    .map(|v| match v {
+                                        serde_json::Value::Null => "NULL".to_string(),
+                                        serde_json::Value::String(s) => s.clone(),
+                                        _ => v.to_string(),
+                                    })
+                                    .unwrap_or_else(|| "NULL".to_string())
+                            })
+                            .collect();
+                        table.add_row(values.iter().map(Cell::new));
+                    }
+                }
+
+                println!("\n{}", table);
+                println!("{}", format_success(&format!("({} rows)", data.len())));
+            } else {
+                // Scalar results - display as single column
+                let mut table = Table::new();
+                table
+                    .load_preset(UTF8_FULL)
+                    .apply_modifier(UTF8_ROUND_CORNERS);
+                table.set_header(vec![Cell::new("result").fg(Color::Cyan)]);
+
+                for item in data {
+                    let value = match item {
+                        serde_json::Value::Null => "NULL".to_string(),
+                        serde_json::Value::String(s) => s.clone(),
+                        _ => item.to_string(),
+                    };
+                    table.add_row(vec![Cell::new(value)]);
+                }
+
+                println!("\n{}", table);
+                println!("{}", format_success(&format!("({} rows)", data.len())));
+            }
+        }
+
+        Ok(())
+    }
+
     /// Highlight SQL query using syntect
     fn highlight_query(&self, query: &str) -> String {
         let syntax = self
@@ -1096,6 +1404,8 @@ Supported Protocols:
   --protocol redis      Redis RESP protocol (port 6379)
   --protocol orbitql    OrbitQL via REST API (port 8080)
   --protocol cql        Cassandra CQL via REST (port 9042)
+  --protocol cypher     Neo4j Cypher via REST API (port 7474)
+  --protocol aql        ArangoDB AQL via REST API (port 8529)
 
 Meta Commands:
   \?          Show this help
@@ -1128,6 +1438,16 @@ Redis Examples:
   SET mykey "Hello World"
   GET mykey
   KEYS *
+
+Cypher Examples (Neo4j):
+  MATCH (n:Person) RETURN n.name;
+  CREATE (p:Person {name: 'Alice'}) RETURN p;
+  MATCH (a:Person)-[:KNOWS]->(b:Person) RETURN a.name, b.name;
+
+AQL Examples (ArangoDB):
+  FOR doc IN users RETURN doc;
+  FOR u IN users FILTER u.age > 18 RETURN u.name;
+  INSERT {name: 'Alice'} INTO users;
 
 "#;
 

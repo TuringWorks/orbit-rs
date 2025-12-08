@@ -355,6 +355,21 @@ pub enum ColumnConstraint {
         on_update: Option<ReferentialAction>,
     },
     Check(Expression),
+    /// PostgreSQL 12+ GENERATED ALWAYS AS (expression) STORED
+    /// PostgreSQL 18+ GENERATED ALWAYS AS (expression) VIRTUAL
+    Generated {
+        expression: Expression,
+        storage: GeneratedColumnStorage,
+    },
+}
+
+/// Storage type for generated columns
+#[derive(Debug, Clone, PartialEq)]
+pub enum GeneratedColumnStorage {
+    /// STORED - value is computed on INSERT/UPDATE and stored physically
+    Stored,
+    /// VIRTUAL - value is computed on each read (PostgreSQL 18+)
+    Virtual,
 }
 
 #[derive(Debug, Clone, PartialEq)]

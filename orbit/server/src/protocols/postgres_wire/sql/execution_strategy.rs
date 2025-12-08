@@ -731,6 +731,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                             .iter()
                             .map(|c| format!("{c:?}"))
                             .collect(),
+                        generated: None, // TODO: Support generated columns in execution strategy
                     });
                 }
 

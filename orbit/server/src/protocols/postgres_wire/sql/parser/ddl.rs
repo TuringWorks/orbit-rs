@@ -13,10 +13,10 @@ use crate::protocols::postgres_wire::sql::{
         CreateTriggerStatement, CreateViewStatement, DropDatabaseStatement, DropExtensionStatement,
         DropIndexStatement, DropSchemaStatement, DropSequenceStatement, DropTableStatement,
         DropTriggerStatement, DropViewStatement, FunctionLanguage, FunctionName, FunctionParameter,
-        FunctionVolatility, IndexColumn, IndexOption, IndexType, NullsOrder, ParameterMode,
-        ReferentialAction, SequenceBound, SequenceOptions, SequenceOwner, SortDirection, Statement,
-        TableConstraint, TableOption, TriggerEvent, TriggerForEach, TriggerTiming,
-        TruncateIdentity, TruncateStatement,
+        FunctionVolatility, GeneratedColumnStorage, IndexColumn, IndexOption, IndexType,
+        NullsOrder, ParameterMode, ReferentialAction, SequenceBound, SequenceOptions,
+        SequenceOwner, SortDirection, Statement, TableConstraint, TableOption, TriggerEvent,
+        TriggerForEach, TriggerTiming, TruncateIdentity, TruncateStatement,
     },
     lexer::Token,
     types::SqlValue,
@@ -1114,6 +1114,7 @@ fn parse_column_definition(parser: &mut SqlParser) -> ParseResult<ColumnDefiniti
         Token::Unique,
         Token::References,
         Token::Check,
+        Token::Generated, // PostgreSQL 12+ GENERATED ALWAYS AS
     ]) {
         match &parser.current_token {
             Some(Token::Not) => {
@@ -1197,6 +1198,36 @@ fn parse_column_definition(parser: &mut SqlParser) -> ParseResult<ColumnDefiniti
                 let expr = utilities::parse_expression(parser)?;
                 parser.expect(Token::RightParen)?;
                 constraints.push(ColumnConstraint::Check(expr));
+            }
+            // PostgreSQL 12+ GENERATED ALWAYS AS (expression) STORED
+            // PostgreSQL 18+ GENERATED ALWAYS AS (expression) VIRTUAL
+            Some(Token::Generated) => {
+                parser.advance()?;
+                // Expect ALWAYS
+                parser.expect(Token::Always)?;
+                // Expect AS
+                parser.expect(Token::As)?;
+                // Expect (
+                parser.expect(Token::LeftParen)?;
+                // Parse expression
+                let expr = utilities::parse_expression(parser)?;
+                // Expect )
+                parser.expect(Token::RightParen)?;
+                // Parse STORED or VIRTUAL (default to STORED for compatibility)
+                let storage = if parser.matches(&[Token::Stored]) {
+                    parser.advance()?;
+                    GeneratedColumnStorage::Stored
+                } else if parser.matches(&[Token::Virtual]) {
+                    parser.advance()?;
+                    GeneratedColumnStorage::Virtual
+                } else {
+                    // Default to STORED if not specified (PostgreSQL 12 behavior)
+                    GeneratedColumnStorage::Stored
+                };
+                constraints.push(ColumnConstraint::Generated {
+                    expression: expr,
+                    storage,
+                });
             }
             _ => break,
         }
