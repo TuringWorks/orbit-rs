@@ -4309,7 +4309,7 @@ pub fn parse_alter_group(parser: &mut SqlParser) -> ParseResult<Statement> {
                 break;
             }
         }
-        AlterGroupAction::AddUsers(users)
+        AlterGroupAction::AddUser(users)
     } else if parser.matches(&[Token::Drop]) {
         parser.advance()?;
         parser.expect(Token::User)?;
@@ -4327,7 +4327,7 @@ pub fn parse_alter_group(parser: &mut SqlParser) -> ParseResult<Statement> {
                 break;
             }
         }
-        AlterGroupAction::DropUsers(users)
+        AlterGroupAction::DropUser(users)
     } else if parser.matches(&[Token::Rename]) {
         parser.advance()?;
         parser.expect(Token::To)?;
@@ -4417,12 +4417,12 @@ pub fn parse_create_tablespace(parser: &mut SqlParser) -> ParseResult<Statement>
             if let Some(Token::Identifier(key)) = &parser.current_token {
                 let key = key.clone();
                 parser.advance()?;
-                parser.expect(Token::Equals)?;
+                parser.expect(Token::Equal)?;
                 let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
                     v.clone()
                 } else if let Some(Token::Identifier(v)) = &parser.current_token {
                     v.clone()
-                } else if let Some(Token::Number(v)) = &parser.current_token {
+                } else if let Some(Token::NumericLiteral(v)) = &parser.current_token {
                     v.clone()
                 } else {
                     String::new()
@@ -4440,6 +4440,7 @@ pub fn parse_create_tablespace(parser: &mut SqlParser) -> ParseResult<Statement>
     }
 
     Ok(Statement::CreateTablespace(CreateTablespaceStatement {
+        if_not_exists: false,
         name,
         owner,
         location,
@@ -4539,12 +4540,12 @@ pub fn parse_alter_tablespace(parser: &mut SqlParser) -> ParseResult<Statement> 
             if let Some(Token::Identifier(key)) = &parser.current_token {
                 let key = key.clone();
                 parser.advance()?;
-                parser.expect(Token::Equals)?;
+                parser.expect(Token::Equal)?;
                 let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
                     v.clone()
                 } else if let Some(Token::Identifier(v)) = &parser.current_token {
                     v.clone()
-                } else if let Some(Token::Number(v)) = &parser.current_token {
+                } else if let Some(Token::NumericLiteral(v)) = &parser.current_token {
                     v.clone()
                 } else {
                     String::new()
@@ -4636,7 +4637,7 @@ pub fn parse_create_aggregate(parser: &mut SqlParser) -> ParseResult<Statement> 
         if let Some(Token::Identifier(key)) = &parser.current_token {
             let key_upper = key.to_uppercase();
             parser.advance()?;
-            parser.expect(Token::Equals)?;
+            parser.expect(Token::Equal)?;
 
             match key_upper.as_str() {
                 "SFUNC" => {
@@ -4695,7 +4696,7 @@ pub fn parse_create_aggregate(parser: &mut SqlParser) -> ParseResult<Statement> 
                     options.push(AggregateOption::MSType(t));
                 }
                 "MSSPACE" => {
-                    if let Some(Token::Number(n)) = &parser.current_token {
+                    if let Some(Token::NumericLiteral(n)) = &parser.current_token {
                         if let Ok(size) = n.parse() {
                             options.push(AggregateOption::MSSpace(size));
                         }
@@ -4735,7 +4736,8 @@ pub fn parse_create_aggregate(parser: &mut SqlParser) -> ParseResult<Statement> 
 
     Ok(Statement::CreateAggregate(CreateAggregateStatement {
         name,
-        input_types,
+        args: input_types,
+        or_replace: false,
         sfunc,
         stype,
         options,
@@ -4781,8 +4783,7 @@ pub fn parse_drop_aggregate(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     Ok(Statement::DropAggregate(DropAggregateStatement {
         if_exists,
-        name,
-        arg_types,
+        names: vec![(name, arg_types)],
         cascade,
     }))
 }
@@ -4872,7 +4873,7 @@ pub fn parse_alter_aggregate(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     Ok(Statement::AlterAggregate(AlterAggregateStatement {
         name,
-        arg_types,
+        args: arg_types,
         action,
     }))
 }
@@ -4918,7 +4919,7 @@ pub fn parse_create_operator(parser: &mut SqlParser) -> ParseResult<Statement> {
         if let Some(Token::Identifier(key)) = &parser.current_token {
             let key_upper = key.to_uppercase();
             parser.advance()?;
-            parser.expect(Token::Equals)?;
+            parser.expect(Token::Equal)?;
 
             match key_upper.as_str() {
                 "PROCEDURE" | "FUNCTION" => {
@@ -5037,9 +5038,7 @@ pub fn parse_drop_operator(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     Ok(Statement::DropOperator(DropOperatorStatement {
         if_exists,
-        name,
-        left_type,
-        right_type,
+        operators: vec![(name, left_type, right_type)],
         cascade,
     }))
 }
@@ -5120,7 +5119,7 @@ pub fn parse_alter_operator(parser: &mut SqlParser) -> ParseResult<Statement> {
                 if let Some(Token::Identifier(key)) = &parser.current_token {
                     let key = key.clone();
                     parser.advance()?;
-                    parser.expect(Token::Equals)?;
+                    parser.expect(Token::Equal)?;
                     let value = if let Some(Token::Identifier(v)) = &parser.current_token {
                         v.clone()
                     } else {
@@ -5318,7 +5317,7 @@ pub fn parse_create_collation(parser: &mut SqlParser) -> ParseResult<Statement> 
             if let Some(Token::Identifier(key)) = &parser.current_token {
                 let key_upper = key.to_uppercase();
                 parser.advance()?;
-                parser.expect(Token::Equals)?;
+                parser.expect(Token::Equal)?;
 
                 match key_upper.as_str() {
                     "LOCALE" => {
@@ -5346,10 +5345,10 @@ pub fn parse_create_collation(parser: &mut SqlParser) -> ParseResult<Statement> 
                         }
                     }
                     "DETERMINISTIC" => {
-                        if let Some(Token::True) = &parser.current_token {
+                        if let Some(Token::BooleanLiteral(true)) = &parser.current_token {
                             deterministic = Some(true);
                             parser.advance()?;
-                        } else if let Some(Token::False) = &parser.current_token {
+                        } else if let Some(Token::BooleanLiteral(false)) = &parser.current_token {
                             deterministic = Some(false);
                             parser.advance()?;
                         }
@@ -5371,13 +5370,16 @@ pub fn parse_create_collation(parser: &mut SqlParser) -> ParseResult<Statement> 
     Ok(Statement::CreateCollation(CreateCollationStatement {
         if_not_exists,
         name,
-        options: CollationOptions {
-            from,
-            locale,
-            lc_collate,
-            lc_ctype,
-            provider,
-            deterministic,
+        options: if let Some(from_name) = from {
+            CollationOptions::From(from_name)
+        } else {
+            CollationOptions::Definition {
+                locale,
+                lc_collate,
+                lc_ctype,
+                provider,
+                deterministic,
+            }
         },
     }))
 }

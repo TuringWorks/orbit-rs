@@ -117,6 +117,8 @@ pub enum Token {
     Data,
     Mapping,
     Options,
+    Location,  // For CREATE TABLESPACE LOCATION
+    Reset,     // For RESET and ALTER TABLESPACE RESET
     // Text search keywords
     TextSearch,
     Configuration,
@@ -534,6 +536,8 @@ impl Lexer {
             ("DATA", Token::Data),
             ("MAPPING", Token::Mapping),
             ("OPTIONS", Token::Options),
+            ("LOCATION", Token::Location),
+            ("RESET", Token::Reset),
             // Text search keywords
             ("CONFIGURATION", Token::Configuration),
             ("DICTIONARY", Token::Dictionary),

@@ -1923,9 +1923,8 @@ pub struct DropRuleStatement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateGroupStatement {
-    pub if_not_exists: bool,
     pub name: String,
-    pub options: Vec<RoleOption>,
+    pub with_options: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2005,6 +2004,12 @@ pub enum AggregateOption {
     MInitCond(String),
     SortOp(String),
     Parallel(String),
+    // Moving-aggregate options (PostgreSQL)
+    MSFunc(String),      // Moving-aggregate state function
+    MInvFunc(String),    // Moving-aggregate inverse function
+    MSType(SqlType),     // Moving-aggregate state type
+    MSSpace(i64),        // Moving-aggregate state size
+    MFinalFunc(String),  // Moving-aggregate final function
 }
 
 #[derive(Debug, Clone, PartialEq)]

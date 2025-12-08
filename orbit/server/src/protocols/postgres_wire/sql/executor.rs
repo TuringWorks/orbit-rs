@@ -865,6 +865,12 @@ impl SqlExecutor {
             // Extended DDL - Rules
             Statement::CreateRule(stmt) => self.execute_create_rule(stmt).await,
             Statement::DropRule(stmt) => self.execute_drop_rule(stmt).await,
+
+            // Catch-all for unimplemented statement types
+            _ => Err(ProtocolError::not_implemented(
+                "Statement type",
+                "This SQL statement is not yet implemented",
+            )),
         }
     }
 
