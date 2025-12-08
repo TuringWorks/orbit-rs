@@ -187,73 +187,189 @@ pub trait DatabaseConnection: Send + Sync {
 
 ## 3. Parser/Lexer Architecture
 
-### Two Separate Parser Implementations
+### Complete Parser Inventory
 
-OrbitRS has **two completely independent parsers**:
+OrbitRS implements **six independent parser/lexer systems**, one for each query language:
 
-#### PostgreSQL Parser (in `orbit-server`)
+| Parser | Language | Location | Entry Point |
+|--------|----------|----------|-------------|
+| PostgreSQL SQL | ANSI SQL + extensions | `orbit/server/src/protocols/postgres_wire/sql/` | `SqlParser::parse()` |
+| OrbitQL | Multi-model query language | `orbit/shared/src/orbitql/` | `Parser::parse()` |
+| Cypher | Neo4j graph queries | `orbit/server/src/protocols/cypher/` | `CypherParser::parse()` |
+| CQL | Cassandra Query Language | `orbit/server/src/protocols/cql/` | `CqlParser::parse()` |
+| AQL | ArangoDB Query Language | `orbit/server/src/protocols/aql/` | `AqlParser::parse()` |
+| PL/pgSQL | Stored procedures | `orbit/engine/src/procedures/` | CREATE FUNCTION |
+
+---
+
+### 3.1 PostgreSQL SQL Parser
 
 **Location**: `orbit/server/src/protocols/postgres_wire/sql/`
 
 ```text
 orbit/server/src/protocols/postgres_wire/sql/
-├── lexer.rs           # Token definitions
+├── lexer.rs              # SQL tokenizer (~1,200 lines)
 ├── parser/
-│   ├── mod.rs         # Parser coordination
-│   ├── dml.rs         # SELECT, INSERT, UPDATE, DELETE
-│   ├── ddl.rs         # CREATE, ALTER, DROP
-│   ├── expressions.rs # Expression parsing
-│   ├── select.rs      # SELECT-specific parsing
-│   ├── tcl.rs         # Transaction control
-│   └── dcl.rs         # Data control
-├── ast.rs             # AST definitions
-├── executor.rs        # Query execution
-└── expression_evaluator.rs # Expression evaluation
+│   ├── mod.rs            # Parser coordination (~16,000 lines)
+│   ├── dml.rs            # SELECT, INSERT, UPDATE, DELETE (~71,000 lines)
+│   ├── ddl.rs            # CREATE, ALTER, DROP (~81,000 lines)
+│   ├── dcl.rs            # GRANT, REVOKE (~9,600 lines)
+│   ├── tcl.rs            # BEGIN, COMMIT, ROLLBACK (~9,700 lines)
+│   ├── expressions.rs    # Expression parsing (~59,000 lines)
+│   ├── select.rs         # SELECT-specific (~25,000 lines)
+│   └── utilities.rs      # Helper functions (~37,000 lines)
+├── ast.rs                # AST definitions
+├── executor.rs           # Query execution
+└── expression_evaluator.rs
 ```
 
-**Features**:
-- Standard SQL compatibility
-- PostgreSQL-specific extensions (JSONB, arrays, vectors)
-- Window functions, CTEs, subqueries
-- Some OrbitQL extensions baked in (TRAVERSE clause)
+**Capabilities**:
+- Full ANSI SQL compliance
+- PostgreSQL extensions: JSONB, arrays, vectors (pgvector)
+- DDL: CREATE/ALTER/DROP for tables, indexes, views, schemas, functions, triggers, sequences
+- DML: SELECT with JOINs, subqueries, CTEs, window functions, MERGE, COPY
+- DCL: GRANT/REVOKE permission management
+- TCL: Transaction control with savepoints
+- Vector operations: COSINE_DISTANCE, EUCLIDEAN_DISTANCE
 
-#### OrbitQL Parser (in `orbit-shared`)
+---
+
+### 3.2 OrbitQL Parser
 
 **Location**: `orbit/shared/src/orbitql/`
 
 ```text
 orbit/shared/src/orbitql/
-├── lexer.rs           # OrbitQL tokens
-├── parser.rs          # OrbitQL parser
-├── ast.rs             # OrbitQL AST
+├── lexer.rs           # OrbitQL tokenizer (~45,000 lines)
+├── parser.rs          # Main parser (~2,000 lines)
+├── ast.rs             # AST definitions (~27,000 lines)
 ├── executor.rs        # Query execution
 ├── planner.rs         # Query planning
 ├── optimizer.rs       # Query optimization
-├── spatial.rs         # Spatial queries
-├── streaming.rs       # Real-time queries
+├── spatial.rs         # Spatial/geo queries
+├── streaming.rs       # Real-time/live queries
 └── distributed.rs     # Distributed execution
 ```
 
-**Unique Features**:
-- Graph keywords: `Node`, `Edge`, `Path`, `Traverse`, `MaxDepth`
-- Time-series: `Metrics`, `Aggregate`, `Window`, `Range`, `Now`
-- Live queries: `Live`, `Diff`, `Fetch`
-- Position tracking for better error messages
+**Capabilities**:
+- Multi-model operations (documents, graphs, time-series, key-value)
+- Graph keywords: `NODE`, `EDGE`, `PATH`, `TRAVERSE`, `CONNECTED`, `MAX_DEPTH`
+- Time-series: `METRICS`, `AGGREGATE`, `WINDOW`, `RANGE`, `NOW`
+- Live queries: `LIVE`, `DIFF`, `FETCH`
+- Cross-model JOINs
+- Recursive CTEs
+- GraphRAG operations
 
-### Parser Selection Logic
+---
 
-**Over PostgreSQL Wire Protocol (Port 5432)**:
-- Always uses PostgreSQL parser
-- No runtime switching mechanism
-- OrbitQL extensions available via embedded TRAVERSE clause
+### 3.3 Cypher Parser (Neo4j)
 
-**Over REST API (Port 8080)**:
-- `POST /api/v1/sql` - Uses PostgreSQL parser
-- OrbitQL can be added as separate endpoint
+**Location**: `orbit/server/src/protocols/cypher/`
 
-**OrbitQL Direct (Port 8081)**:
-- Dedicated OrbitQL parser
-- Full OrbitQL language support
+```text
+orbit/server/src/protocols/cypher/
+├── cypher_parser.rs   # Parser + tokenizer (~3,900 lines)
+├── types.rs           # Type definitions
+├── graph_engine.rs    # Execution engine
+└── bolt_protocol.rs   # Bolt wire protocol
+```
+
+**Capabilities**:
+- Neo4j Cypher compatibility (based on ANTLR4 grammar)
+- Pattern matching: `MATCH (n:Label)-[:REL]->(m)`
+- Graph mutations: `CREATE`, `MERGE`, `SET`, `DELETE`, `DETACH DELETE`
+- Aggregations: `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`, `COLLECT`
+- Path operations: Variable-length patterns `[*1..5]`
+- Procedure calls: `CALL ... YIELD`
+- CASE expressions and WHERE filtering
+- `ORDER BY`, `LIMIT`, `SKIP`
+
+---
+
+### 3.4 CQL Parser (Cassandra)
+
+**Location**: `orbit/server/src/protocols/cql/`
+
+```text
+orbit/server/src/protocols/cql/
+├── parser.rs          # CQL parser (~3,500 lines)
+├── types.rs           # CQL types and statements
+├── adapter.rs         # Protocol adapter
+└── mod.rs             # Module exports
+```
+
+**Capabilities**:
+- Cassandra CQL3 compatibility
+- Keyspace and table management
+- SELECT with `ALLOW FILTERING`, `PER PARTITION LIMIT`
+- INSERT with `IF NOT EXISTS`, TTL support
+- UPDATE with counter operations, collection mutations
+- Batch operations: `LOGGED`, `UNLOGGED`, `COUNTER`
+- Vector search: ANN (Approximate Nearest Neighbor)
+- User-defined types
+- Permission management: `GRANT`, `REVOKE`
+
+---
+
+### 3.5 AQL Parser (ArangoDB)
+
+**Location**: `orbit/server/src/protocols/aql/`
+
+```text
+orbit/server/src/protocols/aql/
+├── aql_parser.rs      # Parser + tokenizer (~2,900 lines)
+├── query_engine.rs    # Query execution
+├── storage.rs         # Storage adapter
+└── data_model.rs      # Data model definitions
+```
+
+**Capabilities**:
+- ArangoDB AQL compatibility (based on ANTLR4 grammar)
+- Iteration: `FOR doc IN collection`
+- Filtering: `FILTER condition`
+- Variable binding: `LET var = expression`
+- Aggregation: `COLLECT`
+- Projections: `RETURN`
+- Data modification: `INSERT`, `UPDATE`, `REPLACE`, `REMOVE`, `UPSERT`
+- Sorting and limiting: `SORT`, `LIMIT`
+- Graph traversal patterns
+- Debug mode for development
+
+---
+
+### 3.6 PL/pgSQL Parser (Stored Procedures)
+
+**Location**: `orbit/engine/src/procedures/`
+
+```text
+orbit/engine/src/procedures/
+├── ast.rs             # Procedure AST
+├── executor.rs        # Procedure execution
+└── mod.rs             # Module exports
+```
+
+**Capabilities**:
+- Variable declarations: `DECLARE`
+- Control flow: `IF-THEN-ELSE`, `LOOP`, `WHILE`
+- SQL statement execution within procedures
+- Exception handling: `RAISE NOTICE`, `RAISE EXCEPTION`
+- Function definitions with parameters and return types
+- Expression evaluation with operators
+
+---
+
+### Parser Selection by Protocol
+
+| Protocol Port | Wire Protocol | Parser Used | Notes |
+|---------------|---------------|-------------|-------|
+| 5432 | PostgreSQL | PostgreSQL SQL | Full SQL with extensions |
+| 3306 | MySQL | MySQL (adapter) | Translated to internal SQL |
+| 6379 | Redis RESP | RESP Command | Direct command parsing |
+| 9042 | CQL Native | CQL | Native Cassandra parsing |
+| 7687 | Bolt | Cypher | Neo4j graph queries |
+| 8529 | HTTP | AQL | ArangoDB queries |
+| 8080 | HTTP REST | PostgreSQL SQL | `/api/v1/sql` endpoint |
+| 8081 | HTTP REST | OrbitQL | Dedicated OrbitQL endpoint |
 
 ---
 
@@ -468,6 +584,7 @@ serde_json = "1"
 
 | Date | Changes |
 |------|---------|
+| 2025-12-07 | Expanded Parser/Lexer Architecture section to document all 6 parsers (PostgreSQL, OrbitQL, Cypher, CQL, AQL, PL/pgSQL) |
 | 2025-12-07 | Added Cypher (Neo4j) and AQL (ArangoDB) support - CLI now has full protocol parity with Desktop |
 | 2025-12-07 | Updated to reflect full CLI protocol implementation (PostgreSQL, MySQL, Redis, OrbitQL, CQL) |
 | 2025-12-07 | Initial specification |
