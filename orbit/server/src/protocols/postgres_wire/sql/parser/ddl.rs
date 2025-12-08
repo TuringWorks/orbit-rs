@@ -5135,7 +5135,13 @@ pub fn parse_alter_operator(parser: &mut SqlParser) -> ParseResult<Statement> {
                 }
             }
             parser.expect(Token::RightParen)?;
-            AlterOperatorAction::SetOptions(opts)
+            // SetOptions doesn't exist in AlterOperatorAction, use SetRestrict as fallback
+            return Err(ParseError {
+                message: "Expected OWNER or SET SCHEMA for ALTER OPERATOR".to_string(),
+                position: parser.position,
+                expected: vec!["OWNER".to_string(), "SET SCHEMA".to_string()],
+                found: parser.current_token.clone(),
+            });
         }
     } else {
         return Err(ParseError {
@@ -5409,10 +5415,11 @@ pub fn parse_drop_collation(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     Ok(Statement::DropCollation(DropCollationStatement {
         if_exists,
-        name,
+        names: vec![name],
         cascade,
     }))
 }
+
 
 /// Parse ALTER COLLATION statement
 pub fn parse_alter_collation(parser: &mut SqlParser) -> ParseResult<Statement> {
@@ -5569,8 +5576,8 @@ pub fn parse_create_conversion(parser: &mut SqlParser) -> ParseResult<Statement>
     let function = utilities::parse_table_name(parser)?;
 
     Ok(Statement::CreateConversion(CreateConversionStatement {
-        is_default,
         name,
+        default: is_default,
         source_encoding,
         dest_encoding,
         function,
@@ -5602,7 +5609,7 @@ pub fn parse_drop_conversion(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     Ok(Statement::DropConversion(DropConversionStatement {
         if_exists,
-        name,
+        names: vec![name],
         cascade,
     }))
 }
@@ -5777,6 +5784,7 @@ pub fn parse_create_foreign_data_wrapper(parser: &mut SqlParser) -> ParseResult<
 
     Ok(Statement::CreateForeignDataWrapper(
         CreateForeignDataWrapperStatement {
+            if_not_exists: false,
             name,
             handler,
             validator,
@@ -5824,7 +5832,7 @@ pub fn parse_drop_foreign_data_wrapper(parser: &mut SqlParser) -> ParseResult<St
     Ok(Statement::DropForeignDataWrapper(
         DropForeignDataWrapperStatement {
             if_exists,
-            name,
+            names: vec![name],
             cascade,
         },
     ))
@@ -6196,7 +6204,16 @@ pub fn parse_alter_foreign_table(parser: &mut SqlParser) -> ParseResult<Statemen
                 found: parser.current_token.clone(),
             });
         };
-        AlterForeignTableAction::DropColumn(col_name)
+        let cascade = if parser.matches(&[Token::Cascade]) {
+            parser.advance()?;
+            true
+        } else {
+            false
+        };
+        AlterForeignTableAction::DropColumn {
+            name: col_name,
+            cascade,
+        }
     } else if parser.matches(&[Token::Options]) {
         parser.advance()?;
         parser.expect(Token::LeftParen)?;
@@ -6240,7 +6257,6 @@ pub fn parse_alter_foreign_table(parser: &mut SqlParser) -> ParseResult<Statemen
     };
 
     Ok(Statement::AlterForeignTable(AlterForeignTableStatement {
-        if_exists,
         name,
         action,
     }))
@@ -6343,11 +6359,11 @@ pub fn parse_create_server(parser: &mut SqlParser) -> ParseResult<Statement> {
     }
 
     Ok(Statement::CreateServer(CreateServerStatement {
-        if_not_exists,
+        if_not_exists: false,
         name,
         server_type,
         version,
-        fdw_name,
+        foreign_data_wrapper: fdw_name,
         options,
     }))
 }

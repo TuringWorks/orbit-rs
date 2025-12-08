@@ -14,7 +14,16 @@ def run_file(conn, path):
         sql = f.read()
     with conn.cursor() as cur:
         for stmt in [s.strip() for s in sql.split(";") if s.strip()]:
-            cur.execute(stmt)
+            try:
+                cur.execute(stmt)
+                try:
+                    rows = cur.fetchall()
+                    if rows:
+                        print(rows)
+                except Exception:
+                    pass
+            except Exception as e:
+                print("error:", e)
     conn.commit()
 
 def main():

@@ -1673,11 +1673,7 @@ impl QueryEngine {
         // Check if table already exists
         if storage.table_exists(table).await? {
             if if_not_exists {
-                // IF NOT EXISTS specified, just return success without creating
-                return Ok(QueryResult::Select {
-                    columns: vec![],
-                    rows: vec![],
-                });
+                return Ok(QueryResult::Update { count: 0 });
             } else {
                 return Err(ProtocolError::PostgresError(format!(
                     "Table '{}' already exists",
@@ -1738,10 +1734,7 @@ impl QueryEngine {
         // Create the table
         storage.create_table(schema).await?;
 
-        Ok(QueryResult::Select {
-            columns: vec![],
-            rows: vec![],
-        })
+        Ok(QueryResult::Update { count: 0 })
     }
 
     /// Execute DROP TABLE on persistent storage
@@ -1754,11 +1747,7 @@ impl QueryEngine {
         // Check if table exists
         if !storage.table_exists(table).await? {
             if if_exists {
-                // IF EXISTS specified, just return success without dropping
-                return Ok(QueryResult::Select {
-                    columns: vec![],
-                    rows: vec![],
-                });
+                return Ok(QueryResult::Update { count: 0 });
             } else {
                 return Err(ProtocolError::PostgresError(format!(
                     "Table '{}' does not exist",
@@ -1770,10 +1759,7 @@ impl QueryEngine {
         // Drop the table
         storage.drop_table(table).await?;
 
-        Ok(QueryResult::Select {
-            columns: vec![],
-            rows: vec![],
-        })
+        Ok(QueryResult::Update { count: 0 })
     }
 }
 
