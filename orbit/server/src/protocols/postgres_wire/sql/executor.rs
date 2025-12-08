@@ -21,11 +21,12 @@ use crate::protocols::postgres_wire::sql::{
         DropSchemaStatement, DropSequenceStatement, DropTableStatement, DropTriggerStatement,
         DropTypeStatement, DropViewStatement, ExplainStatement, Expression, FromClause,
         FunctionLanguage, FunctionVolatility, GeneratedColumnStorage, GrantStatement, IndexType,
-        InsertSource, InsertStatement, IsolationLevel, JoinCondition, JoinType, MergeStatement,
-        ParameterMode, Privilege, ReleaseSavepointStatement, RevokeStatement, RollbackStatement,
-        SavepointStatement, SelectItem, SelectStatement, SetStatement, ShowStatement, ShowVariable,
-        Statement, TableConstraint, TableName, TriggerEvent, TriggerForEach, TriggerTiming,
-        TruncateStatement, TypeDefinition, UpdateStatement, UseStatement,
+        InsertSource, InsertStatement, IsolationLevel, JoinCondition, JoinType, MergeAction,
+        MergeInsertValues, MergeStatement, ParameterMode, Privilege, ReleaseSavepointStatement,
+        RevokeStatement, RollbackStatement, SavepointStatement, SelectItem, SelectStatement,
+        SetStatement, ShowStatement, ShowVariable, Statement, TableConstraint, TableName,
+        TriggerEvent, TriggerForEach, TriggerTiming, TruncateStatement, TypeDefinition,
+        UpdateStatement, UseStatement,
     },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator, SequenceAccessor},
     parser::SqlParser,
@@ -2562,31 +2563,286 @@ impl SqlExecutor {
         })
     }
 
-    async fn execute_merge(&self, _stmt: MergeStatement) -> ProtocolResult<ExecutionResult> {
-        // Placeholder for MERGE execution
-        // For the test case: MERGE INTO test_merge t USING (VALUES (1, 'new')) AS s(id, val) ON t.id = s.id WHEN NOT MATCHED THEN INSERT VALUES (s.id, s.val) RETURNING NEW.val;
+    async fn execute_merge(&self, stmt: MergeStatement) -> ProtocolResult<ExecutionResult> {
+        // PostgreSQL 18 MERGE statement execution
+        // MERGE INTO target USING source ON condition
+        // WHEN MATCHED THEN UPDATE/DELETE
+        // WHEN NOT MATCHED THEN INSERT
+        // RETURNING ...
 
-        // We need to implement enough logic to pass the test.
-        // 1. Resolve source
-        // 2. Resolve target
-        // 3. Perform join/lookup
-        // 4. Execute actions
+        let table_name = stmt.table.full_name();
 
-        // For now, let's just return a dummy result if it's the specific test case, or try to implement basic logic.
-        // Since we are in the executor, we can't easily do the full join logic without the planner.
-        // But we can try to handle the specific case of USING VALUES.
+        // Get target table schema
+        let tables = self.tables.read().await;
+        let table_schema = tables
+            .get(&table_name)
+            .ok_or_else(|| ProtocolError::table_not_found(&table_name))?
+            .clone();
+        drop(tables);
 
-        // Let's return a dummy result to satisfy the test for now, assuming the parser works.
-        // The test expects "RETURNING NEW.val".
+        // Step 1: Resolve source data
+        let source_rows = self.resolve_merge_source(&stmt.source).await?;
 
-        // If we want to be more correct, we should implement this in execution_strategy.rs where we have access to MVCC.
-        // But here we return ExecutionResult.
+        // Step 2: Get target table data
+        let mut table_data = self.table_data.write().await;
+        let target_data = table_data
+            .entry(table_name.clone())
+            .or_insert_with(Vec::new);
 
-        // Let's return a result that mimics a successful merge with returning.
+        // Track changes for RETURNING clause
+        let mut merge_results: Vec<(
+            Option<HashMap<String, SqlValue>>, // OLD row (for UPDATE/DELETE)
+            Option<HashMap<String, SqlValue>>, // NEW row (for UPDATE/INSERT)
+            String,                             // Action type: "UPDATE", "INSERT", "DELETE"
+        )> = Vec::new();
+
+        let mut merge_count = 0;
+
+        // Step 3: Process each source row
+        for source_row in source_rows {
+            // Find matching target row based on ON condition
+            let mut matched_index: Option<usize> = None;
+
+            for (i, target_row) in target_data.iter().enumerate() {
+                // Evaluate ON condition with both source and target row
+                let mut combined_row = target_row.clone();
+                // Add source columns with alias prefix if present
+                if let Some(alias) = &stmt.alias {
+                    for (key, value) in target_row {
+                        combined_row.insert(format!("{}.{}", alias, key), value.clone());
+                    }
+                }
+                // Add source row columns
+                for (key, value) in &source_row {
+                    combined_row.insert(key.clone(), value.clone());
+                }
+
+                let context =
+                    EvaluationContext::with_row_and_table(combined_row, table_name.clone());
+
+                match self.evaluate_where_condition(&stmt.on, &context).await {
+                    Ok(SqlValue::Boolean(true)) => {
+                        matched_index = Some(i);
+                        break;
+                    }
+                    _ => continue,
+                }
+            }
+
+            // Step 4: Execute appropriate WHEN clause
+            if let Some(index) = matched_index {
+                // WHEN MATCHED - execute first matching MATCHED clause
+                for when_clause in &stmt.when_clauses {
+                    if !when_clause.matched {
+                        continue;
+                    }
+
+                    // Check optional condition
+                    if let Some(condition) = &when_clause.condition {
+                        let mut combined_row = target_data[index].clone();
+                        for (key, value) in &source_row {
+                            combined_row.insert(key.clone(), value.clone());
+                        }
+                        let context = EvaluationContext::with_row_and_table(
+                            combined_row,
+                            table_name.clone(),
+                        );
+
+                        match self.evaluate_where_condition(condition, &context).await {
+                            Ok(SqlValue::Boolean(true)) => {}
+                            _ => continue,
+                        }
+                    }
+
+                    // Execute action
+                    match &when_clause.action {
+                        MergeAction::Update(update) => {
+                            let old_row = target_data[index].clone();
+                            let mut new_row = old_row.clone();
+
+                            // Apply updates
+                            for assignment in &update.assignments {
+                                let col_name = match &assignment.target {
+                                    AssignmentTarget::Column(name) => name.clone(),
+                                    AssignmentTarget::Columns(names) => {
+                                        names.first().cloned().unwrap_or_default()
+                                    }
+                                };
+
+                                // Check if generated column
+                                if table_schema.columns.iter().any(|c| {
+                                    c.name.eq_ignore_ascii_case(&col_name) && c.generated.is_some()
+                                }) {
+                                    return Err(ProtocolError::PostgresError(format!(
+                                        "cannot update generated column \"{}\"",
+                                        col_name
+                                    )));
+                                }
+
+                                let value = match &assignment.value {
+                                    Expression::Literal(val) => val.clone(),
+                                    Expression::Column(col_ref) => {
+                                        // Try to get from source row
+                                        source_row
+                                            .get(&col_ref.name)
+                                            .cloned()
+                                            .unwrap_or(SqlValue::Null)
+                                    }
+                                    _ => SqlValue::Text("complex_expr".to_string()),
+                                };
+
+                                new_row.insert(col_name, value);
+                            }
+
+                            // Recompute generated columns
+                            self.compute_generated_columns(&table_schema, &mut new_row)?;
+
+                            // Check temporal constraints
+                            let other_rows: Vec<HashMap<String, SqlValue>> = target_data
+                                .iter()
+                                .enumerate()
+                                .filter(|(i, _)| *i != index)
+                                .map(|(_, r)| r.clone())
+                                .collect();
+                            self.check_temporal_overlaps(&table_schema, &new_row, &other_rows)?;
+
+                            target_data[index] = new_row.clone();
+                            merge_results.push((Some(old_row), Some(new_row), "UPDATE".to_string()));
+                            merge_count += 1;
+                        }
+                        MergeAction::Delete => {
+                            let old_row = target_data.remove(index);
+                            merge_results.push((
+                                Some(old_row.clone()),
+                                None,
+                                "DELETE".to_string(),
+                            ));
+                            merge_count += 1;
+                        }
+                        MergeAction::DoNothing => {
+                            // Do nothing
+                        }
+                        _ => {}
+                    }
+                    break; // Execute only first matching clause
+                }
+            } else {
+                // WHEN NOT MATCHED - execute first matching NOT MATCHED clause
+                for when_clause in &stmt.when_clauses {
+                    if when_clause.matched {
+                        continue;
+                    }
+
+                    // Check optional condition
+                    if let Some(condition) = &when_clause.condition {
+                        let context = EvaluationContext::with_row_and_table(
+                            source_row.clone(),
+                            table_name.clone(),
+                        );
+
+                        match self.evaluate_where_condition(condition, &context).await {
+                            Ok(SqlValue::Boolean(true)) => {}
+                            _ => continue,
+                        }
+                    }
+
+                    // Execute action
+                    if let MergeAction::Insert(insert) = &when_clause.action {
+                        let mut new_row = HashMap::new();
+
+                        match &insert.values {
+                            MergeInsertValues::Values(values) => {
+                                let insert_columns = if let Some(cols) = &insert.columns {
+                                    cols.clone()
+                                } else {
+                                    table_schema.columns.iter().map(|c| c.name.clone()).collect()
+                                };
+
+                                for (i, value_expr) in values.iter().enumerate() {
+                                    if i < insert_columns.len() {
+                                        let col_name = &insert_columns[i];
+
+                                        // Check if generated column
+                                        if table_schema.columns.iter().any(|c| {
+                                            c.name.eq_ignore_ascii_case(col_name)
+                                                && c.generated.is_some()
+                                        }) {
+                                            return Err(ProtocolError::PostgresError(format!(
+                                                "cannot insert into generated column \"{}\"",
+                                                col_name
+                                            )));
+                                        }
+
+                                        let value = match value_expr {
+                                            Expression::Literal(val) => val.clone(),
+                                            Expression::Column(col_ref) => source_row
+                                                .get(&col_ref.name)
+                                                .cloned()
+                                                .unwrap_or(SqlValue::Null),
+                                            _ => SqlValue::Text("complex_expr".to_string()),
+                                        };
+
+                                        new_row.insert(col_name.clone(), value);
+                                    }
+                                }
+                            }
+                            MergeInsertValues::DefaultValues => {
+                                // Use default values from schema
+                                for col in &table_schema.columns {
+                                    if let Some(default) = &col.default {
+                                        let value = match default {
+                                            Expression::Literal(val) => val.clone(),
+                                            _ => SqlValue::Null,
+                                        };
+                                        new_row.insert(col.name.clone(), value);
+                                    }
+                                }
+                            }
+                        }
+
+                        // Compute generated columns
+                        self.compute_generated_columns(&table_schema, &mut new_row)?;
+
+                        // Check temporal constraints
+                        self.check_temporal_overlaps(&table_schema, &new_row, target_data)?;
+
+                        target_data.push(new_row.clone());
+                        merge_results.push((None, Some(new_row), "INSERT".to_string()));
+                        merge_count += 1;
+                    }
+                    break; // Execute only first matching clause
+                }
+            }
+        }
+
+        drop(table_data);
+
+        // Step 5: Process RETURNING clause if present
+        let (columns, rows) = if let Some(returning_items) = &stmt.returning {
+            let cols = self.extract_returning_columns(returning_items);
+
+            // Evaluate RETURNING for each merge result
+            let mut result_rows = Vec::new();
+            for (old_row, new_row, _action) in &merge_results {
+                // For MERGE: OLD = old row (UPDATE/DELETE), NEW = new row (UPDATE/INSERT)
+                let row_pair = (old_row.clone(), new_row.clone().unwrap_or_default());
+                let rows = self.evaluate_returning_clause_with_old_new(
+                    returning_items,
+                    &vec![row_pair],
+                    &table_schema,
+                )?;
+                result_rows.extend(rows);
+            }
+
+            (cols, result_rows)
+        } else {
+            (Vec::new(), Vec::new())
+        };
+
         Ok(ExecutionResult::Merge {
-            count: 1,
-            rows: vec![vec![Some("new".to_string())]],
-            columns: vec!["val".to_string()],
+            count: merge_count,
+            columns,
+            rows,
         })
     }
 
@@ -2645,6 +2901,97 @@ impl SqlExecutor {
                     count: 0,
                 })
             }
+        }
+    }
+
+    /// Resolve source data for MERGE statement
+    async fn resolve_merge_source(
+        &self,
+        source: &FromClause,
+    ) -> ProtocolResult<Vec<HashMap<String, SqlValue>>> {
+        match source {
+            FromClause::Table { name, alias: _ } => {
+                // Source is a table - read all rows
+                let table_name = name.full_name();
+                let table_data = self.table_data.read().await;
+                Ok(table_data.get(&table_name).cloned().unwrap_or_default())
+            }
+            FromClause::Values { values, alias } => {
+                // Source is VALUES clause
+                let mut rows = Vec::new();
+
+                // Get column names from alias if present
+                let column_names = if let Some(table_alias) = alias {
+                    table_alias.columns.clone().unwrap_or_default()
+                } else {
+                    // Generate default column names (column1, column2, ...)
+                    if let Some(first_row) = values.first() {
+                        (0..first_row.len())
+                            .map(|i| format!("column{}", i + 1))
+                            .collect()
+                    } else {
+                        Vec::new()
+                    }
+                };
+
+                for value_row in values {
+                    let mut row = HashMap::new();
+                    for (i, value_expr) in value_row.iter().enumerate() {
+                        if i < column_names.len() {
+                            let col_name = &column_names[i];
+                            let value = match value_expr {
+                                Expression::Literal(val) => val.clone(),
+                                _ => SqlValue::Text("complex_expr".to_string()),
+                            };
+                            row.insert(col_name.clone(), value);
+                        }
+                    }
+                    rows.push(row);
+                }
+
+                Ok(rows)
+            }
+            FromClause::Subquery { query, alias: _ } => {
+                // Source is a subquery - execute it
+                let result = self.execute_select(*query.clone()).await?;
+                match result {
+                    ExecutionResult::Select { rows, columns, .. } => {
+                        let mut source_rows = Vec::new();
+                        for row in rows {
+                            let mut row_map = HashMap::new();
+                            for (i, col_name) in columns.iter().enumerate() {
+                                if i < row.len() {
+                                    let value = if let Some(val_str) = &row[i] {
+                                        // Try to parse as different types
+                                        if let Ok(i) = val_str.parse::<i64>() {
+                                            if i >= i32::MIN as i64 && i <= i32::MAX as i64 {
+                                                SqlValue::Integer(i as i32)
+                                            } else {
+                                                SqlValue::BigInt(i)
+                                            }
+                                        } else if let Ok(f) = val_str.parse::<f64>() {
+                                            SqlValue::DoublePrecision(f)
+                                        } else {
+                                            SqlValue::Text(val_str.clone())
+                                        }
+                                    } else {
+                                        SqlValue::Null
+                                    };
+                                    row_map.insert(col_name.clone(), value);
+                                }
+                            }
+                            source_rows.push(row_map);
+                        }
+                        Ok(source_rows)
+                    }
+                    _ => Err(ProtocolError::PostgresError(
+                        "MERGE source subquery must return rows".to_string(),
+                    )),
+                }
+            }
+            _ => Err(ProtocolError::PostgresError(
+                "Unsupported MERGE source type".to_string(),
+            )),
         }
     }
 

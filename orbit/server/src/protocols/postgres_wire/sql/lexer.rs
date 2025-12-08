@@ -107,6 +107,48 @@ pub enum Token {
     Composite,
     // Domain keywords use already-defined Constraint, Check, Null, Default
 
+    // Additional DDL keywords
+    Cast,
+    Language,
+    Transform,
+    AccessMethod,
+    Server,
+    Wrapper,
+    Data,
+    Mapping,
+    Options,
+    // Text search keywords
+    TextSearch,
+    Configuration,
+    Dictionary,
+    Parser,
+    Template,
+    // Large object
+    LargeObject,
+    // Operator keywords
+    Class,
+    Family,
+    Routine,
+    // System
+    System,
+    // Privileges
+    Privileges,
+    // Owned
+    OwnedBy,
+    // Refresh
+    Refresh,
+    // Rename
+    Rename,
+    // Restrict
+    Restrict,
+    // Validate
+    Validate,
+    // Enable/Disable
+    Enable,
+    Disable,
+    // Force
+    // Force is already defined for DROP DATABASE
+
     // Keywords - DML
     Select,
     Insert,
@@ -169,7 +211,6 @@ pub enum Token {
     To,
     Option,
     For,
-    Restrict,
     Public,
     Execute,
     Usage,
@@ -177,7 +218,6 @@ pub enum Token {
     Sequence,
     Database,
     Owner,
-    Template,
     Encoding,
     Force,
     Work,
@@ -189,7 +229,6 @@ pub enum Token {
     Nothing,
     Returning,
     Procedure,
-    Language,
     Returns,
     Out,
     InOut,
@@ -231,7 +270,6 @@ pub enum Token {
     Exists,
     Any,
     Some,
-    Cast,
     As,
     If,
     Replace,
@@ -486,6 +524,40 @@ impl Lexer {
             // Type keywords
             ("ENUM", Token::Enum),
             ("COMPOSITE", Token::Composite),
+            // Additional DDL keywords
+            ("CAST", Token::Cast),
+            ("LANGUAGE", Token::Language),
+            ("TRANSFORM", Token::Transform),
+            ("ACCESS", Token::AccessMethod),
+            ("SERVER", Token::Server),
+            ("WRAPPER", Token::Wrapper),
+            ("DATA", Token::Data),
+            ("MAPPING", Token::Mapping),
+            ("OPTIONS", Token::Options),
+            // Text search keywords
+            ("CONFIGURATION", Token::Configuration),
+            ("DICTIONARY", Token::Dictionary),
+            ("PARSER", Token::Parser),
+            ("TEMPLATE", Token::Template),
+            // Operator keywords
+            ("CLASS", Token::Class),
+            ("FAMILY", Token::Family),
+            ("ROUTINE", Token::Routine),
+            // System
+            ("SYSTEM", Token::System),
+            // Privileges
+            ("PRIVILEGES", Token::Privileges),
+            // Refresh
+            ("REFRESH", Token::Refresh),
+            // Rename
+            ("RENAME", Token::Rename),
+            // Restrict
+            ("RESTRICT", Token::Restrict),
+            // Validate
+            ("VALIDATE", Token::Validate),
+            // Enable/Disable
+            ("ENABLE", Token::Enable),
+            ("DISABLE", Token::Disable),
             // DML Keywords
             ("SELECT", Token::Select),
             ("INSERT", Token::Insert),
@@ -563,7 +635,6 @@ impl Lexer {
             ("TO", Token::To),
             ("OPTION", Token::Option),
             ("FOR", Token::For),
-            ("RESTRICT", Token::Restrict),
             ("PUBLIC", Token::Public),
             ("EXECUTE", Token::Execute),
             ("USAGE", Token::Usage),
@@ -571,7 +642,6 @@ impl Lexer {
             ("SEQUENCE", Token::Sequence),
             ("DATABASE", Token::Database),
             ("OWNER", Token::Owner),
-            ("TEMPLATE", Token::Template),
             ("ENCODING", Token::Encoding),
             ("FORCE", Token::Force),
             ("WORK", Token::Work),
@@ -583,7 +653,6 @@ impl Lexer {
             ("NOTHING", Token::Nothing),
             ("RETURNING", Token::Returning),
             ("PROCEDURE", Token::Procedure),
-            ("LANGUAGE", Token::Language),
             ("RETURNS", Token::Returns),
             ("OUT", Token::Out),
             ("INOUT", Token::InOut),
@@ -606,7 +675,6 @@ impl Lexer {
             ("EXISTS", Token::Exists),
             ("ANY", Token::Any),
             ("SOME", Token::Some),
-            ("CAST", Token::Cast),
             ("AS", Token::As),
             ("IF", Token::If),
             ("REPLACE", Token::Replace),

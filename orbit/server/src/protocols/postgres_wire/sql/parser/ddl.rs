@@ -4195,3 +4195,2303 @@ pub fn parse_drop_rule(parser: &mut SqlParser) -> ParseResult<Statement> {
         cascade,
     }))
 }
+
+// ============================================================================
+// GROUP statements
+// ============================================================================
+
+/// Parse CREATE GROUP statement
+pub fn parse_create_group(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateGroupStatement;
+
+    parser.expect(Token::Group)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected group name".to_string(),
+            position: parser.position,
+            expected: vec!["group_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse optional WITH options
+    let mut with_options = Vec::new();
+    if parser.matches(&[Token::With]) {
+        parser.advance()?;
+        // Parse role options
+        while let Some(Token::Identifier(opt)) = &parser.current_token {
+            with_options.push(opt.clone());
+            parser.advance()?;
+            if !parser.matches(&[Token::Comma]) {
+                break;
+            }
+            parser.advance()?;
+        }
+    }
+
+    Ok(Statement::CreateGroup(CreateGroupStatement {
+        name,
+        with_options,
+    }))
+}
+
+/// Parse DROP GROUP statement
+pub fn parse_drop_group(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropGroupStatement;
+
+    parser.expect(Token::Group)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let mut names = Vec::new();
+    loop {
+        if let Some(Token::Identifier(n)) = &parser.current_token {
+            names.push(n.clone());
+            parser.advance()?;
+        } else {
+            break;
+        }
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    Ok(Statement::DropGroup(DropGroupStatement { if_exists, names }))
+}
+
+/// Parse ALTER GROUP statement
+pub fn parse_alter_group(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{AlterGroupAction, AlterGroupStatement};
+
+    parser.expect(Token::Group)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected group name".to_string(),
+            position: parser.position,
+            expected: vec!["group_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse action: ADD USER | DROP USER | RENAME TO
+    let action = if parser.matches(&[Token::Add]) {
+        parser.advance()?;
+        parser.expect(Token::User)?;
+        let mut users = Vec::new();
+        loop {
+            if let Some(Token::Identifier(u)) = &parser.current_token {
+                users.push(u.clone());
+                parser.advance()?;
+            } else {
+                break;
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        AlterGroupAction::AddUsers(users)
+    } else if parser.matches(&[Token::Drop]) {
+        parser.advance()?;
+        parser.expect(Token::User)?;
+        let mut users = Vec::new();
+        loop {
+            if let Some(Token::Identifier(u)) = &parser.current_token {
+                users.push(u.clone());
+                parser.advance()?;
+            } else {
+                break;
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        AlterGroupAction::DropUsers(users)
+    } else if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new group name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterGroupAction::Rename(new_name)
+    } else {
+        return Err(ParseError {
+            message: "Expected ADD, DROP, or RENAME".to_string(),
+            position: parser.position,
+            expected: vec!["ADD".to_string(), "DROP".to_string(), "RENAME".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterGroup(AlterGroupStatement { name, action }))
+}
+
+// ============================================================================
+// TABLESPACE statements
+// ============================================================================
+
+/// Parse CREATE TABLESPACE statement
+pub fn parse_create_tablespace(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateTablespaceStatement;
+
+    parser.expect(Token::Tablespace)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected tablespace name".to_string(),
+            position: parser.position,
+            expected: vec!["tablespace_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse optional OWNER
+    let owner = if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = Some(o.clone());
+            parser.advance()?;
+            owner
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Parse LOCATION
+    parser.expect(Token::Location)?;
+    let location = if let Some(Token::StringLiteral(loc)) = &parser.current_token {
+        let location = loc.clone();
+        parser.advance()?;
+        location
+    } else {
+        return Err(ParseError {
+            message: "Expected location string".to_string(),
+            position: parser.position,
+            expected: vec!["'location'".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse optional WITH options
+    let mut options = Vec::new();
+    if parser.matches(&[Token::With]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        loop {
+            if let Some(Token::Identifier(key)) = &parser.current_token {
+                let key = key.clone();
+                parser.advance()?;
+                parser.expect(Token::Equals)?;
+                let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                    v.clone()
+                } else if let Some(Token::Identifier(v)) = &parser.current_token {
+                    v.clone()
+                } else if let Some(Token::Number(v)) = &parser.current_token {
+                    v.clone()
+                } else {
+                    String::new()
+                };
+                parser.advance()?;
+                options.push((key, value));
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+    }
+
+    Ok(Statement::CreateTablespace(CreateTablespaceStatement {
+        name,
+        owner,
+        location,
+        options,
+    }))
+}
+
+/// Parse DROP TABLESPACE statement
+pub fn parse_drop_tablespace(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropTablespaceStatement;
+
+    parser.expect(Token::Tablespace)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected tablespace name".to_string(),
+            position: parser.position,
+            expected: vec!["tablespace_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::DropTablespace(DropTablespaceStatement {
+        if_exists,
+        name,
+    }))
+}
+
+/// Parse ALTER TABLESPACE statement
+pub fn parse_alter_tablespace(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{AlterTablespaceAction, AlterTablespaceStatement};
+
+    parser.expect(Token::Tablespace)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected tablespace name".to_string(),
+            position: parser.position,
+            expected: vec!["tablespace_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new tablespace name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterTablespaceAction::Rename(new_name)
+    } else if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterTablespaceAction::Owner(new_owner)
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        let mut options = Vec::new();
+        loop {
+            if let Some(Token::Identifier(key)) = &parser.current_token {
+                let key = key.clone();
+                parser.advance()?;
+                parser.expect(Token::Equals)?;
+                let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                    v.clone()
+                } else if let Some(Token::Identifier(v)) = &parser.current_token {
+                    v.clone()
+                } else if let Some(Token::Number(v)) = &parser.current_token {
+                    v.clone()
+                } else {
+                    String::new()
+                };
+                parser.advance()?;
+                options.push((key, value));
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+        AlterTablespaceAction::SetOptions(options)
+    } else if parser.matches(&[Token::Reset]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        let mut options = Vec::new();
+        loop {
+            if let Some(Token::Identifier(opt)) = &parser.current_token {
+                options.push(opt.clone());
+                parser.advance()?;
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+        AlterTablespaceAction::ResetOptions(options)
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME, OWNER, SET, or RESET".to_string(),
+            position: parser.position,
+            expected: vec![
+                "RENAME".to_string(),
+                "OWNER".to_string(),
+                "SET".to_string(),
+                "RESET".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterTablespace(AlterTablespaceStatement {
+        name,
+        action,
+    }))
+}
+
+// ============================================================================
+// AGGREGATE statements
+// ============================================================================
+
+/// Parse CREATE AGGREGATE statement
+pub fn parse_create_aggregate(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{
+        AggregateOption, CreateAggregateStatement,
+    };
+    use crate::protocols::postgres_wire::sql::types::SqlType;
+
+    parser.expect(Token::Aggregate)?;
+
+    let name = utilities::parse_table_name(parser)?;
+
+    // Parse input types
+    parser.expect(Token::LeftParen)?;
+    let mut input_types = Vec::new();
+    while !parser.matches(&[Token::RightParen]) {
+        let dt = utilities::parse_data_type(parser)?;
+        input_types.push(dt);
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+    parser.expect(Token::RightParen)?;
+
+    // Parse aggregate definition
+    parser.expect(Token::LeftParen)?;
+    let mut sfunc = String::new();
+    let mut stype = SqlType::Integer;
+    let mut options = Vec::new();
+
+    while !parser.matches(&[Token::RightParen]) {
+        if let Some(Token::Identifier(key)) = &parser.current_token {
+            let key_upper = key.to_uppercase();
+            parser.advance()?;
+            parser.expect(Token::Equals)?;
+
+            match key_upper.as_str() {
+                "SFUNC" => {
+                    if let Some(Token::Identifier(f)) = &parser.current_token {
+                        sfunc = f.clone();
+                        parser.advance()?;
+                    }
+                }
+                "STYPE" => {
+                    stype = utilities::parse_data_type(parser)?;
+                }
+                "FINALFUNC" => {
+                    if let Some(Token::Identifier(f)) = &parser.current_token {
+                        options.push(AggregateOption::FinalFunc(f.clone()));
+                        parser.advance()?;
+                    }
+                }
+                "INITCOND" => {
+                    if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                        options.push(AggregateOption::InitCond(v.clone()));
+                        parser.advance()?;
+                    }
+                }
+                "COMBINEFUNC" => {
+                    if let Some(Token::Identifier(f)) = &parser.current_token {
+                        options.push(AggregateOption::CombineFunc(f.clone()));
+                        parser.advance()?;
+                    }
+                }
+                "SERIALFUNC" => {
+                    if let Some(Token::Identifier(f)) = &parser.current_token {
+                        options.push(AggregateOption::SerialFunc(f.clone()));
+                        parser.advance()?;
+                    }
+                }
+                "DESERIALFUNC" => {
+                    if let Some(Token::Identifier(f)) = &parser.current_token {
+                        options.push(AggregateOption::DeserialFunc(f.clone()));
+                        parser.advance()?;
+                    }
+                }
+                "MSFUNC" => {
+                    if let Some(Token::Identifier(f)) = &parser.current_token {
+                        options.push(AggregateOption::MSFunc(f.clone()));
+                        parser.advance()?;
+                    }
+                }
+                "MINVFUNC" => {
+                    if let Some(Token::Identifier(f)) = &parser.current_token {
+                        options.push(AggregateOption::MInvFunc(f.clone()));
+                        parser.advance()?;
+                    }
+                }
+                "MSTYPE" => {
+                    let t = utilities::parse_data_type(parser)?;
+                    options.push(AggregateOption::MSType(t));
+                }
+                "MSSPACE" => {
+                    if let Some(Token::Number(n)) = &parser.current_token {
+                        if let Ok(size) = n.parse() {
+                            options.push(AggregateOption::MSSpace(size));
+                        }
+                        parser.advance()?;
+                    }
+                }
+                "MFINALFUNC" => {
+                    if let Some(Token::Identifier(f)) = &parser.current_token {
+                        options.push(AggregateOption::MFinalFunc(f.clone()));
+                        parser.advance()?;
+                    }
+                }
+                "SORTOP" => {
+                    if let Some(Token::Identifier(op)) = &parser.current_token {
+                        options.push(AggregateOption::SortOp(op.clone()));
+                        parser.advance()?;
+                    }
+                }
+                "PARALLEL" => {
+                    if let Some(Token::Identifier(p)) = &parser.current_token {
+                        options.push(AggregateOption::Parallel(p.clone()));
+                        parser.advance()?;
+                    }
+                }
+                _ => {
+                    parser.advance()?;
+                }
+            }
+        } else {
+            parser.advance()?;
+        }
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        }
+    }
+    parser.expect(Token::RightParen)?;
+
+    Ok(Statement::CreateAggregate(CreateAggregateStatement {
+        name,
+        input_types,
+        sfunc,
+        stype,
+        options,
+    }))
+}
+
+/// Parse DROP AGGREGATE statement
+pub fn parse_drop_aggregate(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropAggregateStatement;
+
+    parser.expect(Token::Aggregate)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = utilities::parse_table_name(parser)?;
+
+    // Parse argument types
+    parser.expect(Token::LeftParen)?;
+    let mut arg_types = Vec::new();
+    while !parser.matches(&[Token::RightParen]) {
+        let dt = utilities::parse_data_type(parser)?;
+        arg_types.push(dt);
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+    parser.expect(Token::RightParen)?;
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropAggregate(DropAggregateStatement {
+        if_exists,
+        name,
+        arg_types,
+        cascade,
+    }))
+}
+
+/// Parse ALTER AGGREGATE statement
+pub fn parse_alter_aggregate(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{AlterAggregateAction, AlterAggregateStatement};
+
+    parser.expect(Token::Aggregate)?;
+
+    let name = utilities::parse_table_name(parser)?;
+
+    // Parse argument types
+    parser.expect(Token::LeftParen)?;
+    let mut arg_types = Vec::new();
+    while !parser.matches(&[Token::RightParen]) {
+        let dt = utilities::parse_data_type(parser)?;
+        arg_types.push(dt);
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+    parser.expect(Token::RightParen)?;
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new aggregate name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterAggregateAction::Rename(new_name)
+    } else if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterAggregateAction::Owner(new_owner)
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        parser.expect(Token::Schema)?;
+        let new_schema = if let Some(Token::Identifier(s)) = &parser.current_token {
+            let schema = s.clone();
+            parser.advance()?;
+            schema
+        } else {
+            return Err(ParseError {
+                message: "Expected schema name".to_string(),
+                position: parser.position,
+                expected: vec!["schema_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterAggregateAction::SetSchema(new_schema)
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME, OWNER, or SET SCHEMA".to_string(),
+            position: parser.position,
+            expected: vec![
+                "RENAME".to_string(),
+                "OWNER".to_string(),
+                "SET".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterAggregate(AlterAggregateStatement {
+        name,
+        arg_types,
+        action,
+    }))
+}
+
+// ============================================================================
+// OPERATOR statements
+// ============================================================================
+
+/// Parse CREATE OPERATOR statement
+pub fn parse_create_operator(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{
+        CreateOperatorStatement, OperatorOption,
+    };
+    use crate::protocols::postgres_wire::sql::types::SqlType;
+
+    parser.expect(Token::Operator)?;
+
+    // Parse operator name (can be symbols)
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        // Could also be operator symbols
+        let mut name = String::new();
+        while !parser.matches(&[Token::LeftParen]) {
+            if let Some(tok) = &parser.current_token {
+                name.push_str(&format!("{:?}", tok));
+            }
+            parser.advance()?;
+        }
+        name
+    };
+
+    // Parse operator definition
+    parser.expect(Token::LeftParen)?;
+    let mut procedure = String::new();
+    let mut left_type = None;
+    let mut right_type = None;
+    let mut options = Vec::new();
+
+    while !parser.matches(&[Token::RightParen]) {
+        if let Some(Token::Identifier(key)) = &parser.current_token {
+            let key_upper = key.to_uppercase();
+            parser.advance()?;
+            parser.expect(Token::Equals)?;
+
+            match key_upper.as_str() {
+                "PROCEDURE" | "FUNCTION" => {
+                    if let Some(Token::Identifier(f)) = &parser.current_token {
+                        procedure = f.clone();
+                        parser.advance()?;
+                    }
+                }
+                "LEFTARG" => {
+                    left_type = Some(utilities::parse_data_type(parser)?);
+                }
+                "RIGHTARG" => {
+                    right_type = Some(utilities::parse_data_type(parser)?);
+                }
+                "COMMUTATOR" => {
+                    if let Some(Token::Identifier(op)) = &parser.current_token {
+                        options.push(OperatorOption::Commutator(op.clone()));
+                        parser.advance()?;
+                    }
+                }
+                "NEGATOR" => {
+                    if let Some(Token::Identifier(op)) = &parser.current_token {
+                        options.push(OperatorOption::Negator(op.clone()));
+                        parser.advance()?;
+                    }
+                }
+                "RESTRICT" => {
+                    if let Some(Token::Identifier(f)) = &parser.current_token {
+                        options.push(OperatorOption::Restrict(f.clone()));
+                        parser.advance()?;
+                    }
+                }
+                "JOIN" => {
+                    if let Some(Token::Identifier(f)) = &parser.current_token {
+                        options.push(OperatorOption::Join(f.clone()));
+                        parser.advance()?;
+                    }
+                }
+                "HASHES" => {
+                    options.push(OperatorOption::Hashes);
+                }
+                "MERGES" => {
+                    options.push(OperatorOption::Merges);
+                }
+                _ => {
+                    parser.advance()?;
+                }
+            }
+        } else {
+            parser.advance()?;
+        }
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        }
+    }
+    parser.expect(Token::RightParen)?;
+
+    Ok(Statement::CreateOperator(CreateOperatorStatement {
+        name,
+        procedure,
+        left_type: left_type.unwrap_or(SqlType::Integer),
+        right_type: right_type.unwrap_or(SqlType::Integer),
+        options,
+    }))
+}
+
+/// Parse DROP OPERATOR statement
+pub fn parse_drop_operator(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropOperatorStatement;
+
+    parser.expect(Token::Operator)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        String::new()
+    };
+
+    // Parse argument types
+    parser.expect(Token::LeftParen)?;
+    let left_type = if !parser.matches(&[Token::Comma, Token::None]) {
+        Some(utilities::parse_data_type(parser)?)
+    } else {
+        if parser.matches(&[Token::None]) {
+            parser.advance()?;
+        }
+        None
+    };
+    parser.expect(Token::Comma)?;
+    let right_type = if !parser.matches(&[Token::RightParen, Token::None]) {
+        Some(utilities::parse_data_type(parser)?)
+    } else {
+        if parser.matches(&[Token::None]) {
+            parser.advance()?;
+        }
+        None
+    };
+    parser.expect(Token::RightParen)?;
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropOperator(DropOperatorStatement {
+        if_exists,
+        name,
+        left_type,
+        right_type,
+        cascade,
+    }))
+}
+
+/// Parse ALTER OPERATOR statement
+pub fn parse_alter_operator(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{AlterOperatorAction, AlterOperatorStatement};
+
+    parser.expect(Token::Operator)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        String::new()
+    };
+
+    // Parse argument types
+    parser.expect(Token::LeftParen)?;
+    let left_type = if !parser.matches(&[Token::Comma, Token::None]) {
+        Some(utilities::parse_data_type(parser)?)
+    } else {
+        if parser.matches(&[Token::None]) {
+            parser.advance()?;
+        }
+        None
+    };
+    parser.expect(Token::Comma)?;
+    let right_type = if !parser.matches(&[Token::RightParen, Token::None]) {
+        Some(utilities::parse_data_type(parser)?)
+    } else {
+        if parser.matches(&[Token::None]) {
+            parser.advance()?;
+        }
+        None
+    };
+    parser.expect(Token::RightParen)?;
+
+    let action = if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterOperatorAction::Owner(new_owner)
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        if parser.matches(&[Token::Schema]) {
+            parser.advance()?;
+            let new_schema = if let Some(Token::Identifier(s)) = &parser.current_token {
+                let schema = s.clone();
+                parser.advance()?;
+                schema
+            } else {
+                return Err(ParseError {
+                    message: "Expected schema name".to_string(),
+                    position: parser.position,
+                    expected: vec!["schema_name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            AlterOperatorAction::SetSchema(new_schema)
+        } else {
+            // SET ( ... )
+            parser.expect(Token::LeftParen)?;
+            let mut opts = Vec::new();
+            while !parser.matches(&[Token::RightParen]) {
+                if let Some(Token::Identifier(key)) = &parser.current_token {
+                    let key = key.clone();
+                    parser.advance()?;
+                    parser.expect(Token::Equals)?;
+                    let value = if let Some(Token::Identifier(v)) = &parser.current_token {
+                        v.clone()
+                    } else {
+                        String::new()
+                    };
+                    parser.advance()?;
+                    opts.push((key, value));
+                }
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+            parser.expect(Token::RightParen)?;
+            AlterOperatorAction::SetOptions(opts)
+        }
+    } else {
+        return Err(ParseError {
+            message: "Expected OWNER or SET".to_string(),
+            position: parser.position,
+            expected: vec!["OWNER".to_string(), "SET".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterOperator(AlterOperatorStatement {
+        name,
+        left_type,
+        right_type,
+        action,
+    }))
+}
+
+// ============================================================================
+// CAST statements
+// ============================================================================
+
+/// Parse CREATE CAST statement
+pub fn parse_create_cast(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{CastContext, CreateCastStatement};
+
+    parser.expect(Token::Cast)?;
+
+    // Parse ( source_type AS target_type )
+    parser.expect(Token::LeftParen)?;
+    let source_type = utilities::parse_data_type(parser)?;
+    parser.expect(Token::As)?;
+    let target_type = utilities::parse_data_type(parser)?;
+    parser.expect(Token::RightParen)?;
+
+    // Parse WITH FUNCTION | WITHOUT FUNCTION | WITH INOUT
+    let (function, context) = if parser.matches(&[Token::With]) {
+        parser.advance()?;
+        if let Some(Token::Identifier(kw)) = &parser.current_token {
+            if kw.to_uppercase() == "INOUT" {
+                parser.advance()?;
+                (None, CastContext::Implicit)
+            } else if kw.to_uppercase() == "FUNCTION" {
+                parser.advance()?;
+                let func_name = utilities::parse_table_name(parser)?;
+                // Skip function argument types
+                if parser.matches(&[Token::LeftParen]) {
+                    let mut depth = 1;
+                    parser.advance()?;
+                    while depth > 0 {
+                        if parser.matches(&[Token::LeftParen]) {
+                            depth += 1;
+                        } else if parser.matches(&[Token::RightParen]) {
+                            depth -= 1;
+                        }
+                        if depth > 0 {
+                            parser.advance()?;
+                        }
+                    }
+                    parser.advance()?;
+                }
+                (Some(func_name), CastContext::Explicit)
+            } else {
+                (None, CastContext::Explicit)
+            }
+        } else {
+            (None, CastContext::Explicit)
+        }
+    } else if parser.matches(&[Token::Without]) {
+        parser.advance()?;
+        // WITHOUT FUNCTION
+        if let Some(Token::Identifier(kw)) = &parser.current_token {
+            if kw.to_uppercase() == "FUNCTION" {
+                parser.advance()?;
+            }
+        }
+        (None, CastContext::Implicit)
+    } else {
+        (None, CastContext::Explicit)
+    };
+
+    // Parse optional AS ASSIGNMENT | AS IMPLICIT
+    let context = if parser.matches(&[Token::As]) {
+        parser.advance()?;
+        if let Some(Token::Identifier(kw)) = &parser.current_token {
+            let ctx = match kw.to_uppercase().as_str() {
+                "ASSIGNMENT" => CastContext::Assignment,
+                "IMPLICIT" => CastContext::Implicit,
+                _ => CastContext::Explicit,
+            };
+            parser.advance()?;
+            ctx
+        } else {
+            context
+        }
+    } else {
+        context
+    };
+
+    Ok(Statement::CreateCast(CreateCastStatement {
+        source_type,
+        target_type,
+        function,
+        context,
+    }))
+}
+
+/// Parse DROP CAST statement
+pub fn parse_drop_cast(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropCastStatement;
+
+    parser.expect(Token::Cast)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    // Parse ( source_type AS target_type )
+    parser.expect(Token::LeftParen)?;
+    let source_type = utilities::parse_data_type(parser)?;
+    parser.expect(Token::As)?;
+    let target_type = utilities::parse_data_type(parser)?;
+    parser.expect(Token::RightParen)?;
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropCast(DropCastStatement {
+        if_exists,
+        source_type,
+        target_type,
+        cascade,
+    }))
+}
+
+// ============================================================================
+// COLLATION statements
+// ============================================================================
+
+/// Parse CREATE COLLATION statement
+pub fn parse_create_collation(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{CollationOptions, CreateCollationStatement};
+
+    parser.expect(Token::Collation)?;
+
+    let if_not_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Not)?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = utilities::parse_table_name(parser)?;
+
+    // Parse collation options
+    let mut from = None;
+    let mut locale = None;
+    let mut lc_collate = None;
+    let mut lc_ctype = None;
+    let mut provider = None;
+    let mut deterministic = None;
+
+    if parser.matches(&[Token::From]) {
+        parser.advance()?;
+        from = Some(utilities::parse_table_name(parser)?);
+    } else if parser.matches(&[Token::LeftParen]) {
+        parser.advance()?;
+        while !parser.matches(&[Token::RightParen]) {
+            if let Some(Token::Identifier(key)) = &parser.current_token {
+                let key_upper = key.to_uppercase();
+                parser.advance()?;
+                parser.expect(Token::Equals)?;
+
+                match key_upper.as_str() {
+                    "LOCALE" => {
+                        if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                            locale = Some(v.clone());
+                            parser.advance()?;
+                        }
+                    }
+                    "LC_COLLATE" => {
+                        if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                            lc_collate = Some(v.clone());
+                            parser.advance()?;
+                        }
+                    }
+                    "LC_CTYPE" => {
+                        if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                            lc_ctype = Some(v.clone());
+                            parser.advance()?;
+                        }
+                    }
+                    "PROVIDER" => {
+                        if let Some(Token::Identifier(v)) = &parser.current_token {
+                            provider = Some(v.clone());
+                            parser.advance()?;
+                        }
+                    }
+                    "DETERMINISTIC" => {
+                        if let Some(Token::True) = &parser.current_token {
+                            deterministic = Some(true);
+                            parser.advance()?;
+                        } else if let Some(Token::False) = &parser.current_token {
+                            deterministic = Some(false);
+                            parser.advance()?;
+                        }
+                    }
+                    _ => {
+                        parser.advance()?;
+                    }
+                }
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+    }
+
+    Ok(Statement::CreateCollation(CreateCollationStatement {
+        if_not_exists,
+        name,
+        options: CollationOptions {
+            from,
+            locale,
+            lc_collate,
+            lc_ctype,
+            provider,
+            deterministic,
+        },
+    }))
+}
+
+/// Parse DROP COLLATION statement
+pub fn parse_drop_collation(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropCollationStatement;
+
+    parser.expect(Token::Collation)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = utilities::parse_table_name(parser)?;
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropCollation(DropCollationStatement {
+        if_exists,
+        name,
+        cascade,
+    }))
+}
+
+/// Parse ALTER COLLATION statement
+pub fn parse_alter_collation(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{AlterCollationAction, AlterCollationStatement};
+
+    parser.expect(Token::Collation)?;
+
+    let name = utilities::parse_table_name(parser)?;
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new collation name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterCollationAction::Rename(new_name)
+    } else if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterCollationAction::Owner(new_owner)
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        parser.expect(Token::Schema)?;
+        let new_schema = if let Some(Token::Identifier(s)) = &parser.current_token {
+            let schema = s.clone();
+            parser.advance()?;
+            schema
+        } else {
+            return Err(ParseError {
+                message: "Expected schema name".to_string(),
+                position: parser.position,
+                expected: vec!["schema_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterCollationAction::SetSchema(new_schema)
+    } else if let Some(Token::Identifier(kw)) = &parser.current_token {
+        if kw.to_uppercase() == "REFRESH" {
+            parser.advance()?;
+            parser.expect(Token::Version)?;
+            AlterCollationAction::RefreshVersion
+        } else {
+            return Err(ParseError {
+                message: "Expected RENAME, OWNER, SET SCHEMA, or REFRESH VERSION".to_string(),
+                position: parser.position,
+                expected: vec![
+                    "RENAME".to_string(),
+                    "OWNER".to_string(),
+                    "SET".to_string(),
+                    "REFRESH".to_string(),
+                ],
+                found: parser.current_token.clone(),
+            });
+        }
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME, OWNER, SET SCHEMA, or REFRESH VERSION".to_string(),
+            position: parser.position,
+            expected: vec![
+                "RENAME".to_string(),
+                "OWNER".to_string(),
+                "SET".to_string(),
+                "REFRESH".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterCollation(AlterCollationStatement {
+        name,
+        action,
+    }))
+}
+
+// ============================================================================
+// CONVERSION statements
+// ============================================================================
+
+/// Parse CREATE CONVERSION statement
+pub fn parse_create_conversion(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateConversionStatement;
+
+    // Check for DEFAULT keyword
+    let is_default = if let Some(Token::Default) = &parser.current_token {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    parser.expect(Token::Conversion)?;
+
+    let name = utilities::parse_table_name(parser)?;
+
+    // Parse FOR source_encoding TO dest_encoding FROM function
+    parser.expect(Token::For)?;
+    let source_encoding = if let Some(Token::StringLiteral(e)) = &parser.current_token {
+        let enc = e.clone();
+        parser.advance()?;
+        enc
+    } else if let Some(Token::Identifier(e)) = &parser.current_token {
+        let enc = e.clone();
+        parser.advance()?;
+        enc
+    } else {
+        return Err(ParseError {
+            message: "Expected source encoding".to_string(),
+            position: parser.position,
+            expected: vec!["source_encoding".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    parser.expect(Token::To)?;
+    let dest_encoding = if let Some(Token::StringLiteral(e)) = &parser.current_token {
+        let enc = e.clone();
+        parser.advance()?;
+        enc
+    } else if let Some(Token::Identifier(e)) = &parser.current_token {
+        let enc = e.clone();
+        parser.advance()?;
+        enc
+    } else {
+        return Err(ParseError {
+            message: "Expected destination encoding".to_string(),
+            position: parser.position,
+            expected: vec!["dest_encoding".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    parser.expect(Token::From)?;
+    let function = utilities::parse_table_name(parser)?;
+
+    Ok(Statement::CreateConversion(CreateConversionStatement {
+        is_default,
+        name,
+        source_encoding,
+        dest_encoding,
+        function,
+    }))
+}
+
+/// Parse DROP CONVERSION statement
+pub fn parse_drop_conversion(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropConversionStatement;
+
+    parser.expect(Token::Conversion)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = utilities::parse_table_name(parser)?;
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropConversion(DropConversionStatement {
+        if_exists,
+        name,
+        cascade,
+    }))
+}
+
+/// Parse ALTER CONVERSION statement
+pub fn parse_alter_conversion(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{AlterConversionAction, AlterConversionStatement};
+
+    parser.expect(Token::Conversion)?;
+
+    let name = utilities::parse_table_name(parser)?;
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new conversion name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterConversionAction::Rename(new_name)
+    } else if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterConversionAction::Owner(new_owner)
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        parser.expect(Token::Schema)?;
+        let new_schema = if let Some(Token::Identifier(s)) = &parser.current_token {
+            let schema = s.clone();
+            parser.advance()?;
+            schema
+        } else {
+            return Err(ParseError {
+                message: "Expected schema name".to_string(),
+                position: parser.position,
+                expected: vec!["schema_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterConversionAction::SetSchema(new_schema)
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME, OWNER, or SET SCHEMA".to_string(),
+            position: parser.position,
+            expected: vec![
+                "RENAME".to_string(),
+                "OWNER".to_string(),
+                "SET".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterConversion(AlterConversionStatement {
+        name,
+        action,
+    }))
+}
+
+// ============================================================================
+// FOREIGN DATA WRAPPER statements
+// ============================================================================
+
+/// Parse CREATE FOREIGN DATA WRAPPER statement
+pub fn parse_create_foreign_data_wrapper(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateForeignDataWrapperStatement;
+
+    // Already past FOREIGN
+    parser.expect(Token::Data)?;
+    parser.expect(Token::Wrapper)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected wrapper name".to_string(),
+            position: parser.position,
+            expected: vec!["wrapper_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse optional HANDLER, VALIDATOR, OPTIONS
+    let mut handler = None;
+    let mut validator = None;
+    let mut options = Vec::new();
+
+    while parser.current_token.is_some() && !parser.matches(&[Token::Semicolon]) {
+        if let Some(Token::Identifier(kw)) = &parser.current_token {
+            match kw.to_uppercase().as_str() {
+                "HANDLER" => {
+                    parser.advance()?;
+                    if let Some(Token::Identifier(h)) = &parser.current_token {
+                        handler = Some(h.clone());
+                        parser.advance()?;
+                    }
+                }
+                "VALIDATOR" => {
+                    parser.advance()?;
+                    if let Some(Token::Identifier(v)) = &parser.current_token {
+                        validator = Some(v.clone());
+                        parser.advance()?;
+                    }
+                }
+                "NO" => {
+                    parser.advance()?;
+                    if let Some(Token::Identifier(kw2)) = &parser.current_token {
+                        match kw2.to_uppercase().as_str() {
+                            "HANDLER" => {
+                                parser.advance()?;
+                                handler = None;
+                            }
+                            "VALIDATOR" => {
+                                parser.advance()?;
+                                validator = None;
+                            }
+                            _ => parser.advance()?,
+                        }
+                    }
+                }
+                _ => break,
+            }
+        } else if parser.matches(&[Token::Options]) {
+            parser.advance()?;
+            parser.expect(Token::LeftParen)?;
+            while !parser.matches(&[Token::RightParen]) {
+                if let Some(Token::Identifier(key)) = &parser.current_token {
+                    let key = key.clone();
+                    parser.advance()?;
+                    let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                        let v = v.clone();
+                        parser.advance()?;
+                        v
+                    } else {
+                        String::new()
+                    };
+                    options.push((key, value));
+                }
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+            parser.expect(Token::RightParen)?;
+        } else {
+            break;
+        }
+    }
+
+    Ok(Statement::CreateForeignDataWrapper(
+        CreateForeignDataWrapperStatement {
+            name,
+            handler,
+            validator,
+            options,
+        },
+    ))
+}
+
+/// Parse DROP FOREIGN DATA WRAPPER statement
+pub fn parse_drop_foreign_data_wrapper(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropForeignDataWrapperStatement;
+
+    // Already past FOREIGN
+    parser.expect(Token::Data)?;
+    parser.expect(Token::Wrapper)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected wrapper name".to_string(),
+            position: parser.position,
+            expected: vec!["wrapper_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropForeignDataWrapper(
+        DropForeignDataWrapperStatement {
+            if_exists,
+            name,
+            cascade,
+        },
+    ))
+}
+
+/// Parse ALTER FOREIGN DATA WRAPPER statement
+pub fn parse_alter_foreign_data_wrapper(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{
+        AlterForeignDataWrapperAction, AlterForeignDataWrapperStatement,
+    };
+
+    // Already past FOREIGN
+    parser.expect(Token::Data)?;
+    parser.expect(Token::Wrapper)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected wrapper name".to_string(),
+            position: parser.position,
+            expected: vec!["wrapper_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new wrapper name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterForeignDataWrapperAction::Rename(new_name)
+    } else if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterForeignDataWrapperAction::Owner(new_owner)
+    } else if let Some(Token::Identifier(kw)) = &parser.current_token {
+        match kw.to_uppercase().as_str() {
+            "HANDLER" => {
+                parser.advance()?;
+                if let Some(Token::Identifier(h)) = &parser.current_token {
+                    let handler = h.clone();
+                    parser.advance()?;
+                    AlterForeignDataWrapperAction::SetHandler(Some(handler))
+                } else {
+                    AlterForeignDataWrapperAction::SetHandler(None)
+                }
+            }
+            "VALIDATOR" => {
+                parser.advance()?;
+                if let Some(Token::Identifier(v)) = &parser.current_token {
+                    let validator = v.clone();
+                    parser.advance()?;
+                    AlterForeignDataWrapperAction::SetValidator(Some(validator))
+                } else {
+                    AlterForeignDataWrapperAction::SetValidator(None)
+                }
+            }
+            "NO" => {
+                parser.advance()?;
+                if let Some(Token::Identifier(kw2)) = &parser.current_token {
+                    match kw2.to_uppercase().as_str() {
+                        "HANDLER" => {
+                            parser.advance()?;
+                            AlterForeignDataWrapperAction::SetHandler(None)
+                        }
+                        "VALIDATOR" => {
+                            parser.advance()?;
+                            AlterForeignDataWrapperAction::SetValidator(None)
+                        }
+                        _ => AlterForeignDataWrapperAction::SetHandler(None),
+                    }
+                } else {
+                    AlterForeignDataWrapperAction::SetHandler(None)
+                }
+            }
+            _ => {
+                return Err(ParseError {
+                    message: "Expected RENAME, OWNER, HANDLER, VALIDATOR, or NO".to_string(),
+                    position: parser.position,
+                    expected: vec![
+                        "RENAME".to_string(),
+                        "OWNER".to_string(),
+                        "HANDLER".to_string(),
+                    ],
+                    found: parser.current_token.clone(),
+                });
+            }
+        }
+    } else if parser.matches(&[Token::Options]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        let mut opts = Vec::new();
+        while !parser.matches(&[Token::RightParen]) {
+            if let Some(Token::Identifier(key)) = &parser.current_token {
+                let key = key.clone();
+                parser.advance()?;
+                let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                    let v = v.clone();
+                    parser.advance()?;
+                    v
+                } else {
+                    String::new()
+                };
+                opts.push((key, value));
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+        AlterForeignDataWrapperAction::SetOptions(opts)
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME, OWNER, HANDLER, VALIDATOR, NO, or OPTIONS".to_string(),
+            position: parser.position,
+            expected: vec![
+                "RENAME".to_string(),
+                "OWNER".to_string(),
+                "HANDLER".to_string(),
+                "OPTIONS".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterForeignDataWrapper(
+        AlterForeignDataWrapperStatement { name, action },
+    ))
+}
+
+// ============================================================================
+// FOREIGN TABLE statements
+// ============================================================================
+
+/// Parse CREATE FOREIGN TABLE statement
+pub fn parse_create_foreign_table(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateForeignTableStatement;
+
+    // Already past FOREIGN
+    parser.expect(Token::Table)?;
+
+    let if_not_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Not)?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = utilities::parse_table_name(parser)?;
+
+    // Parse column definitions
+    parser.expect(Token::LeftParen)?;
+    let mut columns = Vec::new();
+    while !parser.matches(&[Token::RightParen]) {
+        let column = parse_column_definition(parser)?;
+        columns.push(column);
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+    parser.expect(Token::RightParen)?;
+
+    // Parse SERVER
+    parser.expect(Token::Server)?;
+    let server = if let Some(Token::Identifier(s)) = &parser.current_token {
+        let server = s.clone();
+        parser.advance()?;
+        server
+    } else {
+        return Err(ParseError {
+            message: "Expected server name".to_string(),
+            position: parser.position,
+            expected: vec!["server_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse optional OPTIONS
+    let mut options = Vec::new();
+    if parser.matches(&[Token::Options]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        while !parser.matches(&[Token::RightParen]) {
+            if let Some(Token::Identifier(key)) = &parser.current_token {
+                let key = key.clone();
+                parser.advance()?;
+                let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                    let v = v.clone();
+                    parser.advance()?;
+                    v
+                } else {
+                    String::new()
+                };
+                options.push((key, value));
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+    }
+
+    Ok(Statement::CreateForeignTable(CreateForeignTableStatement {
+        if_not_exists,
+        name,
+        columns,
+        server,
+        options,
+    }))
+}
+
+/// Parse DROP FOREIGN TABLE statement
+pub fn parse_drop_foreign_table(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropForeignTableStatement;
+
+    // Already past FOREIGN
+    parser.expect(Token::Table)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let mut names = Vec::new();
+    loop {
+        let name = utilities::parse_table_name(parser)?;
+        names.push(name);
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropForeignTable(DropForeignTableStatement {
+        if_exists,
+        names,
+        cascade,
+    }))
+}
+
+/// Parse ALTER FOREIGN TABLE statement
+pub fn parse_alter_foreign_table(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{
+        AlterForeignTableAction, AlterForeignTableStatement,
+    };
+
+    // Already past FOREIGN
+    parser.expect(Token::Table)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = utilities::parse_table_name(parser)?;
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new table name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterForeignTableAction::Rename(new_name)
+    } else if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterForeignTableAction::Owner(new_owner)
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        parser.expect(Token::Schema)?;
+        let new_schema = if let Some(Token::Identifier(s)) = &parser.current_token {
+            let schema = s.clone();
+            parser.advance()?;
+            schema
+        } else {
+            return Err(ParseError {
+                message: "Expected schema name".to_string(),
+                position: parser.position,
+                expected: vec!["schema_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterForeignTableAction::SetSchema(new_schema)
+    } else if parser.matches(&[Token::Add]) {
+        parser.advance()?;
+        parser.expect(Token::Column)?;
+        let column = parse_column_definition(parser)?;
+        AlterForeignTableAction::AddColumn(column)
+    } else if parser.matches(&[Token::Drop]) {
+        parser.advance()?;
+        parser.expect(Token::Column)?;
+        let col_name = if let Some(Token::Identifier(c)) = &parser.current_token {
+            let name = c.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected column name".to_string(),
+                position: parser.position,
+                expected: vec!["column_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterForeignTableAction::DropColumn(col_name)
+    } else if parser.matches(&[Token::Options]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        let mut opts = Vec::new();
+        while !parser.matches(&[Token::RightParen]) {
+            if let Some(Token::Identifier(key)) = &parser.current_token {
+                let key = key.clone();
+                parser.advance()?;
+                let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                    let v = v.clone();
+                    parser.advance()?;
+                    v
+                } else {
+                    String::new()
+                };
+                opts.push((key, value));
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+        AlterForeignTableAction::SetOptions(opts)
+    } else {
+        return Err(ParseError {
+            message:
+                "Expected RENAME, OWNER, SET SCHEMA, ADD COLUMN, DROP COLUMN, or OPTIONS"
+                    .to_string(),
+            position: parser.position,
+            expected: vec![
+                "RENAME".to_string(),
+                "OWNER".to_string(),
+                "SET".to_string(),
+                "ADD".to_string(),
+                "DROP".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterForeignTable(AlterForeignTableStatement {
+        if_exists,
+        name,
+        action,
+    }))
+}
+
+// ============================================================================
+// SERVER statements
+// ============================================================================
+
+/// Parse CREATE SERVER statement
+pub fn parse_create_server(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateServerStatement;
+
+    parser.expect(Token::Server)?;
+
+    let if_not_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Not)?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected server name".to_string(),
+            position: parser.position,
+            expected: vec!["server_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse optional TYPE and VERSION
+    let mut server_type = None;
+    let mut version = None;
+
+    if parser.matches(&[Token::Type]) {
+        parser.advance()?;
+        if let Some(Token::StringLiteral(t)) = &parser.current_token {
+            server_type = Some(t.clone());
+            parser.advance()?;
+        }
+    }
+
+    if parser.matches(&[Token::Version]) {
+        parser.advance()?;
+        if let Some(Token::StringLiteral(v)) = &parser.current_token {
+            version = Some(v.clone());
+            parser.advance()?;
+        }
+    }
+
+    // Parse FOREIGN DATA WRAPPER
+    parser.expect(Token::Foreign)?;
+    parser.expect(Token::Data)?;
+    parser.expect(Token::Wrapper)?;
+    let fdw_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected foreign data wrapper name".to_string(),
+            position: parser.position,
+            expected: vec!["fdw_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse optional OPTIONS
+    let mut options = Vec::new();
+    if parser.matches(&[Token::Options]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        while !parser.matches(&[Token::RightParen]) {
+            if let Some(Token::Identifier(key)) = &parser.current_token {
+                let key = key.clone();
+                parser.advance()?;
+                let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                    let v = v.clone();
+                    parser.advance()?;
+                    v
+                } else {
+                    String::new()
+                };
+                options.push((key, value));
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+    }
+
+    Ok(Statement::CreateServer(CreateServerStatement {
+        if_not_exists,
+        name,
+        server_type,
+        version,
+        fdw_name,
+        options,
+    }))
+}
+
+/// Parse DROP SERVER statement
+pub fn parse_drop_server(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropServerStatement;
+
+    parser.expect(Token::Server)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let mut names = Vec::new();
+    loop {
+        if let Some(Token::Identifier(n)) = &parser.current_token {
+            names.push(n.clone());
+            parser.advance()?;
+        } else {
+            break;
+        }
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropServer(DropServerStatement {
+        if_exists,
+        names,
+        cascade,
+    }))
+}
+
+/// Parse ALTER SERVER statement
+pub fn parse_alter_server(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{AlterServerAction, AlterServerStatement};
+
+    parser.expect(Token::Server)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected server name".to_string(),
+            position: parser.position,
+            expected: vec!["server_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new server name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterServerAction::Rename(new_name)
+    } else if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterServerAction::Owner(new_owner)
+    } else if parser.matches(&[Token::Version]) {
+        parser.advance()?;
+        let version = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+            let v = v.clone();
+            parser.advance()?;
+            Some(v)
+        } else {
+            None
+        };
+        AlterServerAction::SetVersion(version)
+    } else if parser.matches(&[Token::Options]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        let mut opts = Vec::new();
+        while !parser.matches(&[Token::RightParen]) {
+            if let Some(Token::Identifier(key)) = &parser.current_token {
+                let key = key.clone();
+                parser.advance()?;
+                let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                    let v = v.clone();
+                    parser.advance()?;
+                    v
+                } else {
+                    String::new()
+                };
+                opts.push((key, value));
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+        AlterServerAction::SetOptions(opts)
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME, OWNER, VERSION, or OPTIONS".to_string(),
+            position: parser.position,
+            expected: vec![
+                "RENAME".to_string(),
+                "OWNER".to_string(),
+                "VERSION".to_string(),
+                "OPTIONS".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterServer(AlterServerStatement { name, action }))
+}

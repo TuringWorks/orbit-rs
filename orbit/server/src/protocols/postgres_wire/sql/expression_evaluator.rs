@@ -608,10 +608,19 @@ impl ExpressionEvaluator {
             "SIN" => self.evaluate_sin(&args),
             "COS" => self.evaluate_cos(&args),
             "TAN" => self.evaluate_tan(&args),
+            "COT" => self.evaluate_cot(&args),
             "ASIN" => self.evaluate_asin(&args),
             "ACOS" => self.evaluate_acos(&args),
             "ATAN" => self.evaluate_atan(&args),
             "ATAN2" => self.evaluate_atan2(&args),
+            // Hyperbolic functions (PostgreSQL 18)
+            "SINH" => self.evaluate_sinh(&args),
+            "COSH" => self.evaluate_cosh(&args),
+            "TANH" => self.evaluate_tanh(&args),
+            // Inverse hyperbolic functions (PostgreSQL 18)
+            "ASINH" => self.evaluate_asinh(&args),
+            "ACOSH" => self.evaluate_acosh(&args),
+            "ATANH" => self.evaluate_atanh(&args),
             "SIGN" => self.evaluate_sign(&args),
             "TRUNC" | "TRUNCATE" => self.evaluate_trunc(&args),
 
@@ -2199,6 +2208,126 @@ impl ExpressionEvaluator {
         match (y, x) {
             (Some(y), Some(x)) => Ok(SqlValue::DoublePrecision(y.atan2(x))),
             _ => Ok(SqlValue::Null),
+        }
+    }
+
+    /// Evaluate cot(x) - cotangent (PostgreSQL 18)
+    fn evaluate_cot(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "COT requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => {
+                let tan_val = f.tan();
+                if tan_val.abs() < f64::EPSILON {
+                    return Err(ProtocolError::PostgresError(
+                        "COT division by zero".to_string(),
+                    ));
+                }
+                Ok(SqlValue::DoublePrecision(1.0 / tan_val))
+            }
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    /// Evaluate sinh(x) - hyperbolic sine (PostgreSQL 18)
+    fn evaluate_sinh(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "SINH requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => Ok(SqlValue::DoublePrecision(f.sinh())),
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    /// Evaluate cosh(x) - hyperbolic cosine (PostgreSQL 18)
+    fn evaluate_cosh(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "COSH requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => Ok(SqlValue::DoublePrecision(f.cosh())),
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    /// Evaluate tanh(x) - hyperbolic tangent (PostgreSQL 18)
+    fn evaluate_tanh(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "TANH requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => Ok(SqlValue::DoublePrecision(f.tanh())),
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    /// Evaluate asinh(x) - inverse hyperbolic sine (PostgreSQL 18)
+    fn evaluate_asinh(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "ASINH requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => Ok(SqlValue::DoublePrecision(f.asinh())),
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    /// Evaluate acosh(x) - inverse hyperbolic cosine (PostgreSQL 18)
+    fn evaluate_acosh(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "ACOSH requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => {
+                if f < 1.0 {
+                    return Err(ProtocolError::PostgresError(
+                        "ACOSH input must be >= 1".to_string(),
+                    ));
+                }
+                Ok(SqlValue::DoublePrecision(f.acosh()))
+            }
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    /// Evaluate atanh(x) - inverse hyperbolic tangent (PostgreSQL 18)
+    fn evaluate_atanh(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "ATANH requires exactly one argument".to_string(),
+            ));
+        }
+
+        match Self::to_f64_static(&args[0])? {
+            Some(f) => {
+                if f.abs() >= 1.0 {
+                    return Err(ProtocolError::PostgresError(
+                        "ATANH input must be in range (-1, 1)".to_string(),
+                    ));
+                }
+                Ok(SqlValue::DoublePrecision(f.atanh()))
+            }
+            None => Ok(SqlValue::Null),
         }
     }
 

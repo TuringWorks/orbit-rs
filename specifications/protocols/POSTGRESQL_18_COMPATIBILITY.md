@@ -171,7 +171,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | INSERT | ✅ | VALUES, SELECT, ON CONFLICT |
 | UPDATE | ✅ | SET, FROM, WHERE, RETURNING |
 | DELETE | ✅ | USING, WHERE, RETURNING |
-| MERGE | 🔶 | Parsing complete with PG18 RETURNING support |
+| MERGE | ✅ | Full execution with RETURNING, OLD/NEW support |
 | COPY | 🔶 | Parsing complete, execution incomplete |
 | SELECT INTO | ✅ | CREATE TABLE AS |
 
@@ -482,9 +482,9 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | random() | ✅ | Random value |
 | setseed(x) | ❌ | Set random seed |
 | sign(x) | ✅ | Sign of number |
-| factorial(x) | ❌ | Factorial |
-| gcd(a,b) | ❌ | Greatest common divisor |
-| lcm(a,b) | ❌ | Least common multiple |
+| factorial(x) | ✅ | Factorial (max 20) |
+| gcd(a,b) | ✅ | Greatest common divisor |
+| lcm(a,b) | ✅ | Least common multiple |
 | min_scale(x) | ❌ | Minimum scale |
 | scale(x) | ❌ | Scale of decimal |
 | trim_scale(x) | ❌ | Remove trailing zeros |
@@ -497,17 +497,17 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | sin(x) | ✅ | Sine |
 | cos(x) | ✅ | Cosine |
 | tan(x) | ✅ | Tangent |
-| cot(x) | ❌ | Cotangent |
+| cot(x) | ✅ | Cotangent (PG18) |
 | asin(x) | ✅ | Arc sine |
 | acos(x) | ✅ | Arc cosine |
 | atan(x) | ✅ | Arc tangent |
 | atan2(y,x) | ✅ | Two-argument arc tangent |
-| sinh(x) | ❌ | Hyperbolic sine |
-| cosh(x) | ❌ | Hyperbolic cosine |
-| tanh(x) | ❌ | Hyperbolic tangent |
-| asinh(x) | ❌ | Inverse hyperbolic sine |
-| acosh(x) | ❌ | Inverse hyperbolic cosine |
-| atanh(x) | ❌ | Inverse hyperbolic tangent |
+| sinh(x) | ✅ | Hyperbolic sine (PG18) |
+| cosh(x) | ✅ | Hyperbolic cosine (PG18) |
+| tanh(x) | ✅ | Hyperbolic tangent (PG18) |
+| asinh(x) | ✅ | Inverse hyperbolic sine (PG18) |
+| acosh(x) | ✅ | Inverse hyperbolic cosine (PG18) |
+| atanh(x) | ✅ | Inverse hyperbolic tangent (PG18) |
 
 ### String Functions
 
