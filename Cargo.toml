@@ -98,7 +98,7 @@ thiserror = "1.0"
 
 # Time and UUID
 chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.0", features = ["v4", "serde"] }
+uuid = { version = "1.19", features = ["v4", "serde"] }
 
 # Collections and utilities
 dashmap = "6.0"
