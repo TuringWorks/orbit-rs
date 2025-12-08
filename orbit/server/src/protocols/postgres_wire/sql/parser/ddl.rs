@@ -6,17 +6,23 @@
 use super::{utilities, ParseError, ParseResult, SqlParser};
 use crate::protocols::postgres_wire::sql::{
     ast::{
-        AlterColumnAction, AlterSequenceStatement, AlterTableAction, AlterTableStatement,
+        AlterColumnAction, AlterDomainAction, AlterDomainStatement, AlterPolicyAction,
+        AlterPolicyStatement, AlterRoleAction, AlterRoleStatement, AlterSequenceStatement,
+        AlterTableAction, AlterTableStatement, AlterTypeAction, AlterTypeStatement,
         ColumnConstraint, ColumnDefinition, CommentObjectType, CommentOnStatement,
-        CreateDatabaseStatement, CreateExtensionStatement, CreateFunctionStatement,
-        CreateIndexStatement, CreateSchemaStatement, CreateSequenceStatement, CreateTableStatement,
-        CreateTriggerStatement, CreateViewStatement, DropDatabaseStatement, DropExtensionStatement,
-        DropIndexStatement, DropSchemaStatement, DropSequenceStatement, DropTableStatement,
-        DropTriggerStatement, DropViewStatement, FunctionLanguage, FunctionName, FunctionParameter,
-        FunctionVolatility, GeneratedColumnStorage, IndexColumn, IndexOption, IndexType,
-        NullsOrder, ParameterMode, ReferentialAction, SequenceBound, SequenceOptions,
-        SequenceOwner, SortDirection, Statement, TableConstraint, TableOption, TriggerEvent,
-        TriggerForEach, TriggerTiming, TruncateIdentity, TruncateStatement,
+        CreateDatabaseStatement, CreateDomainStatement, CreateExtensionStatement,
+        CreateFunctionStatement, CreateIndexStatement, CreatePolicyStatement, CreateRoleStatement,
+        CreateRuleStatement, CreateSchemaStatement, CreateSequenceStatement, CreateTableStatement,
+        CreateTriggerStatement, CreateTypeStatement, CreateViewStatement, DomainConstraint,
+        DomainConstraintType, DropDatabaseStatement, DropDomainStatement, DropExtensionStatement,
+        DropIndexStatement, DropPolicyStatement, DropRoleStatement, DropRuleStatement,
+        DropSchemaStatement, DropSequenceStatement, DropTableStatement, DropTriggerStatement,
+        DropTypeStatement, DropViewStatement, EnumValuePosition, FunctionLanguage, FunctionName,
+        FunctionParameter, FunctionVolatility, GeneratedColumnStorage, IndexColumn, IndexOption,
+        IndexType, NullsOrder, ParameterMode, PolicyCommand, ReferentialAction, RoleOption,
+        RuleAction, RuleEvent, SequenceBound, SequenceOptions, SequenceOwner, SortDirection,
+        Statement, TableConstraint, TableOption, TriggerEvent, TriggerForEach, TriggerTiming,
+        TruncateIdentity, TruncateStatement, TypeAttribute, TypeDefinition,
     },
     lexer::Token,
     types::SqlValue,
@@ -2544,5 +2550,1648 @@ pub fn parse_truncate(parser: &mut SqlParser) -> ParseResult<Statement> {
         identity,
         cascade,
         only,
+    }))
+}
+
+// ===== Extended DDL: TYPE Statements =====
+
+/// Parse CREATE TYPE statement
+/// CREATE TYPE name AS ENUM ('value1', 'value2', ...)
+/// CREATE TYPE name AS (attr1 type1, attr2 type2, ...)
+/// CREATE TYPE name AS RANGE (SUBTYPE = ...)
+/// CREATE TYPE name (INPUT = ..., OUTPUT = ...)
+/// CREATE TYPE name  -- shell type
+pub fn parse_create_type(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Type)?;
+
+    // Check for IF NOT EXISTS (PostgreSQL 9.5+)
+    let if_not_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Not)?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    // Parse type name (may be schema-qualified)
+    let name = utilities::parse_table_name(parser)?;
+
+    // Check what kind of type definition follows
+    let type_definition = if parser.matches(&[Token::As]) {
+        parser.advance()?;
+
+        if parser.matches(&[Token::Enum]) {
+            // ENUM type
+            parser.advance()?;
+            parser.expect(Token::LeftParen)?;
+
+            let mut values = Vec::new();
+            loop {
+                if let Some(Token::StringLiteral(value)) = &parser.current_token {
+                    values.push(value.clone());
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+
+            parser.expect(Token::RightParen)?;
+            TypeDefinition::Enum { values }
+        } else if parser.matches(&[Token::LeftParen]) {
+            // Composite type: AS (attr1 type1, ...)
+            parser.advance()?;
+
+            let mut attributes = Vec::new();
+            loop {
+                if parser.matches(&[Token::RightParen]) {
+                    break;
+                }
+
+                // Parse attribute name
+                let attr_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                    let name = n.clone();
+                    parser.advance()?;
+                    name
+                } else {
+                    return Err(ParseError {
+                        message: "Expected attribute name".to_string(),
+                        position: parser.position,
+                        expected: vec!["attribute_name".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                };
+
+                // Parse data type
+                let data_type = utilities::parse_data_type(parser)?;
+
+                // Optional COLLATE
+                let collation = if parser.matches(&[Token::Collation]) {
+                    parser.advance()?;
+                    if let Some(Token::Identifier(coll)) = &parser.current_token {
+                        let c = coll.clone();
+                        parser.advance()?;
+                        Some(c)
+                    } else if let Some(Token::StringLiteral(coll)) = &parser.current_token {
+                        let c = coll.clone();
+                        parser.advance()?;
+                        Some(c)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                attributes.push(TypeAttribute {
+                    name: attr_name,
+                    data_type,
+                    collation,
+                });
+
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+
+            parser.expect(Token::RightParen)?;
+            TypeDefinition::Composite { attributes }
+        } else if parser.matches(&[Token::Range]) {
+            // Range type: AS RANGE (SUBTYPE = ...)
+            parser.advance()?;
+            parser.expect(Token::LeftParen)?;
+
+            // For now, just parse the subtype
+            let mut subtype = None;
+            while !parser.matches(&[Token::RightParen]) {
+                if let Some(Token::Identifier(opt)) = &parser.current_token {
+                    if opt.to_uppercase() == "SUBTYPE" {
+                        parser.advance()?;
+                        parser.expect(Token::Equal)?;
+                        subtype = Some(utilities::parse_data_type(parser)?);
+                    } else {
+                        // Skip other options for now
+                        parser.advance()?;
+                        if parser.matches(&[Token::Equal]) {
+                            parser.advance()?;
+                            // Skip the value
+                            parser.advance()?;
+                        }
+                    }
+                } else {
+                    parser.advance()?;
+                }
+
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                }
+            }
+
+            parser.expect(Token::RightParen)?;
+
+            let subtype = subtype.ok_or_else(|| ParseError {
+                message: "RANGE type requires SUBTYPE".to_string(),
+                position: parser.position,
+                expected: vec!["SUBTYPE".to_string()],
+                found: parser.current_token.clone(),
+            })?;
+
+            TypeDefinition::Range {
+                subtype,
+                options: Vec::new(),
+            }
+        } else {
+            return Err(ParseError {
+                message: "Expected ENUM, composite definition, or RANGE after AS".to_string(),
+                position: parser.position,
+                expected: vec!["ENUM".to_string(), "(".to_string(), "RANGE".to_string()],
+                found: parser.current_token.clone(),
+            });
+        }
+    } else if parser.matches(&[Token::LeftParen]) {
+        // Base type: CREATE TYPE name (INPUT = ..., OUTPUT = ...)
+        parser.advance()?;
+
+        // Skip the options for now (complex base type definitions)
+        let mut depth = 1;
+        while depth > 0 {
+            if parser.matches(&[Token::LeftParen]) {
+                depth += 1;
+            } else if parser.matches(&[Token::RightParen]) {
+                depth -= 1;
+            }
+            if depth > 0 {
+                parser.advance()?;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+
+        TypeDefinition::Base {
+            options: Vec::new(),
+        }
+    } else {
+        // Shell type: CREATE TYPE name (no definition yet)
+        TypeDefinition::Shell
+    };
+
+    Ok(Statement::CreateType(CreateTypeStatement {
+        if_not_exists,
+        name,
+        type_definition,
+    }))
+}
+
+/// Parse DROP TYPE statement
+pub fn parse_drop_type(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Type)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    // Parse type names (comma-separated)
+    let mut names = vec![utilities::parse_table_name(parser)?];
+    while parser.matches(&[Token::Comma]) {
+        parser.advance()?;
+        names.push(utilities::parse_table_name(parser)?);
+    }
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        if parser.matches(&[Token::Restrict]) {
+            parser.advance()?;
+        }
+        false
+    };
+
+    Ok(Statement::DropType(DropTypeStatement {
+        if_exists,
+        names,
+        cascade,
+    }))
+}
+
+/// Parse ALTER TYPE statement
+pub fn parse_alter_type(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Type)?;
+
+    let name = utilities::parse_table_name(parser)?;
+
+    let action = if parser.matches(&[Token::Add]) {
+        parser.advance()?;
+
+        if let Some(Token::Identifier(kw)) = &parser.current_token {
+            if kw.to_uppercase() == "VALUE" {
+                parser.advance()?;
+
+                let if_not_exists = if parser.matches(&[Token::If]) {
+                    parser.advance()?;
+                    parser.expect(Token::Not)?;
+                    parser.expect(Token::Exists)?;
+                    true
+                } else {
+                    false
+                };
+
+                let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                    let val = v.clone();
+                    parser.advance()?;
+                    val
+                } else {
+                    return Err(ParseError {
+                        message: "Expected string value".to_string(),
+                        position: parser.position,
+                        expected: vec!["'value'".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                };
+
+                let position = if parser.matches(&[Token::Before]) {
+                    parser.advance()?;
+                    if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                        let pos = v.clone();
+                        parser.advance()?;
+                        Some(EnumValuePosition::Before(pos))
+                    } else {
+                        None
+                    }
+                } else if parser.matches(&[Token::After]) {
+                    parser.advance()?;
+                    if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                        let pos = v.clone();
+                        parser.advance()?;
+                        Some(EnumValuePosition::After(pos))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                AlterTypeAction::AddValue {
+                    if_not_exists,
+                    value,
+                    position,
+                }
+            } else if kw.to_uppercase() == "ATTRIBUTE" {
+                parser.advance()?;
+                let attr_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                    let name = n.clone();
+                    parser.advance()?;
+                    name
+                } else {
+                    return Err(ParseError {
+                        message: "Expected attribute name".to_string(),
+                        position: parser.position,
+                        expected: vec!["attribute_name".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                };
+
+                let data_type = utilities::parse_data_type(parser)?;
+                AlterTypeAction::AddAttribute {
+                    name: attr_name,
+                    data_type,
+                }
+            } else {
+                return Err(ParseError {
+                    message: "Expected VALUE or ATTRIBUTE after ADD".to_string(),
+                    position: parser.position,
+                    expected: vec!["VALUE".to_string(), "ATTRIBUTE".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            }
+        } else {
+            return Err(ParseError {
+                message: "Expected VALUE or ATTRIBUTE".to_string(),
+                position: parser.position,
+                expected: vec!["VALUE".to_string(), "ATTRIBUTE".to_string()],
+                found: parser.current_token.clone(),
+            });
+        }
+    } else if parser.matches(&[Token::Drop]) {
+        parser.advance()?;
+
+        if let Some(Token::Identifier(kw)) = &parser.current_token {
+            if kw.to_uppercase() == "ATTRIBUTE" {
+                parser.advance()?;
+                let attr_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                    let name = n.clone();
+                    parser.advance()?;
+                    name
+                } else {
+                    return Err(ParseError {
+                        message: "Expected attribute name".to_string(),
+                        position: parser.position,
+                        expected: vec!["attribute_name".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                };
+
+                let cascade = if parser.matches(&[Token::Cascade]) {
+                    parser.advance()?;
+                    true
+                } else {
+                    false
+                };
+
+                AlterTypeAction::DropAttribute {
+                    name: attr_name,
+                    cascade,
+                }
+            } else {
+                return Err(ParseError {
+                    message: "Expected ATTRIBUTE after DROP".to_string(),
+                    position: parser.position,
+                    expected: vec!["ATTRIBUTE".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            }
+        } else {
+            return Err(ParseError {
+                message: "Expected ATTRIBUTE".to_string(),
+                position: parser.position,
+                expected: vec!["ATTRIBUTE".to_string()],
+                found: parser.current_token.clone(),
+            });
+        }
+    } else if let Some(Token::Identifier(kw)) = &parser.current_token {
+        if kw.to_uppercase() == "RENAME" {
+            parser.advance()?;
+
+            if let Some(Token::Identifier(kw2)) = &parser.current_token {
+                if kw2.to_uppercase() == "VALUE" {
+                    parser.advance()?;
+                    let old_value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                        let val = v.clone();
+                        parser.advance()?;
+                        val
+                    } else {
+                        return Err(ParseError {
+                            message: "Expected old value".to_string(),
+                            position: parser.position,
+                            expected: vec!["'old_value'".to_string()],
+                            found: parser.current_token.clone(),
+                        });
+                    };
+
+                    parser.expect(Token::To)?;
+
+                    let new_value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                        let val = v.clone();
+                        parser.advance()?;
+                        val
+                    } else {
+                        return Err(ParseError {
+                            message: "Expected new value".to_string(),
+                            position: parser.position,
+                            expected: vec!["'new_value'".to_string()],
+                            found: parser.current_token.clone(),
+                        });
+                    };
+
+                    AlterTypeAction::RenameValue {
+                        old_value,
+                        new_value,
+                    }
+                } else {
+                    // RENAME TO new_name
+                    parser.expect(Token::To)?;
+                    let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                        let name = n.clone();
+                        parser.advance()?;
+                        name
+                    } else {
+                        return Err(ParseError {
+                            message: "Expected new name".to_string(),
+                            position: parser.position,
+                            expected: vec!["new_name".to_string()],
+                            found: parser.current_token.clone(),
+                        });
+                    };
+                    AlterTypeAction::Rename(new_name)
+                }
+            } else if parser.matches(&[Token::To]) {
+                parser.advance()?;
+                let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                    let name = n.clone();
+                    parser.advance()?;
+                    name
+                } else {
+                    return Err(ParseError {
+                        message: "Expected new name".to_string(),
+                        position: parser.position,
+                        expected: vec!["new_name".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                };
+                AlterTypeAction::Rename(new_name)
+            } else {
+                return Err(ParseError {
+                    message: "Expected VALUE or TO after RENAME".to_string(),
+                    position: parser.position,
+                    expected: vec!["VALUE".to_string(), "TO".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            }
+        } else if kw.to_uppercase() == "OWNER" {
+            parser.advance()?;
+            parser.expect(Token::To)?;
+            let owner = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let name = n.clone();
+                parser.advance()?;
+                name
+            } else {
+                return Err(ParseError {
+                    message: "Expected owner name".to_string(),
+                    position: parser.position,
+                    expected: vec!["owner_name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            AlterTypeAction::Owner(owner)
+        } else {
+            return Err(ParseError {
+                message: "Unknown ALTER TYPE action".to_string(),
+                position: parser.position,
+                expected: vec![
+                    "ADD".to_string(),
+                    "DROP".to_string(),
+                    "RENAME".to_string(),
+                    "OWNER".to_string(),
+                ],
+                found: parser.current_token.clone(),
+            });
+        }
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        parser.expect(Token::Schema)?;
+        let new_schema = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected schema name".to_string(),
+                position: parser.position,
+                expected: vec!["schema_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterTypeAction::SetSchema(new_schema)
+    } else {
+        return Err(ParseError {
+            message: "Expected ALTER TYPE action".to_string(),
+            position: parser.position,
+            expected: vec![
+                "ADD".to_string(),
+                "DROP".to_string(),
+                "RENAME".to_string(),
+                "SET".to_string(),
+                "OWNER".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterType(AlterTypeStatement { name, action }))
+}
+
+// ===== Extended DDL: DOMAIN Statements =====
+
+/// Parse CREATE DOMAIN statement
+pub fn parse_create_domain(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Domain)?;
+
+    let if_not_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Not)?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = utilities::parse_table_name(parser)?;
+
+    parser.expect(Token::As)?;
+
+    let data_type = utilities::parse_data_type(parser)?;
+
+    // Optional COLLATE
+    let collation = if parser.matches(&[Token::Collation]) {
+        parser.advance()?;
+        if let Some(Token::Identifier(coll)) = &parser.current_token {
+            let c = coll.clone();
+            parser.advance()?;
+            Some(c)
+        } else if let Some(Token::StringLiteral(coll)) = &parser.current_token {
+            let c = coll.clone();
+            parser.advance()?;
+            Some(c)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Optional DEFAULT
+    let default = if parser.matches(&[Token::Default]) {
+        parser.advance()?;
+        Some(utilities::parse_expression(parser)?)
+    } else {
+        None
+    };
+
+    // Parse constraints
+    let mut constraints = Vec::new();
+    loop {
+        if parser.matches(&[Token::Constraint]) {
+            parser.advance()?;
+            let constraint_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let name = n.clone();
+                parser.advance()?;
+                Some(name)
+            } else {
+                None
+            };
+
+            let constraint_type = parse_domain_constraint_type(parser)?;
+            constraints.push(DomainConstraint {
+                name: constraint_name,
+                constraint_type,
+            });
+        } else if parser.matches(&[Token::Not]) {
+            parser.advance()?;
+            parser.expect(Token::Null)?;
+            constraints.push(DomainConstraint {
+                name: None,
+                constraint_type: DomainConstraintType::NotNull,
+            });
+        } else if parser.matches(&[Token::Null]) {
+            parser.advance()?;
+            constraints.push(DomainConstraint {
+                name: None,
+                constraint_type: DomainConstraintType::Null,
+            });
+        } else if parser.matches(&[Token::Check]) {
+            parser.advance()?;
+            parser.expect(Token::LeftParen)?;
+            let expr = utilities::parse_expression(parser)?;
+            parser.expect(Token::RightParen)?;
+            constraints.push(DomainConstraint {
+                name: None,
+                constraint_type: DomainConstraintType::Check(expr),
+            });
+        } else {
+            break;
+        }
+    }
+
+    Ok(Statement::CreateDomain(CreateDomainStatement {
+        if_not_exists,
+        name,
+        data_type,
+        collation,
+        default,
+        constraints,
+    }))
+}
+
+fn parse_domain_constraint_type(parser: &mut SqlParser) -> ParseResult<DomainConstraintType> {
+    if parser.matches(&[Token::Not]) {
+        parser.advance()?;
+        parser.expect(Token::Null)?;
+        Ok(DomainConstraintType::NotNull)
+    } else if parser.matches(&[Token::Null]) {
+        parser.advance()?;
+        Ok(DomainConstraintType::Null)
+    } else if parser.matches(&[Token::Check]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        let expr = utilities::parse_expression(parser)?;
+        parser.expect(Token::RightParen)?;
+        Ok(DomainConstraintType::Check(expr))
+    } else {
+        Err(ParseError {
+            message: "Expected constraint type".to_string(),
+            position: parser.position,
+            expected: vec!["NOT NULL".to_string(), "NULL".to_string(), "CHECK".to_string()],
+            found: parser.current_token.clone(),
+        })
+    }
+}
+
+/// Parse DROP DOMAIN statement
+pub fn parse_drop_domain(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Domain)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let mut names = vec![utilities::parse_table_name(parser)?];
+    while parser.matches(&[Token::Comma]) {
+        parser.advance()?;
+        names.push(utilities::parse_table_name(parser)?);
+    }
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        if parser.matches(&[Token::Restrict]) {
+            parser.advance()?;
+        }
+        false
+    };
+
+    Ok(Statement::DropDomain(DropDomainStatement {
+        if_exists,
+        names,
+        cascade,
+    }))
+}
+
+/// Parse ALTER DOMAIN statement
+pub fn parse_alter_domain(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Domain)?;
+
+    let name = utilities::parse_table_name(parser)?;
+
+    let action = if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+
+        if parser.matches(&[Token::Default]) {
+            parser.advance()?;
+            let expr = utilities::parse_expression(parser)?;
+            AlterDomainAction::SetDefault(expr)
+        } else if parser.matches(&[Token::Not]) {
+            parser.advance()?;
+            parser.expect(Token::Null)?;
+            AlterDomainAction::SetNotNull
+        } else if parser.matches(&[Token::Schema]) {
+            parser.advance()?;
+            let new_schema = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let name = n.clone();
+                parser.advance()?;
+                name
+            } else {
+                return Err(ParseError {
+                    message: "Expected schema name".to_string(),
+                    position: parser.position,
+                    expected: vec!["schema_name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            AlterDomainAction::SetSchema(new_schema)
+        } else {
+            return Err(ParseError {
+                message: "Expected DEFAULT, NOT NULL, or SCHEMA after SET".to_string(),
+                position: parser.position,
+                expected: vec!["DEFAULT".to_string(), "NOT NULL".to_string(), "SCHEMA".to_string()],
+                found: parser.current_token.clone(),
+            });
+        }
+    } else if parser.matches(&[Token::Drop]) {
+        parser.advance()?;
+
+        if parser.matches(&[Token::Default]) {
+            parser.advance()?;
+            AlterDomainAction::DropDefault
+        } else if parser.matches(&[Token::Not]) {
+            parser.advance()?;
+            parser.expect(Token::Null)?;
+            AlterDomainAction::DropNotNull
+        } else if parser.matches(&[Token::Constraint]) {
+            parser.advance()?;
+            let constraint_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let name = n.clone();
+                parser.advance()?;
+                name
+            } else {
+                return Err(ParseError {
+                    message: "Expected constraint name".to_string(),
+                    position: parser.position,
+                    expected: vec!["constraint_name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+
+            let cascade = if parser.matches(&[Token::Cascade]) {
+                parser.advance()?;
+                true
+            } else {
+                false
+            };
+
+            AlterDomainAction::DropConstraint {
+                name: constraint_name,
+                cascade,
+            }
+        } else {
+            return Err(ParseError {
+                message: "Expected DEFAULT, NOT NULL, or CONSTRAINT after DROP".to_string(),
+                position: parser.position,
+                expected: vec!["DEFAULT".to_string(), "NOT NULL".to_string(), "CONSTRAINT".to_string()],
+                found: parser.current_token.clone(),
+            });
+        }
+    } else if parser.matches(&[Token::Add]) {
+        parser.advance()?;
+
+        let constraint_name = if parser.matches(&[Token::Constraint]) {
+            parser.advance()?;
+            if let Some(Token::Identifier(n)) = &parser.current_token {
+                let name = n.clone();
+                parser.advance()?;
+                Some(name)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let constraint_type = parse_domain_constraint_type(parser)?;
+        AlterDomainAction::AddConstraint(DomainConstraint {
+            name: constraint_name,
+            constraint_type,
+        })
+    } else if let Some(Token::Identifier(kw)) = &parser.current_token {
+        if kw.to_uppercase() == "RENAME" {
+            parser.advance()?;
+
+            if parser.matches(&[Token::Constraint]) {
+                parser.advance()?;
+                let old_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                    let name = n.clone();
+                    parser.advance()?;
+                    name
+                } else {
+                    return Err(ParseError {
+                        message: "Expected old constraint name".to_string(),
+                        position: parser.position,
+                        expected: vec!["old_constraint_name".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                };
+
+                parser.expect(Token::To)?;
+
+                let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                    let name = n.clone();
+                    parser.advance()?;
+                    name
+                } else {
+                    return Err(ParseError {
+                        message: "Expected new constraint name".to_string(),
+                        position: parser.position,
+                        expected: vec!["new_constraint_name".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                };
+
+                AlterDomainAction::RenameConstraint { old_name, new_name }
+            } else {
+                parser.expect(Token::To)?;
+                let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                    let name = n.clone();
+                    parser.advance()?;
+                    name
+                } else {
+                    return Err(ParseError {
+                        message: "Expected new domain name".to_string(),
+                        position: parser.position,
+                        expected: vec!["new_name".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                };
+                AlterDomainAction::Rename(new_name)
+            }
+        } else if kw.to_uppercase() == "OWNER" {
+            parser.advance()?;
+            parser.expect(Token::To)?;
+            let owner = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let name = n.clone();
+                parser.advance()?;
+                name
+            } else {
+                return Err(ParseError {
+                    message: "Expected owner name".to_string(),
+                    position: parser.position,
+                    expected: vec!["owner_name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            AlterDomainAction::Owner(owner)
+        } else if kw.to_uppercase() == "VALIDATE" {
+            parser.advance()?;
+            parser.expect(Token::Constraint)?;
+            let constraint_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let name = n.clone();
+                parser.advance()?;
+                name
+            } else {
+                return Err(ParseError {
+                    message: "Expected constraint name".to_string(),
+                    position: parser.position,
+                    expected: vec!["constraint_name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            AlterDomainAction::ValidateConstraint(constraint_name)
+        } else {
+            return Err(ParseError {
+                message: "Unknown ALTER DOMAIN action".to_string(),
+                position: parser.position,
+                expected: vec![
+                    "SET".to_string(),
+                    "DROP".to_string(),
+                    "ADD".to_string(),
+                    "RENAME".to_string(),
+                    "OWNER".to_string(),
+                    "VALIDATE".to_string(),
+                ],
+                found: parser.current_token.clone(),
+            });
+        }
+    } else {
+        return Err(ParseError {
+            message: "Expected ALTER DOMAIN action".to_string(),
+            position: parser.position,
+            expected: vec![
+                "SET".to_string(),
+                "DROP".to_string(),
+                "ADD".to_string(),
+                "RENAME".to_string(),
+                "OWNER".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterDomain(AlterDomainStatement { name, action }))
+}
+
+// ===== Extended DDL: ROLE/USER Statements =====
+
+/// Parse CREATE ROLE/USER statement
+pub fn parse_create_role(parser: &mut SqlParser, is_user: bool) -> ParseResult<Statement> {
+    if is_user {
+        parser.expect(Token::User)?;
+    } else {
+        parser.expect(Token::Role)?;
+    }
+
+    let if_not_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Not)?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected role/user name".to_string(),
+            position: parser.position,
+            expected: vec!["role_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse optional WITH
+    if parser.matches(&[Token::With]) {
+        parser.advance()?;
+    }
+
+    // Parse role options
+    let options = parse_role_options(parser)?;
+
+    Ok(Statement::CreateRole(CreateRoleStatement {
+        if_not_exists,
+        name,
+        is_user,
+        options,
+    }))
+}
+
+fn parse_role_options(parser: &mut SqlParser) -> ParseResult<Vec<RoleOption>> {
+    let mut options = Vec::new();
+
+    loop {
+        if parser.matches(&[Token::SuperUser]) {
+            parser.advance()?;
+            options.push(RoleOption::SuperUser(true));
+        } else if parser.matches(&[Token::NoSuperUser]) {
+            parser.advance()?;
+            options.push(RoleOption::SuperUser(false));
+        } else if parser.matches(&[Token::CreateDb]) {
+            parser.advance()?;
+            options.push(RoleOption::CreateDb(true));
+        } else if parser.matches(&[Token::NoCreateDb]) {
+            parser.advance()?;
+            options.push(RoleOption::CreateDb(false));
+        } else if parser.matches(&[Token::CreateRole]) {
+            parser.advance()?;
+            options.push(RoleOption::CreateRole(true));
+        } else if parser.matches(&[Token::NoCreateRole]) {
+            parser.advance()?;
+            options.push(RoleOption::CreateRole(false));
+        } else if parser.matches(&[Token::Inherit]) {
+            parser.advance()?;
+            options.push(RoleOption::Inherit(true));
+        } else if parser.matches(&[Token::NoInherit]) {
+            parser.advance()?;
+            options.push(RoleOption::Inherit(false));
+        } else if parser.matches(&[Token::Login]) {
+            parser.advance()?;
+            options.push(RoleOption::Login(true));
+        } else if parser.matches(&[Token::NoLogin]) {
+            parser.advance()?;
+            options.push(RoleOption::Login(false));
+        } else if parser.matches(&[Token::Replication]) {
+            parser.advance()?;
+            options.push(RoleOption::Replication(true));
+        } else if parser.matches(&[Token::NoReplication]) {
+            parser.advance()?;
+            options.push(RoleOption::Replication(false));
+        } else if parser.matches(&[Token::BypassRls]) {
+            parser.advance()?;
+            options.push(RoleOption::BypassRls(true));
+        } else if parser.matches(&[Token::NoBypassRls]) {
+            parser.advance()?;
+            options.push(RoleOption::BypassRls(false));
+        } else if parser.matches(&[Token::ConnectionLimit]) {
+            parser.advance()?;
+            parser.expect(Token::Limit)?;
+            if let Some(Token::NumericLiteral(n)) = &parser.current_token {
+                let limit = n.parse::<i32>().unwrap_or(-1);
+                parser.advance()?;
+                options.push(RoleOption::ConnectionLimit(limit));
+            }
+        } else if parser.matches(&[Token::Password]) {
+            parser.advance()?;
+            if parser.matches(&[Token::Null]) {
+                parser.advance()?;
+                options.push(RoleOption::Password(None));
+            } else if let Some(Token::StringLiteral(pwd)) = &parser.current_token {
+                let password = pwd.clone();
+                parser.advance()?;
+                options.push(RoleOption::Password(Some(password)));
+            }
+        } else if parser.matches(&[Token::Encrypted]) {
+            parser.advance()?;
+            parser.expect(Token::Password)?;
+            if let Some(Token::StringLiteral(pwd)) = &parser.current_token {
+                let password = pwd.clone();
+                parser.advance()?;
+                options.push(RoleOption::EncryptedPassword(password));
+            }
+        } else if parser.matches(&[Token::ValidUntil]) {
+            parser.advance()?;
+            // Handle "VALID UNTIL" as two keywords
+            if let Some(Token::Identifier(kw)) = &parser.current_token {
+                if kw.to_uppercase() == "UNTIL" {
+                    parser.advance()?;
+                }
+            }
+            if let Some(Token::StringLiteral(ts)) = &parser.current_token {
+                let timestamp = ts.clone();
+                parser.advance()?;
+                options.push(RoleOption::ValidUntil(timestamp));
+            }
+        } else if parser.matches(&[Token::In]) {
+            parser.advance()?;
+            parser.expect(Token::Role)?;
+            let roles = parse_role_list(parser)?;
+            options.push(RoleOption::InRole(roles));
+        } else if parser.matches(&[Token::Role]) {
+            parser.advance()?;
+            let roles = parse_role_list(parser)?;
+            options.push(RoleOption::Role(roles));
+        } else if let Some(Token::Identifier(kw)) = &parser.current_token {
+            if kw.to_uppercase() == "ADMIN" {
+                parser.advance()?;
+                let roles = parse_role_list(parser)?;
+                options.push(RoleOption::Admin(roles));
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    Ok(options)
+}
+
+fn parse_role_list(parser: &mut SqlParser) -> ParseResult<Vec<String>> {
+    let mut roles = Vec::new();
+
+    loop {
+        if let Some(Token::Identifier(name)) = &parser.current_token {
+            roles.push(name.clone());
+            parser.advance()?;
+        } else {
+            break;
+        }
+
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    Ok(roles)
+}
+
+/// Parse DROP ROLE/USER statement
+pub fn parse_drop_role(parser: &mut SqlParser, is_user: bool) -> ParseResult<Statement> {
+    if is_user {
+        parser.expect(Token::User)?;
+    } else {
+        parser.expect(Token::Role)?;
+    }
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let mut names = Vec::new();
+    loop {
+        if let Some(Token::Identifier(name)) = &parser.current_token {
+            names.push(name.clone());
+            parser.advance()?;
+        } else {
+            break;
+        }
+
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    Ok(Statement::DropRole(DropRoleStatement {
+        if_exists,
+        names,
+        is_user,
+    }))
+}
+
+/// Parse ALTER ROLE/USER statement
+pub fn parse_alter_role(parser: &mut SqlParser, is_user: bool) -> ParseResult<Statement> {
+    if is_user {
+        parser.expect(Token::User)?;
+    } else {
+        parser.expect(Token::Role)?;
+    }
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected role/user name".to_string(),
+            position: parser.position,
+            expected: vec!["role_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    let action = if let Some(Token::Identifier(kw)) = &parser.current_token {
+        if kw.to_uppercase() == "RENAME" {
+            parser.advance()?;
+            parser.expect(Token::To)?;
+            let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let name = n.clone();
+                parser.advance()?;
+                name
+            } else {
+                return Err(ParseError {
+                    message: "Expected new name".to_string(),
+                    position: parser.position,
+                    expected: vec!["new_name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            AlterRoleAction::Rename(new_name)
+        } else if kw.to_uppercase() == "RESET" {
+            parser.advance()?;
+            if parser.matches(&[Token::All]) {
+                parser.advance()?;
+                AlterRoleAction::ResetAllConfig
+            } else if let Some(Token::Identifier(param)) = &parser.current_token {
+                let parameter = param.clone();
+                parser.advance()?;
+                AlterRoleAction::ResetConfig(parameter)
+            } else {
+                return Err(ParseError {
+                    message: "Expected ALL or parameter name".to_string(),
+                    position: parser.position,
+                    expected: vec!["ALL".to_string(), "parameter".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            }
+        } else {
+            // Assume it's role options
+            let options = parse_role_options(parser)?;
+            AlterRoleAction::SetOptions(options)
+        }
+    } else if parser.matches(&[Token::With]) {
+        parser.advance()?;
+        let options = parse_role_options(parser)?;
+        AlterRoleAction::SetOptions(options)
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        let parameter = if let Some(Token::Identifier(param)) = &parser.current_token {
+            let name = param.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected parameter name".to_string(),
+                position: parser.position,
+                expected: vec!["parameter".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+
+        // TO or = or FROM CURRENT
+        if parser.matches(&[Token::To]) || parser.matches(&[Token::Equal]) {
+            parser.advance()?;
+        }
+
+        let value = utilities::parse_expression(parser)?;
+        AlterRoleAction::SetConfig { parameter, value }
+    } else {
+        // Try parsing role options directly
+        let options = parse_role_options(parser)?;
+        if options.is_empty() {
+            return Err(ParseError {
+                message: "Expected ALTER ROLE action".to_string(),
+                position: parser.position,
+                expected: vec![
+                    "WITH".to_string(),
+                    "RENAME".to_string(),
+                    "SET".to_string(),
+                    "RESET".to_string(),
+                    "role_option".to_string(),
+                ],
+                found: parser.current_token.clone(),
+            });
+        }
+        AlterRoleAction::SetOptions(options)
+    };
+
+    Ok(Statement::AlterRole(AlterRoleStatement {
+        name,
+        is_user,
+        action,
+    }))
+}
+
+// ===== Extended DDL: POLICY Statements =====
+
+/// Parse CREATE POLICY statement
+pub fn parse_create_policy(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Policy)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected policy name".to_string(),
+            position: parser.position,
+            expected: vec!["policy_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    parser.expect(Token::On)?;
+
+    let table = utilities::parse_table_name(parser)?;
+
+    // AS PERMISSIVE | RESTRICTIVE (default PERMISSIVE)
+    let permissive = if parser.matches(&[Token::As]) {
+        parser.advance()?;
+        if parser.matches(&[Token::Permissive]) {
+            parser.advance()?;
+            true
+        } else if parser.matches(&[Token::Restrictive]) {
+            parser.advance()?;
+            false
+        } else {
+            true
+        }
+    } else {
+        true
+    };
+
+    // FOR command (default ALL)
+    let command = if parser.matches(&[Token::For]) {
+        parser.advance()?;
+        if parser.matches(&[Token::All]) {
+            parser.advance()?;
+            PolicyCommand::All
+        } else if parser.matches(&[Token::Select]) {
+            parser.advance()?;
+            PolicyCommand::Select
+        } else if parser.matches(&[Token::Insert]) {
+            parser.advance()?;
+            PolicyCommand::Insert
+        } else if parser.matches(&[Token::Update]) {
+            parser.advance()?;
+            PolicyCommand::Update
+        } else if parser.matches(&[Token::Delete]) {
+            parser.advance()?;
+            PolicyCommand::Delete
+        } else {
+            PolicyCommand::All
+        }
+    } else {
+        PolicyCommand::All
+    };
+
+    // TO roles
+    let roles = if parser.matches(&[Token::To]) {
+        parser.advance()?;
+        let mut roles = Vec::new();
+        loop {
+            if parser.matches(&[Token::Public]) {
+                roles.push("PUBLIC".to_string());
+                parser.advance()?;
+            } else if let Some(Token::Identifier(role)) = &parser.current_token {
+                roles.push(role.clone());
+                parser.advance()?;
+            } else {
+                break;
+            }
+
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        roles
+    } else {
+        vec!["PUBLIC".to_string()]
+    };
+
+    // USING expression
+    let using_expr = if parser.matches(&[Token::Using]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        let expr = utilities::parse_expression(parser)?;
+        parser.expect(Token::RightParen)?;
+        Some(expr)
+    } else {
+        None
+    };
+
+    // WITH CHECK expression
+    let check_expr = if parser.matches(&[Token::With]) {
+        parser.advance()?;
+        parser.expect(Token::Check)?;
+        parser.expect(Token::LeftParen)?;
+        let expr = utilities::parse_expression(parser)?;
+        parser.expect(Token::RightParen)?;
+        Some(expr)
+    } else {
+        None
+    };
+
+    Ok(Statement::CreatePolicy(CreatePolicyStatement {
+        name,
+        table,
+        permissive,
+        command,
+        roles,
+        using_expr,
+        check_expr,
+    }))
+}
+
+/// Parse DROP POLICY statement
+pub fn parse_drop_policy(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Policy)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected policy name".to_string(),
+            position: parser.position,
+            expected: vec!["policy_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    parser.expect(Token::On)?;
+
+    let table = utilities::parse_table_name(parser)?;
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropPolicy(DropPolicyStatement {
+        if_exists,
+        name,
+        table,
+        cascade,
+    }))
+}
+
+/// Parse ALTER POLICY statement
+pub fn parse_alter_policy(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Policy)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected policy name".to_string(),
+            position: parser.position,
+            expected: vec!["policy_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    parser.expect(Token::On)?;
+
+    let table = utilities::parse_table_name(parser)?;
+
+    let action = if let Some(Token::Identifier(kw)) = &parser.current_token {
+        if kw.to_uppercase() == "RENAME" {
+            parser.advance()?;
+            parser.expect(Token::To)?;
+            let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+                let name = n.clone();
+                parser.advance()?;
+                name
+            } else {
+                return Err(ParseError {
+                    message: "Expected new policy name".to_string(),
+                    position: parser.position,
+                    expected: vec!["new_name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            AlterPolicyAction::Rename(new_name)
+        } else {
+            return Err(ParseError {
+                message: "Expected RENAME, TO, USING, or WITH CHECK".to_string(),
+                position: parser.position,
+                expected: vec!["RENAME".to_string(), "TO".to_string(), "USING".to_string()],
+                found: parser.current_token.clone(),
+            });
+        }
+    } else if parser.matches(&[Token::To]) {
+        parser.advance()?;
+        let mut roles = Vec::new();
+        loop {
+            if parser.matches(&[Token::Public]) {
+                roles.push("PUBLIC".to_string());
+                parser.advance()?;
+            } else if let Some(Token::Identifier(role)) = &parser.current_token {
+                roles.push(role.clone());
+                parser.advance()?;
+            } else {
+                break;
+            }
+
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        AlterPolicyAction::SetRoles(roles)
+    } else if parser.matches(&[Token::Using]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        let expr = utilities::parse_expression(parser)?;
+        parser.expect(Token::RightParen)?;
+        AlterPolicyAction::SetUsing(Some(expr))
+    } else if parser.matches(&[Token::With]) {
+        parser.advance()?;
+        parser.expect(Token::Check)?;
+        parser.expect(Token::LeftParen)?;
+        let expr = utilities::parse_expression(parser)?;
+        parser.expect(Token::RightParen)?;
+        AlterPolicyAction::SetCheck(Some(expr))
+    } else {
+        return Err(ParseError {
+            message: "Expected ALTER POLICY action".to_string(),
+            position: parser.position,
+            expected: vec![
+                "RENAME".to_string(),
+                "TO".to_string(),
+                "USING".to_string(),
+                "WITH CHECK".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterPolicy(AlterPolicyStatement {
+        name,
+        table,
+        action,
+    }))
+}
+
+// ===== Extended DDL: RULE Statements =====
+
+/// Parse CREATE RULE statement
+pub fn parse_create_rule(parser: &mut SqlParser, or_replace: bool) -> ParseResult<Statement> {
+    parser.expect(Token::Rule)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected rule name".to_string(),
+            position: parser.position,
+            expected: vec!["rule_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    parser.expect(Token::As)?;
+    parser.expect(Token::On)?;
+
+    // Parse event (SELECT, INSERT, UPDATE, DELETE)
+    let event = if parser.matches(&[Token::Select]) {
+        parser.advance()?;
+        RuleEvent::Select
+    } else if parser.matches(&[Token::Insert]) {
+        parser.advance()?;
+        RuleEvent::Insert
+    } else if parser.matches(&[Token::Update]) {
+        parser.advance()?;
+        RuleEvent::Update
+    } else if parser.matches(&[Token::Delete]) {
+        parser.advance()?;
+        RuleEvent::Delete
+    } else {
+        return Err(ParseError {
+            message: "Expected SELECT, INSERT, UPDATE, or DELETE".to_string(),
+            position: parser.position,
+            expected: vec![
+                "SELECT".to_string(),
+                "INSERT".to_string(),
+                "UPDATE".to_string(),
+                "DELETE".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    parser.expect(Token::To)?;
+
+    let table = utilities::parse_table_name(parser)?;
+
+    // Optional WHERE clause
+    let where_clause = if parser.matches(&[Token::Where]) {
+        parser.advance()?;
+        Some(utilities::parse_expression(parser)?)
+    } else {
+        None
+    };
+
+    parser.expect(Token::Do)?;
+
+    // Parse action: ALSO | INSTEAD | NOTHING
+    let action = if parser.matches(&[Token::Nothing]) {
+        parser.advance()?;
+        RuleAction::Nothing
+    } else if parser.matches(&[Token::Instead]) {
+        parser.advance()?;
+        if parser.matches(&[Token::Nothing]) {
+            parser.advance()?;
+            RuleAction::Nothing
+        } else {
+            // Parse statements (simplified - just skip for now)
+            RuleAction::Instead(Vec::new())
+        }
+    } else if let Some(Token::Identifier(kw)) = &parser.current_token {
+        if kw.to_uppercase() == "ALSO" {
+            parser.advance()?;
+            // Parse statements (simplified - just skip for now)
+            RuleAction::Also(Vec::new())
+        } else {
+            // Default to ALSO with single statement
+            RuleAction::Also(Vec::new())
+        }
+    } else {
+        RuleAction::Also(Vec::new())
+    };
+
+    Ok(Statement::CreateRule(CreateRuleStatement {
+        or_replace,
+        name,
+        table,
+        event,
+        where_clause,
+        action,
+    }))
+}
+
+/// Parse DROP RULE statement
+pub fn parse_drop_rule(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Rule)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected rule name".to_string(),
+            position: parser.position,
+            expected: vec!["rule_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    parser.expect(Token::On)?;
+
+    let table = utilities::parse_table_name(parser)?;
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropRule(DropRuleStatement {
+        if_exists,
+        name,
+        table,
+        cascade,
     }))
 }

@@ -73,6 +73,30 @@ pub enum Statement {
 
     // Truncate
     Truncate(TruncateStatement),
+
+    // Extended DDL - Types
+    CreateType(CreateTypeStatement),
+    DropType(DropTypeStatement),
+    AlterType(AlterTypeStatement),
+
+    // Extended DDL - Domains
+    CreateDomain(CreateDomainStatement),
+    DropDomain(DropDomainStatement),
+    AlterDomain(AlterDomainStatement),
+
+    // Extended DDL - Roles/Users
+    CreateRole(CreateRoleStatement),
+    DropRole(DropRoleStatement),
+    AlterRole(AlterRoleStatement),
+
+    // Extended DDL - Policies (Row-Level Security)
+    CreatePolicy(CreatePolicyStatement),
+    DropPolicy(DropPolicyStatement),
+    AlterPolicy(AlterPolicyStatement),
+
+    // Extended DDL - Rules
+    CreateRule(CreateRuleStatement),
+    DropRule(DropRuleStatement),
 }
 
 // ===== DDL Statements =====
@@ -1437,4 +1461,322 @@ impl From<String> for TableName {
 pub struct SetStatement {
     pub variable: String,
     pub value: Vec<Expression>,
+}
+
+// ===== Extended DDL - Type Statements =====
+
+/// CREATE TYPE statement for enum, composite, range, and base types
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTypeStatement {
+    pub if_not_exists: bool,
+    pub name: TableName, // schema.name support
+    pub type_definition: TypeDefinition,
+}
+
+/// Type definition variants
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypeDefinition {
+    /// ENUM type: CREATE TYPE name AS ENUM ('value1', 'value2', ...)
+    Enum { values: Vec<String> },
+    /// Composite type: CREATE TYPE name AS (column1 type1, column2 type2, ...)
+    Composite { attributes: Vec<TypeAttribute> },
+    /// Range type: CREATE TYPE name AS RANGE (SUBTYPE = subtype, ...)
+    Range { subtype: SqlType, options: Vec<RangeTypeOption> },
+    /// Base type: CREATE TYPE name (INPUT = ..., OUTPUT = ..., ...)
+    Base { options: Vec<BaseTypeOption> },
+    /// Shell type: CREATE TYPE name (placeholder for forward references)
+    Shell,
+}
+
+/// Attribute for composite types
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeAttribute {
+    pub name: String,
+    pub data_type: SqlType,
+    pub collation: Option<String>,
+}
+
+/// Options for range types
+#[derive(Debug, Clone, PartialEq)]
+pub enum RangeTypeOption {
+    Subtype(SqlType),
+    SubtypeOpClass(String),
+    Collation(String),
+    Canonical(String),
+    SubtypeDiff(String),
+    Multirange(String),
+}
+
+/// Options for base types
+#[derive(Debug, Clone, PartialEq)]
+pub enum BaseTypeOption {
+    Input(String),
+    Output(String),
+    Receive(String),
+    Send(String),
+    TypeModIn(String),
+    TypeModOut(String),
+    Analyze(String),
+    Subscript(String),
+    InternalLength(i32),
+    PassedByValue,
+    Alignment(String),
+    Storage(String),
+    Like(String),
+    Category(char),
+    Preferred(bool),
+    DefaultValue(String),
+    Element(SqlType),
+    Delimiter(char),
+    Collatable(bool),
+}
+
+/// DROP TYPE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropTypeStatement {
+    pub if_exists: bool,
+    pub names: Vec<TableName>,
+    pub cascade: bool,
+}
+
+/// ALTER TYPE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterTypeStatement {
+    pub name: TableName,
+    pub action: AlterTypeAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterTypeAction {
+    /// ADD VALUE 'new_value' [BEFORE|AFTER 'existing_value']
+    AddValue {
+        if_not_exists: bool,
+        value: String,
+        position: Option<EnumValuePosition>,
+    },
+    /// RENAME VALUE 'old_value' TO 'new_value'
+    RenameValue { old_value: String, new_value: String },
+    /// RENAME TO new_name
+    Rename(String),
+    /// SET SCHEMA new_schema
+    SetSchema(String),
+    /// ADD ATTRIBUTE name data_type
+    AddAttribute { name: String, data_type: SqlType },
+    /// DROP ATTRIBUTE name
+    DropAttribute { name: String, cascade: bool },
+    /// ALTER ATTRIBUTE name SET DATA TYPE data_type
+    AlterAttribute { name: String, data_type: SqlType },
+    /// OWNER TO new_owner
+    Owner(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum EnumValuePosition {
+    Before(String),
+    After(String),
+}
+
+// ===== Extended DDL - Domain Statements =====
+
+/// CREATE DOMAIN statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateDomainStatement {
+    pub if_not_exists: bool,
+    pub name: TableName,
+    pub data_type: SqlType,
+    pub collation: Option<String>,
+    pub default: Option<Expression>,
+    pub constraints: Vec<DomainConstraint>,
+}
+
+/// Domain constraint
+#[derive(Debug, Clone, PartialEq)]
+pub struct DomainConstraint {
+    pub name: Option<String>,
+    pub constraint_type: DomainConstraintType,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DomainConstraintType {
+    NotNull,
+    Null,
+    Check(Expression),
+}
+
+/// DROP DOMAIN statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropDomainStatement {
+    pub if_exists: bool,
+    pub names: Vec<TableName>,
+    pub cascade: bool,
+}
+
+/// ALTER DOMAIN statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterDomainStatement {
+    pub name: TableName,
+    pub action: AlterDomainAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterDomainAction {
+    SetDefault(Expression),
+    DropDefault,
+    SetNotNull,
+    DropNotNull,
+    AddConstraint(DomainConstraint),
+    DropConstraint { name: String, cascade: bool },
+    RenameConstraint { old_name: String, new_name: String },
+    ValidateConstraint(String),
+    Owner(String),
+    Rename(String),
+    SetSchema(String),
+}
+
+// ===== Extended DDL - Role/User Statements =====
+
+/// CREATE ROLE/USER statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateRoleStatement {
+    pub if_not_exists: bool,
+    pub name: String,
+    pub is_user: bool, // true for CREATE USER (implies LOGIN)
+    pub options: Vec<RoleOption>,
+}
+
+/// Role options
+#[derive(Debug, Clone, PartialEq)]
+pub enum RoleOption {
+    SuperUser(bool),         // SUPERUSER / NOSUPERUSER
+    CreateDb(bool),          // CREATEDB / NOCREATEDB
+    CreateRole(bool),        // CREATEROLE / NOCREATEROLE
+    Inherit(bool),           // INHERIT / NOINHERIT
+    Login(bool),             // LOGIN / NOLOGIN
+    Replication(bool),       // REPLICATION / NOREPLICATION
+    BypassRls(bool),         // BYPASSRLS / NOBYPASSRLS
+    ConnectionLimit(i32),    // CONNECTION LIMIT n
+    Password(Option<String>), // PASSWORD 'password' / PASSWORD NULL
+    EncryptedPassword(String), // ENCRYPTED PASSWORD 'password'
+    ValidUntil(String),      // VALID UNTIL 'timestamp'
+    InRole(Vec<String>),     // IN ROLE role1, role2
+    Role(Vec<String>),       // ROLE role1, role2 (this role can be granted)
+    Admin(Vec<String>),      // ADMIN role1, role2 (can grant this role)
+}
+
+/// DROP ROLE/USER statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropRoleStatement {
+    pub if_exists: bool,
+    pub names: Vec<String>,
+    pub is_user: bool, // true for DROP USER
+}
+
+/// ALTER ROLE/USER statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterRoleStatement {
+    pub name: String,
+    pub is_user: bool,
+    pub action: AlterRoleAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterRoleAction {
+    /// ALTER ROLE name WITH options
+    SetOptions(Vec<RoleOption>),
+    /// ALTER ROLE name RENAME TO new_name
+    Rename(String),
+    /// ALTER ROLE name SET parameter TO value
+    SetConfig { parameter: String, value: Expression },
+    /// ALTER ROLE name RESET parameter
+    ResetConfig(String),
+    /// ALTER ROLE name RESET ALL
+    ResetAllConfig,
+}
+
+// ===== Extended DDL - Policy Statements (Row-Level Security) =====
+
+/// CREATE POLICY statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreatePolicyStatement {
+    pub name: String,
+    pub table: TableName,
+    pub permissive: bool, // true for PERMISSIVE (default), false for RESTRICTIVE
+    pub command: PolicyCommand,
+    pub roles: Vec<String>, // TO roles
+    pub using_expr: Option<Expression>, // USING expression
+    pub check_expr: Option<Expression>, // WITH CHECK expression
+}
+
+/// Policy command type
+#[derive(Debug, Clone, PartialEq)]
+pub enum PolicyCommand {
+    All,
+    Select,
+    Insert,
+    Update,
+    Delete,
+}
+
+/// DROP POLICY statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropPolicyStatement {
+    pub if_exists: bool,
+    pub name: String,
+    pub table: TableName,
+    pub cascade: bool,
+}
+
+/// ALTER POLICY statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterPolicyStatement {
+    pub name: String,
+    pub table: TableName,
+    pub action: AlterPolicyAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterPolicyAction {
+    Rename(String),
+    SetRoles(Vec<String>),
+    SetUsing(Option<Expression>),
+    SetCheck(Option<Expression>),
+}
+
+// ===== Extended DDL - Rule Statements =====
+
+/// CREATE RULE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateRuleStatement {
+    pub or_replace: bool,
+    pub name: String,
+    pub table: TableName,
+    pub event: RuleEvent,
+    pub where_clause: Option<Expression>,
+    pub action: RuleAction,
+}
+
+/// Rule event type
+#[derive(Debug, Clone, PartialEq)]
+pub enum RuleEvent {
+    Select,
+    Insert,
+    Update,
+    Delete,
+}
+
+/// Rule action
+#[derive(Debug, Clone, PartialEq)]
+pub enum RuleAction {
+    Nothing,
+    Instead(Vec<Statement>),
+    Also(Vec<Statement>),
+}
+
+/// DROP RULE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropRuleStatement {
+    pub if_exists: bool,
+    pub name: String,
+    pub table: TableName,
+    pub cascade: bool,
 }

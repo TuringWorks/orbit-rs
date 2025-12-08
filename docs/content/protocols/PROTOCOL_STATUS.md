@@ -11,7 +11,7 @@ This document provides an accurate assessment of protocol implementation status 
 
 | Protocol | Port | Status | Completion | Tests | Notes |
 |----------|------|--------|------------|-------|-------|
-| **PostgreSQL Wire** | 5432 | Production Ready | 94% | 460+ | Full SQL, pgvector, JSONB, sequences, PG18 |
+| **PostgreSQL Wire** | 5432 | Production Ready | 95% | 480+ | Full SQL, pgvector, JSONB, sequences, extended DDL, PG18 |
 | **Redis RESP** | 6379 | Production Ready | 95% | 292 | 50+ commands, streams, ACL, functions |
 | **MySQL** | 3306 | Production Ready | 75% | 15+ | Wire protocol, prepared statements |
 | **CQL (Cassandra)** | 9042 | Production Ready | 70% | 12+ | DDL, DML, RBAC |
@@ -48,10 +48,12 @@ This document provides an accurate assessment of protocol implementation status 
 - **String functions (30+)**: left, right, trim, pad, split_part, initcap, reverse
 - **Date/time functions**: EXTRACT, DATE_TRUNC, interval arithmetic
 - **PostgreSQL 18 features**: NegotiateProtocolVersion, temporal constraints
+- **Extended DDL**: CREATE/DROP/ALTER TYPE, DOMAIN, ROLE, USER, POLICY, RULE
+- **Type system**: ENUM, COMPOSITE, RANGE types
+- **Row-level security**: CREATE POLICY with USING and WITH CHECK expressions
 
 **Pending**:
-- Stored procedures (PL/pgSQL) - parsing only
-- CREATE ROLE/USER
+- Stored procedures (PL/pgSQL) - parsing only, no execution
 - System catalogs (pg_catalog) - stub only
 - Full-text search (tsvector/tsquery)
 

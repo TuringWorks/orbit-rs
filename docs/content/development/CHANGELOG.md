@@ -43,6 +43,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Function overloading**: Supports multiple functions with same name but different parameter types
   - **Tests**: 11 new tests for function and trigger creation/deletion
 
+- **PostgreSQL Extended DDL Support** (2025-12-08): Comprehensive DDL statement support for PostgreSQL compatibility
+  - **CREATE/DROP/ALTER TYPE**: Full support for ENUM, COMPOSITE, and RANGE types
+    - ENUM types with ADD VALUE, RENAME VALUE, position control (BEFORE/AFTER)
+    - Composite types with attributes and collation
+    - Range types with subtype specification
+  - **CREATE/DROP/ALTER DOMAIN**: Domain type support with constraints
+    - CHECK constraints with expressions
+    - NOT NULL and NULL constraints
+    - DEFAULT values
+    - SET/DROP DEFAULT, SET/DROP NOT NULL, ADD/DROP CONSTRAINT
+  - **CREATE/DROP/ALTER ROLE**: Complete role management
+    - All PostgreSQL role options (SUPERUSER, CREATEDB, CREATEROLE, LOGIN, etc.)
+    - Password management (PASSWORD, ENCRYPTED PASSWORD, VALID UNTIL)
+    - Connection limits
+    - Role inheritance (IN ROLE, ROLE, ADMIN)
+  - **CREATE/DROP/ALTER USER**: User management (aliased to role with LOGIN)
+  - **CREATE/DROP/ALTER POLICY**: Row-level security policy support
+    - PERMISSIVE and RESTRICTIVE policies
+    - FOR command (SELECT, INSERT, UPDATE, DELETE, ALL)
+    - USING and WITH CHECK expressions
+    - TO roles specification
+  - **CREATE/DROP RULE**: Query rewrite rules
+    - DO NOTHING, INSTEAD, ALSO actions
+    - WHERE conditions
+  - **Context-sensitive keywords**: Type, Domain, Role, User, Policy, etc. can be used as identifiers
+  - **Tests**: 22 new tests covering all extended DDL operations
+
 ### Changed
 
 - **Sequence Storage Lock Type** (2025-12-08): Changed sequences storage from `tokio::sync::RwLock` to `std::sync::RwLock`

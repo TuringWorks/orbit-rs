@@ -280,6 +280,12 @@ impl SqlParser {
                 Ok(stmt)
             },
             Some(Token::Sequence) => ddl::parse_create_sequence(self),
+            Some(Token::Type) => ddl::parse_create_type(self),
+            Some(Token::Domain) => ddl::parse_create_domain(self),
+            Some(Token::Role) => ddl::parse_create_role(self, false),
+            Some(Token::User) => ddl::parse_create_role(self, true),
+            Some(Token::Policy) => ddl::parse_create_policy(self),
+            Some(Token::Rule) => ddl::parse_create_rule(self, or_replace),
 
             Some(token) => Err(ParseError {
                 message: format!("Unexpected token after CREATE: {token:?}"),
@@ -296,6 +302,12 @@ impl SqlParser {
                     "FUNCTION".to_string(),
                     "TRIGGER".to_string(),
                     "SEQUENCE".to_string(),
+                    "TYPE".to_string(),
+                    "DOMAIN".to_string(),
+                    "ROLE".to_string(),
+                    "USER".to_string(),
+                    "POLICY".to_string(),
+                    "RULE".to_string(),
                 ],
                 found: Some(token.clone()),
             }),
@@ -316,18 +328,39 @@ impl SqlParser {
         match &self.current_token {
             Some(Token::Table) => ddl::parse_alter_table(self),
             Some(Token::Sequence) => ddl::parse_alter_sequence(self),
+            Some(Token::Type) => ddl::parse_alter_type(self),
+            Some(Token::Domain) => ddl::parse_alter_domain(self),
+            Some(Token::Role) => ddl::parse_alter_role(self, false),
+            Some(Token::User) => ddl::parse_alter_role(self, true),
+            Some(Token::Policy) => ddl::parse_alter_policy(self),
 
             Some(token) => Err(ParseError {
                 message: format!("Unexpected token after ALTER: {token:?}"),
                 position: self.position,
-                expected: vec!["TABLE".to_string(), "SEQUENCE".to_string()],
+                expected: vec![
+                    "TABLE".to_string(),
+                    "SEQUENCE".to_string(),
+                    "TYPE".to_string(),
+                    "DOMAIN".to_string(),
+                    "ROLE".to_string(),
+                    "USER".to_string(),
+                    "POLICY".to_string(),
+                ],
                 found: Some(token.clone()),
             }),
 
             None => Err(ParseError {
                 message: "Expected object type after ALTER".to_string(),
                 position: self.position,
-                expected: vec!["TABLE".to_string(), "SEQUENCE".to_string()],
+                expected: vec![
+                    "TABLE".to_string(),
+                    "SEQUENCE".to_string(),
+                    "TYPE".to_string(),
+                    "DOMAIN".to_string(),
+                    "ROLE".to_string(),
+                    "USER".to_string(),
+                    "POLICY".to_string(),
+                ],
                 found: None,
             }),
         }
@@ -346,6 +379,12 @@ impl SqlParser {
             Some(Token::Extension) => ddl::parse_drop_extension(self),
             Some(Token::Trigger) => ddl::parse_drop_trigger(self),
             Some(Token::Sequence) => ddl::parse_drop_sequence(self),
+            Some(Token::Type) => ddl::parse_drop_type(self),
+            Some(Token::Domain) => ddl::parse_drop_domain(self),
+            Some(Token::Role) => ddl::parse_drop_role(self, false),
+            Some(Token::User) => ddl::parse_drop_role(self, true),
+            Some(Token::Policy) => ddl::parse_drop_policy(self),
+            Some(Token::Rule) => ddl::parse_drop_rule(self),
 
             Some(token) => Err(ParseError {
                 message: format!("Unexpected token after DROP: {token:?}"),
@@ -359,6 +398,12 @@ impl SqlParser {
                     "EXTENSION".to_string(),
                     "TRIGGER".to_string(),
                     "SEQUENCE".to_string(),
+                    "TYPE".to_string(),
+                    "DOMAIN".to_string(),
+                    "ROLE".to_string(),
+                    "USER".to_string(),
+                    "POLICY".to_string(),
+                    "RULE".to_string(),
                 ],
                 found: Some(token.clone()),
             }),
@@ -367,7 +412,7 @@ impl SqlParser {
                 message: "Expected object type after DROP".to_string(),
                 position: self.position,
                 expected: vec![
-                    "DATABASE, TABLE, INDEX, VIEW, SCHEMA, EXTENSION, TRIGGER, or SEQUENCE"
+                    "DATABASE, TABLE, INDEX, VIEW, SCHEMA, EXTENSION, TRIGGER, SEQUENCE, TYPE, DOMAIN, ROLE, USER, POLICY, or RULE"
                         .to_string(),
                 ],
                 found: None,

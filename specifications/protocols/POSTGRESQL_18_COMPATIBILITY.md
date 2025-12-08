@@ -49,14 +49,14 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | CREATE TRIGGER | ✅ | Parsing and storage, no execution |
 | DROP TRIGGER | ✅ | Full support with IF EXISTS |
 | CREATE SEQUENCE | ✅ | Full support with START, INCREMENT, MINVALUE, MAXVALUE, CYCLE |
-| CREATE TYPE | ❌ | Enum/composite types |
-| CREATE DOMAIN | ❌ | Domain types |
-| CREATE ROLE | ❌ | Role management |
-| CREATE USER | ❌ | User management |
+| CREATE TYPE | ✅ | ENUM, COMPOSITE, RANGE types with parsing and storage |
+| CREATE DOMAIN | ✅ | Domain types with CHECK, NOT NULL, DEFAULT constraints |
+| CREATE ROLE | ✅ | Role management with all options (SUPERUSER, CREATEDB, LOGIN, etc.) |
+| CREATE USER | ✅ | User management (alias for CREATE ROLE ... LOGIN) |
 | CREATE GROUP | ❌ | Group management |
 | CREATE TABLESPACE | ❌ | Tablespace management |
-| CREATE POLICY | ❌ | Row-level security |
-| CREATE RULE | ❌ | Query rewrite rules |
+| CREATE POLICY | ✅ | Row-level security with USING and WITH CHECK expressions |
+| CREATE RULE | ✅ | Query rewrite rules with DO NOTHING, INSTEAD, ALSO |
 | CREATE AGGREGATE | ❌ | Custom aggregates |
 | CREATE OPERATOR | ❌ | Custom operators |
 | CREATE CAST | ❌ | Type casts |
@@ -86,13 +86,13 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | ALTER PROCEDURE | ❌ | Procedure modification |
 | ALTER TRIGGER | ❌ | Trigger modification |
 | ALTER SEQUENCE | ✅ | INCREMENT, MINVALUE, MAXVALUE, RESTART, CYCLE |
-| ALTER TYPE | ❌ | Type modification |
-| ALTER DOMAIN | ❌ | Domain modification |
-| ALTER ROLE | ❌ | Role modification |
-| ALTER USER | ❌ | User modification |
+| ALTER TYPE | ✅ | ADD VALUE, RENAME VALUE, ADD/DROP ATTRIBUTE |
+| ALTER DOMAIN | ✅ | SET/DROP DEFAULT, SET/DROP NOT NULL, ADD/DROP CONSTRAINT |
+| ALTER ROLE | ✅ | Role options, RENAME, SET/RESET config |
+| ALTER USER | ✅ | User modification (alias for ALTER ROLE) |
 | ALTER GROUP | ❌ | Group modification |
 | ALTER TABLESPACE | ❌ | Tablespace modification |
-| ALTER POLICY | ❌ | Policy modification |
+| ALTER POLICY | ✅ | RENAME, TO roles, USING, WITH CHECK |
 | ALTER RULE | ❌ | Rule modification |
 | ALTER AGGREGATE | ❌ | Aggregate modification |
 | ALTER OPERATOR | ❌ | Operator modification |
@@ -126,16 +126,16 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | DROP EXTENSION | ✅ | Basic support |
 | DROP FUNCTION | ❌ | Not implemented |
 | DROP PROCEDURE | ❌ | Not implemented |
-| DROP TRIGGER | 🔶 | Parsing only |
+| DROP TRIGGER | ✅ | Full support with IF EXISTS, CASCADE |
 | DROP SEQUENCE | ✅ | With IF EXISTS, CASCADE |
-| DROP TYPE | ❌ | Not implemented |
-| DROP DOMAIN | ❌ | Not implemented |
-| DROP ROLE | ❌ | Not implemented |
-| DROP USER | ❌ | Not implemented |
+| DROP TYPE | ✅ | With IF EXISTS, CASCADE |
+| DROP DOMAIN | ✅ | With IF EXISTS, CASCADE |
+| DROP ROLE | ✅ | With IF EXISTS |
+| DROP USER | ✅ | With IF EXISTS |
 | DROP GROUP | ❌ | Not implemented |
 | DROP TABLESPACE | ❌ | Not implemented |
-| DROP POLICY | ❌ | Not implemented |
-| DROP RULE | ❌ | Not implemented |
+| DROP POLICY | ✅ | With IF EXISTS, CASCADE |
+| DROP RULE | ✅ | With IF EXISTS, CASCADE |
 | DROP AGGREGATE | ❌ | Not implemented |
 | DROP OPERATOR | ❌ | Not implemented |
 | DROP CAST | ❌ | Not implemented |

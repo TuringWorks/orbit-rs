@@ -3918,4 +3918,286 @@ mod tests {
         ).await;
         assert!(result.is_ok(), "Failed to create multi-event trigger: {:?}", result);
     }
+
+    // ===== Extended DDL: TYPE Tests =====
+
+    #[tokio::test]
+    async fn test_create_enum_type() {
+        let mut engine = SqlEngine::new();
+        let result = engine
+            .execute("CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')")
+            .await;
+        assert!(result.is_ok(), "Failed to create ENUM type: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_composite_type() {
+        let mut engine = SqlEngine::new();
+        let result = engine
+            .execute("CREATE TYPE address AS (street TEXT, city TEXT, zip VARCHAR(10))")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to create composite type: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_drop_type() {
+        let mut engine = SqlEngine::new();
+        // Create and then drop
+        engine
+            .execute("CREATE TYPE test_mood AS ENUM ('a', 'b')")
+            .await
+            .unwrap();
+        let result = engine.execute("DROP TYPE test_mood").await;
+        assert!(result.is_ok(), "Failed to drop type: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_drop_type_if_exists() {
+        let mut engine = SqlEngine::new();
+        let result = engine.execute("DROP TYPE IF EXISTS nonexistent_type").await;
+        assert!(
+            result.is_ok(),
+            "Failed to drop type IF EXISTS: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_alter_type_add_value() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE TYPE color AS ENUM ('red', 'green')")
+            .await
+            .unwrap();
+        let result = engine
+            .execute("ALTER TYPE color ADD VALUE 'blue'")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to add value to enum type: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_alter_type_add_value_before() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE TYPE size AS ENUM ('small', 'large')")
+            .await
+            .unwrap();
+        let result = engine
+            .execute("ALTER TYPE size ADD VALUE 'medium' BEFORE 'large'")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to add value BEFORE: {:?}",
+            result
+        );
+    }
+
+    // ===== Extended DDL: DOMAIN Tests =====
+
+    #[tokio::test]
+    async fn test_create_domain() {
+        let mut engine = SqlEngine::new();
+        let result = engine
+            .execute("CREATE DOMAIN positive_int AS INTEGER CHECK (VALUE > 0)")
+            .await;
+        assert!(result.is_ok(), "Failed to create domain: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_domain_with_default() {
+        let mut engine = SqlEngine::new();
+        let result = engine
+            .execute("CREATE DOMAIN email AS TEXT DEFAULT 'unknown@example.com' NOT NULL")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to create domain with default: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_drop_domain() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE DOMAIN test_domain AS TEXT")
+            .await
+            .unwrap();
+        let result = engine.execute("DROP DOMAIN test_domain").await;
+        assert!(result.is_ok(), "Failed to drop domain: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_alter_domain_set_default() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE DOMAIN counter AS INTEGER")
+            .await
+            .unwrap();
+        let result = engine
+            .execute("ALTER DOMAIN counter SET DEFAULT 0")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to alter domain set default: {:?}",
+            result
+        );
+    }
+
+    // ===== Extended DDL: ROLE/USER Tests =====
+
+    #[tokio::test]
+    async fn test_create_role() {
+        let mut engine = SqlEngine::new();
+        let result = engine.execute("CREATE ROLE app_user").await;
+        assert!(result.is_ok(), "Failed to create role: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_role_with_options() {
+        let mut engine = SqlEngine::new();
+        let result = engine
+            .execute("CREATE ROLE admin_user WITH SUPERUSER CREATEDB LOGIN")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to create role with options: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_user() {
+        let mut engine = SqlEngine::new();
+        let result = engine.execute("CREATE USER john").await;
+        assert!(result.is_ok(), "Failed to create user: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_user_with_password() {
+        let mut engine = SqlEngine::new();
+        let result = engine
+            .execute("CREATE USER jane WITH PASSWORD 'secret123'")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to create user with password: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_drop_role() {
+        let mut engine = SqlEngine::new();
+        engine.execute("CREATE ROLE temp_role").await.unwrap();
+        let result = engine.execute("DROP ROLE temp_role").await;
+        assert!(result.is_ok(), "Failed to drop role: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_alter_role() {
+        let mut engine = SqlEngine::new();
+        engine.execute("CREATE ROLE modify_role").await.unwrap();
+        let result = engine
+            .execute("ALTER ROLE modify_role WITH CREATEDB")
+            .await;
+        assert!(result.is_ok(), "Failed to alter role: {:?}", result);
+    }
+
+    // ===== Extended DDL: POLICY Tests =====
+
+    #[tokio::test]
+    async fn test_create_policy() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE TABLE policy_test (id INTEGER, user_id INTEGER)")
+            .await
+            .unwrap();
+        let result = engine
+            .execute(
+                "CREATE POLICY user_access ON policy_test FOR SELECT TO PUBLIC USING (user_id = 1)",
+            )
+            .await;
+        assert!(result.is_ok(), "Failed to create policy: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_policy_restrictive() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE TABLE restrict_test (id INTEGER)")
+            .await
+            .unwrap();
+        let result = engine
+            .execute(
+                "CREATE POLICY restrict_policy ON restrict_test AS RESTRICTIVE FOR ALL TO PUBLIC USING (TRUE)",
+            )
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to create restrictive policy: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_drop_policy() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE TABLE policy_drop_test (id INTEGER)")
+            .await
+            .unwrap();
+        engine
+            .execute("CREATE POLICY to_drop ON policy_drop_test USING (TRUE)")
+            .await
+            .unwrap();
+        let result = engine
+            .execute("DROP POLICY to_drop ON policy_drop_test")
+            .await;
+        assert!(result.is_ok(), "Failed to drop policy: {:?}", result);
+    }
+
+    // ===== Extended DDL: RULE Tests =====
+
+    #[tokio::test]
+    async fn test_create_rule_nothing() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE TABLE rule_test (id INTEGER)")
+            .await
+            .unwrap();
+        let result = engine
+            .execute("CREATE RULE no_delete AS ON DELETE TO rule_test DO NOTHING")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to create rule DO NOTHING: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_drop_rule() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE TABLE rule_drop_test (id INTEGER)")
+            .await
+            .unwrap();
+        engine
+            .execute("CREATE RULE to_drop_rule AS ON DELETE TO rule_drop_test DO NOTHING")
+            .await
+            .unwrap();
+        let result = engine
+            .execute("DROP RULE to_drop_rule ON rule_drop_test")
+            .await;
+        assert!(result.is_ok(), "Failed to drop rule: {:?}", result);
+    }
 }

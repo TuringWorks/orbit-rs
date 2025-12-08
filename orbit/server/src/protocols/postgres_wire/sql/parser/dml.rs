@@ -96,15 +96,22 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
                 // Check for alias
                 let alias = if parser.matches(&[Token::As]) {
                     parser.advance()?;
-                    if let Some(Token::Identifier(alias_name)) = &parser.current_token {
-                        let alias = alias_name.clone();
+                    if let Some(alias_name) = parser
+                        .current_token
+                        .as_ref()
+                        .and_then(super::utilities::token_to_identifier_name)
+                    {
                         parser.advance()?;
-                        Some(alias)
+                        Some(alias_name)
                     } else {
                         None
                     }
-                } else if let Some(Token::Identifier(alias_name)) = &parser.current_token {
-                    // Check if this might be an alias (not a reserved word)
+                } else if let Some(alias_name) = parser
+                    .current_token
+                    .as_ref()
+                    .and_then(super::utilities::token_to_identifier_name)
+                {
+                    // Check if this might be an alias (not a reserved word like FROM, WHERE, etc.)
                     // Don't consume if next token is FROM, WHERE, GROUP BY, ORDER BY, or LIMIT
                     if !parser.matches(&[
                         Token::From,
@@ -114,9 +121,8 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
                         Token::Limit,
                         Token::Comma, // Also don't treat as alias if followed by comma
                     ]) {
-                        let alias = alias_name.clone();
                         parser.advance()?;
-                        Some(alias)
+                        Some(alias_name)
                     } else {
                         None
                     }

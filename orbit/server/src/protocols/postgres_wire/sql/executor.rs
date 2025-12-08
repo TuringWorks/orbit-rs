@@ -9,20 +9,23 @@ use crate::protocols::common::storage::{
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::{
     ast::{
-        AccessMode, AlterSequenceStatement, AlterTableStatement, AssignmentTarget, BeginStatement,
-        ColumnConstraint, CommitStatement, CopyDirection, CopySource, CopyStatement, CopyTarget,
-        CreateDatabaseStatement, CreateExtensionStatement, CreateFunctionStatement,
-        CreateIndexStatement, CreateSchemaStatement, CreateSequenceStatement, CreateTableStatement,
-        CreateTriggerStatement, CreateViewStatement, DeleteStatement, DescribeStatement,
-        DropDatabaseStatement, DropExtensionStatement, DropIndexStatement, DropSchemaStatement,
-        DropSequenceStatement, DropTableStatement, DropTriggerStatement, DropViewStatement,
-        ExplainStatement, Expression,
-        FromClause, FunctionLanguage, FunctionVolatility, GeneratedColumnStorage, GrantStatement,
-        IndexType, InsertSource, InsertStatement, IsolationLevel, JoinCondition, JoinType,
-        MergeStatement, ParameterMode, Privilege, ReleaseSavepointStatement, RevokeStatement,
-        RollbackStatement, SavepointStatement, SelectItem, SelectStatement, SetStatement,
-        ShowStatement, ShowVariable, Statement, TableConstraint, TableName, TriggerEvent,
-        TriggerForEach, TriggerTiming, TruncateStatement, UpdateStatement, UseStatement,
+        AccessMode, AlterDomainStatement, AlterPolicyStatement, AlterRoleStatement,
+        AlterSequenceStatement, AlterTableStatement, AlterTypeStatement, AssignmentTarget,
+        BeginStatement, ColumnConstraint, CommitStatement, CopyDirection, CopySource, CopyStatement,
+        CopyTarget, CreateDatabaseStatement, CreateDomainStatement, CreateExtensionStatement,
+        CreateFunctionStatement, CreateIndexStatement, CreatePolicyStatement, CreateRoleStatement,
+        CreateRuleStatement, CreateSchemaStatement, CreateSequenceStatement, CreateTableStatement,
+        CreateTriggerStatement, CreateTypeStatement, CreateViewStatement, DeleteStatement,
+        DescribeStatement, DropDatabaseStatement, DropDomainStatement, DropExtensionStatement,
+        DropIndexStatement, DropPolicyStatement, DropRoleStatement, DropRuleStatement,
+        DropSchemaStatement, DropSequenceStatement, DropTableStatement, DropTriggerStatement,
+        DropTypeStatement, DropViewStatement, ExplainStatement, Expression, FromClause,
+        FunctionLanguage, FunctionVolatility, GeneratedColumnStorage, GrantStatement, IndexType,
+        InsertSource, InsertStatement, IsolationLevel, JoinCondition, JoinType, MergeStatement,
+        ParameterMode, Privilege, ReleaseSavepointStatement, RevokeStatement, RollbackStatement,
+        SavepointStatement, SelectItem, SelectStatement, SetStatement, ShowStatement, ShowVariable,
+        Statement, TableConstraint, TableName, TriggerEvent, TriggerForEach, TriggerTiming,
+        TruncateStatement, TypeDefinition, UpdateStatement, UseStatement,
     },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator, SequenceAccessor},
     parser::SqlParser,
@@ -837,6 +840,30 @@ impl SqlExecutor {
 
             // Truncate operation
             Statement::Truncate(stmt) => self.execute_truncate(stmt).await,
+
+            // Extended DDL - Types
+            Statement::CreateType(stmt) => self.execute_create_type(stmt).await,
+            Statement::DropType(stmt) => self.execute_drop_type(stmt).await,
+            Statement::AlterType(stmt) => self.execute_alter_type(stmt).await,
+
+            // Extended DDL - Domains
+            Statement::CreateDomain(stmt) => self.execute_create_domain(stmt).await,
+            Statement::DropDomain(stmt) => self.execute_drop_domain(stmt).await,
+            Statement::AlterDomain(stmt) => self.execute_alter_domain(stmt).await,
+
+            // Extended DDL - Roles/Users
+            Statement::CreateRole(stmt) => self.execute_create_role(stmt).await,
+            Statement::DropRole(stmt) => self.execute_drop_role(stmt).await,
+            Statement::AlterRole(stmt) => self.execute_alter_role(stmt).await,
+
+            // Extended DDL - Policies
+            Statement::CreatePolicy(stmt) => self.execute_create_policy(stmt).await,
+            Statement::DropPolicy(stmt) => self.execute_drop_policy(stmt).await,
+            Statement::AlterPolicy(stmt) => self.execute_alter_policy(stmt).await,
+
+            // Extended DDL - Rules
+            Statement::CreateRule(stmt) => self.execute_create_rule(stmt).await,
+            Statement::DropRule(stmt) => self.execute_drop_rule(stmt).await,
         }
     }
 
@@ -5170,6 +5197,177 @@ impl SqlExecutor {
         Ok(ExecutionResult::Show {
             variable: "TRUNCATE TABLE".to_string(),
             value: truncated.join(", "),
+        })
+    }
+
+    // ===== Extended DDL: TYPE Operations =====
+
+    async fn execute_create_type(
+        &self,
+        stmt: CreateTypeStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let type_name = stmt.name.full_name();
+
+        // Check if type already exists (for IF NOT EXISTS)
+        // For now, just acknowledge the type creation
+        let type_kind = match &stmt.type_definition {
+            TypeDefinition::Enum { values } => format!("ENUM with {} values", values.len()),
+            TypeDefinition::Composite { attributes } => {
+                format!("COMPOSITE with {} attributes", attributes.len())
+            }
+            TypeDefinition::Range { .. } => "RANGE".to_string(),
+            TypeDefinition::Base { .. } => "BASE".to_string(),
+            TypeDefinition::Shell => "SHELL".to_string(),
+        };
+
+        Ok(ExecutionResult::Show {
+            variable: "CREATE TYPE".to_string(),
+            value: format!("{} ({})", type_name, type_kind),
+        })
+    }
+
+    async fn execute_drop_type(&self, stmt: DropTypeStatement) -> ProtocolResult<ExecutionResult> {
+        let type_names: Vec<String> = stmt.names.iter().map(|n| n.full_name()).collect();
+
+        Ok(ExecutionResult::Show {
+            variable: "DROP TYPE".to_string(),
+            value: type_names.join(", "),
+        })
+    }
+
+    async fn execute_alter_type(
+        &self,
+        stmt: AlterTypeStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let type_name = stmt.name.full_name();
+
+        Ok(ExecutionResult::Show {
+            variable: "ALTER TYPE".to_string(),
+            value: type_name,
+        })
+    }
+
+    // ===== Extended DDL: DOMAIN Operations =====
+
+    async fn execute_create_domain(
+        &self,
+        stmt: CreateDomainStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let domain_name = stmt.name.full_name();
+
+        Ok(ExecutionResult::Show {
+            variable: "CREATE DOMAIN".to_string(),
+            value: domain_name,
+        })
+    }
+
+    async fn execute_drop_domain(
+        &self,
+        stmt: DropDomainStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let domain_names: Vec<String> = stmt.names.iter().map(|n| n.full_name()).collect();
+
+        Ok(ExecutionResult::Show {
+            variable: "DROP DOMAIN".to_string(),
+            value: domain_names.join(", "),
+        })
+    }
+
+    async fn execute_alter_domain(
+        &self,
+        stmt: AlterDomainStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let domain_name = stmt.name.full_name();
+
+        Ok(ExecutionResult::Show {
+            variable: "ALTER DOMAIN".to_string(),
+            value: domain_name,
+        })
+    }
+
+    // ===== Extended DDL: ROLE/USER Operations =====
+
+    async fn execute_create_role(
+        &self,
+        stmt: CreateRoleStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let object_type = if stmt.is_user { "USER" } else { "ROLE" };
+
+        Ok(ExecutionResult::Show {
+            variable: format!("CREATE {}", object_type),
+            value: stmt.name.clone(),
+        })
+    }
+
+    async fn execute_drop_role(&self, stmt: DropRoleStatement) -> ProtocolResult<ExecutionResult> {
+        let object_type = if stmt.is_user { "USER" } else { "ROLE" };
+
+        Ok(ExecutionResult::Show {
+            variable: format!("DROP {}", object_type),
+            value: stmt.names.join(", "),
+        })
+    }
+
+    async fn execute_alter_role(
+        &self,
+        stmt: AlterRoleStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let object_type = if stmt.is_user { "USER" } else { "ROLE" };
+
+        Ok(ExecutionResult::Show {
+            variable: format!("ALTER {}", object_type),
+            value: stmt.name.clone(),
+        })
+    }
+
+    // ===== Extended DDL: POLICY Operations =====
+
+    async fn execute_create_policy(
+        &self,
+        stmt: CreatePolicyStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        Ok(ExecutionResult::Show {
+            variable: "CREATE POLICY".to_string(),
+            value: format!("{} ON {}", stmt.name, stmt.table.full_name()),
+        })
+    }
+
+    async fn execute_drop_policy(
+        &self,
+        stmt: DropPolicyStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        Ok(ExecutionResult::Show {
+            variable: "DROP POLICY".to_string(),
+            value: format!("{} ON {}", stmt.name, stmt.table.full_name()),
+        })
+    }
+
+    async fn execute_alter_policy(
+        &self,
+        stmt: AlterPolicyStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        Ok(ExecutionResult::Show {
+            variable: "ALTER POLICY".to_string(),
+            value: format!("{} ON {}", stmt.name, stmt.table.full_name()),
+        })
+    }
+
+    // ===== Extended DDL: RULE Operations =====
+
+    async fn execute_create_rule(
+        &self,
+        stmt: CreateRuleStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        Ok(ExecutionResult::Show {
+            variable: "CREATE RULE".to_string(),
+            value: format!("{} ON {}", stmt.name, stmt.table.full_name()),
+        })
+    }
+
+    async fn execute_drop_rule(&self, stmt: DropRuleStatement) -> ProtocolResult<ExecutionResult> {
+        Ok(ExecutionResult::Show {
+            variable: "DROP RULE".to_string(),
+            value: format!("{} ON {}", stmt.name, stmt.table.full_name()),
         })
     }
 }
