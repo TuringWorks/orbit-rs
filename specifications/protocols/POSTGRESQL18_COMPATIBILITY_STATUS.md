@@ -218,7 +218,7 @@ RETURNING OLD.*;
 
 ### 2.5 MERGE Enhancements
 
-**Status**: ⚠️ Partial (MERGE exists, RETURNING not supported)
+**Status**: ⚠️ Partial (Parsing complete, Execution placeholder)
 
 ```sql
 -- PostgreSQL 18 MERGE with RETURNING
@@ -235,8 +235,9 @@ WHEN NOT MATCHED THEN
 **Current Status**:
 - ✅ Basic MERGE syntax parsed
 - ✅ WHEN MATCHED / WHEN NOT MATCHED
-- ❌ RETURNING clause in MERGE
-- ✅ OLD/NEW references (implemented for UPDATE/DELETE, pending for MERGE)
+- ✅ RETURNING clause parsing (with OLD/NEW support)
+- ⚠️ Execution: Placeholder only (returns dummy data)
+- Unit tests: 3 parsing tests added
 
 ---
 
@@ -396,6 +397,7 @@ cargo test -p orbit-server -- generated_column
 
 | Date | Changes |
 |------|---------|
+| 2025-12-07 | Added MERGE with RETURNING clause parsing (3 unit tests) |
 | 2025-12-07 | Implemented VIRTUAL generated columns (compute on SELECT) |
 | 2025-12-07 | Implemented OLD/NEW table references in UPDATE/DELETE RETURNING |
 | 2025-12-07 | Implemented STORED generated column execution (INSERT, UPDATE) |

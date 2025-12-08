@@ -2923,4 +2923,45 @@ mod tests {
             result
         );
     }
+
+    // ===== PostgreSQL 18 MERGE with RETURNING Tests =====
+
+    #[test]
+    fn test_merge_with_returning_parsing() {
+        // Test MERGE with RETURNING clause (PostgreSQL 18)
+        let sql = "MERGE INTO target_table t USING source_table s ON t.id = s.id WHEN MATCHED THEN UPDATE SET value = s.value WHEN NOT MATCHED THEN INSERT (id, value) VALUES (s.id, s.value) RETURNING *";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "MERGE with RETURNING should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_merge_with_old_new_returning_parsing() {
+        // Test MERGE with OLD/NEW in RETURNING clause (PostgreSQL 18)
+        let sql = "MERGE INTO products p USING updates u ON p.id = u.id WHEN MATCHED THEN UPDATE SET price = u.price RETURNING OLD.price AS old_price, NEW.price AS new_price";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "MERGE with OLD/NEW RETURNING should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_merge_insert_with_returning_parsing() {
+        // Test MERGE INSERT action with RETURNING clause
+        let sql = "MERGE INTO users u USING new_users n ON u.email = n.email WHEN NOT MATCHED THEN INSERT (name, email) VALUES (n.name, n.email) RETURNING NEW.*";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "MERGE INSERT with RETURNING NEW.* should parse: {:?}",
+            result
+        );
+    }
 }
