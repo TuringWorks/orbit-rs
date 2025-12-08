@@ -400,13 +400,26 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 
 | Type | Status | OID | Notes |
 |------|--------|-----|-------|
-| int4range | 🔶 | 3904 | Type defined |
-| int8range | 🔶 | 3926 | Type defined |
-| numrange | 🔶 | 3906 | Type defined |
-| tsrange | 🔶 | 3908 | Type defined |
-| tstzrange | 🔶 | 3910 | Type defined |
-| daterange | 🔶 | 3912 | Type defined |
+| int4range | ✅ | 3904 | Full operator support |
+| int8range | ✅ | 3926 | Full operator support |
+| numrange | ✅ | 3906 | Full operator support |
+| tsrange | ✅ | 3908 | Full operator support |
+| tstzrange | ✅ | 3910 | Full operator support |
+| daterange | ✅ | 3912 | Full operator support |
 | multirange types | ❌ | - | Not implemented |
+
+#### Range Operators (PostgreSQL 18)
+
+| Operator | Status | Description |
+|----------|--------|-------------|
+| @> | ✅ | Range contains element/range |
+| <@ | ✅ | Element/range is contained by |
+| && | ✅ | Ranges overlap |
+| -\|- | ✅ | Ranges are adjacent |
+| << | ✅ | Range strictly left of |
+| >> | ✅ | Range strictly right of |
+| &< | ✅ | Range does not extend right |
+| &> | ✅ | Range does not extend left |
 
 ### Domain Types
 
@@ -665,8 +678,8 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | ->> | ✅ | JSON field as text |
 | #> | ❌ | JSON path |
 | #>> | ❌ | JSON path as text |
-| @> | ❌ | Contains |
-| <@ | ❌ | Contained by |
+| @> | ✅ | Contains (JSON/Range) |
+| <@ | ✅ | Contained by (JSON/Range) |
 | ? | ❌ | Key exists |
 | ?| | ❌ | Any key exists |
 | ?& | ❌ | All keys exist |
