@@ -19,15 +19,31 @@ The current `query_engine.rs` implementation provides:
 - Vector query detection and routing to VectorQueryEngine
 - Actor-based storage simulation
 
-### Limitations
+### Current Implementation Status (December 2025)
 
-- No support for JOINs, subqueries, or complex expressions
-- Limited WHERE clause parsing (single condition only)
-- No DDL (CREATE, ALTER, DROP) support
-- No DCL (GRANT, REVOKE) or TCL (BEGIN, COMMIT) support
-- No aggregate functions, window functions, or CTEs
-- Hardcoded to "actors" table only
-- Basic string-based parsing prone to errors
+The SQL parser has been significantly enhanced beyond the original design:
+
+**Fully Implemented:**
+- ✅ JOINs (INNER, LEFT, RIGHT, FULL, CROSS)
+- ✅ Subqueries (scalar, EXISTS, IN, correlated)
+- ✅ Complex expressions with operator precedence
+- ✅ DDL: CREATE/ALTER/DROP TABLE, INDEX, VIEW, SCHEMA, SEQUENCE
+- ✅ TCL: BEGIN, COMMIT, ROLLBACK, SAVEPOINT
+- ✅ Aggregate functions: COUNT, SUM, AVG, MIN, MAX, COUNT(DISTINCT)
+- ✅ Window functions: ROW_NUMBER, RANK, DENSE_RANK, NTILE, LAG, LEAD
+- ✅ Window frame modes: ROWS, RANGE, GROUPS with EXCLUDE clause
+- ✅ CTEs (WITH clause)
+- ✅ Sequence functions: nextval, currval, setval, lastval
+- ✅ 50+ math functions: cbrt, div, factorial, gcd, lcm, sign, etc.
+- ✅ 30+ string functions: left, right, trim, pad, split_part, etc.
+- ✅ Date/time functions: EXTRACT, DATE_TRUNC, interval arithmetic
+- ✅ PostgreSQL 18 features: NegotiateProtocolVersion, temporal constraints
+
+**Remaining Gaps:**
+- DCL (GRANT, REVOKE) - parsing only, no execution
+- Stored procedures (PL/pgSQL) - parsing only
+- CREATE ROLE/USER - not implemented
+- System catalogs (pg_catalog) - stub implementation
 
 ## New Architecture Design
 
