@@ -94,7 +94,7 @@ vulkano = { version = "0.35", optional = true }
 
 # Logging and metrics
 tracing = "0.1"
-metrics = "0.23"
+metrics = "0.24"
 
 # Memory management
 memmap2 = "0.9"
