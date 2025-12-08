@@ -1,8 +1,8 @@
 # OrbitRS Protocol Implementation Status
 
-**Last Updated**: 2025-12-07
+**Last Updated**: 2025-12-08
 **Orbit-RS Version**: 0.1.0
-**Total Tests**: 2,540+ passing
+**Total Tests**: 2,560+ passing
 **Compiler Warnings**: 0 (zero-warnings policy compliant)
 
 This document provides the authoritative status of protocol implementations in OrbitRS, including completion percentages, feature matrices, gaps, and priorities.
@@ -14,7 +14,7 @@ This document provides the authoritative status of protocol implementations in O
 | Protocol | Completion | Status | Tests | Key Gaps |
 |----------|------------|--------|-------|----------|
 | **Redis RESP** | 60% | Production Ready | 190+ | Sorted Sets, Lua scripting |
-| **PostgreSQL** | 70% | Production Ready | 440+ | Sequences, user management |
+| **PostgreSQL** | 72% | Production Ready | 460+ | User management, cursors |
 | **MySQL** | 51% | Active Development | 35+ | Binary protocol, replication |
 | **CQL (Cassandra)** | 55% | Active Development | 51+ | UDTs, Materialized views |
 | **Cypher/Bolt** | 85% | Production Ready | 105+ | DISTINCT, subqueries |
@@ -22,7 +22,8 @@ This document provides the authoritative status of protocol implementations in O
 | **MongoDB** | 50% | Early Development | 6+ | Aggregation stages, Change streams |
 | **REST/HTTP** | 40% | Active Development | - | Authentication |
 
-### Recent Improvements (2025-12-07)
+### Recent Improvements (2025-12-08)
+- **PostgreSQL**: Sequence functions (nextval, currval, setval, lastval) ✅, Math functions (cbrt, div, factorial, gcd, lcm, sign) ✅
 - **PostgreSQL (PG18)**: NegotiateProtocolVersion ✅, Temporal constraints (WITHOUT OVERLAPS) ✅, Variable-length cancel keys ✅
 - **PostgreSQL (PG18)**: UUIDv7 functions ✅, GENERATED columns (STORED/VIRTUAL) ✅, OLD/NEW in RETURNING ✅
 - **PostgreSQL**: RETURNING clause ✅, EXTRACT/DATE_TRUNC functions ✅, Window frame modes (ROWS/RANGE/GROUPS) ✅, EXCLUDE clause ✅
