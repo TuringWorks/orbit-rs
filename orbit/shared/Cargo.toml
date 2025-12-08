@@ -33,7 +33,7 @@ futures.workspace = true
 tower = { version = "0.5", features = ["limit", "load-shed", "timeout"] }
 hyper = "0.14"
 fastrand = "2.0"
-metrics = "0.23"
+metrics = "0.24"
 # LSP dependencies
 tower-lsp = "0.20"
 tokio-stream = { version = "0.1", features = ["sync"] }
