@@ -8,11 +8,11 @@
 
 ## Executive Summary
 
-OrbitRS provides multiple client tools for interacting with the database server. The CLI has achieved near-parity with the Desktop app for core protocols.
+OrbitRS provides multiple client tools for interacting with the database server. **The CLI has achieved full parity with the Desktop app**, supporting all 7 protocols.
 
 | Client Tool | Protocols Supported | Primary Use Case |
 |-------------|---------------------|------------------|
-| orbit/cli | 5 protocols (PostgreSQL, MySQL, Redis, OrbitQL, CQL) | Terminal/scripting |
+| orbit/cli | 7 protocols (PostgreSQL, MySQL, Redis, OrbitQL, CQL, Cypher, AQL) | Terminal/scripting |
 | orbit/desktop | 7 protocols | GUI management |
 | orbit-python-client | REST API | Python applications |
 | orbit-vscode-extension | LSP | IDE integration |
@@ -33,8 +33,8 @@ OrbitRS provides multiple client tools for interacting with the database server.
 | Redis | ✅ Fully implemented | `redis` crate with async | 6379 |
 | OrbitQL | ✅ Fully implemented | HTTP REST (`/api/v1/sql`) | 8080 |
 | CQL | ✅ Implemented | HTTP REST fallback | 9042 |
-| Cypher | ❌ Not supported | Not in enum | - |
-| AQL | ❌ Not supported | Not in enum | - |
+| Cypher | ✅ Fully implemented | Neo4j HTTP REST API | 7474 |
+| AQL | ✅ Fully implemented | ArangoDB HTTP REST API | 8529 |
 
 ### Usage Examples
 
@@ -53,6 +53,12 @@ orbit --protocol orbitql -H localhost -p 8080
 
 # CQL via REST
 orbit --protocol cql -H localhost -p 9042
+
+# Cypher (Neo4j) via REST
+orbit --protocol cypher -H localhost -p 7474 -u neo4j -W password
+
+# AQL (ArangoDB) via REST
+orbit --protocol aql -H localhost -p 8529 -d _system -u root
 
 # Execute single command
 orbit --protocol postgres -e "SELECT * FROM users;"
@@ -74,6 +80,7 @@ orbit --protocol postgres -o json -e "SELECT * FROM users;"
 - File execution mode (`-f`)
 - Single command mode (`-e`)
 - Protocol-specific command handling (Redis commands execute immediately)
+- Basic authentication support for Cypher and AQL
 
 ### Protocol-Specific Behavior
 
@@ -83,6 +90,8 @@ orbit --protocol postgres -o json -e "SELECT * FROM users;"
 | MySQL | Semicolon (`;`) | Yes | Standard SQL |
 | OrbitQL | Semicolon (`;`) | Yes | REST API with JSON body |
 | CQL | Semicolon (`;`) | Yes | REST API with protocol hint |
+| Cypher | Semicolon (`;`) | Yes | Neo4j REST API with basic auth |
+| AQL | Semicolon (`;`) | Yes | ArangoDB cursor API with basic auth |
 | Redis | Newline | No | Commands execute immediately |
 
 ### ReplState Architecture
@@ -102,7 +111,7 @@ struct ReplState {
     pg_client: Option<Client>,                    // PostgreSQL
     mysql_pool: Option<mysql_async::Pool>,        // MySQL
     redis_client: Option<redis::Client>,          // Redis
-    http_client: Option<reqwest::Client>,         // OrbitQL/CQL
+    http_client: Option<reqwest::Client>,         // OrbitQL/CQL/Cypher/AQL
 }
 ```
 
@@ -110,9 +119,8 @@ struct ReplState {
 
 | Gap | Priority | Effort | Notes |
 |-----|----------|--------|-------|
-| Cypher support | Low | Medium | HTTP REST to Bolt endpoint |
-| AQL support | Low | Medium | HTTP REST to ArangoDB API |
 | Native CQL driver | Low | Medium | Replace REST with `cdrs-tokio` |
+| Native Bolt driver | Low | High | Replace REST with native Bolt protocol |
 
 ---
 
@@ -259,8 +267,8 @@ orbit/shared/src/orbitql/
 | MySQL Wire | 3306 | MySQL | ✅ | ✅ |
 | Redis RESP | 6379 | RESP | ✅ | ✅ |
 | CQL | 9042 | CQL | ✅ (REST) | ✅ |
-| Cypher/Bolt | 7687 | Cypher | ❌ | ✅ |
-| AQL | 8529 | AQL | ❌ | ✅ |
+| Cypher/Bolt | 7474 | Cypher | ✅ (REST) | ✅ |
+| AQL | 8529 | AQL | ✅ (REST) | ✅ |
 | REST API | 8080 | PostgreSQL | ✅ (OrbitQL) | ✅ |
 | OrbitQL | 8081 | OrbitQL | ✅ | ✅ |
 | gRPC | 50051 | Protobuf | ❌ | Internal |
@@ -274,8 +282,8 @@ orbit/shared/src/orbitql/
 | Redis commands | ✅ | ✅ | ❌ |
 | OrbitQL queries | ✅ | ✅ | ❌ |
 | CQL queries | ✅ | ✅ | ❌ |
-| Graph queries (Cypher) | ❌ | ✅ | ❌ |
-| AQL queries | ❌ | ✅ | ❌ |
+| Graph queries (Cypher) | ✅ | ✅ | ❌ |
+| AQL queries | ✅ | ✅ | ❌ |
 | Syntax highlighting | ✅ | ✅ | N/A |
 | Connection management | Basic | Full | Basic |
 | Query history | ✅ | ✅ | ❌ |
@@ -285,43 +293,25 @@ orbit/shared/src/orbitql/
 
 ## 5. Future Enhancements
 
-### Phase 1: Complete CLI Protocol Parity (Low Priority)
+### Phase 1: Native Protocol Drivers (Low Priority)
 
-**Goal**: Add remaining protocols to CLI
+**Goal**: Replace REST fallbacks with native protocol drivers
 
-#### Task 1.1: Add Cypher to CLI
+#### Task 1.1: Native CQL Driver
 ```rust
-// Add to Protocol enum
-enum Protocol {
-    Postgres,
-    Mysql,
-    Cql,
-    Redis,
-    Orbitql,
-    Cypher,  // NEW
-}
-
-// Implement Cypher via HTTP REST (Bolt endpoint)
-impl ReplState {
-    async fn execute_cypher(&self, query: &str) -> Result<()> {
-        let url = format!("http://{}:{}/db/neo4j/tx/commit", self.host, self.port);
-        // HTTP POST with Cypher query in JSON body
-    }
-}
+// Replace HTTP REST with cdrs-tokio for native CQL support
+// Benefits: Better performance, connection pooling, prepared statements
 ```
 
-**Effort**: Medium (2-3 days)
+**Effort**: Medium (3-4 days)
 
-#### Task 1.2: Add AQL to CLI
+#### Task 1.2: Native Bolt Driver
 ```rust
-// Add AQL support via ArangoDB REST API
-async fn execute_aql(&self, query: &str) -> Result<()> {
-    let url = format!("http://{}:{}/_api/cursor", self.host, self.port);
-    // HTTP POST with AQL query
-}
+// Replace HTTP REST with native Bolt protocol for Cypher
+// Benefits: Better performance, streaming results, transaction support
 ```
 
-**Effort**: Medium (2-3 days)
+**Effort**: High (1-2 weeks)
 
 ### Phase 2: Unified Query Interface
 
@@ -363,6 +353,14 @@ class OrbitClient:
 
     def execute_orbitql(self, query):
         """OrbitQL via REST or dedicated port"""
+        pass
+
+    def execute_cypher(self, query):
+        """Cypher via Neo4j REST API"""
+        pass
+
+    def execute_aql(self, query):
+        """AQL via ArangoDB REST API"""
         pass
 ```
 
@@ -407,6 +405,20 @@ async fn test_cli_cql_via_rest() {
     let mut state = ReplState::new(&cli);
     assert!(state.connect_cql().await.is_ok());
 }
+
+#[tokio::test]
+async fn test_cli_cypher_via_rest() {
+    let cli = Cli::parse_from(&["orbit", "--protocol", "cypher"]);
+    let mut state = ReplState::new(&cli);
+    assert!(state.connect_cypher().await.is_ok());
+}
+
+#[tokio::test]
+async fn test_cli_aql_via_rest() {
+    let cli = Cli::parse_from(&["orbit", "--protocol", "aql"]);
+    let mut state = ReplState::new(&cli);
+    assert!(state.connect_aql().await.is_ok());
+}
 ```
 
 ### Integration Tests
@@ -445,7 +457,7 @@ dirs = "5"
 tokio-postgres = "0.7"                                    # PostgreSQL
 mysql_async = "0.34"                                      # MySQL
 redis = { version = "0.25", features = ["tokio-comp"] }   # Redis
-reqwest = { version = "0.12", features = ["json"] }       # HTTP for OrbitQL/CQL
+reqwest = { version = "0.12", features = ["json"] }       # HTTP for OrbitQL/CQL/Cypher/AQL
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ```
@@ -456,5 +468,6 @@ serde_json = "1"
 
 | Date | Changes |
 |------|---------|
+| 2025-12-07 | Added Cypher (Neo4j) and AQL (ArangoDB) support - CLI now has full protocol parity with Desktop |
 | 2025-12-07 | Updated to reflect full CLI protocol implementation (PostgreSQL, MySQL, Redis, OrbitQL, CQL) |
 | 2025-12-07 | Initial specification |
