@@ -54,6 +54,11 @@ pub enum Token {
     Cycle,
     Owned,
     None,
+    // PostgreSQL 18 - Generated columns
+    Generated,
+    Always,
+    Stored,
+    Virtual,
 
     // Keywords - DML
     Select,
@@ -385,6 +390,11 @@ impl Lexer {
             ("CYCLE", Token::Cycle),
             ("OWNED", Token::Owned),
             ("NONE", Token::None),
+            // PostgreSQL 18 - Generated columns
+            ("GENERATED", Token::Generated),
+            ("ALWAYS", Token::Always),
+            ("STORED", Token::Stored),
+            ("VIRTUAL", Token::Virtual),
             // DML Keywords
             ("SELECT", Token::Select),
             ("INSERT", Token::Insert),

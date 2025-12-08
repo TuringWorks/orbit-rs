@@ -574,8 +574,19 @@ impl ExpressionEvaluator {
                 Ok(SqlValue::Json(serde_json::Value::Object(map)))
             }
 
-            // UUID functions
+            // UUID functions (PostgreSQL 18 compatible)
+            // UUIDv7 - timestamp-ordered UUID (PostgreSQL 18 feature)
+            // Recommended for primary keys as they are sortable by creation time
             "UUID_GENERATE_V7" | "UUIDV7" => Ok(SqlValue::Uuid(Uuid::now_v7())),
+            // UUIDv4 - random UUID (standard PostgreSQL function)
+            // gen_random_uuid() is the standard PostgreSQL function name
+            "GEN_RANDOM_UUID" | "UUID_GENERATE_V4" | "UUIDV4" => {
+                Ok(SqlValue::Uuid(Uuid::new_v4()))
+            }
+            // UUID nil - all zeros (useful for comparisons)
+            "UUID_NIL" => Ok(SqlValue::Uuid(Uuid::nil())),
+            // UUID max - all ones
+            "UUID_MAX" => Ok(SqlValue::Uuid(Uuid::max())),
 
             // JSON functions
             "JSON_TABLE" => Ok(SqlValue::Text("JSON Table".to_string())),
