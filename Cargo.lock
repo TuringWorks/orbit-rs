@@ -5474,7 +5474,7 @@ dependencies = [
  "aligned-vec",
  "anyhow",
  "bytemuck",
- "core-foundation 0.9.4",
+ "core-foundation 0.10.1",
  "criterion 0.7.0",
  "cudarc 0.12.1",
  "env_logger",
