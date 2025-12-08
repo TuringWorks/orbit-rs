@@ -9,29 +9,34 @@
 
 | Protocol | Completion | Blocking Issues | Top Priority |
 |----------|------------|-----------------|--------------|
-| PostgreSQL | ~55% | RETURNING, aggregates | User management, sequences |
-| Redis/RESP | ~45-50% | MULTI/EXEC, sorted sets | Transactions |
+| PostgreSQL | ~65% | Aggregates, sequences | User management, sequences |
+| Redis/RESP | ~60% | Sorted sets, scripting | Lua scripting |
 | MySQL | ~51% | Stored procedures | Authentication |
 | CQL | ~50-60% | UDTs, materialized views | TTL enforcement |
-| Cypher | ~75% | GROUP BY, DISTINCT | Aggregation grouping |
+| Cypher | ~85% | DISTINCT | Subqueries |
 | AQL | ~40% | Graph traversal | COLLECT execution |
 | MongoDB | ~60% | Transactions, auth | Change streams |
 | REST/HTTP | ~40% | Authentication | Query execution |
 
+### ✅ Recently Completed (2025-12-07)
+- **PostgreSQL**: RETURNING clause execution, EXTRACT/DATE_TRUNC functions, Window frame modes (ROWS/RANGE/GROUPS), EXCLUDE clause
+- **Redis**: Full MULTI/EXEC/DISCARD/WATCH/UNWATCH transaction support (100% coverage)
+- **Cypher**: Implicit GROUP BY with aggregations in RETURN and WITH clauses
+
 ---
 
-## 1. PostgreSQL Wire Protocol (~55% complete for PG16/17)
+## 1. PostgreSQL Wire Protocol (~65% complete for PG16/17)
 
 ### CRITICAL Missing
 
-| Feature | Impact | Location | Effort |
-|---------|--------|----------|--------|
-| CREATE ROLE/USER, ALTER ROLE | No user management | `parser/dcl.rs` | High |
-| CREATE SEQUENCE | SERIAL columns don't work | `parser/ddl.rs` | Medium |
-| TRUNCATE execution | Must use DELETE instead | `executor.rs` | Low |
-| RETURNING clause execution | Parsed but not returned | `executor.rs` | Medium |
-| ON CONFLICT execution | Parsed but stubbed | `executor.rs` | Medium |
-| Savepoint functionality | TODO stubs only | `executor.rs` | Medium |
+| Feature | Impact | Location | Effort | Status |
+|---------|--------|----------|--------|--------|
+| CREATE ROLE/USER, ALTER ROLE | No user management | `parser/dcl.rs` | High | Pending |
+| CREATE SEQUENCE | SERIAL columns don't work | `parser/ddl.rs` | Medium | Pending |
+| TRUNCATE execution | Must use DELETE instead | `executor.rs` | Low | Pending |
+| RETURNING clause execution | Parsed but not returned | `executor.rs` | Medium | ✅ **DONE** |
+| ON CONFLICT execution | Parsed but stubbed | `executor.rs` | Medium | Pending |
+| Savepoint functionality | TODO stubs only | `executor.rs` | Medium | Pending |
 
 ### HIGH Priority Missing
 
@@ -42,10 +47,14 @@
 - `JSON_AGG`, `JSONB_AGG` - JSON aggregation
 - `BOOL_AND`, `BOOL_OR` - Boolean aggregates ✅ (recently added)
 
-#### Window Frame Execution
-- Frames defined in AST but not evaluated during execution
-- `ROWS BETWEEN`, `RANGE BETWEEN`, `GROUPS BETWEEN` parsing ✅ (recently added)
-- Actual frame-bounded aggregation not implemented
+#### Window Frame Execution ✅ **COMPLETED**
+- Frames defined in AST ✅
+- `ROWS BETWEEN`, `RANGE BETWEEN`, `GROUPS BETWEEN` parsing ✅
+- Frame-bounded aggregation ✅ **DONE**
+- ROWS mode with CURRENT ROW, N PRECEDING/FOLLOWING, UNBOUNDED ✅
+- RANGE mode with ORDER BY value comparison and peer groups ✅
+- GROUPS mode with peer group handling ✅
+- EXCLUDE clause (CURRENT ROW, GROUP, TIES, NO OTHERS) ✅
 
 #### String Functions
 - `TRIM` ✅, `LTRIM` ✅, `RTRIM` ✅ - Whitespace removal (recently added)
@@ -55,12 +64,14 @@
 - `INITCAP` ✅ - Title case (recently added)
 - `REVERSE` ✅ - String reversal (recently added)
 
-#### Date/Time Functions
-- `EXTRACT` - Extract date parts
-- `DATE_TRUNC` - Truncate to precision
-- `AGE` - Interval between dates
-- `MAKE_DATE`, `MAKE_TIME`, `MAKE_TIMESTAMP` - Date construction
-- `TO_CHAR`, `TO_DATE`, `TO_TIMESTAMP` - Formatting
+#### Date/Time Functions ✅ **MOSTLY COMPLETED**
+- `EXTRACT` ✅ **DONE** - Extract date parts (YEAR, MONTH, DAY, HOUR, MINUTE, SECOND, DOW, DOY, WEEK, QUARTER, EPOCH)
+- `DATE_TRUNC` ✅ **DONE** - Truncate to precision (year, month, day, hour, minute, second, week, quarter)
+- `DATE_PART` ✅ **DONE** - Alias for EXTRACT
+- `HOUR`, `MINUTE`, `SECOND`, `WEEK`, `QUARTER`, `DOW`, `DOY` ✅ **DONE** - Individual field extractors
+- `AGE` - Interval between dates (Pending)
+- `MAKE_DATE`, `MAKE_TIME`, `MAKE_TIMESTAMP` - Date construction (Pending)
+- `TO_CHAR`, `TO_DATE`, `TO_TIMESTAMP` - Formatting (Pending)
 
 #### Math Functions
 - `MOD` ✅ - Modulo (recently added)
@@ -108,16 +119,25 @@ Operators:  ██████░░░░ 60%  (Comparison, JSONB, Vector)
 
 ---
 
-## 2. Redis/RESP Protocol (~45-50% of Redis 7.x)
+## 2. Redis/RESP Protocol (~60% of Redis 7.x)
 
 ### CRITICAL Missing
 
-| Feature | Commands | Impact |
-|---------|----------|--------|
-| Transactions | `MULTI`, `EXEC`, `DISCARD`, `WATCH`, `UNWATCH` | No atomicity guarantees |
-| Sorted Sets | 24 missing commands | Leaderboards, rankings broken |
-| Blocking Lists | `BLPOP`, `BRPOP` (stubs) | Queue patterns don't work |
-| Lua Scripting | `EVAL`, `EVALSHA`, `SCRIPT *` | No server-side logic |
+| Feature | Commands | Impact | Status |
+|---------|----------|--------|--------|
+| Transactions | `MULTI`, `EXEC`, `DISCARD`, `WATCH`, `UNWATCH` | No atomicity guarantees | ✅ **DONE** |
+| Sorted Sets | 24 missing commands | Leaderboards, rankings broken | Pending |
+| Blocking Lists | `BLPOP`, `BRPOP` (stubs) | Queue patterns don't work | Pending |
+| Lua Scripting | `EVAL`, `EVALSHA`, `SCRIPT *` | No server-side logic | Pending |
+
+### ✅ Transaction Support COMPLETED (2025-12-07)
+- `MULTI` - Start transaction ✅
+- `EXEC` - Execute queued commands ✅
+- `DISCARD` - Abort transaction ✅
+- `WATCH` - Optimistic locking ✅
+- `UNWATCH` - Remove watches ✅
+- Per-connection transaction state management ✅
+- Global transaction manager for key watch notifications ✅
 
 #### Sorted Set Missing Commands
 ```
@@ -267,15 +287,22 @@ Functions:    ███░░░░░░░ 30%  (Basic aggregates only)
 
 ---
 
-## 5. Cypher/Graph Protocol (~75% complete)
+## 5. Cypher/Graph Protocol (~85% complete)
+
+### ✅ Recently Completed (2025-12-07)
+
+| Feature | Impact | Notes | Status |
+|---------|--------|-------|--------|
+| GROUP BY / HAVING | Analytics queries | Implicit grouping with aggregations | ✅ **DONE** |
+| Aggregation grouping | Functions + grouping | Key extraction implemented | ✅ **DONE** |
+| RETURN with aggregations | Grouped results | COUNT, SUM, AVG, MIN, MAX, COLLECT | ✅ **DONE** |
+| WITH with aggregations | Chained grouping | Intermediate aggregation support | ✅ **DONE** |
 
 ### CRITICAL Missing
 
-| Feature | Impact | Notes |
-|---------|--------|-------|
-| GROUP BY / HAVING | No analytics queries | Aggregation framework needed |
-| DISTINCT execution | Results have duplicates | Dedup in execution |
-| Aggregation grouping | Functions work, grouping doesn't | Key extraction needed |
+| Feature | Impact | Notes | Status |
+|---------|--------|-------|--------|
+| DISTINCT execution | Results have duplicates | Dedup in execution | Pending |
 
 ### HIGH Priority Missing
 
@@ -477,20 +504,22 @@ Sharding:     ░░░░░░░░░░ 0%   (Not implemented)
 |----------|---------|--------|--------|
 | PostgreSQL | RETURNING execution | Medium | INSERT/UPDATE workflows |
 | PostgreSQL | Aggregate functions | Medium | Analytics queries |
-| Redis | MULTI/EXEC transactions | High | Atomicity |
-| Redis | Sorted Set operations | Medium | Leaderboards |
-| MySQL | Stored procedures | High | Business logic |
-| CQL | TTL enforcement | Medium | Data expiration |
-| Cypher | GROUP BY execution | Medium | Analytics |
-| MongoDB | Transactions | High | ACID compliance |
-| REST | Authentication | High | Security |
+| Redis | MULTI/EXEC transactions | High | Atomicity | ✅ **DONE** |
+| Redis | Sorted Set operations | Medium | Leaderboards | Pending |
+| MySQL | Stored procedures | High | Business logic | Pending |
+| CQL | TTL enforcement | Medium | Data expiration | Pending |
+| Cypher | GROUP BY execution | Medium | Analytics | ✅ **DONE** |
+| MongoDB | Transactions | High | ACID compliance | Pending |
+| REST | Authentication | High | Security | Pending |
 
 ### Tier 2: Limits Advanced Usage (Q2)
 
-| Protocol | Feature | Effort |
-|----------|---------|--------|
-| PostgreSQL | Window frames | Medium |
-| PostgreSQL | Recursive CTEs | High |
+| Protocol | Feature | Effort | Status |
+|----------|---------|--------|--------|
+| PostgreSQL | Window frames | Medium | ✅ **DONE** |
+| PostgreSQL | RETURNING clause | Medium | ✅ **DONE** |
+| PostgreSQL | Date/Time functions | Medium | ✅ **DONE** |
+| PostgreSQL | Recursive CTEs | High | Pending |
 | PostgreSQL | Full-text search | High |
 | Redis | Lua scripting | Very High |
 | Redis | Blocking operations | Medium |

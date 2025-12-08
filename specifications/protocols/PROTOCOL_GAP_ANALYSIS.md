@@ -1,6 +1,6 @@
 # OrbitRS Protocol Gap Analysis
 
-**Last Updated**: 2025-01-XX
+**Last Updated**: 2025-12-07
 **Purpose**: Track implementation completeness across all supported protocols
 
 ---
@@ -11,14 +11,19 @@ OrbitRS implements multiple database protocols from a single unified storage lay
 
 | Protocol | Current Coverage | Target | Priority |
 |----------|-----------------|--------|----------|
-| PostgreSQL | ~55% | 100% | Critical |
-| Redis (RESP) | ~50% | 80% | High |
+| PostgreSQL | ~65% | 100% | Critical |
+| Redis (RESP) | ~60% | 80% | High |
 | MySQL | ~51% | 70% | Medium |
 | CQL (Cassandra) | ~55% | 70% | Medium |
-| Cypher (Graph) | ~75% | 90% | High |
+| Cypher (Graph) | ~85% | 90% | High |
 | AQL (ArangoDB) | ~40% | 60% | Low |
 | MongoDB Wire | ~60% | 70% | Medium |
 | REST/HTTP | ~40% | 80% | High |
+
+### Recent Improvements (2025-12-07)
+- **PostgreSQL**: RETURNING clause, EXTRACT/DATE_TRUNC functions, window frame modes (ROWS/RANGE/GROUPS), EXCLUDE clause
+- **Redis**: Full MULTI/EXEC/DISCARD/WATCH/UNWATCH transaction support
+- **Cypher**: Implicit GROUP BY with aggregations in RETURN and WITH clauses
 
 ---
 
@@ -49,13 +54,15 @@ OrbitRS implements multiple database protocols from a single unified storage lay
 | System catalogs (pg_catalog) | Tool compatibility | High |
 
 #### Should Have (Feature Parity)
-| Feature | Impact | Effort |
-|---------|--------|--------|
-| Window frame specification | Analytics queries | Medium |
-| Aggregate functions (array_agg, string_agg) | Data aggregation | Medium |
-| Full-text search (tsvector/tsquery) | Search capabilities | High |
-| Stored procedures (PL/pgSQL execution) | Business logic | Very High |
-| COPY command execution | Bulk data loading | Medium |
+| Feature | Impact | Effort | Status |
+|---------|--------|--------|--------|
+| Window frame specification | Analytics queries | Medium | ✅ **DONE** |
+| RETURNING clause | DML results | Medium | ✅ **DONE** |
+| Date/Time functions (EXTRACT, DATE_TRUNC) | Time queries | Medium | ✅ **DONE** |
+| Aggregate functions (array_agg, string_agg) | Data aggregation | Medium | Pending |
+| Full-text search (tsvector/tsquery) | Search capabilities | High | Pending |
+| Stored procedures (PL/pgSQL execution) | Business logic | Very High | Pending |
+| COPY command execution | Bulk data loading | Medium | Pending |
 
 #### Nice to Have (Advanced Features)
 | Feature | Impact | Effort |
@@ -84,13 +91,13 @@ OrbitRS implements multiple database protocols from a single unified storage lay
 ### Critical Gaps
 
 #### Must Have
-| Feature | Impact | Effort |
-|---------|--------|--------|
-| Transactions (MULTI/EXEC/DISCARD) | Atomicity | High |
-| Sorted Set full support | Leaderboards, ranking | Medium |
-| Key scanning (SCAN, HSCAN, SSCAN) | Iteration | Medium |
-| TTL enforcement | Expiration | Medium |
-| Cluster commands | Distribution | Very High |
+| Feature | Impact | Effort | Status |
+|---------|--------|--------|--------|
+| Transactions (MULTI/EXEC/DISCARD/WATCH/UNWATCH) | Atomicity | High | ✅ **DONE** |
+| Sorted Set full support | Leaderboards, ranking | Medium | Pending |
+| Key scanning (SCAN, HSCAN, SSCAN) | Iteration | Medium | Pending |
+| TTL enforcement | Expiration | Medium | Partial |
+| Cluster commands | Distribution | Very High | Pending |
 
 #### Should Have
 | Feature | Impact | Effort |
@@ -118,7 +125,7 @@ OrbitRS implements multiple database protocols from a single unified storage lay
 | Sets | 8 | 15 | 53% |
 | Sorted Sets | 10 | 35 | 29% |
 | Keys | 15 | 30 | 50% |
-| Transactions | 0 | 5 | 0% |
+| Transactions | 5 | 5 | **100%** ✅ |
 | Scripting | 0 | 10 | 0% |
 | Pub/Sub | 3 | 8 | 38% |
 | Streams | 0 | 20 | 0% |
@@ -228,13 +235,13 @@ OrbitRS implements multiple database protocols from a single unified storage lay
 ### Critical Gaps
 
 #### Must Have
-| Feature | Impact | Effort |
-|---------|--------|--------|
-| GROUP BY aggregation | Analytics | Medium |
-| DISTINCT execution | Deduplication | Low |
-| OPTIONAL MATCH | Outer joins | Medium |
-| Variable-length paths | Graph traversal | Medium |
-| Index usage | Performance | Medium |
+| Feature | Impact | Effort | Status |
+|---------|--------|--------|--------|
+| GROUP BY aggregation | Analytics | Medium | ✅ **DONE** |
+| DISTINCT execution | Deduplication | Low | Pending |
+| OPTIONAL MATCH | Outer joins | Medium | ✅ Implemented |
+| Variable-length paths | Graph traversal | Medium | ✅ Implemented |
+| Index usage | Performance | Medium | Pending |
 
 #### Should Have
 | Feature | Impact | Effort |
@@ -258,10 +265,12 @@ OrbitRS implements multiple database protocols from a single unified storage lay
 | Feature | Parse | Execute | Notes |
 |---------|-------|---------|-------|
 | MATCH | ✅ | ✅ | Node patterns |
-| OPTIONAL MATCH | ✅ | 🔶 | Partial |
+| OPTIONAL MATCH | ✅ | ✅ | Full support |
 | WHERE | ✅ | ✅ | Full expressions |
-| RETURN | ✅ | ✅ | Projections |
-| WITH | ✅ | ✅ | Chaining |
+| RETURN | ✅ | ✅ | Projections + aggregations |
+| RETURN + GROUP BY | ✅ | ✅ | **Implicit grouping** ✅ |
+| WITH | ✅ | ✅ | Chaining + aggregations |
+| WITH + GROUP BY | ✅ | ✅ | **Implicit grouping** ✅ |
 | CREATE | ✅ | ✅ | Nodes/edges |
 | MERGE | ✅ | ✅ | Upsert |
 | DELETE | ✅ | ✅ | Remove |
@@ -269,7 +278,9 @@ OrbitRS implements multiple database protocols from a single unified storage lay
 | REMOVE | ✅ | ✅ | Properties |
 | ORDER BY | ✅ | ✅ | Sorting |
 | SKIP/LIMIT | ✅ | ✅ | Pagination |
-| DISTINCT | ✅ | ❌ | Parse only |
+| COUNT/SUM/AVG/MIN/MAX | ✅ | ✅ | **All aggregations** ✅ |
+| COLLECT | ✅ | ✅ | Array aggregation |
+| DISTINCT | ✅ | 🔶 | Partial |
 | UNION | ✅ | ❌ | Parse only |
 | UNWIND | ✅ | 🔶 | Basic |
 | CALL | ✅ | 🔶 | Limited |
@@ -502,5 +513,6 @@ OrbitRS has **two separate parsers** that are not unified:
 
 | Date | Changes |
 |------|---------|
+| 2025-12-07 | **Major Update**: Tier 1 features implemented - PostgreSQL RETURNING/Date-Time/Window frames, Redis transactions, Cypher GROUP BY |
 | 2025-12-07 | Added client tools protocol gaps (Section 9) |
 | 2025-01-XX | Initial gap analysis |
