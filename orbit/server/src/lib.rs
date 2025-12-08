@@ -2,6 +2,8 @@ pub mod ai;
 pub mod config;
 pub mod directory;
 pub mod features;
+#[cfg(feature = "fts")]
+pub mod fts;
 pub mod load_balancer;
 pub mod mesh;
 pub mod persistence;
