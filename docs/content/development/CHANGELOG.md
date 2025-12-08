@@ -11,7 +11,43 @@ All notable changes to the Orbit-RS project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-12-02
+## [Unreleased] - 2025-12-08
+
+### Added
+
+- **PostgreSQL Sequence Functions** (2025-12-08): Full sequence function support for PostgreSQL compatibility
+  - **SequenceAccessor Trait**: New trait in `expression_evaluator.rs` for synchronous sequence access
+  - **ExecutorSequenceAccessor**: Implementation using `std::sync::RwLock` for thread-safe sequence operations
+  - **Sequence Functions Implemented**:
+    - `nextval(sequence_name)` - Advance and return next sequence value
+    - `currval(sequence_name)` - Return current value (requires prior nextval in session)
+    - `setval(sequence_name, value, is_called)` - Set sequence to specific value
+    - `lastval()` - Return last sequence value from any sequence in session
+  - **Session Tracking**: Added `sequence_last_value` field for per-session lastval() tracking
+  - **Tests**: 17 new sequence tests covering CREATE/ALTER/DROP SEQUENCE, all functions, cycling, and overflow
+
+- **PostgreSQL Math Functions** (2025-12-08): Additional mathematical functions for PostgreSQL 18 compatibility
+  - `cbrt(x)` - Cube root function
+  - `div(x, y)` - Integer division (truncated toward zero)
+  - `factorial(n)` - Factorial function
+  - `gcd(a, b)` - Greatest common divisor
+  - `lcm(a, b)` - Least common multiple
+  - `sign(x)` - Sign of number (-1, 0, or 1)
+
+### Changed
+
+- **Sequence Storage Lock Type** (2025-12-08): Changed sequences storage from `tokio::sync::RwLock` to `std::sync::RwLock`
+  - Enables synchronous access from expression evaluator during query execution
+  - Maintains thread safety while avoiding async boundary crossing
+
+### Documentation
+
+- **Specification Updates** (2025-12-08): Updated all specification documents
+  - `specifications/PRD.md` - Updated test counts and PostgreSQL feature coverage
+  - `specifications/protocols/PROTOCOL_STATUS.md` - Added sequence and math functions, updated coverage metrics
+  - `specifications/protocols/POSTGRESQL18_COMPATIBILITY_STATUS.md` - Added Section 2.6 for Sequence Functions
+  - `specifications/protocols/POSTGRESQL_18_COMPATIBILITY.md` - Updated function implementation status
+  - `specifications/protocols/CLIENT_TOOLS_PROTOCOL_SUPPORT.md` - Updated PostgreSQL capabilities
 
 ### Fixed
 
