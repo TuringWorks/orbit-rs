@@ -209,6 +209,15 @@ impl ExpressionParser {
                     Token::VectorDistance => BinaryOperator::VectorDistance,
                     Token::VectorInnerProduct => BinaryOperator::VectorInnerProduct,
                     Token::VectorCosineDistance => BinaryOperator::VectorCosineDistance,
+                    // Range operators (PostgreSQL range types)
+                    Token::RangeContains => BinaryOperator::RangeContains,
+                    Token::RangeContainedBy => BinaryOperator::RangeContainedBy,
+                    Token::RangeOverlaps => BinaryOperator::RangeOverlaps,
+                    Token::RangeAdjacent => BinaryOperator::RangeAdjacent,
+                    Token::RangeStrictlyLeft => BinaryOperator::RangeStrictlyLeft,
+                    Token::RangeStrictlyRight => BinaryOperator::RangeStrictlyRight,
+                    Token::RangeNotExtendRight => BinaryOperator::RangeNotExtendRight,
+                    Token::RangeNotExtendLeft => BinaryOperator::RangeNotExtendLeft,
                     _ => break,
                 };
 

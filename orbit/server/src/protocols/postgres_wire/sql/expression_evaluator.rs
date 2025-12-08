@@ -485,6 +485,16 @@ impl ExpressionEvaluator {
             BinaryOperator::JsonDelete => self.json_delete(&left_val, &right_val),
             BinaryOperator::JsonDeletePath => self.json_delete_path(&left_val, &right_val),
 
+            // Range operators (PostgreSQL range types)
+            BinaryOperator::RangeContains => self.range_contains(&left_val, &right_val),
+            BinaryOperator::RangeContainedBy => self.range_contained_by(&left_val, &right_val),
+            BinaryOperator::RangeOverlaps => self.range_overlaps(&left_val, &right_val),
+            BinaryOperator::RangeAdjacent => self.range_adjacent(&left_val, &right_val),
+            BinaryOperator::RangeStrictlyLeft => self.range_strictly_left(&left_val, &right_val),
+            BinaryOperator::RangeStrictlyRight => self.range_strictly_right(&left_val, &right_val),
+            BinaryOperator::RangeNotExtendRight => self.range_not_extend_right(&left_val, &right_val),
+            BinaryOperator::RangeNotExtendLeft => self.range_not_extend_left(&left_val, &right_val),
+
             _ => Err(ProtocolError::not_implemented(
                 "Binary operator",
                 &format!("{operator:?}"),
@@ -5802,6 +5812,187 @@ impl ExpressionEvaluator {
             }
             _ => Err(ProtocolError::PostgresError(
                 "Expected string array".to_string(),
+            )),
+        }
+    }
+
+    // Range operator implementations for PostgreSQL range types
+
+    /// @> operator: range contains element/range
+    fn range_contains(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Range(range), SqlValue::Range(other)) => {
+                // Range contains another range if lower <= other.lower AND upper >= other.upper
+                let lower_ok = match (&range.lower, &other.lower) {
+                    (Some(r_lower), Some(o_lower)) => {
+                        self.compare_values(r_lower, o_lower)? != Ordering::Greater
+                    }
+                    (None, _) => true,  // Unbounded lower contains any lower
+                    (Some(_), None) => false,  // Bounded lower doesn't contain unbounded
+                };
+                let upper_ok = match (&range.upper, &other.upper) {
+                    (Some(r_upper), Some(o_upper)) => {
+                        self.compare_values(r_upper, o_upper)? != Ordering::Less
+                    }
+                    (None, _) => true,  // Unbounded upper contains any upper
+                    (Some(_), None) => false,  // Bounded upper doesn't contain unbounded
+                };
+                Ok(SqlValue::Boolean(lower_ok && upper_ok))
+            }
+            (SqlValue::Range(range), elem) => {
+                // Range contains element
+                let lower_ok = match &range.lower {
+                    Some(lower) => {
+                        if range.lower_inclusive {
+                            self.compare_values(lower, elem)? != Ordering::Greater
+                        } else {
+                            self.compare_values(lower, elem)? == Ordering::Less
+                        }
+                    }
+                    None => true,  // Unbounded lower
+                };
+                let upper_ok = match &range.upper {
+                    Some(upper) => {
+                        if range.upper_inclusive {
+                            self.compare_values(upper, elem)? != Ordering::Less
+                        } else {
+                            self.compare_values(upper, elem)? == Ordering::Greater
+                        }
+                    }
+                    None => true,  // Unbounded upper
+                };
+                Ok(SqlValue::Boolean(lower_ok && upper_ok))
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Range contains operator requires range type".to_string(),
+            )),
+        }
+    }
+
+    /// <@ operator: element/range is contained by range
+    fn range_contained_by(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        self.range_contains(right, left)
+    }
+
+    /// && operator: ranges overlap
+    fn range_overlaps(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Range(r1), SqlValue::Range(r2)) => {
+                let r1_lower_lt_r2_upper = match (&r1.lower, &r2.upper) {
+                    (Some(l), Some(u)) => self.compare_values(l, u)? == Ordering::Less,
+                    (None, _) | (_, None) => true,  // Unbounded ranges always overlap
+                };
+                let r2_lower_lt_r1_upper = match (&r2.lower, &r1.upper) {
+                    (Some(l), Some(u)) => self.compare_values(l, u)? == Ordering::Less,
+                    (None, _) | (_, None) => true,  // Unbounded ranges always overlap
+                };
+                Ok(SqlValue::Boolean(r1_lower_lt_r2_upper && r2_lower_lt_r1_upper))
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Range overlaps operator requires range types".to_string(),
+            )),
+        }
+    }
+
+    /// -|- operator: ranges are adjacent
+    fn range_adjacent(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Range(r1), SqlValue::Range(r2)) => {
+                let r1_upper_eq_r2_lower = match (&r1.upper, &r2.lower) {
+                    (Some(u), Some(l)) => {
+                        self.compare_values(u, l)? == Ordering::Equal
+                            && (r1.upper_inclusive != r2.lower_inclusive)
+                    }
+                    _ => false,  // Unbounded ranges can't be adjacent
+                };
+                let r2_upper_eq_r1_lower = match (&r2.upper, &r1.lower) {
+                    (Some(u), Some(l)) => {
+                        self.compare_values(u, l)? == Ordering::Equal
+                            && (r2.upper_inclusive != r1.lower_inclusive)
+                    }
+                    _ => false,  // Unbounded ranges can't be adjacent
+                };
+                Ok(SqlValue::Boolean(r1_upper_eq_r2_lower || r2_upper_eq_r1_lower))
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Range adjacent operator requires range types".to_string(),
+            )),
+        }
+    }
+
+    /// << operator: range is strictly left of range
+    fn range_strictly_left(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Range(r1), SqlValue::Range(r2)) => {
+                match (&r1.upper, &r2.lower) {
+                    (Some(u), Some(l)) => Ok(SqlValue::Boolean(
+                        self.compare_values(u, l)? == Ordering::Less
+                    )),
+                    _ => Ok(SqlValue::Boolean(false)),  // Unbounded ranges can't be strictly left
+                }
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Range strictly left operator requires range types".to_string(),
+            )),
+        }
+    }
+
+    /// >> operator: range is strictly right of range
+    fn range_strictly_right(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Range(r1), SqlValue::Range(r2)) => {
+                match (&r1.lower, &r2.upper) {
+                    (Some(l), Some(u)) => Ok(SqlValue::Boolean(
+                        self.compare_values(l, u)? == Ordering::Greater
+                    )),
+                    _ => Ok(SqlValue::Boolean(false)),  // Unbounded ranges can't be strictly right
+                }
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Range strictly right operator requires range types".to_string(),
+            )),
+        }
+    }
+
+    /// &< operator: range does not extend right of range
+    fn range_not_extend_right(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Range(r1), SqlValue::Range(r2)) => {
+                match (&r1.upper, &r2.upper) {
+                    (Some(u1), Some(u2)) => Ok(SqlValue::Boolean(
+                        self.compare_values(u1, u2)? != Ordering::Greater
+                    )),
+                    (None, _) => Ok(SqlValue::Boolean(false)),  // Unbounded upper extends right
+                    (_, None) => Ok(SqlValue::Boolean(true)),   // Any bounded doesn't extend past unbounded
+                }
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Range not extend right operator requires range types".to_string(),
+            )),
+        }
+    }
+
+    /// &> operator: range does not extend left of range
+    fn range_not_extend_left(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Range(r1), SqlValue::Range(r2)) => {
+                match (&r1.lower, &r2.lower) {
+                    (Some(l1), Some(l2)) => Ok(SqlValue::Boolean(
+                        self.compare_values(l1, l2)? != Ordering::Less
+                    )),
+                    (None, _) => Ok(SqlValue::Boolean(false)),  // Unbounded lower extends left
+                    (_, None) => Ok(SqlValue::Boolean(true)),   // Any bounded doesn't extend past unbounded
+                }
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Range not extend left operator requires range types".to_string(),
             )),
         }
     }
