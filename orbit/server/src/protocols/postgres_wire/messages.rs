@@ -120,7 +120,10 @@ pub enum BackendMessage {
     /// Backend key data for cancellation
     /// PostgreSQL 18 (protocol 3.2): supports variable-length keys (4-256 bytes)
     /// For backward compatibility with protocol 3.0, use 4-byte keys by default
-    BackendKeyData { process_id: i32, secret_key: Vec<u8> },
+    BackendKeyData {
+        process_id: i32,
+        secret_key: Vec<u8>,
+    },
     /// Bind complete
     BindComplete,
     /// Close complete

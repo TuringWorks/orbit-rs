@@ -14,7 +14,7 @@ This document provides the authoritative status of protocol implementations in O
 | Protocol | Completion | Status | Tests | Key Gaps |
 |----------|------------|--------|-------|----------|
 | **Redis RESP** | 60% | Production Ready | 190+ | Sorted Sets, Lua scripting |
-| **PostgreSQL** | 65% | Production Ready | 425+ | Sequences, user management |
+| **PostgreSQL** | 70% | Production Ready | 440+ | Sequences, user management |
 | **MySQL** | 51% | Active Development | 35+ | Binary protocol, replication |
 | **CQL (Cassandra)** | 55% | Active Development | 51+ | UDTs, Materialized views |
 | **Cypher/Bolt** | 85% | Production Ready | 105+ | DISTINCT, subqueries |
@@ -23,6 +23,8 @@ This document provides the authoritative status of protocol implementations in O
 | **REST/HTTP** | 40% | Active Development | - | Authentication |
 
 ### Recent Improvements (2025-12-07)
+- **PostgreSQL (PG18)**: NegotiateProtocolVersion ✅, Temporal constraints (WITHOUT OVERLAPS) ✅, Variable-length cancel keys ✅
+- **PostgreSQL (PG18)**: UUIDv7 functions ✅, GENERATED columns (STORED/VIRTUAL) ✅, OLD/NEW in RETURNING ✅
 - **PostgreSQL**: RETURNING clause ✅, EXTRACT/DATE_TRUNC functions ✅, Window frame modes (ROWS/RANGE/GROUPS) ✅, EXCLUDE clause ✅
 - **Redis**: Full MULTI/EXEC/DISCARD/WATCH/UNWATCH transaction support ✅ (100% coverage)
 - **Cypher**: Implicit GROUP BY with aggregations in RETURN and WITH clauses ✅
@@ -84,17 +86,19 @@ This document provides the authoritative status of protocol implementations in O
 
 ---
 
-## 2. PostgreSQL Wire Protocol (65% Complete)
+## 2. PostgreSQL Wire Protocol (70% Complete)
 
 ### Wire Protocol Support
 
 | Feature | Status | Version |
 |---------|--------|---------|
-| Authentication (MD5, Plain) | ✅ Complete | v3 |
+| Authentication (MD5, Plain, SCRAM-SHA-256) | ✅ Complete | v3 |
 | Simple Query | ✅ Complete | v3 |
 | Extended Query | ✅ Complete | v3 |
 | Prepared Statements | ✅ Complete | v3 |
 | COPY Protocol | ⚠️ Partial | v3 |
+| NegotiateProtocolVersion | ✅ Complete | v3.2 (PG18) |
+| Variable-length Cancel Keys | ✅ Complete | v3.2 (PG18) |
 | Streaming Replication | ❌ Not Implemented | - |
 
 ### SQL Parser Coverage
@@ -117,6 +121,19 @@ This document provides the authoritative status of protocol implementations in O
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| **PostgreSQL 18 Protocol** | | |
+| NegotiateProtocolVersion | ✅ **DONE** | Protocol 3.2 negotiation in startup |
+| Variable-length cancel keys | ✅ **DONE** | 4-256 byte keys (v3.2) |
+| **PostgreSQL 18 SQL** | | |
+| UUIDv7 functions | ✅ **DONE** | uuidv7(), uuid_generate_v7(), uuid_max() |
+| GENERATED ALWAYS AS (STORED) | ✅ **DONE** | Computed on INSERT/UPDATE |
+| GENERATED ALWAYS AS (VIRTUAL) | ✅ **DONE** | Computed on SELECT |
+| OLD/NEW in RETURNING | ✅ **DONE** | Access previous values |
+| WITHOUT OVERLAPS constraints | ✅ **DONE** | PRIMARY KEY, UNIQUE with temporal |
+| PERIOD keyword (FK) | ✅ **DONE** | Temporal foreign key parsing |
+| Temporal overlap checking | ✅ **DONE** | INSERT/UPDATE validation |
+| MERGE with RETURNING | 🔶 **PARTIAL** | Parsing complete |
+| **Standard Features** | | |
 | RETURNING clause | ✅ **DONE** | INSERT/UPDATE/DELETE |
 | EXTRACT function | ✅ **DONE** | All field types (YEAR, MONTH, DAY, HOUR, etc.) |
 | DATE_TRUNC function | ✅ **DONE** | All precision levels |

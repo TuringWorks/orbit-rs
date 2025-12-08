@@ -959,7 +959,7 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | Protocol | Status | Completion | Tests | Key Components |
 |----------|--------|------------|-------|----------------|
 | **Redis RESP** | Complete | 97% | 183 | String, Hash, List, Set, SortedSet, Stream, PubSub, Vector, TimeSeries, Graph, CLUSTER |
-| **PostgreSQL** | Complete | 90% | 412 | Wire protocol, SQL parser, Query engine, JSONB, pgvector, CTEs, Window functions |
+| **PostgreSQL** | Complete | 92% | 440+ | Wire protocol (v3/v3.2), SQL parser, Query engine, JSONB, pgvector, CTEs, Window functions, PG18 features |
 | **MySQL** | Complete | 80% | 32 | Wire protocol, Auth, Binary protocol (prepared statements) |
 | **CQL (Cassandra)** | Complete | 75% | 23 | Wire protocol, CQL parser, BATCH operations, LWT |
 | **AQL (ArangoDB)** | Active | 75% | 102 | Parser, Query engine, Graph traversal, PRUNE, OPTIONS, SEARCH |
@@ -983,12 +983,20 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | CLUSTER Commands | Complete | 7 | `resp/commands/cluster.rs` |
 | ACL Commands | Complete | ~5 | `resp/commands/acl.rs` |
 | **PostgreSQL Features** | | | |
-| Wire Protocol | Complete | - | `postgres_wire/protocol.rs` |
+| Wire Protocol (v3/v3.2) | Complete | - | `postgres_wire/protocol.rs` |
 | SQL Parser (DML/DDL/DQL) | Complete | ~200 | `sql/parser/*.rs` |
 | Query Engine | Complete | ~100 | `sql/query_engine.rs` |
 | JSONB Operators | Complete | 12 | `jsonb/operators.rs` |
 | pgvector Support | Complete | ~50 | `sql/pgvector*.rs` |
 | Window Functions | Complete | ~30 | `sql/window_functions.rs` |
+| **PostgreSQL 18 Features** | | | |
+| NegotiateProtocolVersion | Complete | - | `postgres_wire/protocol.rs`, `messages.rs` |
+| Variable-length Cancel Keys | Complete | - | `postgres_wire/protocol.rs` |
+| UUIDv7 Functions | Complete | 6 | `sql/expression_evaluator.rs` |
+| GENERATED Columns (STORED/VIRTUAL) | Complete | 10 | `sql/executor.rs` |
+| OLD/NEW in RETURNING | Complete | 4 | `sql/executor.rs` |
+| Temporal Constraints (WITHOUT OVERLAPS) | Complete | 13 | `sql/parser/ddl.rs`, `sql/executor.rs` |
+| MERGE with RETURNING | Partial | 3 | `sql/parser/dml.rs` |
 | **Cypher/Bolt Features** | | | |
 | Bolt Protocol v4/v5 | Complete | - | `bolt_protocol.rs` |
 | Cypher Parser | Complete | ~40 | `cypher_parser.rs` |
@@ -1007,7 +1015,7 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | **Infrastructure** | | | |
 | Kubernetes Operator | Active | 0 | `orbit-operator/` |
 
-**Total Tests: 2,352+** (as of December 2025)
+**Total Tests: 2,400+** (as of December 2025)
 
 ---
 

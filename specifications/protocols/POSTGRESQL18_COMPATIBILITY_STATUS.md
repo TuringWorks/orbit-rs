@@ -63,7 +63,7 @@ OrbitRS implements PostgreSQL wire protocol (v3.0) with extensive SQL support. T
 | NotificationResponse | `A` | ⚠️ Partial | NOTIFY/LISTEN basic |
 | CopyInResponse | `G` | ✅ Implemented | COPY IN |
 | CopyOutResponse | `H` | ✅ Implemented | COPY OUT |
-| NegotiateProtocolVersion | `v` | ❌ Not Started | Protocol 3.2 feature |
+| NegotiateProtocolVersion | `v` | ✅ Implemented | Protocol 3.2 negotiation in startup flow |
 
 ---
 
@@ -147,7 +147,7 @@ CREATE TABLE products (
 
 ### 2.3 Temporal Constraints (WITHOUT OVERLAPS)
 
-**Status**: ⚠️ Parsing Implemented, Execution Pending
+**Status**: ✅ Fully Implemented (Parsing + Execution)
 
 ```sql
 -- PostgreSQL 18 temporal PRIMARY KEY
@@ -176,14 +176,16 @@ CREATE TABLE salary_history (
 | DDL parsing (PRIMARY KEY/UNIQUE) | ✅ Done | Parses `column WITHOUT OVERLAPS` syntax |
 | AST types (period_column for FK) | ✅ Done | Added to `TableConstraint::ForeignKey` |
 | DDL parsing (PERIOD in FK) | ✅ Done | Parses `PERIOD column` syntax in FK |
-| Overlap checking execution | ❌ Pending | Constraint validation at INSERT/UPDATE |
+| Overlap checking execution | ✅ Done | Constraint validation at INSERT/UPDATE |
+| TableConstraintSchema.without_overlaps | ✅ Done | Stores temporal constraint info in schema |
 | Range type operations | ⚠️ Partial | Basic TSTZRANGE support exists |
-| Unit tests | ✅ Done | 7 parsing tests (4 WITHOUT OVERLAPS + 3 PERIOD FK) |
+| Unit tests | ✅ Done | 13 tests (7 parsing + 6 execution) |
 
 **Implementation Location**:
 - Lexer: `orbit/server/src/protocols/postgres_wire/sql/lexer.rs`
 - AST: `orbit/server/src/protocols/postgres_wire/sql/ast.rs`
 - Parser: `orbit/server/src/protocols/postgres_wire/sql/parser/ddl.rs`
+- Executor (overlap checking): `orbit/server/src/protocols/postgres_wire/sql/executor.rs` (`check_temporal_overlaps`, `parse_tstzrange`)
 - Tests: `orbit/server/src/protocols/postgres_wire/sql/tests.rs`
 
 ---
@@ -288,7 +290,7 @@ PostgreSQL 18 introduces OAuth-based authentication.
 
 ### 3.3 Protocol Negotiation
 
-**Status**: ✅ Implemented (Message Type)
+**Status**: ✅ Fully Implemented
 
 PostgreSQL 18 supports protocol version negotiation via `NegotiateProtocolVersion` message.
 
@@ -297,10 +299,13 @@ PostgreSQL 18 supports protocol version negotiation via `NegotiateProtocolVersio
 |-----------|--------|-------|
 | Message type definition | ✅ Done | `BackendMessage::NegotiateProtocolVersion` |
 | Message encoding | ✅ Done | Encodes newest_minor_version and unrecognized_options |
-| Protocol handler integration | ⚠️ Partial | Message available but not sent in startup flow |
+| Protocol handler integration | ✅ Done | Integrated into startup flow |
+| Minor version negotiation | ✅ Done | Negotiates 3.x down to 3.0 |
+| Unrecognized options | ✅ Done | Reports _pq_. options to client |
 
 **Implementation Location**:
 - Message types: `orbit/server/src/protocols/postgres_wire/messages.rs`
+- Protocol handler: `orbit/server/src/protocols/postgres_wire/protocol.rs` (`handle_startup`)
 
 ---
 
@@ -365,7 +370,7 @@ PostgreSQL 18 supports protocol version negotiation via `NegotiateProtocolVersio
 | UUIDv7 function | ✅ Done | - |
 | gen_random_uuid | ✅ Done | - |
 | GENERATED ALWAYS AS (STORED) | ✅ Done | - |
-| Variable-length cancel keys | Planned | Low |
+| Variable-length cancel keys | ✅ Done | Protocol 3.2 compatible |
 
 ### Phase 2: PostgreSQL 18 Advanced (Medium Priority)
 
@@ -375,12 +380,13 @@ PostgreSQL 18 supports protocol version negotiation via `NegotiateProtocolVersio
 | OLD/NEW in RETURNING | ✅ Done | - |
 | MERGE with RETURNING | Planned | Medium |
 
-### Phase 3: PostgreSQL 18 Temporal (Lower Priority)
+### Phase 3: PostgreSQL 18 Temporal (Completed)
 
 | Task | Status | Effort |
 |------|--------|--------|
-| WITHOUT OVERLAPS constraint | Planned | High |
-| Temporal foreign keys | Planned | High |
+| WITHOUT OVERLAPS constraint parsing | ✅ Done | - |
+| WITHOUT OVERLAPS constraint execution | ✅ Done | - |
+| Temporal foreign keys (PERIOD parsing) | ✅ Done | - |
 | Range type improvements | Planned | Medium |
 
 ---
@@ -410,7 +416,7 @@ cargo test -p orbit-server -- generated_column
 | GENERATED columns (VIRTUAL exec) | ✅ | ❌ |
 | OLD/NEW in RETURNING | ✅ | ❌ |
 | Temporal constraints (parsing) | ✅ | ❌ |
-| Temporal constraints (execution) | ❌ | ❌ |
+| Temporal constraints (execution) | ✅ | ❌ |
 
 ---
 
@@ -418,6 +424,8 @@ cargo test -p orbit-server -- generated_column
 
 | Date | Changes |
 |------|---------|
+| 2025-12-07 | Integrated NegotiateProtocolVersion into startup flow (protocol 3.2) |
+| 2025-12-07 | Implemented temporal constraint overlap checking (INSERT/UPDATE validation) |
 | 2025-12-07 | Added NegotiateProtocolVersion message type (protocol 3.2) |
 | 2025-12-07 | Added PERIOD keyword parsing for temporal foreign keys |
 | 2025-12-07 | Implemented variable-length cancellation keys (protocol 3.2 compatibility) |

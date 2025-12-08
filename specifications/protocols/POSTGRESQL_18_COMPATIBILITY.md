@@ -2,8 +2,8 @@
 
 **Target**: Full PostgreSQL 18 Wire Protocol Compatibility
 **Reference**: https://www.postgresql.org/docs/18/index.html
-**Last Updated**: 2025-01-XX
-**Current Estimated Coverage**: ~55%
+**Last Updated**: 2025-12-07
+**Current Estimated Coverage**: ~60%
 
 ---
 
@@ -170,7 +170,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | INSERT | ✅ | VALUES, SELECT, ON CONFLICT |
 | UPDATE | ✅ | SET, FROM, WHERE, RETURNING |
 | DELETE | ✅ | USING, WHERE, RETURNING |
-| MERGE | 🔶 | Basic parsing, limited execution |
+| MERGE | 🔶 | Parsing complete with PG18 RETURNING support |
 | COPY | 🔶 | Parsing complete, execution incomplete |
 | SELECT INTO | ✅ | CREATE TABLE AS |
 
@@ -356,6 +356,17 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | Type | Status | OID | Notes |
 |------|--------|-----|-------|
 | uuid | ✅ | 2950 | Universally unique identifier |
+
+#### UUID Functions (PostgreSQL 18)
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| gen_random_uuid() | ✅ | Generate random UUID v4 |
+| uuid_generate_v4() | ✅ | Alias for gen_random_uuid() |
+| uuidv7() | ✅ | PostgreSQL 18: timestamp-ordered UUID |
+| uuid_generate_v7() | ✅ | Alias for uuidv7() |
+| uuid_nil() | ✅ | All-zeros UUID |
+| uuid_max() | ✅ | All-ones UUID (PostgreSQL 18) |
 
 ### XML Type
 
@@ -809,7 +820,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | AuthenticationSASLContinue | ❌ | SASL continue |
 | AuthenticationSASLFinal | ❌ | SASL final |
 | ParameterStatus | ✅ | Server parameters |
-| BackendKeyData | ✅ | Process ID/secret |
+| BackendKeyData | ✅ | Process ID/secret (PG18: variable-length keys) |
 | ReadyForQuery | ✅ | Transaction status |
 | Query | ✅ | Simple query |
 | Parse | ✅ | Extended query |
@@ -833,14 +844,14 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | ParameterDescription | ✅ | Parameter types |
 | NoData | ✅ | No data returned |
 | PortalSuspended | ❌ | Partial fetch |
-| CopyInResponse | ❌ | COPY FROM start |
-| CopyOutResponse | ❌ | COPY TO start |
-| CopyData | ❌ | COPY data row |
-| CopyDone | ❌ | COPY complete |
-| CopyFail | ❌ | COPY failed |
+| CopyInResponse | ✅ | COPY FROM start |
+| CopyOutResponse | ✅ | COPY TO start |
+| CopyData | 🔶 | COPY data row |
+| CopyDone | 🔶 | COPY complete |
+| CopyFail | ✅ | COPY failed |
 | FunctionCall | ❌ | Direct function call |
 | FunctionCallResponse | ❌ | Function result |
-| NegotiateProtocolVersion | ❌ | Protocol negotiation |
+| NegotiateProtocolVersion | ✅ | Protocol negotiation (PG18 protocol 3.2) |
 
 ### SSL/TLS Support
 
@@ -996,6 +1007,48 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 
 ---
 
+## PostgreSQL 18 New Features Implementation
+
+This section tracks OrbitRS implementation of features new to PostgreSQL 18.
+
+### Wire Protocol 3.2
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| NegotiateProtocolVersion message | ✅ | Integrated into startup flow |
+| Variable-length cancellation keys | ✅ | Supports 4-256 byte keys |
+| Protocol option negotiation | ✅ | Reports unrecognized _pq_. options |
+
+### SQL Features
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| UUIDv7 generation | ✅ | `uuidv7()`, `uuid_generate_v7()` |
+| uuid_max() function | ✅ | Returns all-ones UUID |
+| MERGE with RETURNING | 🔶 | Parsing complete |
+| GENERATED ALWAYS AS (STORED) | ✅ | Computed on INSERT/UPDATE |
+| GENERATED ALWAYS AS (VIRTUAL) | ✅ | Computed on SELECT |
+| OLD/NEW in RETURNING | ✅ | Access previous values in UPDATE/DELETE |
+
+### Temporal Constraints (SQL:2011)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| WITHOUT OVERLAPS (PRIMARY KEY) | ✅ | Parsing and execution |
+| WITHOUT OVERLAPS (UNIQUE) | ✅ | Parsing and execution |
+| PERIOD keyword (FOREIGN KEY) | ✅ | Parsing complete |
+| Overlap checking at INSERT | ✅ | Validates temporal constraints |
+| Overlap checking at UPDATE | ✅ | Validates temporal constraints |
+
+### Security
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| OAuth authentication | ❌ | Not started |
+| SCRAM-SHA-256 | ✅ | Implemented |
+
+---
+
 ## Testing Strategy
 
 ### Compatibility Testing
@@ -1025,6 +1078,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2025-12-07 | 1.1.0 | Added PostgreSQL 18 new features section; updated protocol and temporal constraint status |
 | 2025-01-XX | 1.0.0 | Initial specification |
 
 ---

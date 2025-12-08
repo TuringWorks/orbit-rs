@@ -274,6 +274,42 @@ impl PostgresWireProtocol {
             protocol_version, parameters
         );
 
+        // PostgreSQL 18 Protocol Version Negotiation
+        // Protocol version format: major * 65536 + minor (e.g., 3.0 = 196608, 3.2 = 196610)
+        let major = protocol_version >> 16;
+        let minor = protocol_version & 0xFFFF;
+
+        // We support protocol 3.0 (fully) and 3.2 (partially - message types defined)
+        // If client requests protocol > 3.0, we negotiate down to 3.0
+        const SUPPORTED_MAJOR: i32 = 3;
+        const SUPPORTED_MINOR: i32 = 0;
+
+        // Check for unrecognized protocol options (those starting with _pq_.)
+        let unrecognized_options: Vec<String> = parameters
+            .keys()
+            .filter(|k| k.starts_with("_pq_."))
+            .cloned()
+            .collect();
+
+        // Send NegotiateProtocolVersion if needed (PG18 protocol 3.2 feature)
+        if major != SUPPORTED_MAJOR || minor > SUPPORTED_MINOR || !unrecognized_options.is_empty() {
+            if major == SUPPORTED_MAJOR && minor > SUPPORTED_MINOR {
+                // Client requested a newer minor version, negotiate to our supported version
+                info!(
+                    "Protocol negotiation: client requested {}.{}, negotiating to {}.{}",
+                    major, minor, SUPPORTED_MAJOR, SUPPORTED_MINOR
+                );
+            }
+            if !unrecognized_options.is_empty() {
+                info!("Unrecognized protocol options: {:?}", unrecognized_options);
+            }
+            BackendMessage::NegotiateProtocolVersion {
+                newest_minor_version: SUPPORTED_MINOR,
+                unrecognized_options,
+            }
+            .encode(buf);
+        }
+
         self.username = parameters.get("user").cloned();
         self.database = parameters.get("database").cloned();
         self.parameters = parameters;

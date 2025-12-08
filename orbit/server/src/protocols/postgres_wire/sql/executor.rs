@@ -202,6 +202,9 @@ pub struct TableConstraintSchema {
     pub columns: Vec<String>,
     pub referenced_table: Option<String>,
     pub referenced_columns: Option<Vec<String>>,
+    /// PostgreSQL 18: WITHOUT OVERLAPS temporal column for PRIMARY KEY/UNIQUE
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub without_overlaps: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -749,6 +752,7 @@ impl SqlExecutor {
                     columns: cols.clone(),
                     referenced_table: None,
                     referenced_columns: None,
+                    without_overlaps: without_overlaps.clone(),
                 },
                 TableConstraint::Unique {
                     name,
@@ -764,6 +768,7 @@ impl SqlExecutor {
                     columns: cols.clone(),
                     referenced_table: None,
                     referenced_columns: None,
+                    without_overlaps: without_overlaps.clone(),
                 },
                 TableConstraint::ForeignKey {
                     name,
@@ -777,6 +782,7 @@ impl SqlExecutor {
                     columns: cols.clone(),
                     referenced_table: Some(references_table.full_name()),
                     referenced_columns: Some(references_columns.clone()),
+                    without_overlaps: None,
                 },
                 TableConstraint::Check { name, .. } => TableConstraintSchema {
                     name: name.clone(),
@@ -784,6 +790,7 @@ impl SqlExecutor {
                     columns: Vec::new(),
                     referenced_table: None,
                     referenced_columns: None,
+                    without_overlaps: None,
                 },
             };
             constraints.push(constraint_schema);
@@ -1124,6 +1131,135 @@ impl SqlExecutor {
             }
         }
         Ok(())
+    }
+
+    /// PostgreSQL 18: Check for temporal constraint overlaps (WITHOUT OVERLAPS)
+    /// This validates that a new row doesn't violate temporal PRIMARY KEY or UNIQUE constraints
+    /// by checking if any existing row has the same key values AND overlapping time ranges
+    fn check_temporal_overlaps(
+        &self,
+        table_schema: &TableSchema,
+        new_row: &HashMap<String, SqlValue>,
+        existing_data: &[HashMap<String, SqlValue>],
+    ) -> ProtocolResult<()> {
+        for constraint in &table_schema.constraints {
+            if let Some(ref range_col) = constraint.without_overlaps {
+                // This is a temporal constraint - check for overlaps
+                let key_columns: Vec<&String> = constraint
+                    .columns
+                    .iter()
+                    .filter(|c| *c != range_col)
+                    .collect();
+
+                // Get the new row's range value
+                let new_range = match new_row.get(range_col) {
+                    Some(SqlValue::Text(range_str)) => self.parse_tstzrange(range_str),
+                    _ => continue, // No range value or not a string, skip
+                };
+
+                let Some((new_start, new_end)) = new_range else {
+                    continue;
+                };
+
+                // Check against all existing rows
+                for existing_row in existing_data {
+                    // First check if key columns match
+                    let keys_match = key_columns.iter().all(|col| {
+                        let new_val = new_row.get(*col);
+                        let existing_val = existing_row.get(*col);
+                        match (new_val, existing_val) {
+                            (Some(a), Some(b)) => a == b,
+                            _ => false,
+                        }
+                    });
+
+                    if !keys_match {
+                        continue; // Different keys, no conflict
+                    }
+
+                    // Keys match - check for range overlap
+                    let existing_range = match existing_row.get(range_col) {
+                        Some(SqlValue::Text(range_str)) => self.parse_tstzrange(range_str),
+                        _ => continue,
+                    };
+
+                    if let Some((existing_start, existing_end)) = existing_range {
+                        // Ranges overlap if: new_start < existing_end AND new_end > existing_start
+                        if new_start < existing_end && new_end > existing_start {
+                            let constraint_name = constraint
+                                .name
+                                .clone()
+                                .unwrap_or_else(|| constraint.constraint_type.clone());
+                            return Err(ProtocolError::PostgresError(format!(
+                                "conflicting key value violates exclusion constraint \"{}\": \
+                                 range overlap for key ({}) with existing row",
+                                constraint_name,
+                                key_columns
+                                    .iter()
+                                    .map(|c| c.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Parse a TSTZRANGE string into start/end timestamps
+    /// Format: [start,end), (start,end], etc.
+    fn parse_tstzrange(&self, range_str: &str) -> Option<(i64, i64)> {
+        // Remove brackets/parentheses and split by comma
+        let trimmed = range_str.trim();
+        if trimmed.len() < 3 {
+            return None;
+        }
+
+        let inner = &trimmed[1..trimmed.len() - 1];
+        let parts: Vec<&str> = inner.split(',').collect();
+        if parts.len() != 2 {
+            return None;
+        }
+
+        // Parse timestamps - for simplicity, we use basic parsing
+        // Real implementation would handle various timestamp formats
+        let start = self.parse_timestamp_to_micros(parts[0].trim())?;
+        let end = self.parse_timestamp_to_micros(parts[1].trim())?;
+
+        Some((start, end))
+    }
+
+    /// Parse a timestamp string to microseconds since epoch
+    fn parse_timestamp_to_micros(&self, ts: &str) -> Option<i64> {
+        // Handle common PostgreSQL timestamp formats
+        let trimmed = ts.trim().trim_matches('"').trim_matches('\'');
+        if trimmed.is_empty() || trimmed == "-infinity" {
+            return Some(i64::MIN);
+        }
+        if trimmed == "infinity" {
+            return Some(i64::MAX);
+        }
+
+        // Try parsing as ISO 8601 date/datetime
+        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(trimmed) {
+            return Some(dt.timestamp_micros());
+        }
+
+        // Try with space separator (PostgreSQL style: 2024-01-01 00:00:00)
+        if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%d %H:%M:%S") {
+            return Some(dt.and_utc().timestamp_micros());
+        }
+
+        // Try date only
+        if let Ok(d) = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+            return d
+                .and_hms_opt(0, 0, 0)
+                .map(|dt| dt.and_utc().timestamp_micros());
+        }
+
+        None
     }
 
     /// Compute a single generated column value
@@ -1594,8 +1730,14 @@ impl SqlExecutor {
                 .entry(table_name.clone())
                 .or_insert_with(Vec::new);
 
+            // PostgreSQL 18: Check temporal constraint overlaps before inserting
             let mut inserted_rows = Vec::new();
             for row in rows_to_insert {
+                // Check against existing data + already inserted rows in this batch
+                let mut all_existing: Vec<HashMap<String, SqlValue>> = data.clone();
+                all_existing.extend(inserted_rows.clone());
+                self.check_temporal_overlaps(&table_schema, &row, &all_existing)?;
+
                 inserted_rows.push(row.clone());
                 data.push(row);
                 count += 1;
@@ -1676,11 +1818,18 @@ impl SqlExecutor {
                 .entry(table_name.clone())
                 .or_insert_with(Vec::new);
 
-            let count = rows_to_insert.len();
+            // PostgreSQL 18: Check temporal constraint overlaps before inserting
+            let mut count = 0;
             let mut inserted_rows = Vec::new();
             for row in rows_to_insert {
+                // Check against existing data + already inserted rows in this batch
+                let mut all_existing: Vec<HashMap<String, SqlValue>> = data.clone();
+                all_existing.extend(inserted_rows.clone());
+                self.check_temporal_overlaps(&table_schema, &row, &all_existing)?;
+
                 inserted_rows.push(row.clone());
                 data.push(row);
+                count += 1;
             }
             drop(table_data);
 
@@ -1727,13 +1876,15 @@ impl SqlExecutor {
         let mut table_data = self.table_data.write().await;
 
         if let Some(data) = table_data.get_mut(&table_name) {
-            for row in data.iter_mut() {
+            // Use index-based iteration to allow for temporal overlap checking
+            let num_rows = data.len();
+            for i in 0..num_rows {
                 let mut should_update = true;
 
                 // Evaluate WHERE clause if present
                 if let Some(where_expr) = &stmt.where_clause {
                     let context =
-                        EvaluationContext::with_row_and_table(row.clone(), table_name.clone());
+                        EvaluationContext::with_row_and_table(data[i].clone(), table_name.clone());
 
                     match self.evaluate_where_condition(where_expr, &context).await {
                         Ok(SqlValue::Boolean(b)) => should_update = b,
@@ -1746,7 +1897,7 @@ impl SqlExecutor {
                 if should_update {
                     // PostgreSQL 18: Save old row values before modification for OLD reference
                     let old_row = if stmt.returning.is_some() {
-                        Some(row.clone())
+                        Some(data[i].clone())
                     } else {
                         None
                     };
@@ -1783,23 +1934,33 @@ impl SqlExecutor {
                         // Handle different assignment target types
                         match &assignment.target {
                             AssignmentTarget::Column(col_name) => {
-                                row.insert(col_name.clone(), value);
+                                data[i].insert(col_name.clone(), value);
                             }
                             AssignmentTarget::Columns(col_names) => {
                                 // For multiple column assignments, use first column for simplicity
                                 if let Some(first_col) = col_names.first() {
-                                    row.insert(first_col.clone(), value);
+                                    data[i].insert(first_col.clone(), value);
                                 }
                             }
                         }
                     }
 
                     // Recompute STORED generated column values after update
-                    self.compute_generated_columns(&table_schema, row)?;
+                    self.compute_generated_columns(&table_schema, &mut data[i])?;
+
+                    // PostgreSQL 18: Check temporal constraint overlaps after update
+                    // We need to check the updated row against all OTHER rows
+                    let other_rows: Vec<HashMap<String, SqlValue>> = data
+                        .iter()
+                        .enumerate()
+                        .filter(|(idx, _)| *idx != i)
+                        .map(|(_, r)| r.clone())
+                        .collect();
+                    self.check_temporal_overlaps(&table_schema, &data[i], &other_rows)?;
 
                     // Collect (old_row, new_row) pair for RETURNING clause with OLD/NEW support
                     if stmt.returning.is_some() {
-                        row_pairs.push((old_row, row.clone()));
+                        row_pairs.push((old_row, data[i].clone()));
                     }
                     count += 1;
                 }
