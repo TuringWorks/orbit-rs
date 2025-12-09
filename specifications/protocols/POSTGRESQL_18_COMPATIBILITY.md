@@ -841,16 +841,16 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | * | ✅ | Multiplication |
 | / | ✅ | Division |
 | % | ✅ | Modulo |
-| ^ | ❌ | Exponentiation |
-| |/ | ❌ | Square root |
-| ||/ | ❌ | Cube root |
-| @ | ❌ | Absolute value |
-| & | ❌ | Bitwise AND |
-| | | ❌ | Bitwise OR |
-| # | ❌ | Bitwise XOR |
-| ~ | ❌ | Bitwise NOT |
-| << | ❌ | Bit shift left |
-| >> | ❌ | Bit shift right |
+| ^ | ✅ | Exponentiation |
+| |/ | ✅ | Square root |
+| ||/ | ✅ | Cube root |
+| @ | ✅ | Absolute value |
+| & | ✅ | Bitwise AND |
+| | | ✅ | Bitwise OR |
+| # | ✅ | Bitwise XOR |
+| ~ | ✅ | Bitwise NOT |
+| << | ✅ | Bit shift left |
+| >> | ✅ | Bit shift right |
 
 ### Subquery Expressions
 

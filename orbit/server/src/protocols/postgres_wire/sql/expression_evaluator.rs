@@ -510,6 +510,13 @@ impl ExpressionEvaluator {
                 self.text_search_followed_by(&left_val, &right_val)
             }
 
+            // Bitwise operators
+            BinaryOperator::BitwiseAnd => self.bitwise_and(&left_val, &right_val),
+            BinaryOperator::BitwiseOr => self.bitwise_or(&left_val, &right_val),
+            BinaryOperator::BitwiseXor => self.bitwise_xor(&left_val, &right_val),
+            BinaryOperator::LeftShift => self.left_shift(&left_val, &right_val),
+            BinaryOperator::RightShift => self.right_shift(&left_val, &right_val),
+
             _ => Err(ProtocolError::not_implemented(
                 "Binary operator",
                 &format!("{operator:?}"),
@@ -529,6 +536,10 @@ impl ExpressionEvaluator {
             UnaryOperator::Plus => Ok(value),
             UnaryOperator::Minus => self.negate_value(&value),
             UnaryOperator::Not => self.logical_not(&value),
+            UnaryOperator::BitwiseNot => self.bitwise_not(&value),
+            UnaryOperator::SquareRoot => self.square_root(&value),
+            UnaryOperator::CubeRoot => self.cube_root(&value),
+            UnaryOperator::AbsoluteValue => self.absolute_value(&value),
             UnaryOperator::IsNull => Ok(SqlValue::Boolean(value.is_null())),
             UnaryOperator::IsNotNull => Ok(SqlValue::Boolean(!value.is_null())),
             UnaryOperator::IsTrue => {
@@ -1355,6 +1366,135 @@ impl ExpressionEvaluator {
             _ => Err(ProtocolError::PostgresError(format!(
                 "Cannot negate {value:?}"
             ))),
+        }
+    }
+
+    fn bitwise_not(&self, value: &SqlValue) -> ProtocolResult<SqlValue> {
+        match value {
+            SqlValue::Integer(i) => Ok(SqlValue::Integer(!i)),
+            SqlValue::BigInt(i) => Ok(SqlValue::BigInt(!i)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Bitwise NOT requires integer operand".to_string(),
+            )),
+        }
+    }
+
+    fn square_root(&self, value: &SqlValue) -> ProtocolResult<SqlValue> {
+        match Self::to_f64_static(value)? {
+            Some(f) => {
+                if f < 0.0 {
+                    Err(ProtocolError::PostgresError(
+                        "Square root of negative number".to_string(),
+                    ))
+                } else {
+                    Ok(SqlValue::DoublePrecision(f.sqrt()))
+                }
+            }
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn cube_root(&self, value: &SqlValue) -> ProtocolResult<SqlValue> {
+        match Self::to_f64_static(value)? {
+            Some(f) => Ok(SqlValue::DoublePrecision(f.cbrt())),
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn absolute_value(&self, value: &SqlValue) -> ProtocolResult<SqlValue> {
+        match value {
+            SqlValue::Integer(i) => Ok(SqlValue::Integer(i.abs())),
+            SqlValue::BigInt(i) => Ok(SqlValue::BigInt(i.abs())),
+            SqlValue::DoublePrecision(f) => Ok(SqlValue::DoublePrecision(f.abs())),
+            SqlValue::Real(f) => Ok(SqlValue::Real(f.abs())),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Absolute value requires numeric operand".to_string(),
+            )),
+        }
+    }
+
+    fn bitwise_and(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Integer(a), SqlValue::Integer(b)) => Ok(SqlValue::Integer(a & b)),
+            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => Ok(SqlValue::BigInt(a & b)),
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Bitwise AND requires integer operands".to_string(),
+            )),
+        }
+    }
+
+    fn bitwise_or(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Integer(a), SqlValue::Integer(b)) => Ok(SqlValue::Integer(a | b)),
+            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => Ok(SqlValue::BigInt(a | b)),
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Bitwise OR requires integer operands".to_string(),
+            )),
+        }
+    }
+
+    fn bitwise_xor(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Integer(a), SqlValue::Integer(b)) => Ok(SqlValue::Integer(a ^ b)),
+            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => Ok(SqlValue::BigInt(a ^ b)),
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Bitwise XOR requires integer operands".to_string(),
+            )),
+        }
+    }
+
+    fn left_shift(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Integer(a), SqlValue::Integer(b)) => {
+                if *b < 0 || *b > 31 {
+                    return Err(ProtocolError::PostgresError(
+                        "Shift amount out of range".to_string(),
+                    ));
+                }
+                Ok(SqlValue::Integer(a << b))
+            }
+            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => {
+                if *b < 0 || *b > 63 {
+                    return Err(ProtocolError::PostgresError(
+                        "Shift amount out of range".to_string(),
+                    ));
+                }
+                Ok(SqlValue::BigInt(a << b))
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Bit shift requires integer operands".to_string(),
+            )),
+        }
+    }
+
+    fn right_shift(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Integer(a), SqlValue::Integer(b)) => {
+                if *b < 0 || *b > 31 {
+                    return Err(ProtocolError::PostgresError(
+                        "Shift amount out of range".to_string(),
+                    ));
+                }
+                Ok(SqlValue::Integer(a >> b))
+            }
+            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => {
+                if *b < 0 || *b > 63 {
+                    return Err(ProtocolError::PostgresError(
+                        "Shift amount out of range".to_string(),
+                    ));
+                }
+                Ok(SqlValue::BigInt(a >> b))
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Bit shift requires integer operands".to_string(),
+            )),
         }
     }
 

@@ -1294,6 +1294,9 @@ pub enum UnaryOperator {
     Minus,
     Not,
     BitwiseNot,
+    SquareRoot,      // |/ operator
+    CubeRoot,        // ||/ operator
+    AbsoluteValue,   // @ operator
     IsNull,
     IsNotNull,
     IsTrue,
