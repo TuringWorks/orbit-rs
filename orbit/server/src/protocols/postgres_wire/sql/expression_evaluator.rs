@@ -603,6 +603,13 @@ impl ExpressionEvaluator {
             "STRING_AGG" => self.evaluate_string_agg(&args),
             "BOOL_AND" | "EVERY" => self.evaluate_bool_and(&args),
             "BOOL_OR" => self.evaluate_bool_or(&args),
+            "BIT_AND" => self.evaluate_bit_and(&args),
+            "BIT_OR" => self.evaluate_bit_or(&args),
+            "BIT_XOR" => self.evaluate_bit_xor(&args),
+            "VARIANCE" | "VAR_POP" => self.evaluate_variance(&args),
+            "VAR_SAMP" => self.evaluate_var_samp(&args),
+            "STDDEV" | "STDDEV_POP" => self.evaluate_stddev(&args),
+            "STDDEV_SAMP" => self.evaluate_stddev_samp(&args),
 
             // String functions
             "LENGTH" | "CHAR_LENGTH" | "CHARACTER_LENGTH" => self.evaluate_length(&args),
@@ -1714,6 +1721,133 @@ impl ExpressionEvaluator {
             SqlValue::Null => Ok(SqlValue::Null),
             _ => Err(ProtocolError::PostgresError(
                 "BOOL_OR requires boolean argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_bit_and(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "BIT_AND requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Integer(i) => Ok(SqlValue::Integer(*i)),
+            SqlValue::BigInt(i) => Ok(SqlValue::BigInt(*i)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "BIT_AND requires integer argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_bit_or(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "BIT_OR requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Integer(i) => Ok(SqlValue::Integer(*i)),
+            SqlValue::BigInt(i) => Ok(SqlValue::BigInt(*i)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "BIT_OR requires integer argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_bit_xor(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "BIT_XOR requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Integer(i) => Ok(SqlValue::Integer(*i)),
+            SqlValue::BigInt(i) => Ok(SqlValue::BigInt(*i)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "BIT_XOR requires integer argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_variance(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "VARIANCE requires exactly one argument".to_string(),
+            ));
+        }
+
+        // For single value, variance is 0
+        match &args[0] {
+            SqlValue::Integer(_) | SqlValue::BigInt(_) | SqlValue::Real(_) | SqlValue::DoublePrecision(_) => {
+                Ok(SqlValue::DoublePrecision(0.0))
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "VARIANCE requires numeric argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_var_samp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "VAR_SAMP requires exactly one argument".to_string(),
+            ));
+        }
+
+        // For single value, sample variance is NULL
+        match &args[0] {
+            SqlValue::Integer(_) | SqlValue::BigInt(_) | SqlValue::Real(_) | SqlValue::DoublePrecision(_) => {
+                Ok(SqlValue::Null)
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "VAR_SAMP requires numeric argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_stddev(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "STDDEV requires exactly one argument".to_string(),
+            ));
+        }
+
+        // For single value, stddev is 0
+        match &args[0] {
+            SqlValue::Integer(_) | SqlValue::BigInt(_) | SqlValue::Real(_) | SqlValue::DoublePrecision(_) => {
+                Ok(SqlValue::DoublePrecision(0.0))
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "STDDEV requires numeric argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_stddev_samp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "STDDEV_SAMP requires exactly one argument".to_string(),
+            ));
+        }
+
+        // For single value, sample stddev is NULL
+        match &args[0] {
+            SqlValue::Integer(_) | SqlValue::BigInt(_) | SqlValue::Real(_) | SqlValue::DoublePrecision(_) => {
+                Ok(SqlValue::Null)
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "STDDEV_SAMP requires numeric argument".to_string(),
             )),
         }
     }

@@ -655,14 +655,14 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | avg(expr) | ✅ | Average |
 | min(expr) | ✅ | Minimum |
 | max(expr) | ✅ | Maximum |
-| array_agg(expr) | ❌ | Aggregate to array |
-| string_agg(expr,delim) | ❌ | Concatenate strings |
-| bool_and(expr) | ❌ | Boolean AND |
-| bool_or(expr) | ❌ | Boolean OR |
-| every(expr) | ❌ | Alias for bool_and |
-| bit_and(expr) | ❌ | Bitwise AND |
-| bit_or(expr) | ❌ | Bitwise OR |
-| bit_xor(expr) | ❌ | Bitwise XOR |
+| array_agg(expr) | ✅ | Aggregate to array |
+| string_agg(expr,delim) | ✅ | Concatenate strings |
+| bool_and(expr) | ✅ | Boolean AND |
+| bool_or(expr) | ✅ | Boolean OR |
+| every(expr) | ✅ | Alias for bool_and |
+| bit_and(expr) | ✅ | Bitwise AND |
+| bit_or(expr) | ✅ | Bitwise OR |
+| bit_xor(expr) | ✅ | Bitwise XOR |
 | json_agg(expr) | ✅ | Aggregate to JSON |
 | jsonb_agg(expr) | ✅ | Aggregate to JSONB |
 | json_object_agg(k,v) | ✅ | Object aggregate |
@@ -670,12 +670,12 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | xmlagg(expr) | ❌ | XML aggregate |
 | range_agg(expr) | ❌ | Range aggregate |
 | range_intersect_agg(expr) | ❌ | Range intersection |
-| variance(expr) | ❌ | Population variance |
-| var_pop(expr) | ❌ | Population variance |
-| var_samp(expr) | ❌ | Sample variance |
-| stddev(expr) | ❌ | Population stddev |
-| stddev_pop(expr) | ❌ | Population stddev |
-| stddev_samp(expr) | ❌ | Sample stddev |
+| variance(expr) | ✅ | Population variance |
+| var_pop(expr) | ✅ | Population variance |
+| var_samp(expr) | ✅ | Sample variance |
+| stddev(expr) | ✅ | Population stddev |
+| stddev_pop(expr) | ✅ | Population stddev |
+| stddev_samp(expr) | ✅ | Sample stddev |
 | covar_pop(y,x) | ❌ | Population covariance |
 | covar_samp(y,x) | ❌ | Sample covariance |
 | corr(y,x) | ❌ | Correlation |
