@@ -10,8 +10,9 @@ use tauri::api::path::app_data_dir;
 use tauri::Config;
 use tracing::{error, info, warn};
 
-use crate::connections::{Connection, ConnectionInfo};
+use crate::connections::{Connection, ConnectionInfo, ConnectionStatus, ConnectionType};
 use crate::queries::QueryRequest;
+use chrono::DateTime;
 
 /// Application data storage
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -221,9 +222,6 @@ impl StoredConnection {
         &self,
         enc_manager: &crate::encryption::EncryptionManager,
     ) -> Result<Connection, StorageError> {
-        use crate::connections::{ConnectionInfo, ConnectionStatus, ConnectionType};
-        use chrono::DateTime;
-
         // Decrypt password if present
         let password = if let Some(encrypted) = &self.info.password_encrypted {
             enc_manager
