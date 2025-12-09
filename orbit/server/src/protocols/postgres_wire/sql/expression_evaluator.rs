@@ -2655,6 +2655,7 @@ impl ExpressionEvaluator {
         }
     }
 
+
     fn evaluate_pi(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         if !args.is_empty() {
             return Err(ProtocolError::PostgresError(
