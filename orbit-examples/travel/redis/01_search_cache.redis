@@ -1,0 +1,159 @@
+# ============================================================================
+# OrbitRS Travel Examples - Search Cache Operations
+# ============================================================================
+# Flight and hotel search caching with Redis
+# ============================================================================
+
+# Flight Search Cache
+# Cache search results for 30 minutes to reduce database load
+
+# Example: Search SFO to JFK on 2024-12-15
+SET search:flight:SFO:JFK:2024-12-15 '{"results":[{"flight_number":"AA123","departure":"08:00","arrival":"16:30","price":299.00},{"flight_number":"DL456","departure":"10:15","arrival":"18:45","price":325.00}],"timestamp":"2024-12-08T22:00:00Z"}' EX 1800
+
+# Hotel Search Cache
+# Cache hotel search results by city and dates
+SET search:hotel:SFO:2024-12-15:2024-12-20 '{"results":[{"hotel_id":"MAR-SFO-001","name":"San Francisco Marriott","price":189.00,"rating":4.5},{"hotel_id":"HLT-SFO-001","name":"Hilton Union Square","price":210.00,"rating":4.3}],"timestamp":"2024-12-08T22:00:00Z"}' EX 1800
+
+# Popular Routes (Sorted Set by search frequency)
+ZADD popular:routes 1500 "SFO:JFK"
+ZADD popular:routes 1200 "LAX:JFK"
+ZADD popular:routes 1100 "SFO:LAX"
+ZADD popular:routes 950 "ORD:LAX"
+ZADD popular:routes 890 "DFW:JFK"
+
+# Get top 10 popular routes
+ZREVRANGE popular:routes 0 9 WITHSCORES
+
+# Popular Destinations (Sorted Set by booking count)
+ZADD popular:destinations 5000 "New York"
+ZADD popular:destinations 4500 "Los Angeles"
+ZADD popular:destinations 4200 "San Francisco"
+ZADD popular:destinations 3800 "Miami"
+ZADD popular:destinations 3500 "Las Vegas"
+
+# Get top 5 destinations
+ZREVRANGE popular:destinations 0 4 WITHSCORES
+
+# Real-time Flight Availability
+# Track available seats for flights on specific dates
+HSET flight:avail:AA123:2024-12-15 economy 45
+HSET flight:avail:AA123:2024-12-15 business 8
+HSET flight:avail:AA123:2024-12-15 first 2
+
+# Decrement when booking
+HINCRBY flight:avail:AA123:2024-12-15 economy -1
+
+# Get all availability
+HGETALL flight:avail:AA123:2024-12-15
+
+# Real-time Hotel Room Availability
+# Track available rooms by room type and date
+HSET hotel:avail:MAR-SFO-001:2024-12-15 standard 25
+HSET hotel:avail:MAR-SFO-001:2024-12-15 deluxe 12
+HSET hotel:avail:MAR-SFO-001:2024-12-15 suite 3
+
+# Decrement when booking
+HINCRBY hotel:avail:MAR-SFO-001:2024-12-15 deluxe -1
+
+# Search Session Management
+# Track user search sessions for analytics
+SETEX session:search:user123 3600 '{"searches":[{"type":"flight","from":"SFO","to":"JFK","date":"2024-12-15"},{"type":"hotel","city":"New York","checkin":"2024-12-15","checkout":"2024-12-20"}],"started_at":"2024-12-08T22:00:00Z"}'
+
+# Recent Searches (per user)
+LPUSH recent:searches:user123 "flight:SFO:JFK:2024-12-15"
+LPUSH recent:searches:user123 "hotel:NYC:2024-12-15:2024-12-20"
+LTRIM recent:searches:user123 0 9  # Keep only last 10 searches
+
+# Get recent searches
+LRANGE recent:searches:user123 0 9
+
+# Price Drop Alerts
+# Users can subscribe to price alerts for specific routes
+SADD alerts:flight:SFO:JFK user123
+SADD alerts:flight:SFO:JFK user456
+SADD alerts:hotel:MAR-SFO-001 user789
+
+# When price drops, get all subscribers
+SMEMBERS alerts:flight:SFO:JFK
+
+# Trending Searches (Last Hour)
+# Use HyperLogLog for unique search counts
+PFADD trending:searches:hour:2024120822 "SFO:JFK"
+PFADD trending:searches:hour:2024120822 "LAX:JFK"
+PFADD trending:searches:hour:2024120822 "SFO:JFK"  # Duplicate, won't increase count
+
+# Get unique search count
+PFCOUNT trending:searches:hour:2024120822
+
+# Search Filters Cache
+# Cache common filter combinations
+SET filters:airlines '["AA","DL","UA","WN","B6"]' EX 3600
+SET filters:hotel_chains '["MAR","HLT","IHG","HYT","ACC"]' EX 3600
+SET filters:car_companies '["HRTZ","AVIS","ENTR","BDGT","NATL"]' EX 3600
+
+# Autocomplete for Destinations
+# Use sorted sets for autocomplete
+ZADD autocomplete:cities 0 "San Francisco"
+ZADD autocomplete:cities 0 "San Diego"
+ZADD autocomplete:cities 0 "Santa Barbara"
+ZADD autocomplete:cities 0 "Seattle"
+ZADD autocomplete:cities 0 "Sacramento"
+
+# Search for cities starting with "San"
+# In application: ZRANGEBYLEX autocomplete:cities [San [San\xff
+
+# Flight Status Cache
+# Cache real-time flight status
+HSET flight:status:AA123:2024-12-15 status "ON_TIME"
+HSET flight:status:AA123:2024-12-15 departure_gate "B12"
+HSET flight:status:AA123:2024-12-15 arrival_gate "C5"
+HSET flight:status:AA123:2024-12-15 delay_minutes "0"
+EXPIRE flight:status:AA123:2024-12-15 86400  # Expire after 24 hours
+
+# Search Result Pagination
+# Store paginated results
+SET search:results:session123:page1 '{"flights":[...],"page":1,"total_pages":5}' EX 1800
+SET search:results:session123:page2 '{"flights":[...],"page":2,"total_pages":5}' EX 1800
+
+# ============================================================================
+# Analytics & Metrics
+# ============================================================================
+
+# Search Conversion Rate
+# Track searches vs bookings
+INCR metrics:searches:total
+INCR metrics:searches:flight
+INCR metrics:bookings:total
+INCR metrics:bookings:flight
+
+# Calculate conversion rate in application:
+# GET metrics:bookings:total / GET metrics:searches:total
+
+# Search Response Time Tracking
+# Use sorted set to track search performance
+ZADD metrics:search:response_time 250 "search:20241208220001"
+ZADD metrics:search:response_time 180 "search:20241208220002"
+ZADD metrics:search:response_time 320 "search:20241208220003"
+
+# Get average response time (in application)
+# Calculate from ZRANGE metrics:search:response_time 0 -1 WITHSCORES
+
+# ============================================================================
+# Cache Invalidation
+# ============================================================================
+
+# When inventory changes, invalidate related caches
+# Example: Flight AA123 on 2024-12-15 sold out
+DEL flight:avail:AA123:2024-12-15
+DEL search:flight:SFO:JFK:2024-12-15
+
+# Bulk invalidation by pattern (use with caution)
+# In application: SCAN and DEL keys matching pattern
+
+# ============================================================================
+# Comments
+# ============================================================================
+# All search caches use 30-minute TTL (1800 seconds)
+# Availability counters are updated in real-time
+# Popular routes/destinations updated hourly via background job
+# Session data expires after 1 hour of inactivity

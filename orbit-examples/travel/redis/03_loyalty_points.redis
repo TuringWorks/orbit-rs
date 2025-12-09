@@ -1,0 +1,253 @@
+# ============================================================================
+# OrbitRS Travel Examples - Loyalty Points Operations
+# ============================================================================
+# Real-time loyalty points tracking, tier management, and redemption
+# ============================================================================
+
+# Customer Loyalty Balance
+# Track points balance in real-time
+HSET loyalty:balance:user123 points 15420
+HSET loyalty:balance:user123 lifetime_points 45890
+HSET loyalty:balance:user123 tier "GOLD"
+HSET loyalty:balance:user123 tier_qualifying_points 12500
+HSET loyalty:balance:user123 next_tier "PLATINUM"
+HSET loyalty:balance:user123 points_to_next_tier 2500
+
+# Earn Points
+HINCRBY loyalty:balance:user123 points 500
+HINCRBY loyalty:balance:user123 lifetime_points 500
+HINCRBY loyalty:balance:user123 tier_qualifying_points 500
+
+# Redeem Points
+HINCRBY loyalty:balance:user123 points -5000
+
+# Tier Status Management
+# Track tier qualification progress
+HSET tier:status:user123 current_tier "GOLD"
+HSET tier:status:user123 tier_start_date "2024-01-01"
+HSET tier:status:user123 tier_end_date "2024-12-31"
+HSET tier:status:user123 qualifying_points 12500
+HSET tier:status:user123 qualifying_dollars 8750.00
+HSET tier:status:user123 qualifying_nights 45
+HSET tier:status:user123 qualifying_segments 38
+
+# Tier Benefits
+# Define benefits for each tier
+HSET tier:benefits:BRONZE free_checked_bags 0
+HSET tier:benefits:BRONZE priority_boarding FALSE
+HSET tier:benefits:BRONZE lounge_access FALSE
+HSET tier:benefits:BRONZE bonus_points_percent 0
+
+HSET tier:benefits:SILVER free_checked_bags 1
+HSET tier:benefits:SILVER priority_boarding TRUE
+HSET tier:benefits:SILVER lounge_access FALSE
+HSET tier:benefits:SILVER bonus_points_percent 25
+
+HSET tier:benefits:GOLD free_checked_bags 2
+HSET tier:benefits:GOLD priority_boarding TRUE
+HSET tier:benefits:GOLD lounge_access TRUE
+HSET tier:benefits:GOLD bonus_points_percent 50
+
+HSET tier:benefits:PLATINUM free_checked_bags 3
+HSET tier:benefits:PLATINUM priority_boarding TRUE
+HSET tier:benefits:PLATINUM lounge_access TRUE
+HSET tier:benefits:PLATINUM bonus_points_percent 100
+HSET tier:benefits:PLATINUM complimentary_upgrades TRUE
+
+# Points Expiration Tracking
+# Track points that will expire soon
+ZADD expiring:points:user123 1735689600 1500  # 1500 points expire on 2025-01-01
+ZADD expiring:points:user123 1767225600 2300  # 2300 points expire on 2026-01-01
+
+# Get points expiring in next 90 days
+# ZRANGEBYSCORE expiring:points:user123 -inf (current_timestamp + 90 days) WITHSCORES
+
+# Points Earning Rates
+# Different earning rates by booking type
+HSET earn:rate:flight base 1.0
+HSET earn:rate:flight bonus_multiplier 1.5
+HSET earn:rate:hotel base 2.0
+HSET earn:rate:hotel bonus_multiplier 2.0
+HSET earn:rate:car base 1.5
+HSET earn:rate:car bonus_multiplier 1.5
+HSET earn:rate:package base 3.0
+HSET earn:rate:package bonus_multiplier 2.5
+
+# Points Redemption Values
+# Points required for different rewards
+HSET redeem:value:flight_domestic 15000
+HSET redeem:value:flight_international 35000
+HSET redeem:value:hotel_night 10000
+HSET redeem:value:car_day 5000
+HSET redeem:value:upgrade 8000
+
+# Bonus Points Campaigns
+# Limited-time bonus point offers
+HSET campaign:bonus:winter2024 multiplier 2.0
+HSET campaign:bonus:winter2024 valid_from "2024-12-01"
+HSET campaign:bonus:winter2024 valid_to "2024-12-31"
+HSET campaign:bonus:winter2024 min_spend 500.00
+HSET campaign:bonus:winter2024 max_bonus 10000
+EXPIRE campaign:bonus:winter2024 2592000  # 30 days
+
+# Partner Earning
+# Earn points with partner airlines/hotels
+HSET partner:earn:airline:AA multiplier 1.0
+HSET partner:earn:airline:DL multiplier 0.75
+HSET partner:earn:hotel:MAR multiplier 1.5
+HSET partner:earn:hotel:HLT multiplier 1.25
+
+# Points Transfer
+# Transfer points to partner programs
+HSET transfer:ratio:airline:AA ratio 1.0
+HSET transfer:ratio:airline:DL ratio 1.0
+HSET transfer:ratio:hotel:MAR ratio 1.5
+HSET transfer:ratio:hotel:HLT ratio 1.25
+
+# Referral Bonuses
+# Track referral rewards
+HSET referral:user123 referrals_made 5
+HSET referral:user123 points_earned 2500
+HSET referral:user123 pending_referrals 2
+
+# Award points for successful referral
+HINCRBY referral:user123 referrals_made 1
+HINCRBY referral:user123 points_earned 500
+HINCRBY loyalty:balance:user123 points 500
+
+# Elite Status Matching
+# Track status match requests
+SADD status:match:pending user456
+HSET status:match:user456 competitor_program "United MileagePlus"
+HSET status:match:user456 competitor_tier "Gold"
+HSET status:match:user456 requested_at "2024-12-08T22:00:00Z"
+
+# Tier Upgrade Challenges
+# Special promotions to achieve higher tier
+HSET challenge:tier:user123 target_tier "PLATINUM"
+HSET challenge:tier:user123 points_needed 2500
+HSET challenge:tier:user123 bookings_needed 3
+HSET challenge:tier:user123 deadline "2024-12-31"
+HSET challenge:tier:user123 progress_points 1200
+HSET challenge:tier:user123 progress_bookings 1
+
+# Points Pooling (Family/Group)
+# Allow family members to pool points
+SADD pool:family:smith user123
+SADD pool:family:smith user456
+SADD pool:family:smith user789
+
+# Get total pooled points
+# Sum of HGET loyalty:balance:userX points for all members
+
+# Anniversary Bonuses
+# Bonus points on membership anniversary
+HSET anniversary:user123 join_date "2020-03-15"
+HSET anniversary:user123 years_member 4
+HSET anniversary:user123 anniversary_bonus 2000
+
+# Points Activity Feed
+# Recent points transactions (list)
+LPUSH activity:points:user123 '{"type":"EARN","amount":500,"booking":"BK123","date":"2024-12-08"}'
+LPUSH activity:points:user123 '{"type":"REDEEM","amount":-15000,"booking":"BK124","date":"2024-12-07"}'
+LPUSH activity:points:user123 '{"type":"BONUS","amount":1000,"campaign":"winter2024","date":"2024-12-06"}'
+LTRIM activity:points:user123 0 49  # Keep last 50 transactions
+
+# Get recent activity
+LRANGE activity:points:user123 0 9
+
+# Tier Leaderboard
+# Top members by tier qualifying points
+ZADD leaderboard:tier:qualifying user123 12500
+ZADD leaderboard:tier:qualifying user456 18900
+ZADD leaderboard:tier:qualifying user789 25400
+
+# Get top 10 members
+ZREVRANGE leaderboard:tier:qualifying 0 9 WITHSCORES
+
+# Points Redemption Cart
+# Temporary cart for points redemption
+HSET cart:redeem:session123 flight_reward 15000
+HSET cart:redeem:session123 hotel_reward 10000
+HSET cart:redeem:session123 total_points 25000
+EXPIRE cart:redeem:session123 1800  # 30 minutes
+
+# Tier Retention Offers
+# Special offers to retain members at risk of downgrade
+HSET retention:offer:user456 bonus_points 5000
+HSET retention:offer:user456 discount_percent 20
+HSET retention:offer:user456 valid_until "2024-12-31"
+HSET retention:offer:user456 min_spend 1000.00
+
+# Points Purchase
+# Buy points at discounted rates
+HSET purchase:points:rate base_price_per_1000 30.00
+HSET purchase:points:rate bonus_percent 50
+HSET purchase:points:rate max_purchase 100000
+
+# Points Gifting
+# Transfer points to another member
+HSET gift:pending:user123:user456 points 5000
+HSET gift:pending:user123:user456 message "Happy Birthday!"
+HSET gift:pending:user123:user456 status "PENDING"
+EXPIRE gift:pending:user123:user456 86400  # 24 hours to accept
+
+# Tier Benefits Usage Tracking
+# Track how often members use benefits
+HINCRBY benefits:usage:user123 lounge_visits 12
+HINCRBY benefits:usage:user123 priority_boarding 28
+HINCRBY benefits:usage:user123 free_upgrades 5
+HINCRBY benefits:usage:user123 free_bags 45
+
+# Points Earning Forecast
+# Predict points earning based on upcoming bookings
+HSET forecast:points:user123 upcoming_bookings 3
+HSET forecast:points:user123 estimated_points 4500
+HSET forecast:points:user123 estimated_tier_progress 3200
+
+# Loyalty Program Engagement Score
+# Track member engagement
+HSET engagement:user123 score 85
+HSET engagement:user123 last_booking "2024-12-01"
+HSET engagement:user123 days_since_booking 7
+HSET engagement:user123 bookings_last_year 12
+HSET engagement:user123 points_redeemed_last_year 25000
+
+# Tier Downgrade Protection
+# Grace period before tier downgrade
+HSET protection:tier:user456 current_tier "GOLD"
+HSET protection:tier:user456 qualifying_points 8500
+HSET protection:tier:user456 points_needed 1500
+HSET protection:tier:user456 grace_period_ends "2025-03-31"
+
+# ============================================================================
+# Analytics & Metrics
+# ============================================================================
+
+# Points Liability
+# Total outstanding points across all members
+INCR metrics:points:total_outstanding 15420
+INCR metrics:points:total_earned_today 45000
+INCR metrics:points:total_redeemed_today 28000
+
+# Tier Distribution
+# Count of members in each tier
+HINCRBY metrics:tier:distribution BRONZE 1
+HINCRBY metrics:tier:distribution SILVER 1
+HINCRBY metrics:tier:distribution GOLD 1
+HINCRBY metrics:tier:distribution PLATINUM 1
+
+# Redemption Rate
+# Track redemption patterns
+HSET metrics:redemption avg_points_per_redemption 12500
+HSET metrics:redemption redemption_rate 0.35
+HSET metrics:redemption most_popular_reward "flight_domestic"
+
+# ============================================================================
+# Comments
+# ============================================================================
+# Points balances updated in real-time with every transaction
+# Tier status recalculated daily via background job
+# Expiring points checked monthly and notifications sent
+# Bonus campaigns expire automatically with TTL
+# Activity feed limited to last 50 transactions per member

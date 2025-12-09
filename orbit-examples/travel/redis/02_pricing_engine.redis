@@ -1,0 +1,193 @@
+# ============================================================================
+# OrbitRS Travel Examples - Dynamic Pricing Engine
+# ============================================================================
+# Real-time fare updates, surge pricing, discounts, and price alerts
+# ============================================================================
+
+# Real-time Flight Pricing
+# Store current prices with timestamps
+HSET price:flight:AA123:2024-12-15 economy 299.00
+HSET price:flight:AA123:2024-12-15 business 899.00
+HSET price:flight:AA123:2024-12-15 first 1599.00
+HSET price:flight:AA123:2024-12-15 updated_at "2024-12-08T22:00:00Z"
+
+# Price History (for trend analysis)
+# Use sorted set with timestamp as score
+ZADD price:history:AA123:economy 1702076400 299.00
+ZADD price:history:AA123:economy 1702080000 315.00
+ZADD price:history:AA123:economy 1702083600 289.00
+
+# Get price trend for last 24 hours
+ZRANGEBYSCORE price:history:AA123:economy 1702000000 1702086400 WITHSCORES
+
+# Surge Pricing Multipliers
+# Apply dynamic pricing based on demand
+HSET surge:multiplier:route:SFO:JFK current 1.25
+HSET surge:multiplier:route:SFO:JFK peak_hours 1.50
+HSET surge:multiplier:route:SFO:JFK off_peak 0.90
+
+# Demand-based pricing
+# Track booking velocity (bookings per hour)
+ZADD demand:flight:AA123:2024-12-15 1702076400 5  # 5 bookings at this hour
+ZADD demand:flight:AA123:2024-12-15 1702080000 12 # 12 bookings next hour
+ZADD demand:flight:AA123:2024-12-15 1702083600 8  # 8 bookings following hour
+
+# Calculate surge multiplier based on demand
+# If bookings > threshold, increase prices
+
+# Discount Codes
+# Store active promotional codes
+HSET promo:SUMMER2024 discount_percent 15
+HSET promo:SUMMER2024 valid_from "2024-06-01"
+HSET promo:SUMMER2024 valid_to "2024-08-31"
+HSET promo:SUMMER2024 max_uses 1000
+HSET promo:SUMMER2024 uses_remaining 847
+HSET promo:SUMMER2024 min_purchase 200.00
+
+# Validate and apply promo code
+HGETALL promo:SUMMER2024
+HINCRBY promo:SUMMER2024 uses_remaining -1
+
+# Member Discounts
+# Loyalty tier-based pricing
+HSET discount:loyalty:GOLD flight_percent 10
+HSET discount:loyalty:GOLD hotel_percent 15
+HSET discount:loyalty:GOLD car_percent 12
+
+HSET discount:loyalty:PLATINUM flight_percent 15
+HSET discount:loyalty:PLATINUM hotel_percent 20
+HSET discount:loyalty:PLATINUM car_percent 18
+
+# Early Bird Discounts
+# Discounts for advance bookings
+ZADD discount:early_bird 7 5.0   # 7+ days: 5% off
+ZADD discount:early_bird 14 10.0 # 14+ days: 10% off
+ZADD discount:early_bird 30 15.0 # 30+ days: 15% off
+ZADD discount:early_bird 60 20.0 # 60+ days: 20% off
+
+# Get applicable discount for 45 days advance
+# ZREVRANGEBYSCORE discount:early_bird 45 0 LIMIT 0 1
+
+# Last-Minute Deals
+# Discounts for bookings within 48 hours
+HSET deal:lastminute:flight:AA123:2024-12-15 discount_percent 25
+HSET deal:lastminute:flight:AA123:2024-12-15 expires_at "2024-12-13T23:59:59Z"
+EXPIRE deal:lastminute:flight:AA123:2024-12-15 172800  # 48 hours
+
+# Package Bundle Discounts
+# Save when booking flight + hotel + car
+HSET discount:bundle:flight_hotel percent 10
+HSET discount:bundle:flight_hotel_car percent 15
+HSET discount:bundle:flight_car percent 8
+
+# Competitive Pricing
+# Track competitor prices for price matching
+HSET competitor:price:SFO:JFK:2024-12-15 expedia 289.00
+HSET competitor:price:SFO:JFK:2024-12-15 kayak 295.00
+HSET competitor:price:SFO:JFK:2024-12-15 priceline 285.00
+HSET competitor:price:SFO:JFK:2024-12-15 updated_at "2024-12-08T22:00:00Z"
+
+# Price Match Guarantee
+# If competitor price is lower, match it
+# Application logic: GET min(competitor prices) and compare
+
+# Price Alerts
+# Users subscribe to price drop notifications
+ZADD alert:price:user123 299.00 "flight:AA123:2024-12-15"
+ZADD alert:price:user123 189.00 "hotel:MAR-SFO-001:2024-12-15"
+
+# When price drops below threshold, notify user
+# Check: current_price < ZSCORE alert:price:user123 "flight:AA123:2024-12-15"
+
+# Price Freeze
+# Lock in price for limited time during booking process
+SETEX price:freeze:session123:flight:AA123 900 299.00  # 15 minutes
+
+# Dynamic Hotel Pricing
+# Adjust room rates based on occupancy
+HSET price:hotel:MAR-SFO-001:2024-12-15 standard 189.00
+HSET price:hotel:MAR-SFO-001:2024-12-15 deluxe 249.00
+HSET price:hotel:MAR-SFO-001:2024-12-15 suite 399.00
+HSET price:hotel:MAR-SFO-001:2024-12-15 occupancy_rate 0.75
+
+# Increase prices as occupancy increases
+# If occupancy > 80%, apply 1.2x multiplier
+# If occupancy > 90%, apply 1.5x multiplier
+
+# Weekend vs Weekday Pricing
+# Different rates for weekends
+HSET price:weekend_multiplier hotel 1.25
+HSET price:weekend_multiplier car 1.15
+
+# Seasonal Pricing
+# Peak season multipliers
+HSET price:seasonal:summer hotel 1.30
+HSET price:seasonal:summer flight 1.20
+HSET price:seasonal:winter hotel 0.90
+HSET price:seasonal:winter flight 1.10
+
+# Flash Sales
+# Limited-time offers
+HSET flash:sale:route:SFO:JFK discount_percent 30
+HSET flash:sale:route:SFO:JFK expires_at "2024-12-09T02:00:00Z"
+HSET flash:sale:route:SFO:JFK max_bookings 50
+HSET flash:sale:route:SFO:JFK bookings_remaining 32
+EXPIRE flash:sale:route:SFO:JFK 14400  # 4 hours
+
+# Group Booking Discounts
+# Discounts for multiple travelers
+ZADD discount:group 5 5.0   # 5+ travelers: 5% off
+ZADD discount:group 10 10.0 # 10+ travelers: 10% off
+ZADD discount:group 20 15.0 # 20+ travelers: 15% off
+
+# Price Prediction
+# ML-based price predictions (stored results)
+HSET predict:price:SFO:JFK:2024-12-15 predicted_low 275.00
+HSET predict:price:SFO:JFK:2024-12-15 predicted_high 350.00
+HSET predict:price:SFO:JFK:2024-12-15 confidence 0.85
+HSET predict:price:SFO:JFK:2024-12-15 recommendation "BOOK_NOW"
+
+# Price Volatility Index
+# Track how much prices fluctuate
+HSET volatility:route:SFO:JFK score 0.65  # 0-1 scale
+HSET volatility:route:SFO:JFK trend "INCREASING"
+
+# Fare Class Availability-Based Pricing
+# Adjust prices based on remaining inventory
+# < 10 seats: premium pricing
+# < 5 seats: maximum pricing
+ZADD price:inventory_threshold 10 1.15  # <10 seats: 15% increase
+ZADD price:inventory_threshold 5 1.30   # <5 seats: 30% increase
+ZADD price:inventory_threshold 2 1.50   # <2 seats: 50% increase
+
+# ============================================================================
+# Pricing Analytics
+# ============================================================================
+
+# Average Selling Price (ASP)
+# Track average prices for routes
+HSET analytics:asp:SFO:JFK economy 315.00
+HSET analytics:asp:SFO:JFK business 925.00
+HSET analytics:asp:SFO:JFK first 1650.00
+
+# Price Elasticity
+# Track how demand changes with price
+ZADD elasticity:route:SFO:JFK 299.00 150  # At $299, 150 bookings
+ZADD elasticity:route:SFO:JFK 349.00 95   # At $349, 95 bookings
+ZADD elasticity:route:SFO:JFK 399.00 60   # At $399, 60 bookings
+
+# Revenue Optimization
+# Track revenue by price point
+HSET revenue:flight:AA123:2024-12-15 total 52350.00
+HSET revenue:flight:AA123:2024-12-15 economy 13455.00
+HSET revenue:flight:AA123:2024-12-15 business 27000.00
+HSET revenue:flight:AA123:2024-12-15 first 11895.00
+
+# ============================================================================
+# Comments
+# ============================================================================
+# Prices updated in real-time based on demand and inventory
+# Surge pricing applied during peak hours and high demand
+# Discount codes validated and decremented atomically
+# Price alerts checked on every price update
+# Flash sales and deals expire automatically with TTL
