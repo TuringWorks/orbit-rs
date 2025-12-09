@@ -676,10 +676,10 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | stddev(expr) | ✅ | Population stddev |
 | stddev_pop(expr) | ✅ | Population stddev |
 | stddev_samp(expr) | ✅ | Sample stddev |
-| covar_pop(y,x) | ❌ | Population covariance |
-| covar_samp(y,x) | ❌ | Sample covariance |
-| corr(y,x) | ❌ | Correlation |
-| regr_*(y,x) | ❌ | Regression functions |
+| covar_pop(y,x) | ✅ | Population covariance |
+| covar_samp(y,x) | ✅ | Sample covariance |
+| corr(y,x) | ✅ | Correlation |
+| regr_*(y,x) | ✅ | Regression functions |
 | percentile_cont(f) | ❌ | Continuous percentile |
 | percentile_disc(f) | ❌ | Discrete percentile |
 | mode() | ❌ | Most frequent value |

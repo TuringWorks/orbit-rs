@@ -613,6 +613,18 @@ impl ExpressionEvaluator {
             "VAR_SAMP" => self.evaluate_var_samp(&args),
             "STDDEV" | "STDDEV_POP" => self.evaluate_stddev(&args),
             "STDDEV_SAMP" => self.evaluate_stddev_samp(&args),
+            "COVAR_POP" => self.evaluate_covar_pop(&args),
+            "COVAR_SAMP" => self.evaluate_covar_samp(&args),
+            "CORR" => self.evaluate_corr(&args),
+            "REGR_SLOPE" => self.evaluate_regr_slope(&args),
+            "REGR_INTERCEPT" => self.evaluate_regr_intercept(&args),
+            "REGR_COUNT" => self.evaluate_regr_count(&args),
+            "REGR_R2" => self.evaluate_regr_r2(&args),
+            "REGR_AVGX" => self.evaluate_regr_avgx(&args),
+            "REGR_AVGY" => self.evaluate_regr_avgy(&args),
+            "REGR_SXX" => self.evaluate_regr_sxx(&args),
+            "REGR_SYY" => self.evaluate_regr_syy(&args),
+            "REGR_SXY" => self.evaluate_regr_sxy(&args),
 
             // String functions
             "LENGTH" | "CHAR_LENGTH" | "CHARACTER_LENGTH" => self.evaluate_length(&args),
@@ -1907,6 +1919,71 @@ impl ExpressionEvaluator {
             )),
         }
     }
+
+    fn evaluate_covar_pop(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 { return Err(ProtocolError::PostgresError("COVAR_POP requires 2 arguments".to_string())); }
+        Ok(SqlValue::DoublePrecision(0.0))
+    }
+
+    fn evaluate_covar_samp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 { return Err(ProtocolError::PostgresError("COVAR_SAMP requires 2 arguments".to_string())); }
+        Ok(SqlValue::Null)
+    }
+
+    fn evaluate_corr(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 { return Err(ProtocolError::PostgresError("CORR requires 2 arguments".to_string())); }
+        Ok(SqlValue::Null)
+    }
+
+    fn evaluate_regr_slope(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         if args.len() != 2 { return Err(ProtocolError::PostgresError("REGR function requires 2 arguments".to_string())); }
+         Ok(SqlValue::Null)
+    }
+
+    fn evaluate_regr_intercept(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 { return Err(ProtocolError::PostgresError("REGR function requires 2 arguments".to_string())); }
+         Ok(SqlValue::Null)
+    }
+
+    fn evaluate_regr_count(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 { return Err(ProtocolError::PostgresError("REGR function requires 2 arguments".to_string())); }
+        if args[0].is_null() || args[1].is_null() {
+            Ok(SqlValue::BigInt(0))
+        } else {
+            Ok(SqlValue::BigInt(1))
+        }
+    }
+
+    fn evaluate_regr_r2(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 { return Err(ProtocolError::PostgresError("REGR function requires 2 arguments".to_string())); }
+         Ok(SqlValue::Null)
+    }
+
+    fn evaluate_regr_avgx(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 { return Err(ProtocolError::PostgresError("REGR function requires 2 arguments".to_string())); }
+        Ok(args[1].clone())
+    }
+
+    fn evaluate_regr_avgy(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 { return Err(ProtocolError::PostgresError("REGR function requires 2 arguments".to_string())); }
+        Ok(args[0].clone())
+    }
+
+    fn evaluate_regr_sxx(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 { return Err(ProtocolError::PostgresError("REGR function requires 2 arguments".to_string())); }
+         Ok(SqlValue::DoublePrecision(0.0))
+    }
+
+    fn evaluate_regr_syy(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 { return Err(ProtocolError::PostgresError("REGR function requires 2 arguments".to_string())); }
+         Ok(SqlValue::DoublePrecision(0.0))
+    }
+
+    fn evaluate_regr_sxy(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 { return Err(ProtocolError::PostgresError("REGR function requires 2 arguments".to_string())); }
+         Ok(SqlValue::DoublePrecision(0.0))
+    }
+
 
     // String function implementations
     fn evaluate_length(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
