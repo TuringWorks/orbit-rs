@@ -1,0 +1,24 @@
+# Automotive Fleet Status (Redis)
+# Tracking real-time state and geofencing.
+
+# 1. Update Vehicle Location (Geo Set)
+# GEOADD key longitude latitude member
+GEOADD fleet:locations -122.4194 37.7749 "VIN_001" 
+GEOADD fleet:locations -122.3995 37.7890 "VIN_002"
+GEOADD fleet:locations -118.2437 34.0522 "VIN_003" # Los Angeles
+
+# 2. Find Vehicles Nearby (Geofence search)
+# "Find all vehicles within 5km of HQ in SF"
+GEORADIUS fleet:locations -122.4194 37.7749 5 km WITHDIST
+
+# 3. Store Real-Time Status (Hash)
+HSET vehicle:status:VIN_001 online "true" current_speed 65 battery 88
+HSET vehicle:status:VIN_002 online "false" last_seen "2023-12-01T10:00:00Z"
+
+# 4. Pub/Sub for Alerts
+# Service listening on channel "alerts:critical" will process this
+PUBLISH alerts:critical "VIN_001: P0300 Random/Multiple Cylinder Misfire Detected"
+
+# 5. Set TTL for ephemeral status
+# If a car doesn't check in for 5 minutes, consider it offline (handled by key expiration logic or just data freshness)
+EXPIRE vehicle:status:VIN_001 300

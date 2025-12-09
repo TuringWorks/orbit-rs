@@ -1,0 +1,39 @@
+# =============================================================================
+# OrbitRS Car Sharing Examples - Vehicle IoT State (Redis)
+# =============================================================================
+# Managing Lock/Unlock commands and real-time vehicle status
+# =============================================================================
+
+# 1. Vehicle Telemetry Update (from Car Modem)
+# --------------------------------------------
+# Car CAR-555 reports status every minute
+# HSET vehicle:{id} fuel_level {percent} lat {lat} long {long} locked {0/1}
+HSET vehicle:CAR-555 type "Toyota Prius" fuel_level 78 lat 37.7749 long -122.4194 locked 1 last_seen_ts 1716234000
+
+# 2. Issue Unlock Command (User App -> Server -> Car)
+# ---------------------------------------------------
+# User requests unlock. 
+# 1. Verify booking in SQL (application logic)
+# 2. Push command to Redis Pub/Sub channel the car is listening to
+PUBLISH cars:commands:CAR-555 "UNLOCK_DOORS"
+
+# 3. Create Temporary Digital Key (BLE Token)
+# -------------------------------------------
+# Store a temporary token that the user's phone app can present to the car via Bluetooth
+# Set to expire after the booking ends (2 hours)
+SET digital_key:booking_999:CAR-555 "token_abc123_secure_hash" EX 7200
+
+# 4. Geofencing / Location Tracking
+# ---------------------------------
+# Add car location to Geospatial index
+GEOADD fleet_locations -122.4194 37.7749 "CAR-555"
+GEOADD fleet_locations -122.4090 37.7837 "CAR-777"
+
+# Find cars near user (for "Find Car near me" feature)
+GEORADIUS fleet_locations -122.4200 37.7750 1 km WITHDIST
+
+# 5. Alerting (Low Fuel / Battery)
+# --------------------------------
+# If fuel level drops below 20%, add to maintenance queue list
+# (Application logic would check HGET result, then push here)
+LPUSH maintenance_queue "CAR-888:Low Fuel:15%"

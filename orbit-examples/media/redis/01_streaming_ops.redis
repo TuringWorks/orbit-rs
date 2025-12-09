@@ -1,0 +1,350 @@
+# =============================================================================
+# OrbitRS Media Examples - Streaming Operations (Redis)
+# =============================================================================
+# Real-time streaming platform patterns: sessions, recommendations,
+# trending content, live events, caching, and analytics
+# =============================================================================
+
+# =============================================================================
+# USER SESSION & PLAYBACK STATE
+# =============================================================================
+
+# Active streaming session
+HSET session:user:U-12345 \
+    session_id "sess_abc123" \
+    device_id "DEV-ROKU-001" \
+    device_type "smart_tv" \
+    content_id "MOVIE-001" \
+    content_type "movie" \
+    playback_position_sec 3542 \
+    duration_sec 7200 \
+    quality "4K_HDR" \
+    bitrate_kbps 25000 \
+    buffer_health_sec 30 \
+    started_at "1702123456789" \
+    last_heartbeat "1702127000000" \
+    subscription_tier "PREMIUM" \
+    region "US-WEST"
+
+# Set session TTL (30 min inactivity timeout)
+EXPIRE session:user:U-12345 1800
+
+# Update playback position (every 10 seconds from client)
+HSET session:user:U-12345 playback_position_sec 3552 last_heartbeat "1702127010000"
+EXPIRE session:user:U-12345 1800
+
+# Track continue watching (resume position per content)
+HSET continue_watching:U-12345 \
+    "MOVIE-001" "3542" \
+    "SERIES-001:S01E03" "1250" \
+    "SERIES-002:S02E07" "0"
+
+# Get resume position for content
+HGET continue_watching:U-12345 "MOVIE-001"
+
+# =============================================================================
+# REAL-TIME RECOMMENDATIONS
+# =============================================================================
+
+# Personalized recommendations (cached from ML model)
+ZADD recommendations:U-12345 0.95 "MOVIE-002" 0.92 "SERIES-003" 0.88 "DOC-001" 0.85 "MOVIE-004" 0.82 "SERIES-005"
+EXPIRE recommendations:U-12345 3600  # 1 hour cache
+
+# Get top 10 recommendations
+ZREVRANGE recommendations:U-12345 0 9 WITHSCORES
+
+# Because You Watched recommendations
+ZADD rec:because_watched:U-12345:MOVIE-001 0.90 "MOVIE-005" 0.87 "MOVIE-006" 0.85 "MOVIE-007"
+EXPIRE rec:because_watched:U-12345:MOVIE-001 86400
+
+# Category-based recommendations
+SADD rec:category:U-12345:ACTION "MOVIE-010" "MOVIE-011" "MOVIE-012" "SERIES-020"
+EXPIRE rec:category:U-12345:ACTION 3600
+
+# =============================================================================
+# TRENDING & POPULAR CONTENT
+# =============================================================================
+
+# Global trending (sorted by watch count in last hour)
+ZINCRBY trending:global:hourly 1 "MOVIE-001"
+ZINCRBY trending:global:hourly 1 "SERIES-001:S01E01"
+EXPIRE trending:global:hourly 3600
+
+# Get top 20 trending
+ZREVRANGE trending:global:hourly 0 19 WITHSCORES
+
+# Regional trending
+ZINCRBY trending:region:US-WEST:hourly 1 "MOVIE-001"
+ZINCRBY trending:region:US-EAST:hourly 1 "MOVIE-002"
+
+# Category trending
+ZINCRBY trending:category:ACTION:daily 1 "MOVIE-001"
+ZINCRBY trending:category:COMEDY:daily 1 "SERIES-005"
+
+# New releases (sorted by release date)
+ZADD new_releases 1702080000 "MOVIE-NEW-001" 1702166400 "MOVIE-NEW-002" 1702252800 "SERIES-NEW-001"
+
+# =============================================================================
+# CONTENT METADATA CACHE
+# =============================================================================
+
+# Cache content metadata (frequently accessed)
+HSET content:MOVIE-001 \
+    content_id "MOVIE-001" \
+    title "The Matrix" \
+    type "movie" \
+    year 1999 \
+    duration_sec 7200 \
+    rating "R" \
+    imdb_score "8.7" \
+    genres "action,sci-fi,thriller" \
+    directors "Wachowskis" \
+    cast "Keanu Reeves,Laurence Fishburne,Carrie-Anne Moss" \
+    thumbnail_url "/thumbnails/movie-001.jpg" \
+    poster_url "/posters/movie-001.jpg" \
+    trailer_url "/trailers/movie-001.mp4" \
+    audio_tracks "en,es,fr,de" \
+    subtitle_tracks "en,es,fr,de,pt,zh" \
+    available_qualities "SD,HD,4K,4K_HDR"
+
+EXPIRE content:MOVIE-001 86400  # 24 hour cache
+
+# Get content metadata
+HGETALL content:MOVIE-001
+
+# Series episode list cache
+ZADD series:SERIES-001:episodes 1 "S01E01" 2 "S01E02" 3 "S01E03" 4 "S01E04" 5 "S01E05"
+EXPIRE series:SERIES-001:episodes 86400
+
+# =============================================================================
+# LIVE STREAMING & EVENTS
+# =============================================================================
+
+# Live event metadata
+HSET live:EVENT-001 \
+    event_id "EVENT-001" \
+    title "UFC 300 Main Event" \
+    type "sports" \
+    status "LIVE" \
+    start_time "1702123200000" \
+    viewer_count 0 \
+    peak_viewers 0 \
+    stream_url "/live/event-001/master.m3u8" \
+    chat_enabled "true" \
+    dvr_enabled "true" \
+    dvr_window_min 120
+
+# Track live viewer count
+HINCRBY live:EVENT-001 viewer_count 1
+HGET live:EVENT-001 viewer_count
+
+# Live chat messages (stream)
+XADD live:chat:EVENT-001 * \
+    user_id "U-12345" \
+    username "john_doe" \
+    message "Amazing fight!" \
+    timestamp "1702127000000"
+
+# Chat consumer group for moderation
+XGROUP CREATE live:chat:EVENT-001 chat-moderators $ MKSTREAM
+XREADGROUP GROUP chat-moderators mod-1 COUNT 50 STREAMS live:chat:EVENT-001 >
+
+# =============================================================================
+# REAL-TIME NOTIFICATIONS (Pub/Sub)
+# =============================================================================
+
+# Subscribe to user-specific notifications
+SUBSCRIBE notifications:user:U-12345
+
+# Publish notifications
+PUBLISH notifications:user:U-12345 "NEW_EPISODE|SERIES-001|S01E06 now available!"
+PUBLISH notifications:user:U-12345 "LIVE_STARTING|EVENT-001|UFC 300 starting in 5 minutes"
+PUBLISH notifications:user:U-12345 "RECOMMENDATION|MOVIE-002|Based on your recent watches"
+
+# Broadcast to all users watching specific content
+PUBLISH content:watchers:MOVIE-001 "BEHIND_SCENES|New behind-the-scenes content available"
+
+# =============================================================================
+# WATCHLIST & USER PREFERENCES
+# =============================================================================
+
+# User watchlist (sorted by add time)
+ZADD watchlist:U-12345 1702100000 "MOVIE-002" 1702110000 "SERIES-003" 1702120000 "DOC-001"
+
+# Get watchlist
+ZREVRANGE watchlist:U-12345 0 -1 WITHSCORES
+
+# Add to watchlist
+ZADD watchlist:U-12345 1702130000 "MOVIE-005"
+
+# Remove from watchlist
+ZREM watchlist:U-12345 "MOVIE-002"
+
+# User preferences
+HSET preferences:U-12345 \
+    language "en" \
+    subtitle_language "off" \
+    default_quality "auto" \
+    autoplay_next "true" \
+    kids_mode "false" \
+    content_ratings "PG,PG-13,R" \
+    notification_new_episodes "true" \
+    notification_recommendations "true"
+
+# Genre preferences (for personalization)
+ZADD preferences:genres:U-12345 0.9 "action" 0.8 "sci-fi" 0.7 "thriller" 0.3 "comedy" 0.2 "romance"
+
+# =============================================================================
+# SUBSCRIPTION & ENTITLEMENTS
+# =============================================================================
+
+# User subscription cache
+HSET subscription:U-12345 \
+    plan "PREMIUM" \
+    status "ACTIVE" \
+    start_date "2024-01-01" \
+    next_billing "2024-12-15" \
+    max_screens 4 \
+    max_quality "4K_HDR" \
+    ad_free "true" \
+    downloads_enabled "true" \
+    downloads_remaining 25
+
+EXPIRE subscription:U-12345 3600  # Refresh hourly
+
+# Active screens tracking (limit concurrent streams)
+SADD active_screens:U-12345 "DEV-ROKU-001" "DEV-IPHONE-002"
+SCARD active_screens:U-12345  # Check count against max_screens
+
+# =============================================================================
+# AD SERVING (Free Tier)
+# =============================================================================
+
+# Ad slots cache
+ZADD ads:preroll:ACTION 0.95 "AD-001" 0.90 "AD-002" 0.85 "AD-003"
+ZADD ads:midroll:SPORTS 0.92 "AD-010" 0.88 "AD-011"
+
+# User ad targeting profile
+HSET ad_profile:U-67890 \
+    age_group "25-34" \
+    gender "M" \
+    interests "sports,tech,travel" \
+    region "US-WEST" \
+    last_ad_served "1702126000000" \
+    ads_served_today 5
+
+# Ad impression tracking
+HINCRBY ad_stats:AD-001:2024-12-09 impressions 1
+HINCRBY ad_stats:AD-001:2024-12-09 clicks 0
+HINCRBY ad_stats:AD-001:2024-12-09 completions 1
+
+# =============================================================================
+# QoS & STREAMING METRICS
+# =============================================================================
+
+# Buffering events (for QoS monitoring)
+XADD stream:buffering * \
+    user_id "U-12345" \
+    content_id "MOVIE-001" \
+    device_type "smart_tv" \
+    isp "Comcast" \
+    region "US-WEST" \
+    buffer_duration_ms 2500 \
+    quality_before "4K_HDR" \
+    quality_after "HD" \
+    timestamp "1702127000000"
+
+# CDN health by region
+HSET cdn:health:US-WEST \
+    avg_latency_ms 15 \
+    cache_hit_rate 0.95 \
+    error_rate 0.001 \
+    active_connections 125000
+
+# Bitrate ladder stats
+ZINCRBY bitrate:distribution:MOVIE-001 1 "4K_HDR"
+ZINCRBY bitrate:distribution:MOVIE-001 1 "HD"
+
+# =============================================================================
+# ENGAGEMENT ANALYTICS
+# =============================================================================
+
+# Content engagement counters
+HINCRBY engagement:MOVIE-001:2024-12-09 views 1
+HINCRBY engagement:MOVIE-001:2024-12-09 completions 0
+HINCRBY engagement:MOVIE-001:2024-12-09 likes 1
+HINCRBY engagement:MOVIE-001:2024-12-09 shares 0
+HINCRBY engagement:MOVIE-001:2024-12-09 watchlist_adds 1
+
+# Watch duration buckets
+HINCRBY watch_duration:MOVIE-001:2024-12-09 "0-25pct" 50
+HINCRBY watch_duration:MOVIE-001:2024-12-09 "25-50pct" 35
+HINCRBY watch_duration:MOVIE-001:2024-12-09 "50-75pct" 25
+HINCRBY watch_duration:MOVIE-001:2024-12-09 "75-100pct" 20
+
+# Daily active users (HyperLogLog)
+PFADD dau:2024-12-09 "U-12345" "U-12346" "U-12347"
+PFCOUNT dau:2024-12-09
+
+# =============================================================================
+# SEARCH AUTOCOMPLETE
+# =============================================================================
+
+# Search autocomplete suggestions
+ZADD search:autocomplete 1000 "the matrix" 950 "the mandalorian" 900 "the office" 850 "the witcher"
+
+# Get autocomplete for "the m"
+ZRANGEBYLEX search:autocomplete "[the m" "[the m\xff" LIMIT 0 10
+
+# Recent searches per user
+LPUSH search:history:U-12345 "action movies" "keanu reeves" "sci-fi"
+LTRIM search:history:U-12345 0 19  # Keep last 20
+
+# =============================================================================
+# RATE LIMITING
+# =============================================================================
+
+# API rate limiting
+INCR ratelimit:api:U-12345:minute
+EXPIRE ratelimit:api:U-12345:minute 60 NX
+
+# Stream start rate limiting (prevent account sharing abuse)
+INCR ratelimit:stream_starts:U-12345:hour
+EXPIRE ratelimit:stream_starts:U-12345:hour 3600 NX
+
+# =============================================================================
+# FULL-TEXT SEARCH (OrbitRS Extension)
+# =============================================================================
+
+# Create FTS index for content search
+FT.CREATE idx:content SCHEMA title TEXT WEIGHT 5 description TEXT genres TEXT cast TEXT
+
+# Add content
+FT.ADD idx:content content:MOVIE-001 1.0 FIELDS title "The Matrix" description "A computer hacker learns the truth about reality" genres "action sci-fi" cast "Keanu Reeves"
+
+# Search content
+FT.SEARCH idx:content "matrix action" LIMIT 0 20
+
+# =============================================================================
+# VECTOR SEARCH FOR SIMILAR CONTENT (OrbitRS Extension)
+# =============================================================================
+
+# Content embeddings for similarity search
+# FT.CREATE idx:content_embeddings ON HASH PREFIX 1 embed: SCHEMA embedding VECTOR HNSW 6 DIM 512 DISTANCE_METRIC COSINE
+
+# Find similar content
+# FT.SEARCH idx:content_embeddings "*=>[KNN 10 @embedding $query_vec]" PARAMS 2 query_vec "\x00..." DIALECT 2
+
+# =============================================================================
+# CLEANUP & MAINTENANCE
+# =============================================================================
+
+# Trim live chat streams (keep last 10000 messages)
+XTRIM live:chat:EVENT-001 MAXLEN ~ 10000
+
+# Clear expired trending data (handled by TTL)
+
+# Archive old engagement data
+RENAME engagement:MOVIE-001:2024-12-08 archive:engagement:MOVIE-001:2024-12-08
+EXPIRE archive:engagement:MOVIE-001:2024-12-08 604800  # 7 days
+

@@ -192,9 +192,61 @@ orbit-examples/
     ├── python/                        # Work order processing
     ├── workflows/01_work_order_processing.md
     └── run_tests.sh                   # Test automation
+
+├── gaming/                            # Gaming & MMO
+│   ├── README.md
+│   ├── sql/                           # Player accounts
+│   ├── redis/                         # Leaderboards
+│   ├── mongodb/                       # Match history
+│   ├── cypher/                        # Social graph
+│   └── workflows/01_matchmaking_flow.md
+│
+├── automotive/                        # Connected Vehicle Platform
+│   ├── README.md
+│   ├── sql/                           # Vehicle registry
+│   ├── cql/                           # Telemetry ingestion
+│   ├── redis/                         # Fleet status
+│   ├── aql/                           # Supply chain graph
+│   └── workflows/01_telemetry_pipeline.md
+│
+├── construction/                      # Construction Management
+│   ├── README.md
+│   ├── sql/                           # Projects & Budgets
+│   ├── mongodb/                       # Blueprints & Logs
+│   ├── redis/                         # Site sensors
+│   └── workflows/01_safety_incident.md
+│
+├── legal/                             # Legal Tech
+│   ├── README.md
+│   ├── sql/                           # Matters & Billing
+│   ├── cypher/                        # Citation graph
+│   ├── aql/                           # Discovery search
+│   └── workflows/01_conflict_check.md
+│
+├── oil-gas/                           # Oil & Gas Exploration
+│   ├── README.md
+│   ├── sql/                           # Assets (Rigs/Wells)
+│   ├── cql/                           # Refinery IoT
+│   ├── cypher/                        # Pipeline graph
+│   ├── mongodb/                       # Seismic surveys
+│   └── workflows/01_preventative_maintenance.md
+│
+├── robotics/                          # Robotics Fleet
+│   ├── README.md
+│   ├── sql/                           # Robot registry
+│   ├── redis/                         # Live telemetry
+│   ├── mongodb/                       # Mission logs
+│   └── workflows/01_navigation_mission.md
+│
+├── semiconductor/                     # Chip Manufacturing
+│   ├── README.md
+│   ├── sql/                           # MES Lot tracking
+│   ├── cql/                           # FDC/SPC sensor data
+│   ├── aql/                           # Yield lineage graph
+│   └── workflows/01_fdc_interdiction.md
 ```
 
-**Total**: 18 industry examples, 70+ files, 17 comprehensive workflows
+**Total**: 25 industry examples, 100+ files, 24 comprehensive workflows
 
 
 ## 🎯 Examples by Protocol
@@ -580,6 +632,73 @@ Complete end-to-end industry examples using multiple protocols - **17 industries
 - **8 ML models**: Predictive maintenance, quality, demand forecasting
 - BOM management and assembly lines
 - **[View Manufacturing Examples](manufacturing/)**
+
+### Gaming (MMO Backend)
+- **4 Protocols**: SQL, Redis, Mongo, Cypher
+- **Real-time Leaderboards** and matchmaking
+- Social graph and match history archival
+- **[View Gaming Examples](gaming/)**
+
+### Aviation & Aerospace (New)
+- **3 Protocols**: SQL, MongoDB, CQL, Redis
+- **Commercial Airlines**: MRO and Flight Data
+- **Private Aviation**: Fractional Ownership
+- **Urban Air Mobility**: eVTOL Telemetry
+- **[View Aviation Examples](aviation/)**
+
+### Automotive (Connected Vehicles)
+- **4 Protocols**: SQL, CQL, Redis, AQL
+- **High-velocity telemetry** ingestion (Cassandra)
+- Real-time fleet tracking and supply chain graph
+- **[View Automotive Examples](automotive/)**
+
+### Construction (Project & IoT)
+- **3 Protocols**: SQL, Mongo, Redis
+- Project budgets and **Blueprint management**
+- Real-time site safety monitoring
+- **[View Construction Examples](construction/)**
+
+### Legal (Practice Management)
+- **3 Protocols**: SQL, Cypher, AQL
+- Matter billing and **Citation Graphs**
+- Document discovery and search
+- **[View Legal Examples](legal/)**
+
+### Oil & Gas (Energy Platform)
+- **4 Protocols**: SQL, CQL, Cypher, Mongo
+- **Refinery IoT** and Seismic Data
+- Pipeline network graph topology
+- **[View Oil & Gas Examples](oil-gas/)**
+
+### Robotics (Fleet Management)
+- **3 Protocols**: SQL, Redis, Mongo
+- **Live LiDAR Streaming** and Telemetry
+- Mission logging and replay
+- **[View Robotics Examples](robotics/)**
+
+### Semiconductor (Wafer Fab)
+- **3 Protocols**: SQL, CQL, AQL
+- MES Lot Tracking and **FDC Sensor Data**
+- Yield Lineage Graph
+- **[View Semiconductor Examples](semiconductor/)**
+
+### Car Rental Agencies
+- **2 Protocols**: SQL, Redis
+- **Fleet Inventory** and Booking System
+- **Live Availability Cache** (Redis Sets)
+- **[View Car Rental Examples](car_rental/)**
+
+### Car Dealership & Sales
+- **2 Protocols**: SQL, MongoDB
+- **Vehicle Inventory** and Sales Transactions
+- **Customer 360 View** (Interactions, Preferences)
+- **[View Car Dealership Examples](car_dealership/)**
+
+### Field Service Management
+- **2 Protocols**: SQL, Cypher
+- **Work Order Scheduling** and Invoicing
+- **Technician Skill Graph** (Matching skills & location)
+- **[View Field Service Examples](field_service/)**
 
 ---
 

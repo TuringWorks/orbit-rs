@@ -1,0 +1,36 @@
+// Legal Document Discovery (AQL)
+// Managing and searching evidence documents.
+
+// 1. Create Collection
+if (!db._collection("evidence")) db._create("evidence");
+
+// 2. Insert Documents
+db.evidence.save({ 
+    _key: "doc1", 
+    title: "Email: Project X Strategy", 
+    sender: "coyote@example.com", 
+    body: "We plan to catch the runner using the new ACME trap.", 
+    date: "2023-01-15",
+    privileged: false
+});
+
+db.evidence.save({ 
+    _key: "doc2", 
+    title: "Memo: Privileged Communication", 
+    author: "Attorney Bob", 
+    body: "The liability risk is high regarding the anvil deployment.", 
+    date: "2023-02-01",
+    privileged: true 
+});
+
+// 3. Query: Find Non-Privileged Documents containing "ACME"
+// Using standard AQL filter (could use ArangoSearch View for FTS)
+var query = `
+    FOR doc IN evidence
+    FILTER doc.privileged == false
+    FILTER CONTAINS(doc.body, "ACME") OR CONTAINS(doc.title, "ACME")
+    RETURN { title: doc.title, sender: doc.sender }
+`;
+
+var result = db._query(query).toArray();
+print("Discovery Results:", result);

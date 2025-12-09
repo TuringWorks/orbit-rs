@@ -98,7 +98,8 @@ telco/
     ├── 02_call_routing.md            # Call routing workflow
     ├── 03_billing_cycle.md           # Billing process
     ├── 04_network_optimization.md    # Network optimization
-    └── 05_bandwidth_auction.md       # Bandwidth bidding
+    ├── 05_bandwidth_auction.md       # Bandwidth bidding
+    └── 03_add_line.md                # Add a Line (Postpaid)
 
 ```
 
@@ -189,6 +190,18 @@ cypher-shell -a bolt://localhost:7687 < cypher/01_network_topology.cypher
 - **Cassandra**: Bandwidth utilization history
 
 **Latency**: <10ms bid processing
+
+### 5. Add a Line (Postpaid)
+
+**Workflow**: Existing customer adds a new line to their account
+
+**Protocols Used**:
+- **SQL**: Eligibility check and billing update
+- **Redis**: Number allocation and reservation
+- **MongoDB**: SIM provisioning
+- **Redis/CQL**: HLR/HSS activation
+
+**Example**: See `workflows/03_add_line.md`
 
 ## Data Models
 

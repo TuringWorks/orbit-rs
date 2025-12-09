@@ -63,6 +63,9 @@ pub enum Statement {
 
     // GraphRAG statements
     GraphRAG(GraphRAGStatement),
+
+    // Procedure calls
+    Call(CallStatement),
 }
 
 /// TRAVERSE statement for graph traversal
@@ -778,6 +781,7 @@ pub enum CreateObjectType {
     Index,
     View,
     Function,
+    Procedure,
     Trigger,
     Schema,
 }
@@ -797,9 +801,18 @@ pub enum CreateDefinition {
         query: Box<SelectStatement>,
     },
     Function {
+        or_replace: bool,
         parameters: Vec<Parameter>,
         return_type: DataType,
-        body: Vec<Statement>,
+        language: Option<FunctionLanguage>,
+        volatility: Option<FunctionVolatility>,
+        body: String,
+    },
+    Procedure {
+        or_replace: bool,
+        parameters: Vec<Parameter>,
+        language: Option<FunctionLanguage>,
+        body: String,
     },
 }
 
@@ -861,6 +874,44 @@ pub struct Parameter {
     pub name: String,
     pub data_type: DataType,
     pub default: Option<Expression>,
+    pub mode: Option<ParameterMode>,
+}
+
+/// Parameter mode for function/procedure parameters
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ParameterMode {
+    In,
+    Out,
+    InOut,
+    Variadic,
+}
+
+/// Function language
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum FunctionLanguage {
+    Sql,
+    OrbitQL,
+    JavaScript,
+    Python,
+    Other(String),
+}
+
+/// Function volatility (how the function behaves with regards to side effects)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum FunctionVolatility {
+    /// Function always returns the same result for the same arguments
+    Immutable,
+    /// Function returns the same result for the same arguments within a single query
+    Stable,
+    /// Function can return different results even with same arguments (default)
+    Volatile,
+}
+
+/// CALL statement for invoking stored procedures/functions
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CallStatement {
+    pub procedure_name: String,
+    pub arguments: Vec<Expression>,
 }
 
 /// DROP statement
@@ -1335,6 +1386,7 @@ impl std::fmt::Display for Statement {
             Statement::Show(_) => write!(f, "SHOW"),
             Statement::Rebuild(_) => write!(f, "REBUILD"),
             Statement::GraphRAG(_) => write!(f, "GRAPH_RAG"),
+            Statement::Call(call) => write!(f, "CALL {}", call.procedure_name),
         }
     }
 }

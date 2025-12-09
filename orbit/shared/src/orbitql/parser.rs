@@ -4,11 +4,13 @@
 //! into an Abstract Syntax Tree (AST) for OrbitQL queries.
 
 use crate::orbitql::ast::{
-    AggregateFunction, BinaryOperator, CreateDefinition, CreateObjectType, CreateStatement,
-    DeleteStatement, DropStatement, EdgeDirection, Expression, FetchClause, FromClause, GraphPath,
-    GraphStep, InsertStatement, InsertValues, JoinClause, JoinType, LiveStatement, OrderByClause,
-    RelateStatement, SelectField, SelectStatement, SortDirection, Statement, TransactionStatement,
-    TraverseStatement, UnaryOperator, UpdateStatement, WhenClause, WithClause,
+    AggregateFunction, BinaryOperator, CallStatement, Constraint, CreateDefinition,
+    CreateObjectType, CreateStatement, DataType, DeleteStatement, DropStatement, EdgeDirection,
+    Expression, FetchClause, FieldConstraint, FieldDefinition, FromClause, FunctionLanguage,
+    FunctionVolatility, GraphPath, GraphStep, InsertStatement, InsertValues, JoinClause, JoinType,
+    LiveStatement, OrderByClause, Parameter, ParameterMode, RelateStatement, SelectField,
+    SelectStatement, SortDirection, Statement, TransactionStatement, TraverseStatement,
+    UnaryOperator, UpdateStatement, WhenClause, WithClause,
 };
 use crate::orbitql::lexer::{LexError, Token, TokenType};
 use crate::orbitql::QueryValue;
@@ -108,6 +110,7 @@ impl Parser {
             TokenType::Relate => Ok(Statement::Relate(self.parse_relate()?)),
             TokenType::Live => Ok(Statement::Live(self.parse_live()?)),
             TokenType::Traverse => Ok(Statement::Traverse(self.parse_traverse()?)),
+            TokenType::Call => Ok(Statement::Call(self.parse_call()?)),
             _ => Err(ParseError::UnexpectedToken {
                 expected: vec![
                     TokenType::With,
@@ -123,6 +126,7 @@ impl Parser {
                     TokenType::Relate,
                     TokenType::Live,
                     TokenType::Traverse,
+                    TokenType::Call,
                 ],
                 found: token.clone(),
             }),
@@ -997,21 +1001,586 @@ impl Parser {
     }
 
     /// Parse CREATE statement
+    /// Supports: CREATE [OR REPLACE] TABLE|INDEX|VIEW|FUNCTION|PROCEDURE ...
     fn parse_create(&mut self) -> Result<CreateStatement, ParseError> {
         self.expect(TokenType::Create)?;
 
-        // TODO: Implement full CREATE parsing
-        let object_type = CreateObjectType::Table;
-        let name = "temp".to_string();
-        let definition = CreateDefinition::Table {
-            fields: Vec::new(),
-            constraints: Vec::new(),
+        // Check for OR REPLACE
+        let or_replace = if self.matches(&[TokenType::Or]) {
+            self.advance();
+            self.expect(TokenType::Replace)?;
+            true
+        } else {
+            false
         };
 
+        let token = self.peek()?;
+        match token.token_type {
+            TokenType::Table => self.parse_create_table(),
+            TokenType::Index => self.parse_create_index(),
+            TokenType::View => self.parse_create_view(),
+            TokenType::Function => self.parse_create_function(or_replace),
+            TokenType::Procedure => self.parse_create_procedure(or_replace),
+            TokenType::Schema => self.parse_create_schema(),
+            _ => Err(ParseError::UnexpectedToken {
+                expected: vec![
+                    TokenType::Table,
+                    TokenType::Index,
+                    TokenType::View,
+                    TokenType::Function,
+                    TokenType::Procedure,
+                    TokenType::Schema,
+                ],
+                found: token.clone(),
+            }),
+        }
+    }
+
+    /// Parse CREATE TABLE statement
+    fn parse_create_table(&mut self) -> Result<CreateStatement, ParseError> {
+        self.expect(TokenType::Table)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Parse column definitions
+        self.expect(TokenType::LeftParen)?;
+        let mut fields = Vec::new();
+        let mut constraints = Vec::new();
+
+        loop {
+            // Check for table-level constraints
+            if self.matches(&[
+                TokenType::Primary,
+                TokenType::Foreign,
+                TokenType::Unique,
+                TokenType::Check,
+                TokenType::Constraint,
+            ]) {
+                constraints.push(self.parse_table_constraint()?);
+            } else {
+                // Parse column definition
+                fields.push(self.parse_field_definition()?);
+            }
+
+            if self.matches(&[TokenType::Comma]) {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        self.expect(TokenType::RightParen)?;
+
         Ok(CreateStatement {
-            object_type,
+            object_type: CreateObjectType::Table,
             name,
-            definition,
+            definition: CreateDefinition::Table {
+                fields,
+                constraints,
+            },
+        })
+    }
+
+    /// Parse CREATE INDEX statement
+    fn parse_create_index(&mut self) -> Result<CreateStatement, ParseError> {
+        let unique = if self.matches(&[TokenType::Unique]) {
+            self.advance();
+            true
+        } else {
+            false
+        };
+
+        self.expect(TokenType::Index)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        self.expect(TokenType::On)?;
+        let table_name = self.expect_identifier_or_keyword()?.value.clone();
+
+        self.expect(TokenType::LeftParen)?;
+        let mut index_fields = Vec::new();
+        loop {
+            let field = self.expect_identifier_or_keyword()?.value.clone();
+            index_fields.push(field);
+            if self.matches(&[TokenType::Comma]) {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        self.expect(TokenType::RightParen)?;
+
+        Ok(CreateStatement {
+            object_type: CreateObjectType::Index,
+            name,
+            definition: CreateDefinition::Index {
+                on: table_name,
+                fields: index_fields,
+                unique,
+            },
+        })
+    }
+
+    /// Parse CREATE VIEW statement
+    fn parse_create_view(&mut self) -> Result<CreateStatement, ParseError> {
+        self.expect(TokenType::View)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        self.expect(TokenType::As)?;
+        let query = self.parse_select()?;
+
+        Ok(CreateStatement {
+            object_type: CreateObjectType::View,
+            name,
+            definition: CreateDefinition::View {
+                query: Box::new(query),
+            },
+        })
+    }
+
+    /// Parse CREATE FUNCTION statement
+    /// Syntax: CREATE [OR REPLACE] FUNCTION name(params) RETURNS type [LANGUAGE lang] [IMMUTABLE|STABLE|VOLATILE] AS $$ body $$
+    fn parse_create_function(&mut self, or_replace: bool) -> Result<CreateStatement, ParseError> {
+        self.expect(TokenType::Function)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Parse parameters
+        self.expect(TokenType::LeftParen)?;
+        let parameters = self.parse_function_parameters()?;
+        self.expect(TokenType::RightParen)?;
+
+        // Parse RETURNS clause
+        self.expect(TokenType::Returns)?;
+        let return_type = self.parse_data_type()?;
+
+        // Parse optional LANGUAGE clause
+        let language = if self.matches(&[TokenType::Language]) {
+            self.advance();
+            Some(self.parse_function_language()?)
+        } else {
+            None
+        };
+
+        // Parse optional volatility (IMMUTABLE, STABLE, VOLATILE)
+        let volatility = self.parse_function_volatility()?;
+
+        // Parse AS keyword and body
+        self.expect(TokenType::As)?;
+        let body = self.parse_function_body()?;
+
+        Ok(CreateStatement {
+            object_type: CreateObjectType::Function,
+            name,
+            definition: CreateDefinition::Function {
+                or_replace,
+                parameters,
+                return_type,
+                language,
+                volatility,
+                body,
+            },
+        })
+    }
+
+    /// Parse CREATE PROCEDURE statement
+    /// Syntax: CREATE [OR REPLACE] PROCEDURE name(params) [LANGUAGE lang] AS $$ body $$
+    fn parse_create_procedure(&mut self, or_replace: bool) -> Result<CreateStatement, ParseError> {
+        self.expect(TokenType::Procedure)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Parse parameters
+        self.expect(TokenType::LeftParen)?;
+        let parameters = self.parse_function_parameters()?;
+        self.expect(TokenType::RightParen)?;
+
+        // Parse optional LANGUAGE clause
+        let language = if self.matches(&[TokenType::Language]) {
+            self.advance();
+            Some(self.parse_function_language()?)
+        } else {
+            None
+        };
+
+        // Parse AS keyword and body
+        self.expect(TokenType::As)?;
+        let body = self.parse_function_body()?;
+
+        Ok(CreateStatement {
+            object_type: CreateObjectType::Procedure,
+            name,
+            definition: CreateDefinition::Procedure {
+                or_replace,
+                parameters,
+                language,
+                body,
+            },
+        })
+    }
+
+    /// Parse CREATE SCHEMA statement
+    fn parse_create_schema(&mut self) -> Result<CreateStatement, ParseError> {
+        self.expect(TokenType::Schema)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        Ok(CreateStatement {
+            object_type: CreateObjectType::Schema,
+            name,
+            definition: CreateDefinition::Table {
+                fields: Vec::new(),
+                constraints: Vec::new(),
+            },
+        })
+    }
+
+    /// Parse function parameters
+    fn parse_function_parameters(&mut self) -> Result<Vec<Parameter>, ParseError> {
+        let mut parameters = Vec::new();
+
+        if self.matches(&[TokenType::RightParen]) {
+            return Ok(parameters);
+        }
+
+        loop {
+            // Check for parameter mode (IN, OUT, INOUT, VARIADIC)
+            // Note: IN is already a token (for IN clause), OUT is separate
+            let mode = if self.check_identifier_value("IN") {
+                self.advance();
+                if self.matches(&[TokenType::Out]) {
+                    self.advance();
+                    Some(ParameterMode::InOut)
+                } else {
+                    Some(ParameterMode::In)
+                }
+            } else if self.matches(&[TokenType::Out]) {
+                self.advance();
+                Some(ParameterMode::Out)
+            } else {
+                None
+            };
+
+            let name = self.expect_identifier_or_keyword()?.value.clone();
+            let data_type = self.parse_data_type()?;
+
+            // Check for DEFAULT clause
+            let default = if self.matches(&[TokenType::Default]) {
+                self.advance();
+                Some(self.parse_expression()?)
+            } else {
+                None
+            };
+
+            parameters.push(Parameter {
+                name,
+                data_type,
+                default,
+                mode,
+            });
+
+            if self.matches(&[TokenType::Comma]) {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        Ok(parameters)
+    }
+
+    /// Parse function language (SQL, ORBITQL, JAVASCRIPT, PYTHON, etc.)
+    fn parse_function_language(&mut self) -> Result<FunctionLanguage, ParseError> {
+        let token = self.advance();
+        let lang_str = token.value.to_uppercase();
+
+        Ok(match lang_str.as_str() {
+            "SQL" => FunctionLanguage::Sql,
+            "ORBITQL" => FunctionLanguage::OrbitQL,
+            "JAVASCRIPT" | "JS" => FunctionLanguage::JavaScript,
+            "PYTHON" | "PY" => FunctionLanguage::Python,
+            _ => FunctionLanguage::Other(token.value.clone()),
+        })
+    }
+
+    /// Parse function volatility (IMMUTABLE, STABLE, VOLATILE)
+    fn parse_function_volatility(&mut self) -> Result<Option<FunctionVolatility>, ParseError> {
+        if self.matches(&[TokenType::Immutable]) {
+            self.advance();
+            Ok(Some(FunctionVolatility::Immutable))
+        } else if self.matches(&[TokenType::Stable]) {
+            self.advance();
+            Ok(Some(FunctionVolatility::Stable))
+        } else if self.matches(&[TokenType::Volatile]) {
+            self.advance();
+            Ok(Some(FunctionVolatility::Volatile))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse function body (string literal, either quoted or $$ delimited)
+    fn parse_function_body(&mut self) -> Result<String, ParseError> {
+        let token = self.peek()?;
+        let token_type = token.token_type.clone();
+        let token_value = token.value.clone();
+
+        // Handle PostgreSQL-style $$ ... $$ delimiter
+        // The lexer tokenizes $ as TokenType::Parameter with value "$"
+        if (token_type == TokenType::Parameter && token_value == "$")
+            || token_type == TokenType::Dollar
+        {
+            self.advance(); // consume first $
+
+            // Check if next is also $ (forming $$)
+            let next = self.peek()?;
+            let is_dollar_quote = (next.token_type == TokenType::Parameter && next.value == "$")
+                || next.token_type == TokenType::Dollar;
+
+            if is_dollar_quote {
+                self.advance(); // consume second $
+
+                // Collect all tokens until we find $$
+                let mut body_tokens = Vec::new();
+                loop {
+                    let current = self.peek()?;
+                    if current.token_type == TokenType::Eof {
+                        return Err(ParseError::UnexpectedEndOfInput {
+                            expected: vec![TokenType::Parameter],
+                        });
+                    }
+
+                    // Check for closing $$
+                    let is_closing_dollar = (current.token_type == TokenType::Parameter
+                        && current.value == "$")
+                        || current.token_type == TokenType::Dollar;
+                    if is_closing_dollar {
+                        let next_pos = self.current + 1;
+                        if next_pos < self.tokens.len() {
+                            let next_token = &self.tokens[next_pos];
+                            let next_is_dollar = (next_token.token_type == TokenType::Parameter
+                                && next_token.value == "$")
+                                || next_token.token_type == TokenType::Dollar;
+                            if next_is_dollar {
+                                self.advance(); // consume first $
+                                self.advance(); // consume second $
+                                break;
+                            }
+                        }
+                    }
+
+                    body_tokens.push(self.advance().value.clone());
+                }
+
+                return Ok(body_tokens.join(" "));
+            }
+
+            // Single $ - return just that
+            return Ok(token_value);
+        }
+
+        // Handle regular string
+        if token_type == TokenType::String {
+            return Ok(self.advance().value.clone());
+        }
+
+        // Accept any token value as body for flexibility
+        Ok(self.advance().value.clone())
+    }
+
+    /// Parse field definition for CREATE TABLE
+    fn parse_field_definition(&mut self) -> Result<FieldDefinition, ParseError> {
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+        let data_type = self.parse_data_type()?;
+
+        let mut nullable = true;
+        let mut default = None;
+        let mut constraints = Vec::new();
+
+        // Parse column constraints
+        while self.matches(&[
+            TokenType::Not,
+            TokenType::Default,
+            TokenType::Primary,
+            TokenType::Unique,
+            TokenType::Check,
+            TokenType::References,
+        ]) {
+            if self.matches(&[TokenType::Not]) {
+                self.advance();
+                self.expect(TokenType::Null)?;
+                nullable = false;
+                constraints.push(FieldConstraint::NotNull);
+            } else if self.matches(&[TokenType::Default]) {
+                self.advance();
+                default = Some(self.parse_expression()?);
+            } else if self.matches(&[TokenType::Primary]) {
+                self.advance();
+                self.expect(TokenType::Key)?;
+                // Primary key implies NOT NULL
+                nullable = false;
+            } else if self.matches(&[TokenType::Unique]) {
+                self.advance();
+                constraints.push(FieldConstraint::Unique);
+            } else if self.matches(&[TokenType::Check]) {
+                self.advance();
+                self.expect(TokenType::LeftParen)?;
+                let expr = self.parse_expression()?;
+                self.expect(TokenType::RightParen)?;
+                constraints.push(FieldConstraint::Check(expr));
+            } else if self.matches(&[TokenType::References]) {
+                self.advance();
+                let table = self.expect_identifier_or_keyword()?.value.clone();
+                self.expect(TokenType::LeftParen)?;
+                let field = self.expect_identifier_or_keyword()?.value.clone();
+                self.expect(TokenType::RightParen)?;
+                constraints.push(FieldConstraint::ForeignKey { table, field });
+            }
+        }
+
+        Ok(FieldDefinition {
+            name,
+            data_type,
+            nullable,
+            default,
+            constraints,
+        })
+    }
+
+    /// Parse table-level constraint
+    fn parse_table_constraint(&mut self) -> Result<Constraint, ParseError> {
+        // Skip optional CONSTRAINT name
+        if self.matches(&[TokenType::Constraint]) {
+            self.advance();
+            let _constraint_name = self.expect_identifier_or_keyword()?.value.clone();
+        }
+
+        if self.matches(&[TokenType::Primary]) {
+            self.advance();
+            self.expect(TokenType::Key)?;
+            self.expect(TokenType::LeftParen)?;
+            let mut columns = Vec::new();
+            loop {
+                columns.push(self.expect_identifier_or_keyword()?.value.clone());
+                if self.matches(&[TokenType::Comma]) {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            self.expect(TokenType::RightParen)?;
+            Ok(Constraint::PrimaryKey(columns))
+        } else if self.matches(&[TokenType::Unique]) {
+            self.advance();
+            self.expect(TokenType::LeftParen)?;
+            let mut columns = Vec::new();
+            loop {
+                columns.push(self.expect_identifier_or_keyword()?.value.clone());
+                if self.matches(&[TokenType::Comma]) {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            self.expect(TokenType::RightParen)?;
+            Ok(Constraint::Unique(columns))
+        } else if self.matches(&[TokenType::Foreign]) {
+            self.advance();
+            self.expect(TokenType::Key)?;
+            self.expect(TokenType::LeftParen)?;
+            let mut fields = Vec::new();
+            loop {
+                fields.push(self.expect_identifier_or_keyword()?.value.clone());
+                if self.matches(&[TokenType::Comma]) {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            self.expect(TokenType::RightParen)?;
+            self.expect(TokenType::References)?;
+            let references_table = self.expect_identifier_or_keyword()?.value.clone();
+            self.expect(TokenType::LeftParen)?;
+            let mut references_fields = Vec::new();
+            loop {
+                references_fields.push(self.expect_identifier_or_keyword()?.value.clone());
+                if self.matches(&[TokenType::Comma]) {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            self.expect(TokenType::RightParen)?;
+            Ok(Constraint::ForeignKey {
+                fields,
+                references_table,
+                references_fields,
+            })
+        } else if self.matches(&[TokenType::Check]) {
+            self.advance();
+            self.expect(TokenType::LeftParen)?;
+            let expr = self.parse_expression()?;
+            self.expect(TokenType::RightParen)?;
+            Ok(Constraint::Check(expr))
+        } else {
+            let token = self.peek()?;
+            Err(ParseError::UnexpectedToken {
+                expected: vec![
+                    TokenType::Primary,
+                    TokenType::Unique,
+                    TokenType::Foreign,
+                    TokenType::Check,
+                ],
+                found: token.clone(),
+            })
+        }
+    }
+
+    /// Parse data type
+    fn parse_data_type(&mut self) -> Result<DataType, ParseError> {
+        let token = self.advance();
+        let type_name = token.value.to_uppercase();
+
+        Ok(match type_name.as_str() {
+            "BOOLEAN" | "BOOL" => DataType::Boolean,
+            "INTEGER" | "INT" | "INT4" | "BIGINT" | "INT8" | "SMALLINT" | "INT2" => {
+                DataType::Integer
+            }
+            "FLOAT" | "DOUBLE" | "REAL" | "FLOAT4" | "FLOAT8" | "DECIMAL" | "NUMERIC" => {
+                DataType::Float
+            }
+            "STRING" | "TEXT" | "VARCHAR" | "CHAR" => {
+                // Check for length specification
+                if self.matches(&[TokenType::LeftParen]) {
+                    self.advance();
+                    let len_token = self.advance();
+                    let max_length = len_token.value.parse::<u32>().ok();
+                    self.expect(TokenType::RightParen)?;
+                    DataType::String { max_length }
+                } else {
+                    DataType::String { max_length: None }
+                }
+            }
+            "DATETIME" | "TIMESTAMP" | "TIMESTAMPTZ" | "DATE" | "TIME" => DataType::DateTime,
+            "DURATION" | "INTERVAL" => DataType::Duration,
+            "UUID" => DataType::Uuid,
+            "JSON" | "JSONB" => DataType::Json,
+            "OBJECT" | "RECORD" => DataType::Object,
+            "GEOMETRY" => DataType::Geometry,
+            "POINT" => DataType::Point,
+            "LINESTRING" => DataType::LineString,
+            "POLYGON" => DataType::Polygon,
+            "MULTIPOINT" => DataType::MultiPoint,
+            "MULTILINESTRING" => DataType::MultiLineString,
+            "MULTIPOLYGON" => DataType::MultiPolygon,
+            "GEOMETRYCOLLECTION" => DataType::GeometryCollection,
+            "ARRAY" => {
+                // Parse ARRAY<type> syntax
+                if self.matches(&[TokenType::LessThan]) {
+                    self.advance();
+                    let inner_type = self.parse_data_type()?;
+                    self.expect(TokenType::GreaterThan)?;
+                    DataType::Array(Box::new(inner_type))
+                } else {
+                    DataType::Array(Box::new(DataType::Any))
+                }
+            }
+            _ => DataType::Any,
         })
     }
 
@@ -1019,12 +1588,106 @@ impl Parser {
     fn parse_drop(&mut self) -> Result<DropStatement, ParseError> {
         self.expect(TokenType::Drop)?;
 
-        // TODO: Implement full DROP parsing
+        // Check for IF EXISTS
+        let if_exists = if self.matches(&[TokenType::If]) {
+            self.advance();
+            self.expect(TokenType::Exists)?;
+            true
+        } else {
+            false
+        };
+
+        // Parse object type
+        let token = self.peek()?;
+        let object_type = match token.token_type {
+            TokenType::Table => {
+                self.advance();
+                CreateObjectType::Table
+            }
+            TokenType::Index => {
+                self.advance();
+                CreateObjectType::Index
+            }
+            TokenType::View => {
+                self.advance();
+                CreateObjectType::View
+            }
+            TokenType::Function => {
+                self.advance();
+                CreateObjectType::Function
+            }
+            TokenType::Procedure => {
+                self.advance();
+                CreateObjectType::Procedure
+            }
+            TokenType::Schema => {
+                self.advance();
+                CreateObjectType::Schema
+            }
+            _ => {
+                return Err(ParseError::UnexpectedToken {
+                    expected: vec![
+                        TokenType::Table,
+                        TokenType::Index,
+                        TokenType::View,
+                        TokenType::Function,
+                        TokenType::Procedure,
+                        TokenType::Schema,
+                    ],
+                    found: token.clone(),
+                });
+            }
+        };
+
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Check for CASCADE or RESTRICT
+        let cascade = if self.matches(&[TokenType::Cascade]) {
+            self.advance();
+            true
+        } else if self.matches(&[TokenType::Restrict]) {
+            self.advance();
+            false
+        } else {
+            false
+        };
+
         Ok(DropStatement {
-            object_type: CreateObjectType::Table,
-            name: "temp".to_string(),
-            if_exists: false,
-            cascade: false,
+            object_type,
+            name,
+            if_exists,
+            cascade,
+        })
+    }
+
+    /// Parse CALL statement
+    /// Syntax: CALL procedure_name(arg1, arg2, ...)
+    fn parse_call(&mut self) -> Result<CallStatement, ParseError> {
+        self.expect(TokenType::Call)?;
+
+        let procedure_name = self.expect_identifier_or_keyword()?.value.clone();
+
+        self.expect(TokenType::LeftParen)?;
+
+        let mut arguments = Vec::new();
+        if !self.matches(&[TokenType::RightParen]) {
+            loop {
+                let expr = self.parse_expression()?;
+                arguments.push(expr);
+
+                if self.matches(&[TokenType::Comma]) {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        self.expect(TokenType::RightParen)?;
+
+        Ok(CallStatement {
+            procedure_name,
+            arguments,
         })
     }
 
@@ -1234,6 +1897,15 @@ impl Parser {
     fn matches(&self, types: &[TokenType]) -> bool {
         if let Ok(token) = self.peek() {
             types.contains(&token.token_type)
+        } else {
+            false
+        }
+    }
+
+    /// Check if current token is an identifier with a specific value (case-insensitive)
+    fn check_identifier_value(&self, value: &str) -> bool {
+        if let Ok(token) = self.peek() {
+            token.value.eq_ignore_ascii_case(value)
         } else {
             false
         }
@@ -1946,5 +2618,278 @@ mod tests {
             "Failed to parse COUNT(*): {:?}",
             result.err()
         );
+    }
+
+    #[test]
+    fn test_parse_create_function_simple() {
+        // Test parsing simple CREATE FUNCTION
+        let lexer = Lexer::new();
+        let query = "CREATE FUNCTION add_numbers(a INT, b INT) RETURNS INT AS $$ SELECT a + b $$";
+        let tokens = lexer.tokenize(query).unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse CREATE FUNCTION: {:?}",
+            result.err()
+        );
+
+        if let Statement::Create(create) = result.unwrap() {
+            assert_eq!(create.name, "add_numbers");
+            assert!(matches!(create.object_type, CreateObjectType::Function));
+            if let CreateDefinition::Function {
+                or_replace,
+                parameters,
+                return_type,
+                language,
+                volatility,
+                body,
+            } = create.definition
+            {
+                assert!(!or_replace);
+                assert_eq!(parameters.len(), 2);
+                assert_eq!(parameters[0].name, "a");
+                assert_eq!(parameters[1].name, "b");
+                assert!(matches!(return_type, DataType::Integer));
+                assert!(language.is_none());
+                assert!(volatility.is_none());
+                assert_eq!(body.trim(), "SELECT a + b");
+            } else {
+                panic!("Expected Function definition");
+            }
+        } else {
+            panic!("Expected CREATE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_create_function_with_language() {
+        // Test parsing CREATE FUNCTION with LANGUAGE clause
+        let lexer = Lexer::new();
+        let query = "CREATE FUNCTION calculate_tax(amount DECIMAL) RETURNS DECIMAL LANGUAGE SQL AS $$ SELECT amount * 0.1 $$";
+        let tokens = lexer.tokenize(query).unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse CREATE FUNCTION with LANGUAGE: {:?}",
+            result.err()
+        );
+
+        if let Statement::Create(create) = result.unwrap() {
+            if let CreateDefinition::Function { language, .. } = create.definition {
+                assert!(matches!(language, Some(FunctionLanguage::Sql)));
+            } else {
+                panic!("Expected Function definition");
+            }
+        } else {
+            panic!("Expected CREATE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_create_function_with_volatility() {
+        // Test parsing CREATE FUNCTION with IMMUTABLE
+        let lexer = Lexer::new();
+        let query = "CREATE FUNCTION square(x INT) RETURNS INT IMMUTABLE AS $$ SELECT x * x $$";
+        let tokens = lexer.tokenize(query).unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse CREATE FUNCTION with IMMUTABLE: {:?}",
+            result.err()
+        );
+
+        if let Statement::Create(create) = result.unwrap() {
+            if let CreateDefinition::Function { volatility, .. } = create.definition {
+                assert!(matches!(volatility, Some(FunctionVolatility::Immutable)));
+            } else {
+                panic!("Expected Function definition");
+            }
+        } else {
+            panic!("Expected CREATE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_create_or_replace_function() {
+        // Test parsing CREATE OR REPLACE FUNCTION
+        let lexer = Lexer::new();
+        let query = "CREATE OR REPLACE FUNCTION greet(name VARCHAR) RETURNS VARCHAR AS $$ SELECT CONCAT('Hello ', name) $$";
+        let tokens = lexer.tokenize(query).unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse CREATE OR REPLACE FUNCTION: {:?}",
+            result.err()
+        );
+
+        if let Statement::Create(create) = result.unwrap() {
+            if let CreateDefinition::Function { or_replace, .. } = create.definition {
+                assert!(or_replace);
+            } else {
+                panic!("Expected Function definition");
+            }
+        } else {
+            panic!("Expected CREATE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_create_function_with_out_param() {
+        // Test parsing CREATE FUNCTION with OUT parameter
+        let lexer = Lexer::new();
+        let query = "CREATE FUNCTION get_stats(IN user_id INT, OUT total INT, OUT average DECIMAL) RETURNS VOID AS $$ SELECT count(*), avg(value) INTO total, average FROM stats WHERE uid = user_id $$";
+        let tokens = lexer.tokenize(query).unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse CREATE FUNCTION with OUT params: {:?}",
+            result.err()
+        );
+
+        if let Statement::Create(create) = result.unwrap() {
+            if let CreateDefinition::Function { parameters, .. } = create.definition {
+                assert_eq!(parameters.len(), 3);
+                assert!(matches!(parameters[0].mode, Some(ParameterMode::In)));
+                assert!(matches!(parameters[1].mode, Some(ParameterMode::Out)));
+                assert!(matches!(parameters[2].mode, Some(ParameterMode::Out)));
+            } else {
+                panic!("Expected Function definition");
+            }
+        } else {
+            panic!("Expected CREATE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_create_procedure() {
+        // Test parsing CREATE PROCEDURE
+        let lexer = Lexer::new();
+        let query = "CREATE PROCEDURE update_inventory(item_id INT, quantity INT) AS $$ UPDATE inventory SET qty = qty + quantity WHERE id = item_id $$";
+        let tokens = lexer.tokenize(query).unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse CREATE PROCEDURE: {:?}",
+            result.err()
+        );
+
+        if let Statement::Create(create) = result.unwrap() {
+            assert_eq!(create.name, "update_inventory");
+            assert!(matches!(create.object_type, CreateObjectType::Procedure));
+            if let CreateDefinition::Procedure {
+                or_replace,
+                parameters,
+                language,
+                body,
+            } = create.definition
+            {
+                assert!(!or_replace);
+                assert_eq!(parameters.len(), 2);
+                assert!(language.is_none());
+                assert!(body.contains("UPDATE inventory"));
+            } else {
+                panic!("Expected Procedure definition");
+            }
+        } else {
+            panic!("Expected CREATE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_call_statement() {
+        // Test parsing CALL statement
+        let lexer = Lexer::new();
+        let query = "CALL update_inventory(123, 50)";
+        let tokens = lexer.tokenize(query).unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse CALL statement: {:?}",
+            result.err()
+        );
+
+        if let Statement::Call(call) = result.unwrap() {
+            assert_eq!(call.procedure_name, "update_inventory");
+            assert_eq!(call.arguments.len(), 2);
+        } else {
+            panic!("Expected CALL statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_call_no_args() {
+        // Test parsing CALL statement with no arguments
+        let lexer = Lexer::new();
+        let query = "CALL refresh_cache()";
+        let tokens = lexer.tokenize(query).unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse CALL with no args: {:?}",
+            result.err()
+        );
+
+        if let Statement::Call(call) = result.unwrap() {
+            assert_eq!(call.procedure_name, "refresh_cache");
+            assert_eq!(call.arguments.len(), 0);
+        } else {
+            panic!("Expected CALL statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_call_with_expressions() {
+        // Test parsing CALL statement with complex expressions
+        let lexer = Lexer::new();
+        let query = "CALL process_order('ORD-001', 100.50, true)";
+        let tokens = lexer.tokenize(query).unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse CALL with expressions: {:?}",
+            result.err()
+        );
+
+        if let Statement::Call(call) = result.unwrap() {
+            assert_eq!(call.procedure_name, "process_order");
+            assert_eq!(call.arguments.len(), 3);
+        } else {
+            panic!("Expected CALL statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_function_language_javascript() {
+        // Test parsing CREATE FUNCTION with JavaScript language
+        let lexer = Lexer::new();
+        let query = "CREATE FUNCTION transform_data(input VARCHAR) RETURNS VARCHAR LANGUAGE JAVASCRIPT AS $$ return input.toUpperCase(); $$";
+        let tokens = lexer.tokenize(query).unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse CREATE FUNCTION with JAVASCRIPT: {:?}",
+            result.err()
+        );
+
+        if let Statement::Create(create) = result.unwrap() {
+            if let CreateDefinition::Function { language, body, .. } = create.definition {
+                assert!(matches!(language, Some(FunctionLanguage::JavaScript)));
+                assert!(body.contains("toUpperCase"));
+            } else {
+                panic!("Expected Function definition");
+            }
+        } else {
+            panic!("Expected CREATE statement");
+        }
     }
 }

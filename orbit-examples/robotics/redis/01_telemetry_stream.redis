@@ -1,0 +1,23 @@
+# Robotics Telemetry (Redis)
+# Streaming high-frequency sensor data from AMRs.
+
+# 1. Real-time Pose (Hash)
+# Updated 10Hz
+HSET robot:pose:R-101 x 15.4 y 22.1 theta 1.57 map_id "warehouse_A"
+
+# 2. Battery Status (String/Gauge)
+SET robot:battery:R-101 88
+
+# 3. LiDAR / Camera Stream (Stream)
+# Ingesting sensor frames for processing consumers
+XADD robot:lidar:R-101 * frame_id 5502 points_count 360 ranges_blob "BASE64..."
+
+# 4. Command Queue (List)
+# Scheduling next tasks
+RPUSH robot:cmd:R-101 "GOTO x=50 y=10"
+RPUSH robot:cmd:R-101 "LIFT pallet_id=P-99"
+
+# 5. Geofence Check (Geo)
+GEOADD active_robots 15.4 22.1 "R-101"
+# Check proximity to Charging Station
+GEODIST active_robots "R-101" "ChargingStation_1" m

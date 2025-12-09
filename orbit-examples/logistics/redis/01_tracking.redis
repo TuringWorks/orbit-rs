@@ -1,0 +1,342 @@
+# =============================================================================
+# OrbitRS Logistics Examples - Real-time Tracking & Operations (Redis)
+# =============================================================================
+# Comprehensive supply chain patterns: fleet tracking, package status,
+# route optimization, warehouse operations, and real-time analytics
+# =============================================================================
+
+# =============================================================================
+# FLEET & DRIVER TRACKING (Geospatial)
+# =============================================================================
+
+# Track driver locations in real-time (NYC metro area)
+GEOADD fleet:drivers:nyc -74.0060 40.7128 "driver:D-101"  # Manhattan
+GEOADD fleet:drivers:nyc -73.9352 40.7306 "driver:D-102"  # Queens
+GEOADD fleet:drivers:nyc -73.9442 40.6782 "driver:D-103"  # Brooklyn
+GEOADD fleet:drivers:nyc -74.1502 40.5795 "driver:D-104"  # Staten Island
+
+# Track delivery vehicles with metadata
+HSET vehicle:V-1001 \
+    driver_id "D-101" \
+    vehicle_type "Van" \
+    capacity_kg 2000 \
+    current_load_kg 1450 \
+    fuel_level 75 \
+    status "EN_ROUTE" \
+    last_update "1702123456789" \
+    active_route "R-2024-001"
+
+# Find drivers within 5km of delivery address
+GEORADIUS fleet:drivers:nyc -73.9857 40.7484 5 km WITHDIST WITHCOORD ASC
+
+# Find nearest available driver
+GEORADIUSBYMEMBER fleet:drivers:nyc "driver:D-101" 10 km WITHDIST ASC COUNT 3
+
+# Track vehicle location history (sorted set by timestamp)
+ZADD location:history:V-1001 1702123456 "-74.0060,40.7128"
+ZADD location:history:V-1001 1702123516 "-74.0055,40.7135"
+ZADD location:history:V-1001 1702123576 "-74.0048,40.7142"
+
+# Get last 10 locations
+ZREVRANGE location:history:V-1001 0 9 WITHSCORES
+
+# =============================================================================
+# PACKAGE TRACKING
+# =============================================================================
+
+# Comprehensive package status
+HSET pkg:TRK-998877 \
+    tracking_number "TRK-998877" \
+    status "OUT_FOR_DELIVERY" \
+    status_code "OFD" \
+    carrier "UPS" \
+    service_type "NEXT_DAY_AIR" \
+    origin_facility "LAX-DC-001" \
+    destination_address "123 Main St, New York, NY 10001" \
+    current_location "NYC-SORT-001" \
+    driver_id "D-101" \
+    vehicle_id "V-1001" \
+    weight_kg "2.5" \
+    dimensions "30x20x15cm" \
+    est_delivery "2024-12-09 14:30:00" \
+    delivery_window_start "14:00" \
+    delivery_window_end "18:00" \
+    signature_required "true" \
+    special_instructions "Leave at door" \
+    created_at "1702036800000" \
+    updated_at "1702123456789"
+
+# Get package status
+HGETALL pkg:TRK-998877
+HGET pkg:TRK-998877 status
+
+# Update delivery status
+HSET pkg:TRK-998877 status "DELIVERED" status_code "DEL" delivered_at "1702130400000"
+
+# Track package events (sorted set timeline)
+ZADD pkg:events:TRK-998877 1702036800 "LABEL_CREATED|LAX|Shipping label created"
+ZADD pkg:events:TRK-998877 1702080000 "PICKED_UP|LAX-DC-001|Package picked up from sender"
+ZADD pkg:events:TRK-998877 1702094400 "IN_TRANSIT|LAX-HUB|Departed facility"
+ZADD pkg:events:TRK-998877 1702116000 "IN_TRANSIT|NYC-HUB|Arrived at destination hub"
+ZADD pkg:events:TRK-998877 1702123200 "OUT_FOR_DELIVERY|NYC-SORT-001|With delivery driver"
+
+# Get event timeline
+ZRANGE pkg:events:TRK-998877 0 -1 WITHSCORES
+
+# =============================================================================
+# DELIVERY ROUTES & OPTIMIZATION
+# =============================================================================
+
+# Store route with ordered stops (list)
+RPUSH route:R-2024-001 \
+    "stop:S001|123 Main St|TRK-998877|14:30" \
+    "stop:S002|456 Oak Ave|TRK-998878|14:45" \
+    "stop:S003|789 Elm St|TRK-998879|15:00" \
+    "stop:S004|321 Pine Rd|TRK-998880|15:15"
+
+# Get next stop
+LINDEX route:R-2024-001 0
+
+# Remove completed stop
+LPOP route:R-2024-001
+
+# Get remaining stops
+LRANGE route:R-2024-001 0 -1
+
+# Route metadata
+HSET route:meta:R-2024-001 \
+    driver_id "D-101" \
+    vehicle_id "V-1001" \
+    total_stops 4 \
+    completed_stops 0 \
+    total_distance_km "45.5" \
+    est_duration_min "180" \
+    start_time "1702119600000" \
+    status "IN_PROGRESS" \
+    zone "NYC-MANHATTAN"
+
+# =============================================================================
+# REAL-TIME DELIVERY NOTIFICATIONS (Pub/Sub)
+# =============================================================================
+
+# Subscribe to delivery events
+SUBSCRIBE delivery:events
+SUBSCRIBE delivery:zone:NYC
+SUBSCRIBE delivery:customer:C-12345
+
+# Publish delivery status update
+PUBLISH delivery:events "STATUS_UPDATE|TRK-998877|OUT_FOR_DELIVERY|ETA 14:30"
+PUBLISH delivery:zone:NYC "DRIVER_LOCATION|D-101|-73.9857,40.7484"
+PUBLISH delivery:customer:C-12345 "YOUR_PACKAGE|TRK-998877|10 stops away"
+
+# =============================================================================
+# DELIVERY STREAMS (Real-time Event Log)
+# =============================================================================
+
+# Stream delivery events
+XADD stream:deliveries * \
+    event_type "STATUS_CHANGE" \
+    tracking_number "TRK-998877" \
+    from_status "IN_TRANSIT" \
+    to_status "OUT_FOR_DELIVERY" \
+    driver_id "D-101" \
+    location "NYC-SORT-001" \
+    timestamp "1702123200000"
+
+XADD stream:deliveries * \
+    event_type "DELIVERY_ATTEMPT" \
+    tracking_number "TRK-998877" \
+    status "DELIVERED" \
+    signature "John Doe" \
+    proof_of_delivery "POD-12345.jpg" \
+    timestamp "1702130400000"
+
+# Consumer groups for different processing needs
+XGROUP CREATE stream:deliveries tracking-updates $ MKSTREAM
+XGROUP CREATE stream:deliveries analytics-etl $ MKSTREAM
+XGROUP CREATE stream:deliveries customer-notifications $ MKSTREAM
+
+# Read events for tracking updates
+XREADGROUP GROUP tracking-updates worker-1 COUNT 10 STREAMS stream:deliveries >
+
+# =============================================================================
+# WAREHOUSE OPERATIONS
+# =============================================================================
+
+# Warehouse inventory cache
+HSET warehouse:WH-NYC-001:inventory \
+    SKU-001 "1500" \
+    SKU-002 "850" \
+    SKU-003 "2200" \
+    SKU-004 "125"
+
+# Get inventory level
+HGET warehouse:WH-NYC-001:inventory SKU-001
+
+# Decrement on pick
+HINCRBY warehouse:WH-NYC-001:inventory SKU-001 -1
+
+# Bin locations
+HSET bin:WH-NYC-001:SKU-001 \
+    primary_bin "A-01-02-03" \
+    overflow_bins "B-02-01-01,C-03-02-02" \
+    quantity 1500 \
+    reorder_point 500 \
+    max_quantity 3000
+
+# Pick queue (priority sorted by wave deadline)
+ZADD pick:queue:WH-NYC-001 1702123200 "WAVE-001|ORDER-1234|SKU-001,SKU-002|PRIORITY_HIGH"
+ZADD pick:queue:WH-NYC-001 1702126800 "WAVE-002|ORDER-1235|SKU-003|PRIORITY_NORMAL"
+
+# Get next pick task
+ZPOPMIN pick:queue:WH-NYC-001
+
+# Track dock doors
+HSET dock:WH-NYC-001:DOOR-1 \
+    status "LOADING" \
+    trailer_id "TRL-5001" \
+    carrier "FEDEX" \
+    scheduled_departure "1702130400000" \
+    load_progress "75"
+
+# =============================================================================
+# ORDER FULFILLMENT QUEUES
+# =============================================================================
+
+# New orders queue (by priority)
+ZADD orders:pending 100 '{"order_id":"ORD-001","priority":"HIGH","items":3}'
+ZADD orders:pending 50 '{"order_id":"ORD-002","priority":"NORMAL","items":1}'
+ZADD orders:pending 200 '{"order_id":"ORD-003","priority":"EXPRESS","items":2}'
+
+# Process highest priority
+ZPOPMAX orders:pending
+
+# Fulfillment stages (using lists for FIFO per stage)
+LPUSH fulfillment:picking '{"order_id":"ORD-001","warehouse":"WH-NYC-001"}'
+LPUSH fulfillment:packing '{"order_id":"ORD-004","warehouse":"WH-NYC-001"}'
+LPUSH fulfillment:shipping '{"order_id":"ORD-005","carrier":"UPS"}'
+
+# Worker processes next item in stage
+BRPOP fulfillment:picking 30
+
+# =============================================================================
+# CARRIER RATE CACHE
+# =============================================================================
+
+# Cache carrier rates (TTL 1 hour)
+HSET cache:rates:UPS:GROUND \
+    "zone_1" "5.99" \
+    "zone_2" "7.99" \
+    "zone_3" "9.99" \
+    "zone_4" "12.99" \
+    updated_at "1702123456789"
+EXPIRE cache:rates:UPS:GROUND 3600
+
+# Cache service availability
+SADD cache:carriers:NYC "UPS" "FEDEX" "USPS" "DHL" "LOCAL_COURIER"
+EXPIRE cache:carriers:NYC 3600
+
+# =============================================================================
+# DELIVERY METRICS & ANALYTICS
+# =============================================================================
+
+# Daily delivery stats
+HINCRBY stats:deliveries:2024-12-09 total 1
+HINCRBY stats:deliveries:2024-12-09 on_time 1
+HINCRBY stats:deliveries:2024-12-09 late 0
+HINCRBY stats:deliveries:2024-12-09 failed 0
+
+# Driver performance
+ZINCRBY stats:driver:completions:2024-12-09 1 "D-101"
+ZINCRBY stats:driver:completions:2024-12-09 1 "D-102"
+
+# Get top performing drivers
+ZREVRANGE stats:driver:completions:2024-12-09 0 9 WITHSCORES
+
+# Hourly delivery heatmap
+HINCRBY stats:hourly:2024-12-09 "08:00" 5
+HINCRBY stats:hourly:2024-12-09 "09:00" 12
+HINCRBY stats:hourly:2024-12-09 "10:00" 18
+
+# Zone delivery counts
+PFADD stats:unique_customers:NYC:2024-12-09 "C-001" "C-002" "C-003"
+PFCOUNT stats:unique_customers:NYC:2024-12-09
+
+# =============================================================================
+# CAPACITY & RATE LIMITING
+# =============================================================================
+
+# Warehouse capacity tracking
+SET capacity:WH-NYC-001:orders_today 450 EX 86400
+INCR capacity:WH-NYC-001:orders_today
+
+# Carrier daily limit
+SET limit:carrier:UPS:daily 500 EX 86400
+INCR limit:carrier:UPS:daily
+
+# Check remaining capacity
+GET limit:carrier:UPS:daily
+
+# API rate limiting for tracking queries
+INCR ratelimit:tracking:api:hour
+EXPIRE ratelimit:tracking:api:hour 3600 NX
+
+# =============================================================================
+# EXCEPTION HANDLING
+# =============================================================================
+
+# Track failed deliveries
+LPUSH exceptions:failed_deliveries '{"tracking":"TRK-998880","reason":"NO_ACCESS","attempts":2,"next_attempt":"2024-12-10"}'
+
+# Address validation failures
+SADD exceptions:invalid_addresses "ORD-006" "ORD-007"
+
+# Weather delays
+HSET alerts:weather:NYC \
+    status "SNOW_WARNING" \
+    impact "DELAYS_EXPECTED" \
+    affected_routes "50" \
+    valid_until "1702180800000"
+
+# =============================================================================
+# FULL-TEXT SEARCH (OrbitRS Extension)
+# =============================================================================
+
+# Create FTS index for address search
+FT.CREATE idx:addresses SCHEMA street TEXT city TEXT state TEXT zip TEXT
+
+# Add addresses
+FT.ADD idx:addresses addr:1 1.0 FIELDS street "123 Main St" city "New York" state "NY" zip "10001"
+FT.ADD idx:addresses addr:2 1.0 FIELDS street "456 Broadway" city "New York" state "NY" zip "10012"
+
+# Search addresses
+FT.SEARCH idx:addresses "broadway new york" LIMIT 0 10
+
+# =============================================================================
+# VECTOR SEARCH FOR SIMILAR ROUTES (OrbitRS Extension)
+# =============================================================================
+
+# Store route embeddings for optimization
+# FT.CREATE idx:routes ON HASH PREFIX 1 route: SCHEMA embedding VECTOR HNSW 6 DIM 64 DISTANCE_METRIC COSINE
+
+# Find similar historical routes for ETA prediction
+# FT.SEARCH idx:routes "*=>[KNN 5 @embedding $query_vec]" PARAMS 2 query_vec "\x00..." DIALECT 2
+
+# =============================================================================
+# CLEANUP & TTL MANAGEMENT
+# =============================================================================
+
+# Package tracking expires after 30 days
+EXPIRE pkg:TRK-998877 2592000
+EXPIRE pkg:events:TRK-998877 2592000
+
+# Location history expires after 7 days
+EXPIRE location:history:V-1001 604800
+
+# Trim delivery stream (keep last 100000)
+XTRIM stream:deliveries MAXLEN ~ 100000
+
+# Archive completed routes
+RENAME route:R-2024-001 archive:route:R-2024-001
+EXPIRE archive:route:R-2024-001 604800
+

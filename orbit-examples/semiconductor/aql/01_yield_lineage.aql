@@ -1,0 +1,42 @@
+// Semiconductor Yield Lineage (AQL)
+// Tracing relationships between Process Tools and Final Yield (Binning).
+
+// 1. Create Collections
+if (!db._collection("entities")) db._create("entities");
+if (!db._collection("processed_by")) db._createEdgeCollection("processed_by");
+
+// 2. Nodes: Lots, Wafers, Tools
+var t1 = db.entities.save({ _key: "ETCH-01", type: "Tool", model: "Lam Kiyo" });
+var t2 = db.entities.save({ _key: "DEP-01", type: "Tool", model: "AMAT Producer" });
+
+var w1 = db.entities.save({ _key: "W-8842-01", type: "Wafer", lot: "L8842" });
+var w2 = db.entities.save({ _key: "W-8842-02", type: "Wafer", lot: "L8842" });
+
+// 3. Edges: Processing Steps
+// Wafer 1 went through Etch-01 then Dep-01
+db.processed_by.save({ _from: w1._id, _to: t1._id, timestamp: "2024-01-01T10:00:00Z", step: "Etch_Gate" });
+db.processed_by.save({ _from: w1._id, _to: t2._id, timestamp: "2024-01-01T14:00:00Z", step: "Dep_Oxide" });
+
+// Wafer 2 went through Etch-01
+db.processed_by.save({ _from: w2._id, _to: t1._id, timestamp: "2024-01-01T10:05:00Z", step: "Etch_Gate" });
+
+
+// 4. Yield Data (Added as properties or separate nodes)
+db.entities.update(w1, { yield_percent: 98.5 });
+db.entities.update(w2, { yield_percent: 45.0 }); // Low Yield!
+
+// 5. Query: Root Cause Analysis
+// "Find common tools shared by Low Yielding Wafers (< 50%)"
+var query = `
+    FOR wafer IN entities
+    FILTER wafer.type == 'Wafer' AND wafer.yield_percent < 50
+    FOR tool, edge IN 1..1 OUTBOUND wafer processed_by
+    RETURN { 
+        wafer: wafer._key, 
+        suspect_tool: tool._key, 
+        step: edge.step 
+    }
+`;
+
+var result = db._query(query).toArray();
+print("Suspect Tools:", result);
