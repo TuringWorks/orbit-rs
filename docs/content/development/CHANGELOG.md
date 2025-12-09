@@ -15,6 +15,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Cross-Protocol Full-Text Search** (2025-12-08): Comprehensive FTS implementation across all supported protocols
+  - **PostgreSQL FTS Functions**:
+    - `to_tsvector(text)`, `to_tsvector(config, text)` - Create tsvector from text
+    - `to_tsquery(text)`, `plainto_tsquery(text)`, `phraseto_tsquery(text)`, `websearch_to_tsquery(text)` - Parse tsquery
+    - `setweight(tsvector, char)` - Set weight for lexemes
+    - `ts_rank(tsvector, tsquery)`, `ts_rank_cd(tsvector, tsquery)` - Relevance ranking
+    - `ts_headline(text, tsquery)` - Highlight matches
+    - `numnode(tsquery)`, `querytree(tsquery)`, `strip(tsvector)`, `ts_lexize(dict, text)` - Utility functions
+  - **PostgreSQL FTS Operators**:
+    - `@@` - tsvector matches tsquery
+    - `@>` / `<@` - tsquery contains/contained by
+    - `||` - Concatenate tsvectors/tsqueries
+    - `&&` - AND tsqueries
+    - `!!` - Negate tsquery
+    - `<->` - Phrase search (followed by)
+  - **Redis RediSearch-Compatible Commands**:
+    - `FT.CREATE` - Create FTS index with schema (TEXT, TAG, NUMERIC, GEO, VECTOR fields)
+    - `FT.ADD` - Add document to FTS index
+    - `FT.SEARCH` - Search with TF-IDF scoring, relevance ranking
+    - `FT.DEL` - Delete document from FTS index
+    - `FT.INFO` - Get FTS index information
+  - **MySQL FULLTEXT Search**:
+    - `CREATE FULLTEXT INDEX` - Create FULLTEXT index on text columns
+    - `MATCH() AGAINST()` with three modes:
+      - `IN NATURAL LANGUAGE MODE` - TF-IDF scoring with relevance ranking
+      - `IN BOOLEAN MODE` - Boolean operators (+must, -exclude, optional)
+      - `WITH QUERY EXPANSION` - Query expansion using top results
+  - **CQL SASI/SAI Search** (new `cql/fts.rs`):
+    - `CREATE INDEX ... USING 'SASI'` - Create SASI secondary index
+    - `CONTAINS` operator for full-text term matching
+    - `LIKE` with prefix/suffix wildcard support
+    - Analyzer modes: StandardAnalyzer, NonTokenizingAnalyzer, CaseInsensitiveAnalyzer
+    - Full-text search with TF-IDF relevance scoring
+
 - **PostgreSQL Sequence Functions** (2025-12-08): Full sequence function support for PostgreSQL compatibility
   - **SequenceAccessor Trait**: New trait in `expression_evaluator.rs` for synchronous sequence access
   - **ExecutorSequenceAccessor**: Implementation using `std::sync::RwLock` for thread-safe sequence operations
