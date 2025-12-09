@@ -180,11 +180,7 @@ impl SasiIndex {
             term.to_lowercase()
         };
 
-        let partition_keys = self
-            .inverted_index
-            .get(&term)
-            .cloned()
-            .unwrap_or_default();
+        let partition_keys = self.inverted_index.get(&term).cloned().unwrap_or_default();
 
         partition_keys
             .into_iter()
@@ -541,7 +537,10 @@ mod tests {
             .await
             .unwrap();
 
-        let results = fts.search_contains("articles", "content", "fox").await.unwrap();
+        let results = fts
+            .search_contains("articles", "content", "fox")
+            .await
+            .unwrap();
         assert_eq!(results.len(), 2);
     }
 
@@ -576,7 +575,10 @@ mod tests {
         assert_eq!(results.len(), 1);
 
         // Suffix search
-        let results = fts.search_like("users", "email", "%example.com").await.unwrap();
+        let results = fts
+            .search_like("users", "email", "%example.com")
+            .await
+            .unwrap();
         assert_eq!(results.len(), 2);
     }
 
@@ -588,9 +590,14 @@ mod tests {
             .await
             .unwrap();
 
-        fts.add_document("posts", "body", "1", "Rust is a systems programming language")
-            .await
-            .unwrap();
+        fts.add_document(
+            "posts",
+            "body",
+            "1",
+            "Rust is a systems programming language",
+        )
+        .await
+        .unwrap();
         fts.add_document("posts", "body", "2", "Python is great for data science")
             .await
             .unwrap();

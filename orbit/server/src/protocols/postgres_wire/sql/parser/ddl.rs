@@ -1032,6 +1032,9 @@ pub fn parse_create_function(parser: &mut SqlParser) -> ParseResult<Statement> {
                 language = match lang.to_uppercase().as_str() {
                     "SQL" => Some(FunctionLanguage::Sql),
                     "PLPGSQL" => Some(FunctionLanguage::PlPgSql),
+                    "PLJAVASCRIPT" | "JAVASCRIPT" | "PLJS" | "JS" => {
+                        Some(FunctionLanguage::PlJavaScript)
+                    }
                     _ => Some(FunctionLanguage::Other(lang.clone())),
                 };
                 parser.advance()?;

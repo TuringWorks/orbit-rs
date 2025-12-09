@@ -767,7 +767,7 @@ impl Parser {
                     // Check for aggregate functions
                     let is_aggregate = matches!(
                         name.to_uppercase().as_str(),
-                        "COUNT" | "SUM" | "AVG" | "MIN" | "MAX"
+                        "COUNT" | "SUM" | "AVG" | "MIN" | "MAX" | "ARRAY_AGG" | "STRING_AGG"
                     );
 
                     if is_aggregate {
@@ -780,14 +780,14 @@ impl Parser {
                         };
 
                         // Check for * (as in COUNT(*))
-                        let arg = if self.matches(&[TokenType::Multiply]) {
+                        let args = if self.matches(&[TokenType::Multiply]) {
                             self.advance();
-                            None
+                            Vec::new() // Empty args indicates *
                         } else if self.matches(&[TokenType::RightParen]) {
                             // Empty argument list like COUNT()
-                            None
+                            Vec::new()
                         } else {
-                            Some(Box::new(self.parse_expression()?))
+                            self.parse_expression_list()?
                         };
 
                         self.expect(TokenType::RightParen)?;
@@ -799,9 +799,11 @@ impl Parser {
                                 "AVG" => AggregateFunction::Avg,
                                 "MIN" => AggregateFunction::Min,
                                 "MAX" => AggregateFunction::Max,
+                                "ARRAY_AGG" => AggregateFunction::ArrayAgg,
+                                "STRING_AGG" => AggregateFunction::StringAgg,
                                 _ => unreachable!(),
                             },
-                            expression: arg,
+                            args,
                             distinct,
                         });
                     }

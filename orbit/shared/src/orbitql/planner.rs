@@ -116,7 +116,7 @@ pub enum PlanNode {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AggregateExpression {
     pub function: AggregateFunction,
-    pub expression: Option<Expression>,
+    pub args: Vec<Expression>,
     pub distinct: bool,
     pub alias: Option<String>,
 }
@@ -366,13 +366,13 @@ impl QueryPlanner {
             if let SelectField::Expression { expr, alias } = field {
                 if let Some(Expression::Aggregate {
                     function,
-                    expression,
+                    args,
                     distinct,
                 }) = self.extract_aggregate_from_expression(expr)
                 {
                     aggregates.push(AggregateExpression {
                         function: function.clone(),
-                        expression: expression.as_ref().map(|e| (**e).clone()),
+                        args: args.clone(),
                         distinct: *distinct,
                         alias: alias.clone(),
                     });

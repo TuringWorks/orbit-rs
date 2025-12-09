@@ -186,7 +186,9 @@ impl AqlQueryEngine {
                 } => {
                     // Execute FOR clause - iterate over collection (storage is guaranteed present)
                     let storage = storage_opt.ok_or_else(|| {
-                        ProtocolError::AqlError("Storage backend required for FOR clause".to_string())
+                        ProtocolError::AqlError(
+                            "Storage backend required for FOR clause".to_string(),
+                        )
                     })?;
                     for_documents = self.execute_for_clause(storage, data_source).await?;
                     for_variable = Some(variable.clone());

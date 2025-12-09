@@ -459,31 +459,31 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 
 | Type | Status | OID | Notes |
 |------|--------|-----|-------|
-| domain (user-defined) | ❌ | - | CREATE DOMAIN |
+| domain (user-defined) | ✅ | - | CREATE DOMAIN |
 
 ### Object Identifier Types
 
 | Type | Status | OID | Notes |
 |------|--------|-----|-------|
-| oid | ❌ | 26 | Object identifier |
-| regclass | ❌ | 2205 | Relation name |
-| regcollation | ❌ | 4191 | Collation name |
-| regconfig | ❌ | 3734 | Text search config |
-| regdictionary | ❌ | 3769 | Text search dictionary |
-| regnamespace | ❌ | 4089 | Schema name |
-| regoper | ❌ | 2203 | Operator name |
-| regoperator | ❌ | 2204 | Operator with args |
-| regproc | ❌ | 24 | Function name |
-| regprocedure | ❌ | 2202 | Function with args |
-| regrole | ❌ | 4096 | Role name |
-| regtype | ❌ | 2206 | Type name |
+| oid | ✅ | 26 | Object identifier |
+| regclass | ✅ | 2205 | Relation name |
+| regcollation | ✅ | 4191 | Collation name |
+| regconfig | ✅ | 3734 | Text search config |
+| regdictionary | ✅ | 3769 | Text search dictionary |
+| regnamespace | ✅ | 4089 | Schema name |
+| regoper | ✅ | 2203 | Operator name |
+| regoperator | ✅ | 2204 | Operator with args |
+| regproc | ✅ | 24 | Function name |
+| regprocedure | ✅ | 2202 | Function with args |
+| regrole | ✅ | 4096 | Role name |
+| regtype | ✅ | 2206 | Type name |
 
 ### PostgreSQL-Specific Types
 
 | Type | Status | OID | Notes |
 |------|--------|-----|-------|
-| pg_lsn | ❌ | 3220 | Log sequence number |
-| pg_snapshot | ❌ | 5038 | Transaction snapshot |
+| pg_lsn | ✅ | 3220 | Log sequence number |
+| pg_snapshot | ✅ | 5038 | Transaction snapshot |
 
 ### Vector Types (pgvector Extension)
 
@@ -586,30 +586,30 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | repeat(s,n) | ✅ | Repeat string |
 | reverse(s) | ✅ | Reverse string |
 | split_part(s,delim,n) | ✅ | Split and get part |
-| string_to_array(s,delim) | ❌ | Split to array |
-| array_to_string(arr,delim) | ❌ | Join array |
-| regexp_match(s,pattern) | ❌ | Regex match |
-| regexp_matches(s,pattern) | ❌ | Regex match all |
-| regexp_replace(s,pat,rep) | ❌ | Regex replace |
-| regexp_split_to_array(s,pat) | ❌ | Regex split |
+| string_to_array(s,delim) | ✅ | Split to array |
+| array_to_string(arr,delim) | ✅ | Join array |
+| regexp_match(s,pattern) | ✅ | Regex match |
+| regexp_matches(s,pattern) | ✅ | Regex match all |
+| regexp_replace(s,pat,rep) | ✅ | Regex replace |
+| regexp_split_to_array(s,pat) | ✅ | Regex split |
 | regexp_split_to_table(s,pat) | ❌ | Regex split to rows |
-| regexp_like(s,pattern) | ❌ | Regex test |
-| regexp_count(s,pattern) | ❌ | Count matches |
-| regexp_instr(s,pattern) | ❌ | Find position |
-| regexp_substr(s,pattern) | ❌ | Extract match |
+| regexp_like(s,pattern) | ✅ | Regex test |
+| regexp_count(s,pattern) | ✅ | Count matches |
+| regexp_instr(s,pattern) | ✅ | Find position |
+| regexp_substr(s,pattern) | ✅ | Extract match |
 | encode(data,format) | ✅ | Encode binary |
 | decode(s,format) | ✅ | Decode to binary |
 | md5(s) | ✅ | MD5 hash |
-| sha224/256/384/512(s) | ❌ | SHA hashes |
+| sha224/256/384/512(s) | ✅ | SHA hashes |
 | ascii(s) | ✅ | ASCII code |
 | chr(n) | ✅ | Character from code |
 | quote_ident(s) | ✅ | Quote identifier |
 | quote_literal(s) | ✅ | Quote literal |
-| quote_nullable(s) | ❌ | Quote nullable |
+| quote_nullable(s) | ✅ | Quote nullable |
 | normalize(s) | ❌ | Unicode normalize |
 | is_normalized(s) | ❌ | Check normalized |
 | unistr(s) | ❌ | Unicode string |
-| overlay(s placing r from p) | ❌ | Replace substring |
+| overlay(s placing r from p) | ✅ | Replace substring |
 
 ### Date/Time Functions
 
@@ -619,27 +619,27 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | current_timestamp | ✅ | Current timestamp |
 | current_date | ✅ | Current date |
 | current_time | ✅ | Current time |
-| localtime | ❌ | Local time |
-| localtimestamp | ❌ | Local timestamp |
-| clock_timestamp() | ❌ | Wall clock time |
-| statement_timestamp() | ❌ | Statement start time |
-| transaction_timestamp() | ❌ | Transaction start |
-| timeofday() | ❌ | Text time |
-| age(ts1,ts2) | ❌ | Interval between |
-| date_part(field,ts) | 🔶 | Extract part |
-| extract(field from ts) | 🔶 | Extract part |
-| date_trunc(field,ts) | ❌ | Truncate to precision |
+| localtime | ✅ | Local time |
+| localtimestamp | ✅ | Local timestamp |
+| clock_timestamp() | ✅ | Wall clock time |
+| statement_timestamp() | ✅ | Statement start time |
+| transaction_timestamp() | ✅ | Transaction start |
+| timeofday() | ✅ | Text time |
+| age(ts1,ts2) | ✅ | Interval between |
+| date_part(field,ts) | ✅ | Extract part |
+| extract(field from ts) | ✅ | Extract part |
+| date_trunc(field,ts) | ✅ | Truncate to precision |
 | date_bin(stride,ts,origin) | ❌ | Bin timestamp |
-| make_date(y,m,d) | ❌ | Construct date |
-| make_time(h,m,s) | ❌ | Construct time |
-| make_timestamp(y,m,d,h,m,s) | ❌ | Construct timestamp |
+| make_date(y,m,d) | ✅ | Construct date |
+| make_time(h,m,s) | ✅ | Construct time |
+| make_timestamp(y,m,d,h,m,s) | ✅ | Construct timestamp |
 | make_timestamptz(...) | ❌ | Construct timestamptz |
 | make_interval(...) | ❌ | Construct interval |
-| to_timestamp(epoch) | ❌ | From Unix epoch |
+| to_timestamp(epoch) | ✅ | From Unix epoch |
 | to_timestamp(s,fmt) | ❌ | Parse timestamp |
 | to_date(s,fmt) | ❌ | Parse date |
-| to_char(ts,fmt) | ❌ | Format timestamp |
-| isfinite(ts) | ❌ | Check finite |
+| to_char(ts,fmt) | ✅ | Format timestamp |
+| isfinite(ts) | ✅ | Check finite |
 | justify_days(interval) | ❌ | Normalize days |
 | justify_hours(interval) | ❌ | Normalize hours |
 | justify_interval(interval) | ❌ | Normalize interval |
@@ -655,31 +655,31 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | avg(expr) | ✅ | Average |
 | min(expr) | ✅ | Minimum |
 | max(expr) | ✅ | Maximum |
-| array_agg(expr) | ❌ | Aggregate to array |
-| string_agg(expr,delim) | ❌ | Concatenate strings |
-| bool_and(expr) | ❌ | Boolean AND |
-| bool_or(expr) | ❌ | Boolean OR |
-| every(expr) | ❌ | Alias for bool_and |
-| bit_and(expr) | ❌ | Bitwise AND |
-| bit_or(expr) | ❌ | Bitwise OR |
-| bit_xor(expr) | ❌ | Bitwise XOR |
-| json_agg(expr) | ❌ | Aggregate to JSON |
-| jsonb_agg(expr) | ❌ | Aggregate to JSONB |
-| json_object_agg(k,v) | ❌ | Object aggregate |
-| jsonb_object_agg(k,v) | ❌ | Object aggregate |
+| array_agg(expr) | ✅ | Aggregate to array |
+| string_agg(expr,delim) | ✅ | Concatenate strings |
+| bool_and(expr) | ✅ | Boolean AND |
+| bool_or(expr) | ✅ | Boolean OR |
+| every(expr) | ✅ | Alias for bool_and |
+| bit_and(expr) | ✅ | Bitwise AND |
+| bit_or(expr) | ✅ | Bitwise OR |
+| bit_xor(expr) | ✅ | Bitwise XOR |
+| json_agg(expr) | ✅ | Aggregate to JSON |
+| jsonb_agg(expr) | ✅ | Aggregate to JSONB |
+| json_object_agg(k,v) | ✅ | Object aggregate |
+| jsonb_object_agg(k,v) | ✅ | Object aggregate |
 | xmlagg(expr) | ❌ | XML aggregate |
 | range_agg(expr) | ❌ | Range aggregate |
 | range_intersect_agg(expr) | ❌ | Range intersection |
-| variance(expr) | ❌ | Population variance |
-| var_pop(expr) | ❌ | Population variance |
-| var_samp(expr) | ❌ | Sample variance |
-| stddev(expr) | ❌ | Population stddev |
-| stddev_pop(expr) | ❌ | Population stddev |
-| stddev_samp(expr) | ❌ | Sample stddev |
-| covar_pop(y,x) | ❌ | Population covariance |
-| covar_samp(y,x) | ❌ | Sample covariance |
-| corr(y,x) | ❌ | Correlation |
-| regr_*(y,x) | ❌ | Regression functions |
+| variance(expr) | ✅ | Population variance |
+| var_pop(expr) | ✅ | Population variance |
+| var_samp(expr) | ✅ | Sample variance |
+| stddev(expr) | ✅ | Population stddev |
+| stddev_pop(expr) | ✅ | Population stddev |
+| stddev_samp(expr) | ✅ | Sample stddev |
+| covar_pop(y,x) | ✅ | Population covariance |
+| covar_samp(y,x) | ✅ | Sample covariance |
+| corr(y,x) | ✅ | Correlation |
+| regr_*(y,x) | ✅ | Regression functions |
 | percentile_cont(f) | ❌ | Continuous percentile |
 | percentile_disc(f) | ❌ | Discrete percentile |
 | mode() | ❌ | Most frequent value |
@@ -695,14 +695,14 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | row_number() | ✅ | Sequential number |
 | rank() | ✅ | Rank with gaps |
 | dense_rank() | ✅ | Rank without gaps |
-| percent_rank() | ❌ | Relative rank |
-| cume_dist() | ❌ | Cumulative distribution |
-| ntile(n) | ❌ | Divide into buckets |
-| lag(expr,offset,default) | 🔶 | Previous row value |
-| lead(expr,offset,default) | 🔶 | Next row value |
-| first_value(expr) | ❌ | First in frame |
-| last_value(expr) | ❌ | Last in frame |
-| nth_value(expr,n) | ❌ | Nth in frame |
+| percent_rank() | ✅ | Relative rank |
+| cume_dist() | ✅ | Cumulative distribution |
+| ntile(n) | ✅ | Divide into buckets |
+| lag(expr,offset,default) | ✅ | Previous row value |
+| lead(expr,offset,default) | ✅ | Next row value |
+| first_value(expr) | ✅ | First in frame |
+| last_value(expr) | ✅ | Last in frame |
+| nth_value(expr,n) | ✅ | Nth in frame |
 
 ### JSON Functions
 
@@ -710,35 +710,35 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 |----------|--------|-------|
 | -> | ✅ | JSON object field |
 | ->> | ✅ | JSON field as text |
-| #> | ❌ | JSON path |
-| #>> | ❌ | JSON path as text |
+| #> | ✅ | JSON path |
+| #>> | ✅ | JSON path as text |
 | @> | ✅ | Contains (JSON/Range) |
 | <@ | ✅ | Contained by (JSON/Range) |
-| ? | ❌ | Key exists |
-| ?| | ❌ | Any key exists |
-| ?& | ❌ | All keys exist |
-| || | ❌ | Concatenate |
-| - | ❌ | Delete key |
-| #- | ❌ | Delete path |
+| ? | ✅ | Key exists |
+| ?| | ✅ | Any key exists |
+| ?& | ✅ | All keys exist |
+| || | ✅ | Concatenate |
+| - | ✅ | Delete key |
+| #- | ✅ | Delete path |
 | @? | ❌ | JSONPath exists |
 | @@ | ❌ | JSONPath match |
-| json_array_length(j) | ❌ | Array length |
-| json_each(j) | ❌ | Expand to rows |
-| json_extract_path(j,...) | ❌ | Extract path |
-| json_object_keys(j) | ❌ | Get keys |
+| json_array_length(j) | ✅ | Array length |
+| json_each(j) | ✅ | Expand to rows |
+| json_extract_path(j,...) | ✅ | Extract path |
+| json_object_keys(j) | ✅ | Get keys |
 | json_populate_record() | ❌ | Populate record |
 | json_to_record(j) | ❌ | To record |
-| json_typeof(j) | ❌ | Get type name |
-| jsonb_set(j,path,val) | ❌ | Set value |
-| jsonb_insert(j,path,val) | ❌ | Insert value |
+| json_typeof(j) | ✅ | Get type name |
+| jsonb_set(j,path,val) | ✅ | Set value |
+| jsonb_insert(j,path,val) | ✅ | Insert value |
 | jsonb_path_query(j,path) | ❌ | JSONPath query |
-| jsonb_pretty(j) | ❌ | Pretty print |
-| jsonb_strip_nulls(j) | ❌ | Remove nulls |
-| to_json(val) | ❌ | Convert to JSON |
-| to_jsonb(val) | ❌ | Convert to JSONB |
-| row_to_json(row) | ❌ | Row to JSON |
-| json_build_object(...) | ❌ | Build JSON object |
-| json_build_array(...) | ❌ | Build JSON array |
+| jsonb_pretty(j) | ✅ | Pretty print |
+| jsonb_strip_nulls(j) | ✅ | Remove nulls |
+| to_json(val) | ✅ | Convert to JSON |
+| to_jsonb(val) | ✅ | Convert to JSONB |
+| row_to_json(row) | ✅ | Row to JSON |
+| json_build_object(...) | ✅ | Build JSON object |
+| json_build_array(...) | ✅ | Build JSON array |
 | JSON_QUERY() | ❌ | SQL/JSON query |
 | JSON_VALUE() | ❌ | SQL/JSON value |
 | JSON_EXISTS() | ❌ | SQL/JSON exists |
@@ -755,25 +755,25 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| array_append(arr,elem) | ❌ | Append element |
-| array_cat(arr1,arr2) | ❌ | Concatenate arrays |
-| array_dims(arr) | ❌ | Array dimensions |
-| array_fill(val,dims) | ❌ | Create filled array |
-| array_length(arr,dim) | ❌ | Length of dimension |
-| array_lower(arr,dim) | ❌ | Lower bound |
-| array_upper(arr,dim) | ❌ | Upper bound |
-| array_ndims(arr) | ❌ | Number of dimensions |
-| array_position(arr,elem) | ❌ | Find position |
-| array_positions(arr,elem) | ❌ | Find all positions |
-| array_prepend(elem,arr) | ❌ | Prepend element |
-| array_remove(arr,elem) | ❌ | Remove elements |
-| array_replace(arr,from,to) | ❌ | Replace elements |
+| array_append(arr,elem) | ✅ | Append element |
+| array_cat(arr1,arr2) | ✅ | Concatenate arrays |
+| array_dims(arr) | ✅ | Array dimensions |
+| array_fill(val,dims) | ✅ | Create filled array |
+| array_length(arr,dim) | ✅ | Length of dimension |
+| array_lower(arr,dim) | ✅ | Lower bound |
+| array_upper(arr,dim) | ✅ | Upper bound |
+| array_ndims(arr) | ✅ | Number of dimensions |
+| array_position(arr,elem) | ✅ | Find position |
+| array_positions(arr,elem) | ✅ | Find all positions |
+| array_prepend(elem,arr) | ✅ | Prepend element |
+| array_remove(arr,elem) | ✅ | Remove elements |
+| array_replace(arr,from,to) | ✅ | Replace elements |
 | array_sample(arr,n) | ❌ | Random sample |
 | array_shuffle(arr) | ❌ | Shuffle array |
-| array_to_string(arr,delim) | ❌ | Join to string |
-| cardinality(arr) | ❌ | Total element count |
-| trim_array(arr,n) | ❌ | Trim from end |
-| unnest(arr) | ❌ | Expand to rows |
+| array_to_string(arr,delim) | ✅ | Join to string |
+| cardinality(arr) | ✅ | Total element count |
+| trim_array(arr,n) | ✅ | Trim from end |
+| unnest(arr) | ✅ | Expand to rows |
 
 ### Sequence Functions
 
@@ -811,18 +811,18 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | NOT BETWEEN | ✅ | Not in range |
 | IS NULL | ✅ | Null check |
 | IS NOT NULL | ✅ | Not null check |
-| IS DISTINCT FROM | ❌ | Null-safe not equal |
-| IS NOT DISTINCT FROM | ❌ | Null-safe equal |
+| IS DISTINCT FROM | ✅ | Null-safe not equal |
+| IS NOT DISTINCT FROM | ✅ | Null-safe equal |
 | IN | ✅ | Set membership |
 | NOT IN | ✅ | Not in set |
 | LIKE | ✅ | Pattern match |
 | NOT LIKE | ✅ | Not match |
 | ILIKE | ✅ | Case-insensitive like |
 | SIMILAR TO | ❌ | Regex pattern |
-| ~ | ❌ | Regex match |
-| ~* | ❌ | Case-insensitive regex |
-| !~ | ❌ | Not regex match |
-| !~* | ❌ | Not case-insensitive |
+| ~ | ✅ | Regex match |
+| ~* | ✅ | Case-insensitive regex |
+| !~ | ✅ | Not regex match |
+| !~* | ✅ | Not case-insensitive |
 
 ### Logical Operators
 
@@ -841,16 +841,16 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | * | ✅ | Multiplication |
 | / | ✅ | Division |
 | % | ✅ | Modulo |
-| ^ | ❌ | Exponentiation |
-| |/ | ❌ | Square root |
-| ||/ | ❌ | Cube root |
-| @ | ❌ | Absolute value |
-| & | ❌ | Bitwise AND |
-| | | ❌ | Bitwise OR |
-| # | ❌ | Bitwise XOR |
-| ~ | ❌ | Bitwise NOT |
-| << | ❌ | Bit shift left |
-| >> | ❌ | Bit shift right |
+| ^ | ✅ | Exponentiation |
+| |/ | ✅ | Square root |
+| ||/ | ✅ | Cube root |
+| @ | ✅ | Absolute value |
+| & | ✅ | Bitwise AND |
+| | | ✅ | Bitwise OR |
+| # | ✅ | Bitwise XOR |
+| ~ | ✅ | Bitwise NOT |
+| << | ✅ | Bit shift left |
+| >> | ✅ | Bit shift right |
 
 ### Subquery Expressions
 

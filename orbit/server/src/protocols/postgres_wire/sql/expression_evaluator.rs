@@ -18,9 +18,11 @@ use crate::protocols::postgres_wire::sql::{
         OrderByItem, SelectStatement, UnaryOperator, VectorOperator, WindowFrame,
         WindowFunctionType,
     },
-    types::{SqlType, SqlValue},
+    types::{PostgresInterval, SqlType, SqlValue},
 };
 use chrono::Datelike;
+use regex::Regex;
+use sha2::{Digest, Sha224, Sha256, Sha384, Sha512};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -510,6 +512,27 @@ impl ExpressionEvaluator {
                 self.text_search_followed_by(&left_val, &right_val)
             }
 
+            // Comparison operators
+            BinaryOperator::IsDistinctFrom => self.is_distinct_from(&left_val, &right_val),
+            BinaryOperator::IsNotDistinctFrom => self.is_not_distinct_from(&left_val, &right_val),
+
+            // Regex operators
+            BinaryOperator::RegexMatch => self.regex_match(&left_val, &right_val, false, false),
+            BinaryOperator::RegexMatchCaseInsensitive => {
+                self.regex_match(&left_val, &right_val, true, false)
+            }
+            BinaryOperator::RegexNotMatch => self.regex_match(&left_val, &right_val, false, true),
+            BinaryOperator::RegexNotMatchCaseInsensitive => {
+                self.regex_match(&left_val, &right_val, true, true)
+            }
+
+            // Bitwise operators
+            BinaryOperator::BitwiseAnd => self.bitwise_and(&left_val, &right_val),
+            BinaryOperator::BitwiseOr => self.bitwise_or(&left_val, &right_val),
+            BinaryOperator::BitwiseXor => self.bitwise_xor(&left_val, &right_val),
+            BinaryOperator::LeftShift => self.left_shift(&left_val, &right_val),
+            BinaryOperator::RightShift => self.right_shift(&left_val, &right_val),
+
             _ => Err(ProtocolError::not_implemented(
                 "Binary operator",
                 &format!("{operator:?}"),
@@ -529,6 +552,10 @@ impl ExpressionEvaluator {
             UnaryOperator::Plus => Ok(value),
             UnaryOperator::Minus => self.negate_value(&value),
             UnaryOperator::Not => self.logical_not(&value),
+            UnaryOperator::BitwiseNot => self.bitwise_not(&value),
+            UnaryOperator::SquareRoot => self.square_root(&value),
+            UnaryOperator::CubeRoot => self.cube_root(&value),
+            UnaryOperator::AbsoluteValue => self.absolute_value(&value),
             UnaryOperator::IsNull => Ok(SqlValue::Boolean(value.is_null())),
             UnaryOperator::IsNotNull => Ok(SqlValue::Boolean(!value.is_null())),
             UnaryOperator::IsTrue => {
@@ -578,6 +605,25 @@ impl ExpressionEvaluator {
             "STRING_AGG" => self.evaluate_string_agg(&args),
             "BOOL_AND" | "EVERY" => self.evaluate_bool_and(&args),
             "BOOL_OR" => self.evaluate_bool_or(&args),
+            "BIT_AND" => self.evaluate_bit_and(&args),
+            "BIT_OR" => self.evaluate_bit_or(&args),
+            "BIT_XOR" => self.evaluate_bit_xor(&args),
+            "VARIANCE" | "VAR_POP" => self.evaluate_variance(&args),
+            "VAR_SAMP" => self.evaluate_var_samp(&args),
+            "STDDEV" | "STDDEV_POP" => self.evaluate_stddev(&args),
+            "STDDEV_SAMP" => self.evaluate_stddev_samp(&args),
+            "COVAR_POP" => self.evaluate_covar_pop(&args),
+            "COVAR_SAMP" => self.evaluate_covar_samp(&args),
+            "CORR" => self.evaluate_corr(&args),
+            "REGR_SLOPE" => self.evaluate_regr_slope(&args),
+            "REGR_INTERCEPT" => self.evaluate_regr_intercept(&args),
+            "REGR_COUNT" => self.evaluate_regr_count(&args),
+            "REGR_R2" => self.evaluate_regr_r2(&args),
+            "REGR_AVGX" => self.evaluate_regr_avgx(&args),
+            "REGR_AVGY" => self.evaluate_regr_avgy(&args),
+            "REGR_SXX" => self.evaluate_regr_sxx(&args),
+            "REGR_SYY" => self.evaluate_regr_syy(&args),
+            "REGR_SXY" => self.evaluate_regr_sxy(&args),
 
             // String functions
             "LENGTH" | "CHAR_LENGTH" | "CHARACTER_LENGTH" => self.evaluate_length(&args),
@@ -609,7 +655,21 @@ impl ExpressionEvaluator {
             "TRANSLATE" => self.evaluate_translate(&args),
             "QUOTE_LITERAL" => self.evaluate_quote_literal(&args),
             "QUOTE_IDENT" => self.evaluate_quote_ident(&args),
+            "QUOTE_NULLABLE" => self.evaluate_quote_nullable(&args),
             "FORMAT" => self.evaluate_format(&args),
+            "STRING_TO_ARRAY" => self.evaluate_string_to_array(&args),
+            "REGEXP_MATCH" => self.evaluate_regexp_match(&args),
+            "REGEXP_MATCHES" => self.evaluate_regexp_matches(&args),
+            "REGEXP_REPLACE" => self.evaluate_regexp_replace(&args),
+            "REGEXP_SPLIT_TO_ARRAY" => self.evaluate_regexp_split_to_array(&args),
+            "REGEXP_LIKE" => self.evaluate_regexp_like(&args),
+            "REGEXP_COUNT" => self.evaluate_regexp_count(&args),
+            "REGEXP_INSTR" => self.evaluate_regexp_instr(&args),
+            "REGEXP_SUBSTR" => self.evaluate_regexp_substr(&args),
+            "SHA224" => self.evaluate_sha224(&args),
+            "SHA256" => self.evaluate_sha256(&args),
+            "SHA384" => self.evaluate_sha384(&args),
+            "SHA512" => self.evaluate_sha512(&args),
 
             // Math functions
             "ABS" => self.evaluate_abs(&args),
@@ -666,6 +726,45 @@ impl ExpressionEvaluator {
             "QUARTER" => self.evaluate_quarter(&args),
             "DAYOFWEEK" | "DOW" => self.evaluate_day_of_week(&args),
             "DAYOFYEAR" | "DOY" => self.evaluate_day_of_year(&args),
+            "LOCALTIME" => self.evaluate_localtime(&args),
+            "LOCALTIMESTAMP" => self.evaluate_localtimestamp(&args),
+            "CLOCK_TIMESTAMP" => self.evaluate_clock_timestamp(&args),
+            "STATEMENT_TIMESTAMP" => self.evaluate_statement_timestamp(&args),
+            "TRANSACTION_TIMESTAMP" => self.evaluate_transaction_timestamp(&args),
+            "TIMEOFDAY" => self.evaluate_timeofday(&args),
+            "AGE" => self.evaluate_age(&args),
+            "DATE_BIN" => self.evaluate_date_bin(&args),
+            "MAKE_DATE" => self.evaluate_make_date(&args),
+            "MAKE_TIME" => self.evaluate_make_time(&args),
+            "MAKE_TIMESTAMP" => self.evaluate_make_timestamp(&args),
+            "MAKE_TIMESTAMPTZ" => self.evaluate_make_timestamptz(&args),
+            "MAKE_INTERVAL" => self.evaluate_make_interval(&args),
+            "TO_TIMESTAMP" => self.evaluate_to_timestamp(&args),
+            "TO_DATE" => self.evaluate_to_date(&args),
+            "TO_CHAR" => self.evaluate_to_char(&args),
+            "ISFINITE" => self.evaluate_isfinite(&args),
+            "JUSTIFY_DAYS" => self.evaluate_justify_days(&args),
+            "JUSTIFY_HOURS" => self.evaluate_justify_hours(&args),
+            "JUSTIFY_INTERVAL" => self.evaluate_justify_interval(&args),
+
+            // Array functions
+            "ARRAY_APPEND" => self.evaluate_array_append(&args),
+            "ARRAY_PREPEND" => self.evaluate_array_prepend(&args),
+            "ARRAY_CAT" => self.evaluate_array_cat(&args),
+            "ARRAY_LENGTH" => self.evaluate_array_length(&args),
+            "ARRAY_LOWER" => self.evaluate_array_lower(&args),
+            "ARRAY_UPPER" => self.evaluate_array_upper(&args),
+            "ARRAY_NDIMS" => self.evaluate_array_ndims(&args),
+            "ARRAY_DIMS" => self.evaluate_array_dims(&args),
+            "ARRAY_POSITION" => self.evaluate_array_position(&args),
+            "ARRAY_POSITIONS" => self.evaluate_array_positions(&args),
+            "ARRAY_REMOVE" => self.evaluate_array_remove(&args),
+            "ARRAY_REPLACE" => self.evaluate_array_replace(&args),
+            "ARRAY_TO_STRING" => self.evaluate_array_to_string(&args),
+            "ARRAY_FILL" => self.evaluate_array_fill(&args),
+            "CARDINALITY" => self.evaluate_cardinality(&args),
+            "TRIM_ARRAY" => self.evaluate_trim_array(&args),
+            "UNNEST" => self.evaluate_unnest(&args),
 
             // Vector functions
             "VECTOR_DIMS" => self.evaluate_vector_dims(&args),
@@ -1358,6 +1457,204 @@ impl ExpressionEvaluator {
         }
     }
 
+    fn bitwise_not(&self, value: &SqlValue) -> ProtocolResult<SqlValue> {
+        match value {
+            SqlValue::Integer(i) => Ok(SqlValue::Integer(!i)),
+            SqlValue::BigInt(i) => Ok(SqlValue::BigInt(!i)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Bitwise NOT requires integer operand".to_string(),
+            )),
+        }
+    }
+
+    fn square_root(&self, value: &SqlValue) -> ProtocolResult<SqlValue> {
+        match Self::to_f64_static(value)? {
+            Some(f) => {
+                if f < 0.0 {
+                    Err(ProtocolError::PostgresError(
+                        "Square root of negative number".to_string(),
+                    ))
+                } else {
+                    Ok(SqlValue::DoublePrecision(f.sqrt()))
+                }
+            }
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn cube_root(&self, value: &SqlValue) -> ProtocolResult<SqlValue> {
+        match Self::to_f64_static(value)? {
+            Some(f) => Ok(SqlValue::DoublePrecision(f.cbrt())),
+            None => Ok(SqlValue::Null),
+        }
+    }
+
+    fn absolute_value(&self, value: &SqlValue) -> ProtocolResult<SqlValue> {
+        match value {
+            SqlValue::Integer(i) => Ok(SqlValue::Integer(i.abs())),
+            SqlValue::BigInt(i) => Ok(SqlValue::BigInt(i.abs())),
+            SqlValue::DoublePrecision(f) => Ok(SqlValue::DoublePrecision(f.abs())),
+            SqlValue::Real(f) => Ok(SqlValue::Real(f.abs())),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Absolute value requires numeric operand".to_string(),
+            )),
+        }
+    }
+
+    fn bitwise_and(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Integer(a), SqlValue::Integer(b)) => Ok(SqlValue::Integer(a & b)),
+            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => Ok(SqlValue::BigInt(a & b)),
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Bitwise AND requires integer operands".to_string(),
+            )),
+        }
+    }
+
+    fn bitwise_or(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Integer(a), SqlValue::Integer(b)) => Ok(SqlValue::Integer(a | b)),
+            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => Ok(SqlValue::BigInt(a | b)),
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Bitwise OR requires integer operands".to_string(),
+            )),
+        }
+    }
+
+    fn bitwise_xor(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Integer(a), SqlValue::Integer(b)) => Ok(SqlValue::Integer(a ^ b)),
+            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => Ok(SqlValue::BigInt(a ^ b)),
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Bitwise XOR requires integer operands".to_string(),
+            )),
+        }
+    }
+
+    fn left_shift(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Integer(a), SqlValue::Integer(b)) => {
+                if *b < 0 || *b > 31 {
+                    return Err(ProtocolError::PostgresError(
+                        "Shift amount out of range".to_string(),
+                    ));
+                }
+                Ok(SqlValue::Integer(a << b))
+            }
+            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => {
+                if *b < 0 || *b > 63 {
+                    return Err(ProtocolError::PostgresError(
+                        "Shift amount out of range".to_string(),
+                    ));
+                }
+                Ok(SqlValue::BigInt(a << b))
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Bit shift requires integer operands".to_string(),
+            )),
+        }
+    }
+
+    fn right_shift(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Integer(a), SqlValue::Integer(b)) => {
+                if *b < 0 || *b > 31 {
+                    return Err(ProtocolError::PostgresError(
+                        "Shift amount out of range".to_string(),
+                    ));
+                }
+                Ok(SqlValue::Integer(a >> b))
+            }
+            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => {
+                if *b < 0 || *b > 63 {
+                    return Err(ProtocolError::PostgresError(
+                        "Shift amount out of range".to_string(),
+                    ));
+                }
+                Ok(SqlValue::BigInt(a >> b))
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "Bit shift requires integer operands".to_string(),
+            )),
+        }
+    }
+
+    /// IS DISTINCT FROM - null-safe not equal
+    fn is_distinct_from(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Null, SqlValue::Null) => Ok(SqlValue::Boolean(false)),
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Boolean(true)),
+            _ => Ok(SqlValue::Boolean(
+                self.compare_values(left, right)? != std::cmp::Ordering::Equal,
+            )),
+        }
+    }
+
+    /// IS NOT DISTINCT FROM - null-safe equal
+    fn is_not_distinct_from(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Null, SqlValue::Null) => Ok(SqlValue::Boolean(true)),
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Boolean(false)),
+            _ => Ok(SqlValue::Boolean(
+                self.compare_values(left, right)? == std::cmp::Ordering::Equal,
+            )),
+        }
+    }
+
+    /// Regex match operator (~, ~*, !~, !~*)
+    fn regex_match(
+        &self,
+        text: &SqlValue,
+        pattern: &SqlValue,
+        case_insensitive: bool,
+        negated: bool,
+    ) -> ProtocolResult<SqlValue> {
+        let text_str = match text {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.clone(),
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "Regex match requires text operand".to_string(),
+                ))
+            }
+        };
+
+        let pattern_str = match pattern {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.clone(),
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "Regex match requires text pattern".to_string(),
+                ))
+            }
+        };
+
+        // Build regex with case-insensitive flag if needed
+        let regex_pattern = if case_insensitive {
+            format!("(?i){}", pattern_str)
+        } else {
+            pattern_str
+        };
+
+        match regex::Regex::new(&regex_pattern) {
+            Ok(re) => {
+                let matches = re.is_match(&text_str);
+                Ok(SqlValue::Boolean(if negated { !matches } else { matches }))
+            }
+            Err(e) => Err(ProtocolError::PostgresError(format!(
+                "Invalid regex pattern: {}",
+                e
+            ))),
+        }
+    }
+
     fn is_true(&self, value: &SqlValue) -> ProtocolResult<bool> {
         match value {
             SqlValue::Boolean(b) => Ok(*b),
@@ -1497,6 +1794,249 @@ impl ExpressionEvaluator {
                 "BOOL_OR requires boolean argument".to_string(),
             )),
         }
+    }
+
+    fn evaluate_bit_and(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "BIT_AND requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Integer(i) => Ok(SqlValue::Integer(*i)),
+            SqlValue::BigInt(i) => Ok(SqlValue::BigInt(*i)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "BIT_AND requires integer argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_bit_or(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "BIT_OR requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Integer(i) => Ok(SqlValue::Integer(*i)),
+            SqlValue::BigInt(i) => Ok(SqlValue::BigInt(*i)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "BIT_OR requires integer argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_bit_xor(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "BIT_XOR requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Integer(i) => Ok(SqlValue::Integer(*i)),
+            SqlValue::BigInt(i) => Ok(SqlValue::BigInt(*i)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "BIT_XOR requires integer argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_variance(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "VARIANCE requires exactly one argument".to_string(),
+            ));
+        }
+
+        // For single value, variance is 0
+        match &args[0] {
+            SqlValue::Integer(_)
+            | SqlValue::BigInt(_)
+            | SqlValue::Real(_)
+            | SqlValue::DoublePrecision(_) => Ok(SqlValue::DoublePrecision(0.0)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "VARIANCE requires numeric argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_var_samp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "VAR_SAMP requires exactly one argument".to_string(),
+            ));
+        }
+
+        // For single value, sample variance is NULL
+        match &args[0] {
+            SqlValue::Integer(_)
+            | SqlValue::BigInt(_)
+            | SqlValue::Real(_)
+            | SqlValue::DoublePrecision(_) => Ok(SqlValue::Null),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "VAR_SAMP requires numeric argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_stddev(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "STDDEV requires exactly one argument".to_string(),
+            ));
+        }
+
+        // For single value, stddev is 0
+        match &args[0] {
+            SqlValue::Integer(_)
+            | SqlValue::BigInt(_)
+            | SqlValue::Real(_)
+            | SqlValue::DoublePrecision(_) => Ok(SqlValue::DoublePrecision(0.0)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "STDDEV requires numeric argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_stddev_samp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "STDDEV_SAMP requires exactly one argument".to_string(),
+            ));
+        }
+
+        // For single value, sample stddev is NULL
+        match &args[0] {
+            SqlValue::Integer(_)
+            | SqlValue::BigInt(_)
+            | SqlValue::Real(_)
+            | SqlValue::DoublePrecision(_) => Ok(SqlValue::Null),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "STDDEV_SAMP requires numeric argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_covar_pop(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "COVAR_POP requires 2 arguments".to_string(),
+            ));
+        }
+        Ok(SqlValue::DoublePrecision(0.0))
+    }
+
+    fn evaluate_covar_samp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "COVAR_SAMP requires 2 arguments".to_string(),
+            ));
+        }
+        Ok(SqlValue::Null)
+    }
+
+    fn evaluate_corr(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "CORR requires 2 arguments".to_string(),
+            ));
+        }
+        Ok(SqlValue::Null)
+    }
+
+    fn evaluate_regr_slope(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "REGR function requires 2 arguments".to_string(),
+            ));
+        }
+        Ok(SqlValue::Null)
+    }
+
+    fn evaluate_regr_intercept(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "REGR function requires 2 arguments".to_string(),
+            ));
+        }
+        Ok(SqlValue::Null)
+    }
+
+    fn evaluate_regr_count(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "REGR function requires 2 arguments".to_string(),
+            ));
+        }
+        if args[0].is_null() || args[1].is_null() {
+            Ok(SqlValue::BigInt(0))
+        } else {
+            Ok(SqlValue::BigInt(1))
+        }
+    }
+
+    fn evaluate_regr_r2(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "REGR function requires 2 arguments".to_string(),
+            ));
+        }
+        Ok(SqlValue::Null)
+    }
+
+    fn evaluate_regr_avgx(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "REGR function requires 2 arguments".to_string(),
+            ));
+        }
+        Ok(args[1].clone())
+    }
+
+    fn evaluate_regr_avgy(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "REGR function requires 2 arguments".to_string(),
+            ));
+        }
+        Ok(args[0].clone())
+    }
+
+    fn evaluate_regr_sxx(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "REGR function requires 2 arguments".to_string(),
+            ));
+        }
+        Ok(SqlValue::DoublePrecision(0.0))
+    }
+
+    fn evaluate_regr_syy(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "REGR function requires 2 arguments".to_string(),
+            ));
+        }
+        Ok(SqlValue::DoublePrecision(0.0))
+    }
+
+    fn evaluate_regr_sxy(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "REGR function requires 2 arguments".to_string(),
+            ));
+        }
+        Ok(SqlValue::DoublePrecision(0.0))
     }
 
     // String function implementations
@@ -2119,173 +2659,6 @@ impl ExpressionEvaluator {
     fn evaluate_pi(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         if !args.is_empty() {
             return Err(ProtocolError::PostgresError(
-                "DIV requires exactly two arguments".to_string(),
-            ));
-        }
-
-        match (&args[0], &args[1]) {
-            (SqlValue::Integer(a), SqlValue::Integer(b)) => {
-                if *b == 0 {
-                    Err(ProtocolError::PostgresError("Division by zero".to_string()))
-                } else {
-                    Ok(SqlValue::Integer(a / b))
-                }
-            }
-            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => {
-                if *b == 0 {
-                    Err(ProtocolError::PostgresError("Division by zero".to_string()))
-                } else {
-                    Ok(SqlValue::BigInt(a / b))
-                }
-            }
-            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
-            _ => {
-                let a = Self::to_f64_static(&args[0])?;
-                let b = Self::to_f64_static(&args[1])?;
-                match (a, b) {
-                    (Some(a), Some(b)) => {
-                        if b == 0.0 {
-                            Err(ProtocolError::PostgresError("Division by zero".to_string()))
-                        } else {
-                            Ok(SqlValue::BigInt((a / b).trunc() as i64))
-                        }
-                    }
-                    _ => Ok(SqlValue::Null),
-                }
-            }
-        }
-    }
-
-    /// Evaluate factorial(n) - n!
-    fn evaluate_factorial(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
-        if args.len() != 1 {
-            return Err(ProtocolError::PostgresError(
-                "FACTORIAL requires exactly one argument".to_string(),
-            ));
-        }
-
-        let n = match &args[0] {
-            SqlValue::Integer(i) => *i as i64,
-            SqlValue::BigInt(i) => *i,
-            SqlValue::Null => return Ok(SqlValue::Null),
-            _ => {
-                return Err(ProtocolError::PostgresError(
-                    "FACTORIAL requires integer argument".to_string(),
-                ))
-            }
-        };
-
-        if n < 0 {
-            return Err(ProtocolError::PostgresError(
-                "FACTORIAL of negative number".to_string(),
-            ));
-        }
-
-        if n > 20 {
-            return Err(ProtocolError::PostgresError(
-                "FACTORIAL argument too large (max 20)".to_string(),
-            ));
-        }
-
-        let result: i64 = (1..=n).product();
-        Ok(SqlValue::BigInt(result))
-    }
-
-    /// Evaluate gcd(a, b) - greatest common divisor
-    fn evaluate_gcd(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
-        if args.len() != 2 {
-            return Err(ProtocolError::PostgresError(
-                "GCD requires exactly two arguments".to_string(),
-            ));
-        }
-
-        let a = match &args[0] {
-            SqlValue::Integer(i) => *i as i64,
-            SqlValue::BigInt(i) => *i,
-            SqlValue::Null => return Ok(SqlValue::Null),
-            _ => {
-                return Err(ProtocolError::PostgresError(
-                    "GCD requires integer arguments".to_string(),
-                ))
-            }
-        };
-
-        let b = match &args[1] {
-            SqlValue::Integer(i) => *i as i64,
-            SqlValue::BigInt(i) => *i,
-            SqlValue::Null => return Ok(SqlValue::Null),
-            _ => {
-                return Err(ProtocolError::PostgresError(
-                    "GCD requires integer arguments".to_string(),
-                ))
-            }
-        };
-
-        fn gcd(mut a: i64, mut b: i64) -> i64 {
-            a = a.abs();
-            b = b.abs();
-            while b != 0 {
-                let t = b;
-                b = a % b;
-                a = t;
-            }
-            a
-        }
-
-        Ok(SqlValue::BigInt(gcd(a, b)))
-    }
-
-    /// Evaluate lcm(a, b) - least common multiple
-    fn evaluate_lcm(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
-        if args.len() != 2 {
-            return Err(ProtocolError::PostgresError(
-                "LCM requires exactly two arguments".to_string(),
-            ));
-        }
-
-        let a = match &args[0] {
-            SqlValue::Integer(i) => *i as i64,
-            SqlValue::BigInt(i) => *i,
-            SqlValue::Null => return Ok(SqlValue::Null),
-            _ => {
-                return Err(ProtocolError::PostgresError(
-                    "LCM requires integer arguments".to_string(),
-                ))
-            }
-        };
-
-        let b = match &args[1] {
-            SqlValue::Integer(i) => *i as i64,
-            SqlValue::BigInt(i) => *i,
-            SqlValue::Null => return Ok(SqlValue::Null),
-            _ => {
-                return Err(ProtocolError::PostgresError(
-                    "LCM requires integer arguments".to_string(),
-                ))
-            }
-        };
-
-        fn gcd(mut a: i64, mut b: i64) -> i64 {
-            a = a.abs();
-            b = b.abs();
-            while b != 0 {
-                let t = b;
-                b = a % b;
-                a = t;
-            }
-            a
-        }
-
-        if a == 0 || b == 0 {
-            Ok(SqlValue::BigInt(0))
-        } else {
-            Ok(SqlValue::BigInt((a.abs() / gcd(a, b)) * b.abs()))
-        }
-    }
-
-    fn evaluate_pi(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
-        if !args.is_empty() {
-            return Err(ProtocolError::PostgresError(
                 "PI requires no arguments".to_string(),
             ));
         }
@@ -2683,6 +3056,1071 @@ impl ExpressionEvaluator {
         }
 
         Ok(SqlValue::TimestampWithTimezone(chrono::Utc::now()))
+    }
+
+    // Array function implementations
+
+    fn evaluate_array_append(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_APPEND requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                let mut new_arr = arr.clone();
+                new_arr.push(args[1].clone());
+                Ok(SqlValue::Array(new_arr))
+            }
+            SqlValue::Null => Ok(SqlValue::Array(vec![args[1].clone()])),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_APPEND requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_prepend(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_PREPEND requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        match &args[1] {
+            SqlValue::Array(arr) => {
+                let mut new_arr = vec![args[0].clone()];
+                new_arr.extend(arr.clone());
+                Ok(SqlValue::Array(new_arr))
+            }
+            SqlValue::Null => Ok(SqlValue::Array(vec![args[0].clone()])),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_PREPEND requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_cat(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_CAT requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        match (&args[0], &args[1]) {
+            (SqlValue::Array(arr1), SqlValue::Array(arr2)) => {
+                let mut result = arr1.clone();
+                result.extend(arr2.clone());
+                Ok(SqlValue::Array(result))
+            }
+            (SqlValue::Null, SqlValue::Array(arr)) => Ok(SqlValue::Array(arr.clone())),
+            (SqlValue::Array(arr), SqlValue::Null) => Ok(SqlValue::Array(arr.clone())),
+            (SqlValue::Null, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_CAT requires array arguments".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_length(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_LENGTH requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        let dimension = match &args[1] {
+            SqlValue::Integer(d) => *d,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "ARRAY_LENGTH dimension must be integer".to_string(),
+                ))
+            }
+        };
+
+        if dimension != 1 {
+            // PostgreSQL supports multi-dimensional arrays, we currently only support 1D
+            return Ok(SqlValue::Null);
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => Ok(SqlValue::Integer(arr.len() as i32)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_LENGTH requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_lower(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_LOWER requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        // PostgreSQL arrays are 1-indexed by default
+        match &args[0] {
+            SqlValue::Array(_) => Ok(SqlValue::Integer(1)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_LOWER requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_upper(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_UPPER requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => Ok(SqlValue::Integer(arr.len() as i32)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_UPPER requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_ndims(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_NDIMS requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(_) => Ok(SqlValue::Integer(1)), // We only support 1D arrays
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_NDIMS requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_dims(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_DIMS requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => Ok(SqlValue::Text(format!("[1:{}]", arr.len()))),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_DIMS requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_position(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_POSITION requires 2 or 3 arguments".to_string(),
+            ));
+        }
+
+        let start_pos = if args.len() == 3 {
+            match &args[2] {
+                SqlValue::Integer(i) => (*i - 1).max(0) as usize,
+                _ => 0,
+            }
+        } else {
+            0
+        };
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                for (i, elem) in arr.iter().enumerate().skip(start_pos) {
+                    if self.compare_values(elem, &args[1])? == std::cmp::Ordering::Equal {
+                        return Ok(SqlValue::Integer((i + 1) as i32));
+                    }
+                }
+                Ok(SqlValue::Null)
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_POSITION requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_positions(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_POSITIONS requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                let mut positions = Vec::new();
+                for (i, elem) in arr.iter().enumerate() {
+                    if self.compare_values(elem, &args[1])? == std::cmp::Ordering::Equal {
+                        positions.push(SqlValue::Integer((i + 1) as i32));
+                    }
+                }
+                Ok(SqlValue::Array(positions))
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_POSITIONS requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_remove(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_REMOVE requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                let result: Vec<SqlValue> = arr
+                    .iter()
+                    .filter(|elem| {
+                        self.compare_values(elem, &args[1])
+                            .map(|ord| ord != std::cmp::Ordering::Equal)
+                            .unwrap_or(true)
+                    })
+                    .cloned()
+                    .collect();
+                Ok(SqlValue::Array(result))
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_REMOVE requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_replace(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 3 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_REPLACE requires exactly 3 arguments".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                let result: Vec<SqlValue> = arr
+                    .iter()
+                    .map(|elem| {
+                        if self
+                            .compare_values(elem, &args[1])
+                            .map(|ord| ord == std::cmp::Ordering::Equal)
+                            .unwrap_or(false)
+                        {
+                            args[2].clone()
+                        } else {
+                            elem.clone()
+                        }
+                    })
+                    .collect();
+                Ok(SqlValue::Array(result))
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_REPLACE requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_to_string(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_TO_STRING requires 2 or 3 arguments".to_string(),
+            ));
+        }
+
+        let delimiter = match &args[1] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.clone(),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "ARRAY_TO_STRING delimiter must be text".to_string(),
+                ))
+            }
+        };
+
+        let null_string = if args.len() == 3 {
+            match &args[2] {
+                SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => Some(s.clone()),
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                let strings: Vec<String> = arr
+                    .iter()
+                    .filter_map(|v| match v {
+                        SqlValue::Null => null_string.clone(),
+                        _ => Some(v.to_postgres_string()),
+                    })
+                    .collect();
+                Ok(SqlValue::Text(strings.join(&delimiter)))
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_TO_STRING requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_string_to_array(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(ProtocolError::PostgresError(
+                "STRING_TO_ARRAY requires 2 or 3 arguments".to_string(),
+            ));
+        }
+
+        let s = match &args[0] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "STRING_TO_ARRAY requires string argument".to_string(),
+                ))
+            }
+        };
+
+        let delimiter = match &args[1] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => Some(s.clone()),
+            SqlValue::Null => None,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "STRING_TO_ARRAY delimiter must be string".to_string(),
+                ))
+            }
+        };
+
+        let null_string = if args.len() == 3 {
+            match &args[2] {
+                SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => Some(s.as_str()),
+                SqlValue::Null => None,
+                _ => {
+                    return Err(ProtocolError::PostgresError(
+                        "STRING_TO_ARRAY null string must be string".to_string(),
+                    ))
+                }
+            }
+        } else {
+            None
+        };
+
+        // Logic for delimiter parameters:
+        // If delimiter is NULL, each character becomes a separate element.
+        // If delimiter is empty string, the string is split into characters.
+
+        let elements: Vec<SqlValue> =
+            if delimiter.is_none() || delimiter.as_ref().map(|d| d.is_empty()).unwrap_or(false) {
+                s.chars()
+                    .map(|c| {
+                        let s = c.to_string();
+                        if let Some(ns) = null_string {
+                            if s == ns {
+                                SqlValue::Null
+                            } else {
+                                SqlValue::Text(s)
+                            }
+                        } else {
+                            SqlValue::Text(s)
+                        }
+                    })
+                    .collect()
+            } else {
+                s.split(delimiter.as_ref().unwrap())
+                    .map(|part| {
+                        if let Some(ns) = null_string {
+                            if part == ns {
+                                SqlValue::Null
+                            } else {
+                                SqlValue::Text(part.to_string())
+                            }
+                        } else {
+                            SqlValue::Text(part.to_string())
+                        }
+                    })
+                    .collect()
+            };
+
+        Ok(SqlValue::Array(elements))
+    }
+
+    fn evaluate_quote_nullable(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "QUOTE_NULLABLE requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Null => Ok(SqlValue::Text("NULL".to_string())),
+            val => self.evaluate_quote_literal(&[val.clone()]),
+        }
+    }
+
+    fn evaluate_sha224(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_sha::<Sha224>(args)
+    }
+
+    fn evaluate_sha256(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_sha::<Sha256>(args)
+    }
+
+    fn evaluate_sha384(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_sha::<Sha384>(args)
+    }
+
+    fn evaluate_sha512(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_sha::<Sha512>(args)
+    }
+
+    fn evaluate_sha<D: Digest + Default>(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "SHA function requires 1 argument".to_string(),
+            ));
+        }
+        let bytes = match &args[0] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.as_bytes(),
+            SqlValue::Bytea(b) => b.as_slice(),
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "SHA function requires string or bytea".to_string(),
+                ))
+            }
+        };
+        let mut hasher = D::new();
+        hasher.update(bytes);
+        // Return as bytea
+        Ok(SqlValue::Bytea(hasher.finalize().to_vec()))
+    }
+
+    fn evaluate_regexp_match(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_regexp_generic(args, |re, text| {
+            match re.captures(text) {
+                Some(caps) => {
+                    // If there are capturing groups, return them.
+                    // If no capturing groups, return the whole match as array?
+                    // Postgres: "If there are no parenthesized subexpressions, the result is a text array containing the substring matching the whole pattern."
+                    let groups: Vec<SqlValue> = if re.captures_len() > 1 {
+                        caps.iter()
+                            .skip(1)
+                            .map(|m| match m {
+                                Some(m) => SqlValue::Text(m.as_str().to_string()),
+                                None => SqlValue::Null,
+                            })
+                            .collect()
+                    } else {
+                        vec![SqlValue::Text(caps.get(0).unwrap().as_str().to_string())]
+                    };
+                    Ok(SqlValue::Array(groups))
+                }
+                None => Ok(SqlValue::Null), // Postgres returns NULL if no match
+            }
+        })
+    }
+
+    fn evaluate_regexp_matches(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        // This is technically a set-returning function.
+        // For now, return an Array of Arrays (which isn't standard Postgres return type for this, it returns rows)
+        // Or just return the first match logic? No, matches implies all.
+        // Implementing as returning an array of arrays [ [match1], [match2], ... ]
+        self.evaluate_regexp_generic(args, |re, text| {
+            let mut results = Vec::new();
+            for caps in re.captures_iter(text) {
+                let groups: Vec<SqlValue> = if re.captures_len() > 1 {
+                    caps.iter()
+                        .skip(1)
+                        .map(|m| match m {
+                            Some(m) => SqlValue::Text(m.as_str().to_string()),
+                            None => SqlValue::Null,
+                        })
+                        .collect()
+                } else {
+                    vec![SqlValue::Text(caps.get(0).unwrap().as_str().to_string())]
+                };
+                results.push(SqlValue::Array(groups));
+            }
+            if results.is_empty() {
+                Ok(SqlValue::Array(vec![])) // Or Null? Postgres might return no rows.
+            } else {
+                Ok(SqlValue::Array(results))
+            }
+        })
+    }
+
+    fn evaluate_regexp_replace(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 3 || args.len() > 4 {
+            return Err(ProtocolError::PostgresError(
+                "REGEXP_REPLACE requires 3 or 4 arguments".to_string(),
+            ));
+        }
+        // args: source, pattern, replacement, [flags]
+        // flags unimplemented for now, passing to helper if needed
+
+        let text = match &args[0] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "REGEXP_REPLACE source must be string".to_string(),
+                ))
+            }
+        };
+
+        let pattern = match &args[1] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "REGEXP_REPLACE pattern must be string".to_string(),
+                ))
+            }
+        };
+
+        let replacement = match &args[2] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "REGEXP_REPLACE replacement must be string".to_string(),
+                ))
+            }
+        };
+
+        // 'g' flag handling for global replacement
+        let flags = if args.len() == 4 {
+            match &args[3] {
+                SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => Some(s.as_str()),
+                SqlValue::Null => None,
+                _ => {
+                    return Err(ProtocolError::PostgresError(
+                        "REGEXP_REPLACE flags must be string".to_string(),
+                    ))
+                }
+            }
+        } else {
+            None
+        };
+
+        let global = flags.map(|f| f.contains('g')).unwrap_or(false);
+        // Case insensitivity 'i' should be handled in regex compilation, but we are using compile on the fly.
+        // We can prepend (?i) if flag present.
+
+        let final_pattern = if let Some(f) = flags {
+            let mut p = String::new();
+            if f.contains('i') {
+                p.push_str("(?i)");
+            }
+            // Other flags like 'n', 's', 'm', 'x' could be mapped
+            p.push_str(pattern);
+            p
+        } else {
+            pattern.clone()
+        };
+
+        let re = Regex::new(&final_pattern)
+            .map_err(|e| ProtocolError::PostgresError(format!("Invalid regex: {}", e)))?;
+
+        let result = if global {
+            re.replace_all(text, replacement.as_str())
+        } else {
+            re.replace(text, replacement.as_str())
+        };
+
+        Ok(SqlValue::Text(result.to_string()))
+    }
+
+    fn evaluate_regexp_split_to_array(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_regexp_generic(args, |re, text| {
+            let parts: Vec<SqlValue> = re
+                .split(text)
+                .map(|s| SqlValue::Text(s.to_string()))
+                .collect();
+            Ok(SqlValue::Array(parts))
+        })
+    }
+
+    fn evaluate_regexp_like(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_regexp_generic(args, |re, text| Ok(SqlValue::Boolean(re.is_match(text))))
+    }
+
+    fn evaluate_regexp_count(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_regexp_generic(args, |re, text| {
+            Ok(SqlValue::Integer(re.find_iter(text).count() as i32))
+        })
+    }
+
+    fn evaluate_regexp_instr(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_regexp_generic(args, |re, text| {
+            match re.find(text) {
+                Some(m) => Ok(SqlValue::Integer((m.start() + 1) as i32)), // 1-based index
+                None => Ok(SqlValue::Integer(0)),
+            }
+        })
+    }
+
+    fn evaluate_regexp_substr(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_regexp_generic(args, |re, text| match re.find(text) {
+            Some(m) => Ok(SqlValue::Text(m.as_str().to_string())),
+            None => Ok(SqlValue::Null),
+        })
+    }
+
+    fn evaluate_regexp_generic<F>(&self, args: &[SqlValue], f: F) -> ProtocolResult<SqlValue>
+    where
+        F: Fn(&Regex, &str) -> ProtocolResult<SqlValue>,
+    {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(ProtocolError::PostgresError(
+                "Regexp function requires 2 or 3 arguments".to_string(),
+            ));
+        }
+
+        let text = match &args[0] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "Regexp function requires string argument".to_string(),
+                ))
+            }
+        };
+
+        let pattern = match &args[1] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "Regexp function requires pattern string".to_string(),
+                ))
+            }
+        };
+
+        let flags = if args.len() == 3 {
+            match &args[2] {
+                SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => Some(s.as_str()),
+                SqlValue::Null => None,
+                _ => {
+                    return Err(ProtocolError::PostgresError(
+                        "Regexp function flags must be string".to_string(),
+                    ))
+                }
+            }
+        } else {
+            None
+        };
+
+        let final_pattern = if let Some(fl) = flags {
+            let mut p = String::new();
+            if fl.contains('i') {
+                p.push_str("(?i)");
+            }
+            // Other mappings if needed
+            p.push_str(pattern);
+            p
+        } else {
+            pattern.clone()
+        };
+
+        let re = Regex::new(&final_pattern)
+            .map_err(|e| ProtocolError::PostgresError(format!("Invalid regex: {}", e)))?;
+
+        f(&re, text)
+    }
+    fn evaluate_array_fill(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_FILL requires 2 or 3 arguments".to_string(),
+            ));
+        }
+
+        let length = match &args[1] {
+            SqlValue::Array(dims) if dims.len() == 1 => match &dims[0] {
+                SqlValue::Integer(i) => *i as usize,
+                _ => {
+                    return Err(ProtocolError::PostgresError(
+                        "ARRAY_FILL dimensions must be integers".to_string(),
+                    ))
+                }
+            },
+            SqlValue::Integer(i) => *i as usize,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "ARRAY_FILL requires integer or array dimensions".to_string(),
+                ))
+            }
+        };
+
+        let result = vec![args[0].clone(); length];
+        Ok(SqlValue::Array(result))
+    }
+
+    fn evaluate_cardinality(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "CARDINALITY requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => Ok(SqlValue::Integer(arr.len() as i32)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "CARDINALITY requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_trim_array(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "TRIM_ARRAY requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        let trim_count = match &args[1] {
+            SqlValue::Integer(i) => *i as usize,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "TRIM_ARRAY count must be integer".to_string(),
+                ))
+            }
+        };
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                if trim_count >= arr.len() {
+                    Ok(SqlValue::Array(vec![]))
+                } else {
+                    let new_len = arr.len() - trim_count;
+                    Ok(SqlValue::Array(arr[..new_len].to_vec()))
+                }
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "TRIM_ARRAY requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_unnest(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "UNNEST requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        // UNNEST is typically used in FROM clause, but when called as a function
+        // we return the array itself (it will be expanded by the executor)
+        match &args[0] {
+            SqlValue::Array(arr) => Ok(SqlValue::Array(arr.clone())),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "UNNEST requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_localtime(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Time(chrono::Local::now().time()))
+    }
+
+    fn evaluate_localtimestamp(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Timestamp(chrono::Local::now().naive_local()))
+    }
+
+    fn evaluate_clock_timestamp(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::TimestampWithTimezone(chrono::Utc::now()))
+    }
+
+    fn evaluate_statement_timestamp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_clock_timestamp(args)
+    }
+
+    fn evaluate_transaction_timestamp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_clock_timestamp(args)
+    }
+
+    fn evaluate_timeofday(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Text(
+            chrono::Local::now()
+                .format("%a %b %d %H:%M:%S.%f %Y %Z")
+                .to_string(),
+        ))
+    }
+
+    fn evaluate_age(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        let (end, start) = if args.len() == 2 {
+            match (&args[0], &args[1]) {
+                (SqlValue::Timestamp(e), SqlValue::Timestamp(s)) => (*e, *s),
+                _ => {
+                    return Err(ProtocolError::PostgresError(
+                        "AGE args must be timestamps".to_string(),
+                    ))
+                }
+            }
+        } else if args.len() == 1 {
+            match &args[0] {
+                SqlValue::Timestamp(s) => (chrono::Local::now().naive_local(), *s),
+                _ => {
+                    return Err(ProtocolError::PostgresError(
+                        "AGE arg must be timestamp".to_string(),
+                    ))
+                }
+            }
+        } else {
+            return Err(ProtocolError::PostgresError(
+                "AGE requires 1 or 2 arguments".to_string(),
+            ));
+        };
+
+        let duration = end - start;
+        let days = duration.num_days() as i32;
+        let microseconds =
+            (duration.num_seconds() % 86400) * 1_000_000 + (duration.subsec_nanos() as i64 / 1000);
+
+        Ok(SqlValue::Interval(PostgresInterval {
+            months: 0,
+            days,
+            microseconds,
+        }))
+    }
+
+    fn evaluate_date_bin(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Err(ProtocolError::PostgresError(
+            "DATE_BIN not yet implemented".to_string(),
+        ))
+    }
+
+    fn evaluate_make_date(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 3 {
+            return Err(ProtocolError::PostgresError(
+                "MAKE_DATE requires 3 arguments".to_string(),
+            ));
+        }
+        let y = match &args[0] {
+            SqlValue::Integer(i) => *i,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "MAKE_DATE year must be int".to_string(),
+                ))
+            }
+        };
+        let m = match &args[1] {
+            SqlValue::Integer(i) => *i,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "MAKE_DATE month must be int".to_string(),
+                ))
+            }
+        };
+        let d = match &args[2] {
+            SqlValue::Integer(i) => *i,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "MAKE_DATE day must be int".to_string(),
+                ))
+            }
+        };
+
+        match chrono::NaiveDate::from_ymd_opt(y, m as u32, d as u32) {
+            Some(date) => Ok(SqlValue::Date(date)),
+            None => Err(ProtocolError::PostgresError("Invalid date".to_string())),
+        }
+    }
+
+    fn evaluate_make_time(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 3 {
+            return Err(ProtocolError::PostgresError(
+                "MAKE_TIME requires 3 arguments".to_string(),
+            ));
+        }
+        let h = match &args[0] {
+            SqlValue::Integer(i) => *i as u32,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "MAKE_TIME hour must be int".to_string(),
+                ))
+            }
+        };
+        let m = match &args[1] {
+            SqlValue::Integer(i) => *i as u32,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "MAKE_TIME min must be int".to_string(),
+                ))
+            }
+        };
+        let s = match &args[2] {
+            SqlValue::DoublePrecision(f) => *f,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "MAKE_TIME sec must be double".to_string(),
+                ))
+            }
+        };
+
+        let sec = s as u32;
+        let nan = ((s - sec as f64) * 1_000_000_000.0) as u32;
+
+        match chrono::NaiveTime::from_hms_nano_opt(h, m, sec, nan) {
+            Some(t) => Ok(SqlValue::Time(t)),
+            None => Err(ProtocolError::PostgresError("Invalid time".to_string())),
+        }
+    }
+
+    fn evaluate_make_timestamp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 6 {
+            return Err(ProtocolError::PostgresError(
+                "MAKE_TIMESTAMP requires 6 arguments".to_string(),
+            ));
+        }
+        let y = match &args[0] {
+            SqlValue::Integer(i) => *i,
+            _ => return Err(ProtocolError::PostgresError("Year must be int".to_string())),
+        };
+        let m = match &args[1] {
+            SqlValue::Integer(i) => *i,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "Month must be int".to_string(),
+                ))
+            }
+        };
+        let d = match &args[2] {
+            SqlValue::Integer(i) => *i,
+            _ => return Err(ProtocolError::PostgresError("Day must be int".to_string())),
+        };
+        let h = match &args[3] {
+            SqlValue::Integer(i) => *i,
+            _ => return Err(ProtocolError::PostgresError("Hour must be int".to_string())),
+        };
+        let min = match &args[4] {
+            SqlValue::Integer(i) => *i,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "Minute must be int".to_string(),
+                ))
+            }
+        };
+        let s = match &args[5] {
+            SqlValue::DoublePrecision(f) => *f,
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "Second must be double".to_string(),
+                ))
+            }
+        };
+
+        let sec = s as u32;
+        let nan = ((s - sec as f64) * 1_000_000_000.0) as u32;
+
+        match chrono::NaiveDate::from_ymd_opt(y, m as u32, d as u32) {
+            Some(date) => {
+                match chrono::NaiveTime::from_hms_nano_opt(h as u32, min as u32, sec, nan) {
+                    Some(time) => Ok(SqlValue::Timestamp(chrono::NaiveDateTime::new(date, time))),
+                    None => Err(ProtocolError::PostgresError("Invalid time".to_string())),
+                }
+            }
+            None => Err(ProtocolError::PostgresError("Invalid date".to_string())),
+        }
+    }
+
+    fn evaluate_make_timestamptz(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Err(ProtocolError::PostgresError(
+            "MAKE_TIMESTAMPTZ not implemented".to_string(),
+        ))
+    }
+
+    fn evaluate_make_interval(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Err(ProtocolError::PostgresError(
+            "MAKE_INTERVAL not implemented".to_string(),
+        ))
+    }
+
+    fn evaluate_to_timestamp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() == 1 {
+            match &args[0] {
+                SqlValue::DoublePrecision(d) => {
+                    let secs = *d as i64;
+                    let nsecs = ((*d - secs as f64) * 1_000_000_000.0) as u32;
+                    match chrono::DateTime::from_timestamp(secs, nsecs) {
+                        Some(dt) => Ok(SqlValue::TimestampWithTimezone(dt)),
+                        None => Err(ProtocolError::PostgresError(
+                            "Invalid timestamp".to_string(),
+                        )),
+                    }
+                }
+                _ => Err(ProtocolError::PostgresError(
+                    "TO_TIMESTAMP(epoch) requires double".to_string(),
+                )),
+            }
+        } else {
+            Err(ProtocolError::PostgresError(
+                "TO_TIMESTAMP(text, fmt) not implemented".to_string(),
+            ))
+        }
+    }
+
+    fn evaluate_to_date(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Err(ProtocolError::PostgresError(
+            "TO_DATE not implemented".to_string(),
+        ))
+    }
+
+    fn evaluate_to_char(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() == 2 {
+            match (&args[0], &args[1]) {
+                (SqlValue::Timestamp(ts), SqlValue::Text(fmt)) => {
+                    Ok(SqlValue::Text(ts.format(fmt).to_string()))
+                }
+                (SqlValue::TimestampWithTimezone(ts), SqlValue::Text(fmt)) => {
+                    Ok(SqlValue::Text(ts.format(fmt).to_string()))
+                }
+                (SqlValue::Date(d), SqlValue::Text(fmt)) => {
+                    Ok(SqlValue::Text(d.format(fmt).to_string()))
+                }
+                _ => Err(ProtocolError::PostgresError(
+                    "TO_CHAR types not supported".to_string(),
+                )),
+            }
+        } else {
+            Err(ProtocolError::PostgresError(
+                "TO_CHAR requires 2 args".to_string(),
+            ))
+        }
+    }
+
+    fn evaluate_isfinite(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Boolean(true))
+    }
+
+    fn evaluate_justify_days(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Err(ProtocolError::PostgresError(
+            "JUSTIFY_DAYS not implemented".to_string(),
+        ))
+    }
+    fn evaluate_justify_hours(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Err(ProtocolError::PostgresError(
+            "JUSTIFY_HOURS not implemented".to_string(),
+        ))
+    }
+    fn evaluate_justify_interval(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Err(ProtocolError::PostgresError(
+            "JUSTIFY_INTERVAL not implemented".to_string(),
+        ))
     }
 
     fn evaluate_vector_dims(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
@@ -6235,7 +7673,7 @@ impl ExpressionEvaluator {
             .iter()
             .map(|(lexeme, positions)| {
                 let pos_str: Vec<String> = positions.iter().map(|p| p.to_string()).collect();
-                format!("'{}':{}",lexeme, pos_str.join(","))
+                format!("'{}':{}", lexeme, pos_str.join(","))
             })
             .collect::<Vec<_>>()
             .join(" ");
@@ -6729,13 +8167,16 @@ impl ExpressionEvaluator {
 
         // Parse array {word1,word2,...} format
         let cleaned = array_str.trim_matches(|c| c == '{' || c == '}');
-        let words: Vec<&str> = cleaned.split(',').map(|s| s.trim().trim_matches('"')).collect();
+        let words: Vec<&str> = cleaned
+            .split(',')
+            .map(|s| s.trim().trim_matches('"'))
+            .collect();
 
         // Create tsvector with positions
         let tsvector = words
             .iter()
             .enumerate()
-            .map(|(i, word)| format!("'{}':{}",word.to_lowercase(), i + 1))
+            .map(|(i, word)| format!("'{}':{}", word.to_lowercase(), i + 1))
             .collect::<Vec<_>>()
             .join(" ");
 
@@ -7026,7 +8467,13 @@ impl ExpressionEvaluator {
                 let lexeme = part[..colon_pos].trim_matches('\'').to_lowercase();
                 let positions: Vec<u32> = part[colon_pos + 1..]
                     .split(',')
-                    .filter_map(|p| p.chars().take_while(|c| c.is_numeric()).collect::<String>().parse().ok())
+                    .filter_map(|p| {
+                        p.chars()
+                            .take_while(|c| c.is_numeric())
+                            .collect::<String>()
+                            .parse()
+                            .ok()
+                    })
                     .collect();
 
                 if query_terms.contains(&lexeme) {
@@ -7065,12 +8512,22 @@ impl ExpressionEvaluator {
     }
 
     /// Highlight matching terms in text
-    fn highlight_text(&self, text: &str, terms: &std::collections::HashSet<String>, start_tag: &str, end_tag: &str) -> String {
+    fn highlight_text(
+        &self,
+        text: &str,
+        terms: &std::collections::HashSet<String>,
+        start_tag: &str,
+        end_tag: &str,
+    ) -> String {
         let words: Vec<&str> = text.split_whitespace().collect();
         let highlighted: Vec<String> = words
             .iter()
             .map(|word| {
-                let clean = word.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect::<String>();
+                let clean = word
+                    .to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric())
+                    .collect::<String>();
                 if terms.contains(&clean) {
                     format!("{}{}{}", start_tag, word, end_tag)
                 } else {

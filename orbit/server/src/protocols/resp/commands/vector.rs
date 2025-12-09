@@ -188,7 +188,12 @@ impl TextIndex {
     }
 
     /// Search text index with query
-    fn search(&self, query: &str, limit: usize, offset: usize) -> Vec<(String, f32, HashMap<String, String>)> {
+    fn search(
+        &self,
+        query: &str,
+        limit: usize,
+        offset: usize,
+    ) -> Vec<(String, f32, HashMap<String, String>)> {
         let query_terms = self.tokenize(query);
         if query_terms.is_empty() {
             return vec![];
@@ -898,14 +903,15 @@ impl VectorCommands {
                                 i += 1;
                                 if i < args.len() {
                                     let metric_str = self.get_string_arg(args, i, "FT.CREATE")?;
-                                    distance_metric =
-                                        DistanceMetric::from_str(&metric_str).unwrap_or(DistanceMetric::Cosine);
+                                    distance_metric = DistanceMetric::from_str(&metric_str)
+                                        .unwrap_or(DistanceMetric::Cosine);
                                     i += 1;
                                 }
                             }
                             // If we hit another field name (not an option), break
                             _ if !opt.is_empty()
-                                && !["TEXT", "TAG", "NUMERIC", "GEO", "VECTOR"].contains(&opt.as_str()) =>
+                                && !["TEXT", "TAG", "NUMERIC", "GEO", "VECTOR"]
+                                    .contains(&opt.as_str()) =>
                             {
                                 break;
                             }
@@ -1227,7 +1233,11 @@ impl VectorCommands {
             ))
         })?;
 
-        let num_docs = index.text_index.as_ref().map(|t| t.doc_count()).unwrap_or(0);
+        let num_docs = index
+            .text_index
+            .as_ref()
+            .map(|t| t.doc_count())
+            .unwrap_or(0);
         let num_terms = index
             .text_index
             .as_ref()
@@ -1244,9 +1254,15 @@ impl VectorCommands {
                     .map(|f| {
                         let type_str = match &f.field_type {
                             FtsFieldType::Text { weight, nostem } => {
-                                format!("TEXT WEIGHT {} {}", weight, if *nostem { "NOSTEM" } else { "" })
+                                format!(
+                                    "TEXT WEIGHT {} {}",
+                                    weight,
+                                    if *nostem { "NOSTEM" } else { "" }
+                                )
                             }
-                            FtsFieldType::Tag { separator } => format!("TAG SEPARATOR {}", separator),
+                            FtsFieldType::Tag { separator } => {
+                                format!("TAG SEPARATOR {}", separator)
+                            }
                             FtsFieldType::Numeric => "NUMERIC".to_string(),
                             FtsFieldType::Geo => "GEO".to_string(),
                             FtsFieldType::Vector { dim, metric } => {

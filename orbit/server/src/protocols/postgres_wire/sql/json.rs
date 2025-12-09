@@ -430,6 +430,90 @@ impl JsonOperations {
     pub fn json_strip_nulls(json: &JsonValue) -> ProtocolResult<SqlValue> {
         Ok(SqlValue::Json(strip_nulls(json)))
     }
+
+    // ========== Phase 4: Conversion Functions ==========
+
+    /// Convert any SQL value to JSON (to_json)
+    pub fn to_json(value: SqlValue) -> ProtocolResult<SqlValue> {
+        let json_val = sql_value_to_json(value)?;
+        Ok(SqlValue::Json(json_val))
+    }
+
+    /// Convert any SQL value to JSONB (to_jsonb)
+    pub fn to_jsonb(value: SqlValue) -> ProtocolResult<SqlValue> {
+        let json_val = sql_value_to_json(value)?;
+        Ok(SqlValue::Jsonb(json_val))
+    }
+
+    /// Convert a row (composite type) to JSON object (row_to_json)
+    pub fn row_to_json(row: HashMap<String, SqlValue>) -> ProtocolResult<SqlValue> {
+        let mut map = Map::new();
+        for (key, val) in row {
+            map.insert(key, sql_value_to_json(val)?);
+        }
+        Ok(SqlValue::Json(JsonValue::Object(map)))
+    }
+
+    // ========== Phase 5: Extraction Functions ==========
+
+    /// Expand JSON object to rows of (key, value) pairs (json_each)
+    /// Returns Vec of (key as text, value as json)
+    pub fn json_each(json: &JsonValue) -> ProtocolResult<Vec<(SqlValue, SqlValue)>> {
+        match json {
+            JsonValue::Object(map) => Ok(map
+                .iter()
+                .map(|(k, v)| (SqlValue::Text(k.clone()), SqlValue::Json(v.clone())))
+                .collect()),
+            _ => Err(ProtocolError::PostgresError(
+                "json_each requires a JSON object".to_string(),
+            )),
+        }
+    }
+
+    /// Expand JSON object to rows of (key, value) pairs as text (json_each_text)
+    pub fn json_each_text(json: &JsonValue) -> ProtocolResult<Vec<(SqlValue, SqlValue)>> {
+        match json {
+            JsonValue::Object(map) => Ok(map
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        SqlValue::Text(k.clone()),
+                        SqlValue::Text(json_value_to_text(v)),
+                    )
+                })
+                .collect()),
+            _ => Err(ProtocolError::PostgresError(
+                "json_each_text requires a JSON object".to_string(),
+            )),
+        }
+    }
+
+    /// Extract JSON at path using variadic text arguments (json_extract_path)
+    pub fn json_extract_path(
+        json: &JsonValue,
+        path_elements: Vec<String>,
+    ) -> ProtocolResult<SqlValue> {
+        let path = JsonPath::from_text_array(&path_elements)?;
+        Self::json_path_extract(json, &path)
+    }
+
+    /// Extract JSON at path as text using variadic arguments (json_extract_path_text)
+    pub fn json_extract_path_text(
+        json: &JsonValue,
+        path_elements: Vec<String>,
+    ) -> ProtocolResult<SqlValue> {
+        let path = JsonPath::from_text_array(&path_elements)?;
+        Self::json_path_extract_text(json, &path)
+    }
+
+    // ========== Phase 6: JSONB Formatting ==========
+
+    /// Pretty print JSONB with indentation (jsonb_pretty)
+    pub fn jsonb_pretty(json: &JsonValue) -> ProtocolResult<SqlValue> {
+        let pretty = serde_json::to_string_pretty(json)
+            .map_err(|e| ProtocolError::PostgresError(format!("Pretty print failed: {}", e)))?;
+        Ok(SqlValue::Text(pretty))
+    }
 }
 
 /// Helper function to convert JSON value to text (PostgreSQL semantics)
@@ -973,5 +1057,89 @@ mod tests {
 
         let invalid_json = json!({"age": 30}); // Missing required "name"
         assert!(schema.validate(&invalid_json).is_err());
+    }
+
+    // ========== Tests for Phase 4: Conversion Functions ==========
+
+    #[test]
+    fn test_to_json() {
+        // Test integer conversion
+        let result = JsonOperations::to_json(SqlValue::Integer(42)).unwrap();
+        match result {
+            SqlValue::Json(v) => assert_eq!(v, json!(42)),
+            _ => panic!("Expected JSON value"),
+        }
+
+        // Test string conversion
+        let result = JsonOperations::to_json(SqlValue::Text("hello".to_string())).unwrap();
+        match result {
+            SqlValue::Json(v) => assert_eq!(v, json!("hello")),
+            _ => panic!("Expected JSON value"),
+        }
+
+        // Test null conversion
+        let result = JsonOperations::to_json(SqlValue::Null).unwrap();
+        match result {
+            SqlValue::Json(v) => assert_eq!(v, json!(null)),
+            _ => panic!("Expected JSON value"),
+        }
+    }
+
+    #[test]
+    fn test_to_jsonb() {
+        let result = JsonOperations::to_jsonb(SqlValue::Integer(42)).unwrap();
+        match result {
+            SqlValue::Jsonb(v) => assert_eq!(v, json!(42)),
+            _ => panic!("Expected JSONB value"),
+        }
+    }
+
+    #[test]
+    fn test_row_to_json() {
+        let mut row = HashMap::new();
+        row.insert("id".to_string(), SqlValue::Integer(1));
+        row.insert("name".to_string(), SqlValue::Text("Alice".to_string()));
+
+        let result = JsonOperations::row_to_json(row).unwrap();
+        match result {
+            SqlValue::Json(v) => {
+                assert_eq!(v.get("id").unwrap(), &json!(1));
+                assert_eq!(v.get("name").unwrap(), &json!("Alice"));
+            }
+            _ => panic!("Expected JSON object"),
+        }
+    }
+
+    #[test]
+    fn test_json_each() {
+        let json = json!({"a": 1, "b": "hello"});
+        let result = JsonOperations::json_each(&json).unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_json_extract_path() {
+        let json = json!({"a": {"b": {"c": 42}}});
+        let path = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let result = JsonOperations::json_extract_path(&json, path).unwrap();
+
+        match result {
+            SqlValue::Json(v) => assert_eq!(v, json!(42)),
+            _ => panic!("Expected JSON value"),
+        }
+    }
+
+    #[test]
+    fn test_jsonb_pretty() {
+        let json = json!({"name": "Alice", "age": 30});
+        let result = JsonOperations::jsonb_pretty(&json).unwrap();
+
+        match result {
+            SqlValue::Text(s) => {
+                assert!(s.contains('\n'));
+                assert!(s.contains("\"name\""));
+            }
+            _ => panic!("Expected text value"),
+        }
     }
 }
