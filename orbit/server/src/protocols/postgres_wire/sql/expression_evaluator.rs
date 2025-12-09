@@ -18,7 +18,7 @@ use crate::protocols::postgres_wire::sql::{
         OrderByItem, SelectStatement, UnaryOperator, VectorOperator, WindowFrame,
         WindowFunctionType,
     },
-    types::{SqlType, SqlValue},
+    types::{PostgresInterval, SqlType, SqlValue},
 };
 use chrono::Datelike;
 use std::cmp::Ordering;
@@ -715,6 +715,26 @@ impl ExpressionEvaluator {
             "QUARTER" => self.evaluate_quarter(&args),
             "DAYOFWEEK" | "DOW" => self.evaluate_day_of_week(&args),
             "DAYOFYEAR" | "DOY" => self.evaluate_day_of_year(&args),
+            "LOCALTIME" => self.evaluate_localtime(&args),
+            "LOCALTIMESTAMP" => self.evaluate_localtimestamp(&args),
+            "CLOCK_TIMESTAMP" => self.evaluate_clock_timestamp(&args),
+            "STATEMENT_TIMESTAMP" => self.evaluate_statement_timestamp(&args),
+            "TRANSACTION_TIMESTAMP" => self.evaluate_transaction_timestamp(&args),
+            "TIMEOFDAY" => self.evaluate_timeofday(&args),
+            "AGE" => self.evaluate_age(&args),
+            "DATE_BIN" => self.evaluate_date_bin(&args),
+            "MAKE_DATE" => self.evaluate_make_date(&args),
+            "MAKE_TIME" => self.evaluate_make_time(&args),
+            "MAKE_TIMESTAMP" => self.evaluate_make_timestamp(&args),
+            "MAKE_TIMESTAMPTZ" => self.evaluate_make_timestamptz(&args),
+            "MAKE_INTERVAL" => self.evaluate_make_interval(&args),
+            "TO_TIMESTAMP" => self.evaluate_to_timestamp(&args),
+            "TO_DATE" => self.evaluate_to_date(&args),
+            "TO_CHAR" => self.evaluate_to_char(&args),
+            "ISFINITE" => self.evaluate_isfinite(&args),
+            "JUSTIFY_DAYS" => self.evaluate_justify_days(&args),
+            "JUSTIFY_HOURS" => self.evaluate_justify_hours(&args),
+            "JUSTIFY_INTERVAL" => self.evaluate_justify_interval(&args),
 
             // Array functions
             "ARRAY_APPEND" => self.evaluate_array_append(&args),
@@ -3611,6 +3631,165 @@ impl ExpressionEvaluator {
             )),
         }
     }
+
+    fn evaluate_localtime(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Time(chrono::Local::now().time()))
+    }
+
+    fn evaluate_localtimestamp(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Timestamp(chrono::Local::now().naive_local()))
+    }
+
+    fn evaluate_clock_timestamp(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::TimestampWithTimezone(chrono::Utc::now()))
+    }
+
+    fn evaluate_statement_timestamp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_clock_timestamp(args)
+    }
+
+    fn evaluate_transaction_timestamp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_clock_timestamp(args)
+    }
+
+    fn evaluate_timeofday(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Text(chrono::Local::now().format("%a %b %d %H:%M:%S.%f %Y %Z").to_string()))
+    }
+
+    fn evaluate_age(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        let (end, start) = if args.len() == 2 {
+             match (&args[0], &args[1]) {
+                 (SqlValue::Timestamp(e), SqlValue::Timestamp(s)) => (*e, *s),
+                 _ => return Err(ProtocolError::PostgresError("AGE args must be timestamps".to_string())),
+             }
+        } else if args.len() == 1 {
+             match &args[0] {
+                 SqlValue::Timestamp(s) => (chrono::Local::now().naive_local(), *s),
+                 _ => return Err(ProtocolError::PostgresError("AGE arg must be timestamp".to_string())),
+             }
+        } else {
+             return Err(ProtocolError::PostgresError("AGE requires 1 or 2 arguments".to_string()));
+        };
+
+        let duration = end - start;
+        let days = duration.num_days() as i32;
+        let microseconds = (duration.num_seconds() % 86400) * 1_000_000 + (duration.subsec_nanos() as i64 / 1000);
+        
+        Ok(SqlValue::Interval(PostgresInterval {
+            months: 0,
+            days,
+            microseconds
+        }))
+    }
+    
+    fn evaluate_date_bin(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         Err(ProtocolError::PostgresError("DATE_BIN not yet implemented".to_string()))
+    }
+    
+    fn evaluate_make_date(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 3 { return Err(ProtocolError::PostgresError("MAKE_DATE requires 3 arguments".to_string())); }
+        let y = match &args[0] { SqlValue::Integer(i) => *i, _ => return Err(ProtocolError::PostgresError("MAKE_DATE year must be int".to_string())) };
+        let m = match &args[1] { SqlValue::Integer(i) => *i, _ => return Err(ProtocolError::PostgresError("MAKE_DATE month must be int".to_string())) };
+        let d = match &args[2] { SqlValue::Integer(i) => *i, _ => return Err(ProtocolError::PostgresError("MAKE_DATE day must be int".to_string())) };
+        
+        match chrono::NaiveDate::from_ymd_opt(y, m as u32, d as u32) {
+            Some(date) => Ok(SqlValue::Date(date)),
+            None => Err(ProtocolError::PostgresError("Invalid date".to_string()))
+        }
+    }
+    
+    fn evaluate_make_time(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 3 { return Err(ProtocolError::PostgresError("MAKE_TIME requires 3 arguments".to_string())); }
+        let h = match &args[0] { SqlValue::Integer(i) => *i as u32, _ => return Err(ProtocolError::PostgresError("MAKE_TIME hour must be int".to_string())) };
+        let m = match &args[1] { SqlValue::Integer(i) => *i as u32, _ => return Err(ProtocolError::PostgresError("MAKE_TIME min must be int".to_string())) };
+        let s = match &args[2] { SqlValue::DoublePrecision(f) => *f, _ => return Err(ProtocolError::PostgresError("MAKE_TIME sec must be double".to_string())) };
+        
+        let sec = s as u32;
+        let nan = ((s - sec as f64) * 1_000_000_000.0) as u32;
+        
+        match chrono::NaiveTime::from_hms_nano_opt(h, m, sec, nan) {
+            Some(t) => Ok(SqlValue::Time(t)),
+            None => Err(ProtocolError::PostgresError("Invalid time".to_string()))
+        }
+    }
+
+    fn evaluate_make_timestamp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 6 { return Err(ProtocolError::PostgresError("MAKE_TIMESTAMP requires 6 arguments".to_string())); }
+        let y = match &args[0] { SqlValue::Integer(i) => *i, _ => return Err(ProtocolError::PostgresError("Year must be int".to_string())) };
+        let m = match &args[1] { SqlValue::Integer(i) => *i, _ => return Err(ProtocolError::PostgresError("Month must be int".to_string())) };
+        let d = match &args[2] { SqlValue::Integer(i) => *i, _ => return Err(ProtocolError::PostgresError("Day must be int".to_string())) };
+        let h = match &args[3] { SqlValue::Integer(i) => *i, _ => return Err(ProtocolError::PostgresError("Hour must be int".to_string())) };
+        let min = match &args[4] { SqlValue::Integer(i) => *i, _ => return Err(ProtocolError::PostgresError("Minute must be int".to_string())) };
+        let s = match &args[5] { SqlValue::DoublePrecision(f) => *f, _ => return Err(ProtocolError::PostgresError("Second must be double".to_string())) };
+        
+        let sec = s as u32;
+        let nan = ((s - sec as f64) * 1_000_000_000.0) as u32;
+        
+        match chrono::NaiveDate::from_ymd_opt(y, m as u32, d as u32) {
+             Some(date) => match chrono::NaiveTime::from_hms_nano_opt(h as u32, min as u32, sec, nan) {
+                 Some(time) => Ok(SqlValue::Timestamp(chrono::NaiveDateTime::new(date, time))),
+                 None => Err(ProtocolError::PostgresError("Invalid time".to_string()))
+             },
+             None => Err(ProtocolError::PostgresError("Invalid date".to_string()))
+        }
+    }
+
+    fn evaluate_make_timestamptz(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         Err(ProtocolError::PostgresError("MAKE_TIMESTAMPTZ not implemented".to_string()))
+    }
+    
+    fn evaluate_make_interval(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Err(ProtocolError::PostgresError("MAKE_INTERVAL not implemented".to_string()))
+    }
+
+    fn evaluate_to_timestamp(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         if args.len() == 1 {
+             match &args[0] {
+                 SqlValue::DoublePrecision(d) => {
+                     let secs = *d as i64;
+                     let nsecs = ((*d - secs as f64) * 1_000_000_000.0) as u32;
+                     match chrono::DateTime::from_timestamp(secs, nsecs) {
+                         Some(dt) => Ok(SqlValue::TimestampWithTimezone(dt)),
+                         None => Err(ProtocolError::PostgresError("Invalid timestamp".to_string()))
+                     }
+                 },
+                 _ => Err(ProtocolError::PostgresError("TO_TIMESTAMP(epoch) requires double".to_string()))
+             }
+         } else {
+             Err(ProtocolError::PostgresError("TO_TIMESTAMP(text, fmt) not implemented".to_string()))
+         }
+    }
+    
+    fn evaluate_to_date(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         Err(ProtocolError::PostgresError("TO_DATE not implemented".to_string()))
+    }
+    
+    fn evaluate_to_char(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() == 2 {
+             match (&args[0], &args[1]) {
+                 (SqlValue::Timestamp(ts), SqlValue::Text(fmt)) => {
+                     Ok(SqlValue::Text(ts.format(fmt).to_string()))
+                 },
+                 (SqlValue::TimestampWithTimezone(ts), SqlValue::Text(fmt)) => {
+                     Ok(SqlValue::Text(ts.format(fmt).to_string()))
+                 },
+                 (SqlValue::Date(d), SqlValue::Text(fmt)) => {
+                     Ok(SqlValue::Text(d.format(fmt).to_string()))
+                 },
+                  _ => Err(ProtocolError::PostgresError("TO_CHAR types not supported".to_string()))
+             }
+        } else {
+             Err(ProtocolError::PostgresError("TO_CHAR requires 2 args".to_string()))
+        }
+    }
+
+    fn evaluate_isfinite(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         Ok(SqlValue::Boolean(true))
+    }
+
+    fn evaluate_justify_days(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> { Err(ProtocolError::PostgresError("JUSTIFY_DAYS not implemented".to_string())) }
+    fn evaluate_justify_hours(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> { Err(ProtocolError::PostgresError("JUSTIFY_HOURS not implemented".to_string())) }
+    fn evaluate_justify_interval(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> { Err(ProtocolError::PostgresError("JUSTIFY_INTERVAL not implemented".to_string())) }
 
     fn evaluate_vector_dims(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         if args.len() != 1 {

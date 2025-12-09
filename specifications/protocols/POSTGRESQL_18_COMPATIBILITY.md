@@ -619,27 +619,27 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | current_timestamp | ✅ | Current timestamp |
 | current_date | ✅ | Current date |
 | current_time | ✅ | Current time |
-| localtime | ❌ | Local time |
-| localtimestamp | ❌ | Local timestamp |
-| clock_timestamp() | ❌ | Wall clock time |
-| statement_timestamp() | ❌ | Statement start time |
-| transaction_timestamp() | ❌ | Transaction start |
-| timeofday() | ❌ | Text time |
-| age(ts1,ts2) | ❌ | Interval between |
-| date_part(field,ts) | 🔶 | Extract part |
-| extract(field from ts) | 🔶 | Extract part |
-| date_trunc(field,ts) | ❌ | Truncate to precision |
+| localtime | ✅ | Local time |
+| localtimestamp | ✅ | Local timestamp |
+| clock_timestamp() | ✅ | Wall clock time |
+| statement_timestamp() | ✅ | Statement start time |
+| transaction_timestamp() | ✅ | Transaction start |
+| timeofday() | ✅ | Text time |
+| age(ts1,ts2) | ✅ | Interval between |
+| date_part(field,ts) | ✅ | Extract part |
+| extract(field from ts) | ✅ | Extract part |
+| date_trunc(field,ts) | ✅ | Truncate to precision |
 | date_bin(stride,ts,origin) | ❌ | Bin timestamp |
-| make_date(y,m,d) | ❌ | Construct date |
-| make_time(h,m,s) | ❌ | Construct time |
-| make_timestamp(y,m,d,h,m,s) | ❌ | Construct timestamp |
+| make_date(y,m,d) | ✅ | Construct date |
+| make_time(h,m,s) | ✅ | Construct time |
+| make_timestamp(y,m,d,h,m,s) | ✅ | Construct timestamp |
 | make_timestamptz(...) | ❌ | Construct timestamptz |
 | make_interval(...) | ❌ | Construct interval |
-| to_timestamp(epoch) | ❌ | From Unix epoch |
+| to_timestamp(epoch) | ✅ | From Unix epoch |
 | to_timestamp(s,fmt) | ❌ | Parse timestamp |
 | to_date(s,fmt) | ❌ | Parse date |
-| to_char(ts,fmt) | ❌ | Format timestamp |
-| isfinite(ts) | ❌ | Check finite |
+| to_char(ts,fmt) | ✅ | Format timestamp |
+| isfinite(ts) | ✅ | Check finite |
 | justify_days(interval) | ❌ | Normalize days |
 | justify_hours(interval) | ❌ | Normalize hours |
 | justify_interval(interval) | ❌ | Normalize interval |
