@@ -232,27 +232,29 @@ impl MysqlFts {
         let mut store = self.text_store.write().await;
         store.insert(index_name.clone(), TextIndex::new(columns.to_vec()));
 
-        // Also try to create Tantivy index for better performance
-        let mut schema_builder = Schema::builder();
-        schema_builder.add_text_field("_id", STRING | STORED);
+        // Also try to create Tantivy index for better performance (if available)
+        if let Some(engine) = &self.engine {
+            let mut schema_builder = Schema::builder();
+            schema_builder.add_text_field("_id", STRING | STORED);
 
-        let text_options = TextOptions::default()
-            .set_indexing_options(
-                TextFieldIndexing::default()
-                    .set_tokenizer("default")
-                    .set_index_option(IndexRecordOption::WithFreqsAndPositions),
-            )
-            .set_stored();
+            let text_options = TextOptions::default()
+                .set_indexing_options(
+                    TextFieldIndexing::default()
+                        .set_tokenizer("default")
+                        .set_index_option(IndexRecordOption::WithFreqsAndPositions),
+                )
+                .set_stored();
 
-        for column in columns {
-            schema_builder.add_text_field(column, text_options.clone());
-        }
+            for column in columns {
+                schema_builder.add_text_field(column, text_options.clone());
+            }
 
-        let schema = schema_builder.build();
+            let schema = schema_builder.build();
 
-        // Create Tantivy index (best effort)
-        if let Ok(engine) = self.engine.try_write() {
-            let _ = engine.create_index(&index_name, schema).await;
+            // Create Tantivy index (best effort)
+            if let Ok(engine_guard) = engine.try_write() {
+                let _ = engine_guard.create_index(&index_name, schema).await;
+            }
         }
 
         Ok(())

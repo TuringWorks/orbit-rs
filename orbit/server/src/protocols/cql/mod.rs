@@ -39,11 +39,13 @@
 //! ```
 
 pub mod adapter;
+pub mod fts;
 pub mod parser;
 pub mod protocol;
 pub mod types;
 
 pub use adapter::CqlAdapter;
+pub use fts::{AnalyzerMode, CqlFts, SasiIndexConfig};
 pub use parser::{ComparisonOperator, CqlParser, CqlStatement};
 pub use protocol::{ConsistencyLevel, CqlFrame, CqlOpcode};
 pub use types::{CqlType, CqlValue};

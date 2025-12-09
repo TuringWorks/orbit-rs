@@ -24,6 +24,13 @@ This document provides the authoritative status of protocol implementations in O
 | **REST/HTTP** | 40% | Active Development | - | Authentication |
 
 ### Recent Improvements (2025-12-08)
+- **Full-Text Search (Cross-Protocol)**:
+  - PostgreSQL FTS functions: to_tsvector, to_tsquery, plainto_tsquery, phraseto_tsquery, websearch_to_tsquery ✅
+  - PostgreSQL FTS operators: @@ (match), @> (contains), <@ (contained by), || (concat), && (and), !! (not), <-> (followed by) ✅
+  - PostgreSQL FTS functions: setweight, ts_rank, ts_rank_cd, ts_headline, numnode, querytree, strip, ts_lexize ✅
+  - Redis RediSearch-compatible: FT.CREATE, FT.ADD, FT.SEARCH (TF-IDF), FT.DEL, FT.INFO ✅
+  - MySQL FULLTEXT: MATCH...AGAINST with NATURAL LANGUAGE, BOOLEAN, and QUERY EXPANSION modes ✅
+  - CQL SASI/SAI: CONTAINS, LIKE (prefix/suffix wildcards), fulltext search ✅
 - **PostgreSQL Two-Phase Commit**: Full 2PC support:
   - PREPARE TRANSACTION 'transaction_id' ✅
   - COMMIT PREPARED 'transaction_id' ✅
@@ -192,6 +199,14 @@ OrbitQL supports two wire protocols for client-server communication:
 | Vectors | 10 | ✅ Complete | ~25 |
 | Graph | 5 | ✅ Complete | ~20 |
 | GraphRAG | 3 | ✅ Complete | ~5 |
+| **Full-Text Search** | 5 | ✅ **NEW** | ~10 |
+
+### ✅ Full-Text Search (RediSearch-Compatible)
+- `FT.CREATE` - Create FTS index with schema (TEXT, TAG, NUMERIC, GEO, VECTOR fields) ✅
+- `FT.ADD` - Add document to FTS index ✅
+- `FT.SEARCH` - Search with TF-IDF scoring, relevance ranking ✅
+- `FT.DEL` - Delete document from FTS index ✅
+- `FT.INFO` - Get FTS index information ✅
 
 ### Critical Gaps
 
@@ -328,6 +343,13 @@ OrbitQL supports two wire protocols for client-server communication:
 | SHOW commands | 60% | SHOW TABLES, etc. |
 | Information_schema | 50% | Basic tables |
 
+### ✅ Full-Text Search (MySQL FULLTEXT)
+- `CREATE FULLTEXT INDEX` - Create FULLTEXT index on text columns ✅
+- `MATCH() AGAINST()` - Full-text search with three modes:
+  - `IN NATURAL LANGUAGE MODE` - TF-IDF scoring, relevance ranking ✅
+  - `IN BOOLEAN MODE` - Boolean operators (+must -exclude optional) ✅
+  - `WITH QUERY EXPANSION` - Query expansion using top results ✅
+
 ### Critical Gaps
 
 | Feature | Impact | Priority |
@@ -375,6 +397,16 @@ OrbitQL supports two wire protocols for client-server communication:
 | ANN OF clause | ✅ Complete |
 | similarity_cosine | ✅ Complete |
 | SAI index for vectors | ✅ Complete |
+
+### ✅ Full-Text Search (SASI/SAI Compatible)
+- `CREATE INDEX ... USING 'SASI'` - Create SASI secondary index ✅
+- `CONTAINS` - Full-text term matching ✅
+- `LIKE` with wildcards - Prefix and suffix matching ✅
+- Analyzer modes:
+  - `StandardAnalyzer` - Whitespace/punctuation tokenization ✅
+  - `NonTokenizingAnalyzer` - Exact matching ✅
+  - `CaseInsensitiveAnalyzer` - Case-insensitive matching ✅
+- Full-text search with TF-IDF relevance scoring ✅
 
 ### Critical Gaps
 
@@ -579,7 +611,10 @@ OrbitQL supports two wire protocols for client-server communication:
 | Protocol | Feature | Status |
 |----------|---------|--------|
 | PostgreSQL | Recursive CTEs | Pending |
-| PostgreSQL | Full-text search | Pending |
+| PostgreSQL | Full-text search | ✅ **DONE** |
+| Redis | Full-text search | ✅ **DONE** |
+| MySQL | Full-text search | ✅ **DONE** |
+| CQL | Full-text search | ✅ **DONE** |
 | Redis | Lua scripting | Pending |
 | Redis | Sorted Set operations | Pending |
 | CQL | TTL enforcement | Pending |
