@@ -133,6 +133,17 @@ pub enum TokenType {
     Access,
     Use,
 
+    // Function/Procedure keywords
+    Call,
+    Procedure,
+    Language,
+    Returns,
+    Immutable,
+    Stable,
+    Volatile,
+    Replace,
+    Out,
+
     // Graph keywords
     Node,
     Edge,
@@ -395,6 +406,15 @@ impl Token {
                 | LineString
                 | Polygon
                 | Geography
+                // Function/Procedure keywords
+                | Call
+                | Procedure
+                | Language
+                | Returns
+                | Immutable
+                | Stable
+                | Volatile
+                | Replace
         )
     }
 
@@ -651,6 +671,17 @@ impl Lexer {
         keywords.insert("REBUILD".to_string(), TokenType::Rebuild);
         keywords.insert("ACCESS".to_string(), TokenType::Access);
         keywords.insert("USE".to_string(), TokenType::Use);
+
+        // Function/Procedure keywords
+        keywords.insert("CALL".to_string(), TokenType::Call);
+        keywords.insert("PROCEDURE".to_string(), TokenType::Procedure);
+        keywords.insert("LANGUAGE".to_string(), TokenType::Language);
+        keywords.insert("RETURNS".to_string(), TokenType::Returns);
+        keywords.insert("IMMUTABLE".to_string(), TokenType::Immutable);
+        keywords.insert("STABLE".to_string(), TokenType::Stable);
+        keywords.insert("VOLATILE".to_string(), TokenType::Volatile);
+        keywords.insert("REPLACE".to_string(), TokenType::Replace);
+        keywords.insert("OUT".to_string(), TokenType::Out);
 
         // Vector and spatial keywords
         keywords.insert("VECTOR".to_string(), TokenType::Vector);

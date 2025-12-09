@@ -213,6 +213,9 @@ impl<'a> StatementExecutor<'a> {
             Statement::Savepoint(_) => Err(SpatialError::OperationError(
                 "SAVEPOINT not yet implemented".to_string(),
             )),
+            Statement::Call(_) => Err(SpatialError::OperationError(
+                "CALL not yet implemented".to_string(),
+            )),
         }
     }
 

@@ -1,0 +1,417 @@
+-- ============================================================================
+-- OrbitRS Healthcare Examples - OrbitQL Clinical Queries
+-- ============================================================================
+-- Comprehensive clinical queries demonstrating OrbitQL's unique features:
+-- - Graph traversal for care team relationships
+-- - Vector search for similar patient cohorts
+-- - ML model integration for risk prediction
+-- - Live queries for real-time monitoring
+-- ============================================================================
+
+-- ============================================================================
+-- PATIENT GRAPH RELATIONSHIPS
+-- ============================================================================
+
+-- Define patient care team relationships
+RELATE patients:mrn_888->treated_by->providers:dr_smith SET
+    relationship = 'Primary Care Physician',
+    since = '2020-01-15',
+    active = true;
+
+RELATE patients:mrn_888->treated_by->providers:dr_jones SET
+    relationship = 'Cardiologist',
+    referral_date = '2023-06-01',
+    referring_provider = 'dr_smith';
+
+RELATE patients:mrn_888->treated_by->providers:nurse_wilson SET
+    relationship = 'Care Coordinator',
+    assigned_date = '2024-01-01';
+
+-- Patient to facility relationships
+RELATE patients:mrn_888->visits->facilities:main_hospital SET
+    first_visit = '2020-01-15',
+    visit_count = 25,
+    primary_department = 'Internal Medicine';
+
+-- Medication relationships
+RELATE patients:mrn_888->takes->medications:metformin SET
+    dosage = '500mg',
+    frequency = 'twice_daily',
+    prescriber = 'dr_smith',
+    start_date = '2020-02-01',
+    indication = 'Type 2 Diabetes';
+
+-- ============================================================================
+-- CARE TEAM GRAPH TRAVERSAL
+-- ============================================================================
+
+-- Find all providers treating a patient
+SELECT ->treated_by->provider.* AS care_team
+FROM patients:mrn_888;
+
+-- Find providers and their specialties
+SELECT
+    ->treated_by->provider.name AS provider_name,
+    ->treated_by->provider.specialty AS specialty,
+    ->treated_by.relationship AS role,
+    ->treated_by.since AS since_date
+FROM patients:mrn_888;
+
+-- Find all patients of a specific provider
+SELECT <-treated_by<-patient.* AS patients
+FROM providers:dr_smith
+WHERE <-treated_by.active = true;
+
+-- Multi-hop: Find all providers who share patients with Dr. Smith
+SELECT DISTINCT
+    p.->treated_by->provider.name AS colleague
+FROM providers:dr_smith
+    <-treated_by<-patient AS p
+WHERE p.->treated_by->provider.id != 'dr_smith';
+
+-- Referral network analysis
+TRAVERSE referral FROM providers:dr_smith MAX_DEPTH 3;
+
+-- ============================================================================
+-- SIMILAR PATIENT COHORT (Vector Search)
+-- ============================================================================
+
+-- Find similar patients based on clinical embeddings
+SELECT
+    id AS patient_mrn,
+    name,
+    primary_diagnosis,
+    age,
+    vector::similarity::cosine(clinical_embedding, $query_patient_embedding) AS similarity
+FROM patients
+WHERE similarity > 0.85
+ORDER BY similarity DESC
+LIMIT 20;
+
+-- Find similar patients with specific condition filters
+SELECT
+    p.mrn,
+    p.name,
+    p.diagnoses,
+    p.age,
+    vector::similarity::cosine(p.embedding, $target_embedding) AS similarity
+FROM patients p
+WHERE 'E11.9' = ANY(p.diagnosis_codes)  -- Type 2 Diabetes
+    AND p.age BETWEEN 55 AND 75
+ORDER BY p.embedding <=> $target_embedding
+LIMIT 10;
+
+-- Hybrid search: Similar patients + keyword match
+SELECT
+    p.mrn,
+    p.name,
+    search::score(1) AS text_relevance,
+    1 - (p.embedding <=> $query_embedding) AS vector_similarity,
+    (search::score(1) * 0.4 + (1 - (p.embedding <=> $query_embedding)) * 0.6) AS hybrid_score
+FROM patients p
+WHERE p.clinical_notes @@ plainto_tsquery('diabetes uncontrolled')
+ORDER BY hybrid_score DESC
+LIMIT 20;
+
+-- ============================================================================
+-- ML MODEL INTEGRATION - RISK PREDICTION
+-- ============================================================================
+
+-- Predict readmission risk using ML model
+SELECT
+    p.mrn,
+    p.name,
+    p.last_admission_date,
+    p.diagnosis,
+    ml::predict('readmission_risk_v2', {
+        age: p.age,
+        prior_admissions_6mo: p.admission_count_6mo,
+        comorbidity_index: p.charlson_index,
+        length_of_stay: p.los_days,
+        discharge_disposition: p.discharge_to
+    }) AS readmission_probability
+FROM patients p
+WHERE p.discharge_date >= CURRENT_DATE - INTERVAL '30 days'
+ORDER BY readmission_probability DESC;
+
+-- Predict mortality risk for ICU patients
+SELECT
+    p.mrn,
+    p.name,
+    p.icu_admission_time,
+    ml::predict('mortality_risk_icu', {
+        apache_score: v.apache_ii,
+        sofa_score: v.sofa,
+        age: p.age,
+        mechanical_ventilation: v.on_vent,
+        vasopressors: v.on_pressors,
+        gcs: v.gcs_total
+    }) AS mortality_risk,
+    CASE
+        WHEN ml::predict('mortality_risk_icu', {...}) > 0.5 THEN 'HIGH'
+        WHEN ml::predict('mortality_risk_icu', {...}) > 0.25 THEN 'MODERATE'
+        ELSE 'LOW'
+    END AS risk_category
+FROM patients p
+JOIN vitals v ON p.mrn = v.patient_mrn
+WHERE p.location LIKE 'ICU%'
+    AND v.recorded_at = (SELECT MAX(recorded_at) FROM vitals WHERE patient_mrn = p.mrn);
+
+-- Generate clinical note embeddings
+UPDATE clinical_notes
+SET embedding = ml::embed_text(
+    string::concat(chief_complaint, ' ', assessment, ' ', plan),
+    'clinical-bert-base'
+)
+WHERE embedding IS NULL
+LIMIT 1000;
+
+-- ============================================================================
+-- CLINICAL DECISION SUPPORT QUERIES
+-- ============================================================================
+
+-- Drug-drug interaction check using graph
+MATCH (med1:Medication)<-[:TAKES]-(p:Patient)-[:TAKES]->(med2:Medication),
+      (med1)-[:INTERACTS_WITH {severity: 'HIGH'}]->(med2)
+WHERE p.mrn = 'MRN-888'
+RETURN med1.name AS medication1, med2.name AS medication2,
+       med1->interacts_with->med2.severity AS severity,
+       med1->interacts_with->med2.description AS interaction;
+
+-- Find patients needing screening based on guidelines
+SELECT
+    p.mrn,
+    p.name,
+    p.age,
+    p.gender,
+    'Colonoscopy' AS recommended_screening,
+    p.last_colonoscopy_date,
+    CASE
+        WHEN p.last_colonoscopy_date IS NULL THEN 'Never screened'
+        WHEN p.last_colonoscopy_date < CURRENT_DATE - INTERVAL '10 years' THEN 'Overdue'
+        ELSE 'Up to date'
+    END AS screening_status
+FROM patients p
+WHERE p.age >= 45
+    AND p.age < 75
+    AND (p.last_colonoscopy_date IS NULL OR p.last_colonoscopy_date < CURRENT_DATE - INTERVAL '10 years')
+ORDER BY p.age DESC;
+
+-- Care gap analysis
+SELECT
+    p.mrn,
+    p.name,
+    p.primary_diagnosis,
+    ARRAY_AGG(DISTINCT cg.gap_type) AS care_gaps,
+    COUNT(DISTINCT cg.gap_type) AS gap_count
+FROM patients p
+JOIN care_gaps cg ON p.mrn = cg.patient_mrn
+WHERE cg.status = 'OPEN'
+    AND p.->treated_by->provider.id = 'dr_smith'
+GROUP BY p.mrn, p.name, p.primary_diagnosis
+HAVING COUNT(DISTINCT cg.gap_type) > 0
+ORDER BY gap_count DESC;
+
+-- ============================================================================
+-- REAL-TIME MONITORING (Live Queries)
+-- ============================================================================
+
+-- Live query: Monitor critical vitals
+LIVE SELECT
+    v.patient_mrn,
+    p.name,
+    p.room,
+    v.heart_rate,
+    v.blood_pressure_sys,
+    v.blood_pressure_dia,
+    v.spo2,
+    v.respiratory_rate,
+    CASE
+        WHEN v.heart_rate < 50 OR v.heart_rate > 120 THEN 'CRITICAL'
+        WHEN v.spo2 < 92 THEN 'CRITICAL'
+        WHEN v.blood_pressure_sys > 180 OR v.blood_pressure_sys < 90 THEN 'CRITICAL'
+        ELSE 'NORMAL'
+    END AS alert_status
+FROM vitals v
+JOIN patients p ON v.patient_mrn = p.mrn
+WHERE v.recorded_at >= time::now() - 1m
+DIFF;
+
+-- Live query: Sepsis early warning
+LIVE SELECT
+    p.mrn,
+    p.name,
+    p.room,
+    v.temperature,
+    v.heart_rate,
+    v.respiratory_rate,
+    v.wbc,
+    ml::predict('sepsis_early_warning', {
+        temp: v.temperature,
+        hr: v.heart_rate,
+        rr: v.respiratory_rate,
+        wbc: v.wbc,
+        lactate: v.lactate,
+        sbp: v.blood_pressure_sys
+    }) AS sepsis_risk
+FROM vitals v
+JOIN patients p ON v.patient_mrn = p.mrn
+WHERE v.recorded_at >= time::now() - 5m
+    AND sepsis_risk > 0.6
+DIFF;
+
+-- Live query: Bed census by unit
+LIVE SELECT
+    unit,
+    COUNT(*) AS occupied_beds,
+    MAX(total_beds) AS total_beds,
+    ROUND(COUNT(*) * 100.0 / MAX(total_beds), 1) AS occupancy_pct
+FROM bed_assignments ba
+JOIN units u ON ba.unit = u.unit_code
+WHERE ba.discharge_time IS NULL
+GROUP BY unit
+DIFF;
+
+-- ============================================================================
+-- ANALYTICS & REPORTING
+-- ============================================================================
+
+-- Patient outcomes by provider
+SELECT
+    prov.name AS provider_name,
+    prov.specialty,
+    COUNT(DISTINCT e.patient_mrn) AS patient_count,
+    AVG(e.length_of_stay) AS avg_los,
+    SUM(CASE WHEN e.readmission_30day THEN 1 ELSE 0 END) AS readmissions,
+    ROUND(SUM(CASE WHEN e.readmission_30day THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS readmission_rate
+FROM providers prov
+    <-treated_by<-patient AS p
+JOIN encounters e ON p.mrn = e.patient_mrn
+WHERE e.discharge_date >= CURRENT_DATE - INTERVAL '12 months'
+GROUP BY prov.id, prov.name, prov.specialty
+ORDER BY readmission_rate DESC;
+
+-- Disease cohort analysis with graph
+SELECT
+    d.icd10_code,
+    d.description AS diagnosis,
+    COUNT(DISTINCT p.mrn) AS patient_count,
+    AVG(p.age) AS avg_age,
+    COUNT(DISTINCT p.->treated_by->provider.id) AS treating_providers,
+    COUNT(DISTINCT p.->takes->medication.id) AS unique_medications
+FROM diagnoses d
+    <-has_diagnosis<-patient AS p
+WHERE d.icd10_code LIKE 'E11%'  -- Diabetes codes
+GROUP BY d.icd10_code, d.description
+ORDER BY patient_count DESC;
+
+-- Clustering patients by clinical similarity
+SELECT
+    p.mrn,
+    p.name,
+    p.primary_diagnosis,
+    ml::cluster_kmeans(p.clinical_embedding, 10) AS cluster_id
+FROM patients p
+WHERE p.active = true;
+
+-- Find cluster centroids and representative patients
+WITH clustered AS (
+    SELECT
+        p.*,
+        ml::cluster_kmeans(p.clinical_embedding, 10) AS cluster_id
+    FROM patients p
+    WHERE p.active = true
+)
+SELECT DISTINCT ON (cluster_id)
+    cluster_id,
+    mrn,
+    name,
+    primary_diagnosis,
+    COUNT(*) OVER (PARTITION BY cluster_id) AS cluster_size
+FROM clustered
+ORDER BY cluster_id,
+    vector::distance::cosine(clinical_embedding,
+        (SELECT vector::avg(clinical_embedding) FROM clustered c2 WHERE c2.cluster_id = clustered.cluster_id));
+
+-- ============================================================================
+-- HIPAA AUDIT QUERIES
+-- ============================================================================
+
+-- Audit access to specific patient records
+SELECT
+    al.access_time,
+    al.user_id,
+    u.name AS user_name,
+    u.role,
+    al.action_type,
+    al.resource_accessed,
+    al.ip_address,
+    al.justification
+FROM audit_log al
+JOIN users u ON al.user_id = u.id
+WHERE al.patient_mrn = 'MRN-888'
+    AND al.access_time >= CURRENT_DATE - INTERVAL '90 days'
+ORDER BY al.access_time DESC;
+
+-- Detect unusual access patterns
+SELECT
+    al.user_id,
+    u.name,
+    u.role,
+    u.department,
+    COUNT(*) AS access_count,
+    COUNT(DISTINCT al.patient_mrn) AS unique_patients_accessed,
+    COUNT(DISTINCT DATE(al.access_time)) AS active_days
+FROM audit_log al
+JOIN users u ON al.user_id = u.id
+WHERE al.access_time >= CURRENT_DATE - INTERVAL '7 days'
+GROUP BY al.user_id, u.name, u.role, u.department
+HAVING COUNT(DISTINCT al.patient_mrn) > 100  -- Flag unusual volume
+ORDER BY unique_patients_accessed DESC;
+
+-- ============================================================================
+-- TRANSACTIONS FOR DATA INTEGRITY
+-- ============================================================================
+
+-- Admit patient with full data integrity
+BEGIN TRANSACTION;
+    -- Create encounter
+    INSERT INTO encounters {
+        encounter_id: uuid::v4(),
+        patient_mrn: 'MRN-888',
+        encounter_type: 'INPATIENT',
+        admission_date: time::now(),
+        admitting_provider: 'dr_smith',
+        chief_complaint: 'Chest pain',
+        status: 'ACTIVE'
+    };
+
+    -- Update patient status
+    UPDATE patients SET
+        current_location = 'ICU-4A',
+        current_status = 'INPATIENT',
+        updated_at = time::now()
+    WHERE mrn = 'MRN-888';
+
+    -- Create bed assignment
+    INSERT INTO bed_assignments {
+        patient_mrn: 'MRN-888',
+        unit: 'ICU-4A',
+        bed: 'Bed-2',
+        assigned_at: time::now()
+    };
+
+    -- Create care team relationships
+    RELATE patients:mrn_888->assigned_to->providers:dr_johnson SET
+        role = 'Attending',
+        assigned_at = time::now();
+
+    -- Create audit entry
+    INSERT INTO audit_log {
+        event_type: 'ADMISSION',
+        patient_mrn: 'MRN-888',
+        user_id: $current_user,
+        timestamp: time::now()
+    };
+COMMIT;
+

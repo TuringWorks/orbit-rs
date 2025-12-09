@@ -1,0 +1,439 @@
+-- ============================================================================
+-- OrbitRS Logistics Examples - OrbitQL Supply Chain Queries
+-- ============================================================================
+-- Comprehensive supply chain queries demonstrating OrbitQL's unique features:
+-- - Graph traversal for supply chain network
+-- - Vector search for route optimization
+-- - ML model integration for ETA prediction
+-- - Live queries for real-time tracking
+-- ============================================================================
+
+-- ============================================================================
+-- SUPPLY CHAIN GRAPH RELATIONSHIPS
+-- ============================================================================
+
+-- Define supplier relationships
+RELATE suppliers:acme_corp->supplies->warehouses:wh_nyc SET
+    products = ['SKU-001', 'SKU-002', 'SKU-003'],
+    lead_time_days = 5,
+    contract_start = '2024-01-01',
+    contract_end = '2025-12-31',
+    priority = 'PRIMARY';
+
+-- Warehouse to warehouse relationships
+RELATE warehouses:wh_nyc->transfers_to->warehouses:wh_chicago SET
+    transfer_frequency = 'DAILY',
+    avg_transfer_time_hours = 18,
+    primary_carrier = 'FedEx Freight';
+
+-- Facility to delivery zone relationships
+RELATE warehouses:wh_nyc->serves->delivery_zones:manhattan SET
+    service_level = 'SAME_DAY',
+    avg_delivery_time_min = 45,
+    capacity_packages_per_day = 5000;
+
+-- Driver to vehicle relationships
+RELATE drivers:d_101->operates->vehicles:v_1001 SET
+    assigned_date = '2024-01-15',
+    license_class = 'CDL-A',
+    endorsements = ['Hazmat', 'Tanker'];
+
+-- ============================================================================
+-- SUPPLY CHAIN NETWORK TRAVERSAL
+-- ============================================================================
+
+-- Find all suppliers for a warehouse
+SELECT <-supplies<-supplier.* AS suppliers
+FROM warehouses:wh_nyc;
+
+-- Multi-hop: Find suppliers to downstream facilities
+SELECT
+    s.name AS supplier_name,
+    s.->supplies->warehouse.name AS direct_warehouse,
+    s.->supplies->warehouse.->transfers_to->warehouse.name AS downstream_warehouse
+FROM suppliers s;
+
+-- Find optimal supply path
+SELECT graph::shortest_path(
+    suppliers:acme_corp,
+    delivery_zones:manhattan,
+    ['supplies', 'transfers_to', 'serves']
+) AS supply_chain_path;
+
+-- All paths from supplier to customer
+SELECT graph::all_paths(
+    suppliers:acme_corp,
+    customers:cust_12345,
+    ['supplies', 'transfers_to', 'serves', 'delivered_to'],
+    5
+) AS delivery_paths;
+
+-- Network centrality: Find most critical warehouses
+SELECT
+    w.id,
+    w.name,
+    w.location,
+    graph::betweenness_centrality(w.id) AS criticality_score,
+    COUNT(<-supplies) AS supplier_count,
+    COUNT(->serves) AS zones_served
+FROM warehouses w
+ORDER BY criticality_score DESC;
+
+-- ============================================================================
+-- ROUTE SIMILARITY (Vector Search)
+-- ============================================================================
+
+-- Find similar historical routes for ETA prediction
+SELECT
+    r.route_id,
+    r.zone,
+    r.total_stops,
+    r.actual_duration_min,
+    r.efficiency_score,
+    vector::similarity::cosine(r.route_embedding, $current_route_embedding) AS similarity
+FROM route_history r
+WHERE r.zone = 'NYC-MANHATTAN'
+    AND r.route_date >= CURRENT_DATE - INTERVAL '30 days'
+ORDER BY similarity DESC
+LIMIT 10;
+
+-- Find routes with similar traffic patterns
+SELECT
+    r.route_id,
+    r.day_of_week,
+    r.start_hour,
+    r.traffic_level,
+    r.actual_duration_min,
+    1 - (r.traffic_embedding <=> $current_conditions_embedding) AS traffic_similarity
+FROM route_history r
+WHERE r.traffic_similarity > 0.85
+    AND r.day_of_week = day_of_week(CURRENT_DATE)
+ORDER BY r.traffic_embedding <=> $current_conditions_embedding
+LIMIT 5;
+
+-- Hybrid search: Similar routes + filter criteria
+SELECT
+    r.route_id,
+    r.zone,
+    search::score(1) AS keyword_score,
+    1 - (r.route_embedding <=> $query_embedding) AS vector_score,
+    (search::score(1) * 0.3 + (1 - (r.route_embedding <=> $query_embedding)) * 0.7) AS hybrid_score
+FROM route_history r
+WHERE r.notes @@ plainto_tsquery('residential traffic congestion')
+ORDER BY hybrid_score DESC
+LIMIT 10;
+
+-- ============================================================================
+-- ML MODEL INTEGRATION - PREDICTIONS
+-- ============================================================================
+
+-- Predict ETA using ML model
+SELECT
+    s.tracking_number,
+    s.origin,
+    s.destination,
+    s.current_location,
+    s.distance_remaining_km,
+    ml::predict('eta_prediction_v3', {
+        distance_km: s.distance_remaining_km,
+        current_hour: EXTRACT(HOUR FROM time::now()),
+        day_of_week: day_of_week(CURRENT_DATE),
+        weather_conditions: w.conditions,
+        traffic_index: t.congestion_level,
+        carrier: s.carrier,
+        service_type: s.service_type
+    }) AS predicted_eta_minutes,
+    time::now() + INTERVAL predicted_eta_minutes || ' minutes' AS estimated_arrival
+FROM shipments s
+JOIN weather w ON s.destination_region = w.region
+JOIN traffic t ON s.current_route = t.route_id
+WHERE s.status = 'IN_TRANSIT';
+
+-- Predict delivery success probability
+SELECT
+    d.tracking_number,
+    d.address,
+    d.scheduled_time,
+    ml::predict('delivery_success', {
+        time_of_day: EXTRACT(HOUR FROM d.scheduled_time),
+        address_type: d.address_type,
+        prior_attempts: d.attempt_count,
+        signature_required: d.signature_required,
+        package_value: d.declared_value,
+        access_notes: d.access_instructions
+    }) AS success_probability,
+    CASE
+        WHEN ml::predict('delivery_success', {...}) < 0.7 THEN 'HIGH_RISK'
+        WHEN ml::predict('delivery_success', {...}) < 0.85 THEN 'MODERATE_RISK'
+        ELSE 'LOW_RISK'
+    END AS risk_category
+FROM deliveries d
+WHERE d.status = 'SCHEDULED'
+    AND d.delivery_date = CURRENT_DATE;
+
+-- Demand forecasting for inventory
+SELECT
+    p.sku,
+    p.name,
+    p.current_stock,
+    ml::predict('demand_forecast_weekly', {
+        sku: p.sku,
+        category: p.category,
+        historical_sales: p.sales_30day,
+        seasonality_index: p.seasonal_factor,
+        price: p.unit_price,
+        promotion_active: p.on_promotion
+    }) AS predicted_weekly_demand,
+    p.current_stock / NULLIF(predicted_weekly_demand, 0) AS weeks_of_supply,
+    CASE
+        WHEN weeks_of_supply < 2 THEN 'REORDER_NOW'
+        WHEN weeks_of_supply < 4 THEN 'REORDER_SOON'
+        ELSE 'ADEQUATE'
+    END AS inventory_status
+FROM products p
+WHERE p.active = true
+ORDER BY weeks_of_supply ASC;
+
+-- ============================================================================
+-- REAL-TIME TRACKING (Live Queries)
+-- ============================================================================
+
+-- Live query: Track all active deliveries
+LIVE SELECT
+    d.tracking_number,
+    d.driver_id,
+    drv.name AS driver_name,
+    d.current_lat,
+    d.current_lon,
+    d.status,
+    d.eta_minutes,
+    d.stops_remaining,
+    time::now() AS last_update
+FROM deliveries d
+JOIN drivers drv ON d.driver_id = drv.id
+WHERE d.status = 'OUT_FOR_DELIVERY'
+    AND d.delivery_date = CURRENT_DATE
+DIFF;
+
+-- Live query: Monitor package exceptions
+LIVE SELECT
+    s.tracking_number,
+    s.status,
+    s.exception_code,
+    s.exception_reason,
+    s.current_location,
+    s.customer_name,
+    s.customer_phone,
+    time::now() AS alert_time
+FROM shipments s
+WHERE s.status = 'EXCEPTION'
+    AND s.exception_time >= time::now() - 5m
+DIFF;
+
+-- Live query: Warehouse throughput
+LIVE SELECT
+    wh.warehouse_id,
+    wh.name,
+    COUNT(CASE WHEN m.movement_type = 'RECEIVE' THEN 1 END) AS inbound_today,
+    COUNT(CASE WHEN m.movement_type = 'SHIP' THEN 1 END) AS outbound_today,
+    COUNT(CASE WHEN m.movement_type = 'PICK' THEN 1 END) AS picks_today,
+    COUNT(*) AS total_movements
+FROM warehouses wh
+LEFT JOIN inventory_movements m ON wh.warehouse_id = m.warehouse_id
+    AND m.movement_date = CURRENT_DATE
+GROUP BY wh.warehouse_id, wh.name
+DIFF;
+
+-- Live query: Driver performance dashboard
+LIVE SELECT
+    d.driver_id,
+    d.name,
+    d.current_route_id,
+    r.completed_stops,
+    r.total_stops,
+    ROUND(r.completed_stops * 100.0 / NULLIF(r.total_stops, 0), 1) AS completion_pct,
+    r.on_time_deliveries,
+    r.late_deliveries,
+    d.current_lat,
+    d.current_lon
+FROM drivers d
+JOIN routes r ON d.current_route_id = r.route_id
+WHERE d.status = 'ON_DUTY'
+    AND r.route_date = CURRENT_DATE
+DIFF;
+
+-- ============================================================================
+-- ROUTE OPTIMIZATION QUERIES
+-- ============================================================================
+
+-- Generate optimized route using graph
+SELECT
+    graph::traveling_salesman(
+        ARRAY(SELECT delivery_location FROM stops WHERE route_id = $route_id),
+        'distance'
+    ) AS optimized_order;
+
+-- Calculate route with time windows
+SELECT
+    s.stop_id,
+    s.address,
+    s.time_window_start,
+    s.time_window_end,
+    graph::route_with_windows(
+        $start_location,
+        ARRAY_AGG(s.location),
+        ARRAY_AGG(s.time_window_start),
+        ARRAY_AGG(s.time_window_end)
+    ) AS optimal_sequence
+FROM stops s
+WHERE s.route_id = $route_id
+GROUP BY s.stop_id, s.address, s.time_window_start, s.time_window_end;
+
+-- Find alternative routes during traffic
+SELECT
+    r.route_id,
+    r.path,
+    r.distance_km,
+    r.estimated_time_min,
+    r.traffic_adjusted_time_min
+FROM routes r
+WHERE r.origin = $origin
+    AND r.destination = $destination
+ORDER BY r.traffic_adjusted_time_min ASC
+LIMIT 3;
+
+-- ============================================================================
+-- ANALYTICS & REPORTING
+-- ============================================================================
+
+-- Carrier performance comparison
+SELECT
+    c.carrier_id,
+    c.name,
+    COUNT(*) AS total_deliveries,
+    SUM(CASE WHEN d.on_time THEN 1 ELSE 0 END) AS on_time_count,
+    ROUND(SUM(CASE WHEN d.on_time THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS on_time_rate,
+    AVG(d.delivery_time_min) AS avg_delivery_time,
+    SUM(d.shipping_cost) AS total_cost,
+    AVG(d.customer_rating) AS avg_rating
+FROM carriers c
+JOIN deliveries d ON c.carrier_id = d.carrier_id
+WHERE d.delivery_date >= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY c.carrier_id, c.name
+ORDER BY on_time_rate DESC;
+
+-- Supply chain efficiency by path
+SELECT
+    s.name AS supplier,
+    w1.name AS primary_warehouse,
+    w2.name AS distribution_center,
+    dz.name AS delivery_zone,
+    COUNT(*) AS shipment_count,
+    AVG(ship.transit_days) AS avg_transit_days,
+    AVG(ship.cost_per_unit) AS avg_cost_per_unit
+FROM suppliers s
+    ->supplies->warehouses AS w1
+    ->transfers_to->warehouses AS w2
+    ->serves->delivery_zones AS dz
+    <-delivered_to<-shipments AS ship
+WHERE ship.shipped_date >= CURRENT_DATE - INTERVAL '90 days'
+GROUP BY s.name, w1.name, w2.name, dz.name
+ORDER BY shipment_count DESC;
+
+-- Inventory clustering by demand patterns
+SELECT
+    p.sku,
+    p.name,
+    p.category,
+    ml::cluster_kmeans(p.demand_pattern_embedding, 5) AS demand_cluster
+FROM products p
+WHERE p.active = true;
+
+-- ============================================================================
+-- EXCEPTION HANDLING QUERIES
+-- ============================================================================
+
+-- Find shipments at risk of delay
+SELECT
+    s.tracking_number,
+    s.origin,
+    s.destination,
+    s.promised_delivery,
+    s.current_eta,
+    s.delay_risk_factors,
+    ml::predict('delay_risk', {
+        current_delay_min: EXTRACT(EPOCH FROM (s.current_eta - s.promised_delivery)) / 60,
+        weather: w.severity,
+        carrier_performance: c.recent_on_time_rate,
+        distance_remaining: s.distance_remaining_km
+    }) AS delay_probability
+FROM shipments s
+JOIN weather w ON s.destination_region = w.region
+JOIN carriers c ON s.carrier_id = c.carrier_id
+WHERE s.status = 'IN_TRANSIT'
+    AND s.current_eta > s.promised_delivery
+ORDER BY delay_probability DESC;
+
+-- Address validation failures
+SELECT
+    o.order_id,
+    o.customer_name,
+    o.shipping_address,
+    o.validation_errors,
+    vector::similarity::cosine(
+        ml::embed_text(o.shipping_address, 'address-encoder'),
+        (SELECT embedding FROM valid_addresses WHERE similarity > 0.9 LIMIT 1)
+    ) AS closest_match_similarity
+FROM orders o
+WHERE o.address_validated = false
+    AND o.order_date >= CURRENT_DATE - INTERVAL '24 hours';
+
+-- ============================================================================
+-- TRANSACTIONS FOR ORDER FULFILLMENT
+-- ============================================================================
+
+-- Complete fulfillment workflow with data integrity
+BEGIN TRANSACTION;
+    -- Reserve inventory
+    UPDATE inventory SET
+        available_quantity = available_quantity - $order_quantity,
+        reserved_quantity = reserved_quantity + $order_quantity,
+        updated_at = time::now()
+    WHERE sku = $sku
+        AND warehouse_id = $warehouse_id
+        AND available_quantity >= $order_quantity;
+
+    -- Create pick task
+    INSERT INTO pick_tasks {
+        task_id: uuid::v4(),
+        order_id: $order_id,
+        sku: $sku,
+        quantity: $order_quantity,
+        bin_location: $bin_location,
+        status: 'PENDING',
+        created_at: time::now()
+    };
+
+    -- Update order status
+    UPDATE orders SET
+        status = 'PICKING',
+        warehouse_id = $warehouse_id,
+        updated_at = time::now()
+    WHERE order_id = $order_id;
+
+    -- Create inventory movement
+    INSERT INTO inventory_movements {
+        movement_id: uuid::v4(),
+        warehouse_id: $warehouse_id,
+        sku: $sku,
+        quantity: $order_quantity,
+        movement_type: 'RESERVE',
+        order_id: $order_id,
+        timestamp: time::now()
+    };
+
+    -- Create relationship
+    RELATE orders:$order_id->fulfilled_from->warehouses:$warehouse_id SET
+        reserved_at = time::now();
+COMMIT;
+

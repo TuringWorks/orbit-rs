@@ -1,0 +1,448 @@
+-- ============================================================================
+-- OrbitRS Media Examples - OrbitQL Content & Recommendation Queries
+-- ============================================================================
+-- Comprehensive streaming platform queries demonstrating OrbitQL's unique features:
+-- - Graph traversal for content relationships and social features
+-- - Vector search for content similarity and personalization
+-- - ML model integration for recommendations and churn prediction
+-- - Live queries for real-time engagement monitoring
+-- ============================================================================
+
+-- ============================================================================
+-- CONTENT RELATIONSHIP GRAPH
+-- ============================================================================
+
+-- Define content relationships
+RELATE content:movie_001->sequel_of->content:movie_000 SET
+    release_gap_years = 3,
+    same_director = true;
+
+RELATE content:series_001->spin_off_of->content:series_000 SET
+    shared_characters = ['Character A', 'Character B'],
+    same_universe = true;
+
+-- Actor/Director relationships
+RELATE content:movie_001->features->people:actor_keanu SET
+    role = 'Neo',
+    role_type = 'LEAD',
+    billing_order = 1;
+
+RELATE content:movie_001->directed_by->people:director_wachowski SET
+    credit_type = 'DIRECTOR';
+
+-- Genre and mood relationships
+RELATE content:movie_001->belongs_to->genres:action;
+RELATE content:movie_001->belongs_to->genres:sci_fi;
+RELATE content:movie_001->has_mood->moods:mind_bending;
+
+-- User social relationships
+RELATE users:user_12345->follows->users:user_67890 SET
+    since = '2024-01-15';
+
+RELATE users:user_12345->shares_taste_with->users:user_67890 SET
+    similarity_score = 0.87,
+    common_genres = ['action', 'sci-fi'],
+    calculated_at = time::now();
+
+-- ============================================================================
+-- CONTENT DISCOVERY GRAPH TRAVERSAL
+-- ============================================================================
+
+-- Find related content through actors
+SELECT
+    c.->features->person.name AS actor,
+    c.->features->person.<-features<-content.title AS other_movies
+FROM content:movie_001 AS c
+WHERE c.->features->person.<-features<-content.id != 'movie_001';
+
+-- Find content in same universe/franchise
+SELECT
+    ->sequel_of->content.title AS prequels,
+    <-sequel_of<-content.title AS sequels,
+    ->spin_off_of->content.title AS spin_off_source,
+    <-spin_off_of<-content.title AS spin_offs
+FROM content:series_001;
+
+-- Discover content through genre graph
+SELECT DISTINCT
+    c2.title,
+    c2.release_year,
+    c2.rating,
+    COUNT(DISTINCT g.name) AS shared_genres
+FROM content:movie_001 AS c1
+    ->belongs_to->genre AS g
+    <-belongs_to<-content AS c2
+WHERE c2.id != 'movie_001'
+GROUP BY c2.id, c2.title, c2.release_year, c2.rating
+HAVING shared_genres >= 2
+ORDER BY shared_genres DESC, c2.rating DESC
+LIMIT 20;
+
+-- Social recommendations: What are friends watching?
+SELECT
+    u.->follows->user.->watched->content.title AS friend_watching,
+    COUNT(DISTINCT u.->follows->user.id) AS friend_count,
+    AVG(u.->follows->user.->watched.rating) AS avg_friend_rating
+FROM users:user_12345 AS u
+WHERE u.->follows->user.->watched->content.id NOT IN (
+    SELECT ->watched->content.id FROM users:user_12345
+)
+GROUP BY friend_watching
+ORDER BY friend_count DESC, avg_friend_rating DESC
+LIMIT 10;
+
+-- ============================================================================
+-- CONTENT SIMILARITY (Vector Search)
+-- ============================================================================
+
+-- Find similar content based on embeddings
+SELECT
+    c.content_id,
+    c.title,
+    c.genres,
+    c.release_year,
+    vector::similarity::cosine(c.content_embedding, $query_embedding) AS similarity
+FROM content c
+WHERE c.content_type = 'movie'
+    AND c.available = true
+ORDER BY c.content_embedding <=> $query_embedding
+LIMIT 20;
+
+-- "Because you watched" recommendations
+SELECT
+    c.title,
+    c.genres,
+    c.rating,
+    vector::similarity::cosine(c.content_embedding, $watched_embedding) AS similarity
+FROM content c
+WHERE c.id NOT IN (SELECT content_id FROM watch_history WHERE user_id = $user_id)
+    AND c.content_type = $content_type
+ORDER BY similarity DESC
+LIMIT 10;
+
+-- Cross-modal search: Text query -> Content
+SELECT
+    c.title,
+    c.description,
+    c.thumbnail_url,
+    vector::similarity::cosine(
+        c.description_embedding,
+        ml::embed_text($search_query, 'text-embedding-ada-002')
+    ) AS relevance
+FROM content c
+WHERE c.available = true
+ORDER BY relevance DESC
+LIMIT 20;
+
+-- Hybrid search: Keyword + Vector
+SELECT
+    c.content_id,
+    c.title,
+    search::score(1) AS text_score,
+    1 - (c.content_embedding <=> $query_embedding) AS vector_score,
+    (search::score(1) * 0.4 + (1 - (c.content_embedding <=> $query_embedding)) * 0.6) AS hybrid_score
+FROM content c
+WHERE c.searchable_text @@ plainto_tsquery($search_text)
+ORDER BY hybrid_score DESC
+LIMIT 30;
+
+-- ============================================================================
+-- ML-POWERED RECOMMENDATIONS
+-- ============================================================================
+
+-- Generate personalized recommendations
+SELECT
+    c.content_id,
+    c.title,
+    c.genres,
+    c.thumbnail_url,
+    ml::predict('recommendation_model_v4', {
+        user_embedding: $user_embedding,
+        content_embedding: c.content_embedding,
+        user_genres: $user_preferred_genres,
+        content_genres: c.genres,
+        user_avg_completion: $user_avg_completion,
+        content_avg_completion: c.avg_completion_rate,
+        time_of_day: EXTRACT(HOUR FROM time::now()),
+        day_of_week: day_of_week(CURRENT_DATE),
+        device_type: $device_type
+    }) AS recommendation_score
+FROM content c
+WHERE c.id NOT IN (SELECT content_id FROM watch_history WHERE user_id = $user_id)
+    AND c.available = true
+ORDER BY recommendation_score DESC
+LIMIT 50;
+
+-- Churn risk prediction
+SELECT
+    u.user_id,
+    u.name,
+    u.email,
+    u.subscription_tier,
+    u.last_active_date,
+    ml::predict('churn_predictor_v2', {
+        days_since_active: EXTRACT(DAY FROM (CURRENT_DATE - u.last_active_date)),
+        total_watch_hours_30d: u.watch_hours_30d,
+        avg_session_duration: u.avg_session_min,
+        completion_rate: u.avg_completion_rate,
+        device_count: u.unique_devices,
+        subscription_months: u.subscription_tenure_months,
+        payment_issues: u.payment_failure_count
+    }) AS churn_probability,
+    CASE
+        WHEN churn_probability > 0.7 THEN 'HIGH_RISK'
+        WHEN churn_probability > 0.4 THEN 'MEDIUM_RISK'
+        ELSE 'LOW_RISK'
+    END AS risk_tier
+FROM users u
+WHERE u.subscription_status = 'ACTIVE'
+ORDER BY churn_probability DESC;
+
+-- Content moderation scoring
+SELECT
+    c.content_id,
+    c.title,
+    c.thumbnail_url,
+    ml::predict('content_moderation', {
+        image_embedding: c.thumbnail_embedding,
+        title: c.title,
+        description: c.description
+    }) AS moderation_scores,
+    moderation_scores.violence AS violence_score,
+    moderation_scores.adult AS adult_score,
+    moderation_scores.hate_speech AS hate_speech_score
+FROM user_generated_content c
+WHERE c.moderation_status = 'PENDING';
+
+-- ============================================================================
+-- REAL-TIME ENGAGEMENT (Live Queries)
+-- ============================================================================
+
+-- Live query: Current viewers per content
+LIVE SELECT
+    c.content_id,
+    c.title,
+    c.content_type,
+    COUNT(DISTINCT s.user_id) AS current_viewers,
+    AVG(s.quality_profile) AS avg_quality,
+    AVG(s.buffer_ratio) AS avg_buffering
+FROM sessions s
+JOIN content c ON s.content_id = c.content_id
+WHERE s.status = 'PLAYING'
+    AND s.last_heartbeat >= time::now() - 30s
+GROUP BY c.content_id, c.title, c.content_type
+ORDER BY current_viewers DESC
+DIFF;
+
+-- Live query: Trending content
+LIVE SELECT
+    c.content_id,
+    c.title,
+    c.thumbnail_url,
+    COUNT(*) AS views_last_hour,
+    COUNT(*) - LAG(COUNT(*)) OVER (ORDER BY time::now()) AS velocity
+FROM watch_events w
+JOIN content c ON w.content_id = c.content_id
+WHERE w.event_time >= time::now() - 1h
+GROUP BY c.content_id, c.title, c.thumbnail_url
+ORDER BY views_last_hour DESC
+LIMIT 20
+DIFF;
+
+-- Live query: Live event engagement
+LIVE SELECT
+    e.event_id,
+    e.title,
+    COUNT(DISTINCT v.user_id) AS concurrent_viewers,
+    MAX(e.peak_viewers) AS peak_viewers,
+    COUNT(DISTINCT chat.user_id) AS chat_participants,
+    COUNT(chat.message_id) AS chat_messages_5min
+FROM live_events e
+LEFT JOIN live_viewers v ON e.event_id = v.event_id
+    AND v.last_ping >= time::now() - 30s
+LEFT JOIN live_chat chat ON e.event_id = chat.event_id
+    AND chat.timestamp >= time::now() - 5m
+WHERE e.status = 'LIVE'
+GROUP BY e.event_id, e.title
+DIFF;
+
+-- Live query: QoS alerts
+LIVE SELECT
+    s.session_id,
+    s.user_id,
+    u.subscription_tier,
+    s.content_id,
+    s.device_type,
+    s.buffer_ratio,
+    s.quality_drops,
+    s.error_count,
+    CASE
+        WHEN s.buffer_ratio > 0.05 THEN 'BUFFERING_HIGH'
+        WHEN s.quality_drops > 3 THEN 'QUALITY_UNSTABLE'
+        WHEN s.error_count > 0 THEN 'PLAYBACK_ERRORS'
+    END AS alert_type
+FROM sessions s
+JOIN users u ON s.user_id = u.user_id
+WHERE s.status = 'PLAYING'
+    AND (s.buffer_ratio > 0.05 OR s.quality_drops > 3 OR s.error_count > 0)
+DIFF;
+
+-- ============================================================================
+-- PERSONALIZATION QUERIES
+-- ============================================================================
+
+-- Build user taste profile from graph
+SELECT
+    u.user_id,
+    ARRAY_AGG(DISTINCT g.name) AS favorite_genres,
+    ARRAY_AGG(DISTINCT m.name) AS favorite_moods,
+    ARRAY_AGG(DISTINCT p.name) AS favorite_actors,
+    vector::avg(c.content_embedding) AS taste_centroid
+FROM users u
+    ->watched->content AS c
+    ->belongs_to->genre AS g
+    ->has_mood->mood AS m
+    ->features->person AS p
+WHERE u.user_id = $user_id
+    AND u.->watched.completion_pct > 0.5
+    AND u.->watched.timestamp >= CURRENT_DATE - INTERVAL '90 days'
+GROUP BY u.user_id;
+
+-- Collaborative filtering: Find similar users
+SELECT
+    u2.user_id,
+    u2.name,
+    vector::similarity::cosine(u1.user_embedding, u2.user_embedding) AS similarity,
+    COUNT(DISTINCT common_content.id) AS common_watches
+FROM users u1, users u2
+LEFT JOIN (
+    SELECT content_id AS id FROM watch_history WHERE user_id = $user_id
+    INTERSECT
+    SELECT content_id AS id FROM watch_history WHERE user_id = u2.user_id
+) common_content ON true
+WHERE u1.user_id = $user_id
+    AND u2.user_id != $user_id
+GROUP BY u2.user_id, u2.name, similarity
+ORDER BY similarity DESC
+LIMIT 50;
+
+-- A/B test variant assignment
+SELECT
+    u.user_id,
+    e.experiment_id,
+    e.experiment_name,
+    ml::assign_variant(u.user_id, e.experiment_id, e.variant_weights) AS assigned_variant
+FROM users u
+CROSS JOIN active_experiments e
+WHERE e.status = 'RUNNING'
+    AND u.user_id = $user_id;
+
+-- ============================================================================
+-- CONTENT ANALYTICS
+-- ============================================================================
+
+-- Content performance with graph context
+SELECT
+    c.content_id,
+    c.title,
+    c.content_type,
+    COUNT(DISTINCT w.user_id) AS unique_viewers,
+    AVG(w.completion_pct) AS avg_completion,
+    AVG(w.rating) AS avg_rating,
+    COUNT(DISTINCT c.->features->person.id) AS cast_size,
+    COUNT(DISTINCT c.->belongs_to->genre.id) AS genre_count,
+    COUNT(DISTINCT c.<-sequel_of<-content.id) + COUNT(DISTINCT c.->sequel_of->content.id) AS franchise_size
+FROM content c
+LEFT JOIN watch_history w ON c.content_id = w.content_id
+    AND w.watch_date >= CURRENT_DATE - INTERVAL '30 days'
+WHERE c.release_date >= CURRENT_DATE - INTERVAL '90 days'
+GROUP BY c.content_id, c.title, c.content_type
+ORDER BY unique_viewers DESC;
+
+-- Genre performance trends
+SELECT
+    g.name AS genre,
+    DATE_TRUNC('week', w.watch_date) AS week,
+    COUNT(*) AS total_watches,
+    COUNT(DISTINCT w.user_id) AS unique_viewers,
+    AVG(w.completion_pct) AS avg_completion,
+    SUM(w.watch_duration_min) AS total_watch_minutes
+FROM genres g
+    <-belongs_to<-content AS c
+JOIN watch_history w ON c.content_id = w.content_id
+WHERE w.watch_date >= CURRENT_DATE - INTERVAL '12 weeks'
+GROUP BY g.name, week
+ORDER BY week DESC, total_watches DESC;
+
+-- Content clustering by viewer behavior
+SELECT
+    c.content_id,
+    c.title,
+    c.genres,
+    ml::cluster_kmeans(c.viewer_behavior_embedding, 8) AS content_cluster,
+    COUNT(DISTINCT w.user_id) AS viewer_count
+FROM content c
+LEFT JOIN watch_history w ON c.content_id = w.content_id
+GROUP BY c.content_id, c.title, c.genres, content_cluster;
+
+-- ============================================================================
+-- SUBSCRIPTION & REVENUE
+-- ============================================================================
+
+-- Subscription tier analysis with engagement
+SELECT
+    u.subscription_tier,
+    COUNT(DISTINCT u.user_id) AS subscriber_count,
+    AVG(u.watch_hours_30d) AS avg_watch_hours,
+    AVG(u.unique_titles_30d) AS avg_titles_watched,
+    SUM(CASE WHEN u.status = 'CHURNED' THEN 1 ELSE 0 END) AS churned_30d,
+    ROUND(SUM(CASE WHEN u.status = 'CHURNED' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS churn_rate
+FROM users u
+WHERE u.subscription_start_date <= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY u.subscription_tier
+ORDER BY subscriber_count DESC;
+
+-- ============================================================================
+-- TRANSACTIONS FOR USER ACTIONS
+-- ============================================================================
+
+-- Record watch session with full context
+BEGIN TRANSACTION;
+    -- Create watch history entry
+    INSERT INTO watch_history {
+        watch_id: uuid::v4(),
+        user_id: $user_id,
+        content_id: $content_id,
+        session_id: $session_id,
+        watch_date: CURRENT_DATE,
+        start_position: $start_position,
+        end_position: $end_position,
+        duration_sec: $watch_duration,
+        completion_pct: $completion_pct,
+        quality: $quality_profile,
+        device_type: $device_type,
+        timestamp: time::now()
+    };
+
+    -- Update user stats
+    UPDATE users SET
+        total_watch_time_sec = total_watch_time_sec + $watch_duration,
+        last_active_date = CURRENT_DATE,
+        titles_watched = titles_watched + (CASE WHEN $completion_pct > 0.9 THEN 1 ELSE 0 END),
+        updated_at = time::now()
+    WHERE user_id = $user_id;
+
+    -- Create watched relationship
+    RELATE users:$user_id->watched->content:$content_id SET
+        completion_pct = $completion_pct,
+        rating = $rating,
+        timestamp = time::now();
+
+    -- Update content stats
+    UPDATE content SET
+        total_views = total_views + 1,
+        total_watch_time_sec = total_watch_time_sec + $watch_duration,
+        updated_at = time::now()
+    WHERE content_id = $content_id;
+COMMIT;
+
