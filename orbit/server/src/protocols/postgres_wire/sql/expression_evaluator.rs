@@ -25,6 +25,9 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
+use regex::Regex;
+use sha2::{Digest, Sha224, Sha256, Sha384, Sha512};
+
 
 /// Sequence accessor trait for sequence function evaluation
 /// This allows the expression evaluator to access and modify sequences
@@ -641,7 +644,21 @@ impl ExpressionEvaluator {
             "TRANSLATE" => self.evaluate_translate(&args),
             "QUOTE_LITERAL" => self.evaluate_quote_literal(&args),
             "QUOTE_IDENT" => self.evaluate_quote_ident(&args),
+            "QUOTE_NULLABLE" => self.evaluate_quote_nullable(&args),
             "FORMAT" => self.evaluate_format(&args),
+            "STRING_TO_ARRAY" => self.evaluate_string_to_array(&args),
+            "REGEXP_MATCH" => self.evaluate_regexp_match(&args),
+            "REGEXP_MATCHES" => self.evaluate_regexp_matches(&args),
+            "REGEXP_REPLACE" => self.evaluate_regexp_replace(&args),
+            "REGEXP_SPLIT_TO_ARRAY" => self.evaluate_regexp_split_to_array(&args),
+            "REGEXP_LIKE" => self.evaluate_regexp_like(&args),
+            "REGEXP_COUNT" => self.evaluate_regexp_count(&args),
+            "REGEXP_INSTR" => self.evaluate_regexp_instr(&args),
+            "REGEXP_SUBSTR" => self.evaluate_regexp_substr(&args),
+            "SHA224" => self.evaluate_sha224(&args),
+            "SHA256" => self.evaluate_sha256(&args),
+            "SHA384" => self.evaluate_sha384(&args),
+            "SHA512" => self.evaluate_sha512(&args),
 
             // Math functions
             "ABS" => self.evaluate_abs(&args),
@@ -3206,6 +3223,305 @@ impl ExpressionEvaluator {
         }
     }
 
+    fn evaluate_string_to_array(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(ProtocolError::PostgresError(
+                "STRING_TO_ARRAY requires 2 or 3 arguments".to_string(),
+            ));
+        }
+
+        let s = match &args[0] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => return Err(ProtocolError::PostgresError(
+                "STRING_TO_ARRAY requires string argument".to_string(),
+            )),
+        };
+
+        let delimiter = match &args[1] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => Some(s.clone()),
+            SqlValue::Null => None,
+            _ => return Err(ProtocolError::PostgresError(
+                "STRING_TO_ARRAY delimiter must be string".to_string(),
+            )),
+        };
+
+        let null_string = if args.len() == 3 {
+             match &args[2] {
+                SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => Some(s.as_str()),
+                SqlValue::Null => None,
+                _ => return Err(ProtocolError::PostgresError(
+                    "STRING_TO_ARRAY null string must be string".to_string(),
+                )),
+             }
+        } else {
+            None
+        };
+
+        // Logic for delimiter parameters:
+        // If delimiter is NULL, each character becomes a separate element.
+        // If delimiter is empty string, the string is split into characters.
+        
+        let elements: Vec<SqlValue> = if delimiter.is_none() || delimiter.as_ref().map(|d| d.is_empty()).unwrap_or(false) {
+             s.chars().map(|c| {
+                 let s = c.to_string();
+                 if let Some(ns) = null_string {
+                     if s == ns { SqlValue::Null } else { SqlValue::Text(s) }
+                 } else {
+                     SqlValue::Text(s)
+                 }
+             }).collect()
+        } else {
+             s.split(delimiter.as_ref().unwrap()).map(|part| {
+                 if let Some(ns) = null_string {
+                     if part == ns { SqlValue::Null } else { SqlValue::Text(part.to_string()) }
+                 } else {
+                     SqlValue::Text(part.to_string())
+                 }
+             }).collect()
+        };
+
+        Ok(SqlValue::Array(elements))
+    }
+
+    fn evaluate_quote_nullable(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+             return Err(ProtocolError::PostgresError(
+                 "QUOTE_NULLABLE requires exactly 1 argument".to_string(),
+             ));
+        }
+
+        match &args[0] {
+            SqlValue::Null => Ok(SqlValue::Text("NULL".to_string())),
+            val => self.evaluate_quote_literal(&[val.clone()]),
+        }
+    }
+
+    fn evaluate_sha224(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         self.evaluate_sha::<Sha224>(args)
+    }
+
+    fn evaluate_sha256(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         self.evaluate_sha::<Sha256>(args)
+    }
+
+    fn evaluate_sha384(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         self.evaluate_sha::<Sha384>(args)
+    }
+
+    fn evaluate_sha512(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         self.evaluate_sha::<Sha512>(args)
+    }
+
+    fn evaluate_sha<D: Digest + Default>(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         if args.len() != 1 {
+             return Err(ProtocolError::PostgresError("SHA function requires 1 argument".to_string()));
+         }
+         let bytes = match &args[0] {
+             SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.as_bytes(),
+             SqlValue::Bytea(b) => b.as_slice(),
+             SqlValue::Null => return Ok(SqlValue::Null),
+             _ => return Err(ProtocolError::PostgresError("SHA function requires string or bytea".to_string())),
+         };
+         let mut hasher = D::new();
+         hasher.update(bytes);
+         // Return as bytea
+         Ok(SqlValue::Bytea(hasher.finalize().to_vec()))
+    }
+
+    fn evaluate_regexp_match(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        self.evaluate_regexp_generic(args, |re, text| {
+            match re.captures(text) {
+                Some(caps) => {
+                     // If there are capturing groups, return them.
+                     // If no capturing groups, return the whole match as array?
+                     // Postgres: "If there are no parenthesized subexpressions, the result is a text array containing the substring matching the whole pattern."
+                     let groups: Vec<SqlValue> = if re.captures_len() > 1 {
+                         caps.iter().skip(1).map(|m| {
+                             match m {
+                                 Some(m) => SqlValue::Text(m.as_str().to_string()),
+                                 None => SqlValue::Null
+                             }
+                         }).collect()
+                     } else {
+                         vec![SqlValue::Text(caps.get(0).unwrap().as_str().to_string())]
+                     };
+                     Ok(SqlValue::Array(groups))
+                },
+                None => Ok(SqlValue::Null) // Postgres returns NULL if no match
+            }
+        })
+    }
+    
+    fn evaluate_regexp_matches(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         // This is technically a set-returning function.
+         // For now, return an Array of Arrays (which isn't standard Postgres return type for this, it returns rows)
+         // Or just return the first match logic? No, matches implies all.
+         // Implementing as returning an array of arrays [ [match1], [match2], ... ]
+         self.evaluate_regexp_generic(args, |re, text| {
+             let mut results = Vec::new();
+             for caps in re.captures_iter(text) {
+                 let groups: Vec<SqlValue> = if re.captures_len() > 1 {
+                     caps.iter().skip(1).map(|m| {
+                         match m {
+                             Some(m) => SqlValue::Text(m.as_str().to_string()),
+                             None => SqlValue::Null
+                         }
+                     }).collect()
+                 } else {
+                     vec![SqlValue::Text(caps.get(0).unwrap().as_str().to_string())]
+                 };
+                 results.push(SqlValue::Array(groups));
+             }
+             if results.is_empty() {
+                 Ok(SqlValue::Array(vec![])) // Or Null? Postgres might return no rows.
+             } else {
+                 Ok(SqlValue::Array(results))
+             }
+         })
+    }
+
+    fn evaluate_regexp_replace(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         if args.len() < 3 || args.len() > 4 {
+              return Err(ProtocolError::PostgresError("REGEXP_REPLACE requires 3 or 4 arguments".to_string()));
+         }
+         // args: source, pattern, replacement, [flags]
+         // flags unimplemented for now, passing to helper if needed
+         
+         let text = match &args[0] {
+             SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s,
+             SqlValue::Null => return Ok(SqlValue::Null),
+             _ => return Err(ProtocolError::PostgresError("REGEXP_REPLACE source must be string".to_string())),
+         };
+         
+         let pattern = match &args[1] {
+             SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s,
+             SqlValue::Null => return Ok(SqlValue::Null),
+              _ => return Err(ProtocolError::PostgresError("REGEXP_REPLACE pattern must be string".to_string())),
+         };
+         
+         let replacement = match &args[2] {
+             SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s,
+             SqlValue::Null => return Ok(SqlValue::Null),
+              _ => return Err(ProtocolError::PostgresError("REGEXP_REPLACE replacement must be string".to_string())),
+         };
+
+         // 'g' flag handling for global replacement
+         let flags = if args.len() == 4 {
+             match &args[3] {
+                 SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => Some(s.as_str()),
+                 SqlValue::Null => None,
+                 _ => return Err(ProtocolError::PostgresError("REGEXP_REPLACE flags must be string".to_string())),
+             }
+         } else {
+             None
+         };
+         
+         let global = flags.map(|f| f.contains('g')).unwrap_or(false);
+         // Case insensitivity 'i' should be handled in regex compilation, but we are using compile on the fly.
+         // We can prepend (?i) if flag present.
+         
+         let final_pattern = if let Some(f) = flags {
+             let mut p = String::new();
+             if f.contains('i') { p.push_str("(?i)"); }
+             // Other flags like 'n', 's', 'm', 'x' could be mapped
+             p.push_str(pattern);
+             p
+         } else {
+             pattern.clone()
+         };
+
+         let re = Regex::new(&final_pattern).map_err(|e| ProtocolError::PostgresError(format!("Invalid regex: {}", e)))?;
+         
+         let result = if global {
+             re.replace_all(text, replacement.as_str())
+         } else {
+             re.replace(text, replacement.as_str())
+         };
+         
+         Ok(SqlValue::Text(result.to_string()))
+    }
+    
+    fn evaluate_regexp_split_to_array(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         self.evaluate_regexp_generic(args, |re, text| {
+             let parts: Vec<SqlValue> = re.split(text).map(|s| SqlValue::Text(s.to_string())).collect();
+             Ok(SqlValue::Array(parts))
+         })
+    }
+
+    fn evaluate_regexp_like(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         self.evaluate_regexp_generic(args, |re, text| {
+             Ok(SqlValue::Boolean(re.is_match(text)))
+         })
+    }
+    
+    fn evaluate_regexp_count(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         self.evaluate_regexp_generic(args, |re, text| {
+             Ok(SqlValue::Integer(re.find_iter(text).count() as i32))
+         })
+    }
+    
+    fn evaluate_regexp_instr(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+          self.evaluate_regexp_generic(args, |re, text| {
+             match re.find(text) {
+                 Some(m) => Ok(SqlValue::Integer((m.start() + 1) as i32)), // 1-based index
+                 None => Ok(SqlValue::Integer(0))
+             }
+          })
+    }
+    
+    fn evaluate_regexp_substr(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+          self.evaluate_regexp_generic(args, |re, text| {
+             match re.find(text) {
+                 Some(m) => Ok(SqlValue::Text(m.as_str().to_string())),
+                 None => Ok(SqlValue::Null)
+             }
+          })
+    }
+
+    fn evaluate_regexp_generic<F>(&self, args: &[SqlValue], f: F) -> ProtocolResult<SqlValue> 
+    where F: Fn(&Regex, &str) -> ProtocolResult<SqlValue>
+    {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(ProtocolError::PostgresError("Regexp function requires 2 or 3 arguments".to_string()));
+        }
+        
+        let text = match &args[0] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => return Err(ProtocolError::PostgresError("Regexp function requires string argument".to_string())),
+        };
+        
+        let pattern = match &args[1] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s,
+            SqlValue::Null => return Ok(SqlValue::Null),
+             _ => return Err(ProtocolError::PostgresError("Regexp function requires pattern string".to_string())),
+        };
+        
+        let flags = if args.len() == 3 {
+             match &args[2] {
+                 SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => Some(s.as_str()),
+                 SqlValue::Null => None,
+                 _ => return Err(ProtocolError::PostgresError("Regexp function flags must be string".to_string())),
+             }
+        } else {
+             None
+        };
+        
+        let final_pattern = if let Some(fl) = flags {
+             let mut p = String::new();
+             if fl.contains('i') { p.push_str("(?i)"); }
+             // Other mappings if needed
+             p.push_str(pattern);
+             p
+        } else {
+            pattern.clone()
+        };
+
+        let re = Regex::new(&final_pattern).map_err(|e| ProtocolError::PostgresError(format!("Invalid regex: {}", e)))?;
+        
+        f(&re, text)
+    }
     fn evaluate_array_fill(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         if args.len() < 2 || args.len() > 3 {
             return Err(ProtocolError::PostgresError(

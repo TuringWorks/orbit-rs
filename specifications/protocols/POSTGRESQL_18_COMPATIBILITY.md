@@ -586,30 +586,30 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | repeat(s,n) | ✅ | Repeat string |
 | reverse(s) | ✅ | Reverse string |
 | split_part(s,delim,n) | ✅ | Split and get part |
-| string_to_array(s,delim) | ❌ | Split to array |
-| array_to_string(arr,delim) | ❌ | Join array |
-| regexp_match(s,pattern) | ❌ | Regex match |
-| regexp_matches(s,pattern) | ❌ | Regex match all |
-| regexp_replace(s,pat,rep) | ❌ | Regex replace |
-| regexp_split_to_array(s,pat) | ❌ | Regex split |
+| string_to_array(s,delim) | ✅ | Split to array |
+| array_to_string(arr,delim) | ✅ | Join array |
+| regexp_match(s,pattern) | ✅ | Regex match |
+| regexp_matches(s,pattern) | ✅ | Regex match all |
+| regexp_replace(s,pat,rep) | ✅ | Regex replace |
+| regexp_split_to_array(s,pat) | ✅ | Regex split |
 | regexp_split_to_table(s,pat) | ❌ | Regex split to rows |
-| regexp_like(s,pattern) | ❌ | Regex test |
-| regexp_count(s,pattern) | ❌ | Count matches |
-| regexp_instr(s,pattern) | ❌ | Find position |
-| regexp_substr(s,pattern) | ❌ | Extract match |
+| regexp_like(s,pattern) | ✅ | Regex test |
+| regexp_count(s,pattern) | ✅ | Count matches |
+| regexp_instr(s,pattern) | ✅ | Find position |
+| regexp_substr(s,pattern) | ✅ | Extract match |
 | encode(data,format) | ✅ | Encode binary |
 | decode(s,format) | ✅ | Decode to binary |
 | md5(s) | ✅ | MD5 hash |
-| sha224/256/384/512(s) | ❌ | SHA hashes |
+| sha224/256/384/512(s) | ✅ | SHA hashes |
 | ascii(s) | ✅ | ASCII code |
 | chr(n) | ✅ | Character from code |
 | quote_ident(s) | ✅ | Quote identifier |
 | quote_literal(s) | ✅ | Quote literal |
-| quote_nullable(s) | ❌ | Quote nullable |
+| quote_nullable(s) | ✅ | Quote nullable |
 | normalize(s) | ❌ | Unicode normalize |
 | is_normalized(s) | ❌ | Check normalized |
 | unistr(s) | ❌ | Unicode string |
-| overlay(s placing r from p) | ❌ | Replace substring |
+| overlay(s placing r from p) | ✅ | Replace substring |
 
 ### Date/Time Functions
 
