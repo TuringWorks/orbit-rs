@@ -374,6 +374,12 @@ mod tests {
         codec.encode(frame.clone(), &mut buf).unwrap();
 
         // Should have magic bytes (5) + frame
+        let frame = Frame::new(1, MessageType::Query, Bytes::from("SELECT 1"));
+
+        // Encode
+        codec.encode(frame.clone(), &mut buf).unwrap();
+
+        // Should have magic bytes + frame
         assert!(buf.len() > 5);
 
         // Create server codec and decode

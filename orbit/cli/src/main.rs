@@ -228,9 +228,14 @@ struct ReplState {
 }
 
 /// OrbitWire connection wrapper
-#[allow(dead_code)]
 struct OrbitWireConnection {
     stream: tokio::net::TcpStream,
+}
+
+/// Flight SQL connection wrapper
+struct FlightSqlConnection {
+    client: reqwest::Client,
+    endpoint: String,
 }
 
 /// Flight SQL connection wrapper

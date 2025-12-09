@@ -102,6 +102,34 @@ orbit-examples/
 │   ├── README.md
 │   └── workflows/01_precision_farming.md
 │
+│   ├── README.md
+│   ├── sql/01_schema_ehr.sql          # Electronic Health Records
+│   └── workflows/01_patient_admission.md
+│
+├── logistics/                         # Supply Chain & Logistics
+│   ├── README.md
+│   └── workflows/01_order_fulfillment.md
+│
+├── energy/                            # Energy & Utilities
+│   ├── README.md
+│   └── workflows/01_grid_management.md
+│
+├── media/                             # Media & Entertainment
+│   ├── README.md
+│   └── workflows/01_content_recommendation.md
+│
+├── education/                         # Education & EdTech
+│   ├── README.md
+│   └── workflows/01_personalized_learning.md
+│
+├── real-estate/                       # Real Estate & PropTech
+│   ├── README.md
+│   └── workflows/01_property_listing.md
+│
+├── agriculture/                       # Agriculture & AgTech
+│   ├── README.md
+│   └── workflows/01_precision_farming.md
+│
 ├── defense/                           # Defense & Aerospace
 │   ├── README.md
 │   └── workflows/01_mission_planning.md
@@ -155,6 +183,7 @@ orbit-examples/
 │   ├── python/                        # Booking workflows
 │   └── workflows/01_flight_booking_workflow.md
 
+│
 └── manufacturing/                     # Electronics Manufacturing
     ├── README.md
     ├── sql/                           # Products, BOM, production

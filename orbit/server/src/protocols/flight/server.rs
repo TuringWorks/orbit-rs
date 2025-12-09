@@ -112,6 +112,11 @@ impl FlightSqlServer {
         &self,
         _stream: FlightDataStream,
         _session: Arc<RwLock<FlightSession>>,
+    #[instrument(skip(self, stream))]
+    pub async fn do_put(
+        &self,
+        stream: FlightDataStream,
+        session: Arc<RwLock<FlightSession>>,
     ) -> Result<PutResult, FlightSqlError> {
         debug!("DoPut request");
 
@@ -132,6 +137,11 @@ impl FlightSqlServer {
         &self,
         _stream: FlightDataStream,
         _session: Arc<RwLock<FlightSession>>,
+    #[instrument(skip(self, stream))]
+    pub async fn do_exchange(
+        &self,
+        stream: FlightDataStream,
+        session: Arc<RwLock<FlightSession>>,
     ) -> Result<FlightDataStream, FlightSqlError> {
         debug!("DoExchange request for LIVE query");
 

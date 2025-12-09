@@ -16,6 +16,7 @@ This document provides the authoritative status of protocol implementations in O
 | **OrbitQL** | 95% | Production Ready | 50+ | Parser validation, Edge cases |
 | **Redis RESP** | 60% | Production Ready | 190+ | Sorted Sets, Lua scripting |
 | **PostgreSQL** | 90% | Production Ready | 460+ | User management execution |
+| **PostgreSQL** | 72% | Production Ready | 460+ | User management, cursors |
 | **MySQL** | 51% | Active Development | 35+ | Binary protocol, replication |
 | **CQL (Cassandra)** | 55% | Active Development | 51+ | UDTs, Materialized views |
 | **Cypher/Bolt** | 85% | Production Ready | 105+ | DISTINCT, subqueries |
@@ -220,6 +221,7 @@ OrbitQL supports two wire protocols for client-server communication:
 ---
 
 ## 2. PostgreSQL Wire Protocol (85% Complete)
+## 2. PostgreSQL Wire Protocol (72% Complete)
 
 ### Wire Protocol Support
 

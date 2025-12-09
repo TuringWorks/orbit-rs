@@ -4,6 +4,7 @@
 **Reference**: https://www.postgresql.org/docs/18/index.html
 **Last Updated**: 2025-12-08
 **Current Estimated Coverage**: ~90%
+**Current Estimated Coverage**: ~85%
 
 ---
 
