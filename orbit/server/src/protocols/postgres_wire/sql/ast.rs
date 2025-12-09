@@ -536,6 +536,7 @@ pub enum ParameterMode {
 pub enum FunctionLanguage {
     Sql,
     PlPgSql,
+    PlJavaScript,
     Other(String),
 }
 
@@ -1232,16 +1233,16 @@ pub enum BinaryOperator {
     // Pattern matching
     Match,
     NotMatch,
-    RegexMatch,              // ~ operator
-    RegexMatchCaseInsensitive, // ~* operator
-    RegexNotMatch,           // !~ operator
+    RegexMatch,                   // ~ operator
+    RegexMatchCaseInsensitive,    // ~* operator
+    RegexNotMatch,                // !~ operator
     RegexNotMatchCaseInsensitive, // !~* operator
 
     // Null tests
     Is,
     IsNot,
-    IsDistinctFrom,          // IS DISTINCT FROM
-    IsNotDistinctFrom,       // IS NOT DISTINCT FROM
+    IsDistinctFrom,    // IS DISTINCT FROM
+    IsNotDistinctFrom, // IS NOT DISTINCT FROM
 
     // Set operations
     In,
@@ -1300,9 +1301,9 @@ pub enum UnaryOperator {
     Minus,
     Not,
     BitwiseNot,
-    SquareRoot,      // |/ operator
-    CubeRoot,        // ||/ operator
-    AbsoluteValue,   // @ operator
+    SquareRoot,    // |/ operator
+    CubeRoot,      // ||/ operator
+    AbsoluteValue, // @ operator
     IsNull,
     IsNotNull,
     IsTrue,
