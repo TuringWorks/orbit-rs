@@ -699,6 +699,25 @@ impl ExpressionEvaluator {
             "DAYOFWEEK" | "DOW" => self.evaluate_day_of_week(&args),
             "DAYOFYEAR" | "DOY" => self.evaluate_day_of_year(&args),
 
+            // Array functions
+            "ARRAY_APPEND" => self.evaluate_array_append(&args),
+            "ARRAY_PREPEND" => self.evaluate_array_prepend(&args),
+            "ARRAY_CAT" => self.evaluate_array_cat(&args),
+            "ARRAY_LENGTH" => self.evaluate_array_length(&args),
+            "ARRAY_LOWER" => self.evaluate_array_lower(&args),
+            "ARRAY_UPPER" => self.evaluate_array_upper(&args),
+            "ARRAY_NDIMS" => self.evaluate_array_ndims(&args),
+            "ARRAY_DIMS" => self.evaluate_array_dims(&args),
+            "ARRAY_POSITION" => self.evaluate_array_position(&args),
+            "ARRAY_POSITIONS" => self.evaluate_array_positions(&args),
+            "ARRAY_REMOVE" => self.evaluate_array_remove(&args),
+            "ARRAY_REPLACE" => self.evaluate_array_replace(&args),
+            "ARRAY_TO_STRING" => self.evaluate_array_to_string(&args),
+            "ARRAY_FILL" => self.evaluate_array_fill(&args),
+            "CARDINALITY" => self.evaluate_cardinality(&args),
+            "TRIM_ARRAY" => self.evaluate_trim_array(&args),
+            "UNNEST" => self.evaluate_unnest(&args),
+
             // Vector functions
             "VECTOR_DIMS" => self.evaluate_vector_dims(&args),
             "VECTOR_NORM" => self.evaluate_vector_norm(&args),
@@ -2869,6 +2888,412 @@ impl ExpressionEvaluator {
         }
 
         Ok(SqlValue::TimestampWithTimezone(chrono::Utc::now()))
+    }
+
+    // Array function implementations
+    
+    fn evaluate_array_append(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_APPEND requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                let mut new_arr = arr.clone();
+                new_arr.push(args[1].clone());
+                Ok(SqlValue::Array(new_arr))
+            }
+            SqlValue::Null => {
+                Ok(SqlValue::Array(vec![args[1].clone()]))
+            }
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_APPEND requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_prepend(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_PREPEND requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        match &args[1] {
+            SqlValue::Array(arr) => {
+                let mut new_arr = vec![args[0].clone()];
+                new_arr.extend(arr.clone());
+                Ok(SqlValue::Array(new_arr))
+            }
+            SqlValue::Null => {
+                Ok(SqlValue::Array(vec![args[0].clone()]))
+            }
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_PREPEND requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_cat(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_CAT requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        match (&args[0], &args[1]) {
+            (SqlValue::Array(arr1), SqlValue::Array(arr2)) => {
+                let mut result = arr1.clone();
+                result.extend(arr2.clone());
+                Ok(SqlValue::Array(result))
+            }
+            (SqlValue::Null, SqlValue::Array(arr)) => Ok(SqlValue::Array(arr.clone())),
+            (SqlValue::Array(arr), SqlValue::Null) => Ok(SqlValue::Array(arr.clone())),
+            (SqlValue::Null, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_CAT requires array arguments".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_length(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_LENGTH requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        let dimension = match &args[1] {
+            SqlValue::Integer(d) => *d,
+            _ => return Err(ProtocolError::PostgresError(
+                "ARRAY_LENGTH dimension must be integer".to_string(),
+            )),
+        };
+
+        if dimension != 1 {
+            // PostgreSQL supports multi-dimensional arrays, we currently only support 1D
+            return Ok(SqlValue::Null);
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => Ok(SqlValue::Integer(arr.len() as i32)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_LENGTH requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_lower(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_LOWER requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        // PostgreSQL arrays are 1-indexed by default
+        match &args[0] {
+            SqlValue::Array(_) => Ok(SqlValue::Integer(1)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_LOWER requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_upper(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_UPPER requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => Ok(SqlValue::Integer(arr.len() as i32)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_UPPER requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_ndims(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_NDIMS requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(_) => Ok(SqlValue::Integer(1)), // We only support 1D arrays
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_NDIMS requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_dims(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_DIMS requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => Ok(SqlValue::Text(format!("[1:{}]", arr.len()))),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_DIMS requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_position(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_POSITION requires 2 or 3 arguments".to_string(),
+            ));
+        }
+
+        let start_pos = if args.len() == 3 {
+            match &args[2] {
+                SqlValue::Integer(i) => (*i - 1).max(0) as usize,
+                _ => 0,
+            }
+        } else {
+            0
+        };
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                for (i, elem) in arr.iter().enumerate().skip(start_pos) {
+                    if self.compare_values(elem, &args[1])? == std::cmp::Ordering::Equal {
+                        return Ok(SqlValue::Integer((i + 1) as i32));
+                    }
+                }
+                Ok(SqlValue::Null)
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_POSITION requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_positions(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_POSITIONS requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                let mut positions = Vec::new();
+                for (i, elem) in arr.iter().enumerate() {
+                    if self.compare_values(elem, &args[1])? == std::cmp::Ordering::Equal {
+                        positions.push(SqlValue::Integer((i + 1) as i32));
+                    }
+                }
+                Ok(SqlValue::Array(positions))
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_POSITIONS requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_remove(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_REMOVE requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                let result: Vec<SqlValue> = arr
+                    .iter()
+                    .filter(|elem| {
+                        self.compare_values(elem, &args[1])
+                            .map(|ord| ord != std::cmp::Ordering::Equal)
+                            .unwrap_or(true)
+                    })
+                    .cloned()
+                    .collect();
+                Ok(SqlValue::Array(result))
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_REMOVE requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_replace(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 3 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_REPLACE requires exactly 3 arguments".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                let result: Vec<SqlValue> = arr
+                    .iter()
+                    .map(|elem| {
+                        if self.compare_values(elem, &args[1])
+                            .map(|ord| ord == std::cmp::Ordering::Equal)
+                            .unwrap_or(false)
+                        {
+                            args[2].clone()
+                        } else {
+                            elem.clone()
+                        }
+                    })
+                    .collect();
+                Ok(SqlValue::Array(result))
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_REPLACE requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_to_string(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_TO_STRING requires 2 or 3 arguments".to_string(),
+            ));
+        }
+
+        let delimiter = match &args[1] {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.clone(),
+            _ => return Err(ProtocolError::PostgresError(
+                "ARRAY_TO_STRING delimiter must be text".to_string(),
+            )),
+        };
+
+        let null_string = if args.len() == 3 {
+            match &args[2] {
+                SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => Some(s.clone()),
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                let strings: Vec<String> = arr
+                    .iter()
+                    .filter_map(|v| match v {
+                        SqlValue::Null => null_string.clone(),
+                        _ => Some(v.to_postgres_string()),
+                    })
+                    .collect();
+                Ok(SqlValue::Text(strings.join(&delimiter)))
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "ARRAY_TO_STRING requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_fill(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(ProtocolError::PostgresError(
+                "ARRAY_FILL requires 2 or 3 arguments".to_string(),
+            ));
+        }
+
+        let length = match &args[1] {
+            SqlValue::Array(dims) if dims.len() == 1 => {
+                match &dims[0] {
+                    SqlValue::Integer(i) => *i as usize,
+                    _ => return Err(ProtocolError::PostgresError(
+                        "ARRAY_FILL dimensions must be integers".to_string(),
+                    )),
+                }
+            }
+            SqlValue::Integer(i) => *i as usize,
+            _ => return Err(ProtocolError::PostgresError(
+                "ARRAY_FILL requires integer or array dimensions".to_string(),
+            )),
+        };
+
+        let result = vec![args[0].clone(); length];
+        Ok(SqlValue::Array(result))
+    }
+
+    fn evaluate_cardinality(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "CARDINALITY requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => Ok(SqlValue::Integer(arr.len() as i32)),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "CARDINALITY requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_trim_array(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "TRIM_ARRAY requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        let trim_count = match &args[1] {
+            SqlValue::Integer(i) => *i as usize,
+            _ => return Err(ProtocolError::PostgresError(
+                "TRIM_ARRAY count must be integer".to_string(),
+            )),
+        };
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                if trim_count >= arr.len() {
+                    Ok(SqlValue::Array(vec![]))
+                } else {
+                    let new_len = arr.len() - trim_count;
+                    Ok(SqlValue::Array(arr[..new_len].to_vec()))
+                }
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "TRIM_ARRAY requires array argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_unnest(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "UNNEST requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        // UNNEST is typically used in FROM clause, but when called as a function
+        // we return the array itself (it will be expanded by the executor)
+        match &args[0] {
+            SqlValue::Array(arr) => Ok(SqlValue::Array(arr.clone())),
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "UNNEST requires array argument".to_string(),
+            )),
+        }
     }
 
     fn evaluate_vector_dims(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {

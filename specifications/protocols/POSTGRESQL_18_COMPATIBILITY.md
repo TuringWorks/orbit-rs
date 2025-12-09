@@ -755,25 +755,25 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| array_append(arr,elem) | ❌ | Append element |
-| array_cat(arr1,arr2) | ❌ | Concatenate arrays |
-| array_dims(arr) | ❌ | Array dimensions |
-| array_fill(val,dims) | ❌ | Create filled array |
-| array_length(arr,dim) | ❌ | Length of dimension |
-| array_lower(arr,dim) | ❌ | Lower bound |
-| array_upper(arr,dim) | ❌ | Upper bound |
-| array_ndims(arr) | ❌ | Number of dimensions |
-| array_position(arr,elem) | ❌ | Find position |
-| array_positions(arr,elem) | ❌ | Find all positions |
-| array_prepend(elem,arr) | ❌ | Prepend element |
-| array_remove(arr,elem) | ❌ | Remove elements |
-| array_replace(arr,from,to) | ❌ | Replace elements |
+| array_append(arr,elem) | ✅ | Append element |
+| array_cat(arr1,arr2) | ✅ | Concatenate arrays |
+| array_dims(arr) | ✅ | Array dimensions |
+| array_fill(val,dims) | ✅ | Create filled array |
+| array_length(arr,dim) | ✅ | Length of dimension |
+| array_lower(arr,dim) | ✅ | Lower bound |
+| array_upper(arr,dim) | ✅ | Upper bound |
+| array_ndims(arr) | ✅ | Number of dimensions |
+| array_position(arr,elem) | ✅ | Find position |
+| array_positions(arr,elem) | ✅ | Find all positions |
+| array_prepend(elem,arr) | ✅ | Prepend element |
+| array_remove(arr,elem) | ✅ | Remove elements |
+| array_replace(arr,from,to) | ✅ | Replace elements |
 | array_sample(arr,n) | ❌ | Random sample |
 | array_shuffle(arr) | ❌ | Shuffle array |
-| array_to_string(arr,delim) | ❌ | Join to string |
-| cardinality(arr) | ❌ | Total element count |
-| trim_array(arr,n) | ❌ | Trim from end |
-| unnest(arr) | ❌ | Expand to rows |
+| array_to_string(arr,delim) | ✅ | Join to string |
+| cardinality(arr) | ✅ | Total element count |
+| trim_array(arr,n) | ✅ | Trim from end |
+| unnest(arr) | ✅ | Expand to rows |
 
 ### Sequence Functions
 
