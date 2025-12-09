@@ -392,6 +392,12 @@ pub fn parse_notify(parser: &mut SqlParser) -> ParseResult<Statement> {
 pub fn parse_prepare(parser: &mut SqlParser) -> ParseResult<Statement> {
     // PREPARE already consumed
 
+    // Check for PREPARE TRANSACTION (two-phase commit)
+    if parser.matches(&[Token::Transaction]) {
+        parser.advance()?;
+        return parse_prepare_transaction(parser);
+    }
+
     let name = if let Some(Token::Identifier(n)) = &parser.current_token {
         let name = n.clone();
         parser.advance()?;
@@ -1366,4 +1372,284 @@ fn parse_options_list(parser: &mut SqlParser) -> ParseResult<Vec<(String, String
     }
 
     Ok(options)
+}
+
+// ===== Two-Phase Commit Commands =====
+
+pub fn parse_prepare_transaction(parser: &mut SqlParser) -> ParseResult<Statement> {
+    // PREPARE TRANSACTION already consumed
+
+    let transaction_id = if let Some(Token::StringLiteral(s)) = &parser.current_token {
+        let id = s.clone();
+        parser.advance()?;
+        id
+    } else {
+        return Err(super::ParseError {
+            message: "Expected transaction ID".to_string(),
+            position: parser.position,
+            expected: vec!["string literal".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::PrepareTransaction(PrepareTransactionStatement {
+        transaction_id,
+    }))
+}
+
+pub fn parse_commit_prepared(parser: &mut SqlParser) -> ParseResult<Statement> {
+    // COMMIT PREPARED already consumed
+
+    let transaction_id = if let Some(Token::StringLiteral(s)) = &parser.current_token {
+        let id = s.clone();
+        parser.advance()?;
+        id
+    } else {
+        return Err(super::ParseError {
+            message: "Expected transaction ID".to_string(),
+            position: parser.position,
+            expected: vec!["string literal".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::CommitPrepared(CommitPreparedStatement {
+        transaction_id,
+    }))
+}
+
+pub fn parse_rollback_prepared(parser: &mut SqlParser) -> ParseResult<Statement> {
+    // ROLLBACK PREPARED already consumed
+
+    let transaction_id = if let Some(Token::StringLiteral(s)) = &parser.current_token {
+        let id = s.clone();
+        parser.advance()?;
+        id
+    } else {
+        return Err(super::ParseError {
+            message: "Expected transaction ID".to_string(),
+            position: parser.position,
+            expected: vec!["string literal".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::RollbackPrepared(RollbackPreparedStatement {
+        transaction_id,
+    }))
+}
+
+// ===== Additional DCL Commands =====
+
+pub fn parse_reassign_owned(parser: &mut SqlParser) -> ParseResult<Statement> {
+    // REASSIGN OWNED already consumed
+
+    parser.expect(Token::By)?;
+
+    let mut old_roles = Vec::new();
+    loop {
+        if let Some(Token::Identifier(name)) = &parser.current_token {
+            old_roles.push(name.clone());
+            parser.advance()?;
+        } else {
+            break;
+        }
+
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    parser.expect(Token::To)?;
+
+    let new_role = if let Some(Token::Identifier(name)) = &parser.current_token {
+        let n = name.clone();
+        parser.advance()?;
+        n
+    } else {
+        return Err(super::ParseError {
+            message: "Expected new role name".to_string(),
+            position: parser.position,
+            expected: vec!["identifier".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::ReassignOwned(ReassignOwnedStatement {
+        old_roles,
+        new_role,
+    }))
+}
+
+pub fn parse_security_label(parser: &mut SqlParser) -> ParseResult<Statement> {
+    // SECURITY LABEL already consumed
+
+    // Optional FOR provider
+    let provider = if parser.matches(&[Token::For]) {
+        parser.advance()?;
+        if let Some(Token::Identifier(name)) = &parser.current_token {
+            let p = name.clone();
+            parser.advance()?;
+            Some(p)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    parser.expect(Token::On)?;
+
+    // Parse object type
+    let (object_type, column_name) = parse_security_label_object_type(parser)?;
+
+    // Parse object name
+    let object_name = utilities::parse_table_name(parser)?;
+
+    parser.expect(Token::Is)?;
+
+    // Parse label or NULL
+    let label = if parser.matches(&[Token::Null]) {
+        parser.advance()?;
+        None
+    } else if let Some(Token::StringLiteral(s)) = &parser.current_token {
+        let l = s.clone();
+        parser.advance()?;
+        Some(l)
+    } else {
+        return Err(super::ParseError {
+            message: "Expected label string or NULL".to_string(),
+            position: parser.position,
+            expected: vec!["string literal".to_string(), "NULL".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::SecurityLabel(SecurityLabelStatement {
+        provider,
+        object_type,
+        object_name,
+        column_name,
+        label,
+    }))
+}
+
+fn parse_security_label_object_type(
+    parser: &mut SqlParser,
+) -> ParseResult<(SecurityLabelObjectType, Option<String>)> {
+    let mut column_name = None;
+
+    let object_type = match &parser.current_token {
+        Some(Token::Table) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Table
+        }
+        Some(Token::Column) => {
+            parser.advance()?;
+            // Column requires table.column format, we'll parse the column name from object_name
+            SecurityLabelObjectType::Column
+        }
+        Some(Token::Aggregate) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Aggregate
+        }
+        Some(Token::Database) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Database
+        }
+        Some(Token::Domain) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Domain
+        }
+        Some(Token::Event) => {
+            parser.advance()?;
+            parser.expect(Token::Trigger)?;
+            SecurityLabelObjectType::EventTrigger
+        }
+        Some(Token::Foreign) => {
+            parser.advance()?;
+            parser.expect(Token::Table)?;
+            SecurityLabelObjectType::ForeignTable
+        }
+        Some(Token::Function) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Function
+        }
+        Some(Token::Index) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Index
+        }
+        Some(Token::Language) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Language
+        }
+        Some(Token::Large) => {
+            parser.advance()?;
+            parser.expect(Token::Object)?;
+            SecurityLabelObjectType::LargeObject
+        }
+        Some(Token::Materialized) => {
+            parser.advance()?;
+            parser.expect(Token::View)?;
+            SecurityLabelObjectType::MaterializedView
+        }
+        Some(Token::Procedure) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Procedure
+        }
+        Some(Token::Publication) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Publication
+        }
+        Some(Token::Role) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Role
+        }
+        Some(Token::Routine) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Routine
+        }
+        Some(Token::Schema) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Schema
+        }
+        Some(Token::Sequence) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Sequence
+        }
+        Some(Token::Subscription) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Subscription
+        }
+        Some(Token::Tablespace) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Tablespace
+        }
+        Some(Token::Type) => {
+            parser.advance()?;
+            SecurityLabelObjectType::Type
+        }
+        Some(Token::View) => {
+            parser.advance()?;
+            SecurityLabelObjectType::View
+        }
+        _ => {
+            return Err(super::ParseError {
+                message: "Expected object type".to_string(),
+                position: parser.position,
+                expected: vec![
+                    "TABLE".to_string(),
+                    "COLUMN".to_string(),
+                    "FUNCTION".to_string(),
+                    "SCHEMA".to_string(),
+                    "etc.".to_string(),
+                ],
+                found: parser.current_token.clone(),
+            });
+        }
+    };
+
+    Ok((object_type, column_name))
 }

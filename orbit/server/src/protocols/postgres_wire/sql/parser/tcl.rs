@@ -4,8 +4,9 @@
 
 use super::{ParseError, ParseResult, SqlParser};
 use crate::protocols::postgres_wire::sql::ast::{
-    AccessMode, BeginStatement, CommitStatement, IsolationLevel, ReleaseSavepointStatement,
-    RollbackStatement, SavepointStatement, Statement,
+    AccessMode, BeginStatement, CommitPreparedStatement, CommitStatement, IsolationLevel,
+    ReleaseSavepointStatement, RollbackPreparedStatement, RollbackStatement, SavepointStatement,
+    Statement,
 };
 use crate::protocols::postgres_wire::sql::lexer::Token;
 
@@ -47,8 +48,29 @@ pub fn parse_begin(parser: &mut SqlParser) -> ParseResult<Statement> {
 
 /// Parse COMMIT statement
 /// COMMIT \[WORK | TRANSACTION\] \[AND \[NO\] CHAIN\]
+/// COMMIT PREPARED transaction_id
 pub fn parse_commit(parser: &mut SqlParser) -> ParseResult<Statement> {
     parser.expect(Token::Commit)?;
+
+    // Check for COMMIT PREPARED
+    if parser.matches(&[Token::Prepared]) {
+        parser.advance()?;
+        let transaction_id = if let Some(Token::StringLiteral(s)) = &parser.current_token {
+            let id = s.clone();
+            parser.advance()?;
+            id
+        } else {
+            return Err(ParseError {
+                message: "Expected transaction ID".to_string(),
+                position: parser.position,
+                expected: vec!["string literal".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        return Ok(Statement::CommitPrepared(CommitPreparedStatement {
+            transaction_id,
+        }));
+    }
 
     // Optional WORK or TRANSACTION
     if parser.matches(&[Token::Work, Token::Transaction]) {
@@ -82,8 +104,29 @@ pub fn parse_commit(parser: &mut SqlParser) -> ParseResult<Statement> {
 
 /// Parse ROLLBACK statement
 /// ROLLBACK \[WORK | TRANSACTION\] \[TO \[SAVEPOINT\] savepoint_name\] \[AND \[NO\] CHAIN\]
+/// ROLLBACK PREPARED transaction_id
 pub fn parse_rollback(parser: &mut SqlParser) -> ParseResult<Statement> {
     parser.expect(Token::Rollback)?;
+
+    // Check for ROLLBACK PREPARED
+    if parser.matches(&[Token::Prepared]) {
+        parser.advance()?;
+        let transaction_id = if let Some(Token::StringLiteral(s)) = &parser.current_token {
+            let id = s.clone();
+            parser.advance()?;
+            id
+        } else {
+            return Err(ParseError {
+                message: "Expected transaction ID".to_string(),
+                position: parser.position,
+                expected: vec!["string literal".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        return Ok(Statement::RollbackPrepared(RollbackPreparedStatement {
+            transaction_id,
+        }));
+    }
 
     // Optional WORK or TRANSACTION
     if parser.matches(&[Token::Work, Token::Transaction]) {

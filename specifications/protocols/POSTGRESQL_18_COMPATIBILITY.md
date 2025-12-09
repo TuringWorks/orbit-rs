@@ -3,7 +3,7 @@
 **Target**: Full PostgreSQL 18 Wire Protocol Compatibility
 **Reference**: https://www.postgresql.org/docs/18/index.html
 **Last Updated**: 2025-12-08
-**Current Estimated Coverage**: ~88%
+**Current Estimated Coverage**: ~90%
 
 ---
 
@@ -209,9 +209,9 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | ABORT | ✅ | Alias for ROLLBACK |
 | SET TRANSACTION | ✅ | Transaction characteristics |
 | SET CONSTRAINTS | ✅ | Deferred constraints |
-| PREPARE TRANSACTION | ❌ | Two-phase commit |
-| COMMIT PREPARED | ❌ | Two-phase commit |
-| ROLLBACK PREPARED | ❌ | Two-phase commit |
+| PREPARE TRANSACTION | ✅ | Two-phase commit |
+| COMMIT PREPARED | ✅ | Two-phase commit |
+| ROLLBACK PREPARED | ✅ | Two-phase commit |
 | LOCK | ✅ | Explicit table locking with all modes |
 
 ### Data Control Language (DCL)
@@ -220,8 +220,8 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 |---------|--------|-------|
 | GRANT | 🔶 | Basic parsing |
 | REVOKE | 🔶 | Basic parsing |
-| REASSIGN OWNED | ❌ | Object reassignment |
-| SECURITY LABEL | ❌ | Security labels |
+| REASSIGN OWNED | ✅ | Object reassignment |
+| SECURITY LABEL | ✅ | Security labels for all object types |
 
 ### Utility Commands
 
@@ -1397,6 +1397,7 @@ This section tracks OrbitRS implementation of features new to PostgreSQL 18.
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2025-12-08 | 1.4.0 | Added two-phase commit (PREPARE/COMMIT/ROLLBACK PREPARED) and DCL commands (REASSIGN OWNED, SECURITY LABEL). Coverage increased to ~90% |
 | 2025-12-08 | 1.3.0 | Added TCL commands (SET TRANSACTION, SET CONSTRAINTS, LOCK) and utility commands (LOAD, REFRESH MATERIALIZED VIEW, IMPORT FOREIGN SCHEMA). Coverage increased to ~88% |
 | 2025-12-08 | 1.2.0 | Added comprehensive DDL parsing: CREATE/ALTER/DROP for Foreign Tables, FDW, Servers, User Mappings, Publications, Subscriptions, Event Triggers, Access Methods, Statistics, Text Search (Configuration/Dictionary/Parser/Template), Transforms, Languages, Operators, Aggregates, Casts, Collations, Conversions, Tablespaces, Groups, Routines. Coverage increased to ~85% |
 | 2025-12-07 | 1.1.0 | Added PostgreSQL 18 new features section; updated protocol and temporal constraint status |

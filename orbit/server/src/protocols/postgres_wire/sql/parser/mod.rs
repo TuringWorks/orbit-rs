@@ -259,6 +259,18 @@ impl SqlParser {
                 }
             }
 
+            // Additional DCL Commands
+            Some(Token::Reassign) => {
+                self.advance()?;
+                self.expect(Token::Owned)?;
+                utility_commands::parse_reassign_owned(self)
+            }
+            Some(Token::Security) => {
+                self.advance()?;
+                self.expect(Token::Label)?;
+                utility_commands::parse_security_label(self)
+            }
+
             // COMMENT ON statement
             Some(Token::CommentKeyword) => ddl::parse_comment_on(self),
 

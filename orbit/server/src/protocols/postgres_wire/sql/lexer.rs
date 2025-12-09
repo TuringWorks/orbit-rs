@@ -247,6 +247,17 @@ pub enum Token {
     Immediate,
     Nowait,
     Deferrable,
+    // Two-Phase Commit
+    Prepared,
+    // DCL Commands
+    Reassign,
+    // Owned is already defined above
+    Security,
+    Label,
+    Provider,
+    Large,
+    Object,
+    Event,
     // Utility Commands
     Load,
     Import,
@@ -647,6 +658,17 @@ impl Lexer {
             ("IMMEDIATE", Token::Immediate),
             ("NOWAIT", Token::Nowait),
             ("DEFERRABLE", Token::Deferrable),
+            // Two-phase commit
+            ("PREPARED", Token::Prepared),
+            // DCL keywords
+            ("REASSIGN", Token::Reassign),
+            // OWNED is mapped elsewhere
+            ("SECURITY", Token::Security),
+            ("LABEL", Token::Label),
+            ("PROVIDER", Token::Provider),
+            ("LARGE", Token::Large),
+            ("OBJECT", Token::Object),
+            ("EVENT", Token::Event),
             // Utility keywords
             ("LOAD", Token::Load),
             ("IMPORT", Token::Import),

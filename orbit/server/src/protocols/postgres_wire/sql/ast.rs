@@ -276,6 +276,15 @@ pub enum Statement {
     Load(LoadStatement),
     RefreshMaterializedView(RefreshMaterializedViewStatement),
     ImportForeignSchema(ImportForeignSchemaStatement),
+
+    // Two-Phase Commit Commands
+    PrepareTransaction(PrepareTransactionStatement),
+    CommitPrepared(CommitPreparedStatement),
+    RollbackPrepared(RollbackPreparedStatement),
+
+    // Additional DCL Commands
+    ReassignOwned(ReassignOwnedStatement),
+    SecurityLabel(SecurityLabelStatement),
 }
 
 // ===== DDL Statements =====
@@ -3356,4 +3365,64 @@ pub enum ImportForeignSchemaType {
     All,
     LimitTo(Vec<String>),
     Except(Vec<String>),
+}
+
+// ===== Two-Phase Commit Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrepareTransactionStatement {
+    pub transaction_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommitPreparedStatement {
+    pub transaction_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RollbackPreparedStatement {
+    pub transaction_id: String,
+}
+
+// ===== Additional DCL Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReassignOwnedStatement {
+    pub old_roles: Vec<String>,
+    pub new_role: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SecurityLabelStatement {
+    pub provider: Option<String>,
+    pub object_type: SecurityLabelObjectType,
+    pub object_name: TableName,
+    pub column_name: Option<String>,
+    pub label: Option<String>, // None means remove label
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SecurityLabelObjectType {
+    Table,
+    Column,
+    Aggregate,
+    Database,
+    Domain,
+    EventTrigger,
+    ForeignTable,
+    Function,
+    Index,
+    Language,
+    LargeObject,
+    MaterializedView,
+    Procedure,
+    Publication,
+    Role,
+    Routine,
+    Schema,
+    Sequence,
+    Subscription,
+    Tablespace,
+    Type,
+    View,
 }

@@ -15,7 +15,7 @@ This document provides the authoritative status of protocol implementations in O
 |----------|------------|--------|-------|----------|
 | **OrbitQL** | 95% | Production Ready | 50+ | Parser validation, Edge cases |
 | **Redis RESP** | 60% | Production Ready | 190+ | Sorted Sets, Lua scripting |
-| **PostgreSQL** | 88% | Production Ready | 460+ | User management, cursors |
+| **PostgreSQL** | 90% | Production Ready | 460+ | User management execution |
 | **MySQL** | 51% | Active Development | 35+ | Binary protocol, replication |
 | **CQL (Cassandra)** | 55% | Active Development | 51+ | UDTs, Materialized views |
 | **Cypher/Bolt** | 85% | Production Ready | 105+ | DISTINCT, subqueries |
@@ -24,6 +24,13 @@ This document provides the authoritative status of protocol implementations in O
 | **REST/HTTP** | 40% | Active Development | - | Authentication |
 
 ### Recent Improvements (2025-12-08)
+- **PostgreSQL Two-Phase Commit**: Full 2PC support:
+  - PREPARE TRANSACTION 'transaction_id' ✅
+  - COMMIT PREPARED 'transaction_id' ✅
+  - ROLLBACK PREPARED 'transaction_id' ✅
+- **PostgreSQL DCL**: Data control commands:
+  - REASSIGN OWNED BY role TO new_role ✅
+  - SECURITY LABEL (all object types, providers) ✅
 - **PostgreSQL TCL**: Transaction control commands:
   - SET TRANSACTION (isolation level, read only, deferrable) ✅
   - SET CONSTRAINTS (deferred, immediate) ✅
