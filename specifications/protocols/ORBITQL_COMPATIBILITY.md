@@ -68,6 +68,13 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | REMOVE SCOPE | ❌ | Not implemented |
 | REMOVE ANALYZER | ❌ | Not implemented |
 
+### Additional DDL Commands
+
+| Statement | Status | Notes |
+|-----------|--------|-------|
+| CREATE VIEW | ✅ | Materialized views |
+| TRUNCATE | ✅ | Full support |
+
 ### Query Statements (CRUD Operations)
 
 | Statement | Status | Notes |
@@ -118,35 +125,57 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | Feature | Status | Notes |
 |---------|--------|-------|
 | WHERE clause | ✅ | Full expression support |
+| JOIN (all types) | ✅ | INNER, LEFT, RIGHT, FULL |
+| Subqueries | ✅ | Scalar, EXISTS, IN |
+| CTEs (WITH) | ✅ | Recursive CTEs |
+| Window Functions | 🔶 | Basic support |
+| UNION/INTERSECT | ✅ | Set operations |
 | ORDER BY | ✅ | ASC/DESC, NULLS |
 | GROUP BY | ✅ | With ROLLUP, CUBE |
 | HAVING | ✅ | Aggregate filtering |
-| LIMIT/START | ✅ | Pagination |
+| LIMIT/OFFSET | ✅ | Pagination |
 | FETCH | 🔶 | Traverse record links |
 | SPLIT | ❌ | Split results |
 | VERSION | ❌ | Time-travel queries |
 | TIMEOUT | ❌ | Query timeout |
 | PARALLEL | ❌ | Parallel execution |
 
+### Vector Operations
+
+| Operation | Status | Notes |
+|-----------|--------|-------|
+| Vector Similarity Search | ✅ | L2, cosine, inner product |
+| KNN Search | ✅ | K-nearest neighbors |
+| Vector Indexing | ✅ | IVF-Flat, HNSW |
+| Hybrid Search | ✅ | Vector + keyword |
+| Distance Functions | ✅ | <->, <#>, <=> operators |
+
 ### Graph Operations
 
 | Operation | Status | Notes |
 |-----------|--------|-------|
+| MATCH (Cypher-like) | 🔶 | Basic pattern matching |
 | RELATE (create edges) | 🔶 | Basic graph edges |
-| Graph traversal | 🔶 | Basic path queries |
-| Shortest path | ❌ | Not implemented |
+| CREATE (nodes/edges) | 🔶 | Graph creation |
+| Graph traversal | 🔶 | BFS/DFS |
+| Path Queries | 🔶 | Shortest path |
 | Path patterns | 🔶 | Basic pattern matching |
 | Bidirectional edges | 🔶 | Basic support |
 | Edge properties | ✅ | Full support |
+| Property Graphs | 🔶 | Node/edge properties |
 
 ### Document Operations
 
 | Operation | Status | Notes |
 |-----------|--------|-------|
 | JSON Queries | ✅ | JSON path expressions |
+| JSON Indexing | ✅ | GIN indexes |
+| JSON Operators | ✅ | ->, ->>, @>, <@ |
+| JSON Functions | ✅ | Extract, modify |
 | Nested objects | ✅ | Full support |
 | Array operations | ✅ | Array manipulation |
 | Dynamic fields | ✅ | Schema-less support |
+| Document Collections | ✅ | Schema-less storage |
 | SCHEMAFULL tables | ✅ | Strict schema enforcement |
 | SCHEMALESS tables | ✅ | Flexible schema |
 
@@ -158,41 +187,55 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 
 | Type | Status | Notes |
 |------|--------|-------|
-| bool | ✅ | Boolean |
-| int | ✅ | 64-bit integer |
-| float | ✅ | 64-bit float |
-| decimal | ✅ | Fixed-point |
-| string | ✅ | UTF-8 string |
-| datetime | ✅ | ISO 8601 datetime |
-| duration | ✅ | Time duration |
-| uuid | ✅ | UUID v4/v7 |
-| bytes | ✅ | Binary data |
-| null | ✅ | Null value |
-| none | ✅ | Explicit none |
+| bool / BOOLEAN | ✅ | Boolean |
+| int / BIGINT | ✅ | 64-bit integer |
+| int32 / INTEGER | ✅ | 32-bit integer |
+| int16 / SMALLINT | ✅ | 16-bit integer |
+| float / DOUBLE | ✅ | 64-bit float |
+| float32 / FLOAT | ✅ | Single precision |
+| decimal / DECIMAL | ✅ | Fixed-point |
+| string / TEXT | ✅ | UTF-8 string |
+| varchar / VARCHAR | ✅ | Variable-length string |
+| char / CHAR | ✅ | Fixed-length string |
+| datetime / TIMESTAMP | ✅ | ISO 8601 datetime |
+| datetimez / TIMESTAMPTZ | ✅ | With timezone |
+| date / DATE | ✅ | Date values |
+| time / TIME | ✅ | Time values |
+| duration / INTERVAL | ✅ | Time duration |
+| uuid / UUID | ✅ | UUID v4/v7 |
+| bytes / BYTEA | ✅ | Binary data |
+| null / NULL | ✅ | Null value |
+| none / NONE | ✅ | Explicit none |
 
 ### Structured Types
 
 | Type | Status | Notes |
 |------|--------|-------|
-| array | ✅ | Arrays of any type |
-| object | ✅ | JSON objects |
+| array / ARRAY | ✅ | Arrays of any type |
+| object / JSON | ✅ | JSON documents |
+| JSONB | ✅ | Binary JSON |
 | record | ✅ | Record IDs |
 | geometry | ❌ | Geospatial types |
 | set | ✅ | Unique values |
+| RANGE | ✅ | Range types |
 
 ### Advanced Types
 
 | Type | Status | Notes |
 |------|--------|-------|
 | option<T> | ✅ | Optional types |
-| vector<F, N> | ✅ | Dense vectors |
-| halfvec<N> | ✅ | Half-precision vectors |
-| sparsevec | ✅ | Sparse vectors |
+| vector<F, N> / VECTOR | ✅ | Dense vectors |
+| halfvec<N> / HALFVEC | ✅ | Half-precision vectors |
+| sparsevec / SPARSEVEC | ✅ | Sparse vectors |
 
 ### Graph Types
 
 | Type | Status | Notes |
 |------|--------|-------|
+| NODE | 🔶 | Graph nodes |
+| EDGE | 🔶 | Graph edges |
+| PATH | 🔶 | Graph paths |
+| GRAPH | 🔶 | Graph collections |
 | record (nodes) | ✅ | Graph nodes |
 | record (edges) | 🔶 | Graph edges |
 | record links | 🔶 | Record references |
@@ -205,11 +248,13 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| count() | ✅ | Count rows |
-| sum() | ✅ | Sum values |
-| avg() | ✅ | Average |
-| min() | ✅ | Minimum |
-| max() | ✅ | Maximum |
+| count() / COUNT | ✅ | Count rows |
+| sum() / SUM | ✅ | Sum values |
+| avg() / AVG | ✅ | Average |
+| min() / MIN | ✅ | Minimum |
+| max() / MAX | ✅ | Maximum |
+| ARRAY_AGG | ❌ | Aggregate to array |
+| STRING_AGG | ❌ | Concatenate strings |
 | array::group() | ❌ | Group to array |
 | string::join() | ❌ | Join strings |
 
@@ -234,19 +279,23 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| math::abs() | ✅ | Absolute value |
-| math::ceil() | ✅ | Ceiling |
-| math::floor() | ✅ | Floor |
-| math::round() | ✅ | Round |
-| math::sqrt() | ✅ | Square root |
-| math::pow() | ✅ | Power |
-| math::ln() | ✅ | Natural log |
-| math::log() | ✅ | Logarithm |
-| math::sin() | ✅ | Sine |
-| math::cos() | ✅ | Cosine |
-| math::tan() | ✅ | Tangent |
+| math::abs() / ABS | ✅ | Absolute value |
+| math::ceil() / CEIL | ✅ | Ceiling |
+| math::floor() / FLOOR | ✅ | Floor |
+| math::round() / ROUND | ✅ | Round |
+| math::sqrt() / SQRT | ✅ | Square root |
+| math::pow() / POWER | ✅ | Power/Exponentiation |
+| math::exp() / EXP | ✅ | Exponential |
+| math::ln() / LN | ✅ | Natural log |
+| math::log() / LOG | ✅ | Logarithm |
+| math::sin() / SIN | ✅ | Sine |
+| math::cos() / COS | ✅ | Cosine |
+| math::tan() / TAN | ✅ | Tangent |
 | math::max() | ✅ | Maximum |
 | math::min() | ✅ | Minimum |
+| FACTORIAL | ✅ | Factorial (PostgreSQL 18) |
+| GCD | ✅ | Greatest common divisor |
+| LCM | ✅ | Least common multiple |
 
 ### Array Functions
 
@@ -280,17 +329,21 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| time::now() | ✅ | Current time |
+| time::now() / NOW | ✅ | Current time |
+| CURRENT_DATE | ✅ | Current date |
+| CURRENT_TIME | ✅ | Current time |
+| CURRENT_TIMESTAMP | ✅ | Current timestamp |
 | time::unix() | ✅ | Unix timestamp |
-| time::day() | ✅ | Extract day |
-| time::month() | ✅ | Extract month |
-| time::year() | ✅ | Extract year |
-| time::hour() | ✅ | Extract hour |
-| time::minute() | ✅ | Extract minute |
-| time::second() | ✅ | Extract second |
-| time::floor() | ✅ | Floor to unit |
+| time::day() / EXTRACT(DAY) | ✅ | Extract day |
+| time::month() / EXTRACT(MONTH) | ✅ | Extract month |
+| time::year() / EXTRACT(YEAR) | ✅ | Extract year |
+| time::hour() / EXTRACT(HOUR) | ✅ | Extract hour |
+| time::minute() / EXTRACT(MINUTE) | ✅ | Extract minute |
+| time::second() / EXTRACT(SECOND) | ✅ | Extract second |
+| time::floor() / DATE_TRUNC | ✅ | Truncate/floor to unit |
 | time::round() | ✅ | Round to unit |
 | time::format() | ✅ | Format datetime |
+| AGE | ✅ | Age calculation |
 
 ### Type Functions
 
@@ -330,6 +383,11 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 
 | Function | Status | Notes |
 |----------|--------|-------|
+| vector_dims | ✅ | Vector dimensions |
+| vector_norm | ✅ | Vector norm |
+| l2_distance / <-> | ✅ | L2 distance (operator) |
+| cosine_distance / <=> | ✅ | Cosine distance (operator) |
+| inner_product / <#> | ✅ | Inner product (operator) |
 | vector::add() | ✅ | Vector addition |
 | vector::angle() | ✅ | Angle between vectors |
 | vector::cross() | ✅ | Cross product |
@@ -346,6 +404,18 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | vector::distance::manhattan() | ✅ | L1 distance |
 | vector::similarity::cosine() | ✅ | Cosine similarity |
 | vector::similarity::jaccard() | ✅ | Jaccard similarity |
+
+### JSON Functions
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| json_extract / -> | ✅ | Extract value |
+| json_extract_text / ->> | ✅ | Extract as text |
+| json_contains / @> | ✅ | Contains check |
+| json_contained / <@ | ✅ | Is contained check |
+| json_array_length | ❌ | Array length |
+| json_each | ❌ | Expand to rows |
+| jsonb_set | ❌ | Set value |
 
 ### Geo Functions
 
@@ -400,12 +470,23 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | Connection Pooling | ✅ | Full support |
 | SSL/TLS | ❌ | Not implemented |
 
+### Query Execution
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Prepared Statements | ✅ | Full support |
+| Parameterized Queries | ✅ | SQL injection prevention |
+| Batch Execution | ✅ | Multiple queries |
+| Streaming Results | ✅ | Large result sets |
+| Query Cancellation | ✅ | Cancel running queries |
+
 ### Transaction Support
 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | BEGIN/COMMIT | ✅ | Transactions |
-| CANCEL | ✅ | Transaction rollback |
+| ROLLBACK / CANCEL | ✅ | Transaction rollback |
+| SAVEPOINT | ✅ | Named savepoints |
 | Isolation Levels | 🔶 | Basic support |
 | Optimistic Locking | ❌ | Not implemented |
 
@@ -439,13 +520,34 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 
 | Category | Coverage | Notes |
 |----------|----------|-------|
-| DEFINE Statements | ~60% | Core schema definition |
-| Query Statements | ~90% | Full CRUD |
-| Control Flow | ~30% | Basic IF/ELSE |
-| Graph Operations | ~40% | Basic RELATE |
-| Real-time | ~20% | WebSocket only |
+| DDL Commands | ~70% | Core schema operations |
+| DML Commands | ~90% | Full CRUD |
+| Query Features | ~80% | Advanced SQL |
+| Data Types | ~85% | Comprehensive types |
 | Functions | ~70% | Core functions |
 | Vector Operations | ~90% | Full vector support |
+| Graph Operations | ~40% | Basic graph queries |
+| Protocol | ~70% | Multiple interfaces |
+
+### Priority Roadmap
+
+**High Priority**:
+1. ✅ SQL compatibility
+2. ✅ Vector operations
+3. ✅ gRPC protocol
+4. 🔶 Graph queries
+5. ❌ Advanced analytics
+
+**Medium Priority**:
+1. ❌ Time series operations
+2. ❌ Geospatial queries
+3. 🔶 Full-text search
+4. ❌ Machine learning integration
+
+**Low Priority**:
+1. ❌ Advanced graph algorithms
+2. ❌ Stream processing
+3. ❌ Complex event processing
 
 ### SurrealDB Compatibility
 
@@ -457,6 +559,19 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | Real-time | ~20% | Limited LIVE SELECT |
 | Permissions | ~30% | Basic access control |
 | Functions | ~70% | Most functions implemented |
+
+---
+
+## Known Limitations
+
+1. **Graph Queries**: Limited Cypher support
+2. **Full-Text Search**: Basic implementation
+3. **Geospatial**: Not implemented
+4. **Time Series**: Limited support
+5. **Streaming**: Basic streaming only
+6. **Advanced Analytics**: Not implemented
+7. **Machine Learning**: Integration incomplete
+8. **SSL/TLS**: Not implemented
 
 ---
 
@@ -520,3 +635,5 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 - [SurrealQL Statements](https://surrealdb.com/docs/surrealql/statements)
 - [SurrealDB GitHub](https://github.com/surrealdb/surrealdb)
 - [OrbitRS Documentation](https://github.com/orbitrs/orbit-rs)
+- [Vector Extensions (pgvector)](https://github.com/pgvector/pgvector)
+- [PostgreSQL Compatibility](./POSTGRESQL_18_COMPATIBILITY.md)

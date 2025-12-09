@@ -1637,7 +1637,10 @@ pub enum TypeDefinition {
     /// Composite type: CREATE TYPE name AS (column1 type1, column2 type2, ...)
     Composite { attributes: Vec<TypeAttribute> },
     /// Range type: CREATE TYPE name AS RANGE (SUBTYPE = subtype, ...)
-    Range { subtype: SqlType, options: Vec<RangeTypeOption> },
+    Range {
+        subtype: SqlType,
+        options: Vec<RangeTypeOption>,
+    },
     /// Base type: CREATE TYPE name (INPUT = ..., OUTPUT = ..., ...)
     Base { options: Vec<BaseTypeOption> },
     /// Shell type: CREATE TYPE name (placeholder for forward references)
@@ -1711,7 +1714,10 @@ pub enum AlterTypeAction {
         position: Option<EnumValuePosition>,
     },
     /// RENAME VALUE 'old_value' TO 'new_value'
-    RenameValue { old_value: String, new_value: String },
+    RenameValue {
+        old_value: String,
+        new_value: String,
+    },
     /// RENAME TO new_name
     Rename(String),
     /// SET SCHEMA new_schema
@@ -1803,20 +1809,20 @@ pub struct CreateRoleStatement {
 /// Role options
 #[derive(Debug, Clone, PartialEq)]
 pub enum RoleOption {
-    SuperUser(bool),         // SUPERUSER / NOSUPERUSER
-    CreateDb(bool),          // CREATEDB / NOCREATEDB
-    CreateRole(bool),        // CREATEROLE / NOCREATEROLE
-    Inherit(bool),           // INHERIT / NOINHERIT
-    Login(bool),             // LOGIN / NOLOGIN
-    Replication(bool),       // REPLICATION / NOREPLICATION
-    BypassRls(bool),         // BYPASSRLS / NOBYPASSRLS
-    ConnectionLimit(i32),    // CONNECTION LIMIT n
-    Password(Option<String>), // PASSWORD 'password' / PASSWORD NULL
+    SuperUser(bool),           // SUPERUSER / NOSUPERUSER
+    CreateDb(bool),            // CREATEDB / NOCREATEDB
+    CreateRole(bool),          // CREATEROLE / NOCREATEROLE
+    Inherit(bool),             // INHERIT / NOINHERIT
+    Login(bool),               // LOGIN / NOLOGIN
+    Replication(bool),         // REPLICATION / NOREPLICATION
+    BypassRls(bool),           // BYPASSRLS / NOBYPASSRLS
+    ConnectionLimit(i32),      // CONNECTION LIMIT n
+    Password(Option<String>),  // PASSWORD 'password' / PASSWORD NULL
     EncryptedPassword(String), // ENCRYPTED PASSWORD 'password'
-    ValidUntil(String),      // VALID UNTIL 'timestamp'
-    InRole(Vec<String>),     // IN ROLE role1, role2
-    Role(Vec<String>),       // ROLE role1, role2 (this role can be granted)
-    Admin(Vec<String>),      // ADMIN role1, role2 (can grant this role)
+    ValidUntil(String),        // VALID UNTIL 'timestamp'
+    InRole(Vec<String>),       // IN ROLE role1, role2
+    Role(Vec<String>),         // ROLE role1, role2 (this role can be granted)
+    Admin(Vec<String>),        // ADMIN role1, role2 (can grant this role)
 }
 
 /// DROP ROLE/USER statement
@@ -1842,7 +1848,10 @@ pub enum AlterRoleAction {
     /// ALTER ROLE name RENAME TO new_name
     Rename(String),
     /// ALTER ROLE name SET parameter TO value
-    SetConfig { parameter: String, value: Expression },
+    SetConfig {
+        parameter: String,
+        value: Expression,
+    },
     /// ALTER ROLE name RESET parameter
     ResetConfig(String),
     /// ALTER ROLE name RESET ALL
@@ -1858,7 +1867,7 @@ pub struct CreatePolicyStatement {
     pub table: TableName,
     pub permissive: bool, // true for PERMISSIVE (default), false for RESTRICTIVE
     pub command: PolicyCommand,
-    pub roles: Vec<String>, // TO roles
+    pub roles: Vec<String>,             // TO roles
     pub using_expr: Option<Expression>, // USING expression
     pub check_expr: Option<Expression>, // WITH CHECK expression
 }
@@ -2023,11 +2032,11 @@ pub enum AggregateOption {
     SortOp(String),
     Parallel(String),
     // Moving-aggregate options (PostgreSQL)
-    MSFunc(String),      // Moving-aggregate state function
-    MInvFunc(String),    // Moving-aggregate inverse function
-    MSType(SqlType),     // Moving-aggregate state type
-    MSSpace(i64),        // Moving-aggregate state size
-    MFinalFunc(String),  // Moving-aggregate final function
+    MSFunc(String),     // Moving-aggregate state function
+    MInvFunc(String),   // Moving-aggregate inverse function
+    MSType(SqlType),    // Moving-aggregate state type
+    MSSpace(i64),       // Moving-aggregate state size
+    MFinalFunc(String), // Moving-aggregate final function
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2501,9 +2510,18 @@ pub struct AlterTextSearchConfigurationStatement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AlterTextSearchConfigurationAction {
-    AddMapping { token_type: String, dictionaries: Vec<TableName> },
-    AlterMapping { token_type: String, dictionaries: Vec<TableName> },
-    DropMapping { if_exists: bool, token_type: String },
+    AddMapping {
+        token_type: String,
+        dictionaries: Vec<TableName>,
+    },
+    AlterMapping {
+        token_type: String,
+        dictionaries: Vec<TableName>,
+    },
+    DropMapping {
+        if_exists: bool,
+        token_type: String,
+    },
     Owner(String),
     Rename(String),
     SetSchema(String),
@@ -2735,8 +2753,16 @@ pub enum AlterOperatorFamilyAction {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum OperatorFamilyDropItem {
-    Operator { strategy: i32, left_type: SqlType, right_type: SqlType },
-    Function { support: i32, left_type: SqlType, right_type: SqlType },
+    Operator {
+        strategy: i32,
+        left_type: SqlType,
+        right_type: SqlType,
+    },
+    Function {
+        support: i32,
+        left_type: SqlType,
+        right_type: SqlType,
+    },
 }
 
 // ===== Extended DDL - Routine Statements =====
@@ -2864,7 +2890,10 @@ pub enum AlterViewAction {
     SetSchema(String),
     SetOptions(Vec<(String, String)>),
     ResetOptions(Vec<String>),
-    AlterColumn { column: String, action: AlterColumnAction },
+    AlterColumn {
+        column: String,
+        action: AlterColumnAction,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2947,7 +2976,10 @@ pub enum AlterMaterializedViewAction {
     SetTablespace(String),
     SetOptions(Vec<(String, String)>),
     ResetOptions(Vec<String>),
-    AlterColumn { column: String, action: AlterColumnAction },
+    AlterColumn {
+        column: String,
+        action: AlterColumnAction,
+    },
     ClusterOn(String),
     SetWithoutCluster,
 }
@@ -2962,8 +2994,14 @@ pub struct AlterExtensionStatement {
 pub enum AlterExtensionAction {
     UpdateTo(Option<String>),
     SetSchema(String),
-    AddMember { object_type: String, object_name: String },
-    DropMember { object_type: String, object_name: String },
+    AddMember {
+        object_type: String,
+        object_name: String,
+    },
+    DropMember {
+        object_type: String,
+        object_name: String,
+    },
 }
 
 // ===== Extended DDL - Additional Drop Statements =====

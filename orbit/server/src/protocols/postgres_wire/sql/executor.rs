@@ -11,22 +11,22 @@ use crate::protocols::postgres_wire::sql::{
     ast::{
         AccessMode, AlterDomainStatement, AlterPolicyStatement, AlterRoleStatement,
         AlterSequenceStatement, AlterTableStatement, AlterTypeStatement, AssignmentTarget,
-        BeginStatement, ColumnConstraint, CommitStatement, CopyDirection, CopySource, CopyStatement,
-        CopyTarget, CreateDatabaseStatement, CreateDomainStatement, CreateExtensionStatement,
-        CreateFunctionStatement, CreateIndexStatement, CreatePolicyStatement, CreateRoleStatement,
-        CreateRuleStatement, CreateSchemaStatement, CreateSequenceStatement, CreateTableStatement,
-        CreateTriggerStatement, CreateTypeStatement, CreateViewStatement, DeleteStatement,
-        DescribeStatement, DropDatabaseStatement, DropDomainStatement, DropExtensionStatement,
-        DropIndexStatement, DropPolicyStatement, DropRoleStatement, DropRuleStatement,
-        DropSchemaStatement, DropSequenceStatement, DropTableStatement, DropTriggerStatement,
-        DropTypeStatement, DropViewStatement, ExplainStatement, Expression, FromClause,
-        FunctionLanguage, FunctionVolatility, GeneratedColumnStorage, GrantStatement, IndexType,
-        InsertSource, InsertStatement, IsolationLevel, JoinCondition, JoinType, MergeAction,
-        MergeInsertValues, MergeStatement, ParameterMode, Privilege, ReleaseSavepointStatement,
-        RevokeStatement, RollbackStatement, SavepointStatement, SelectItem, SelectStatement,
-        SetStatement, ShowStatement, ShowVariable, Statement, TableConstraint, TableName,
-        TriggerEvent, TriggerForEach, TriggerTiming, TruncateStatement, TypeDefinition,
-        UpdateStatement, UseStatement,
+        BeginStatement, ColumnConstraint, CommitStatement, CopyDirection, CopySource,
+        CopyStatement, CopyTarget, CreateDatabaseStatement, CreateDomainStatement,
+        CreateExtensionStatement, CreateFunctionStatement, CreateIndexStatement,
+        CreatePolicyStatement, CreateRoleStatement, CreateRuleStatement, CreateSchemaStatement,
+        CreateSequenceStatement, CreateTableStatement, CreateTriggerStatement, CreateTypeStatement,
+        CreateViewStatement, DeleteStatement, DescribeStatement, DropDatabaseStatement,
+        DropDomainStatement, DropExtensionStatement, DropIndexStatement, DropPolicyStatement,
+        DropRoleStatement, DropRuleStatement, DropSchemaStatement, DropSequenceStatement,
+        DropTableStatement, DropTriggerStatement, DropTypeStatement, DropViewStatement,
+        ExplainStatement, Expression, FromClause, FunctionLanguage, FunctionVolatility,
+        GeneratedColumnStorage, GrantStatement, IndexType, InsertSource, InsertStatement,
+        IsolationLevel, JoinCondition, JoinType, MergeAction, MergeInsertValues, MergeStatement,
+        ParameterMode, Privilege, ReleaseSavepointStatement, RevokeStatement, RollbackStatement,
+        SavepointStatement, SelectItem, SelectStatement, SetStatement, ShowStatement, ShowVariable,
+        Statement, TableConstraint, TableName, TriggerEvent, TriggerForEach, TriggerTiming,
+        TruncateStatement, TypeDefinition, UpdateStatement, UseStatement,
     },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator, SequenceAccessor},
     parser::SqlParser,
@@ -385,9 +385,9 @@ impl SequenceAccessor for ExecutorSequenceAccessor {
             ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
         })?;
 
-        let seq = sequences.get_mut(sequence_name).ok_or_else(|| {
-            ProtocolError::not_found("Sequence", sequence_name)
-        })?;
+        let seq = sequences
+            .get_mut(sequence_name)
+            .ok_or_else(|| ProtocolError::not_found("Sequence", sequence_name))?;
 
         let next_value = if seq.is_called {
             let next = seq.current_value + seq.increment;
@@ -432,9 +432,9 @@ impl SequenceAccessor for ExecutorSequenceAccessor {
             ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
         })?;
 
-        let seq = sequences.get(sequence_name).ok_or_else(|| {
-            ProtocolError::not_found("Sequence", sequence_name)
-        })?;
+        let seq = sequences
+            .get(sequence_name)
+            .ok_or_else(|| ProtocolError::not_found("Sequence", sequence_name))?;
 
         if !seq.is_called {
             return Err(ProtocolError::PostgresError(format!(
@@ -451,9 +451,9 @@ impl SequenceAccessor for ExecutorSequenceAccessor {
             ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
         })?;
 
-        let seq = sequences.get_mut(sequence_name).ok_or_else(|| {
-            ProtocolError::not_found("Sequence", sequence_name)
-        })?;
+        let seq = sequences
+            .get_mut(sequence_name)
+            .ok_or_else(|| ProtocolError::not_found("Sequence", sequence_name))?;
 
         if value < seq.min_value || value > seq.max_value {
             return Err(ProtocolError::PostgresError(format!(
@@ -892,11 +892,7 @@ impl SqlExecutor {
         let param_types: Vec<String> = stmt
             .args
             .as_ref()
-            .map(|args| {
-                args.iter()
-                    .map(|p| format!("{:?}", p.data_type))
-                    .collect()
-            })
+            .map(|args| args.iter().map(|p| format!("{:?}", p.data_type)).collect())
             .unwrap_or_default();
         let function_key = format!("{}({})", function_name, param_types.join(","));
 
@@ -915,12 +911,16 @@ impl SqlExecutor {
                     .map(|p| FunctionParameterDef {
                         name: p.name.clone(),
                         data_type: format!("{:?}", p.data_type),
-                        mode: p.mode.as_ref().map(|m| match m {
-                            ParameterMode::In => ParameterModeType::In,
-                            ParameterMode::Out => ParameterModeType::Out,
-                            ParameterMode::InOut => ParameterModeType::InOut,
-                            ParameterMode::Variadic => ParameterModeType::Variadic,
-                        }).unwrap_or(ParameterModeType::In),
+                        mode: p
+                            .mode
+                            .as_ref()
+                            .map(|m| match m {
+                                ParameterMode::In => ParameterModeType::In,
+                                ParameterMode::Out => ParameterModeType::Out,
+                                ParameterMode::InOut => ParameterModeType::InOut,
+                                ParameterMode::Variadic => ParameterModeType::Variadic,
+                            })
+                            .unwrap_or(ParameterModeType::In),
                         default_value: p.default.as_ref().map(|e| format!("{:?}", e)),
                     })
                     .collect()
@@ -928,18 +928,26 @@ impl SqlExecutor {
             .unwrap_or_default();
 
         // Convert language
-        let language = stmt.language.as_ref().map(|l| match l {
-            FunctionLanguage::Sql => FunctionLanguageType::Sql,
-            FunctionLanguage::PlPgSql => FunctionLanguageType::PlPgSql,
-            FunctionLanguage::Other(_) => FunctionLanguageType::Internal,
-        }).unwrap_or(FunctionLanguageType::Sql);
+        let language = stmt
+            .language
+            .as_ref()
+            .map(|l| match l {
+                FunctionLanguage::Sql => FunctionLanguageType::Sql,
+                FunctionLanguage::PlPgSql => FunctionLanguageType::PlPgSql,
+                FunctionLanguage::Other(_) => FunctionLanguageType::Internal,
+            })
+            .unwrap_or(FunctionLanguageType::Sql);
 
         // Convert volatility
-        let volatility = stmt.volatility.as_ref().map(|v| match v {
-            FunctionVolatility::Immutable => FunctionVolatilityType::Immutable,
-            FunctionVolatility::Stable => FunctionVolatilityType::Stable,
-            FunctionVolatility::Volatile => FunctionVolatilityType::Volatile,
-        }).unwrap_or(FunctionVolatilityType::Volatile);
+        let volatility = stmt
+            .volatility
+            .as_ref()
+            .map(|v| match v {
+                FunctionVolatility::Immutable => FunctionVolatilityType::Immutable,
+                FunctionVolatility::Stable => FunctionVolatilityType::Stable,
+                FunctionVolatility::Volatile => FunctionVolatilityType::Volatile,
+            })
+            .unwrap_or(FunctionVolatilityType::Volatile);
 
         // Create stored function
         let stored_function = StoredFunction {
@@ -1078,14 +1086,12 @@ impl SqlExecutor {
                 t.table_name == table_name
                     && t.timing == timing
                     && t.enabled
-                    && t.events.iter().any(|e| {
-                        match (e, event) {
-                            (TriggerEventType::Insert, TriggerEventType::Insert) => true,
-                            (TriggerEventType::Delete, TriggerEventType::Delete) => true,
-                            (TriggerEventType::Truncate, TriggerEventType::Truncate) => true,
-                            (TriggerEventType::Update(_), TriggerEventType::Update(_)) => true,
-                            _ => false,
-                        }
+                    && t.events.iter().any(|e| match (e, event) {
+                        (TriggerEventType::Insert, TriggerEventType::Insert) => true,
+                        (TriggerEventType::Delete, TriggerEventType::Delete) => true,
+                        (TriggerEventType::Truncate, TriggerEventType::Truncate) => true,
+                        (TriggerEventType::Update(_), TriggerEventType::Update(_)) => true,
+                        _ => false,
                     })
             })
             .cloned()
@@ -2599,7 +2605,7 @@ impl SqlExecutor {
         let mut merge_results: Vec<(
             Option<HashMap<String, SqlValue>>, // OLD row (for UPDATE/DELETE)
             Option<HashMap<String, SqlValue>>, // NEW row (for UPDATE/INSERT)
-            String,                             // Action type: "UPDATE", "INSERT", "DELETE"
+            String,                            // Action type: "UPDATE", "INSERT", "DELETE"
         )> = Vec::new();
 
         let mut merge_count = 0;
@@ -2649,10 +2655,8 @@ impl SqlExecutor {
                         for (key, value) in &source_row {
                             combined_row.insert(key.clone(), value.clone());
                         }
-                        let context = EvaluationContext::with_row_and_table(
-                            combined_row,
-                            table_name.clone(),
-                        );
+                        let context =
+                            EvaluationContext::with_row_and_table(combined_row, table_name.clone());
 
                         match self.evaluate_where_condition(condition, &context).await {
                             Ok(SqlValue::Boolean(true)) => {}
@@ -2713,16 +2717,16 @@ impl SqlExecutor {
                             self.check_temporal_overlaps(&table_schema, &new_row, &other_rows)?;
 
                             target_data[index] = new_row.clone();
-                            merge_results.push((Some(old_row), Some(new_row), "UPDATE".to_string()));
+                            merge_results.push((
+                                Some(old_row),
+                                Some(new_row),
+                                "UPDATE".to_string(),
+                            ));
                             merge_count += 1;
                         }
                         MergeAction::Delete => {
                             let old_row = target_data.remove(index);
-                            merge_results.push((
-                                Some(old_row.clone()),
-                                None,
-                                "DELETE".to_string(),
-                            ));
+                            merge_results.push((Some(old_row.clone()), None, "DELETE".to_string()));
                             merge_count += 1;
                         }
                         MergeAction::DoNothing => {
@@ -2761,7 +2765,11 @@ impl SqlExecutor {
                                 let insert_columns = if let Some(cols) = &insert.columns {
                                     cols.clone()
                                 } else {
-                                    table_schema.columns.iter().map(|c| c.name.clone()).collect()
+                                    table_schema
+                                        .columns
+                                        .iter()
+                                        .map(|c| c.name.clone())
+                                        .collect()
                                 };
 
                                 for (i, value_expr) in values.iter().enumerate() {
@@ -2942,7 +2950,7 @@ impl SqlExecutor {
                         if i < column_names.len() {
                             let col_name = &column_names[i];
                             let value = match value_expr {
-                            Expression::Literal(val) => (*val).clone(),
+                                Expression::Literal(val) => (*val).clone(),
                                 _ => SqlValue::Text("complex_expr".to_string()),
                             };
                             row.insert(col_name.clone(), value);

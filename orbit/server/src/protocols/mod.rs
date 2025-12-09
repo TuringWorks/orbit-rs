@@ -27,6 +27,10 @@ pub mod time_series;
 pub mod vector_index;
 pub mod vector_store;
 
+// Wire protocols for OrbitQL
+pub mod flight;
+pub mod orbitwire;
+
 // Server wrappers (these use the protocol implementations above)
 mod cql_server;
 mod mysql_server;
@@ -38,6 +42,10 @@ pub use mongodb::MongoDbServer;
 pub use mysql_server::MySqlServer;
 pub use postgres_server::PostgresServer;
 pub use resp_server::RespServer;
+
+// Wire protocol servers
+pub use flight::FlightSqlServer;
+pub use orbitwire::OrbitWireServer;
 
 // Re-export commonly used types
 pub use error::{ProtocolError, ProtocolResult};

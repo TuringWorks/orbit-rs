@@ -24,10 +24,8 @@ impl QueryParser {
     /// Parse PostgreSQL tsquery to Tantivy query
     /// Syntax: 'cat & dog' → AND, 'cat | dog' → OR, '!cat' → NOT
     pub fn parse_tsquery(&self, tsquery: &str) -> Result<Box<dyn Query>> {
-        let query_parser = tantivy::query::QueryParser::for_index(
-            &self.index,
-            self.default_fields.clone(),
-        );
+        let query_parser =
+            tantivy::query::QueryParser::for_index(&self.index, self.default_fields.clone());
 
         // Convert PostgreSQL operators to Tantivy syntax
         let tantivy_query = tsquery
@@ -47,10 +45,8 @@ impl QueryParser {
         let mut must_not = Vec::new();
         let mut should = Vec::new();
 
-        let query_parser = tantivy::query::QueryParser::for_index(
-            &self.index,
-            self.default_fields.clone(),
-        );
+        let query_parser =
+            tantivy::query::QueryParser::for_index(&self.index, self.default_fields.clone());
 
         for term in query.split_whitespace() {
             if term.starts_with('+') {
@@ -64,15 +60,25 @@ impl QueryParser {
             }
         }
 
-        Ok(Box::new(BooleanQuery::new(must, must_not, should)))
+        // Build boolean query using clauses
+        let mut clauses = Vec::new();
+        for q in must {
+            clauses.push((Occur::Must, q));
+        }
+        for q in must_not {
+            clauses.push((Occur::MustNot, q));
+        }
+        for q in should {
+            clauses.push((Occur::Should, q));
+        }
+
+        Ok(Box::new(BooleanQuery::from(clauses)))
     }
 
     /// Parse MongoDB $text query to Tantivy query
     pub fn parse_mongodb_text(&self, search: &str) -> Result<Box<dyn Query>> {
-        let query_parser = tantivy::query::QueryParser::for_index(
-            &self.index,
-            self.default_fields.clone(),
-        );
+        let query_parser =
+            tantivy::query::QueryParser::for_index(&self.index, self.default_fields.clone());
 
         query_parser
             .parse_query(search)
@@ -81,10 +87,8 @@ impl QueryParser {
 
     /// Parse Redis FT.SEARCH query to Tantivy query
     pub fn parse_redis_search(&self, query: &str) -> Result<Box<dyn Query>> {
-        let query_parser = tantivy::query::QueryParser::for_index(
-            &self.index,
-            self.default_fields.clone(),
-        );
+        let query_parser =
+            tantivy::query::QueryParser::for_index(&self.index, self.default_fields.clone());
 
         query_parser
             .parse_query(query)
@@ -93,10 +97,8 @@ impl QueryParser {
 
     /// Parse standard query (Lucene-like syntax)
     pub fn parse_standard(&self, query: &str) -> Result<Box<dyn Query>> {
-        let query_parser = tantivy::query::QueryParser::for_index(
-            &self.index,
-            self.default_fields.clone(),
-        );
+        let query_parser =
+            tantivy::query::QueryParser::for_index(&self.index, self.default_fields.clone());
 
         query_parser
             .parse_query(query)
@@ -111,7 +113,7 @@ impl QueryParser {
 
         let field = self.default_fields[0];
         let term_obj = Term::from_field_text(field, term);
-        
+
         Ok(Box::new(FuzzyTermQuery::new(term_obj, distance, true)))
     }
 

@@ -19,6 +19,7 @@ pub struct FtsEngine {
 
 /// Handle to a Tantivy index
 struct IndexHandle {
+    #[allow(dead_code)]
     index: Index,
     reader: IndexReader,
     writer: Arc<RwLock<IndexWriter>>,
@@ -39,11 +40,7 @@ impl FtsEngine {
     }
 
     /// Create a new index
-    pub async fn create_index(
-        &self,
-        name: &str,
-        schema: Schema,
-    ) -> Result<()> {
+    pub async fn create_index(&self, name: &str, schema: Schema) -> Result<()> {
         let index_path = self.config.index_dir.join(name);
         std::fs::create_dir_all(&index_path)?;
 
@@ -52,7 +49,7 @@ impl FtsEngine {
 
         // Create index writer
         let writer = index.writer(self.config.max_memory)?;
-        writer.set_num_threads(self.config.num_threads)?;
+        // Note: set_num_threads was removed in newer Tantivy versions
 
         // Create index reader
         let reader = index
@@ -88,14 +85,12 @@ impl FtsEngine {
     pub async fn add_document(
         &self,
         index_name: &str,
-        doc: tantivy::Document,
+        doc: tantivy::TantivyDocument,
     ) -> Result<()> {
         let indexes = self.indexes.read().await;
-        let handle = indexes
-            .get(index_name)
-            .context("Index not found")?;
+        let handle = indexes.get(index_name).context("Index not found")?;
 
-        let mut writer = handle.writer.write().await;
+        let writer = handle.writer.write().await;
         writer.add_document(doc)?;
 
         Ok(())
@@ -104,9 +99,7 @@ impl FtsEngine {
     /// Commit pending changes
     pub async fn commit(&self, index_name: &str) -> Result<()> {
         let indexes = self.indexes.read().await;
-        let handle = indexes
-            .get(index_name)
-            .context("Index not found")?;
+        let handle = indexes.get(index_name).context("Index not found")?;
 
         let mut writer = handle.writer.write().await;
         writer.commit()?;
@@ -122,29 +115,24 @@ impl FtsEngine {
         limit: usize,
     ) -> Result<Vec<SearchResult>> {
         let indexes = self.indexes.read().await;
-        let handle = indexes
-            .get(index_name)
-            .context("Index not found")?;
+        let handle = indexes.get(index_name).context("Index not found")?;
 
         let searcher = handle.reader.searcher();
-        let top_docs = searcher.search(
-            &query,
-            &tantivy::collector::TopDocs::with_limit(limit),
-        )?;
+        let top_docs = searcher.search(&query, &tantivy::collector::TopDocs::with_limit(limit))?;
 
         let mut results = Vec::new();
         for (score, doc_address) in top_docs {
-            let doc = searcher.doc(doc_address)?;
-            
+            let doc: tantivy::TantivyDocument = searcher.doc(doc_address)?;
+
             // Extract fields from document
             let mut fields = Vec::new();
-            for (field, field_values) in doc.get_all_sorted() {
-                if let Some(field_entry) = handle.schema.get_field_entry(field) {
-                    let field_name = field_entry.name().to_string();
-                    for value in field_values {
-                        if let Some(text) = value.as_str() {
-                            fields.push((field_name.clone(), text.to_string()));
-                        }
+            for field in handle.schema.fields() {
+                let field_entry = handle.schema.get_field_entry(field.0);
+                let field_name = field_entry.name().to_string();
+
+                for value in doc.get_all(field.0) {
+                    if let Some(text) = value.as_str() {
+                        fields.push((field_name.clone(), text.to_string()));
                     }
                 }
             }
@@ -169,9 +157,7 @@ impl FtsEngine {
     /// Get index statistics
     pub async fn get_stats(&self, index_name: &str) -> Result<IndexStats> {
         let indexes = self.indexes.read().await;
-        let handle = indexes
-            .get(index_name)
-            .context("Index not found")?;
+        let handle = indexes.get(index_name).context("Index not found")?;
 
         let searcher = handle.reader.searcher();
         let num_docs = searcher.num_docs();
@@ -197,7 +183,7 @@ impl FtsEngine {
 /// Calculate directory size recursively
 fn calculate_dir_size(path: &PathBuf) -> Result<u64> {
     let mut size = 0u64;
-    
+
     if path.is_dir() {
         for entry in std::fs::read_dir(path)? {
             let entry = entry?;
@@ -209,7 +195,7 @@ fn calculate_dir_size(path: &PathBuf) -> Result<u64> {
             }
         }
     }
-    
+
     Ok(size)
 }
 
@@ -227,8 +213,15 @@ mod tests {
         let engine = FtsEngine::new(config).unwrap();
 
         let mut schema_builder = Schema::builder();
-        schema_builder.add_text_field("title", TEXT | STORED);
-        schema_builder.add_text_field("body", TEXT);
+        let text_options = TextOptions::default()
+            .set_indexing_options(
+                TextFieldIndexing::default()
+                    .set_tokenizer("default")
+                    .set_index_option(IndexRecordOption::Basic),
+            )
+            .set_stored();
+        schema_builder.add_text_field("title", text_options.clone());
+        schema_builder.add_text_field("body", text_options);
         let schema = schema_builder.build();
 
         engine.create_index("test_index", schema).await.unwrap();

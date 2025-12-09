@@ -286,6 +286,70 @@ impl SqlParser {
             Some(Token::User) => ddl::parse_create_role(self, true),
             Some(Token::Policy) => ddl::parse_create_policy(self),
             Some(Token::Rule) => ddl::parse_create_rule(self, or_replace),
+            // Extended DDL
+            Some(Token::Group) => ddl::parse_create_group(self),
+            Some(Token::Tablespace) => ddl::parse_create_tablespace(self),
+            Some(Token::Aggregate) => ddl::parse_create_aggregate(self),
+            Some(Token::Operator) => ddl::parse_create_operator(self),
+            Some(Token::Cast) => ddl::parse_create_cast(self),
+            Some(Token::Collation) => ddl::parse_create_collation(self),
+            Some(Token::Conversion) => ddl::parse_create_conversion(self),
+            Some(Token::Foreign) => {
+                self.advance()?; // consume FOREIGN
+                // Check for DATA WRAPPER or TABLE
+                if let Some(Token::Identifier(id)) = &self.current_token {
+                    if id.to_uppercase() == "DATA" {
+                        self.advance()?; // consume DATA
+                        // Expect WRAPPER
+                        ddl::parse_create_foreign_data_wrapper(self)
+                    } else {
+                        ddl::parse_create_foreign_table(self)
+                    }
+                } else if matches!(&self.current_token, Some(Token::Table)) {
+                    ddl::parse_create_foreign_table(self)
+                } else {
+                    Err(ParseError {
+                        message: "Expected DATA WRAPPER or TABLE after FOREIGN".to_string(),
+                        position: self.position,
+                        expected: vec!["DATA".to_string(), "TABLE".to_string()],
+                        found: self.current_token.clone(),
+                    })
+                }
+            },
+            Some(Token::Server) => ddl::parse_create_server(self),
+            Some(Token::Publication) => ddl::parse_create_publication(self),
+            Some(Token::Subscription) => ddl::parse_create_subscription(self),
+            Some(Token::EventTrigger) => ddl::parse_create_event_trigger(self),
+            Some(Token::AccessMethod) => ddl::parse_create_access_method(self),
+            Some(Token::Statistics) => ddl::parse_create_statistics(self),
+            Some(Token::TextSearch) => {
+                self.advance()?; // consume TEXT SEARCH
+                // Dispatch based on next token: CONFIGURATION, DICTIONARY, PARSER, TEMPLATE
+                if matches!(&self.current_token, Some(Token::Configuration)) {
+                    ddl::parse_create_text_search_configuration(self)
+                } else if matches!(&self.current_token, Some(Token::Dictionary)) {
+                    ddl::parse_create_text_search_dictionary(self)
+                } else if matches!(&self.current_token, Some(Token::Parser)) {
+                    ddl::parse_create_text_search_parser(self)
+                } else if matches!(&self.current_token, Some(Token::Template)) {
+                    ddl::parse_create_text_search_template(self)
+                } else {
+                    Err(ParseError {
+                        message: "Expected CONFIGURATION, DICTIONARY, PARSER, or TEMPLATE after TEXT SEARCH".to_string(),
+                        position: self.position,
+                        expected: vec!["CONFIGURATION".to_string(), "DICTIONARY".to_string(), "PARSER".to_string(), "TEMPLATE".to_string()],
+                        found: self.current_token.clone(),
+                    })
+                }
+            },
+            Some(Token::Transform) => ddl::parse_create_transform(self),
+            Some(Token::Language) => ddl::parse_create_language(self),
+            // PROCEDURE uses the same parser as FUNCTION with adjustments
+            Some(Token::Procedure) => {
+                let stmt = ddl::parse_create_function(self)?;
+                // The function parser handles both - PROCEDURE token expected
+                Ok(stmt)
+            },
 
             Some(token) => Err(ParseError {
                 message: format!("Unexpected token after CREATE: {token:?}"),
@@ -333,6 +397,58 @@ impl SqlParser {
             Some(Token::Role) => ddl::parse_alter_role(self, false),
             Some(Token::User) => ddl::parse_alter_role(self, true),
             Some(Token::Policy) => ddl::parse_alter_policy(self),
+            // Extended DDL
+            Some(Token::Group) => ddl::parse_alter_group(self),
+            Some(Token::Tablespace) => ddl::parse_alter_tablespace(self),
+            Some(Token::Aggregate) => ddl::parse_alter_aggregate(self),
+            Some(Token::Operator) => ddl::parse_alter_operator(self),
+            Some(Token::Collation) => ddl::parse_alter_collation(self),
+            Some(Token::Conversion) => ddl::parse_alter_conversion(self),
+            Some(Token::Foreign) => {
+                self.advance()?; // consume FOREIGN
+                if let Some(Token::Identifier(id)) = &self.current_token {
+                    if id.to_uppercase() == "DATA" {
+                        self.advance()?; // consume DATA
+                        ddl::parse_alter_foreign_data_wrapper(self)
+                    } else {
+                        ddl::parse_alter_foreign_table(self)
+                    }
+                } else if matches!(&self.current_token, Some(Token::Table)) {
+                    ddl::parse_alter_foreign_table(self)
+                } else {
+                    Err(ParseError {
+                        message: "Expected DATA WRAPPER or TABLE after FOREIGN".to_string(),
+                        position: self.position,
+                        expected: vec!["DATA".to_string(), "TABLE".to_string()],
+                        found: self.current_token.clone(),
+                    })
+                }
+            }
+            Some(Token::Server) => ddl::parse_alter_server(self),
+            Some(Token::Publication) => ddl::parse_alter_publication(self),
+            Some(Token::Subscription) => ddl::parse_alter_subscription(self),
+            Some(Token::EventTrigger) => ddl::parse_alter_event_trigger(self),
+            Some(Token::Statistics) => ddl::parse_alter_statistics(self),
+            Some(Token::TextSearch) => {
+                self.advance()?; // consume TEXT SEARCH
+                if matches!(&self.current_token, Some(Token::Configuration)) {
+                    ddl::parse_alter_text_search_configuration(self)
+                } else if matches!(&self.current_token, Some(Token::Dictionary)) {
+                    ddl::parse_alter_text_search_dictionary(self)
+                } else if matches!(&self.current_token, Some(Token::Parser)) {
+                    ddl::parse_alter_text_search_parser(self)
+                } else if matches!(&self.current_token, Some(Token::Template)) {
+                    ddl::parse_alter_text_search_template(self)
+                } else {
+                    Err(ParseError {
+                        message: "Expected CONFIGURATION, DICTIONARY, PARSER, or TEMPLATE after TEXT SEARCH".to_string(),
+                        position: self.position,
+                        expected: vec!["CONFIGURATION".to_string(), "DICTIONARY".to_string(), "PARSER".to_string(), "TEMPLATE".to_string()],
+                        found: self.current_token.clone(),
+                    })
+                }
+            }
+            Some(Token::Language) => ddl::parse_alter_language(self),
 
             Some(token) => Err(ParseError {
                 message: format!("Unexpected token after ALTER: {token:?}"),
@@ -385,6 +501,65 @@ impl SqlParser {
             Some(Token::User) => ddl::parse_drop_role(self, true),
             Some(Token::Policy) => ddl::parse_drop_policy(self),
             Some(Token::Rule) => ddl::parse_drop_rule(self),
+            // Extended DDL
+            Some(Token::Group) => ddl::parse_drop_group(self),
+            Some(Token::Tablespace) => ddl::parse_drop_tablespace(self),
+            Some(Token::Aggregate) => ddl::parse_drop_aggregate(self),
+            Some(Token::Operator) => ddl::parse_drop_operator(self),
+            Some(Token::Cast) => ddl::parse_drop_cast(self),
+            Some(Token::Collation) => ddl::parse_drop_collation(self),
+            Some(Token::Conversion) => ddl::parse_drop_conversion(self),
+            Some(Token::Foreign) => {
+                self.advance()?; // consume FOREIGN
+                if let Some(Token::Identifier(id)) = &self.current_token {
+                    if id.to_uppercase() == "DATA" {
+                        self.advance()?; // consume DATA
+                        ddl::parse_drop_foreign_data_wrapper(self)
+                    } else {
+                        ddl::parse_drop_foreign_table(self)
+                    }
+                } else if matches!(&self.current_token, Some(Token::Table)) {
+                    ddl::parse_drop_foreign_table(self)
+                } else {
+                    Err(ParseError {
+                        message: "Expected DATA WRAPPER or TABLE after FOREIGN".to_string(),
+                        position: self.position,
+                        expected: vec!["DATA".to_string(), "TABLE".to_string()],
+                        found: self.current_token.clone(),
+                    })
+                }
+            },
+            Some(Token::Server) => ddl::parse_drop_server(self),
+            Some(Token::Publication) => ddl::parse_drop_publication(self),
+            Some(Token::Subscription) => ddl::parse_drop_subscription(self),
+            Some(Token::EventTrigger) => ddl::parse_drop_event_trigger(self),
+            Some(Token::AccessMethod) => ddl::parse_drop_access_method(self),
+            Some(Token::Statistics) => ddl::parse_drop_statistics(self),
+            Some(Token::TextSearch) => {
+                self.advance()?; // consume TEXT SEARCH
+                if matches!(&self.current_token, Some(Token::Configuration)) {
+                    ddl::parse_drop_text_search_configuration(self)
+                } else if matches!(&self.current_token, Some(Token::Dictionary)) {
+                    ddl::parse_drop_text_search_dictionary(self)
+                } else if matches!(&self.current_token, Some(Token::Parser)) {
+                    ddl::parse_drop_text_search_parser(self)
+                } else if matches!(&self.current_token, Some(Token::Template)) {
+                    ddl::parse_drop_text_search_template(self)
+                } else {
+                    Err(ParseError {
+                        message: "Expected CONFIGURATION, DICTIONARY, PARSER, or TEMPLATE after TEXT SEARCH".to_string(),
+                        position: self.position,
+                        expected: vec!["CONFIGURATION".to_string(), "DICTIONARY".to_string(), "PARSER".to_string(), "TEMPLATE".to_string()],
+                        found: self.current_token.clone(),
+                    })
+                }
+            },
+            Some(Token::Transform) => ddl::parse_drop_transform(self),
+            Some(Token::Language) => ddl::parse_drop_language(self),
+            Some(Token::Function) => ddl::parse_drop_function(self),
+            Some(Token::Procedure) => ddl::parse_drop_procedure(self),
+            Some(Token::Routine) => ddl::parse_drop_routine(self),
+            Some(Token::Owned) => ddl::parse_drop_owned(self),
 
             Some(token) => Err(ParseError {
                 message: format!("Unexpected token after DROP: {token:?}"),

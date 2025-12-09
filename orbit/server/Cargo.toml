@@ -88,6 +88,9 @@ http-body-util = "0.1"
 tantivy = { version = "0.22", optional = true }
 tantivy-jieba = { version = "0.11", optional = true }  # Chinese tokenization
 
+# LZ4 compression for OrbitWire
+lz4_flex = "0.11"
+
 [features]
 # Default features - all production-ready features enabled
 default = [
@@ -153,6 +156,8 @@ protocol-arangodb = ["actor-system", "model-graph"]
 protocol-grpc = ["networking"]
 protocol-rest = ["networking"]
 protocol-mcp = ["networking"]
+protocol-flight-sql = ["networking"]
+protocol-orbitwire = ["networking"]
 
 # Storage Engines
 storage-memory = []

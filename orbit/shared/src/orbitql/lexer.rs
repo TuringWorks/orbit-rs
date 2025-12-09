@@ -83,6 +83,56 @@ pub enum TokenType {
     With,
     Recursive,
 
+    // SurrealDB-style DEFINE/REMOVE keywords
+    Define,
+    Remove,
+    Namespace,
+    Database,
+    Field,
+    Event,
+    Analyzer,
+    Token,
+    User,
+    Scope,
+    Param,
+    Schemafull,
+    Schemaless,
+
+    // Additional SQL keywords
+    Truncate,
+    Union,
+    Intersect,
+    Except,
+    Cascade,
+    Restrict,
+    Default,
+    Constraint,
+    Primary,
+    Key,
+    Foreign,
+    References,
+    Unique,
+    Check,
+    Savepoint,
+    Return,
+    Returning,
+    Upsert,
+    Merge,
+    Kill,
+
+    // Control flow keywords
+    For,
+    Continue,
+    Break,
+    Throw,
+    Sleep,
+    Let,
+    Info,
+    Show,
+    Rebuild,
+    Access,
+    Use,
+
     // Graph keywords
     Node,
     Edge,
@@ -90,6 +140,7 @@ pub enum TokenType {
     Connected,
     Traverse, // TRAVERSE for graph traversal
     MaxDepth, // MAX_DEPTH for traversal depth limit
+    Match,    // Cypher-like MATCH
 
     // Time-series keywords
     Metrics,
@@ -112,6 +163,22 @@ pub enum TokenType {
     Score,
     Fit,
     Transform,
+
+    // Vector keywords
+    Vector,
+
+    // JSON operators
+    JsonExtract,     // ->
+    JsonExtractText, // ->>
+    JsonContainsOp,  // @>
+    JsonContainedOp, // <@
+
+    // Spatial keywords
+    Geometry,
+    Point,
+    LineString,
+    Polygon,
+    Geography,
 
     // Operators
     Equal,              // =
@@ -273,6 +340,61 @@ impl Token {
                 | Score
                 | Fit
                 | Transform
+                // New SurrealDB-style keywords
+                | Define
+                | Remove
+                | Namespace
+                | Database
+                | Field
+                | Event
+                | Analyzer
+                | Token
+                | User
+                | Scope
+                | Param
+                | Schemafull
+                | Schemaless
+                // Additional SQL keywords
+                | Truncate
+                | Union
+                | Intersect
+                | Except
+                | Cascade
+                | Restrict
+                | Default
+                | Constraint
+                | Primary
+                | Key
+                | Foreign
+                | References
+                | Unique
+                | Check
+                | Savepoint
+                | Return
+                | Returning
+                | Upsert
+                | Merge
+                | Kill
+                // Control flow keywords
+                | For
+                | Continue
+                | Break
+                | Throw
+                | Sleep
+                | Let
+                | Info
+                | Show
+                | Rebuild
+                | Access
+                | Use
+                | Match
+                // Vector and spatial keywords
+                | Vector
+                | Geometry
+                | Point
+                | LineString
+                | Polygon
+                | Geography
         )
     }
 
@@ -298,6 +420,10 @@ impl Token {
                 | ArrowRight
                 | ArrowLeft
                 | ArrowBoth
+                | JsonExtract
+                | JsonExtractText
+                | JsonContainsOp
+                | JsonContainedOp
         )
     }
 
@@ -453,6 +579,7 @@ impl Lexer {
         keywords.insert("CONNECTED".to_string(), TokenType::Connected);
         keywords.insert("TRAVERSE".to_string(), TokenType::Traverse);
         keywords.insert("MAX_DEPTH".to_string(), TokenType::MaxDepth);
+        keywords.insert("MATCH".to_string(), TokenType::Match);
 
         // Time-series keywords
         keywords.insert("METRICS".to_string(), TokenType::Metrics);
@@ -475,10 +602,69 @@ impl Lexer {
         keywords.insert("FIT".to_string(), TokenType::Fit);
         keywords.insert("TRANSFORM".to_string(), TokenType::Transform);
 
+        // SurrealDB-style DEFINE/REMOVE keywords
+        keywords.insert("DEFINE".to_string(), TokenType::Define);
+        keywords.insert("REMOVE".to_string(), TokenType::Remove);
+        keywords.insert("NAMESPACE".to_string(), TokenType::Namespace);
+        keywords.insert("DATABASE".to_string(), TokenType::Database);
+        keywords.insert("FIELD".to_string(), TokenType::Field);
+        keywords.insert("EVENT".to_string(), TokenType::Event);
+        keywords.insert("ANALYZER".to_string(), TokenType::Analyzer);
+        keywords.insert("TOKEN".to_string(), TokenType::Token);
+        keywords.insert("USER".to_string(), TokenType::User);
+        keywords.insert("SCOPE".to_string(), TokenType::Scope);
+        keywords.insert("PARAM".to_string(), TokenType::Param);
+        keywords.insert("SCHEMAFULL".to_string(), TokenType::Schemafull);
+        keywords.insert("SCHEMALESS".to_string(), TokenType::Schemaless);
+
+        // Additional SQL keywords
+        keywords.insert("TRUNCATE".to_string(), TokenType::Truncate);
+        keywords.insert("UNION".to_string(), TokenType::Union);
+        keywords.insert("INTERSECT".to_string(), TokenType::Intersect);
+        keywords.insert("EXCEPT".to_string(), TokenType::Except);
+        keywords.insert("CASCADE".to_string(), TokenType::Cascade);
+        keywords.insert("RESTRICT".to_string(), TokenType::Restrict);
+        keywords.insert("DEFAULT".to_string(), TokenType::Default);
+        keywords.insert("CONSTRAINT".to_string(), TokenType::Constraint);
+        keywords.insert("PRIMARY".to_string(), TokenType::Primary);
+        keywords.insert("KEY".to_string(), TokenType::Key);
+        keywords.insert("FOREIGN".to_string(), TokenType::Foreign);
+        keywords.insert("REFERENCES".to_string(), TokenType::References);
+        keywords.insert("UNIQUE".to_string(), TokenType::Unique);
+        keywords.insert("CHECK".to_string(), TokenType::Check);
+        keywords.insert("SAVEPOINT".to_string(), TokenType::Savepoint);
+        keywords.insert("RETURN".to_string(), TokenType::Return);
+        keywords.insert("RETURNING".to_string(), TokenType::Returning);
+        keywords.insert("UPSERT".to_string(), TokenType::Upsert);
+        keywords.insert("MERGE".to_string(), TokenType::Merge);
+        keywords.insert("KILL".to_string(), TokenType::Kill);
+
+        // Control flow keywords
+        keywords.insert("FOR".to_string(), TokenType::For);
+        keywords.insert("CONTINUE".to_string(), TokenType::Continue);
+        keywords.insert("BREAK".to_string(), TokenType::Break);
+        keywords.insert("THROW".to_string(), TokenType::Throw);
+        keywords.insert("SLEEP".to_string(), TokenType::Sleep);
+        keywords.insert("LET".to_string(), TokenType::Let);
+        keywords.insert("INFO".to_string(), TokenType::Info);
+        keywords.insert("SHOW".to_string(), TokenType::Show);
+        keywords.insert("REBUILD".to_string(), TokenType::Rebuild);
+        keywords.insert("ACCESS".to_string(), TokenType::Access);
+        keywords.insert("USE".to_string(), TokenType::Use);
+
+        // Vector and spatial keywords
+        keywords.insert("VECTOR".to_string(), TokenType::Vector);
+        keywords.insert("GEOMETRY".to_string(), TokenType::Geometry);
+        keywords.insert("POINT".to_string(), TokenType::Point);
+        keywords.insert("LINESTRING".to_string(), TokenType::LineString);
+        keywords.insert("POLYGON".to_string(), TokenType::Polygon);
+        keywords.insert("GEOGRAPHY".to_string(), TokenType::Geography);
+
         // Boolean and null literals
         keywords.insert("TRUE".to_string(), TokenType::Boolean);
         keywords.insert("FALSE".to_string(), TokenType::Boolean);
         keywords.insert("NULL".to_string(), TokenType::Null);
+        keywords.insert("NONE".to_string(), TokenType::Null); // SurrealDB-style
 
         Self { keywords }
     }

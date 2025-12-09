@@ -4,6 +4,9 @@
 
 use tantivy::schema::*;
 
+/// FTS Schema utilities
+pub struct FtsSchema;
+
 /// Schema builder for PostgreSQL FTS
 pub struct PostgresSchema;
 
@@ -154,11 +157,8 @@ mod tests {
 
     #[test]
     fn test_redis_schema() {
-        let schema = RedisSchema::build(&[
-            ("title", "TEXT"),
-            ("price", "NUMERIC"),
-            ("tags", "TAG"),
-        ]);
+        let schema =
+            RedisSchema::build(&[("title", "TEXT"), ("price", "NUMERIC"), ("tags", "TAG")]);
         assert_eq!(schema.fields().count(), 4);
     }
 }

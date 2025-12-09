@@ -33,6 +33,8 @@
 //! - ✅ SQL parsing (SELECT, INSERT, UPDATE, DELETE)
 
 pub mod auth;
+#[cfg(feature = "fts")]
+pub mod fts;
 pub mod graphrag_engine;
 pub mod jsonb;
 pub mod messages;

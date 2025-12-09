@@ -3,21 +3,22 @@
 // Provides BM25 ranking and relevance scoring for search results.
 
 use super::SearchResult;
-use anyhow::Result;
 
 /// Ranking engine for search results
 pub struct RankingEngine {
     /// BM25 k1 parameter (term frequency saturation)
+    #[allow(dead_code)]
     k1: f32,
     /// BM25 b parameter (length normalization)
+    #[allow(dead_code)]
     b: f32,
 }
 
 impl Default for RankingEngine {
     fn default() -> Self {
         Self {
-            k1: 1.2,  // Standard BM25 k1
-            b: 0.75,  // Standard BM25 b
+            k1: 1.2, // Standard BM25 k1
+            b: 0.75, // Standard BM25 b
         }
     }
 }
@@ -31,7 +32,9 @@ impl RankingEngine {
     pub fn rank(&self, mut results: Vec<SearchResult>) -> Vec<SearchResult> {
         // Tantivy already provides BM25 scores, so we just sort
         results.sort_by(|a, b| {
-            b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal)
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
         results
     }
@@ -73,7 +76,7 @@ mod tests {
     #[test]
     fn test_ranking() {
         let engine = RankingEngine::default();
-        
+
         let results = vec![
             SearchResult {
                 doc_id: "1".to_string(),
@@ -104,7 +107,7 @@ mod tests {
     #[test]
     fn test_normalize_scores() {
         let engine = RankingEngine::default();
-        
+
         let mut results = vec![
             SearchResult {
                 doc_id: "1".to_string(),

@@ -1,0 +1,252 @@
+-- ============================================================================
+-- OrbitQL Protocol Examples - Graph Operations
+-- ============================================================================
+-- Demonstrates RELATE, TRAVERSE, MATCH and graph queries
+-- ============================================================================
+
+-- ============================================================================
+-- RELATE STATEMENTS (Creating Graph Edges)
+-- ============================================================================
+
+-- Basic RELATE (create edge between nodes)
+RELATE users:alice->follows->users:bob;
+
+-- RELATE with properties
+RELATE users:alice->follows->users:bob SET
+    since = time::now(),
+    strength = 0.8,
+    mutual = false;
+
+-- RELATE with complex properties
+RELATE users:alice->purchased->products:laptop SET
+    quantity = 1,
+    price = 1299.99,
+    timestamp = time::now(),
+    payment_method = 'credit_card',
+    shipping = {
+        address: '123 Main St',
+        method: 'express'
+    };
+
+-- RELATE from query results
+RELATE (SELECT id FROM users WHERE department = 'engineering')
+    ->works_in->
+    (SELECT id FROM departments WHERE name = 'Engineering');
+
+-- ============================================================================
+-- GRAPH TRAVERSAL WITH -> AND <- OPERATORS
+-- ============================================================================
+
+-- Outgoing edges (who does Alice follow?)
+SELECT ->follows->user.name AS following
+FROM users:alice;
+
+-- Incoming edges (who follows Alice?)
+SELECT <-follows<-user.name AS followers
+FROM users:alice;
+
+-- Multi-hop traversal (friends of friends)
+SELECT ->follows->user->follows->user.name AS friends_of_friends
+FROM users:alice;
+
+-- Bidirectional traversal
+SELECT <>knows<>user.name AS connections
+FROM users:alice;
+
+-- Traversal with filtering
+SELECT ->follows->user.* AS friends
+FROM users:alice
+WHERE ->follows->user.status = 'active';
+
+-- Traversal with edge properties
+SELECT
+    ->purchased->product.name AS product_name,
+    ->purchased.price AS price,
+    ->purchased.timestamp AS purchased_at
+FROM users:alice;
+
+-- ============================================================================
+-- TRAVERSE STATEMENT
+-- ============================================================================
+
+-- Basic TRAVERSE
+TRAVERSE follows FROM users:alice;
+
+-- TRAVERSE with depth limit
+TRAVERSE follows FROM users:alice MAX_DEPTH 3;
+
+-- TRAVERSE with filter
+TRAVERSE follows FROM users:alice MAX_DEPTH 5
+WHERE type = 'Person' AND status = 'active';
+
+-- TRAVERSE multiple edge types
+TRAVERSE follows, knows, works_with FROM users:alice MAX_DEPTH 2;
+
+-- Breadth-first search
+TRAVERSE BFS follows FROM users:alice MAX_DEPTH 4;
+
+-- Depth-first search
+TRAVERSE DFS follows FROM users:alice MAX_DEPTH 4;
+
+-- ============================================================================
+-- MATCH STATEMENT (Cypher-like Pattern Matching)
+-- ============================================================================
+
+-- Basic MATCH pattern
+MATCH (a:Person)-[:KNOWS]->(b:Person)
+RETURN a.name, b.name;
+
+-- MATCH with properties
+MATCH (a:Person {status: 'active'})-[:FOLLOWS]->(b:Person)
+WHERE b.followers > 1000
+RETURN a.name AS follower, b.name AS influencer;
+
+-- Variable-length path
+MATCH (a:Person)-[:KNOWS*1..3]->(b:Person)
+WHERE a.name = 'Alice'
+RETURN b.name, length(path) AS distance;
+
+-- Path with direction
+MATCH path = (a:Person)-[:MANAGES*]->(b:Person)
+WHERE a.name = 'CEO'
+RETURN path;
+
+-- Multiple patterns
+MATCH
+    (user:Person)-[:PURCHASED]->(product:Product),
+    (product)-[:BELONGS_TO]->(category:Category)
+WHERE category.name = 'Electronics'
+RETURN user.name, product.name, product.price;
+
+-- Optional MATCH
+MATCH (user:Person)
+OPTIONAL MATCH (user)-[:REVIEWED]->(product:Product)
+RETURN user.name, COUNT(product) AS review_count;
+
+-- MATCH with aggregation
+MATCH (user:Person)-[:PURCHASED]->(product:Product)
+RETURN user.name, COUNT(product) AS purchases, SUM(product.price) AS total_spent
+ORDER BY total_spent DESC
+LIMIT 10;
+
+-- ============================================================================
+-- GRAPH ANALYTICS
+-- ============================================================================
+
+-- Find shortest path
+SELECT graph::shortest_path(users:alice, users:bob, 'follows') AS path;
+
+-- Find all paths
+SELECT graph::all_paths(users:alice, users:bob, 'follows', 5) AS paths;
+
+-- PageRank-style influence
+SELECT
+    id,
+    name,
+    COUNT(<-follows) AS follower_count,
+    graph::pagerank(id, 'follows') AS influence_score
+FROM users
+ORDER BY influence_score DESC
+LIMIT 10;
+
+-- Community detection
+SELECT
+    user.name,
+    graph::community(user.id, 'knows') AS community_id
+FROM users;
+
+-- Centrality metrics
+SELECT
+    id,
+    name,
+    graph::betweenness_centrality(id) AS betweenness,
+    graph::closeness_centrality(id) AS closeness,
+    graph::degree_centrality(id) AS degree
+FROM users
+ORDER BY betweenness DESC;
+
+-- ============================================================================
+-- GRAPH QUERIES WITH JOINS
+-- ============================================================================
+
+-- Combine graph and relational queries
+SELECT
+    u.name,
+    u.email,
+    COUNT(->follows) AS following_count,
+    COUNT(<-follows) AS follower_count,
+    o.total_orders,
+    o.total_spent
+FROM users u
+LEFT JOIN (
+    SELECT user_id, COUNT(*) AS total_orders, SUM(total) AS total_spent
+    FROM orders
+    GROUP BY user_id
+) o ON u.id = o.user_id
+ORDER BY follower_count DESC;
+
+-- Recommend products based on graph
+SELECT DISTINCT product.name, product.price
+FROM users:alice
+    ->follows->user
+    ->purchased->product
+WHERE product.id NOT IN (
+    SELECT ->purchased->product.id FROM users:alice
+)
+ORDER BY COUNT(*) DESC
+LIMIT 5;
+
+-- ============================================================================
+-- KNOWLEDGE GRAPH OPERATIONS
+-- ============================================================================
+
+-- Create entities
+INSERT INTO entities { name: 'Alice', type: 'Person', description: 'Software Engineer' };
+INSERT INTO entities { name: 'Acme Corp', type: 'Organization', description: 'Tech company' };
+
+-- Create relationships
+RELATE entities[name='Alice']->works_at->entities[name='Acme Corp'] SET
+    role = 'Engineer',
+    since = '2020-01-15',
+    department = 'Engineering';
+
+-- Query knowledge graph
+SELECT
+    e1.name AS subject,
+    type(r) AS relationship,
+    e2.name AS object,
+    r.* AS properties
+FROM entities e1
+JOIN relationships r ON e1.id = r.from
+JOIN entities e2 ON r.to = e2.id
+WHERE e1.type = 'Person';
+
+-- Semantic search in knowledge graph
+SELECT
+    e.name,
+    e.description,
+    vector::similarity::cosine(e.embedding, $query_embedding) AS similarity
+FROM entities e
+WHERE e.type = 'Person'
+ORDER BY similarity DESC
+LIMIT 10;
+
+-- ============================================================================
+-- GRAPH MUTATIONS
+-- ============================================================================
+
+-- Update edge properties
+UPDATE follows SET strength = 0.9
+WHERE in = users:alice AND out = users:bob;
+
+-- Delete specific edge
+DELETE follows
+WHERE in = users:alice AND out = users:bob;
+
+-- Delete all edges of a type from a node
+DELETE follows WHERE in = users:alice;
+
+-- Merge nodes (combine duplicates)
+MERGE INTO users:primary
+FROM users:duplicate
+ON name, email;

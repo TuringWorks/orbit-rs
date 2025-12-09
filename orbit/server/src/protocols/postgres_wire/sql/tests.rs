@@ -3505,7 +3505,11 @@ mod tests {
 
         // Create a basic sequence
         let result = engine.execute("CREATE SEQUENCE test_seq").await;
-        assert!(result.is_ok(), "CREATE SEQUENCE should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "CREATE SEQUENCE should succeed: {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -3516,7 +3520,11 @@ mod tests {
         let result = engine
             .execute("CREATE SEQUENCE counter_seq START WITH 100 INCREMENT BY 5 MINVALUE 1 MAXVALUE 1000")
             .await;
-        assert!(result.is_ok(), "CREATE SEQUENCE with options should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "CREATE SEQUENCE with options should succeed: {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -3524,7 +3532,10 @@ mod tests {
         let mut engine = SqlEngine::new_traditional();
 
         // Create a sequence
-        engine.execute("CREATE SEQUENCE my_seq START WITH 1").await.unwrap();
+        engine
+            .execute("CREATE SEQUENCE my_seq START WITH 1")
+            .await
+            .unwrap();
 
         // Get next value
         let result = engine.execute("SELECT nextval('my_seq')").await;
@@ -3548,7 +3559,10 @@ mod tests {
         let mut engine = SqlEngine::new_traditional();
 
         // Create a sequence
-        engine.execute("CREATE SEQUENCE inc_seq START WITH 10 INCREMENT BY 5").await.unwrap();
+        engine
+            .execute("CREATE SEQUENCE inc_seq START WITH 10 INCREMENT BY 5")
+            .await
+            .unwrap();
 
         // Get first value
         let result1 = engine.execute("SELECT nextval('inc_seq')").await.unwrap();
@@ -3574,14 +3588,21 @@ mod tests {
         let mut engine = SqlEngine::new_traditional();
 
         // Create a sequence
-        engine.execute("CREATE SEQUENCE curr_seq START WITH 100").await.unwrap();
+        engine
+            .execute("CREATE SEQUENCE curr_seq START WITH 100")
+            .await
+            .unwrap();
 
         // Call nextval first
         engine.execute("SELECT nextval('curr_seq')").await.unwrap();
 
         // Now currval should work
         let result = engine.execute("SELECT currval('curr_seq')").await;
-        assert!(result.is_ok(), "currval after nextval should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "currval after nextval should succeed: {:?}",
+            result
+        );
 
         if let Ok(crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. }) = result {
             assert_eq!(rows[0][0], Some("100".to_string()), "currval should return 100");
@@ -3625,13 +3646,22 @@ mod tests {
         let mut engine = SqlEngine::new_traditional();
 
         // Create a sequence
-        engine.execute("CREATE SEQUENCE setval_uncalled_seq").await.unwrap();
+        engine
+            .execute("CREATE SEQUENCE setval_uncalled_seq")
+            .await
+            .unwrap();
 
         // Set the value with is_called = false
-        engine.execute("SELECT setval('setval_uncalled_seq', 100, false)").await.unwrap();
+        engine
+            .execute("SELECT setval('setval_uncalled_seq', 100, false)")
+            .await
+            .unwrap();
 
         // Next nextval should return 100 (not 101)
-        let result = engine.execute("SELECT nextval('setval_uncalled_seq')").await.unwrap();
+        let result = engine
+            .execute("SELECT nextval('setval_uncalled_seq')")
+            .await
+            .unwrap();
         if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result {
             assert_eq!(rows[0][0], Some("100".to_string()), "nextval after setval(false) should return 100");
         }
@@ -3642,10 +3672,16 @@ mod tests {
         let mut engine = SqlEngine::new_traditional();
 
         // Create a sequence
-        engine.execute("CREATE SEQUENCE lastval_seq START WITH 42").await.unwrap();
+        engine
+            .execute("CREATE SEQUENCE lastval_seq START WITH 42")
+            .await
+            .unwrap();
 
         // Call nextval
-        engine.execute("SELECT nextval('lastval_seq')").await.unwrap();
+        engine
+            .execute("SELECT nextval('lastval_seq')")
+            .await
+            .unwrap();
 
         // lastval should return the same value
         let result = engine.execute("SELECT lastval()").await;
@@ -3709,12 +3745,21 @@ mod tests {
             .unwrap();
 
         // Get values 1 and 2
-        engine.execute("SELECT nextval('no_cycle_seq')").await.unwrap();
-        engine.execute("SELECT nextval('no_cycle_seq')").await.unwrap();
+        engine
+            .execute("SELECT nextval('no_cycle_seq')")
+            .await
+            .unwrap();
+        engine
+            .execute("SELECT nextval('no_cycle_seq')")
+            .await
+            .unwrap();
 
         // Third call should fail (overflow)
         let result = engine.execute("SELECT nextval('no_cycle_seq')").await;
-        assert!(result.is_err(), "nextval on maxed-out non-cycling sequence should fail");
+        assert!(
+            result.is_err(),
+            "nextval on maxed-out non-cycling sequence should fail"
+        );
     }
 
     #[tokio::test]
@@ -3728,7 +3773,10 @@ mod tests {
 
         // Using the dropped sequence should fail
         let next_result = engine.execute("SELECT nextval('drop_me_seq')").await;
-        assert!(next_result.is_err(), "nextval on dropped sequence should fail");
+        assert!(
+            next_result.is_err(),
+            "nextval on dropped sequence should fail"
+        );
     }
 
     #[tokio::test]
@@ -3736,12 +3784,18 @@ mod tests {
         let mut engine = SqlEngine::new_traditional();
 
         // Create a sequence and use it
-        engine.execute("CREATE SEQUENCE alter_seq START WITH 1").await.unwrap();
+        engine
+            .execute("CREATE SEQUENCE alter_seq START WITH 1")
+            .await
+            .unwrap();
         engine.execute("SELECT nextval('alter_seq')").await.unwrap(); // 1
         engine.execute("SELECT nextval('alter_seq')").await.unwrap(); // 2
 
         // Restart the sequence
-        engine.execute("ALTER SEQUENCE alter_seq RESTART WITH 100").await.unwrap();
+        engine
+            .execute("ALTER SEQUENCE alter_seq RESTART WITH 100")
+            .await
+            .unwrap();
 
         // Next value should be 100
         let result = engine.execute("SELECT nextval('alter_seq')").await.unwrap();
@@ -3762,7 +3816,11 @@ mod tests {
         let result = engine.execute(
             "CREATE FUNCTION add_one(x integer) RETURNS integer AS $$ SELECT x + 1 $$ LANGUAGE SQL"
         ).await;
-        assert!(result.is_ok(), "Failed to create simple function: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Failed to create simple function: {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -3784,13 +3842,21 @@ mod tests {
         let result = engine.execute(
             "CREATE FUNCTION double_it(x integer) RETURNS integer AS $$ SELECT x * 2 $$ LANGUAGE SQL IMMUTABLE"
         ).await;
-        assert!(result.is_ok(), "Failed to create immutable function: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Failed to create immutable function: {:?}",
+            result
+        );
 
         // Create a stable function
         let result = engine.execute(
             "CREATE FUNCTION get_current_value() RETURNS integer AS $$ SELECT 42 $$ LANGUAGE SQL STABLE"
         ).await;
-        assert!(result.is_ok(), "Failed to create stable function: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Failed to create stable function: {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -3818,7 +3884,11 @@ mod tests {
         let result = engine.execute(
             "CREATE FUNCTION add_three(a integer, b integer, c integer) RETURNS integer AS $$ SELECT a + b + c $$ LANGUAGE SQL"
         ).await;
-        assert!(result.is_ok(), "Failed to create multi-param function: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Failed to create multi-param function: {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -3826,10 +3896,14 @@ mod tests {
         let mut engine = SqlEngine::new();
 
         // Create a void function (procedure-like)
-        let result = engine.execute(
-            "CREATE FUNCTION do_nothing() RETURNS void AS $$ SELECT 1 $$ LANGUAGE SQL"
-        ).await;
-        assert!(result.is_ok(), "Failed to create void function: {:?}", result);
+        let result = engine
+            .execute("CREATE FUNCTION do_nothing() RETURNS void AS $$ SELECT 1 $$ LANGUAGE SQL")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to create void function: {:?}",
+            result
+        );
     }
 
     // ============================================================================
@@ -3841,13 +3915,20 @@ mod tests {
         let mut engine = SqlEngine::new();
 
         // Create the table
-        engine.execute("CREATE TABLE audit_test (id INTEGER PRIMARY KEY, name TEXT)").await.unwrap();
+        engine
+            .execute("CREATE TABLE audit_test (id INTEGER PRIMARY KEY, name TEXT)")
+            .await
+            .unwrap();
 
         // Create a BEFORE INSERT trigger (function doesn't need to exist for storage test)
         let result = engine.execute(
             "CREATE TRIGGER audit_trigger BEFORE INSERT ON audit_test FOR EACH ROW EXECUTE FUNCTION audit_insert()"
         ).await;
-        assert!(result.is_ok(), "Failed to create BEFORE INSERT trigger: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Failed to create BEFORE INSERT trigger: {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -3855,13 +3936,20 @@ mod tests {
         let mut engine = SqlEngine::new();
 
         // Create the table
-        engine.execute("CREATE TABLE update_test (id INTEGER PRIMARY KEY, value INTEGER)").await.unwrap();
+        engine
+            .execute("CREATE TABLE update_test (id INTEGER PRIMARY KEY, value INTEGER)")
+            .await
+            .unwrap();
 
         // Create an AFTER UPDATE trigger
         let result = engine.execute(
             "CREATE TRIGGER update_trigger AFTER UPDATE ON update_test FOR EACH ROW EXECUTE FUNCTION log_update()"
         ).await;
-        assert!(result.is_ok(), "Failed to create AFTER UPDATE trigger: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Failed to create AFTER UPDATE trigger: {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -3869,13 +3957,20 @@ mod tests {
         let mut engine = SqlEngine::new();
 
         // Create the table
-        engine.execute("CREATE TABLE stmt_test (id INTEGER PRIMARY KEY)").await.unwrap();
+        engine
+            .execute("CREATE TABLE stmt_test (id INTEGER PRIMARY KEY)")
+            .await
+            .unwrap();
 
         // Create a FOR EACH STATEMENT trigger
         let result = engine.execute(
             "CREATE TRIGGER stmt_trigger AFTER INSERT ON stmt_test FOR EACH STATEMENT EXECUTE FUNCTION statement_trigger_fn()"
         ).await;
-        assert!(result.is_ok(), "Failed to create FOR EACH STATEMENT trigger: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Failed to create FOR EACH STATEMENT trigger: {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -3883,13 +3978,18 @@ mod tests {
         let mut engine = SqlEngine::new();
 
         // Create table and trigger
-        engine.execute("CREATE TABLE drop_trigger_test (id INTEGER PRIMARY KEY)").await.unwrap();
+        engine
+            .execute("CREATE TABLE drop_trigger_test (id INTEGER PRIMARY KEY)")
+            .await
+            .unwrap();
         engine.execute(
             "CREATE TRIGGER to_drop BEFORE INSERT ON drop_trigger_test FOR EACH ROW EXECUTE FUNCTION drop_trigger_fn()"
         ).await.unwrap();
 
         // Drop the trigger
-        let result = engine.execute("DROP TRIGGER to_drop ON drop_trigger_test").await;
+        let result = engine
+            .execute("DROP TRIGGER to_drop ON drop_trigger_test")
+            .await;
         assert!(result.is_ok(), "Failed to drop trigger: {:?}", result);
     }
 
@@ -3898,11 +3998,20 @@ mod tests {
         let mut engine = SqlEngine::new();
 
         // Create table
-        engine.execute("CREATE TABLE if_exists_test (id INTEGER PRIMARY KEY)").await.unwrap();
+        engine
+            .execute("CREATE TABLE if_exists_test (id INTEGER PRIMARY KEY)")
+            .await
+            .unwrap();
 
         // Try to drop a non-existent trigger with IF EXISTS (should succeed)
-        let result = engine.execute("DROP TRIGGER IF EXISTS nonexistent ON if_exists_test").await;
-        assert!(result.is_ok(), "DROP TRIGGER IF EXISTS should succeed for non-existent trigger: {:?}", result);
+        let result = engine
+            .execute("DROP TRIGGER IF EXISTS nonexistent ON if_exists_test")
+            .await;
+        assert!(
+            result.is_ok(),
+            "DROP TRIGGER IF EXISTS should succeed for non-existent trigger: {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -3910,13 +4019,20 @@ mod tests {
         let mut engine = SqlEngine::new();
 
         // Create table
-        engine.execute("CREATE TABLE multi_event_test (id INTEGER PRIMARY KEY, name TEXT)").await.unwrap();
+        engine
+            .execute("CREATE TABLE multi_event_test (id INTEGER PRIMARY KEY, name TEXT)")
+            .await
+            .unwrap();
 
         // Create a trigger for multiple events
         let result = engine.execute(
             "CREATE TRIGGER multi_trigger BEFORE INSERT OR UPDATE OR DELETE ON multi_event_test FOR EACH ROW EXECUTE FUNCTION multi_event_fn()"
         ).await;
-        assert!(result.is_ok(), "Failed to create multi-event trigger: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Failed to create multi-event trigger: {:?}",
+            result
+        );
     }
 
     // ===== Extended DDL: TYPE Tests =====
@@ -3973,9 +4089,7 @@ mod tests {
             .execute("CREATE TYPE color AS ENUM ('red', 'green')")
             .await
             .unwrap();
-        let result = engine
-            .execute("ALTER TYPE color ADD VALUE 'blue'")
-            .await;
+        let result = engine.execute("ALTER TYPE color ADD VALUE 'blue'").await;
         assert!(
             result.is_ok(),
             "Failed to add value to enum type: {:?}",
@@ -3993,11 +4107,7 @@ mod tests {
         let result = engine
             .execute("ALTER TYPE size ADD VALUE 'medium' BEFORE 'large'")
             .await;
-        assert!(
-            result.is_ok(),
-            "Failed to add value BEFORE: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "Failed to add value BEFORE: {:?}", result);
     }
 
     // ===== Extended DDL: DOMAIN Tests =====
@@ -4042,9 +4152,7 @@ mod tests {
             .execute("CREATE DOMAIN counter AS INTEGER")
             .await
             .unwrap();
-        let result = engine
-            .execute("ALTER DOMAIN counter SET DEFAULT 0")
-            .await;
+        let result = engine.execute("ALTER DOMAIN counter SET DEFAULT 0").await;
         assert!(
             result.is_ok(),
             "Failed to alter domain set default: {:?}",
@@ -4106,9 +4214,7 @@ mod tests {
     async fn test_alter_role() {
         let mut engine = SqlEngine::new();
         engine.execute("CREATE ROLE modify_role").await.unwrap();
-        let result = engine
-            .execute("ALTER ROLE modify_role WITH CREATEDB")
-            .await;
+        let result = engine.execute("ALTER ROLE modify_role WITH CREATEDB").await;
         assert!(result.is_ok(), "Failed to alter role: {:?}", result);
     }
 

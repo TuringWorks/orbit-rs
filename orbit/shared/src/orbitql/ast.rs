@@ -13,17 +13,54 @@ use std::collections::HashMap;
 /// Root AST node for OrbitQL statements
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Statement {
+    // Data Query Language (DQL)
     Select(SelectStatement),
+
+    // Data Manipulation Language (DML)
     Insert(InsertStatement),
     Update(UpdateStatement),
     Delete(DeleteStatement),
+    Upsert(UpsertStatement),
+    Merge(MergeStatement),
+
+    // Graph operations
     Relate(RelateStatement),
+    Traverse(TraverseStatement),
+    Match(MatchStatement),
+
+    // Schema Definition (SurrealDB-style DEFINE)
+    Define(DefineStatement),
+    Remove(RemoveStatement),
+
+    // Traditional DDL
     Create(CreateStatement),
     Drop(DropStatement),
+    Alter(AlterStatement),
+    Truncate(TruncateStatement),
+
+    // Transaction control
     Transaction(TransactionStatement),
+    Savepoint(SavepointStatement),
+
+    // Real-time queries
     Live(LiveStatement),
-    // Graph traversal
-    Traverse(TraverseStatement),
+    Kill(KillStatement),
+
+    // Control flow
+    Let(LetStatement),
+    For(ForStatement),
+    If(IfStatement),
+    Return(ReturnStatement),
+    Break(BreakStatement),
+    Continue(ContinueStatement),
+    Throw(ThrowStatement),
+
+    // Utility statements
+    Use(UseStatement),
+    Info(InfoStatement),
+    Show(ShowStatement),
+    Rebuild(RebuildStatement),
+
     // GraphRAG statements
     GraphRAG(GraphRAGStatement),
 }
@@ -907,6 +944,321 @@ pub enum GraphRAGStatement {
     },
 }
 
+// =============================================================================
+// NEW SURREALDB-STYLE STATEMENTS
+// =============================================================================
+
+/// DEFINE statement (SurrealDB-style schema definition)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum DefineStatement {
+    Namespace {
+        name: String,
+    },
+    Database {
+        name: String,
+    },
+    Table {
+        name: String,
+        schemafull: bool,
+        drop: bool,
+        as_select: Option<Box<SelectStatement>>,
+        permissions: Option<Permissions>,
+    },
+    Field {
+        name: String,
+        table: String,
+        data_type: Option<DataType>,
+        default: Option<Expression>,
+        assert: Option<Expression>,
+        permissions: Option<Permissions>,
+    },
+    Index {
+        name: String,
+        table: String,
+        fields: Vec<IndexField>,
+        unique: bool,
+        search_analyzer: Option<String>,
+        // Vector index options
+        vector_distance: Option<VectorDistance>,
+        vector_dimension: Option<u32>,
+    },
+    Event {
+        name: String,
+        table: String,
+        when: Expression,
+        then: Vec<Statement>,
+    },
+    Function {
+        name: String,
+        parameters: Vec<FunctionParameter>,
+        body: Vec<Statement>,
+    },
+    Analyzer {
+        name: String,
+        tokenizers: Vec<String>,
+        filters: Vec<String>,
+    },
+    User {
+        name: String,
+        on: String, // namespace or database
+        password: Option<String>,
+        roles: Vec<String>,
+    },
+    Scope {
+        name: String,
+        session: Option<std::time::Duration>,
+        signin: Option<Box<Statement>>,
+        signup: Option<Box<Statement>>,
+    },
+    Param {
+        name: String,
+        value: Expression,
+    },
+}
+
+/// REMOVE statement (SurrealDB-style schema removal)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum RemoveStatement {
+    Namespace { name: String },
+    Database { name: String },
+    Table { name: String },
+    Field { name: String, table: String },
+    Index { name: String, table: String },
+    Event { name: String, table: String },
+    Function { name: String },
+    Analyzer { name: String },
+    User { name: String, on: String },
+    Scope { name: String },
+    Param { name: String },
+}
+
+/// UPSERT statement
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UpsertStatement {
+    pub table: String,
+    pub data: InsertValues,
+    pub where_clause: Option<Expression>,
+}
+
+/// MERGE statement
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MergeStatement {
+    pub into: String,
+    pub using: FromClause,
+    pub on: Expression,
+    pub when_matched: Option<MergeAction>,
+    pub when_not_matched: Option<MergeAction>,
+}
+
+/// MATCH statement (Cypher-like graph pattern matching)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MatchStatement {
+    pub pattern: GraphPattern,
+    pub where_clause: Option<Expression>,
+    pub return_clause: Vec<SelectField>,
+    pub order_by: Vec<OrderByClause>,
+    pub limit: Option<u64>,
+}
+
+/// ALTER statement
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum AlterStatement {
+    Table {
+        name: String,
+        action: AlterTableAction,
+    },
+    Field {
+        name: String,
+        table: String,
+        action: AlterFieldAction,
+    },
+    Index {
+        name: String,
+        table: String,
+        action: AlterIndexAction,
+    },
+}
+
+/// TRUNCATE statement
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TruncateStatement {
+    pub table: String,
+    pub cascade: bool,
+}
+
+/// SAVEPOINT statement
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SavepointStatement {
+    Create { name: String },
+    Release { name: String },
+    Rollback { name: String },
+}
+
+/// KILL statement (cancel a live query)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KillStatement {
+    pub query_id: String,
+}
+
+/// LET statement (variable assignment)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LetStatement {
+    pub name: String,
+    pub value: Expression,
+}
+
+/// FOR statement (iteration)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ForStatement {
+    pub variable: String,
+    pub iterable: Expression,
+    pub body: Vec<Statement>,
+}
+
+/// IF statement (conditional)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct IfStatement {
+    pub condition: Expression,
+    pub then_body: Vec<Statement>,
+    pub else_if: Vec<(Expression, Vec<Statement>)>,
+    pub else_body: Option<Vec<Statement>>,
+}
+
+/// RETURN statement
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReturnStatement {
+    pub value: Option<Expression>,
+}
+
+/// BREAK statement
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BreakStatement;
+
+/// CONTINUE statement
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ContinueStatement;
+
+/// THROW statement
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ThrowStatement {
+    pub message: Expression,
+}
+
+/// USE statement (switch namespace/database)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UseStatement {
+    pub namespace: Option<String>,
+    pub database: Option<String>,
+}
+
+/// INFO statement (database introspection)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum InfoStatement {
+    Root,
+    Namespace,
+    Database,
+    Table { name: String },
+    User { name: String },
+}
+
+/// SHOW statement
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ShowStatement {
+    Changefeeds,
+    Tables,
+    Indexes { table: Option<String> },
+    Functions,
+}
+
+/// REBUILD statement (rebuild indexes)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RebuildStatement {
+    pub index: String,
+    pub table: String,
+}
+
+// =============================================================================
+// Supporting Types
+// =============================================================================
+
+/// Permissions for SurrealDB-style access control
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Permissions {
+    pub select: Option<PermissionLevel>,
+    pub create: Option<PermissionLevel>,
+    pub update: Option<PermissionLevel>,
+    pub delete: Option<PermissionLevel>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PermissionLevel {
+    None,
+    Full,
+    Where(Expression),
+}
+
+/// Index field with optional direction
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct IndexField {
+    pub name: String,
+    pub direction: Option<SortDirection>,
+}
+
+/// Vector distance metrics
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum VectorDistance {
+    Cosine,
+    Euclidean,
+    Manhattan,
+    Hamming,
+    Jaccard,
+}
+
+/// Function parameter
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FunctionParameter {
+    pub name: String,
+    pub data_type: Option<DataType>,
+    pub default: Option<Expression>,
+}
+
+/// Merge action (for MERGE statement)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum MergeAction {
+    Update(Vec<UpdateAssignment>),
+    Delete,
+    Insert(HashMap<String, Expression>),
+}
+
+/// Alter table actions
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum AlterTableAction {
+    AddColumn(FieldDefinition),
+    DropColumn(String),
+    RenameColumn { old: String, new: String },
+    AlterColumn(FieldDefinition),
+    AddConstraint(Constraint),
+    DropConstraint(String),
+    Rename(String),
+}
+
+/// Alter field actions
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum AlterFieldAction {
+    SetType(DataType),
+    SetDefault(Expression),
+    DropDefault,
+    SetNotNull,
+    DropNotNull,
+}
+
+/// Alter index actions
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum AlterIndexAction {
+    Rename(String),
+    Rebuild,
+}
+
 impl Statement {
     /// Returns true if this statement modifies data
     pub fn is_mutating(&self) -> bool {
@@ -915,16 +1267,35 @@ impl Statement {
             Statement::Insert(_)
                 | Statement::Update(_)
                 | Statement::Delete(_)
+                | Statement::Upsert(_)
+                | Statement::Merge(_)
                 | Statement::Relate(_)
                 | Statement::Create(_)
                 | Statement::Drop(_)
+                | Statement::Define(_)
+                | Statement::Remove(_)
+                | Statement::Alter(_)
+                | Statement::Truncate(_)
                 | Statement::GraphRAG(GraphRAGStatement::Build { .. })
         )
     }
 
     /// Returns true if this statement requires a transaction
     pub fn requires_transaction(&self) -> bool {
-        self.is_mutating() || matches!(self, Statement::Transaction(_))
+        self.is_mutating() || matches!(self, Statement::Transaction(_) | Statement::Savepoint(_))
+    }
+
+    /// Returns true if this is a control flow statement
+    pub fn is_control_flow(&self) -> bool {
+        matches!(
+            self,
+            Statement::For(_)
+                | Statement::If(_)
+                | Statement::Return(_)
+                | Statement::Break(_)
+                | Statement::Continue(_)
+                | Statement::Throw(_)
+        )
     }
 }
 
@@ -935,12 +1306,32 @@ impl std::fmt::Display for Statement {
             Statement::Insert(_) => write!(f, "INSERT"),
             Statement::Update(_) => write!(f, "UPDATE"),
             Statement::Delete(_) => write!(f, "DELETE"),
+            Statement::Upsert(_) => write!(f, "UPSERT"),
+            Statement::Merge(_) => write!(f, "MERGE"),
             Statement::Relate(_) => write!(f, "RELATE"),
+            Statement::Traverse(_) => write!(f, "TRAVERSE"),
+            Statement::Match(_) => write!(f, "MATCH"),
+            Statement::Define(_) => write!(f, "DEFINE"),
+            Statement::Remove(_) => write!(f, "REMOVE"),
             Statement::Create(_) => write!(f, "CREATE"),
             Statement::Drop(_) => write!(f, "DROP"),
+            Statement::Alter(_) => write!(f, "ALTER"),
+            Statement::Truncate(_) => write!(f, "TRUNCATE"),
             Statement::Transaction(_) => write!(f, "TRANSACTION"),
+            Statement::Savepoint(_) => write!(f, "SAVEPOINT"),
             Statement::Live(_) => write!(f, "LIVE"),
-            Statement::Traverse(_) => write!(f, "TRAVERSE"),
+            Statement::Kill(_) => write!(f, "KILL"),
+            Statement::Let(_) => write!(f, "LET"),
+            Statement::For(_) => write!(f, "FOR"),
+            Statement::If(_) => write!(f, "IF"),
+            Statement::Return(_) => write!(f, "RETURN"),
+            Statement::Break(_) => write!(f, "BREAK"),
+            Statement::Continue(_) => write!(f, "CONTINUE"),
+            Statement::Throw(_) => write!(f, "THROW"),
+            Statement::Use(_) => write!(f, "USE"),
+            Statement::Info(_) => write!(f, "INFO"),
+            Statement::Show(_) => write!(f, "SHOW"),
+            Statement::Rebuild(_) => write!(f, "REBUILD"),
             Statement::GraphRAG(_) => write!(f, "GRAPH_RAG"),
         }
     }

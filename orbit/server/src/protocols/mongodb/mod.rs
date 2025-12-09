@@ -1,3 +1,5 @@
+#[cfg(feature = "fts")]
+pub mod fts;
 pub mod protocol;
 pub mod server;
 pub mod storage;

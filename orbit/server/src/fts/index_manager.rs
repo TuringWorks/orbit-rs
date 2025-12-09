@@ -2,8 +2,7 @@
 //
 // Manages FTS index lifecycle, schema, and metadata.
 
-use super::{FtsConfig, IndexStats};
-use anyhow::{Context, Result};
+use super::FtsConfig;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tantivy::schema::*;

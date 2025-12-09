@@ -21,8 +21,8 @@ use crate::protocols::postgres_wire::sql::{
         FunctionParameter, FunctionVolatility, GeneratedColumnStorage, IndexColumn, IndexOption,
         IndexType, NullsOrder, ParameterMode, PolicyCommand, ReferentialAction, RoleOption,
         RuleAction, RuleEvent, SequenceBound, SequenceOptions, SequenceOwner, SortDirection,
-        Statement, TableConstraint, TableOption, TriggerEvent, TriggerForEach, TriggerTiming,
-        TruncateIdentity, TruncateStatement, TypeAttribute, TypeDefinition,
+        Statement, TableConstraint, TableName, TableOption, TriggerEvent, TriggerForEach,
+        TriggerTiming, TruncateIdentity, TruncateStatement, TypeAttribute, TypeDefinition,
     },
     lexer::Token,
     types::SqlValue,
@@ -3191,7 +3191,11 @@ fn parse_domain_constraint_type(parser: &mut SqlParser) -> ParseResult<DomainCon
         Err(ParseError {
             message: "Expected constraint type".to_string(),
             position: parser.position,
-            expected: vec!["NOT NULL".to_string(), "NULL".to_string(), "CHECK".to_string()],
+            expected: vec![
+                "NOT NULL".to_string(),
+                "NULL".to_string(),
+                "CHECK".to_string(),
+            ],
             found: parser.current_token.clone(),
         })
     }
@@ -3268,7 +3272,11 @@ pub fn parse_alter_domain(parser: &mut SqlParser) -> ParseResult<Statement> {
             return Err(ParseError {
                 message: "Expected DEFAULT, NOT NULL, or SCHEMA after SET".to_string(),
                 position: parser.position,
-                expected: vec!["DEFAULT".to_string(), "NOT NULL".to_string(), "SCHEMA".to_string()],
+                expected: vec![
+                    "DEFAULT".to_string(),
+                    "NOT NULL".to_string(),
+                    "SCHEMA".to_string(),
+                ],
                 found: parser.current_token.clone(),
             });
         }
@@ -3312,7 +3320,11 @@ pub fn parse_alter_domain(parser: &mut SqlParser) -> ParseResult<Statement> {
             return Err(ParseError {
                 message: "Expected DEFAULT, NOT NULL, or CONSTRAINT after DROP".to_string(),
                 position: parser.position,
-                expected: vec!["DEFAULT".to_string(), "NOT NULL".to_string(), "CONSTRAINT".to_string()],
+                expected: vec![
+                    "DEFAULT".to_string(),
+                    "NOT NULL".to_string(),
+                    "CONSTRAINT".to_string(),
+                ],
                 found: parser.current_token.clone(),
             });
         }
@@ -3450,7 +3462,10 @@ pub fn parse_alter_domain(parser: &mut SqlParser) -> ParseResult<Statement> {
         });
     };
 
-    Ok(Statement::AlterDomain(AlterDomainStatement { name, action }))
+    Ok(Statement::AlterDomain(AlterDomainStatement {
+        name,
+        action,
+    }))
 }
 
 // ===== Extended DDL: ROLE/USER Statements =====
@@ -4269,7 +4284,10 @@ pub fn parse_drop_group(parser: &mut SqlParser) -> ParseResult<Statement> {
         }
     }
 
-    Ok(Statement::DropGroup(DropGroupStatement { if_exists, names }))
+    Ok(Statement::DropGroup(DropGroupStatement {
+        if_exists,
+        names,
+    }))
 }
 
 /// Parse ALTER GROUP statement
@@ -4483,7 +4501,9 @@ pub fn parse_drop_tablespace(parser: &mut SqlParser) -> ParseResult<Statement> {
 
 /// Parse ALTER TABLESPACE statement
 pub fn parse_alter_tablespace(parser: &mut SqlParser) -> ParseResult<Statement> {
-    use crate::protocols::postgres_wire::sql::ast::{AlterTablespaceAction, AlterTablespaceStatement};
+    use crate::protocols::postgres_wire::sql::ast::{
+        AlterTablespaceAction, AlterTablespaceStatement,
+    };
 
     parser.expect(Token::Tablespace)?;
 
@@ -4604,9 +4624,7 @@ pub fn parse_alter_tablespace(parser: &mut SqlParser) -> ParseResult<Statement> 
 
 /// Parse CREATE AGGREGATE statement
 pub fn parse_create_aggregate(parser: &mut SqlParser) -> ParseResult<Statement> {
-    use crate::protocols::postgres_wire::sql::ast::{
-        AggregateOption, CreateAggregateStatement,
-    };
+    use crate::protocols::postgres_wire::sql::ast::{AggregateOption, CreateAggregateStatement};
     use crate::protocols::postgres_wire::sql::types::SqlType;
 
     parser.expect(Token::Aggregate)?;
@@ -4790,7 +4808,9 @@ pub fn parse_drop_aggregate(parser: &mut SqlParser) -> ParseResult<Statement> {
 
 /// Parse ALTER AGGREGATE statement
 pub fn parse_alter_aggregate(parser: &mut SqlParser) -> ParseResult<Statement> {
-    use crate::protocols::postgres_wire::sql::ast::{AlterAggregateAction, AlterAggregateStatement};
+    use crate::protocols::postgres_wire::sql::ast::{
+        AlterAggregateAction, AlterAggregateStatement,
+    };
 
     parser.expect(Token::Aggregate)?;
 
@@ -4862,11 +4882,7 @@ pub fn parse_alter_aggregate(parser: &mut SqlParser) -> ParseResult<Statement> {
         return Err(ParseError {
             message: "Expected RENAME, OWNER, or SET SCHEMA".to_string(),
             position: parser.position,
-            expected: vec![
-                "RENAME".to_string(),
-                "OWNER".to_string(),
-                "SET".to_string(),
-            ],
+            expected: vec!["RENAME".to_string(), "OWNER".to_string(), "SET".to_string()],
             found: parser.current_token.clone(),
         });
     };
@@ -4884,9 +4900,7 @@ pub fn parse_alter_aggregate(parser: &mut SqlParser) -> ParseResult<Statement> {
 
 /// Parse CREATE OPERATOR statement
 pub fn parse_create_operator(parser: &mut SqlParser) -> ParseResult<Statement> {
-    use crate::protocols::postgres_wire::sql::ast::{
-        CreateOperatorStatement, OperatorOption,
-    };
+    use crate::protocols::postgres_wire::sql::ast::{CreateOperatorStatement, OperatorOption};
     use crate::protocols::postgres_wire::sql::types::SqlType;
 
     parser.expect(Token::Operator)?;
@@ -5420,10 +5434,11 @@ pub fn parse_drop_collation(parser: &mut SqlParser) -> ParseResult<Statement> {
     }))
 }
 
-
 /// Parse ALTER COLLATION statement
 pub fn parse_alter_collation(parser: &mut SqlParser) -> ParseResult<Statement> {
-    use crate::protocols::postgres_wire::sql::ast::{AlterCollationAction, AlterCollationStatement};
+    use crate::protocols::postgres_wire::sql::ast::{
+        AlterCollationAction, AlterCollationStatement,
+    };
 
     parser.expect(Token::Collation)?;
 
@@ -5616,7 +5631,9 @@ pub fn parse_drop_conversion(parser: &mut SqlParser) -> ParseResult<Statement> {
 
 /// Parse ALTER CONVERSION statement
 pub fn parse_alter_conversion(parser: &mut SqlParser) -> ParseResult<Statement> {
-    use crate::protocols::postgres_wire::sql::ast::{AlterConversionAction, AlterConversionStatement};
+    use crate::protocols::postgres_wire::sql::ast::{
+        AlterConversionAction, AlterConversionStatement,
+    };
 
     parser.expect(Token::Conversion)?;
 
@@ -5674,11 +5691,7 @@ pub fn parse_alter_conversion(parser: &mut SqlParser) -> ParseResult<Statement> 
         return Err(ParseError {
             message: "Expected RENAME, OWNER, or SET SCHEMA".to_string(),
             position: parser.position,
-            expected: vec![
-                "RENAME".to_string(),
-                "OWNER".to_string(),
-                "SET".to_string(),
-            ],
+            expected: vec!["RENAME".to_string(), "OWNER".to_string(), "SET".to_string()],
             found: parser.current_token.clone(),
         });
     };
@@ -6126,7 +6139,7 @@ pub fn parse_alter_foreign_table(parser: &mut SqlParser) -> ParseResult<Statemen
     // Already past FOREIGN
     parser.expect(Token::Table)?;
 
-    let if_exists = if parser.matches(&[Token::If]) {
+    let _if_exists = if parser.matches(&[Token::If]) {
         parser.advance()?;
         parser.expect(Token::Exists)?;
         true
@@ -6241,9 +6254,8 @@ pub fn parse_alter_foreign_table(parser: &mut SqlParser) -> ParseResult<Statemen
         AlterForeignTableAction::SetOptions(opts)
     } else {
         return Err(ParseError {
-            message:
-                "Expected RENAME, OWNER, SET SCHEMA, ADD COLUMN, DROP COLUMN, or OPTIONS"
-                    .to_string(),
+            message: "Expected RENAME, OWNER, SET SCHEMA, ADD COLUMN, DROP COLUMN, or OPTIONS"
+                .to_string(),
             position: parser.position,
             expected: vec![
                 "RENAME".to_string(),
@@ -6272,7 +6284,7 @@ pub fn parse_create_server(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     parser.expect(Token::Server)?;
 
-    let if_not_exists = if parser.matches(&[Token::If]) {
+    let _if_not_exists = if parser.matches(&[Token::If]) {
         parser.advance()?;
         parser.expect(Token::Not)?;
         parser.expect(Token::Exists)?;
@@ -6511,5 +6523,2746 @@ pub fn parse_alter_server(parser: &mut SqlParser) -> ParseResult<Statement> {
         });
     };
 
-    Ok(Statement::AlterServer(AlterServerStatement { name, action }))
+    Ok(Statement::AlterServer(AlterServerStatement {
+        name,
+        action,
+    }))
+}
+
+// ============================================================================
+// USER MAPPING statements
+// ============================================================================
+
+/// Parse CREATE USER MAPPING statement
+pub fn parse_create_user_mapping(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateUserMappingStatement;
+
+    parser.expect(Token::User)?;
+    parser.expect(Token::Mapping)?;
+
+    let if_not_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Not)?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    // Parse FOR user
+    parser.expect(Token::For)?;
+    let user = if let Some(Token::Identifier(u)) = &parser.current_token {
+        let user = u.clone();
+        parser.advance()?;
+        user
+    } else {
+        return Err(ParseError {
+            message: "Expected user name".to_string(),
+            position: parser.position,
+            expected: vec!["user_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse SERVER
+    parser.expect(Token::Server)?;
+    let server = if let Some(Token::Identifier(s)) = &parser.current_token {
+        let server = s.clone();
+        parser.advance()?;
+        server
+    } else {
+        return Err(ParseError {
+            message: "Expected server name".to_string(),
+            position: parser.position,
+            expected: vec!["server_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse optional OPTIONS
+    let mut options = Vec::new();
+    if parser.matches(&[Token::Options]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        while !parser.matches(&[Token::RightParen]) {
+            if let Some(Token::Identifier(key)) = &parser.current_token {
+                let key = key.clone();
+                parser.advance()?;
+                let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                    let v = v.clone();
+                    parser.advance()?;
+                    v
+                } else {
+                    String::new()
+                };
+                options.push((key, value));
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+    }
+
+    Ok(Statement::CreateUserMapping(CreateUserMappingStatement {
+        if_not_exists,
+        user,
+        server,
+        options,
+    }))
+}
+
+/// Parse DROP USER MAPPING statement
+pub fn parse_drop_user_mapping(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropUserMappingStatement;
+
+    parser.expect(Token::User)?;
+    parser.expect(Token::Mapping)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    // Parse FOR user
+    parser.expect(Token::For)?;
+    let user = if let Some(Token::Identifier(u)) = &parser.current_token {
+        let user = u.clone();
+        parser.advance()?;
+        user
+    } else {
+        return Err(ParseError {
+            message: "Expected user name".to_string(),
+            position: parser.position,
+            expected: vec!["user_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse SERVER
+    parser.expect(Token::Server)?;
+    let server = if let Some(Token::Identifier(s)) = &parser.current_token {
+        let server = s.clone();
+        parser.advance()?;
+        server
+    } else {
+        return Err(ParseError {
+            message: "Expected server name".to_string(),
+            position: parser.position,
+            expected: vec!["server_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::DropUserMapping(DropUserMappingStatement {
+        if_exists,
+        user,
+        server,
+    }))
+}
+
+/// Parse ALTER USER MAPPING statement
+pub fn parse_alter_user_mapping(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::AlterUserMappingStatement;
+
+    parser.expect(Token::User)?;
+    parser.expect(Token::Mapping)?;
+
+    // Parse FOR user
+    parser.expect(Token::For)?;
+    let user = if let Some(Token::Identifier(u)) = &parser.current_token {
+        let user = u.clone();
+        parser.advance()?;
+        user
+    } else {
+        return Err(ParseError {
+            message: "Expected user name".to_string(),
+            position: parser.position,
+            expected: vec!["user_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse SERVER
+    parser.expect(Token::Server)?;
+    let server = if let Some(Token::Identifier(s)) = &parser.current_token {
+        let server = s.clone();
+        parser.advance()?;
+        server
+    } else {
+        return Err(ParseError {
+            message: "Expected server name".to_string(),
+            position: parser.position,
+            expected: vec!["server_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse OPTIONS
+    parser.expect(Token::Options)?;
+    parser.expect(Token::LeftParen)?;
+    let mut options = Vec::new();
+    while !parser.matches(&[Token::RightParen]) {
+        if let Some(Token::Identifier(key)) = &parser.current_token {
+            let key = key.clone();
+            parser.advance()?;
+            let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                let v = v.clone();
+                parser.advance()?;
+                v
+            } else {
+                String::new()
+            };
+            options.push((key, value));
+        }
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+    parser.expect(Token::RightParen)?;
+
+    Ok(Statement::AlterUserMapping(AlterUserMappingStatement {
+        user,
+        server,
+        options,
+    }))
+}
+
+// ============================================================================
+// PUBLICATION statements
+// ============================================================================
+
+/// Parse CREATE PUBLICATION statement
+pub fn parse_create_publication(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreatePublicationStatement;
+
+    parser.expect(Token::Publication)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected publication name".to_string(),
+            position: parser.position,
+            expected: vec!["publication_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse FOR TABLE or FOR ALL TABLES
+    let mut for_all_tables = false;
+    let mut tables = Vec::new();
+
+    if parser.matches(&[Token::For]) {
+        parser.advance()?;
+        if parser.matches(&[Token::All]) {
+            parser.advance()?;
+            // TABLES is a context-sensitive keyword
+            if let Some(Token::Identifier(kw)) = &parser.current_token {
+                if kw.to_uppercase() == "TABLES" {
+                    parser.advance()?;
+                }
+            }
+            for_all_tables = true;
+        } else {
+            parser.expect(Token::Table)?;
+            loop {
+                let table = utilities::parse_table_name(parser)?;
+                tables.push(table);
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    // Parse optional WITH options
+    let mut options = Vec::new();
+    if parser.matches(&[Token::With]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        while !parser.matches(&[Token::RightParen]) {
+            if let Some(Token::Identifier(key)) = &parser.current_token {
+                let key = key.clone();
+                parser.advance()?;
+                parser.expect(Token::Equal)?;
+                let value = if let Some(Token::Identifier(v)) = &parser.current_token {
+                    let v = v.clone();
+                    parser.advance()?;
+                    v
+                } else {
+                    String::new()
+                };
+                options.push((key, value));
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+    }
+
+    Ok(Statement::CreatePublication(CreatePublicationStatement {
+        if_not_exists: false, // CREATE PUBLICATION doesn't support IF NOT EXISTS
+        name,
+        for_all_tables,
+        tables,
+        options,
+    }))
+}
+
+/// Parse DROP PUBLICATION statement
+pub fn parse_drop_publication(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropPublicationStatement;
+
+    parser.expect(Token::Publication)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let mut names = Vec::new();
+    loop {
+        if let Some(Token::Identifier(n)) = &parser.current_token {
+            names.push(n.clone());
+            parser.advance()?;
+        } else {
+            break;
+        }
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropPublication(DropPublicationStatement {
+        if_exists,
+        names,
+        cascade,
+    }))
+}
+
+/// Parse ALTER PUBLICATION statement
+pub fn parse_alter_publication(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{
+        AlterPublicationAction, AlterPublicationStatement,
+    };
+
+    parser.expect(Token::Publication)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected publication name".to_string(),
+            position: parser.position,
+            expected: vec!["publication_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new publication name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterPublicationAction::Rename(new_name)
+    } else if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterPublicationAction::Owner(new_owner)
+    } else if parser.matches(&[Token::Add]) {
+        parser.advance()?;
+        parser.expect(Token::Table)?;
+        let mut tables = Vec::new();
+        loop {
+            let table = utilities::parse_table_name(parser)?;
+            tables.push(table);
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        AlterPublicationAction::AddTable(tables)
+    } else if parser.matches(&[Token::Drop]) {
+        parser.advance()?;
+        parser.expect(Token::Table)?;
+        let mut tables = Vec::new();
+        loop {
+            let table = utilities::parse_table_name(parser)?;
+            tables.push(table);
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        AlterPublicationAction::DropTable(tables)
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        if parser.matches(&[Token::Table]) {
+            parser.advance()?;
+            let mut tables = Vec::new();
+            loop {
+                let table = utilities::parse_table_name(parser)?;
+                tables.push(table);
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+            AlterPublicationAction::SetTable(tables)
+        } else {
+            // SET ( options )
+            parser.expect(Token::LeftParen)?;
+            let mut opts = Vec::new();
+            while !parser.matches(&[Token::RightParen]) {
+                if let Some(Token::Identifier(key)) = &parser.current_token {
+                    let key = key.clone();
+                    parser.advance()?;
+                    parser.expect(Token::Equal)?;
+                    let value = if let Some(Token::Identifier(v)) = &parser.current_token {
+                        let v = v.clone();
+                        parser.advance()?;
+                        v
+                    } else {
+                        String::new()
+                    };
+                    opts.push((key, value));
+                }
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+            parser.expect(Token::RightParen)?;
+            AlterPublicationAction::SetOptions(opts)
+        }
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME, OWNER, ADD TABLE, DROP TABLE, or SET".to_string(),
+            position: parser.position,
+            expected: vec![
+                "RENAME".to_string(),
+                "OWNER".to_string(),
+                "ADD".to_string(),
+                "DROP".to_string(),
+                "SET".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterPublication(AlterPublicationStatement {
+        name,
+        action,
+    }))
+}
+
+// ============================================================================
+// SUBSCRIPTION statements
+// ============================================================================
+
+/// Parse CREATE SUBSCRIPTION statement
+pub fn parse_create_subscription(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateSubscriptionStatement;
+
+    parser.expect(Token::Subscription)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected subscription name".to_string(),
+            position: parser.position,
+            expected: vec!["subscription_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse CONNECTION (context-sensitive keyword)
+    if let Some(Token::Identifier(kw)) = &parser.current_token {
+        if kw.to_uppercase() != "CONNECTION" {
+            return Err(ParseError {
+                message: "Expected CONNECTION".to_string(),
+                position: parser.position,
+                expected: vec!["CONNECTION".to_string()],
+                found: parser.current_token.clone(),
+            });
+        }
+        parser.advance()?;
+    }
+    let connection = if let Some(Token::StringLiteral(c)) = &parser.current_token {
+        let conn = c.clone();
+        parser.advance()?;
+        conn
+    } else {
+        return Err(ParseError {
+            message: "Expected connection string".to_string(),
+            position: parser.position,
+            expected: vec!["'connection_string'".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse PUBLICATION
+    parser.expect(Token::Publication)?;
+    let mut publication = Vec::new();
+    loop {
+        if let Some(Token::Identifier(p)) = &parser.current_token {
+            publication.push(p.clone());
+            parser.advance()?;
+        } else {
+            break;
+        }
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    // Parse optional WITH options
+    let mut options = Vec::new();
+    if parser.matches(&[Token::With]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        while !parser.matches(&[Token::RightParen]) {
+            if let Some(Token::Identifier(key)) = &parser.current_token {
+                let key = key.clone();
+                parser.advance()?;
+                parser.expect(Token::Equal)?;
+                let value = if let Some(Token::Identifier(v)) = &parser.current_token {
+                    let v = v.clone();
+                    parser.advance()?;
+                    v
+                } else if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                    let v = v.clone();
+                    parser.advance()?;
+                    v
+                } else {
+                    String::new()
+                };
+                options.push((key, value));
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+    }
+
+    Ok(Statement::CreateSubscription(CreateSubscriptionStatement {
+        if_not_exists: false,
+        name,
+        connection,
+        publication,
+        options,
+    }))
+}
+
+/// Parse DROP SUBSCRIPTION statement
+pub fn parse_drop_subscription(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropSubscriptionStatement;
+
+    parser.expect(Token::Subscription)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected subscription name".to_string(),
+            position: parser.position,
+            expected: vec!["subscription_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropSubscription(DropSubscriptionStatement {
+        if_exists,
+        name,
+        cascade,
+    }))
+}
+
+/// Parse ALTER SUBSCRIPTION statement
+pub fn parse_alter_subscription(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{
+        AlterSubscriptionAction, AlterSubscriptionStatement,
+    };
+
+    parser.expect(Token::Subscription)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected subscription name".to_string(),
+            position: parser.position,
+            expected: vec!["subscription_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new subscription name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterSubscriptionAction::Rename(new_name)
+    } else if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterSubscriptionAction::Owner(new_owner)
+    } else if let Some(Token::Identifier(kw)) = &parser.current_token {
+        if kw.to_uppercase() == "CONNECTION" {
+            parser.advance()?;
+            let conn = if let Some(Token::StringLiteral(c)) = &parser.current_token {
+                let conn = c.clone();
+                parser.advance()?;
+                conn
+            } else {
+                return Err(ParseError {
+                    message: "Expected connection string".to_string(),
+                    position: parser.position,
+                    expected: vec!["'connection_string'".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            AlterSubscriptionAction::SetConnection(conn)
+        } else {
+            return Err(ParseError {
+                message: "Expected RENAME, OWNER, CONNECTION, SET, ENABLE, DISABLE, or REFRESH"
+                    .to_string(),
+                position: parser.position,
+                expected: vec![
+                    "RENAME".to_string(),
+                    "OWNER".to_string(),
+                    "CONNECTION".to_string(),
+                ],
+                found: parser.current_token.clone(),
+            });
+        }
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        if parser.matches(&[Token::Publication]) {
+            parser.advance()?;
+            let mut pubs = Vec::new();
+            loop {
+                if let Some(Token::Identifier(p)) = &parser.current_token {
+                    pubs.push(p.clone());
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+            AlterSubscriptionAction::SetPublication(pubs)
+        } else {
+            // SET ( options )
+            parser.expect(Token::LeftParen)?;
+            let mut opts = Vec::new();
+            while !parser.matches(&[Token::RightParen]) {
+                if let Some(Token::Identifier(key)) = &parser.current_token {
+                    let key = key.clone();
+                    parser.advance()?;
+                    parser.expect(Token::Equal)?;
+                    let value = if let Some(Token::Identifier(v)) = &parser.current_token {
+                        let v = v.clone();
+                        parser.advance()?;
+                        v
+                    } else {
+                        String::new()
+                    };
+                    opts.push((key, value));
+                }
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+            parser.expect(Token::RightParen)?;
+            AlterSubscriptionAction::SetOptions(opts)
+        }
+    } else if parser.matches(&[Token::Enable]) {
+        parser.advance()?;
+        AlterSubscriptionAction::Enable
+    } else if parser.matches(&[Token::Disable]) {
+        parser.advance()?;
+        AlterSubscriptionAction::Disable
+    } else if parser.matches(&[Token::Refresh]) {
+        parser.advance()?;
+        parser.expect(Token::Publication)?;
+        AlterSubscriptionAction::Refresh
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME, OWNER, CONNECTION, SET, ENABLE, DISABLE, or REFRESH"
+                .to_string(),
+            position: parser.position,
+            expected: vec![
+                "RENAME".to_string(),
+                "OWNER".to_string(),
+                "CONNECTION".to_string(),
+                "SET".to_string(),
+                "ENABLE".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterSubscription(AlterSubscriptionStatement {
+        name,
+        action,
+    }))
+}
+
+// ============================================================================
+// EVENT TRIGGER statements
+// ============================================================================
+
+/// Parse CREATE EVENT TRIGGER statement
+pub fn parse_create_event_trigger(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateEventTriggerStatement;
+
+    // EVENT is handled as identifier in CREATE EVENT TRIGGER
+    parser.expect(Token::Trigger)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected event trigger name".to_string(),
+            position: parser.position,
+            expected: vec!["trigger_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse ON event
+    parser.expect(Token::On)?;
+    let event = if let Some(Token::Identifier(e)) = &parser.current_token {
+        let event = e.clone();
+        parser.advance()?;
+        event
+    } else {
+        return Err(ParseError {
+            message: "Expected event name".to_string(),
+            position: parser.position,
+            expected: vec!["event_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse optional WHEN clause: WHEN tag_name IN ('tag1', 'tag2', ...)
+    let mut when_clause: Option<Vec<(String, Vec<String>)>> = None;
+    if parser.matches(&[Token::When]) {
+        parser.advance()?;
+        let mut clauses = Vec::new();
+        // Parse TAG IN ('tag1', 'tag2', ...)
+        if let Some(Token::Identifier(kw)) = &parser.current_token {
+            let tag_name = kw.clone();
+            parser.advance()?;
+            parser.expect(Token::In)?;
+            parser.expect(Token::LeftParen)?;
+            let mut values = Vec::new();
+            while !parser.matches(&[Token::RightParen]) {
+                if let Some(Token::StringLiteral(t)) = &parser.current_token {
+                    values.push(t.clone());
+                    parser.advance()?;
+                }
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+            parser.expect(Token::RightParen)?;
+            clauses.push((tag_name, values));
+        }
+        when_clause = Some(clauses);
+    }
+
+    // Parse EXECUTE FUNCTION/PROCEDURE
+    parser.expect(Token::Execute)?;
+    if let Some(Token::Identifier(kw)) = &parser.current_token {
+        if kw.to_uppercase() == "FUNCTION" || kw.to_uppercase() == "PROCEDURE" {
+            parser.advance()?;
+        }
+    } else if parser.matches(&[Token::Function]) {
+        parser.advance()?;
+    }
+
+    let function_name = utilities::parse_table_name(parser)?;
+    let function = function_name.to_string();
+    // Skip function arguments ()
+    if parser.matches(&[Token::LeftParen]) {
+        parser.advance()?;
+        parser.expect(Token::RightParen)?;
+    }
+
+    Ok(Statement::CreateEventTrigger(CreateEventTriggerStatement {
+        name,
+        event,
+        when_clause,
+        function,
+    }))
+}
+
+/// Parse DROP EVENT TRIGGER statement
+pub fn parse_drop_event_trigger(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropEventTriggerStatement;
+
+    // EVENT is handled as identifier in CREATE EVENT TRIGGER
+    parser.expect(Token::Trigger)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected event trigger name".to_string(),
+            position: parser.position,
+            expected: vec!["trigger_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropEventTrigger(DropEventTriggerStatement {
+        if_exists,
+        name,
+        cascade,
+    }))
+}
+
+/// Parse ALTER EVENT TRIGGER statement
+pub fn parse_alter_event_trigger(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{
+        AlterEventTriggerAction, AlterEventTriggerStatement,
+    };
+
+    // EVENT is handled as identifier in CREATE EVENT TRIGGER
+    parser.expect(Token::Trigger)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected event trigger name".to_string(),
+            position: parser.position,
+            expected: vec!["trigger_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new trigger name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterEventTriggerAction::Rename(new_name)
+    } else if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterEventTriggerAction::Owner(new_owner)
+    } else if parser.matches(&[Token::Enable]) {
+        parser.advance()?;
+        if let Some(Token::Identifier(kw)) = &parser.current_token {
+            match kw.to_uppercase().as_str() {
+                "REPLICA" => {
+                    parser.advance()?;
+                    AlterEventTriggerAction::EnableReplica
+                }
+                "ALWAYS" => {
+                    parser.advance()?;
+                    AlterEventTriggerAction::EnableAlways
+                }
+                _ => AlterEventTriggerAction::Enable,
+            }
+        } else {
+            AlterEventTriggerAction::Enable
+        }
+    } else if parser.matches(&[Token::Disable]) {
+        parser.advance()?;
+        AlterEventTriggerAction::Disable
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME, OWNER, ENABLE, or DISABLE".to_string(),
+            position: parser.position,
+            expected: vec![
+                "RENAME".to_string(),
+                "OWNER".to_string(),
+                "ENABLE".to_string(),
+                "DISABLE".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterEventTrigger(AlterEventTriggerStatement {
+        name,
+        action,
+    }))
+}
+
+// ============================================================================
+// ACCESS METHOD statements
+// ============================================================================
+
+/// Parse CREATE ACCESS METHOD statement
+/// Called after CREATE ACCESS METHOD tokens have been consumed
+pub fn parse_create_access_method(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{
+        AccessMethodType, CreateAccessMethodStatement,
+    };
+
+    // ACCESS METHOD token already consumed by dispatcher
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected access method name".to_string(),
+            position: parser.position,
+            expected: vec!["method_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse TYPE
+    parser.expect(Token::Type)?;
+    let method_type = if let Some(Token::Identifier(t)) = &parser.current_token {
+        let mt = match t.to_uppercase().as_str() {
+            "INDEX" => AccessMethodType::Index,
+            "TABLE" => AccessMethodType::Table,
+            _ => AccessMethodType::Index,
+        };
+        parser.advance()?;
+        mt
+    } else {
+        AccessMethodType::Index
+    };
+
+    // Parse HANDLER
+    if let Some(Token::Identifier(kw)) = &parser.current_token {
+        if kw.to_uppercase() == "HANDLER" {
+            parser.advance()?;
+        }
+    }
+    let handler_name = utilities::parse_table_name(parser)?;
+    let handler = handler_name.to_string();
+
+    Ok(Statement::CreateAccessMethod(CreateAccessMethodStatement {
+        name,
+        method_type,
+        handler,
+    }))
+}
+
+/// Parse DROP ACCESS METHOD statement
+/// Called after DROP ACCESS METHOD tokens have been consumed
+pub fn parse_drop_access_method(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropAccessMethodStatement;
+
+    // ACCESS METHOD token already consumed by dispatcher
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected access method name".to_string(),
+            position: parser.position,
+            expected: vec!["method_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropAccessMethod(DropAccessMethodStatement {
+        if_exists,
+        name,
+        cascade,
+    }))
+}
+
+// ============================================================================
+// STATISTICS statements
+// ============================================================================
+
+/// Parse CREATE STATISTICS statement
+pub fn parse_create_statistics(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateStatisticsStatement;
+
+    parser.expect(Token::Statistics)?;
+
+    let if_not_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Not)?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = utilities::parse_table_name(parser)?;
+
+    // Parse optional ( statistics_kind, ... )
+    let mut kinds = Vec::new();
+    if parser.matches(&[Token::LeftParen]) {
+        parser.advance()?;
+        while !parser.matches(&[Token::RightParen]) {
+            if let Some(Token::Identifier(k)) = &parser.current_token {
+                kinds.push(k.clone());
+                parser.advance()?;
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+    }
+
+    // Parse ON columns FROM table
+    parser.expect(Token::On)?;
+    let mut columns = Vec::new();
+    loop {
+        if let Some(Token::Identifier(c)) = &parser.current_token {
+            columns.push(c.clone());
+            parser.advance()?;
+        } else {
+            break;
+        }
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    parser.expect(Token::From)?;
+    let table = utilities::parse_table_name(parser)?;
+
+    Ok(Statement::CreateStatistics(CreateStatisticsStatement {
+        if_not_exists,
+        name,
+        kinds,
+        columns,
+        table,
+    }))
+}
+
+/// Parse DROP STATISTICS statement
+pub fn parse_drop_statistics(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropStatisticsStatement;
+
+    parser.expect(Token::Statistics)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let mut names = Vec::new();
+    loop {
+        let name = utilities::parse_table_name(parser)?;
+        names.push(name);
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropStatistics(DropStatisticsStatement {
+        if_exists,
+        names,
+        cascade,
+    }))
+}
+
+/// Parse ALTER STATISTICS statement
+pub fn parse_alter_statistics(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{
+        AlterStatisticsAction, AlterStatisticsStatement,
+    };
+
+    parser.expect(Token::Statistics)?;
+
+    let name = utilities::parse_table_name(parser)?;
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new statistics name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterStatisticsAction::Rename(new_name)
+    } else if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterStatisticsAction::Owner(new_owner)
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        if parser.matches(&[Token::Schema]) {
+            parser.advance()?;
+            let new_schema = if let Some(Token::Identifier(s)) = &parser.current_token {
+                let schema = s.clone();
+                parser.advance()?;
+                schema
+            } else {
+                return Err(ParseError {
+                    message: "Expected schema name".to_string(),
+                    position: parser.position,
+                    expected: vec!["schema_name".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            };
+            AlterStatisticsAction::SetSchema(new_schema)
+        } else if let Some(Token::Identifier(kw)) = &parser.current_token {
+            if kw.to_uppercase() == "STATISTICS" {
+                parser.advance()?;
+                let target = if let Some(Token::NumericLiteral(n)) = &parser.current_token {
+                    let t = n.parse().unwrap_or(0);
+                    parser.advance()?;
+                    t
+                } else if let Some(Token::Integer) = &parser.current_token {
+                    parser.advance()?;
+                    0
+                } else {
+                    0
+                };
+                AlterStatisticsAction::SetStatisticsTarget(target)
+            } else {
+                return Err(ParseError {
+                    message: "Expected SCHEMA or STATISTICS".to_string(),
+                    position: parser.position,
+                    expected: vec!["SCHEMA".to_string(), "STATISTICS".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            }
+        } else {
+            return Err(ParseError {
+                message: "Expected SCHEMA or STATISTICS".to_string(),
+                position: parser.position,
+                expected: vec!["SCHEMA".to_string(), "STATISTICS".to_string()],
+                found: parser.current_token.clone(),
+            });
+        }
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME, OWNER, or SET".to_string(),
+            position: parser.position,
+            expected: vec!["RENAME".to_string(), "OWNER".to_string(), "SET".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterStatistics(AlterStatisticsStatement {
+        name,
+        action,
+    }))
+}
+
+// ============================================================================
+// TEXT SEARCH CONFIGURATION statements
+// ============================================================================
+
+/// Parse CREATE TEXT SEARCH CONFIGURATION statement
+/// Called after CREATE TEXT SEARCH tokens have been consumed
+pub fn parse_create_text_search_configuration(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateTextSearchConfigurationStatement;
+
+    // TEXT SEARCH already consumed, expect CONFIGURATION
+    parser.expect(Token::Configuration)?;
+
+    let if_not_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Not)?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = utilities::parse_table_name(parser)?;
+
+    // Parse ( PARSER = parser_name | COPY = source_config )
+    parser.expect(Token::LeftParen)?;
+    let mut parser_opt: Option<TableName> = None;
+    let mut source: Option<TableName> = None;
+
+    while !parser.matches(&[Token::RightParen]) {
+        if let Some(Token::Identifier(key)) = &parser.current_token {
+            let key_upper = key.to_uppercase();
+            parser.advance()?;
+            parser.expect(Token::Equal)?;
+
+            match key_upper.as_str() {
+                "PARSER" => {
+                    parser_opt = Some(utilities::parse_table_name(parser)?);
+                }
+                "COPY" => {
+                    source = Some(utilities::parse_table_name(parser)?);
+                }
+                _ => {
+                    parser.advance()?;
+                }
+            }
+        }
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+    parser.expect(Token::RightParen)?;
+
+    Ok(Statement::CreateTextSearchConfiguration(
+        CreateTextSearchConfigurationStatement {
+            if_not_exists,
+            name,
+            source,
+            parser: parser_opt,
+        },
+    ))
+}
+
+/// Parse DROP TEXT SEARCH CONFIGURATION statement
+/// Called after DROP TEXT SEARCH tokens have been consumed
+pub fn parse_drop_text_search_configuration(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropTextSearchConfigurationStatement;
+
+    // TEXT SEARCH already consumed, expect CONFIGURATION
+    parser.expect(Token::Configuration)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let mut names = Vec::new();
+    names.push(utilities::parse_table_name(parser)?);
+    while parser.matches(&[Token::Comma]) {
+        parser.advance()?;
+        names.push(utilities::parse_table_name(parser)?);
+    }
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropTextSearchConfiguration(
+        DropTextSearchConfigurationStatement {
+            if_exists,
+            names,
+            cascade,
+        },
+    ))
+}
+
+/// Parse ALTER TEXT SEARCH CONFIGURATION statement
+/// Called after ALTER TEXT SEARCH tokens have been consumed
+pub fn parse_alter_text_search_configuration(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{
+        AlterTextSearchConfigurationAction, AlterTextSearchConfigurationStatement,
+    };
+
+    // TEXT SEARCH already consumed, expect CONFIGURATION
+    parser.expect(Token::Configuration)?;
+
+    let name = utilities::parse_table_name(parser)?;
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new configuration name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterTextSearchConfigurationAction::Rename(new_name)
+    } else if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterTextSearchConfigurationAction::Owner(new_owner)
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        parser.expect(Token::Schema)?;
+        let new_schema = if let Some(Token::Identifier(s)) = &parser.current_token {
+            let schema = s.clone();
+            parser.advance()?;
+            schema
+        } else {
+            return Err(ParseError {
+                message: "Expected schema name".to_string(),
+                position: parser.position,
+                expected: vec!["schema_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterTextSearchConfigurationAction::SetSchema(new_schema)
+    } else if parser.matches(&[Token::Add]) {
+        parser.advance()?;
+        parser.expect(Token::Mapping)?;
+        // Parse FOR token_type WITH dictionary
+        parser.expect(Token::For)?;
+        let token_type = if let Some(Token::Identifier(t)) = &parser.current_token {
+            let tt = t.clone();
+            parser.advance()?;
+            tt
+        } else {
+            return Err(ParseError {
+                message: "Expected token type".to_string(),
+                position: parser.position,
+                expected: vec!["token_type".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        parser.expect(Token::With)?;
+        let mut dictionaries = Vec::new();
+        loop {
+            let dict = utilities::parse_table_name(parser)?;
+            dictionaries.push(dict);
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        AlterTextSearchConfigurationAction::AddMapping {
+            token_type,
+            dictionaries,
+        }
+    } else if parser.matches(&[Token::Drop]) {
+        parser.advance()?;
+        let if_exists = if parser.matches(&[Token::If]) {
+            parser.advance()?;
+            parser.expect(Token::Exists)?;
+            true
+        } else {
+            false
+        };
+        parser.expect(Token::Mapping)?;
+        parser.expect(Token::For)?;
+        let token_type = if let Some(Token::Identifier(t)) = &parser.current_token {
+            let tt = t.clone();
+            parser.advance()?;
+            tt
+        } else {
+            return Err(ParseError {
+                message: "Expected token type".to_string(),
+                position: parser.position,
+                expected: vec!["token_type".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterTextSearchConfigurationAction::DropMapping {
+            if_exists,
+            token_type,
+        }
+    } else if parser.matches(&[Token::Alter]) {
+        parser.advance()?;
+        parser.expect(Token::Mapping)?;
+        parser.expect(Token::For)?;
+        let token_type = if let Some(Token::Identifier(t)) = &parser.current_token {
+            let tt = t.clone();
+            parser.advance()?;
+            tt
+        } else {
+            return Err(ParseError {
+                message: "Expected token type".to_string(),
+                position: parser.position,
+                expected: vec!["token_type".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        parser.expect(Token::With)?;
+        let mut dictionaries = Vec::new();
+        loop {
+            let dict = utilities::parse_table_name(parser)?;
+            dictionaries.push(dict);
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        AlterTextSearchConfigurationAction::AlterMapping {
+            token_type,
+            dictionaries,
+        }
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME, OWNER, SET, ADD, ALTER, or DROP".to_string(),
+            position: parser.position,
+            expected: vec![
+                "RENAME".to_string(),
+                "OWNER".to_string(),
+                "SET".to_string(),
+                "ADD".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterTextSearchConfiguration(
+        AlterTextSearchConfigurationStatement { name, action },
+    ))
+}
+
+// ============================================================================
+// TEXT SEARCH DICTIONARY statements
+// ============================================================================
+
+/// Parse CREATE TEXT SEARCH DICTIONARY statement
+/// Called after CREATE TEXT SEARCH tokens have been consumed
+pub fn parse_create_text_search_dictionary(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateTextSearchDictionaryStatement;
+
+    // TEXT SEARCH already consumed, expect DICTIONARY
+    parser.expect(Token::Dictionary)?;
+
+    let if_not_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Not)?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = utilities::parse_table_name(parser)?;
+
+    // Parse ( TEMPLATE = template_name [, option = value ...] )
+    parser.expect(Token::LeftParen)?;
+    let mut template = TableName {
+        schema: None,
+        name: String::new(),
+    };
+    let mut options = Vec::new();
+
+    // First option should be TEMPLATE
+    if let Some(Token::Identifier(key)) = &parser.current_token {
+        if key.to_uppercase() == "TEMPLATE" {
+            parser.advance()?;
+            parser.expect(Token::Equal)?;
+            template = utilities::parse_table_name(parser)?;
+        }
+    }
+
+    while parser.matches(&[Token::Comma]) {
+        parser.advance()?;
+        if let Some(Token::Identifier(key)) = &parser.current_token {
+            let key = key.clone();
+            parser.advance()?;
+            parser.expect(Token::Equal)?;
+            let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                let v = v.clone();
+                parser.advance()?;
+                v
+            } else if let Some(Token::Identifier(v)) = &parser.current_token {
+                let v = v.clone();
+                parser.advance()?;
+                v
+            } else {
+                String::new()
+            };
+            options.push((key, value));
+        }
+    }
+    parser.expect(Token::RightParen)?;
+
+    Ok(Statement::CreateTextSearchDictionary(
+        CreateTextSearchDictionaryStatement {
+            if_not_exists,
+            name,
+            template,
+            options,
+        },
+    ))
+}
+
+/// Parse DROP TEXT SEARCH DICTIONARY statement
+/// Called after DROP TEXT SEARCH tokens have been consumed
+pub fn parse_drop_text_search_dictionary(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropTextSearchDictionaryStatement;
+
+    // TEXT SEARCH already consumed, expect DICTIONARY
+    parser.expect(Token::Dictionary)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let mut names = Vec::new();
+    names.push(utilities::parse_table_name(parser)?);
+    while parser.matches(&[Token::Comma]) {
+        parser.advance()?;
+        names.push(utilities::parse_table_name(parser)?);
+    }
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropTextSearchDictionary(
+        DropTextSearchDictionaryStatement {
+            if_exists,
+            names,
+            cascade,
+        },
+    ))
+}
+
+/// Parse ALTER TEXT SEARCH DICTIONARY statement
+/// Called after ALTER TEXT SEARCH tokens have been consumed
+pub fn parse_alter_text_search_dictionary(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{
+        AlterTextSearchDictionaryAction, AlterTextSearchDictionaryStatement,
+    };
+
+    // TEXT SEARCH already consumed, expect DICTIONARY
+    parser.expect(Token::Dictionary)?;
+
+    let name = utilities::parse_table_name(parser)?;
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new dictionary name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterTextSearchDictionaryAction::Rename(new_name)
+    } else if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterTextSearchDictionaryAction::Owner(new_owner)
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        parser.expect(Token::Schema)?;
+        let new_schema = if let Some(Token::Identifier(s)) = &parser.current_token {
+            let schema = s.clone();
+            parser.advance()?;
+            schema
+        } else {
+            return Err(ParseError {
+                message: "Expected schema name".to_string(),
+                position: parser.position,
+                expected: vec!["schema_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterTextSearchDictionaryAction::SetSchema(new_schema)
+    } else if parser.matches(&[Token::LeftParen]) {
+        // ( option = value, ... )
+        parser.advance()?;
+        let mut opts = Vec::new();
+        while !parser.matches(&[Token::RightParen]) {
+            if let Some(Token::Identifier(key)) = &parser.current_token {
+                let key = key.clone();
+                parser.advance()?;
+                parser.expect(Token::Equal)?;
+                let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+                    let v = v.clone();
+                    parser.advance()?;
+                    v
+                } else if let Some(Token::Identifier(v)) = &parser.current_token {
+                    let v = v.clone();
+                    parser.advance()?;
+                    v
+                } else {
+                    String::new()
+                };
+                opts.push((key, value));
+            }
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+        AlterTextSearchDictionaryAction::SetOptions(opts)
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME, OWNER, SET, or (options)".to_string(),
+            position: parser.position,
+            expected: vec![
+                "RENAME".to_string(),
+                "OWNER".to_string(),
+                "SET".to_string(),
+                "(".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterTextSearchDictionary(
+        AlterTextSearchDictionaryStatement { name, action },
+    ))
+}
+
+// ============================================================================
+// TEXT SEARCH PARSER statements
+// ============================================================================
+
+/// Parse CREATE TEXT SEARCH PARSER statement
+/// Called after CREATE TEXT SEARCH tokens have been consumed
+pub fn parse_create_text_search_parser(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateTextSearchParserStatement;
+
+    // TEXT SEARCH already consumed, expect PARSER
+    parser.expect(Token::Parser)?;
+
+    let if_not_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Not)?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = utilities::parse_table_name(parser)?;
+
+    // Parse ( START = fn, GETTOKEN = fn, END = fn, LEXTYPES = fn [, HEADLINE = fn] )
+    parser.expect(Token::LeftParen)?;
+    let mut start_func = String::new();
+    let mut gettoken_func = String::new();
+    let mut end_func = String::new();
+    let mut lextypes_func = String::new();
+    let mut headline_func: Option<String> = None;
+
+    while !parser.matches(&[Token::RightParen]) {
+        if let Some(Token::Identifier(key)) = &parser.current_token {
+            let key_upper = key.to_uppercase();
+            parser.advance()?;
+            parser.expect(Token::Equal)?;
+
+            let func_name = utilities::parse_table_name(parser)?.to_string();
+            match key_upper.as_str() {
+                "START" => {
+                    start_func = func_name;
+                }
+                "GETTOKEN" => {
+                    gettoken_func = func_name;
+                }
+                "END" => {
+                    end_func = func_name;
+                }
+                "LEXTYPES" => {
+                    lextypes_func = func_name;
+                }
+                "HEADLINE" => {
+                    headline_func = Some(func_name);
+                }
+                _ => {}
+            }
+        }
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+    parser.expect(Token::RightParen)?;
+
+    Ok(Statement::CreateTextSearchParser(
+        CreateTextSearchParserStatement {
+            if_not_exists,
+            name,
+            start_func,
+            gettoken_func,
+            end_func,
+            lextypes_func,
+            headline_func,
+        },
+    ))
+}
+
+/// Parse DROP TEXT SEARCH PARSER statement
+/// Called after DROP TEXT SEARCH tokens have been consumed
+pub fn parse_drop_text_search_parser(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropTextSearchParserStatement;
+
+    // TEXT SEARCH already consumed, expect PARSER
+    parser.expect(Token::Parser)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let mut names = Vec::new();
+    names.push(utilities::parse_table_name(parser)?);
+    while parser.matches(&[Token::Comma]) {
+        parser.advance()?;
+        names.push(utilities::parse_table_name(parser)?);
+    }
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropTextSearchParser(
+        DropTextSearchParserStatement {
+            if_exists,
+            names,
+            cascade,
+        },
+    ))
+}
+
+/// Parse ALTER TEXT SEARCH PARSER statement
+/// Called after ALTER TEXT SEARCH tokens have been consumed
+pub fn parse_alter_text_search_parser(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{
+        AlterTextSearchParserAction, AlterTextSearchParserStatement,
+    };
+
+    // TEXT SEARCH already consumed, expect PARSER
+    parser.expect(Token::Parser)?;
+
+    let name = utilities::parse_table_name(parser)?;
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new parser name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterTextSearchParserAction::Rename(new_name)
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        parser.expect(Token::Schema)?;
+        let new_schema = if let Some(Token::Identifier(s)) = &parser.current_token {
+            let schema = s.clone();
+            parser.advance()?;
+            schema
+        } else {
+            return Err(ParseError {
+                message: "Expected schema name".to_string(),
+                position: parser.position,
+                expected: vec!["schema_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterTextSearchParserAction::SetSchema(new_schema)
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME or SET SCHEMA".to_string(),
+            position: parser.position,
+            expected: vec!["RENAME".to_string(), "SET".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterTextSearchParser(
+        AlterTextSearchParserStatement { name, action },
+    ))
+}
+
+// ============================================================================
+// TEXT SEARCH TEMPLATE statements
+// ============================================================================
+
+/// Parse CREATE TEXT SEARCH TEMPLATE statement
+/// Called after CREATE TEXT SEARCH tokens have been consumed
+pub fn parse_create_text_search_template(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateTextSearchTemplateStatement;
+
+    // TEXT SEARCH already consumed, expect TEMPLATE
+    parser.expect(Token::Template)?;
+
+    let if_not_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Not)?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = utilities::parse_table_name(parser)?;
+
+    // Parse ( INIT = fn, LEXIZE = fn )
+    parser.expect(Token::LeftParen)?;
+    let mut init_func: Option<String> = None;
+    let mut lexize_func = String::new();
+
+    while !parser.matches(&[Token::RightParen]) {
+        if let Some(Token::Identifier(key)) = &parser.current_token {
+            let key_upper = key.to_uppercase();
+            parser.advance()?;
+            parser.expect(Token::Equal)?;
+
+            let func_name = utilities::parse_table_name(parser)?.to_string();
+            match key_upper.as_str() {
+                "INIT" => {
+                    init_func = Some(func_name);
+                }
+                "LEXIZE" => {
+                    lexize_func = func_name;
+                }
+                _ => {}
+            }
+        }
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+    parser.expect(Token::RightParen)?;
+
+    Ok(Statement::CreateTextSearchTemplate(
+        CreateTextSearchTemplateStatement {
+            if_not_exists,
+            name,
+            init_func,
+            lexize_func,
+        },
+    ))
+}
+
+/// Parse DROP TEXT SEARCH TEMPLATE statement
+/// Called after DROP TEXT SEARCH tokens have been consumed
+pub fn parse_drop_text_search_template(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropTextSearchTemplateStatement;
+
+    // TEXT SEARCH already consumed, expect TEMPLATE
+    parser.expect(Token::Template)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let mut names = Vec::new();
+    names.push(utilities::parse_table_name(parser)?);
+    while parser.matches(&[Token::Comma]) {
+        parser.advance()?;
+        names.push(utilities::parse_table_name(parser)?);
+    }
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropTextSearchTemplate(
+        DropTextSearchTemplateStatement {
+            if_exists,
+            names,
+            cascade,
+        },
+    ))
+}
+
+/// Parse ALTER TEXT SEARCH TEMPLATE statement
+/// Called after ALTER TEXT SEARCH tokens have been consumed
+pub fn parse_alter_text_search_template(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{
+        AlterTextSearchTemplateAction, AlterTextSearchTemplateStatement,
+    };
+
+    // TEXT SEARCH already consumed, expect TEMPLATE
+    parser.expect(Token::Template)?;
+
+    let name = utilities::parse_table_name(parser)?;
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new template name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterTextSearchTemplateAction::Rename(new_name)
+    } else if parser.matches(&[Token::Set]) {
+        parser.advance()?;
+        parser.expect(Token::Schema)?;
+        let new_schema = if let Some(Token::Identifier(s)) = &parser.current_token {
+            let schema = s.clone();
+            parser.advance()?;
+            schema
+        } else {
+            return Err(ParseError {
+                message: "Expected schema name".to_string(),
+                position: parser.position,
+                expected: vec!["schema_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterTextSearchTemplateAction::SetSchema(new_schema)
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME or SET SCHEMA".to_string(),
+            position: parser.position,
+            expected: vec!["RENAME".to_string(), "SET".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterTextSearchTemplate(
+        AlterTextSearchTemplateStatement { name, action },
+    ))
+}
+
+// ============================================================================
+// TRANSFORM statements
+// ============================================================================
+
+/// Parse CREATE TRANSFORM statement
+pub fn parse_create_transform(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateTransformStatement;
+
+    parser.expect(Token::Transform)?;
+
+    let or_replace = false; // Would need to check OR REPLACE before CREATE
+
+    // Parse FOR type_name LANGUAGE lang_name
+    parser.expect(Token::For)?;
+    let type_name = utilities::parse_data_type(parser)?;
+    parser.expect(Token::Language)?;
+    let language = if let Some(Token::Identifier(l)) = &parser.current_token {
+        let lang = l.clone();
+        parser.advance()?;
+        lang
+    } else {
+        return Err(ParseError {
+            message: "Expected language name".to_string(),
+            position: parser.position,
+            expected: vec!["language_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse ( FROM SQL WITH FUNCTION fn, TO SQL WITH FUNCTION fn )
+    parser.expect(Token::LeftParen)?;
+    let mut from_sql: Option<String> = None;
+    let mut to_sql: Option<String> = None;
+
+    while !parser.matches(&[Token::RightParen]) {
+        if parser.matches(&[Token::From]) {
+            parser.advance()?;
+            // FROM SQL WITH FUNCTION fn
+            if let Some(Token::Identifier(kw)) = &parser.current_token {
+                if kw.to_uppercase() == "SQL" {
+                    parser.advance()?;
+                    parser.expect(Token::With)?;
+                    if let Some(Token::Identifier(kw2)) = &parser.current_token {
+                        if kw2.to_uppercase() == "FUNCTION" {
+                            parser.advance()?;
+                            let func_name = utilities::parse_table_name(parser)?;
+                            from_sql = Some(func_name.to_string());
+                            // Skip function arguments if present
+                            if parser.matches(&[Token::LeftParen]) {
+                                let mut depth = 1;
+                                parser.advance()?;
+                                while depth > 0 {
+                                    if parser.matches(&[Token::LeftParen]) {
+                                        depth += 1;
+                                    } else if parser.matches(&[Token::RightParen]) {
+                                        depth -= 1;
+                                    }
+                                    if depth > 0 {
+                                        parser.advance()?;
+                                    }
+                                }
+                                parser.advance()?;
+                            }
+                        }
+                    }
+                }
+            }
+        } else if parser.matches(&[Token::To]) {
+            parser.advance()?;
+            // TO SQL WITH FUNCTION fn
+            if let Some(Token::Identifier(kw)) = &parser.current_token {
+                if kw.to_uppercase() == "SQL" {
+                    parser.advance()?;
+                    parser.expect(Token::With)?;
+                    if let Some(Token::Identifier(kw2)) = &parser.current_token {
+                        if kw2.to_uppercase() == "FUNCTION" {
+                            parser.advance()?;
+                            let func_name = utilities::parse_table_name(parser)?;
+                            to_sql = Some(func_name.to_string());
+                            // Skip function arguments if present
+                            if parser.matches(&[Token::LeftParen]) {
+                                let mut depth = 1;
+                                parser.advance()?;
+                                while depth > 0 {
+                                    if parser.matches(&[Token::LeftParen]) {
+                                        depth += 1;
+                                    } else if parser.matches(&[Token::RightParen]) {
+                                        depth -= 1;
+                                    }
+                                    if depth > 0 {
+                                        parser.advance()?;
+                                    }
+                                }
+                                parser.advance()?;
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            parser.advance()?;
+        }
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        }
+    }
+    parser.expect(Token::RightParen)?;
+
+    Ok(Statement::CreateTransform(CreateTransformStatement {
+        or_replace,
+        type_name,
+        language,
+        from_sql,
+        to_sql,
+    }))
+}
+
+/// Parse DROP TRANSFORM statement
+pub fn parse_drop_transform(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropTransformStatement;
+
+    parser.expect(Token::Transform)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    // Parse FOR type_name LANGUAGE lang_name
+    parser.expect(Token::For)?;
+    let type_name = utilities::parse_data_type(parser)?;
+    parser.expect(Token::Language)?;
+    let language = if let Some(Token::Identifier(l)) = &parser.current_token {
+        let lang = l.clone();
+        parser.advance()?;
+        lang
+    } else {
+        return Err(ParseError {
+            message: "Expected language name".to_string(),
+            position: parser.position,
+            expected: vec!["language_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropTransform(DropTransformStatement {
+        if_exists,
+        type_name,
+        language,
+        cascade,
+    }))
+}
+
+// ============================================================================
+// LANGUAGE statements
+// ============================================================================
+
+/// Parse CREATE LANGUAGE statement
+pub fn parse_create_language(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::CreateLanguageStatement;
+
+    // Check for TRUSTED and/or PROCEDURAL
+    let mut trusted = false;
+    let mut procedural = false;
+
+    while let Some(Token::Identifier(kw)) = &parser.current_token {
+        match kw.to_uppercase().as_str() {
+            "TRUSTED" => {
+                trusted = true;
+                parser.advance()?;
+            }
+            "PROCEDURAL" => {
+                procedural = true;
+                parser.advance()?;
+            }
+            _ => break,
+        }
+    }
+
+    parser.expect(Token::Language)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected language name".to_string(),
+            position: parser.position,
+            expected: vec!["language_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse optional HANDLER, INLINE, VALIDATOR
+    let mut handler: Option<String> = None;
+    let mut inline_handler: Option<String> = None;
+    let mut validator: Option<String> = None;
+
+    while parser.current_token.is_some() && !parser.matches(&[Token::Semicolon]) {
+        if let Some(Token::Identifier(kw)) = &parser.current_token {
+            match kw.to_uppercase().as_str() {
+                "HANDLER" => {
+                    parser.advance()?;
+                    handler = Some(utilities::parse_table_name(parser)?.to_string());
+                }
+                "INLINE" => {
+                    parser.advance()?;
+                    inline_handler = Some(utilities::parse_table_name(parser)?.to_string());
+                }
+                "VALIDATOR" => {
+                    parser.advance()?;
+                    validator = Some(utilities::parse_table_name(parser)?.to_string());
+                }
+                "NO" => {
+                    parser.advance()?;
+                    if let Some(Token::Identifier(kw2)) = &parser.current_token {
+                        match kw2.to_uppercase().as_str() {
+                            "INLINE" => {
+                                parser.advance()?;
+                                inline_handler = None;
+                            }
+                            "VALIDATOR" => {
+                                parser.advance()?;
+                                validator = None;
+                            }
+                            _ => parser.advance()?,
+                        }
+                    }
+                }
+                _ => break,
+            }
+        } else {
+            break;
+        }
+    }
+
+    Ok(Statement::CreateLanguage(CreateLanguageStatement {
+        or_replace: false,
+        trusted,
+        procedural,
+        name,
+        handler,
+        inline_handler,
+        validator,
+    }))
+}
+
+/// Parse DROP LANGUAGE statement
+pub fn parse_drop_language(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropLanguageStatement;
+
+    // Skip PROCEDURAL if present
+    if let Some(Token::Identifier(kw)) = &parser.current_token {
+        if kw.to_uppercase() == "PROCEDURAL" {
+            parser.advance()?;
+        }
+    }
+
+    parser.expect(Token::Language)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected language name".to_string(),
+            position: parser.position,
+            expected: vec!["language_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropLanguage(DropLanguageStatement {
+        if_exists,
+        name,
+        cascade,
+    }))
+}
+
+/// Parse ALTER LANGUAGE statement
+pub fn parse_alter_language(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::{AlterLanguageAction, AlterLanguageStatement};
+
+    // Skip PROCEDURAL if present
+    if let Some(Token::Identifier(kw)) = &parser.current_token {
+        if kw.to_uppercase() == "PROCEDURAL" {
+            parser.advance()?;
+        }
+    }
+
+    parser.expect(Token::Language)?;
+
+    let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+        let name = n.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected language name".to_string(),
+            position: parser.position,
+            expected: vec!["language_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    let action = if parser.matches(&[Token::Rename]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            return Err(ParseError {
+                message: "Expected new language name".to_string(),
+                position: parser.position,
+                expected: vec!["new_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterLanguageAction::Rename(new_name)
+    } else if parser.matches(&[Token::Owner]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        let new_owner = if let Some(Token::Identifier(o)) = &parser.current_token {
+            let owner = o.clone();
+            parser.advance()?;
+            owner
+        } else {
+            return Err(ParseError {
+                message: "Expected new owner name".to_string(),
+                position: parser.position,
+                expected: vec!["owner_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        AlterLanguageAction::Owner(new_owner)
+    } else {
+        return Err(ParseError {
+            message: "Expected RENAME or OWNER".to_string(),
+            position: parser.position,
+            expected: vec!["RENAME".to_string(), "OWNER".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::AlterLanguage(AlterLanguageStatement {
+        name,
+        action,
+    }))
+}
+
+// ============================================================================
+// DROP FUNCTION/PROCEDURE/ROUTINE/OWNED statements
+// ============================================================================
+
+/// Parse DROP FUNCTION statement
+pub fn parse_drop_function(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropFunctionStatement;
+
+    parser.expect(Token::Function)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let mut functions = Vec::new();
+    loop {
+        let name = utilities::parse_table_name(parser)?;
+
+        // Parse optional argument types
+        let mut arg_types = Vec::new();
+        if parser.matches(&[Token::LeftParen]) {
+            parser.advance()?;
+            while !parser.matches(&[Token::RightParen]) {
+                let dt = utilities::parse_data_type(parser)?;
+                arg_types.push(dt);
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+            parser.expect(Token::RightParen)?;
+        }
+        functions.push((name, arg_types));
+
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropFunction(DropFunctionStatement {
+        if_exists,
+        functions,
+        cascade,
+    }))
+}
+
+/// Parse DROP PROCEDURE statement
+pub fn parse_drop_procedure(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropProcedureStatement;
+
+    parser.expect(Token::Procedure)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let mut procedures = Vec::new();
+    loop {
+        let name = utilities::parse_table_name(parser)?;
+
+        // Parse optional argument types
+        let mut arg_types = Vec::new();
+        if parser.matches(&[Token::LeftParen]) {
+            parser.advance()?;
+            while !parser.matches(&[Token::RightParen]) {
+                let dt = utilities::parse_data_type(parser)?;
+                arg_types.push(dt);
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+            parser.expect(Token::RightParen)?;
+        }
+        procedures.push((name, arg_types));
+
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropProcedure(DropProcedureStatement {
+        if_exists,
+        procedures,
+        cascade,
+    }))
+}
+
+/// Parse DROP ROUTINE statement
+pub fn parse_drop_routine(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropRoutineStatement;
+
+    parser.expect(Token::Routine)?;
+
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    let mut routines = Vec::new();
+    loop {
+        let name = utilities::parse_table_name(parser)?;
+
+        // Parse optional argument types
+        let mut arg_types = Vec::new();
+        if parser.matches(&[Token::LeftParen]) {
+            parser.advance()?;
+            while !parser.matches(&[Token::RightParen]) {
+                let dt = utilities::parse_data_type(parser)?;
+                arg_types.push(dt);
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+            parser.expect(Token::RightParen)?;
+        }
+        routines.push((name, arg_types));
+
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropRoutine(DropRoutineStatement {
+        if_exists,
+        routines,
+        cascade,
+    }))
+}
+
+/// Parse DROP OWNED statement
+pub fn parse_drop_owned(parser: &mut SqlParser) -> ParseResult<Statement> {
+    use crate::protocols::postgres_wire::sql::ast::DropOwnedStatement;
+
+    parser.expect(Token::Owned)?;
+    parser.expect(Token::By)?;
+
+    let mut roles = Vec::new();
+    loop {
+        if let Some(Token::Identifier(r)) = &parser.current_token {
+            roles.push(r.clone());
+            parser.advance()?;
+        } else {
+            break;
+        }
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    let cascade = if parser.matches(&[Token::Cascade]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::DropOwned(DropOwnedStatement { roles, cascade }))
 }

@@ -1,0 +1,370 @@
+-- ============================================================================
+-- OrbitQL Protocol Examples - Transactions and Control Flow
+-- ============================================================================
+-- Demonstrates transactions, savepoints, and control flow statements
+-- ============================================================================
+
+-- ============================================================================
+-- TRANSACTION CONTROL
+-- ============================================================================
+
+-- Basic transaction
+BEGIN TRANSACTION;
+    INSERT INTO accounts (id, balance) VALUES ('acc1', 1000);
+    INSERT INTO accounts (id, balance) VALUES ('acc2', 500);
+COMMIT;
+
+-- Transaction with rollback on error
+BEGIN TRANSACTION;
+    UPDATE accounts SET balance = balance - 100 WHERE id = 'acc1';
+    UPDATE accounts SET balance = balance + 100 WHERE id = 'acc2';
+    -- If any error occurs, rollback
+COMMIT;
+
+-- Explicit rollback
+BEGIN TRANSACTION;
+    DELETE FROM users WHERE status = 'inactive';
+    -- Oops, changed my mind
+ROLLBACK;
+
+-- SurrealDB-style transaction (alternative syntax)
+BEGIN;
+    CREATE users:john SET name = 'John', email = 'john@example.com';
+    CREATE users:jane SET name = 'Jane', email = 'jane@example.com';
+COMMIT;
+
+-- Cancel transaction (SurrealDB-style rollback)
+BEGIN;
+    UPDATE users SET status = 'deleted';
+CANCEL;
+
+-- ============================================================================
+-- SAVEPOINTS
+-- ============================================================================
+
+-- Create savepoint
+BEGIN TRANSACTION;
+    INSERT INTO orders (id, user_id, total) VALUES ('ord1', 'user1', 100);
+
+    SAVEPOINT before_items;
+
+    INSERT INTO order_items (order_id, product_id, qty) VALUES ('ord1', 'prod1', 2);
+    INSERT INTO order_items (order_id, product_id, qty) VALUES ('ord1', 'prod2', 1);
+
+    -- Rollback to savepoint if items have issues
+    ROLLBACK TO SAVEPOINT before_items;
+
+    -- Try again with correct items
+    INSERT INTO order_items (order_id, product_id, qty) VALUES ('ord1', 'prod3', 3);
+
+COMMIT;
+
+-- Release savepoint (no longer needed)
+BEGIN TRANSACTION;
+    INSERT INTO audit_log (action, timestamp) VALUES ('start', time::now());
+    SAVEPOINT checkpoint1;
+
+    -- Some operations...
+    UPDATE inventory SET quantity = quantity - 10 WHERE product_id = 'prod1';
+
+    -- Release the savepoint (commit the changes up to this point)
+    RELEASE SAVEPOINT checkpoint1;
+
+COMMIT;
+
+-- ============================================================================
+-- LET STATEMENTS (Variable Assignment)
+-- ============================================================================
+
+-- Simple variable assignment
+LET $user_id = 'user:alice';
+
+-- Variable from query
+LET $user = (SELECT * FROM users WHERE id = $user_id);
+
+-- Variable with expression
+LET $tax_rate = 0.08;
+LET $total_with_tax = $subtotal * (1 + $tax_rate);
+
+-- Multiple variables
+LET $start_date = time::now() - duration::days(30);
+LET $end_date = time::now();
+LET $active_status = 'active';
+
+-- Use variables in query
+SELECT * FROM orders
+WHERE created_at BETWEEN $start_date AND $end_date
+    AND status = $active_status;
+
+-- Variable with object
+LET $config = {
+    max_results: 100,
+    include_deleted: false,
+    sort_order: 'desc'
+};
+
+-- ============================================================================
+-- IF/ELSE STATEMENTS (Conditional Execution)
+-- ============================================================================
+
+-- Simple IF
+IF $user.role = 'admin' THEN
+    SELECT * FROM users;
+END;
+
+-- IF/ELSE
+IF $balance >= $amount THEN
+    UPDATE accounts SET balance = balance - $amount WHERE id = $from_account;
+    UPDATE accounts SET balance = balance + $amount WHERE id = $to_account;
+ELSE
+    THROW "Insufficient funds";
+END;
+
+-- IF/ELSE IF/ELSE
+IF $user.subscription = 'premium' THEN
+    LET $discount = 0.20;
+ELSE IF $user.subscription = 'standard' THEN
+    LET $discount = 0.10;
+ELSE
+    LET $discount = 0;
+END;
+
+-- Nested IF
+IF $order.total > 1000 THEN
+    IF $user.loyalty_points > 500 THEN
+        LET $discount = 0.15;
+    ELSE
+        LET $discount = 0.10;
+    END;
+END;
+
+-- ============================================================================
+-- FOR LOOPS (Iteration)
+-- ============================================================================
+
+-- Basic FOR loop
+FOR $user IN (SELECT * FROM users WHERE status = 'pending') {
+    UPDATE users SET status = 'active' WHERE id = $user.id;
+    CREATE notifications SET
+        user_id = $user.id,
+        message = 'Your account has been activated!',
+        created_at = time::now();
+};
+
+-- FOR with counter
+FOR $i IN 1..10 {
+    CREATE test_data SET
+        index = $i,
+        value = math::random();
+};
+
+-- FOR over array
+LET $tags = ['rust', 'database', 'distributed'];
+FOR $tag IN $tags {
+    INSERT INTO tags (name) VALUES ($tag)
+    ON CONFLICT (name) DO NOTHING;
+};
+
+-- Nested FOR loops
+FOR $category IN (SELECT DISTINCT category FROM products) {
+    FOR $product IN (SELECT * FROM products WHERE category = $category.category) {
+        UPDATE products SET
+            category_rank = (
+                SELECT COUNT(*) + 1 FROM products p2
+                WHERE p2.category = $product.category
+                AND p2.sales > $product.sales
+            )
+        WHERE id = $product.id;
+    };
+};
+
+-- ============================================================================
+-- BREAK AND CONTINUE
+-- ============================================================================
+
+-- BREAK out of loop
+FOR $user IN (SELECT * FROM users ORDER BY created_at) {
+    IF $user.email IS NULL THEN
+        CONTINUE;  -- Skip users without email
+    END;
+
+    IF COUNT((SELECT * FROM notifications WHERE user_id = $user.id AND sent = false)) > 100 THEN
+        BREAK;  -- Stop if we've processed too many
+    END;
+
+    -- Send notification
+    UPDATE notifications SET sent = true WHERE user_id = $user.id AND sent = false;
+};
+
+-- CONTINUE to skip iterations
+FOR $order IN (SELECT * FROM orders WHERE status = 'pending') {
+    IF $order.total < 10 THEN
+        CONTINUE;  -- Skip small orders
+    END;
+
+    -- Process the order
+    UPDATE orders SET status = 'processing' WHERE id = $order.id;
+};
+
+-- ============================================================================
+-- RETURN STATEMENTS
+-- ============================================================================
+
+-- Return from function
+DEFINE FUNCTION fn::calculate_shipping($weight: float, $distance: float) {
+    LET $base_rate = 5.0;
+    LET $per_kg = 0.5;
+    LET $per_km = 0.01;
+
+    IF $weight <= 0 OR $distance <= 0 THEN
+        RETURN 0;
+    END;
+
+    RETURN $base_rate + ($weight * $per_kg) + ($distance * $per_km);
+};
+
+-- Early return
+DEFINE FUNCTION fn::get_discount($user_id: string) {
+    LET $user = (SELECT * FROM users WHERE id = $user_id);
+
+    IF $user IS NULL THEN
+        RETURN 0;
+    END;
+
+    IF $user.subscription = 'premium' THEN
+        RETURN 0.20;
+    END;
+
+    IF $user.orders_count > 10 THEN
+        RETURN 0.10;
+    END;
+
+    RETURN 0.05;
+};
+
+-- Return multiple values (object)
+DEFINE FUNCTION fn::analyze_user($user_id: string) {
+    LET $user = (SELECT * FROM users WHERE id = $user_id);
+    LET $orders = (SELECT * FROM orders WHERE user_id = $user_id);
+    LET $total_spent = math::sum($orders.total);
+
+    RETURN {
+        user: $user,
+        order_count: array::len($orders),
+        total_spent: $total_spent,
+        average_order: $total_spent / array::len($orders),
+        is_vip: $total_spent > 10000
+    };
+};
+
+-- ============================================================================
+-- THROW STATEMENTS (Error Handling)
+-- ============================================================================
+
+-- Simple throw
+IF $amount <= 0 THEN
+    THROW "Amount must be positive";
+END;
+
+-- Throw with details
+IF $user.balance < $amount THEN
+    THROW {
+        code: 'INSUFFICIENT_FUNDS',
+        message: 'Not enough balance for this transaction',
+        required: $amount,
+        available: $user.balance
+    };
+END;
+
+-- Validation with throw
+DEFINE FUNCTION fn::transfer($from: string, $to: string, $amount: float) {
+    IF $amount <= 0 THEN
+        THROW "Transfer amount must be positive";
+    END;
+
+    LET $from_account = (SELECT * FROM accounts WHERE id = $from);
+    IF $from_account IS NULL THEN
+        THROW string::concat("Source account not found: ", $from);
+    END;
+
+    LET $to_account = (SELECT * FROM accounts WHERE id = $to);
+    IF $to_account IS NULL THEN
+        THROW string::concat("Destination account not found: ", $to);
+    END;
+
+    IF $from_account.balance < $amount THEN
+        THROW {
+            code: 'INSUFFICIENT_FUNDS',
+            account: $from,
+            required: $amount,
+            available: $from_account.balance
+        };
+    END;
+
+    BEGIN TRANSACTION;
+        UPDATE accounts SET balance = balance - $amount WHERE id = $from;
+        UPDATE accounts SET balance = balance + $amount WHERE id = $to;
+    COMMIT;
+
+    RETURN {
+        success: true,
+        from: $from,
+        to: $to,
+        amount: $amount
+    };
+};
+
+-- ============================================================================
+-- COMPLEX CONTROL FLOW EXAMPLE
+-- ============================================================================
+
+-- Order processing workflow
+DEFINE FUNCTION fn::process_order($order_id: string) {
+    LET $order = (SELECT * FROM orders WHERE id = $order_id);
+
+    IF $order IS NULL THEN
+        THROW "Order not found";
+    END;
+
+    IF $order.status != 'pending' THEN
+        THROW string::concat("Order is not pending, current status: ", $order.status);
+    END;
+
+    BEGIN TRANSACTION;
+        -- Validate and reserve inventory
+        FOR $item IN $order.items {
+            LET $product = (SELECT * FROM products WHERE id = $item.product_id);
+
+            IF $product IS NULL THEN
+                THROW string::concat("Product not found: ", $item.product_id);
+            END;
+
+            IF $product.inventory < $item.quantity THEN
+                THROW {
+                    code: 'OUT_OF_STOCK',
+                    product: $item.product_id,
+                    requested: $item.quantity,
+                    available: $product.inventory
+                };
+            END;
+
+            UPDATE products SET inventory = inventory - $item.quantity
+            WHERE id = $item.product_id;
+        };
+
+        -- Update order status
+        UPDATE orders SET
+            status = 'confirmed',
+            confirmed_at = time::now()
+        WHERE id = $order_id;
+
+        -- Create shipment
+        CREATE shipments SET
+            order_id = $order_id,
+            status = 'preparing',
+            created_at = time::now();
+
+    COMMIT;
+
+    RETURN { success: true, order_id: $order_id };
+};

@@ -53,9 +53,81 @@ pub mod vectorized_execution;
 
 // Re-export core types
 pub use ast::{
-    BinaryOperator, Expression, FromClause, GeometryLiteral, JoinClause, JoinType, OrderByClause,
-    SelectStatement, SpatialFilter, SpatialIndexConfig, SpatialIndexType, SpatialOperator,
-    StreamTrigger, StreamingClause, UnaryOperator, WindowSpec,
+    AlterFieldAction,
+    AlterIndexAction,
+    AlterStatement,
+    AlterTableAction,
+    // Core types
+    BinaryOperator,
+    BreakStatement,
+    Constraint,
+    ContinueStatement,
+    // Traditional DDL
+    CreateStatement,
+    // Supporting types
+    DataType,
+    // DDL statements (SurrealDB-style)
+    DefineStatement,
+    DeleteStatement,
+    DropStatement,
+    EdgeDirection,
+    Expression,
+    FieldDefinition,
+    ForStatement,
+    FromClause,
+    FunctionParameter,
+    GeometryLiteral,
+    // Graph types
+    GraphPath,
+    GraphPattern,
+    // GraphRAG
+    GraphRAGStatement,
+    GraphStep,
+    IfStatement,
+    IndexField,
+    InfoStatement,
+    // DML statements
+    InsertStatement,
+    JoinClause,
+    JoinType,
+    KillStatement,
+    // Control flow
+    LetStatement,
+    // Real-time
+    LiveStatement,
+    MatchStatement,
+    MergeAction,
+    MergeStatement,
+    OrderByClause,
+    PermissionLevel,
+    Permissions,
+    RebuildStatement,
+    // Graph statements
+    RelateStatement,
+    RemoveStatement,
+    ReturnStatement,
+    SavepointStatement,
+    SelectStatement,
+    ShowStatement,
+    SpatialFilter,
+    SpatialIndexConfig,
+    SpatialIndexType,
+    SpatialOperator,
+    Statement,
+    StreamTrigger,
+    StreamingClause,
+    ThrowStatement,
+    // Transaction control
+    TransactionStatement,
+    TraverseStatement,
+    TruncateStatement,
+    UnaryOperator,
+    UpdateStatement,
+    UpsertStatement,
+    // Utility statements
+    UseStatement,
+    VectorDistance,
+    WindowSpec,
 };
 pub use cache::{
     CacheConfig, CacheHealth, CacheKey, CacheStatistics, CachedQueryExecutor, InvalidationEvent,

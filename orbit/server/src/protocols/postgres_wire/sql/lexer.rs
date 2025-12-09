@@ -117,8 +117,8 @@ pub enum Token {
     Data,
     Mapping,
     Options,
-    Location,  // For CREATE TABLESPACE LOCATION
-    Reset,     // For RESET and ALTER TABLESPACE RESET
+    Location, // For CREATE TABLESPACE LOCATION
+    Reset,    // For RESET and ALTER TABLESPACE RESET
     // Text search keywords
     TextSearch,
     Configuration,
@@ -379,14 +379,14 @@ pub enum Token {
     JsonPathExtractText, // #>> (JSON path extraction as text)
 
     // Operators - Range (PostgreSQL range types)
-    RangeContains,        // @> (contains element/range)
-    RangeContainedBy,     // <@ (is contained by)
-    RangeOverlaps,        // && (overlaps)
-    RangeAdjacent,        // -|- (adjacent to)
-    RangeStrictlyLeft,    // << (strictly left of)
-    RangeStrictlyRight,   // >> (strictly right of)
-    RangeNotExtendRight,  // &< (does not extend right of)
-    RangeNotExtendLeft,   // &> (does not extend left of)
+    RangeContains,       // @> (contains element/range)
+    RangeContainedBy,    // <@ (is contained by)
+    RangeOverlaps,       // && (overlaps)
+    RangeAdjacent,       // -|- (adjacent to)
+    RangeStrictlyLeft,   // << (strictly left of)
+    RangeStrictlyRight,  // >> (strictly right of)
+    RangeNotExtendRight, // &< (does not extend right of)
+    RangeNotExtendLeft,  // &> (does not extend left of)
 
     // Operators - Other
     Concat,
@@ -1186,7 +1186,7 @@ impl Lexer {
                                 }
                                 Some('<') => {
                                     self.advance();
-                                    Token::RangeStrictlyLeft  // << (strictly left of)
+                                    Token::RangeStrictlyLeft // << (strictly left of)
                                 }
                                 Some('@') => {
                                     // <@ (contained by)
@@ -1205,7 +1205,7 @@ impl Lexer {
                                 }
                                 Some('>') => {
                                     self.advance();
-                                    Token::RangeStrictlyRight  // >> (strictly right of)
+                                    Token::RangeStrictlyRight // >> (strictly right of)
                                 }
                                 _ => Token::GreaterThan,
                             };

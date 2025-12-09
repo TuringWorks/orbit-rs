@@ -1,0 +1,280 @@
+-- ============================================================================
+-- OrbitQL Protocol Examples - Real-time and Live Queries
+-- ============================================================================
+-- Demonstrates LIVE SELECT, subscriptions, and real-time features
+-- ============================================================================
+
+-- ============================================================================
+-- LIVE SELECT (Real-time Subscriptions)
+-- ============================================================================
+
+-- Basic LIVE SELECT - subscribe to all changes on a table
+LIVE SELECT * FROM users;
+
+-- LIVE SELECT with filter
+LIVE SELECT * FROM orders WHERE status = 'pending';
+
+-- LIVE SELECT with specific fields
+LIVE SELECT id, name, email, status FROM users WHERE role = 'customer';
+
+-- LIVE SELECT with DIFF (return only changed fields)
+LIVE SELECT DIFF FROM users;
+
+-- LIVE SELECT with JOIN (track changes across related tables)
+LIVE SELECT
+    o.id AS order_id,
+    o.status,
+    u.name AS customer_name,
+    o.total
+FROM orders o
+JOIN users u ON o.user_id = u.id
+WHERE o.status IN ('pending', 'processing');
+
+-- ============================================================================
+-- KILL (Cancel Live Query)
+-- ============================================================================
+
+-- Cancel a specific live query by ID
+KILL 'live_query_uuid_here';
+
+-- Cancel all live queries for a connection
+-- (handled at connection level, not via SQL)
+
+-- ============================================================================
+-- LIVE QUERY EXAMPLES BY USE CASE
+-- ============================================================================
+
+-- Real-time dashboard: Track active users
+LIVE SELECT
+    COUNT(*) AS active_count,
+    COUNT(CASE WHEN last_seen > time::now() - duration::minutes(5) THEN 1 END) AS online_count
+FROM users
+WHERE status = 'active';
+
+-- Real-time notifications
+LIVE SELECT * FROM notifications
+WHERE user_id = $current_user_id AND read = false
+ORDER BY created_at DESC
+LIMIT 50;
+
+-- Real-time inventory tracking
+LIVE SELECT
+    product_id,
+    name,
+    inventory_count,
+    CASE
+        WHEN inventory_count = 0 THEN 'out_of_stock'
+        WHEN inventory_count < 10 THEN 'low_stock'
+        ELSE 'in_stock'
+    END AS stock_status
+FROM products
+WHERE inventory_count <= 20;
+
+-- Real-time order status
+LIVE SELECT
+    id,
+    customer_id,
+    status,
+    total,
+    created_at,
+    updated_at
+FROM orders
+WHERE created_at > time::now() - duration::days(1);
+
+-- Real-time chat messages
+LIVE SELECT
+    id,
+    sender_id,
+    content,
+    created_at,
+    read_by
+FROM messages
+WHERE channel_id = $channel_id
+ORDER BY created_at DESC
+LIMIT 100;
+
+-- Real-time analytics
+LIVE SELECT
+    DATE_TRUNC('minute', created_at) AS minute,
+    COUNT(*) AS request_count,
+    AVG(response_time_ms) AS avg_response_time
+FROM api_requests
+WHERE created_at > time::now() - duration::hours(1)
+GROUP BY minute
+ORDER BY minute DESC;
+
+-- ============================================================================
+-- EVENT-DRIVEN PATTERNS
+-- ============================================================================
+
+-- Define event handler for user signup
+DEFINE EVENT on_user_signup ON TABLE users WHEN $event = "CREATE" THEN {
+    -- Send welcome email
+    CREATE email_queue SET
+        to = $after.email,
+        template = 'welcome',
+        data = {
+            name: $after.name,
+            verification_link: string::concat('https://app.example.com/verify/', $after.id)
+        };
+
+    -- Track analytics
+    CREATE analytics_events SET
+        event = 'user_signup',
+        user_id = $after.id,
+        timestamp = time::now(),
+        properties = {
+            source: $after.signup_source,
+            referral: $after.referral_code
+        };
+};
+
+-- Define event handler for order status change
+DEFINE EVENT on_order_status_change ON TABLE orders
+WHEN $event = "UPDATE" AND $before.status != $after.status
+THEN {
+    -- Log status change
+    CREATE order_status_history SET
+        order_id = $after.id,
+        old_status = $before.status,
+        new_status = $after.status,
+        changed_at = time::now();
+
+    -- Send notification
+    CREATE notifications SET
+        user_id = $after.customer_id,
+        type = 'order_update',
+        message = string::concat('Your order #', $after.id, ' is now ', $after.status),
+        created_at = time::now();
+};
+
+-- Event for low inventory alert
+DEFINE EVENT on_low_inventory ON TABLE products
+WHEN $event = "UPDATE" AND $after.inventory_count < 10 AND $before.inventory_count >= 10
+THEN {
+    CREATE alerts SET
+        type = 'low_inventory',
+        product_id = $after.id,
+        product_name = $after.name,
+        current_stock = $after.inventory_count,
+        created_at = time::now();
+};
+
+-- ============================================================================
+-- CHANGE DATA CAPTURE (CDC) PATTERNS
+-- ============================================================================
+
+-- Track all changes to sensitive tables
+DEFINE TABLE audit_log SCHEMALESS;
+
+DEFINE EVENT audit_users ON TABLE users WHEN $event IN ["CREATE", "UPDATE", "DELETE"] THEN {
+    CREATE audit_log SET
+        table_name = 'users',
+        operation = $event,
+        record_id = COALESCE($after.id, $before.id),
+        old_data = $before,
+        new_data = $after,
+        changed_by = $auth.id,
+        changed_at = time::now();
+};
+
+-- Publish to external message queue (conceptual)
+DEFINE EVENT publish_order_event ON TABLE orders
+WHEN $event IN ["CREATE", "UPDATE"]
+THEN {
+    -- In practice, this would publish to Kafka/RabbitMQ
+    CREATE outbox SET
+        topic = 'orders',
+        key = $after.id,
+        payload = {
+            event_type = $event,
+            order = $after,
+            timestamp = time::now()
+        },
+        status = 'pending';
+};
+
+-- ============================================================================
+-- STREAMING AGGREGATIONS
+-- ============================================================================
+
+-- Real-time metrics with windowing
+LIVE SELECT
+    time::floor(timestamp, 'minute') AS window_start,
+    endpoint,
+    COUNT(*) AS request_count,
+    AVG(latency_ms) AS avg_latency,
+    MAX(latency_ms) AS max_latency,
+    SUM(CASE WHEN status >= 500 THEN 1 ELSE 0 END) AS error_count
+FROM api_logs
+WHERE timestamp > time::now() - duration::minutes(10)
+GROUP BY window_start, endpoint
+ORDER BY window_start DESC;
+
+-- Real-time leaderboard
+LIVE SELECT
+    user_id,
+    username,
+    score,
+    ROW_NUMBER() OVER (ORDER BY score DESC) AS rank
+FROM game_scores
+WHERE game_id = $game_id
+ORDER BY score DESC
+LIMIT 100;
+
+-- Real-time fraud detection signals
+LIVE SELECT
+    user_id,
+    COUNT(*) AS transaction_count,
+    SUM(amount) AS total_amount,
+    COUNT(DISTINCT ip_address) AS unique_ips,
+    COUNT(DISTINCT device_id) AS unique_devices
+FROM transactions
+WHERE created_at > time::now() - duration::hours(1)
+GROUP BY user_id
+HAVING COUNT(*) > 10 OR SUM(amount) > 10000 OR COUNT(DISTINCT ip_address) > 5;
+
+-- ============================================================================
+-- SUBSCRIPTION MANAGEMENT
+-- ============================================================================
+
+-- Application-level subscription tracking
+DEFINE TABLE subscriptions SCHEMAFULL;
+
+DEFINE FIELD connection_id ON TABLE subscriptions TYPE string;
+DEFINE FIELD query_id ON TABLE subscriptions TYPE string;
+DEFINE FIELD query ON TABLE subscriptions TYPE string;
+DEFINE FIELD created_at ON TABLE subscriptions TYPE datetime DEFAULT time::now();
+DEFINE FIELD last_event_at ON TABLE subscriptions TYPE datetime;
+
+-- Query active subscriptions
+SELECT * FROM subscriptions
+WHERE connection_id = $connection_id
+ORDER BY created_at DESC;
+
+-- Clean up old subscriptions
+DELETE FROM subscriptions
+WHERE last_event_at < time::now() - duration::hours(24);
+
+-- ============================================================================
+-- RETRY AND RECONNECTION PATTERNS
+-- ============================================================================
+
+-- Store subscription state for reconnection
+DEFINE TABLE subscription_checkpoints SCHEMAFULL;
+
+DEFINE FIELD subscription_id ON TABLE subscription_checkpoints TYPE string;
+DEFINE FIELD last_event_id ON TABLE subscription_checkpoints TYPE string;
+DEFINE FIELD last_event_time ON TABLE subscription_checkpoints TYPE datetime;
+DEFINE FIELD query_hash ON TABLE subscription_checkpoints TYPE string;
+
+-- On reconnect, resume from checkpoint
+LET $checkpoint = (
+    SELECT * FROM subscription_checkpoints
+    WHERE subscription_id = $sub_id
+);
+
+-- Resume subscription from last known position
+LIVE SELECT * FROM orders
+WHERE updated_at > $checkpoint.last_event_time
+ORDER BY updated_at ASC;

@@ -18,7 +18,6 @@ pub use query_parser::QueryParser;
 pub use ranking::RankingEngine;
 pub use schema::FtsSchema;
 
-use anyhow::Result;
 use std::path::PathBuf;
 
 /// FTS configuration
@@ -43,7 +42,7 @@ impl Default for FtsConfig {
         Self {
             index_dir: PathBuf::from("./data/fts"),
             max_memory: 100_000_000, // 100MB
-            num_threads: num_cpus::get(),
+            num_threads: 4,          // Default to 4 threads
             default_language: "english".to_string(),
             enable_cache: true,
             cache_size: 1000,

@@ -12,16 +12,19 @@ A comprehensive reference for LLM coding tools (like Claude Code) to create and 
 4. [Data Types](#data-types)
 5. [Operators](#operators)
 6. [Statements](#statements)
-7. [Expressions](#expressions)
-8. [Functions](#functions)
-9. [Graph Operations](#graph-operations)
-10. [Time-Series Operations](#time-series-operations)
-11. [Machine Learning Functions](#machine-learning-functions)
-12. [Spatial Operations](#spatial-operations)
-13. [Streaming Queries](#streaming-queries)
-14. [Parser Architecture](#parser-architecture)
-15. [Abstract Syntax Tree (AST)](#abstract-syntax-tree-ast)
-16. [Implementation Libraries](#implementation-libraries)
+7. [DEFINE Statements (SurrealDB-style)](#define-statements-surrealdb-style)
+8. [Control Flow](#control-flow)
+9. [Expressions](#expressions)
+10. [Functions](#functions)
+11. [Graph Operations](#graph-operations)
+12. [Vector Operations](#vector-operations)
+13. [Time-Series Operations](#time-series-operations)
+14. [Machine Learning Functions](#machine-learning-functions)
+15. [Spatial Operations](#spatial-operations)
+16. [Streaming Queries](#streaming-queries)
+17. [Parser Architecture](#parser-architecture)
+18. [Abstract Syntax Tree (AST)](#abstract-syntax-tree-ast)
+19. [Implementation Libraries](#implementation-libraries)
 
 ---
 
@@ -41,14 +44,17 @@ OrbitQL is Orbit-RS's native unified multi-model query language designed specifi
 ### Key Features
 
 - **Multi-Model Unified Syntax**: Query graphs, documents, time-series, and relational data in single queries
-- **Advanced SQL Compatibility**: Full support for CTEs, CASE expressions, window functions, and temporal operations
+- **SurrealDB-Inspired Schema**: DEFINE/REMOVE statements for flexible schema management
+- **Advanced SQL Compatibility**: Full support for CTEs, JOINs, window functions, and temporal operations
+- **Vector Search**: Native vector similarity operations with KNN, cosine, euclidean distance
 - **Machine Learning Integration**: Built-in ML functions including XGBoost, LightGBM, CatBoost, and AdaBoost
-- **Graph Operations**: Native TRAVERSE and RELATE statements for graph data
+- **Graph Operations**: Native TRAVERSE, RELATE, and MATCH statements for graph data
 - **Time-Series Analytics**: Native NOW(), INTERVAL, and TIME_BUCKET functions
 - **Spatial Queries**: PostGIS-compatible spatial functions
 - **Real-Time Streaming**: LIVE queries with change notifications
+- **Control Flow**: IF/ELSE, FOR loops, LET variables, THROW exceptions
 - **Actor-Aware**: Direct integration with Orbit's virtual actor system
-- **ACID Compliance**: Full transaction support across distributed data
+- **ACID Compliance**: Full transaction support with SAVEPOINTs across distributed data
 
 ---
 
@@ -94,75 +100,83 @@ FROM data_sources
 
 ```text
 ALL             AND             AS              ASC
-BETWEEN         BY              CASE            COMMIT
-CREATE          CROSS           DELETE          DESC
+BETWEEN         BREAK           BY              CANCEL
+CASE            COMMIT          CONTINUE        CREATE
+CROSS           DEFINE          DELETE          DESC
 DISTINCT        DROP            ELSE            END
 EXISTS          FALSE           FETCH           FOR
 FROM            FULL            GROUP           HAVING
 IF              IN              INDEX           INNER
 INSERT          INTERVAL        INTO            IS
-JOIN            LEFT            LIKE            LIMIT
-LIVE            MAX_DEPTH       NOT             NOW
+JOIN            KILL            LEFT            LET
+LIKE            LIMIT           LIVE            MATCH
+MAX_DEPTH       MERGE           NOT             NOW
 NULL            OFFSET          ON              OR
-ORDER           OUTER           RELATE          RETURN
-RIGHT           ROLLBACK        SELECT          SET
-TABLE           THEN            TO              TRAVERSE
-TRUE            UNION           UPDATE          VALUES
-WHEN            WHERE           WITH
+ORDER           OUTER           RELATE          REMOVE
+RETURN          RETURNING       RIGHT           ROLLBACK
+SAVEPOINT       SELECT          SET             TABLE
+THEN            THROW           TO              TRAVERSE
+TRUE            TRUNCATE        UNION           UPDATE
+UPSERT          USE             VALUES          WHEN
+WHERE           WITH
 ```
 
 ### Non-Reserved Keywords
 
 ```text
-ABORT           ACTION          ADD             AFTER
-AGGREGATE       ALGORITHM       ALWAYS          ARRAY
-BEFORE          BEGIN           BOOLEAN         CASCADE
-CHECK           COLUMN          CONSTRAINT      CONTINUE
-COUNT           CURRENT         DATA            DATABASE
-DATE            DAY             DEFAULT         DIFF
-DISTINCT        DO              DOUBLE          EDGE
-ENABLE          EVALUATE        EXTRACT         FEATURES
-FILTER          FIRST           FLOAT           FOLLOWING
-FOREIGN         FUNCTION        GENERATED       GRAPH
-HASH            HOLD            HOUR            IDENTITY
-ILIKE           IMMEDIATE       IMPORT          INCLUDE
-INCREMENT       INOUT           INT             INTEGER
-INTERSECT       KEY             LANGUAGE        LARGE
-LAST            LATERAL         LOCAL           LOCATION
-LOCK            MATCH           MATRIX          METRIC
-MILLISECOND     MINUTE          MODEL           MONTH
-NATURAL         NEXT            NODE            NONE
-NORMALIZE       NOTHING         NOTIFY          NULLS
-OBJECT          ONLY            OPTIONS         OUT
-OUTBOUND        OVER            OVERRIDING      OWNED
-OWNER           PARALLEL        PARAMETER       PARTIAL
+ABORT           ACCESS          ACTION          ADD
+AFTER           AGGREGATE       ALGORITHM       ALWAYS
+ANALYZER        ARRAY           BEFORE          BEGIN
+BOOLEAN         CASCADE         CHECK           COLUMN
+CONSTRAINT      COUNT           CURRENT         DATA
+DATABASE        DATE            DAY             DEFAULT
+DIFF            DO              DOUBLE          EDGE
+ENABLE          EVALUATE        EVENT           EXCEPT
+EXTRACT         FEATURES        FIELD           FILTER
+FIRST           FLOAT           FOLLOWING       FOREIGN
+FUNCTION        GENERATED       GEOGRAPHY       GEOMETRY
+GRAPH           HASH            HOLD            HOUR
+IDENTITY        ILIKE           IMMEDIATE       IMPORT
+INCLUDE         INCREMENT       INFO            INOUT
+INT             INTEGER         INTERSECT       KEY
+LANGUAGE        LARGE           LAST            LATERAL
+LINESTRING      LOCAL           LOCATION        LOCK
+MATRIX          METRIC          MILLISECOND     MINUTE
+MODEL           MONTH           NAMESPACE       NATURAL
+NEXT            NODE            NONE            NORMALIZE
+NOTHING         NOTIFY          NULLS           OBJECT
+ONLY            OPTIONS         OUT             OUTBOUND
+OVER            OVERRIDING      OWNED           OWNER
+PARALLEL        PARAM           PARAMETER       PARTIAL
 PARTITION       PATH            PATHS           PENDING
-PERCENT         PERIOD          PLAN            PRECEDING
-PREDICT         PRESERVE        PRIMARY         PRIOR
-PROCEDURE       RANGE           READ            RECURSIVE
+PERCENT         PERIOD          PERMISSIONS     PLAN
+POINT           POLYGON         PRECEDING       PREDICT
+PRESERVE        PRIMARY         PRIOR           PROCEDURE
+RANGE           READ            REBUILD         RECURSIVE
 REF             REFERENCES      REFRESH         RELEASE
 RENAME          REPEAT          REPLACE         REPLICA
 RESET           RESTRICT        RETURNS         REVERT
 REVOKE          ROLE            ROUTINE         ROW
-ROWS            SAVEPOINT       SCHEMA          SCORE
-SCROLL          SEARCH          SECOND          SECURITY
-SEQUENCE        SERIALIZABLE    SESSION         SHARE
-SHOW            SIMILAR         SIMPLE          SKIP
-SMALLINT        SNAPSHOT        SOME            SQL
-STABLE          START           STATEMENT       STATISTICS
-STDDEV          STEPS           STORAGE         STORED
-STRICT          STRING          SUM             SYMMETRIC
-SYSTEM          TARGET          TEMP            TEMPLATE
-TEMPORARY       TEXT            TIME            TIMEOUT
-TIMESTAMP       TRAIN           TRANSACTION     TRANSFORM
-TRIGGER         TRUNCATE        TYPE            UNBOUNDED
+ROWS            SCHEMA          SCHEMAFUL       SCHEMALESS
+SCOPE           SCORE           SCROLL          SEARCH
+SECOND          SECURITY        SEQUENCE        SERIALIZABLE
+SESSION         SHARE           SHOW            SIMILAR
+SIMPLE          SKIP            SLEEP           SMALLINT
+SNAPSHOT        SOME            SQL             STABLE
+START           STATEMENT       STATISTICS      STDDEV
+STEPS           STORAGE         STORED          STRICT
+STRING          SUM             SYMMETRIC       SYSTEM
+TARGET          TEMP            TEMPLATE        TEMPORARY
+TEXT            TIME            TIMEOUT         TIMESTAMP
+TIMESTAMPTZ     TOKEN           TRAIN           TRANSACTION
+TRANSFORM       TRIGGER         TYPE            UNBOUNDED
 UNCOMMITTED     UNIQUE          UNKNOWN         UNLOGGED
-UNTIL           USING           UUID            VACUUM
-VALID           VALIDATE        VALUE           VARCHAR
-VARIANCE        VARYING         VERSION         VIEW
-VIRTUAL         VOLATILE        WEEK            WINDOW
-WITHOUT         WORK            WRITE           YEAR
-ZONE
+UNTIL           USER            USING           UUID
+VACUUM          VALID           VALIDATE        VALUE
+VARCHAR         VARIANCE        VARYING         VECTOR
+VERSION         VIEW            VIRTUAL         VOLATILE
+WEEK            WINDOW          WITHOUT         WORK
+WRITE           YEAR            ZONE
 ```
 
 ### Graph-Specific Keywords
@@ -519,6 +533,10 @@ DROP FUNCTION [IF EXISTS] function_name;
 BEGIN [TRANSACTION];
 COMMIT;
 ROLLBACK;
+SAVEPOINT savepoint_name;
+ROLLBACK TO SAVEPOINT savepoint_name;
+RELEASE SAVEPOINT savepoint_name;
+CANCEL; -- SurrealDB-style rollback
 ```
 
 **Example**:
@@ -526,8 +544,494 @@ ROLLBACK;
 ```orbitql
 BEGIN;
 UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+SAVEPOINT before_transfer;
 UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+-- If something goes wrong, rollback to savepoint
+ROLLBACK TO SAVEPOINT before_transfer;
 COMMIT;
+```
+
+---
+
+## DEFINE Statements (SurrealDB-style)
+
+OrbitQL supports SurrealDB-inspired schema definition statements for flexible, declarative schema management.
+
+### DEFINE TABLE
+
+```orbitql
+DEFINE TABLE table_name
+    [SCHEMAFULL | SCHEMALESS]
+    [DROP]
+    [AS SELECT ... FROM ...]
+    [PERMISSIONS { create: permission, select: permission, update: permission, delete: permission }];
+```
+
+**Examples**:
+
+```orbitql
+-- Define a strict schema table
+DEFINE TABLE users SCHEMAFULL;
+
+-- Define a schemaless table (flexible documents)
+DEFINE TABLE events SCHEMALESS;
+
+-- Define a table that drops records after deletion (no soft delete)
+DEFINE TABLE sessions SCHEMAFULL DROP;
+
+-- Define a view-like table
+DEFINE TABLE active_users AS
+    SELECT * FROM users WHERE status = 'active';
+
+-- Define with permissions
+DEFINE TABLE orders SCHEMAFULL
+    PERMISSIONS {
+        create: WHERE $auth.role IN ['admin', 'user'],
+        select: WHERE user_id = $auth.id OR $auth.role = 'admin',
+        update: WHERE user_id = $auth.id,
+        delete: WHERE $auth.role = 'admin'
+    };
+```
+
+### DEFINE FIELD
+
+```orbitql
+DEFINE FIELD field_name ON TABLE table_name
+    TYPE type_definition
+    [VALUE expression | DEFAULT expression]
+    [READONLY]
+    [ASSERT expression]
+    [PERMISSIONS ...];
+```
+
+**Examples**:
+
+```orbitql
+-- Basic field definition
+DEFINE FIELD name ON TABLE users TYPE string;
+
+-- With default value
+DEFINE FIELD created_at ON TABLE users TYPE datetime DEFAULT time::now();
+
+-- With validation assertion
+DEFINE FIELD email ON TABLE users TYPE string
+    ASSERT string::is::email($value);
+
+-- Readonly computed field
+DEFINE FIELD full_name ON TABLE users
+    TYPE string
+    VALUE string::concat(first_name, ' ', last_name)
+    READONLY;
+
+-- Array field
+DEFINE FIELD tags ON TABLE posts TYPE array<string>;
+
+-- Flexible nested type
+DEFINE FIELD metadata ON TABLE products TYPE object;
+
+-- Optional field with default
+DEFINE FIELD age ON TABLE users TYPE option<int> DEFAULT NULL;
+```
+
+### DEFINE INDEX
+
+```orbitql
+DEFINE INDEX index_name ON TABLE table_name
+    FIELDS field [, ...]
+    [UNIQUE]
+    [SEARCH ANALYZER analyzer_name]
+    [MTREE DIMENSION n DIST distance_type]
+    [HNSW DIMENSION n DIST distance_type [EFC n] [M n]];
+```
+
+**Examples**:
+
+```orbitql
+-- Standard B-tree index
+DEFINE INDEX idx_users_email ON TABLE users FIELDS email UNIQUE;
+
+-- Composite index
+DEFINE INDEX idx_orders_user_date ON TABLE orders FIELDS user_id, created_at;
+
+-- Full-text search index
+DEFINE INDEX idx_posts_content ON TABLE posts FIELDS content
+    SEARCH ANALYZER ascii;
+
+-- Vector index (M-Tree)
+DEFINE INDEX idx_embeddings ON TABLE documents FIELDS embedding
+    MTREE DIMENSION 384 DIST COSINE;
+
+-- Vector index (HNSW)
+DEFINE INDEX idx_vectors ON TABLE products FIELDS embedding
+    HNSW DIMENSION 768 DIST EUCLIDEAN EFC 150 M 12;
+```
+
+### DEFINE FUNCTION
+
+```orbitql
+DEFINE FUNCTION fn::function_name(param: type [, ...]) {
+    function_body
+};
+```
+
+**Examples**:
+
+```orbitql
+-- Simple function
+DEFINE FUNCTION fn::greet(name: string) {
+    RETURN string::concat('Hello, ', name, '!');
+};
+
+-- Function with calculations
+DEFINE FUNCTION fn::calculate_tax(amount: float, rate: float) {
+    RETURN amount * rate;
+};
+
+-- Function with control flow
+DEFINE FUNCTION fn::get_discount(user_id: string) {
+    LET $user = (SELECT * FROM users WHERE id = $user_id);
+
+    IF $user.subscription = 'premium' THEN
+        RETURN 0.20;
+    ELSE IF $user.orders_count > 10 THEN
+        RETURN 0.10;
+    ELSE
+        RETURN 0.05;
+    END;
+};
+
+-- Function with error handling
+DEFINE FUNCTION fn::transfer(from: string, to: string, amount: float) {
+    IF $amount <= 0 THEN
+        THROW 'Amount must be positive';
+    END;
+
+    LET $from_account = (SELECT * FROM accounts WHERE id = $from);
+    IF $from_account.balance < $amount THEN
+        THROW {
+            code: 'INSUFFICIENT_FUNDS',
+            message: 'Not enough balance',
+            required: $amount,
+            available: $from_account.balance
+        };
+    END;
+
+    BEGIN TRANSACTION;
+        UPDATE accounts SET balance = balance - $amount WHERE id = $from;
+        UPDATE accounts SET balance = balance + $amount WHERE id = $to;
+    COMMIT;
+
+    RETURN { success: true, amount: $amount };
+};
+```
+
+### DEFINE EVENT
+
+```orbitql
+DEFINE EVENT event_name ON TABLE table_name
+    WHEN condition
+    THEN { actions };
+```
+
+**Examples**:
+
+```orbitql
+-- Event on record creation
+DEFINE EVENT on_user_signup ON TABLE users
+    WHEN $event = "CREATE"
+    THEN {
+        CREATE notifications SET
+            user_id = $after.id,
+            message = 'Welcome!',
+            created_at = time::now();
+    };
+
+-- Event on field change
+DEFINE EVENT on_order_status_change ON TABLE orders
+    WHEN $event = "UPDATE" AND $before.status != $after.status
+    THEN {
+        CREATE order_history SET
+            order_id = $after.id,
+            old_status = $before.status,
+            new_status = $after.status,
+            changed_at = time::now();
+    };
+
+-- Audit event
+DEFINE EVENT audit_log ON TABLE users
+    WHEN $event IN ["CREATE", "UPDATE", "DELETE"]
+    THEN {
+        CREATE audit_log SET
+            table_name = 'users',
+            operation = $event,
+            record_id = COALESCE($after.id, $before.id),
+            old_data = $before,
+            new_data = $after,
+            changed_by = $auth.id,
+            changed_at = time::now();
+    };
+```
+
+### DEFINE ANALYZER
+
+```orbitql
+DEFINE ANALYZER analyzer_name
+    TOKENIZERS tokenizer [, ...]
+    FILTERS filter [, ...];
+```
+
+**Example**:
+
+```orbitql
+DEFINE ANALYZER english_analyzer
+    TOKENIZERS blank
+    FILTERS lowercase, snowball(english);
+```
+
+### DEFINE USER / SCOPE / TOKEN
+
+```orbitql
+-- Define user
+DEFINE USER username ON DATABASE
+    PASSWORD 'password'
+    ROLES role [, ...];
+
+-- Define scope (for JWT auth)
+DEFINE SCOPE scope_name
+    SESSION duration
+    SIGNUP expression
+    SIGNIN expression;
+
+-- Define token
+DEFINE TOKEN token_name ON SCOPE scope_name
+    TYPE HS256
+    VALUE 'secret';
+```
+
+### DEFINE NAMESPACE / DATABASE
+
+```orbitql
+DEFINE NAMESPACE namespace_name;
+DEFINE DATABASE database_name;
+```
+
+### REMOVE Statements
+
+```orbitql
+REMOVE TABLE table_name;
+REMOVE FIELD field_name ON TABLE table_name;
+REMOVE INDEX index_name ON TABLE table_name;
+REMOVE FUNCTION fn::function_name;
+REMOVE EVENT event_name ON TABLE table_name;
+REMOVE ANALYZER analyzer_name;
+REMOVE USER username ON DATABASE;
+REMOVE SCOPE scope_name;
+REMOVE TOKEN token_name ON SCOPE scope_name;
+REMOVE NAMESPACE namespace_name;
+REMOVE DATABASE database_name;
+```
+
+---
+
+## Control Flow
+
+OrbitQL provides control flow statements for procedural logic within functions and queries.
+
+### LET Statement
+
+```orbitql
+LET $variable = expression;
+```
+
+**Examples**:
+
+```orbitql
+-- Simple assignment
+LET $user_id = 'user:alice';
+
+-- From query
+LET $user = (SELECT * FROM users WHERE id = $user_id);
+
+-- With expression
+LET $tax_rate = 0.08;
+LET $total_with_tax = $subtotal * (1 + $tax_rate);
+
+-- Object assignment
+LET $config = {
+    max_results: 100,
+    include_deleted: false,
+    sort_order: 'desc'
+};
+```
+
+### IF/ELSE Statement
+
+```orbitql
+IF condition THEN
+    statements
+[ELSE IF condition THEN
+    statements]
+[ELSE
+    statements]
+END;
+```
+
+**Examples**:
+
+```orbitql
+-- Simple IF
+IF $user.role = 'admin' THEN
+    SELECT * FROM users;
+END;
+
+-- IF/ELSE
+IF $balance >= $amount THEN
+    UPDATE accounts SET balance = balance - $amount WHERE id = $from_account;
+ELSE
+    THROW "Insufficient funds";
+END;
+
+-- IF/ELSE IF/ELSE
+IF $user.subscription = 'premium' THEN
+    LET $discount = 0.20;
+ELSE IF $user.subscription = 'standard' THEN
+    LET $discount = 0.10;
+ELSE
+    LET $discount = 0;
+END;
+```
+
+### FOR Loop
+
+```orbitql
+FOR $variable IN expression {
+    statements
+};
+```
+
+**Examples**:
+
+```orbitql
+-- Loop over query results
+FOR $user IN (SELECT * FROM users WHERE status = 'pending') {
+    UPDATE users SET status = 'active' WHERE id = $user.id;
+    CREATE notifications SET
+        user_id = $user.id,
+        message = 'Your account has been activated!';
+};
+
+-- Loop over range
+FOR $i IN 1..10 {
+    CREATE test_data SET
+        index = $i,
+        value = math::random();
+};
+
+-- Loop over array
+LET $tags = ['rust', 'database', 'distributed'];
+FOR $tag IN $tags {
+    INSERT INTO tags (name) VALUES ($tag)
+    ON CONFLICT (name) DO NOTHING;
+};
+```
+
+### BREAK and CONTINUE
+
+```orbitql
+-- BREAK exits the loop
+FOR $user IN (SELECT * FROM users ORDER BY created_at) {
+    IF COUNT((SELECT * FROM notifications WHERE user_id = $user.id)) > 100 THEN
+        BREAK;
+    END;
+    -- Process user
+};
+
+-- CONTINUE skips to next iteration
+FOR $order IN (SELECT * FROM orders WHERE status = 'pending') {
+    IF $order.total < 10 THEN
+        CONTINUE;  -- Skip small orders
+    END;
+    UPDATE orders SET status = 'processing' WHERE id = $order.id;
+};
+```
+
+### RETURN Statement
+
+```orbitql
+RETURN expression;
+```
+
+**Example**:
+
+```orbitql
+DEFINE FUNCTION fn::analyze_user(user_id: string) {
+    LET $user = (SELECT * FROM users WHERE id = $user_id);
+    LET $orders = (SELECT * FROM orders WHERE user_id = $user_id);
+    LET $total_spent = math::sum($orders.total);
+
+    RETURN {
+        user: $user,
+        order_count: array::len($orders),
+        total_spent: $total_spent,
+        is_vip: $total_spent > 10000
+    };
+};
+```
+
+### THROW Statement
+
+```orbitql
+THROW message;
+THROW { code: 'ERROR_CODE', message: 'description', ... };
+```
+
+**Examples**:
+
+```orbitql
+-- Simple throw
+IF $amount <= 0 THEN
+    THROW "Amount must be positive";
+END;
+
+-- Throw with details
+IF $user.balance < $amount THEN
+    THROW {
+        code: 'INSUFFICIENT_FUNDS',
+        message: 'Not enough balance for this transaction',
+        required: $amount,
+        available: $user.balance
+    };
+END;
+```
+
+### USE Statement
+
+```orbitql
+USE NS namespace DB database;
+USE NAMESPACE namespace;
+USE DATABASE database;
+```
+
+### INFO Statement
+
+```orbitql
+INFO FOR KV;
+INFO FOR NS;
+INFO FOR DB;
+INFO FOR TABLE table_name;
+```
+
+### SLEEP Statement
+
+```orbitql
+SLEEP duration;
+```
+
+**Example**:
+
+```orbitql
+SLEEP 1s;
+SLEEP 500ms;
 ```
 
 ---
@@ -774,6 +1278,38 @@ RELATE user:alice -> follows -> user:bob
 SET { timestamp: NOW(), strength: 0.8 };
 ```
 
+### MATCH Statement (Cypher-style)
+
+```orbitql
+MATCH pattern
+[WHERE condition]
+RETURN projection;
+```
+
+**Examples**:
+
+```orbitql
+-- Find friends of friends
+MATCH (p:Person)-[:KNOWS]->(f:Person)-[:KNOWS]->(fof:Person)
+WHERE p.name = 'Alice' AND fof != p
+RETURN DISTINCT fof.name;
+
+-- Find paths between nodes
+MATCH path = (start:Person)-[:KNOWS*1..3]->(end:Person)
+WHERE start.name = 'Alice' AND end.name = 'Bob'
+RETURN path;
+
+-- Pattern with properties
+MATCH (u:User)-[r:PURCHASED {quantity: 1}]->(p:Product)
+WHERE p.price > 100
+RETURN u.name, p.name, r.purchase_date;
+
+-- Variable-length paths
+MATCH (a:Person)-[:FRIEND*2..5]->(b:Person)
+WHERE a.city = 'NYC'
+RETURN a.name, b.name, length(path) AS distance;
+```
+
 ### Graph Path Expressions
 
 ```orbitql
@@ -988,17 +1524,169 @@ ML_PCA(features_array, n_components)
 ML_FEATURE_SELECTION(features, target, 'method')
 ```
 
-### Vector Operations
+---
+
+## Vector Operations
+
+OrbitQL provides comprehensive vector similarity search and embedding operations for AI/ML applications.
+
+### Vector Index Types
 
 ```orbitql
--- Text embedding
-ML_EMBED_TEXT(text_column, 'model_name')
+-- HNSW Index (Hierarchical Navigable Small World)
+DEFINE INDEX idx_embeddings ON TABLE documents FIELDS embedding
+    HNSW DIMENSION 384 DIST COSINE EFC 200 M 16;
 
--- Similarity search
-ML_SIMILARITY_SEARCH(query_vector, target_vectors, k)
+-- M-Tree Index
+DEFINE INDEX idx_vectors ON TABLE products FIELDS embedding
+    MTREE DIMENSION 768 DIST EUCLIDEAN;
 
--- Clustering
-ML_VECTOR_CLUSTER(vectors, k)
+-- IVF Index (Inverted File)
+CREATE INDEX idx_ivf ON table_name USING ivfflat (embedding vector_cosine_ops)
+    WITH (lists = 100);
+```
+
+### Distance Functions
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `vector::distance::cosine(a, b)` | Cosine distance (1 - cosine similarity) | `vector::distance::cosine(v1, v2)` |
+| `vector::distance::euclidean(a, b)` | L2 Euclidean distance | `vector::distance::euclidean(v1, v2)` |
+| `vector::distance::manhattan(a, b)` | L1 Manhattan distance | `vector::distance::manhattan(v1, v2)` |
+| `vector::distance::chebyshev(a, b)` | Chebyshev (L∞) distance | `vector::distance::chebyshev(v1, v2)` |
+| `vector::distance::hamming(a, b)` | Hamming distance (binary vectors) | `vector::distance::hamming(v1, v2)` |
+
+### Similarity Functions
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `vector::similarity::cosine(a, b)` | Cosine similarity (0-1) | `vector::similarity::cosine(v1, v2)` |
+| `vector::similarity::jaccard(a, b)` | Jaccard similarity (sets) | `vector::similarity::jaccard(v1, v2)` |
+| `vector::similarity::dot(a, b)` | Dot product | `vector::similarity::dot(v1, v2)` |
+
+### Vector Utility Functions
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `vector::normalize(v)` | Normalize to unit vector | `vector::normalize(embedding)` |
+| `vector::magnitude(v)` | Vector magnitude (norm) | `vector::magnitude(embedding)` |
+| `vector_dims(v)` | Get vector dimensions | `vector_dims(embedding)` |
+| `vector_norm(v)` | L2 norm of vector | `vector_norm(embedding)` |
+
+### KNN Search
+
+```orbitql
+-- Basic K-Nearest Neighbors search
+SELECT id, content, vector::distance::cosine(embedding, $query_vector) AS distance
+FROM documents
+ORDER BY vector::distance::cosine(embedding, $query_vector)
+LIMIT 10;
+
+-- KNN with filter
+SELECT id, title, embedding <-> $query_embedding AS distance
+FROM articles
+WHERE category = 'technology' AND published = true
+ORDER BY embedding <-> $query_embedding
+LIMIT 20;
+
+-- Using vector index hints
+SELECT id, content
+FROM documents
+WHERE embedding <-> $query_vector < 0.3
+ORDER BY embedding <-> $query_vector
+LIMIT 10;
+```
+
+### Hybrid Search (Vector + Full-Text)
+
+```orbitql
+-- Combine vector similarity with full-text search
+SELECT
+    id,
+    title,
+    content,
+    vector::similarity::cosine(embedding, $query_embedding) * 0.7 +
+    search::score() * 0.3 AS hybrid_score
+FROM articles
+WHERE content @@ 'database AND performance'
+ORDER BY hybrid_score DESC
+LIMIT 10;
+
+-- Reciprocal Rank Fusion (RRF)
+WITH vector_results AS (
+    SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <-> $query) AS rank
+    FROM documents
+    LIMIT 50
+),
+text_results AS (
+    SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank(content, query)) AS rank
+    FROM documents, plainto_tsquery($query) query
+    WHERE content @@ query
+    LIMIT 50
+)
+SELECT id, SUM(1.0 / (60 + rank)) AS rrf_score
+FROM (SELECT * FROM vector_results UNION ALL SELECT * FROM text_results) combined
+GROUP BY id
+ORDER BY rrf_score DESC
+LIMIT 10;
+```
+
+### Text Embedding Generation
+
+```orbitql
+-- Generate embeddings using ML model
+SELECT ml::embed_text(content, 'sentence-transformers/all-MiniLM-L6-v2') AS embedding
+FROM documents
+WHERE embedding IS NULL;
+
+-- Update with generated embeddings
+UPDATE documents
+SET embedding = ml::embed_text(
+    COALESCE(summary, title, name),
+    'sentence-transformers/all-MiniLM-L6-v2'
+)
+WHERE embedding IS NULL;
+
+-- Batch embedding generation
+SELECT
+    id,
+    ml::embed_batch(
+        ARRAY_AGG(content),
+        'text-embedding-ada-002'
+    ) AS embeddings
+FROM documents
+GROUP BY batch_id;
+```
+
+### Vector Clustering
+
+```orbitql
+-- K-means clustering on vectors
+SELECT
+    id,
+    ml::cluster_kmeans(embedding, 10) AS cluster_id
+FROM documents;
+
+-- DBSCAN clustering
+SELECT
+    id,
+    ml::cluster_dbscan(embedding, eps := 0.5, min_samples := 5) AS cluster_id
+FROM documents;
+```
+
+### PostgreSQL pgvector Compatibility
+
+```orbitql
+-- pgvector operators
+SELECT id FROM items ORDER BY embedding <-> '[1,2,3]' LIMIT 5;  -- L2 distance
+SELECT id FROM items ORDER BY embedding <#> '[1,2,3]' LIMIT 5;  -- Inner product
+SELECT id FROM items ORDER BY embedding <=> '[1,2,3]' LIMIT 5;  -- Cosine distance
+
+-- Create vector column
+ALTER TABLE documents ADD COLUMN embedding vector(384);
+
+-- Create vector index
+CREATE INDEX ON documents USING hnsw (embedding vector_cosine_ops);
 ```
 
 ---
@@ -1199,17 +1887,124 @@ pub enum ParseError {
 
 ```rust
 pub enum Statement {
+    // Data Query Language (DQL)
     Select(SelectStatement),
+
+    // Data Manipulation Language (DML)
     Insert(InsertStatement),
     Update(UpdateStatement),
     Delete(DeleteStatement),
-    Create(CreateStatement),
-    Drop(DropStatement),
+    Upsert(UpsertStatement),
+    Merge(MergeStatement),
+
+    // Graph Operations
     Relate(RelateStatement),
     Traverse(TraverseStatement),
-    Live(LiveStatement),
+    Match(MatchStatement),
+
+    // Schema Definition (SurrealDB-style DEFINE/REMOVE)
+    Define(DefineStatement),
+    Remove(RemoveStatement),
+
+    // Traditional DDL
+    Create(CreateStatement),
+    Drop(DropStatement),
+    Alter(AlterStatement),
+    Truncate(TruncateStatement),
+
+    // Transaction Control
     Transaction(TransactionStatement),
+    Savepoint(SavepointStatement),
+
+    // Real-time Queries
+    Live(LiveStatement),
+    Kill(KillStatement),
+
+    // Control Flow
+    Let(LetStatement),
+    For(ForStatement),
+    If(IfStatement),
+    Return(ReturnStatement),
+    Break(BreakStatement),
+    Continue(ContinueStatement),
+    Throw(ThrowStatement),
+
+    // Utility Statements
+    Use(UseStatement),
+    Info(InfoStatement),
+    Show(ShowStatement),
+    Rebuild(RebuildStatement),
+
+    // GraphRAG Operations
     GraphRAG(GraphRAGStatement),
+}
+```
+
+### DefineStatement
+
+```rust
+pub enum DefineStatement {
+    Table {
+        name: String,
+        schema_mode: Option<SchemaMode>,  // Schemafull or Schemaless
+        drop: bool,
+        as_select: Option<Box<SelectStatement>>,
+        permissions: Option<Permissions>,
+    },
+    Field {
+        name: String,
+        table: String,
+        field_type: Option<String>,
+        value: Option<Expression>,
+        default: Option<Expression>,
+        readonly: bool,
+        assert: Option<Expression>,
+        permissions: Option<Permissions>,
+    },
+    Index {
+        name: String,
+        table: String,
+        fields: Vec<IndexField>,
+        unique: bool,
+        search_analyzer: Option<String>,
+        vector_config: Option<VectorIndexConfig>,
+    },
+    Function {
+        name: String,
+        params: Vec<FunctionParameter>,
+        body: Vec<Statement>,
+    },
+    Event {
+        name: String,
+        table: String,
+        when: Expression,
+        then: Vec<Statement>,
+    },
+    Analyzer {
+        name: String,
+        tokenizers: Vec<String>,
+        filters: Vec<String>,
+    },
+    User {
+        name: String,
+        on: String,  // DATABASE, NAMESPACE, etc.
+        password: Option<String>,
+        roles: Vec<String>,
+    },
+    Scope {
+        name: String,
+        session: Option<Duration>,
+        signup: Option<Expression>,
+        signin: Option<Expression>,
+    },
+    Token {
+        name: String,
+        on: String,
+        token_type: String,
+        value: String,
+    },
+    Namespace { name: String },
+    Database { name: String },
 }
 ```
 
@@ -1373,19 +2168,25 @@ futures = "0.3"
 | Feature | Status | Completion |
 |---------|--------|------------|
 | Core SELECT/INSERT/UPDATE/DELETE | ✅ Complete | 100% |
+| UPSERT/MERGE operations | ✅ Complete | 100% |
 | JOINs (all types) | ✅ Complete | 100% |
 | GROUP BY / HAVING | ✅ Complete | 100% |
 | ORDER BY / LIMIT / OFFSET | ✅ Complete | 100% |
 | CTEs (WITH clause) | ✅ Complete | 100% |
+| Window Functions | ✅ Complete | 100% |
 | CASE expressions | ✅ Complete | 100% |
 | NOW() / INTERVAL | ✅ Complete | 100% |
 | COUNT(DISTINCT) | ✅ Complete | 100% |
-| Transactions | ✅ Complete | 100% |
-| Graph TRAVERSE / RELATE | ✅ Complete | 95% |
+| Transactions with SAVEPOINTs | ✅ Complete | 100% |
+| DEFINE/REMOVE (SurrealDB-style) | ✅ Complete | 95% |
+| Control Flow (IF/FOR/LET/THROW) | ✅ Complete | 95% |
+| Graph TRAVERSE / RELATE / MATCH | ✅ Complete | 95% |
+| Vector Operations (KNN, Hybrid) | ✅ Complete | 95% |
 | Time-series queries | ✅ Complete | 95% |
 | ML functions | ✅ Complete | 90% |
 | Spatial operations | ✅ Complete | 90% |
-| LIVE streaming | ✅ Complete | 95% |
+| LIVE streaming / KILL | ✅ Complete | 95% |
+| Events (DEFINE EVENT) | ✅ Complete | 90% |
 | GraphRAG | ✅ Complete | 85% |
 | LSP/IDE Support | ✅ Complete | 95% |
 

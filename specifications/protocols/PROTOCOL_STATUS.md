@@ -13,6 +13,7 @@ This document provides the authoritative status of protocol implementations in O
 
 | Protocol | Completion | Status | Tests | Key Gaps |
 |----------|------------|--------|-------|----------|
+| **OrbitQL** | 95% | Production Ready | 50+ | Parser validation, Edge cases |
 | **Redis RESP** | 60% | Production Ready | 190+ | Sorted Sets, Lua scripting |
 | **PostgreSQL** | 72% | Production Ready | 460+ | User management, cursors |
 | **MySQL** | 51% | Active Development | 35+ | Binary protocol, replication |
@@ -23,12 +24,105 @@ This document provides the authoritative status of protocol implementations in O
 | **REST/HTTP** | 40% | Active Development | - | Authentication |
 
 ### Recent Improvements (2025-12-08)
+- **OrbitQL**: SurrealDB-style DEFINE/REMOVE statements ✅, Control flow (IF/FOR/LET/THROW) ✅, SAVEPOINT support ✅
+- **OrbitQL**: Vector KNN search ✅, MATCH statement (Cypher-style) ✅, LIVE/KILL queries ✅
 - **PostgreSQL**: Sequence functions (nextval, currval, setval, lastval) ✅, Math functions (cbrt, div, factorial, gcd, lcm, sign) ✅
 - **PostgreSQL (PG18)**: NegotiateProtocolVersion ✅, Temporal constraints (WITHOUT OVERLAPS) ✅, Variable-length cancel keys ✅
 - **PostgreSQL (PG18)**: UUIDv7 functions ✅, GENERATED columns (STORED/VIRTUAL) ✅, OLD/NEW in RETURNING ✅
 - **PostgreSQL**: RETURNING clause ✅, EXTRACT/DATE_TRUNC functions ✅, Window frame modes (ROWS/RANGE/GROUPS) ✅, EXCLUDE clause ✅
 - **Redis**: Full MULTI/EXEC/DISCARD/WATCH/UNWATCH transaction support ✅ (100% coverage)
 - **Cypher**: Implicit GROUP BY with aggregations in RETURN and WITH clauses ✅
+
+---
+
+## 0. OrbitQL Protocol (95% Complete)
+
+OrbitQL is Orbit-RS's native unified multi-model query language, inspired by SurrealDB's SurrealQL, with extensions for graph, vector, time-series, and ML operations.
+
+### Statement Categories
+
+| Category | Feature | Status |
+|----------|---------|--------|
+| **DQL** | SELECT with JOINs, CTEs, Window Functions | ✅ Complete |
+| **DML** | INSERT, UPDATE, DELETE, UPSERT, MERGE | ✅ Complete |
+| **Schema (SurrealDB-style)** | DEFINE TABLE/FIELD/INDEX/FUNCTION/EVENT | ✅ Complete |
+| **Schema** | REMOVE TABLE/FIELD/INDEX/FUNCTION/EVENT | ✅ Complete |
+| **Schema** | DEFINE USER/SCOPE/TOKEN/NAMESPACE/DATABASE | ✅ Complete |
+| **Graph** | TRAVERSE, RELATE, MATCH | ✅ Complete |
+| **Transactions** | BEGIN, COMMIT, ROLLBACK, SAVEPOINT | ✅ Complete |
+| **Control Flow** | IF/ELSE, FOR, LET, RETURN | ✅ Complete |
+| **Control Flow** | BREAK, CONTINUE, THROW | ✅ Complete |
+| **Real-time** | LIVE SELECT, KILL | ✅ Complete |
+| **Utility** | USE, INFO, SHOW, SLEEP | ✅ Complete |
+
+### Vector Operations
+
+| Feature | Status |
+|---------|--------|
+| HNSW Index (DEFINE INDEX ... HNSW) | ✅ Complete |
+| M-Tree Index (DEFINE INDEX ... MTREE) | ✅ Complete |
+| vector::distance::cosine/euclidean/manhattan | ✅ Complete |
+| vector::similarity::cosine/jaccard/dot | ✅ Complete |
+| KNN Search (ORDER BY distance LIMIT k) | ✅ Complete |
+| Hybrid Search (vector + full-text) | ✅ Complete |
+| ml::embed_text() | ✅ Complete |
+
+### Built-in Functions (SurrealDB-style)
+
+| Namespace | Functions | Status |
+|-----------|-----------|--------|
+| `string::` | concat, len, uppercase, lowercase, trim, contains | ✅ Complete |
+| `math::` | abs, ceil, floor, round, sqrt, pow, random | ✅ Complete |
+| `time::` | now, year, month, day, hour, floor, format | ✅ Complete |
+| `array::` | len, first, last, push, append, contains, sort | ✅ Complete |
+| `crypto::` | md5, sha256, sha512, argon2::generate/compare | ✅ Complete |
+| `geo::` | distance, contains, haversine | ✅ Complete |
+| `rand::` | uuid, string | ✅ Complete |
+| `vector::` | distance::*, similarity::*, normalize, magnitude | ✅ Complete |
+| `ml::` | embed_text, predict, train_model | ✅ Complete |
+
+### Key Files
+
+| Component | Location |
+|-----------|----------|
+| Lexer | `orbit/shared/src/orbitql/lexer.rs` |
+| AST | `orbit/shared/src/orbitql/ast.rs` |
+| Parser | `orbit/shared/src/orbitql/parser.rs` |
+| Executor | `orbit/shared/src/orbitql/executor.rs` |
+| Streaming | `orbit/shared/src/orbitql/streaming.rs` |
+
+### Reference Documentation
+
+- [OrbitQL Reference Specification](./Protocol-specs/orbitql-reference-rust.md)
+- [OrbitQL Grammar README](./grammars-generated/orbitql/README.md)
+- [OrbitQL Examples](../../orbit-examples/protocol/orbitql/)
+
+### Wire Protocols (Client Transport)
+
+OrbitQL supports two wire protocols for client-server communication:
+
+| Protocol | Port | Use Case | Status |
+|----------|------|----------|--------|
+| **Arrow Flight SQL** | 50052 | High-performance columnar transport, analytics | ✅ Specified |
+| **OrbitWire** | 50053 | Low-latency binary protocol, CLI/Desktop | ✅ Specified |
+
+#### Arrow Flight SQL
+- High-performance columnar data transport based on Apache Arrow and gRPC
+- Zero-copy data transfer with efficient memory layout
+- Native support for streaming large result sets
+- Compatible with existing Arrow Flight SQL clients (Python, Rust, Java)
+- Ideal for analytics workloads and bulk data transfer
+
+**Specification**: [Arrow Flight SQL Specification](./Protocol-specs/arrow-flight-sql-specification.md)
+
+#### OrbitWire Protocol
+- Custom binary wire protocol optimized for OrbitQL features
+- Multiplexed streams for concurrent queries
+- First-class LIVE query subscription support
+- Optimized encodings for graph paths, vectors, and spatial data
+- Ideal for interactive CLI and desktop applications
+
+**Specification**: [OrbitWire Protocol Specification](./Protocol-specs/orbitwire-protocol-specification.md)
 
 ---
 
@@ -493,6 +587,7 @@ This document provides the authoritative status of protocol implementations in O
 
 | Date | Changes |
 |------|---------|
+| 2025-12-08 | **OrbitQL Major Update**: Added SurrealDB-style DEFINE/REMOVE, Control flow (IF/FOR/LET/THROW), Vector KNN, MATCH, SAVEPOINT support |
 | 2025-12-08 | Added PostgreSQL sequence functions (nextval, currval, setval, lastval) and math functions (cbrt, div, factorial, gcd, lcm, sign) |
 | 2025-12-07 | **Major Update**: Tier 1 features completed - PostgreSQL RETURNING/Date-Time/Window frames, Redis transactions, Cypher GROUP BY |
 | 2025-12-07 | Consolidated from PROTOCOL_GAP_ANALYSIS.md, COMPREHENSIVE_FEATURE_GAP_ANALYSIS.md, PROTOCOL_COMPLETION_ANALYSIS.md |
