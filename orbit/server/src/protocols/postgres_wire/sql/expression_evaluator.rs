@@ -497,6 +497,19 @@ impl ExpressionEvaluator {
             }
             BinaryOperator::RangeNotExtendLeft => self.range_not_extend_left(&left_val, &right_val),
 
+            // Text Search operators
+            BinaryOperator::TextSearchMatch => self.text_search_match(&left_val, &right_val),
+            BinaryOperator::TextSearchContains => self.text_search_contains(&left_val, &right_val),
+            BinaryOperator::TextSearchContainedBy => {
+                self.text_search_contained_by(&left_val, &right_val)
+            }
+            BinaryOperator::TextSearchConcat => self.text_search_concat(&left_val, &right_val),
+            BinaryOperator::TextSearchAnd => self.text_search_and(&left_val, &right_val),
+            BinaryOperator::TextSearchNot => self.text_search_not(&left_val, &right_val),
+            BinaryOperator::TextSearchFollowedBy => {
+                self.text_search_followed_by(&left_val, &right_val)
+            }
+
             _ => Err(ProtocolError::not_implemented(
                 "Binary operator",
                 &format!("{operator:?}"),
@@ -798,6 +811,30 @@ impl ExpressionEvaluator {
 
             // JSON functions
             "JSON_TABLE" => Ok(SqlValue::Text("JSON Table".to_string())),
+
+            // Full-Text Search functions
+            "TO_TSVECTOR" => self.evaluate_to_tsvector(&args),
+            "TO_TSQUERY" => self.evaluate_to_tsquery(&args),
+            "PLAINTO_TSQUERY" => self.evaluate_plainto_tsquery(&args),
+            "PHRASETO_TSQUERY" => self.evaluate_phraseto_tsquery(&args),
+            "WEBSEARCH_TO_TSQUERY" => self.evaluate_websearch_to_tsquery(&args),
+            "SETWEIGHT" => self.evaluate_setweight(&args),
+            "TS_RANK" => self.evaluate_ts_rank(&args),
+            "TS_RANK_CD" => self.evaluate_ts_rank_cd(&args),
+            "TS_HEADLINE" => self.evaluate_ts_headline(&args),
+            "TSVECTOR_CONCAT" | "TSVECTOR_UPDATE_TRIGGER" => self.evaluate_tsvector_concat(&args),
+            "NUMNODE" => self.evaluate_numnode(&args),
+            "QUERYTREE" => self.evaluate_querytree(&args),
+            "STRIP" => self.evaluate_strip(&args),
+            "TS_LEXIZE" => self.evaluate_ts_lexize(&args),
+            "TS_PARSE" => self.evaluate_ts_parse(&args),
+            "TS_TOKEN_TYPE" => self.evaluate_ts_token_type(&args),
+            "GET_CURRENT_TS_CONFIG" => self.evaluate_get_current_ts_config(&args),
+            "ARRAY_TO_TSVECTOR" => self.evaluate_array_to_tsvector(&args),
+            "TSVECTOR_TO_ARRAY" => self.evaluate_tsvector_to_array(&args),
+            "TS_DELETE" => self.evaluate_ts_delete(&args),
+            "TS_FILTER" => self.evaluate_ts_filter(&args),
+            "TSQUERY_PHRASE" => self.evaluate_tsquery_phrase(&args),
 
             _ => Err(ProtocolError::not_implemented("Function", &func_name)),
         }
@@ -1913,6 +1950,173 @@ impl ExpressionEvaluator {
     /// Evaluate div(a, b) - integer division (truncate towards zero)
     fn evaluate_div(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "DIV requires exactly two arguments".to_string(),
+            ));
+        }
+
+        match (&args[0], &args[1]) {
+            (SqlValue::Integer(a), SqlValue::Integer(b)) => {
+                if *b == 0 {
+                    Err(ProtocolError::PostgresError("Division by zero".to_string()))
+                } else {
+                    Ok(SqlValue::Integer(a / b))
+                }
+            }
+            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => {
+                if *b == 0 {
+                    Err(ProtocolError::PostgresError("Division by zero".to_string()))
+                } else {
+                    Ok(SqlValue::BigInt(a / b))
+                }
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => {
+                let a = Self::to_f64_static(&args[0])?;
+                let b = Self::to_f64_static(&args[1])?;
+                match (a, b) {
+                    (Some(a), Some(b)) => {
+                        if b == 0.0 {
+                            Err(ProtocolError::PostgresError("Division by zero".to_string()))
+                        } else {
+                            Ok(SqlValue::BigInt((a / b).trunc() as i64))
+                        }
+                    }
+                    _ => Ok(SqlValue::Null),
+                }
+            }
+        }
+    }
+
+    /// Evaluate factorial(n) - n!
+    fn evaluate_factorial(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "FACTORIAL requires exactly one argument".to_string(),
+            ));
+        }
+
+        let n = match &args[0] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "FACTORIAL requires integer argument".to_string(),
+                ))
+            }
+        };
+
+        if n < 0 {
+            return Err(ProtocolError::PostgresError(
+                "FACTORIAL of negative number".to_string(),
+            ));
+        }
+
+        if n > 20 {
+            return Err(ProtocolError::PostgresError(
+                "FACTORIAL argument too large (max 20)".to_string(),
+            ));
+        }
+
+        let result: i64 = (1..=n).product();
+        Ok(SqlValue::BigInt(result))
+    }
+
+    /// Evaluate gcd(a, b) - greatest common divisor
+    fn evaluate_gcd(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "GCD requires exactly two arguments".to_string(),
+            ));
+        }
+
+        let a = match &args[0] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "GCD requires integer arguments".to_string(),
+                ))
+            }
+        };
+
+        let b = match &args[1] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "GCD requires integer arguments".to_string(),
+                ))
+            }
+        };
+
+        fn gcd(mut a: i64, mut b: i64) -> i64 {
+            a = a.abs();
+            b = b.abs();
+            while b != 0 {
+                let t = b;
+                b = a % b;
+                a = t;
+            }
+            a
+        }
+
+        Ok(SqlValue::BigInt(gcd(a, b)))
+    }
+
+    /// Evaluate lcm(a, b) - least common multiple
+    fn evaluate_lcm(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "LCM requires exactly two arguments".to_string(),
+            ));
+        }
+
+        let a = match &args[0] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "LCM requires integer arguments".to_string(),
+                ))
+            }
+        };
+
+        let b = match &args[1] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "LCM requires integer arguments".to_string(),
+                ))
+            }
+        };
+
+        fn gcd(mut a: i64, mut b: i64) -> i64 {
+            a = a.abs();
+            b = b.abs();
+            while b != 0 {
+                let t = b;
+                b = a % b;
+                a = t;
+            }
+            a
+        }
+
+        if a == 0 || b == 0 {
+            Ok(SqlValue::BigInt(0))
+        } else {
+            Ok(SqlValue::BigInt((a.abs() / gcd(a, b)) * b.abs()))
+        }
+    }
+
+    fn evaluate_pi(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if !args.is_empty() {
             return Err(ProtocolError::PostgresError(
                 "DIV requires exactly two arguments".to_string(),
             ));
@@ -6005,6 +6209,1116 @@ impl ExpressionEvaluator {
                 "Range not extend left operator requires range types".to_string(),
             )),
         }
+    }
+
+    // ===== Full-Text Search Functions =====
+
+    /// to_tsvector([ config, ] document) - convert document to tsvector
+    fn evaluate_to_tsvector(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        let (config, document) = match args.len() {
+            1 => ("english".to_string(), self.sqlvalue_to_string(&args[0])?),
+            2 => (
+                self.sqlvalue_to_string(&args[0])?,
+                self.sqlvalue_to_string(&args[1])?,
+            ),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "to_tsvector() requires 1 or 2 arguments".to_string(),
+                ))
+            }
+        };
+
+        // Tokenize the document into lexemes with positions
+        let tokens = self.tokenize_text(&document, &config);
+        let tsvector_str = tokens
+            .iter()
+            .map(|(lexeme, positions)| {
+                let pos_str: Vec<String> = positions.iter().map(|p| p.to_string()).collect();
+                format!("'{}':{}",lexeme, pos_str.join(","))
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        Ok(SqlValue::Text(tsvector_str))
+    }
+
+    /// to_tsquery([ config, ] querytext) - convert query to tsquery
+    fn evaluate_to_tsquery(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        let (config, query) = match args.len() {
+            1 => ("english".to_string(), self.sqlvalue_to_string(&args[0])?),
+            2 => (
+                self.sqlvalue_to_string(&args[0])?,
+                self.sqlvalue_to_string(&args[1])?,
+            ),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "to_tsquery() requires 1 or 2 arguments".to_string(),
+                ))
+            }
+        };
+
+        // Parse the query - supports & (AND), | (OR), ! (NOT) operators
+        let normalized = self.normalize_tsquery(&query, &config);
+        Ok(SqlValue::Text(normalized))
+    }
+
+    /// plainto_tsquery([ config, ] querytext) - convert plain text to tsquery (words joined with &)
+    fn evaluate_plainto_tsquery(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        let (config, query) = match args.len() {
+            1 => ("english".to_string(), self.sqlvalue_to_string(&args[0])?),
+            2 => (
+                self.sqlvalue_to_string(&args[0])?,
+                self.sqlvalue_to_string(&args[1])?,
+            ),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "plainto_tsquery() requires 1 or 2 arguments".to_string(),
+                ))
+            }
+        };
+
+        // Plain text: split by whitespace and join with &
+        let words: Vec<String> = query
+            .split_whitespace()
+            .map(|w| self.stem_word(w, &config))
+            .filter(|w| !w.is_empty())
+            .collect();
+
+        let tsquery = if words.is_empty() {
+            String::new()
+        } else {
+            words
+                .iter()
+                .map(|w| format!("'{}'", w))
+                .collect::<Vec<_>>()
+                .join(" & ")
+        };
+
+        Ok(SqlValue::Text(tsquery))
+    }
+
+    /// phraseto_tsquery([ config, ] querytext) - convert phrase to tsquery (with <-> proximity)
+    fn evaluate_phraseto_tsquery(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        let (config, query) = match args.len() {
+            1 => ("english".to_string(), self.sqlvalue_to_string(&args[0])?),
+            2 => (
+                self.sqlvalue_to_string(&args[0])?,
+                self.sqlvalue_to_string(&args[1])?,
+            ),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "phraseto_tsquery() requires 1 or 2 arguments".to_string(),
+                ))
+            }
+        };
+
+        // Phrase: split by whitespace and join with <-> (FOLLOWED BY operator)
+        let words: Vec<String> = query
+            .split_whitespace()
+            .map(|w| self.stem_word(w, &config))
+            .filter(|w| !w.is_empty())
+            .collect();
+
+        let tsquery = if words.is_empty() {
+            String::new()
+        } else {
+            words
+                .iter()
+                .map(|w| format!("'{}'", w))
+                .collect::<Vec<_>>()
+                .join(" <-> ")
+        };
+
+        Ok(SqlValue::Text(tsquery))
+    }
+
+    /// websearch_to_tsquery([ config, ] querytext) - convert web search syntax to tsquery
+    fn evaluate_websearch_to_tsquery(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        let (config, query) = match args.len() {
+            1 => ("english".to_string(), self.sqlvalue_to_string(&args[0])?),
+            2 => (
+                self.sqlvalue_to_string(&args[0])?,
+                self.sqlvalue_to_string(&args[1])?,
+            ),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "websearch_to_tsquery() requires 1 or 2 arguments".to_string(),
+                ))
+            }
+        };
+
+        // Web search syntax:
+        // - unquoted words are ANDed
+        // - "quoted text" creates phrases
+        // - -word excludes that word
+        // - or between words creates OR
+
+        let mut result_parts: Vec<String> = Vec::new();
+        let mut chars = query.chars().peekable();
+        let mut current_word = String::new();
+        let mut in_quotes = false;
+        let mut negate_next = false;
+
+        while let Some(c) = chars.next() {
+            match c {
+                '"' => {
+                    if in_quotes {
+                        // End of quoted phrase
+                        if !current_word.is_empty() {
+                            let phrase_words: Vec<String> = current_word
+                                .split_whitespace()
+                                .map(|w| self.stem_word(w, &config))
+                                .filter(|w| !w.is_empty())
+                                .collect();
+                            if !phrase_words.is_empty() {
+                                let phrase = phrase_words
+                                    .iter()
+                                    .map(|w| format!("'{}'", w))
+                                    .collect::<Vec<_>>()
+                                    .join(" <-> ");
+                                let part = if negate_next {
+                                    format!("!({})", phrase)
+                                } else {
+                                    format!("({})", phrase)
+                                };
+                                result_parts.push(part);
+                                negate_next = false;
+                            }
+                            current_word.clear();
+                        }
+                        in_quotes = false;
+                    } else {
+                        in_quotes = true;
+                    }
+                }
+                '-' if !in_quotes && current_word.is_empty() => {
+                    negate_next = true;
+                }
+                ' ' if !in_quotes => {
+                    if !current_word.is_empty() {
+                        let lower = current_word.to_lowercase();
+                        if lower == "or" {
+                            // Replace last AND with OR if present
+                            if !result_parts.is_empty() {
+                                // Mark next item for OR
+                                result_parts.push("|".to_string());
+                            }
+                        } else {
+                            let stemmed = self.stem_word(&current_word, &config);
+                            if !stemmed.is_empty() {
+                                let part = if negate_next {
+                                    format!("!'{}'", stemmed)
+                                } else {
+                                    format!("'{}'", stemmed)
+                                };
+                                result_parts.push(part);
+                                negate_next = false;
+                            }
+                        }
+                        current_word.clear();
+                    }
+                }
+                _ => {
+                    current_word.push(c);
+                }
+            }
+        }
+
+        // Handle trailing word
+        if !current_word.is_empty() {
+            let stemmed = self.stem_word(&current_word, &config);
+            if !stemmed.is_empty() {
+                let part = if negate_next {
+                    format!("!'{}'", stemmed)
+                } else {
+                    format!("'{}'", stemmed)
+                };
+                result_parts.push(part);
+            }
+        }
+
+        // Join parts with appropriate operators
+        let mut final_parts: Vec<String> = Vec::new();
+        let mut use_or = false;
+
+        for part in result_parts {
+            if part == "|" {
+                use_or = true;
+            } else {
+                if !final_parts.is_empty() {
+                    if use_or {
+                        final_parts.push(" | ".to_string());
+                        use_or = false;
+                    } else {
+                        final_parts.push(" & ".to_string());
+                    }
+                }
+                final_parts.push(part);
+            }
+        }
+
+        Ok(SqlValue::Text(final_parts.join("")))
+    }
+
+    /// setweight(tsvector, weight [, lexemes]) - assign weight to lexemes
+    fn evaluate_setweight(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(ProtocolError::PostgresError(
+                "setweight() requires 2 or 3 arguments".to_string(),
+            ));
+        }
+
+        let tsvector = self.sqlvalue_to_string(&args[0])?;
+        let weight = self.sqlvalue_to_string(&args[1])?;
+
+        // Validate weight
+        let weight_char = weight.chars().next().unwrap_or('D');
+        if !['A', 'B', 'C', 'D'].contains(&weight_char.to_ascii_uppercase()) {
+            return Err(ProtocolError::PostgresError(
+                "weight must be A, B, C, or D".to_string(),
+            ));
+        }
+
+        // Parse tsvector and add weight
+        let weighted = self.add_weight_to_tsvector(&tsvector, weight_char.to_ascii_uppercase());
+
+        Ok(SqlValue::Text(weighted))
+    }
+
+    /// ts_rank([weights,] vector, query [, normalization]) - rank document for query
+    fn evaluate_ts_rank(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.is_empty() || args.len() > 4 {
+            return Err(ProtocolError::PostgresError(
+                "ts_rank() requires 2 to 4 arguments".to_string(),
+            ));
+        }
+
+        let (vector, query) = if args.len() >= 2 {
+            (
+                self.sqlvalue_to_string(&args[args.len() - 2])?,
+                self.sqlvalue_to_string(&args[args.len() - 1])?,
+            )
+        } else {
+            return Err(ProtocolError::PostgresError(
+                "ts_rank() requires at least vector and query arguments".to_string(),
+            ));
+        };
+
+        // Calculate rank based on matching terms
+        let rank = self.calculate_ts_rank(&vector, &query, false);
+
+        Ok(SqlValue::DoublePrecision(rank))
+    }
+
+    /// ts_rank_cd([weights,] vector, query [, normalization]) - cover density rank
+    fn evaluate_ts_rank_cd(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.is_empty() || args.len() > 4 {
+            return Err(ProtocolError::PostgresError(
+                "ts_rank_cd() requires 2 to 4 arguments".to_string(),
+            ));
+        }
+
+        let (vector, query) = if args.len() >= 2 {
+            (
+                self.sqlvalue_to_string(&args[args.len() - 2])?,
+                self.sqlvalue_to_string(&args[args.len() - 1])?,
+            )
+        } else {
+            return Err(ProtocolError::PostgresError(
+                "ts_rank_cd() requires at least vector and query arguments".to_string(),
+            ));
+        };
+
+        // Calculate cover density rank
+        let rank = self.calculate_ts_rank(&vector, &query, true);
+
+        Ok(SqlValue::DoublePrecision(rank))
+    }
+
+    /// ts_headline([config,] document, query [, options]) - display search result with highlights
+    fn evaluate_ts_headline(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 || args.len() > 4 {
+            return Err(ProtocolError::PostgresError(
+                "ts_headline() requires 2 to 4 arguments".to_string(),
+            ));
+        }
+
+        let (document, query) = if args.len() == 2 {
+            (
+                self.sqlvalue_to_string(&args[0])?,
+                self.sqlvalue_to_string(&args[1])?,
+            )
+        } else {
+            (
+                self.sqlvalue_to_string(&args[1])?,
+                self.sqlvalue_to_string(&args[2])?,
+            )
+        };
+
+        // Extract query terms
+        let query_terms = self.extract_query_terms(&query);
+
+        // Highlight matching terms with <b>...</b>
+        let highlighted = self.highlight_text(&document, &query_terms, "<b>", "</b>");
+
+        Ok(SqlValue::Text(highlighted))
+    }
+
+    /// tsvector || tsvector - concatenate tsvectors
+    fn evaluate_tsvector_concat(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "tsvector concatenation requires 2 arguments".to_string(),
+            ));
+        }
+
+        let vec1 = self.sqlvalue_to_string(&args[0])?;
+        let vec2 = self.sqlvalue_to_string(&args[1])?;
+
+        // Parse and merge tsvectors
+        let merged = self.merge_tsvectors(&vec1, &vec2);
+
+        Ok(SqlValue::Text(merged))
+    }
+
+    /// numnode(tsquery) - number of nodes in tsquery
+    fn evaluate_numnode(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "numnode() requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        let query = self.sqlvalue_to_string(&args[0])?;
+
+        // Count nodes in query (terms and operators)
+        let count = self.count_query_nodes(&query);
+
+        Ok(SqlValue::Integer(count))
+    }
+
+    /// querytree(tsquery) - display query tree
+    fn evaluate_querytree(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "querytree() requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        let query = self.sqlvalue_to_string(&args[0])?;
+
+        // Return the normalized query tree representation
+        Ok(SqlValue::Text(query))
+    }
+
+    /// strip(tsvector) - remove positions and weights
+    fn evaluate_strip(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "strip() requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        let tsvector = self.sqlvalue_to_string(&args[0])?;
+
+        // Remove positions and weights, keep only lexemes
+        let stripped = self.strip_tsvector(&tsvector);
+
+        Ok(SqlValue::Text(stripped))
+    }
+
+    /// ts_lexize(dict, token) - test dictionary on token
+    fn evaluate_ts_lexize(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ts_lexize() requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        let _dict = self.sqlvalue_to_string(&args[0])?;
+        let token = self.sqlvalue_to_string(&args[1])?;
+
+        // For now, return a simple array with the lowercased, stemmed token
+        let stemmed = self.stem_word(&token, "english");
+        let result = format!("{{{}}}", stemmed);
+
+        Ok(SqlValue::Text(result))
+    }
+
+    /// ts_parse(parser, document) - test parser
+    fn evaluate_ts_parse(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ts_parse() requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        let _parser = self.sqlvalue_to_string(&args[0])?;
+        let document = self.sqlvalue_to_string(&args[1])?;
+
+        // Return tokens as a set of (tokid, token) pairs
+        let tokens: Vec<String> = document
+            .split_whitespace()
+            .enumerate()
+            .map(|(i, token)| format!("({},\"{}\")", i + 1, token))
+            .collect();
+
+        Ok(SqlValue::Text(format!("{{{}}}", tokens.join(","))))
+    }
+
+    /// ts_token_type(parser) - get token types for parser
+    fn evaluate_ts_token_type(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "ts_token_type() requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        // Return common token types
+        let token_types = vec![
+            "(1,\"asciiword\",\"Word, all ASCII\")",
+            "(2,\"word\",\"Word, all letters\")",
+            "(3,\"numword\",\"Word, letters and digits\")",
+            "(4,\"email\",\"Email address\")",
+            "(5,\"url\",\"URL\")",
+            "(6,\"host\",\"Host\")",
+            "(7,\"sfloat\",\"Scientific notation\")",
+            "(8,\"version\",\"Version number\")",
+            "(9,\"hword_numpart\",\"Hyphenated word part, letters and digits\")",
+            "(10,\"hword_part\",\"Hyphenated word part, all letters\")",
+            "(11,\"hword_asciipart\",\"Hyphenated word part, all ASCII\")",
+            "(12,\"blank\",\"Space symbols\")",
+            "(13,\"tag\",\"XML tag\")",
+            "(14,\"protocol\",\"Protocol head\")",
+            "(15,\"numhword\",\"Hyphenated word, letters and digits\")",
+            "(16,\"asciihword\",\"Hyphenated word, all ASCII\")",
+            "(17,\"hword\",\"Hyphenated word, all letters\")",
+            "(18,\"url_path\",\"URL path\")",
+            "(19,\"file\",\"File or path name\")",
+            "(20,\"float\",\"Decimal notation\")",
+            "(21,\"int\",\"Signed integer\")",
+            "(22,\"uint\",\"Unsigned integer\")",
+            "(23,\"entity\",\"XML entity\")",
+        ];
+
+        Ok(SqlValue::Text(format!("{{{}}}", token_types.join(","))))
+    }
+
+    /// get_current_ts_config() - get default text search configuration
+    fn evaluate_get_current_ts_config(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if !args.is_empty() {
+            return Err(ProtocolError::PostgresError(
+                "get_current_ts_config() takes no arguments".to_string(),
+            ));
+        }
+
+        // Return the default text search configuration
+        Ok(SqlValue::Text("english".to_string()))
+    }
+
+    /// array_to_tsvector(text[]) - convert array to tsvector
+    fn evaluate_array_to_tsvector(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "array_to_tsvector() requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        let array_str = self.sqlvalue_to_string(&args[0])?;
+
+        // Parse array {word1,word2,...} format
+        let cleaned = array_str.trim_matches(|c| c == '{' || c == '}');
+        let words: Vec<&str> = cleaned.split(',').map(|s| s.trim().trim_matches('"')).collect();
+
+        // Create tsvector with positions
+        let tsvector = words
+            .iter()
+            .enumerate()
+            .map(|(i, word)| format!("'{}':{}",word.to_lowercase(), i + 1))
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        Ok(SqlValue::Text(tsvector))
+    }
+
+    /// tsvector_to_array(tsvector) - convert tsvector to array
+    fn evaluate_tsvector_to_array(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "tsvector_to_array() requires exactly 1 argument".to_string(),
+            ));
+        }
+
+        let tsvector = self.sqlvalue_to_string(&args[0])?;
+
+        // Extract lexemes from tsvector
+        let lexemes: Vec<String> = tsvector
+            .split_whitespace()
+            .filter_map(|part| {
+                if let Some(pos) = part.find(':') {
+                    Some(part[..pos].trim_matches('\'').to_string())
+                } else {
+                    Some(part.trim_matches('\'').to_string())
+                }
+            })
+            .collect();
+
+        let array_str = format!("{{{}}}", lexemes.join(","));
+        Ok(SqlValue::Text(array_str))
+    }
+
+    /// ts_delete(tsvector, lexeme) / ts_delete(tsvector, lexeme[]) - remove lexemes
+    fn evaluate_ts_delete(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ts_delete() requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        let tsvector = self.sqlvalue_to_string(&args[0])?;
+        let to_delete = self.sqlvalue_to_string(&args[1])?;
+
+        // Parse lexemes to delete
+        let delete_set: std::collections::HashSet<String> = if to_delete.starts_with('{') {
+            to_delete
+                .trim_matches(|c| c == '{' || c == '}')
+                .split(',')
+                .map(|s| s.trim().trim_matches('"').to_lowercase())
+                .collect()
+        } else {
+            std::iter::once(to_delete.to_lowercase()).collect()
+        };
+
+        // Filter tsvector
+        let filtered: Vec<&str> = tsvector
+            .split_whitespace()
+            .filter(|part| {
+                let lexeme = if let Some(pos) = part.find(':') {
+                    part[..pos].trim_matches('\'')
+                } else {
+                    part.trim_matches('\'')
+                };
+                !delete_set.contains(&lexeme.to_lowercase())
+            })
+            .collect();
+
+        Ok(SqlValue::Text(filtered.join(" ")))
+    }
+
+    /// ts_filter(tsvector, weights) - filter tsvector by weights
+    fn evaluate_ts_filter(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "ts_filter() requires exactly 2 arguments".to_string(),
+            ));
+        }
+
+        let tsvector = self.sqlvalue_to_string(&args[0])?;
+        let weights = self.sqlvalue_to_string(&args[1])?;
+
+        // Parse weight filter
+        let allowed_weights: std::collections::HashSet<char> = weights
+            .trim_matches(|c| c == '{' || c == '}')
+            .chars()
+            .filter(|c| ['A', 'B', 'C', 'D'].contains(&c.to_ascii_uppercase()))
+            .map(|c| c.to_ascii_uppercase())
+            .collect();
+
+        // Filter tsvector by weights (if no weights specified, keep all D weight entries)
+        let filtered: Vec<&str> = tsvector
+            .split_whitespace()
+            .filter(|part| {
+                // Check if this entry has a matching weight
+                if let Some(colon_pos) = part.find(':') {
+                    let after_colon = &part[colon_pos + 1..];
+                    // Look for weight letter at end of positions
+                    for c in after_colon.chars() {
+                        if ['A', 'B', 'C', 'D'].contains(&c.to_ascii_uppercase()) {
+                            return allowed_weights.contains(&c.to_ascii_uppercase());
+                        }
+                    }
+                    // No explicit weight means D
+                    allowed_weights.contains(&'D')
+                } else {
+                    allowed_weights.contains(&'D')
+                }
+            })
+            .collect();
+
+        Ok(SqlValue::Text(filtered.join(" ")))
+    }
+
+    /// tsquery_phrase(query1, query2 [, distance]) - create phrase query
+    fn evaluate_tsquery_phrase(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(ProtocolError::PostgresError(
+                "tsquery_phrase() requires 2 or 3 arguments".to_string(),
+            ));
+        }
+
+        let query1 = self.sqlvalue_to_string(&args[0])?;
+        let query2 = self.sqlvalue_to_string(&args[1])?;
+
+        let distance = if args.len() == 3 {
+            match &args[2] {
+                SqlValue::Integer(n) => *n as usize,
+                _ => 1,
+            }
+        } else {
+            1
+        };
+
+        // Create phrase query with distance operator
+        let phrase = if distance == 1 {
+            format!("{} <-> {}", query1, query2)
+        } else {
+            format!("{} <{}> {}", query1, distance, query2)
+        };
+
+        Ok(SqlValue::Text(phrase))
+    }
+
+    // ===== FTS Helper Functions =====
+
+    /// Tokenize text into lexemes with positions
+    fn tokenize_text(&self, text: &str, config: &str) -> Vec<(String, Vec<u32>)> {
+        let mut tokens: std::collections::HashMap<String, Vec<u32>> =
+            std::collections::HashMap::new();
+
+        for (pos, word) in text.split_whitespace().enumerate() {
+            let lexeme = self.stem_word(word, config);
+            if !lexeme.is_empty() {
+                tokens
+                    .entry(lexeme)
+                    .or_insert_with(Vec::new)
+                    .push((pos + 1) as u32);
+            }
+        }
+
+        let mut result: Vec<(String, Vec<u32>)> = tokens.into_iter().collect();
+        result.sort_by(|a, b| a.0.cmp(&b.0));
+        result
+    }
+
+    /// Simple word stemming (lowercase + basic suffix removal)
+    fn stem_word(&self, word: &str, _config: &str) -> String {
+        let lower = word
+            .to_lowercase()
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect::<String>();
+
+        // Very basic Porter-style stemming for common suffixes
+        let stemmed = if lower.ends_with("ies") && lower.len() > 4 {
+            format!("{}y", &lower[..lower.len() - 3])
+        } else if lower.ends_with("es") && lower.len() > 3 {
+            lower[..lower.len() - 2].to_string()
+        } else if lower.ends_with("s") && lower.len() > 2 && !lower.ends_with("ss") {
+            lower[..lower.len() - 1].to_string()
+        } else if lower.ends_with("ing") && lower.len() > 5 {
+            lower[..lower.len() - 3].to_string()
+        } else if lower.ends_with("ed") && lower.len() > 4 {
+            lower[..lower.len() - 2].to_string()
+        } else {
+            lower
+        };
+
+        stemmed
+    }
+
+    /// Normalize tsquery string
+    fn normalize_tsquery(&self, query: &str, config: &str) -> String {
+        // Parse and normalize query operators
+        let mut result = String::new();
+        let mut in_word = false;
+        let mut current_word = String::new();
+
+        for c in query.chars() {
+            match c {
+                '&' | '|' | '!' | '(' | ')' | '<' | '>' => {
+                    if !current_word.is_empty() {
+                        let stemmed = self.stem_word(&current_word, config);
+                        if !stemmed.is_empty() {
+                            result.push_str(&format!("'{}'", stemmed));
+                        }
+                        current_word.clear();
+                    }
+                    result.push(' ');
+                    result.push(c);
+                    result.push(' ');
+                    in_word = false;
+                }
+                ' ' | '\t' | '\n' => {
+                    if !current_word.is_empty() {
+                        let stemmed = self.stem_word(&current_word, config);
+                        if !stemmed.is_empty() {
+                            result.push_str(&format!("'{}'", stemmed));
+                        }
+                        current_word.clear();
+                    }
+                    in_word = false;
+                }
+                '\'' => {
+                    // Skip quotes
+                }
+                _ => {
+                    if !in_word && !result.is_empty() && !result.ends_with(' ') {
+                        result.push(' ');
+                    }
+                    current_word.push(c);
+                    in_word = true;
+                }
+            }
+        }
+
+        if !current_word.is_empty() {
+            let stemmed = self.stem_word(&current_word, config);
+            if !stemmed.is_empty() {
+                result.push_str(&format!("'{}'", stemmed));
+            }
+        }
+
+        // Clean up extra spaces
+        result.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    /// Add weight to tsvector lexemes
+    fn add_weight_to_tsvector(&self, tsvector: &str, weight: char) -> String {
+        tsvector
+            .split_whitespace()
+            .map(|part| {
+                if let Some(colon_pos) = part.find(':') {
+                    // Replace or add weight to positions
+                    let lexeme = &part[..colon_pos];
+                    let positions = &part[colon_pos + 1..];
+                    let new_positions: Vec<String> = positions
+                        .split(',')
+                        .map(|p| {
+                            let num: String = p.chars().take_while(|c| c.is_numeric()).collect();
+                            format!("{}{}", num, weight)
+                        })
+                        .collect();
+                    format!("{}:{}", lexeme, new_positions.join(","))
+                } else {
+                    format!("{}:{}", part, weight)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// Calculate ts_rank score
+    fn calculate_ts_rank(&self, vector: &str, query: &str, cover_density: bool) -> f64 {
+        let query_terms = self.extract_query_terms(query);
+        if query_terms.is_empty() {
+            return 0.0;
+        }
+
+        // Parse tsvector
+        let mut matches = 0;
+        let mut total_positions = 0;
+        let mut min_pos = u32::MAX;
+        let mut max_pos = 0u32;
+
+        for part in vector.split_whitespace() {
+            if let Some(colon_pos) = part.find(':') {
+                let lexeme = part[..colon_pos].trim_matches('\'').to_lowercase();
+                let positions: Vec<u32> = part[colon_pos + 1..]
+                    .split(',')
+                    .filter_map(|p| p.chars().take_while(|c| c.is_numeric()).collect::<String>().parse().ok())
+                    .collect();
+
+                if query_terms.contains(&lexeme) {
+                    matches += 1;
+                    for pos in &positions {
+                        total_positions += 1;
+                        min_pos = min_pos.min(*pos);
+                        max_pos = max_pos.max(*pos);
+                    }
+                }
+            }
+        }
+
+        if matches == 0 {
+            return 0.0;
+        }
+
+        if cover_density && max_pos > min_pos {
+            // Cover density: favor documents where matching terms are close together
+            let span = (max_pos - min_pos + 1) as f64;
+            (matches as f64 * total_positions as f64) / span
+        } else {
+            // Standard rank: based on term frequency
+            matches as f64 / query_terms.len() as f64
+        }
+    }
+
+    /// Extract query terms from tsquery
+    fn extract_query_terms(&self, query: &str) -> std::collections::HashSet<String> {
+        query
+            .split(|c: char| !c.is_alphanumeric() && c != '\'')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.trim_matches('\'').to_lowercase())
+            .filter(|s| !s.is_empty() && s != "and" && s != "or" && s != "not")
+            .collect()
+    }
+
+    /// Highlight matching terms in text
+    fn highlight_text(&self, text: &str, terms: &std::collections::HashSet<String>, start_tag: &str, end_tag: &str) -> String {
+        let words: Vec<&str> = text.split_whitespace().collect();
+        let highlighted: Vec<String> = words
+            .iter()
+            .map(|word| {
+                let clean = word.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect::<String>();
+                if terms.contains(&clean) {
+                    format!("{}{}{}", start_tag, word, end_tag)
+                } else {
+                    word.to_string()
+                }
+            })
+            .collect();
+        highlighted.join(" ")
+    }
+
+    /// Merge two tsvectors
+    fn merge_tsvectors(&self, vec1: &str, vec2: &str) -> String {
+        let mut lexemes: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+
+        for part in vec1.split_whitespace().chain(vec2.split_whitespace()) {
+            if let Some(colon_pos) = part.find(':') {
+                let lexeme = part[..colon_pos].to_string();
+                let positions = part[colon_pos + 1..].to_string();
+                lexemes
+                    .entry(lexeme)
+                    .or_insert_with(Vec::new)
+                    .push(positions);
+            }
+        }
+
+        let mut result: Vec<String> = lexemes
+            .into_iter()
+            .map(|(lexeme, positions)| format!("{}:{}", lexeme, positions.join(",")))
+            .collect();
+
+        result.sort();
+        result.join(" ")
+    }
+
+    /// Count nodes in tsquery
+    fn count_query_nodes(&self, query: &str) -> i32 {
+        let mut count = 0;
+        let mut in_word = false;
+
+        for c in query.chars() {
+            match c {
+                '&' | '|' | '!' => count += 1,
+                '\'' => {
+                    if !in_word {
+                        count += 1;
+                        in_word = true;
+                    } else {
+                        in_word = false;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        count.max(1)
+    }
+
+    /// Strip positions and weights from tsvector
+    fn strip_tsvector(&self, tsvector: &str) -> String {
+        tsvector
+            .split_whitespace()
+            .map(|part| {
+                if let Some(colon_pos) = part.find(':') {
+                    part[..colon_pos].to_string()
+                } else {
+                    part.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// Convert SqlValue to String for FTS functions
+    fn sqlvalue_to_string(&self, value: &SqlValue) -> ProtocolResult<String> {
+        match value {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => Ok(s.clone()),
+            SqlValue::Null => Ok(String::new()),
+            other => Ok(format!("{:?}", other)),
+        }
+    }
+
+    // ===== Text Search Operators =====
+
+    /// @@ operator: tsvector matches tsquery
+    fn text_search_match(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            (SqlValue::Tsvector(vec), SqlValue::Tsquery(query))
+            | (SqlValue::Tsquery(query), SqlValue::Tsvector(vec)) => {
+                // Check if tsvector matches tsquery
+                let vec_lexemes: std::collections::HashSet<String> =
+                    vec.iter().map(|e| e.lexeme.to_lowercase()).collect();
+
+                // Parse query terms from tsquery string
+                let query_terms = self.extract_query_terms(query);
+
+                // Simple match: check if any query term is in vector
+                let matches = query_terms.iter().any(|term| vec_lexemes.contains(term));
+                Ok(SqlValue::Boolean(matches))
+            }
+            (SqlValue::Text(tsvec), SqlValue::Text(tsquery))
+            | (SqlValue::Varchar(tsvec), SqlValue::Text(tsquery))
+            | (SqlValue::Text(tsvec), SqlValue::Varchar(tsquery)) => {
+                // String-based comparison
+                let vec_terms = self.extract_tsvector_lexemes(tsvec);
+                let query_terms = self.extract_query_terms(tsquery);
+
+                let matches = query_terms.iter().any(|term| vec_terms.contains(term));
+                Ok(SqlValue::Boolean(matches))
+            }
+            _ => Err(ProtocolError::PostgresError(
+                "@@ operator requires tsvector and tsquery arguments".to_string(),
+            )),
+        }
+    }
+
+    /// @> operator: tsquery contains tsquery
+    fn text_search_contains(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            (SqlValue::Tsquery(left_q), SqlValue::Tsquery(right_q)) => {
+                let left_terms = self.extract_query_terms(left_q);
+                let right_terms = self.extract_query_terms(right_q);
+
+                // Left contains right if all right terms are in left
+                let contains = right_terms.iter().all(|term| left_terms.contains(term));
+                Ok(SqlValue::Boolean(contains))
+            }
+            (SqlValue::Text(left_s), SqlValue::Text(right_s)) => {
+                let left_terms = self.extract_query_terms(left_s);
+                let right_terms = self.extract_query_terms(right_s);
+
+                let contains = right_terms.iter().all(|term| left_terms.contains(term));
+                Ok(SqlValue::Boolean(contains))
+            }
+            _ => Err(ProtocolError::PostgresError(
+                "@> text search operator requires tsquery arguments".to_string(),
+            )),
+        }
+    }
+
+    /// <@ operator: tsquery is contained by tsquery
+    fn text_search_contained_by(
+        &self,
+        left: &SqlValue,
+        right: &SqlValue,
+    ) -> ProtocolResult<SqlValue> {
+        // Reverse of contains
+        self.text_search_contains(right, left)
+    }
+
+    /// || operator: concatenate tsvectors or tsqueries
+    fn text_search_concat(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Null, other) | (other, SqlValue::Null) => Ok(other.clone()),
+            (SqlValue::Tsvector(vec1), SqlValue::Tsvector(vec2)) => {
+                // Merge tsvectors
+                let mut merged = vec1.clone();
+                merged.extend(vec2.clone());
+                Ok(SqlValue::Tsvector(merged))
+            }
+            (SqlValue::Tsquery(q1), SqlValue::Tsquery(q2)) => {
+                // OR the tsqueries together
+                let combined = format!("{} | {}", q1, q2);
+                Ok(SqlValue::Tsquery(combined))
+            }
+            (SqlValue::Text(t1), SqlValue::Text(t2)) => {
+                // Concatenate as tsvector strings
+                let merged = self.merge_tsvectors(t1, t2);
+                Ok(SqlValue::Text(merged))
+            }
+            _ => Err(ProtocolError::PostgresError(
+                "|| text search operator requires tsvector or tsquery arguments".to_string(),
+            )),
+        }
+    }
+
+    /// && operator: AND tsqueries
+    fn text_search_and(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            (SqlValue::Tsquery(q1), SqlValue::Tsquery(q2)) => {
+                let combined = format!("{} & {}", q1, q2);
+                Ok(SqlValue::Tsquery(combined))
+            }
+            (SqlValue::Text(t1), SqlValue::Text(t2)) => {
+                let combined = format!("{} & {}", t1, t2);
+                Ok(SqlValue::Text(combined))
+            }
+            _ => Err(ProtocolError::PostgresError(
+                "&& text search operator requires tsquery arguments".to_string(),
+            )),
+        }
+    }
+
+    /// !! operator: negate tsquery
+    fn text_search_not(&self, left: &SqlValue, _right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match left {
+            SqlValue::Null => Ok(SqlValue::Null),
+            SqlValue::Tsquery(q) => {
+                let negated = format!("!{}", q);
+                Ok(SqlValue::Tsquery(negated))
+            }
+            SqlValue::Text(t) => {
+                let negated = format!("!{}", t);
+                Ok(SqlValue::Text(negated))
+            }
+            _ => Err(ProtocolError::PostgresError(
+                "!! text search operator requires tsquery argument".to_string(),
+            )),
+        }
+    }
+
+    /// <-> operator: phrase search (followed by)
+    fn text_search_followed_by(
+        &self,
+        left: &SqlValue,
+        right: &SqlValue,
+    ) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            (SqlValue::Tsquery(q1), SqlValue::Tsquery(q2)) => {
+                let phrase = format!("{} <-> {}", q1, q2);
+                Ok(SqlValue::Tsquery(phrase))
+            }
+            (SqlValue::Text(t1), SqlValue::Text(t2)) => {
+                let phrase = format!("{} <-> {}", t1, t2);
+                Ok(SqlValue::Text(phrase))
+            }
+            _ => Err(ProtocolError::PostgresError(
+                "<-> text search operator requires tsquery arguments".to_string(),
+            )),
+        }
+    }
+
+    /// Extract lexemes from tsvector string
+    fn extract_tsvector_lexemes(&self, tsvector: &str) -> std::collections::HashSet<String> {
+        tsvector
+            .split_whitespace()
+            .map(|part| {
+                if let Some(colon_pos) = part.find(':') {
+                    part[..colon_pos].trim_matches('\'').to_lowercase()
+                } else {
+                    part.trim_matches('\'').to_lowercase()
+                }
+            })
+            .filter(|s| !s.is_empty())
+            .collect()
     }
 }
 

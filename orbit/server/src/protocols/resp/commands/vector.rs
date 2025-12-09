@@ -66,10 +66,182 @@ struct StoredVector {
     metadata: HashMap<String, String>,
 }
 
+/// Full-text search field schema
+#[derive(Debug, Clone)]
+pub struct FtsFieldSchema {
+    pub name: String,
+    pub field_type: FtsFieldType,
+    pub sortable: bool,
+    pub noindex: bool,
+}
+
+/// FTS field types (RediSearch compatible)
+#[derive(Debug, Clone, PartialEq)]
+pub enum FtsFieldType {
+    Text { weight: f32, nostem: bool },
+    Tag { separator: char },
+    Numeric,
+    Geo,
+    Vector { dim: usize, metric: DistanceMetric },
+}
+
+/// Stored document for full-text search
+#[derive(Debug, Clone)]
+struct StoredDocument {
+    #[allow(dead_code)]
+    id: String,
+    fields: HashMap<String, String>,
+    #[allow(dead_code)]
+    score: f32,
+}
+
+/// Text index for full-text search
+struct TextIndex {
+    /// Inverted index: term -> [(doc_id, positions, field_weight)]
+    inverted_index: HashMap<String, Vec<(String, Vec<usize>, f32)>>,
+    /// Document store
+    documents: HashMap<String, StoredDocument>,
+    /// Field schemas
+    schema: Vec<FtsFieldSchema>,
+}
+
+impl TextIndex {
+    fn new(schema: Vec<FtsFieldSchema>) -> Self {
+        Self {
+            inverted_index: HashMap::new(),
+            documents: HashMap::new(),
+            schema,
+        }
+    }
+
+    /// Tokenize text into terms
+    fn tokenize(&self, text: &str) -> Vec<String> {
+        text.to_lowercase()
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|s| !s.is_empty() && s.len() > 1)
+            .map(|s| self.stem_word(s))
+            .collect()
+    }
+
+    /// Simple stemming (basic suffix removal)
+    fn stem_word(&self, word: &str) -> String {
+        let w = word.to_lowercase();
+        if w.ends_with("ing") && w.len() > 5 {
+            w[..w.len() - 3].to_string()
+        } else if w.ends_with("ed") && w.len() > 4 {
+            w[..w.len() - 2].to_string()
+        } else if w.ends_with("s") && w.len() > 3 && !w.ends_with("ss") {
+            w[..w.len() - 1].to_string()
+        } else {
+            w
+        }
+    }
+
+    /// Add document to text index
+    fn add_document(&mut self, id: &str, fields: HashMap<String, String>) {
+        // Index each text field
+        for schema_field in &self.schema {
+            if let FtsFieldType::Text { weight, nostem } = &schema_field.field_type {
+                if let Some(value) = fields.get(&schema_field.name) {
+                    let terms = if *nostem {
+                        value
+                            .to_lowercase()
+                            .split_whitespace()
+                            .map(|s| s.to_string())
+                            .collect()
+                    } else {
+                        self.tokenize(value)
+                    };
+
+                    for (pos, term) in terms.iter().enumerate() {
+                        self.inverted_index
+                            .entry(term.clone())
+                            .or_insert_with(Vec::new)
+                            .push((id.to_string(), vec![pos], *weight));
+                    }
+                }
+            }
+        }
+
+        // Store document
+        self.documents.insert(
+            id.to_string(),
+            StoredDocument {
+                id: id.to_string(),
+                fields,
+                score: 1.0,
+            },
+        );
+    }
+
+    /// Delete document from text index
+    fn delete_document(&mut self, id: &str) -> bool {
+        if self.documents.remove(id).is_some() {
+            // Remove from inverted index
+            for postings in self.inverted_index.values_mut() {
+                postings.retain(|(doc_id, _, _)| doc_id != id);
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Search text index with query
+    fn search(&self, query: &str, limit: usize, offset: usize) -> Vec<(String, f32, HashMap<String, String>)> {
+        let query_terms = self.tokenize(query);
+        if query_terms.is_empty() {
+            return vec![];
+        }
+
+        // Calculate TF-IDF scores for each document
+        let mut doc_scores: HashMap<String, f32> = HashMap::new();
+        let num_docs = self.documents.len() as f32;
+
+        for term in &query_terms {
+            if let Some(postings) = self.inverted_index.get(term) {
+                // IDF = log(N / df)
+                let idf = (num_docs / postings.len() as f32).ln().max(0.0) + 1.0;
+
+                for (doc_id, positions, field_weight) in postings {
+                    // TF = number of occurrences
+                    let tf = positions.len() as f32;
+                    let score = tf * idf * field_weight;
+
+                    *doc_scores.entry(doc_id.clone()).or_insert(0.0) += score;
+                }
+            }
+        }
+
+        // Sort by score
+        let mut results: Vec<(String, f32)> = doc_scores.into_iter().collect();
+        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Apply offset and limit, return with fields
+        results
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .filter_map(|(id, score)| {
+                self.documents
+                    .get(&id)
+                    .map(|doc| (id, score, doc.fields.clone()))
+            })
+            .collect()
+    }
+
+    /// Get document count
+    fn doc_count(&self) -> usize {
+        self.documents.len()
+    }
+}
+
 /// Vector index storage
 struct VectorIndex {
     config: VectorIndexConfig,
     vectors: HashMap<String, StoredVector>,
+    /// Optional text index for hybrid search
+    text_index: Option<TextIndex>,
 }
 
 impl VectorIndex {
@@ -77,6 +249,16 @@ impl VectorIndex {
         Self {
             config,
             vectors: HashMap::new(),
+            text_index: None,
+        }
+    }
+
+    /// Create with text index schema for FT.* commands
+    fn with_text_schema(config: VectorIndexConfig, schema: Vec<FtsFieldSchema>) -> Self {
+        Self {
+            config,
+            vectors: HashMap::new(),
+            text_index: Some(TextIndex::new(schema)),
         }
     }
 
@@ -613,6 +795,7 @@ impl VectorCommands {
     }
 
     /// FT.CREATE - RediSearch-compatible index creation
+    /// Syntax: FT.CREATE index [ON HASH|JSON] [PREFIX count prefix ...] SCHEMA field_name field_type [OPTIONS] ...
     async fn cmd_ft_create(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.is_empty() {
             return Err(crate::protocols::error::ProtocolError::RespError(
@@ -620,12 +803,239 @@ impl VectorCommands {
             ));
         }
 
-        // For now, delegate to VECTOR.CREATE with simplified parsing
-        // Full FT.CREATE would support more schema options
-        self.cmd_vector_create(args).await
+        let index_name = self.get_string_arg(args, 0, "FT.CREATE")?;
+
+        // Parse schema definition
+        let mut schema: Vec<FtsFieldSchema> = Vec::new();
+        let mut i = 1;
+        let mut in_schema = false;
+        let mut vector_dim = 128;
+        let mut distance_metric = DistanceMetric::Cosine;
+
+        while i < args.len() {
+            let arg = self.get_string_arg(args, i, "FT.CREATE")?.to_uppercase();
+
+            match arg.as_str() {
+                "ON" => {
+                    i += 2; // Skip ON HASH/JSON
+                }
+                "PREFIX" => {
+                    if i + 1 < args.len() {
+                        let count = self.get_int_arg(args, i + 1, "FT.CREATE")? as usize;
+                        i += 2 + count; // Skip PREFIX count prefixes...
+                    } else {
+                        i += 1;
+                    }
+                }
+                "SCHEMA" => {
+                    in_schema = true;
+                    i += 1;
+                }
+                _ if in_schema => {
+                    // Parse field definition: field_name TYPE [OPTIONS...]
+                    let field_name = arg.to_lowercase();
+                    i += 1;
+
+                    if i >= args.len() {
+                        break;
+                    }
+
+                    let field_type_str = self.get_string_arg(args, i, "FT.CREATE")?.to_uppercase();
+                    i += 1;
+
+                    let mut weight = 1.0f32;
+                    let mut nostem = false;
+                    let mut sortable = false;
+                    let mut separator = ',';
+
+                    // Parse field options
+                    while i < args.len() {
+                        let opt = self
+                            .get_string_arg(args, i, "FT.CREATE")
+                            .unwrap_or_default()
+                            .to_uppercase();
+
+                        match opt.as_str() {
+                            "WEIGHT" => {
+                                i += 1;
+                                if i < args.len() {
+                                    weight = self
+                                        .get_string_arg(args, i, "FT.CREATE")
+                                        .unwrap_or_default()
+                                        .parse()
+                                        .unwrap_or(1.0);
+                                    i += 1;
+                                }
+                            }
+                            "NOSTEM" => {
+                                nostem = true;
+                                i += 1;
+                            }
+                            "SORTABLE" => {
+                                sortable = true;
+                                i += 1;
+                            }
+                            "SEPARATOR" => {
+                                i += 1;
+                                if i < args.len() {
+                                    separator = self
+                                        .get_string_arg(args, i, "FT.CREATE")
+                                        .unwrap_or_default()
+                                        .chars()
+                                        .next()
+                                        .unwrap_or(',');
+                                    i += 1;
+                                }
+                            }
+                            "DIM" => {
+                                i += 1;
+                                if i < args.len() {
+                                    vector_dim = self.get_int_arg(args, i, "FT.CREATE")? as usize;
+                                    i += 1;
+                                }
+                            }
+                            "DISTANCE_METRIC" => {
+                                i += 1;
+                                if i < args.len() {
+                                    let metric_str = self.get_string_arg(args, i, "FT.CREATE")?;
+                                    distance_metric =
+                                        DistanceMetric::from_str(&metric_str).unwrap_or(DistanceMetric::Cosine);
+                                    i += 1;
+                                }
+                            }
+                            // If we hit another field name (not an option), break
+                            _ if !opt.is_empty()
+                                && !["TEXT", "TAG", "NUMERIC", "GEO", "VECTOR"].contains(&opt.as_str()) =>
+                            {
+                                break;
+                            }
+                            _ => break,
+                        }
+                    }
+
+                    let field_type = match field_type_str.as_str() {
+                        "TEXT" => FtsFieldType::Text { weight, nostem },
+                        "TAG" => FtsFieldType::Tag { separator },
+                        "NUMERIC" => FtsFieldType::Numeric,
+                        "GEO" => FtsFieldType::Geo,
+                        "VECTOR" => FtsFieldType::Vector {
+                            dim: vector_dim,
+                            metric: distance_metric,
+                        },
+                        _ => continue,
+                    };
+
+                    schema.push(FtsFieldSchema {
+                        name: field_name,
+                        field_type,
+                        sortable,
+                        noindex: false,
+                    });
+                }
+                _ => {
+                    i += 1;
+                }
+            }
+        }
+
+        // Create the index with text schema
+        let config = VectorIndexConfig {
+            name: index_name.clone(),
+            dimension: vector_dim,
+            distance_metric,
+            capacity: 100000,
+        };
+
+        let indices = get_vector_indices();
+        let mut indices_guard = indices.write().await;
+
+        if indices_guard.contains_key(&index_name) {
+            return Err(crate::protocols::error::ProtocolError::RespError(format!(
+                "Index already exists: {}",
+                index_name
+            )));
+        }
+
+        let index = VectorIndex::with_text_schema(config, schema);
+        indices_guard.insert(index_name.clone(), index);
+
+        info!("Created FT index '{}'", index_name);
+        Ok(RespValue::ok())
+    }
+
+    /// FT.ADD - Add document to index
+    /// Syntax: FT.ADD index docId score [NOSAVE] [REPLACE] [LANGUAGE lang] [PAYLOAD payload] FIELDS field value ...
+    async fn cmd_ft_add(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 4 {
+            return Err(crate::protocols::error::ProtocolError::RespError(
+                "ERR wrong number of arguments for 'ft.add' command".to_string(),
+            ));
+        }
+
+        let index_name = self.get_string_arg(args, 0, "FT.ADD")?;
+        let doc_id = self.get_string_arg(args, 1, "FT.ADD")?;
+        let _score: f32 = self
+            .get_string_arg(args, 2, "FT.ADD")
+            .unwrap_or_default()
+            .parse()
+            .unwrap_or(1.0);
+
+        // Parse fields
+        let mut fields: HashMap<String, String> = HashMap::new();
+        let mut i = 3;
+        let mut in_fields = false;
+
+        while i < args.len() {
+            let arg = self.get_string_arg(args, i, "FT.ADD")?.to_uppercase();
+            match arg.as_str() {
+                "FIELDS" => {
+                    in_fields = true;
+                    i += 1;
+                }
+                "NOSAVE" | "REPLACE" | "PARTIAL" => {
+                    i += 1;
+                }
+                "LANGUAGE" | "PAYLOAD" => {
+                    i += 2; // Skip option and its value
+                }
+                _ if in_fields => {
+                    if i + 1 < args.len() {
+                        let field_name = self.get_string_arg(args, i, "FT.ADD")?;
+                        let field_value = self.get_string_arg(args, i + 1, "FT.ADD")?;
+                        fields.insert(field_name, field_value);
+                        i += 2;
+                    } else {
+                        break;
+                    }
+                }
+                _ => {
+                    i += 1;
+                }
+            }
+        }
+
+        // Add to index
+        let indices = get_vector_indices();
+        let mut indices_guard = indices.write().await;
+
+        let index = indices_guard.get_mut(&index_name).ok_or_else(|| {
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "Unknown index: {}",
+                index_name
+            ))
+        })?;
+
+        // Add to text index if available
+        if let Some(text_index) = &mut index.text_index {
+            text_index.add_document(&doc_id, fields);
+        }
+
+        info!("Added document '{}' to FT index '{}'", doc_id, index_name);
+        Ok(RespValue::ok())
     }
 
     /// FT.SEARCH - RediSearch-compatible search
+    /// Syntax: FT.SEARCH index query [NOCONTENT] [LIMIT offset num] [RETURN count field ...] [SORTBY field [ASC|DESC]] ...
     async fn cmd_ft_search(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() < 2 {
             return Err(crate::protocols::error::ProtocolError::RespError(
@@ -633,9 +1043,163 @@ impl VectorCommands {
             ));
         }
 
-        // For now, delegate to VECTOR.SEARCH
-        // Full FT.SEARCH would support text queries + vector queries
-        self.cmd_vector_search(args).await
+        let index_name = self.get_string_arg(args, 0, "FT.SEARCH")?;
+        let query = self.get_string_arg(args, 1, "FT.SEARCH")?;
+
+        // Parse options
+        let mut limit = 10usize;
+        let mut offset = 0usize;
+        let mut nocontent = false;
+        let mut return_fields: Option<Vec<String>> = None;
+
+        let mut i = 2;
+        while i < args.len() {
+            let arg = self.get_string_arg(args, i, "FT.SEARCH")?.to_uppercase();
+            match arg.as_str() {
+                "NOCONTENT" => {
+                    nocontent = true;
+                    i += 1;
+                }
+                "LIMIT" => {
+                    if i + 2 < args.len() {
+                        offset = self.get_int_arg(args, i + 1, "FT.SEARCH")? as usize;
+                        limit = self.get_int_arg(args, i + 2, "FT.SEARCH")? as usize;
+                        i += 3;
+                    } else {
+                        i += 1;
+                    }
+                }
+                "RETURN" => {
+                    if i + 1 < args.len() {
+                        let count = self.get_int_arg(args, i + 1, "FT.SEARCH")? as usize;
+                        let mut fields = Vec::new();
+                        for j in 0..count {
+                            if i + 2 + j < args.len() {
+                                fields.push(self.get_string_arg(args, i + 2 + j, "FT.SEARCH")?);
+                            }
+                        }
+                        return_fields = Some(fields);
+                        i += 2 + count;
+                    } else {
+                        i += 1;
+                    }
+                }
+                "SORTBY" => {
+                    i += 2; // Skip SORTBY and field
+                    if i < args.len() {
+                        let dir = self
+                            .get_string_arg(args, i, "FT.SEARCH")
+                            .unwrap_or_default()
+                            .to_uppercase();
+                        if dir == "ASC" || dir == "DESC" {
+                            i += 1;
+                        }
+                    }
+                }
+                _ => {
+                    i += 1;
+                }
+            }
+        }
+
+        // Perform search
+        let indices = get_vector_indices();
+        let indices_guard = indices.read().await;
+
+        let index = indices_guard.get(&index_name).ok_or_else(|| {
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "Unknown index: {}",
+                index_name
+            ))
+        })?;
+
+        // Check if it's a wildcard query
+        let results = if query == "*" {
+            // Return all documents
+            if let Some(text_index) = &index.text_index {
+                text_index
+                    .documents
+                    .iter()
+                    .skip(offset)
+                    .take(limit)
+                    .map(|(id, doc)| (id.clone(), 1.0f32, doc.fields.clone()))
+                    .collect()
+            } else {
+                vec![]
+            }
+        } else if let Some(text_index) = &index.text_index {
+            text_index.search(&query, limit, offset)
+        } else {
+            vec![]
+        };
+
+        // Build response
+        // Format: [total_results, doc_id, [field, value, ...], doc_id, [field, value, ...], ...]
+        let total = results.len();
+        let mut response = vec![RespValue::Integer(total as i64)];
+
+        for (doc_id, _score, fields) in results {
+            response.push(RespValue::bulk_string_from_str(&doc_id));
+
+            if !nocontent {
+                let field_list: Vec<RespValue> = match &return_fields {
+                    Some(rf) => rf
+                        .iter()
+                        .flat_map(|f| {
+                            fields.get(f).map(|v| {
+                                vec![
+                                    RespValue::bulk_string_from_str(f),
+                                    RespValue::bulk_string_from_str(v),
+                                ]
+                            })
+                        })
+                        .flatten()
+                        .collect(),
+                    None => fields
+                        .iter()
+                        .flat_map(|(k, v)| {
+                            vec![
+                                RespValue::bulk_string_from_str(k),
+                                RespValue::bulk_string_from_str(v),
+                            ]
+                        })
+                        .collect(),
+                };
+                response.push(RespValue::Array(field_list));
+            }
+        }
+
+        Ok(RespValue::Array(response))
+    }
+
+    /// FT.DEL - Delete document from index
+    async fn cmd_ft_del(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 2 {
+            return Err(crate::protocols::error::ProtocolError::RespError(
+                "ERR wrong number of arguments for 'ft.del' command".to_string(),
+            ));
+        }
+
+        let index_name = self.get_string_arg(args, 0, "FT.DEL")?;
+        let doc_id = self.get_string_arg(args, 1, "FT.DEL")?;
+
+        let indices = get_vector_indices();
+        let mut indices_guard = indices.write().await;
+
+        let index = indices_guard.get_mut(&index_name).ok_or_else(|| {
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "Unknown index: {}",
+                index_name
+            ))
+        })?;
+
+        let deleted = if let Some(text_index) = &mut index.text_index {
+            text_index.delete_document(&doc_id)
+        } else {
+            false
+        };
+
+        Ok(RespValue::Integer(if deleted { 1 } else { 0 }))
     }
 
     /// FT.DROPINDEX - RediSearch-compatible index deletion
@@ -645,7 +1209,71 @@ impl VectorCommands {
 
     /// FT.INFO - RediSearch-compatible index info
     async fn cmd_ft_info(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
-        self.cmd_vector_info(args).await
+        if args.is_empty() {
+            return Err(crate::protocols::error::ProtocolError::RespError(
+                "ERR wrong number of arguments for 'ft.info' command".to_string(),
+            ));
+        }
+
+        let index_name = self.get_string_arg(args, 0, "FT.INFO")?;
+
+        let indices = get_vector_indices();
+        let indices_guard = indices.read().await;
+
+        let index = indices_guard.get(&index_name).ok_or_else(|| {
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "Unknown index: {}",
+                index_name
+            ))
+        })?;
+
+        let num_docs = index.text_index.as_ref().map(|t| t.doc_count()).unwrap_or(0);
+        let num_terms = index
+            .text_index
+            .as_ref()
+            .map(|t| t.inverted_index.len())
+            .unwrap_or(0);
+
+        // Build schema info
+        let schema_info: Vec<RespValue> = index
+            .text_index
+            .as_ref()
+            .map(|t| {
+                t.schema
+                    .iter()
+                    .map(|f| {
+                        let type_str = match &f.field_type {
+                            FtsFieldType::Text { weight, nostem } => {
+                                format!("TEXT WEIGHT {} {}", weight, if *nostem { "NOSTEM" } else { "" })
+                            }
+                            FtsFieldType::Tag { separator } => format!("TAG SEPARATOR {}", separator),
+                            FtsFieldType::Numeric => "NUMERIC".to_string(),
+                            FtsFieldType::Geo => "GEO".to_string(),
+                            FtsFieldType::Vector { dim, metric } => {
+                                format!("VECTOR DIM {} DISTANCE_METRIC {:?}", dim, metric)
+                            }
+                        };
+                        RespValue::Array(vec![
+                            RespValue::bulk_string_from_str(&f.name),
+                            RespValue::bulk_string_from_str(&type_str),
+                        ])
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(RespValue::Array(vec![
+            RespValue::bulk_string_from_str("index_name"),
+            RespValue::bulk_string_from_str(&index_name),
+            RespValue::bulk_string_from_str("num_docs"),
+            RespValue::Integer(num_docs as i64),
+            RespValue::bulk_string_from_str("num_terms"),
+            RespValue::Integer(num_terms as i64),
+            RespValue::bulk_string_from_str("num_records"),
+            RespValue::Integer(num_docs as i64),
+            RespValue::bulk_string_from_str("fields"),
+            RespValue::Array(schema_info),
+        ]))
     }
 }
 
@@ -665,8 +1293,8 @@ impl CommandHandler for VectorCommands {
             "VECTOR.DROP" => self.cmd_vector_drop(args).await,
             "VECTOR.KNN" => self.cmd_vector_search(args).await, // Alias for VECTOR.SEARCH
             "FT.CREATE" => self.cmd_ft_create(args).await,
-            "FT.ADD" => self.cmd_vector_add(args).await,
-            "FT.DEL" => self.cmd_vector_del(args).await,
+            "FT.ADD" => self.cmd_ft_add(args).await,
+            "FT.DEL" => self.cmd_ft_del(args).await,
             "FT.SEARCH" => self.cmd_ft_search(args).await,
             "FT.DROPINDEX" => self.cmd_ft_dropindex(args).await,
             "FT.INFO" => self.cmd_ft_info(args).await,

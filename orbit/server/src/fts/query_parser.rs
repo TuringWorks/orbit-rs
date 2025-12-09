@@ -148,6 +148,13 @@ mod tests {
         let parser = QueryParser::new(index, vec![title]);
 
         let query = parser.parse_tsquery("cat & dog").unwrap();
+        // Tantivy uses BooleanQuery for AND operations
+        let query_debug = format!("{:?}", query);
+        assert!(
+            query_debug.contains("Boolean") || query_debug.contains("cat") && query_debug.contains("dog"),
+            "Query should contain both terms: {}",
+            query_debug
+        );
         assert!(format!("{:?}", query).contains("AND"));
     }
 }

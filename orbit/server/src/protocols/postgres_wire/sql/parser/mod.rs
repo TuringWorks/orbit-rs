@@ -10,6 +10,7 @@ pub mod expressions;
 pub mod select;
 pub mod tcl;
 pub mod utilities;
+pub mod utility_commands;
 
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::{
@@ -116,9 +117,159 @@ impl SqlParser {
             Some(Token::Commit) => self.parse_commit_statement(),
             Some(Token::Rollback) => self.parse_rollback_statement(),
             Some(Token::Savepoint) => self.parse_savepoint_statement(),
+            Some(Token::Abort) => {
+                self.advance()?;
+                Ok(Statement::Rollback(
+                    crate::protocols::postgres_wire::sql::ast::RollbackStatement {
+                        chain: false,
+                        to_savepoint: None,
+                    },
+                ))
+            }
 
             // Session Management
             Some(Token::Set) => self.parse_set_statement(),
+            Some(Token::Reset) => {
+                self.advance()?;
+                utility_commands::parse_reset(self)
+            }
+            Some(Token::Discard) => {
+                self.advance()?;
+                utility_commands::parse_discard(self)
+            }
+
+            // Cursor Commands
+            Some(Token::Declare) => {
+                self.advance()?;
+                utility_commands::parse_declare_cursor(self)
+            }
+            Some(Token::Fetch) => {
+                self.advance()?;
+                utility_commands::parse_fetch(self)
+            }
+            Some(Token::Move) => {
+                self.advance()?;
+                utility_commands::parse_move(self)
+            }
+            Some(Token::Close) => {
+                self.advance()?;
+                utility_commands::parse_close(self)
+            }
+
+            // Notification Commands
+            Some(Token::Listen) => {
+                self.advance()?;
+                utility_commands::parse_listen(self)
+            }
+            Some(Token::Unlisten) => {
+                self.advance()?;
+                utility_commands::parse_unlisten(self)
+            }
+            Some(Token::Notify) => {
+                self.advance()?;
+                utility_commands::parse_notify(self)
+            }
+
+            // Prepared Statement Commands
+            Some(Token::Prepare) => {
+                self.advance()?;
+                utility_commands::parse_prepare(self)
+            }
+            Some(Token::Execute) => {
+                self.advance()?;
+                utility_commands::parse_execute(self)
+            }
+            Some(Token::Deallocate) => {
+                self.advance()?;
+                utility_commands::parse_deallocate(self)
+            }
+
+            // Maintenance Commands
+            Some(Token::Vacuum) => {
+                self.advance()?;
+                utility_commands::parse_vacuum(self)
+            }
+            Some(Token::Analyze) => {
+                self.advance()?;
+                utility_commands::parse_analyze(self)
+            }
+            Some(Token::Reindex) => {
+                self.advance()?;
+                utility_commands::parse_reindex(self)
+            }
+            Some(Token::Cluster) => {
+                self.advance()?;
+                utility_commands::parse_cluster(self)
+            }
+            Some(Token::Checkpoint) => {
+                self.advance()?;
+                utility_commands::parse_checkpoint(self)
+            }
+
+            // Procedural Commands
+            Some(Token::Call) => {
+                self.advance()?;
+                utility_commands::parse_call(self)
+            }
+            Some(Token::Do) => {
+                self.advance()?;
+                utility_commands::parse_do(self)
+            }
+
+            // Additional TCL Commands
+            Some(Token::Lock) => {
+                self.advance()?;
+                utility_commands::parse_lock(self)
+            }
+
+            // Additional Utility Commands
+            Some(Token::Load) => {
+                self.advance()?;
+                utility_commands::parse_load(self)
+            }
+            Some(Token::Refresh) => {
+                self.advance()?;
+                // REFRESH MATERIALIZED VIEW
+                if self.matches(&[Token::Materialized]) {
+                    self.advance()?;
+                    utility_commands::parse_refresh_materialized_view(self)
+                } else {
+                    Err(ParseError {
+                        message: "Expected MATERIALIZED after REFRESH".to_string(),
+                        position: self.position,
+                        expected: vec!["MATERIALIZED".to_string()],
+                        found: self.current_token.clone(),
+                    })
+                }
+            }
+            Some(Token::Import) => {
+                self.advance()?;
+                // IMPORT FOREIGN SCHEMA
+                if self.matches(&[Token::Foreign]) {
+                    self.advance()?;
+                    self.expect(Token::Schema)?;
+                    utility_commands::parse_import_foreign_schema(self)
+                } else {
+                    Err(ParseError {
+                        message: "Expected FOREIGN after IMPORT".to_string(),
+                        position: self.position,
+                        expected: vec!["FOREIGN".to_string()],
+                        found: self.current_token.clone(),
+                    })
+                }
+            }
+
+            // Additional DCL Commands
+            Some(Token::Reassign) => {
+                self.advance()?;
+                self.expect(Token::Owned)?;
+                utility_commands::parse_reassign_owned(self)
+            }
+            Some(Token::Security) => {
+                self.advance()?;
+                self.expect(Token::Label)?;
+                utility_commands::parse_security_label(self)
+            }
 
             // COMMENT ON statement
             Some(Token::CommentKeyword) => ddl::parse_comment_on(self),
@@ -646,6 +797,46 @@ impl SqlParser {
 
     fn parse_set_statement(&mut self) -> ParseResult<Statement> {
         self.expect(Token::Set)?;
+
+        // Check for SET TRANSACTION
+        if self.matches(&[Token::Transaction]) {
+            self.advance()?;
+            return utility_commands::parse_set_transaction(self);
+        }
+
+        // Check for SET SESSION CHARACTERISTICS AS TRANSACTION
+        if self.matches(&[Token::Session]) {
+            self.advance()?;
+            if self.matches(&[Token::Characteristics]) {
+                self.advance()?;
+                self.expect(Token::As)?;
+                self.expect(Token::Transaction)?;
+                let mut stmt = utility_commands::parse_set_transaction(self)?;
+                // Mark as session characteristics
+                if let Statement::SetTransaction(ref mut s) = stmt {
+                    s.session_characteristics = true;
+                }
+                return Ok(stmt);
+            }
+            // SESSION AUTHORIZATION or other session variables
+            // Fall through to regular SET handling with "session" as part of variable
+        }
+
+        // Check for SET CONSTRAINTS
+        if self.matches(&[Token::Constraints]) {
+            self.advance()?;
+            return utility_commands::parse_set_constraints(self);
+        }
+
+        // Check for SET LOCAL
+        if self.matches(&[Token::Local]) {
+            self.advance()?;
+            if self.matches(&[Token::Transaction]) {
+                self.advance()?;
+                return utility_commands::parse_set_transaction(self);
+            }
+            // SET LOCAL <variable> - treat as regular SET for now
+        }
 
         // Parse variable name
         let variable = if let Some(Token::Identifier(name)) = &self.current_token {

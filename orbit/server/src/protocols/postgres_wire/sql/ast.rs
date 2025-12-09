@@ -235,6 +235,56 @@ pub enum Statement {
     DropFunction(DropFunctionStatement),
     DropProcedure(DropProcedureStatement),
     DropOwned(DropOwnedStatement),
+
+    // Utility Commands
+    Reset(ResetStatement),
+    Discard(DiscardStatement),
+
+    // Cursor Commands
+    DeclareCursor(DeclareCursorStatement),
+    FetchCursor(FetchCursorStatement),
+    MoveCursor(MoveCursorStatement),
+    CloseCursor(CloseCursorStatement),
+
+    // Notification Commands
+    Listen(ListenStatement),
+    Unlisten(UnlistenStatement),
+    Notify(NotifyStatement),
+
+    // Prepared Statement Commands
+    Prepare(PrepareStatement),
+    Execute(ExecuteStatement),
+    Deallocate(DeallocateStatement),
+
+    // Maintenance Commands
+    Vacuum(VacuumStatement),
+    Analyze(AnalyzeStatement),
+    Reindex(ReindexStatement),
+    Cluster(ClusterStatement),
+    Checkpoint,
+
+    // Procedural Commands
+    Call(CallStatement),
+    Do(DoStatement),
+
+    // Additional TCL Commands
+    SetTransaction(SetTransactionStatement),
+    SetConstraints(SetConstraintsStatement),
+    Lock(LockStatement),
+
+    // Additional Utility Commands
+    Load(LoadStatement),
+    RefreshMaterializedView(RefreshMaterializedViewStatement),
+    ImportForeignSchema(ImportForeignSchemaStatement),
+
+    // Two-Phase Commit Commands
+    PrepareTransaction(PrepareTransactionStatement),
+    CommitPrepared(CommitPreparedStatement),
+    RollbackPrepared(RollbackPreparedStatement),
+
+    // Additional DCL Commands
+    ReassignOwned(ReassignOwnedStatement),
+    SecurityLabel(SecurityLabelStatement),
 }
 
 // ===== DDL Statements =====
@@ -1220,6 +1270,22 @@ pub enum BinaryOperator {
     RangeNotExtendRight,
     /// &> operator: range does not extend left of range
     RangeNotExtendLeft,
+
+    // Text Search operators
+    /// @@ operator: tsvector matches tsquery
+    TextSearchMatch,
+    /// @> operator: tsquery contains tsquery
+    TextSearchContains,
+    /// <@ operator: tsquery is contained by tsquery
+    TextSearchContainedBy,
+    /// || operator: concatenate tsvectors or tsqueries
+    TextSearchConcat,
+    /// && operator: AND tsqueries
+    TextSearchAnd,
+    /// !! operator: negate tsquery
+    TextSearchNot,
+    /// <-> operator: followed by (phrase search)
+    TextSearchFollowedBy,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -3024,4 +3090,355 @@ pub struct DropProcedureStatement {
 pub struct DropOwnedStatement {
     pub roles: Vec<String>,
     pub cascade: bool,
+}
+
+// ===== Utility Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResetStatement {
+    pub target: ResetTarget,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResetTarget {
+    Parameter(String),
+    All,
+    TimeZone,
+    Role,
+    SessionAuthorization,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DiscardStatement {
+    pub target: DiscardTarget,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DiscardTarget {
+    All,
+    Plans,
+    Sequences,
+    Temporary,
+    Temp,
+}
+
+// ===== Cursor Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeclareCursorStatement {
+    pub name: String,
+    pub binary: bool,
+    pub insensitive: bool,
+    pub scroll: Option<bool>, // None = default, Some(true) = SCROLL, Some(false) = NO SCROLL
+    pub hold: bool,           // WITH HOLD
+    pub query: Box<SelectStatement>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FetchCursorStatement {
+    pub direction: FetchDirection,
+    pub cursor_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FetchDirection {
+    Next,
+    Prior,
+    First,
+    Last,
+    Absolute(i64),
+    Relative(i64),
+    Count(i64),
+    All,
+    Forward,
+    ForwardCount(i64),
+    ForwardAll,
+    Backward,
+    BackwardCount(i64),
+    BackwardAll,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MoveCursorStatement {
+    pub direction: FetchDirection,
+    pub cursor_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CloseCursorStatement {
+    pub cursor_name: CloseCursorTarget,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CloseCursorTarget {
+    Named(String),
+    All,
+}
+
+// ===== Notification Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ListenStatement {
+    pub channel: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnlistenStatement {
+    pub channel: UnlistenTarget,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum UnlistenTarget {
+    Channel(String),
+    All,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NotifyStatement {
+    pub channel: String,
+    pub payload: Option<String>,
+}
+
+// ===== Prepared Statement Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrepareStatement {
+    pub name: String,
+    pub data_types: Vec<SqlType>,
+    pub statement: Box<Statement>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExecuteStatement {
+    pub name: String,
+    pub parameters: Vec<Expression>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeallocateStatement {
+    pub target: DeallocateTarget,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DeallocateTarget {
+    Named(String),
+    All,
+}
+
+// ===== Maintenance Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VacuumStatement {
+    pub full: bool,
+    pub freeze: bool,
+    pub verbose: bool,
+    pub analyze: bool,
+    pub disable_page_skipping: bool,
+    pub skip_locked: bool,
+    pub index_cleanup: Option<bool>,
+    pub truncate: Option<bool>,
+    pub parallel: Option<i32>,
+    pub tables: Vec<VacuumTable>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VacuumTable {
+    pub name: TableName,
+    pub columns: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnalyzeStatement {
+    pub verbose: bool,
+    pub skip_locked: bool,
+    pub tables: Vec<VacuumTable>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReindexStatement {
+    pub target_type: ReindexTarget,
+    pub concurrently: bool,
+    pub verbose: bool,
+    pub name: Option<TableName>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ReindexTarget {
+    Index,
+    Table,
+    Schema,
+    Database,
+    System,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClusterStatement {
+    pub verbose: bool,
+    pub table_name: Option<TableName>,
+    pub index_name: Option<String>,
+}
+
+// ===== Procedural Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallStatement {
+    pub procedure_name: TableName,
+    pub arguments: Vec<Expression>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DoStatement {
+    pub language: Option<String>,
+    pub code: String,
+}
+
+// ===== Additional TCL Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetTransactionStatement {
+    pub isolation_level: Option<TransactionIsolationLevel>,
+    pub read_only: Option<bool>,
+    pub deferrable: Option<bool>,
+    pub session_characteristics: bool, // SET SESSION CHARACTERISTICS AS TRANSACTION
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TransactionIsolationLevel {
+    ReadUncommitted,
+    ReadCommitted,
+    RepeatableRead,
+    Serializable,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetConstraintsStatement {
+    pub constraints: ConstraintTarget,
+    pub mode: ConstraintMode,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstraintTarget {
+    All,
+    Named(Vec<String>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstraintMode {
+    Deferred,
+    Immediate,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LockStatement {
+    pub tables: Vec<LockTarget>,
+    pub mode: LockMode,
+    pub nowait: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LockTarget {
+    pub table_name: TableName,
+    pub only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LockMode {
+    AccessShare,
+    RowShare,
+    RowExclusive,
+    ShareUpdateExclusive,
+    Share,
+    ShareRowExclusive,
+    Exclusive,
+    AccessExclusive,
+}
+
+// ===== Additional Utility Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LoadStatement {
+    pub filename: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RefreshMaterializedViewStatement {
+    pub concurrently: bool,
+    pub view_name: TableName,
+    pub with_data: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportForeignSchemaStatement {
+    pub remote_schema: String,
+    pub import_type: ImportForeignSchemaType,
+    pub server_name: String,
+    pub local_schema: String,
+    pub options: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ImportForeignSchemaType {
+    All,
+    LimitTo(Vec<String>),
+    Except(Vec<String>),
+}
+
+// ===== Two-Phase Commit Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrepareTransactionStatement {
+    pub transaction_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommitPreparedStatement {
+    pub transaction_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RollbackPreparedStatement {
+    pub transaction_id: String,
+}
+
+// ===== Additional DCL Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReassignOwnedStatement {
+    pub old_roles: Vec<String>,
+    pub new_role: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SecurityLabelStatement {
+    pub provider: Option<String>,
+    pub object_type: SecurityLabelObjectType,
+    pub object_name: TableName,
+    pub column_name: Option<String>,
+    pub label: Option<String>, // None means remove label
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SecurityLabelObjectType {
+    Table,
+    Column,
+    Aggregate,
+    Database,
+    Domain,
+    EventTrigger,
+    ForeignTable,
+    Function,
+    Index,
+    Language,
+    LargeObject,
+    MaterializedView,
+    Procedure,
+    Publication,
+    Role,
+    Routine,
+    Schema,
+    Sequence,
+    Subscription,
+    Tablespace,
+    Type,
+    View,
 }

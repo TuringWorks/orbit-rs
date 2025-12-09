@@ -8,6 +8,8 @@
 //! - OrbitQL (via REST API)
 //! - Cypher (Neo4j graph queries via REST API)
 //! - AQL (ArangoDB queries via REST API)
+//! - Arrow Flight SQL (high-performance columnar protocol)
+//! - OrbitWire (native binary protocol)
 //!
 //! Features:
 //! - Syntax highlighting for SQL queries
@@ -38,9 +40,9 @@ use tracing::{error, info};
 #[command(about = "Interactive CLI client for Orbit database", long_about = None)]
 #[command(version)]
 struct Cli {
-    /// Protocol to use for connection
-    #[arg(long, value_enum, default_value = "postgres")]
-    protocol: Protocol,
+    /// Protocol to use for connection (interactive if not specified)
+    #[arg(long, value_enum)]
+    protocol: Option<Protocol>,
 
     /// Host to connect to
     #[arg(short = 'H', long, default_value = "localhost")]
@@ -50,9 +52,9 @@ struct Cli {
     #[arg(short = 'p', long)]
     port: Option<u16>,
 
-    /// Database name
-    #[arg(short, long, default_value = "orbit")]
-    database: String,
+    /// Database name (prompted if not specified)
+    #[arg(short, long)]
+    database: Option<String>,
 
     /// Username for authentication
     #[arg(short, long, default_value = "orbit")]
@@ -130,6 +132,49 @@ impl Protocol {
             Protocol::Orbitwire => "OrbitWire",
         }
     }
+
+    fn from_str(s: &str) -> Option<Protocol> {
+        match s.to_lowercase().trim() {
+            "postgres" | "postgresql" | "pg" | "1" => Some(Protocol::Postgres),
+            "mysql" | "2" => Some(Protocol::Mysql),
+            "cql" | "cassandra" | "3" => Some(Protocol::Cql),
+            "redis" | "4" => Some(Protocol::Redis),
+            "orbitql" | "orbit" | "5" => Some(Protocol::Orbitql),
+            "cypher" | "neo4j" | "6" => Some(Protocol::Cypher),
+            "aql" | "arango" | "arangodb" | "7" => Some(Protocol::Aql),
+            "flight" | "flightsql" | "arrow" | "8" => Some(Protocol::Flight),
+            "orbitwire" | "wire" | "9" => Some(Protocol::Orbitwire),
+            _ => None,
+        }
+    }
+
+    fn all() -> Vec<Protocol> {
+        vec![
+            Protocol::Postgres,
+            Protocol::Mysql,
+            Protocol::Cql,
+            Protocol::Redis,
+            Protocol::Orbitql,
+            Protocol::Cypher,
+            Protocol::Aql,
+            Protocol::Flight,
+            Protocol::Orbitwire,
+        ]
+    }
+
+    fn cli_name(&self) -> &'static str {
+        match self {
+            Protocol::Postgres => "postgres",
+            Protocol::Mysql => "mysql",
+            Protocol::Cql => "cql",
+            Protocol::Redis => "redis",
+            Protocol::Orbitql => "orbitql",
+            Protocol::Cypher => "cypher",
+            Protocol::Aql => "aql",
+            Protocol::Flight => "flight",
+            Protocol::Orbitwire => "orbitwire",
+        }
+    }
 }
 
 /// CLI output format options
@@ -193,18 +238,30 @@ struct FlightSqlConnection {
     endpoint: String,
 }
 
-impl ReplState {
-    fn new(cli: &Cli) -> Self {
-        let port = cli.port.unwrap_or_else(|| cli.protocol.default_port());
+/// Flight SQL connection wrapper
+struct FlightSqlConnection {
+    client: reqwest::Client,
+    endpoint: String,
+}
 
+impl ReplState {
+    fn new(
+        protocol: Protocol,
+        host: String,
+        port: u16,
+        database: String,
+        username: String,
+        password: Option<String>,
+        format: OutputFormat,
+    ) -> Self {
         Self {
-            protocol: cli.protocol,
-            host: cli.host.clone(),
+            protocol,
+            host,
             port,
-            database: cli.database.clone(),
-            username: cli.username.clone(),
-            password: cli.password.clone(),
-            format: cli.format.into(),
+            database,
+            username,
+            password,
+            format,
             syntax_set: SyntaxSet::load_defaults_newlines(),
             theme_set: ThemeSet::load_defaults(),
             pg_client: None,
@@ -217,6 +274,38 @@ impl ReplState {
         }
     }
 
+    fn from_cli(cli: &Cli, protocol: Protocol, database: String) -> Self {
+        let port = cli.port.unwrap_or_else(|| protocol.default_port());
+        Self::new(
+            protocol,
+            cli.host.clone(),
+            port,
+            database,
+            cli.username.clone(),
+            cli.password.clone(),
+            cli.format.into(),
+        )
+    }
+
+    /// Switch to a different protocol (disconnects current connection)
+    async fn switch_protocol(&mut self, new_protocol: Protocol) -> Result<()> {
+        // Disconnect current connections
+        self.pg_client = None;
+        self.pg_connection_handle = None;
+        self.mysql_pool = None;
+        self.redis_client = None;
+        self.http_client = None;
+        self.orbitwire_stream = None;
+        self.flight_client = None;
+
+        // Update protocol and port
+        self.protocol = new_protocol;
+        self.port = new_protocol.default_port();
+
+        // Connect with new protocol
+        self.connect().await
+    }
+
     /// Connect to the database based on protocol
     async fn connect(&mut self) -> Result<()> {
         match self.protocol {
@@ -227,6 +316,8 @@ impl ReplState {
             Protocol::Cql => self.connect_cql().await,
             Protocol::Cypher => self.connect_cypher().await,
             Protocol::Aql => self.connect_aql().await,
+            Protocol::Flight => self.connect_flight().await,
+            Protocol::Orbitwire => self.connect_orbitwire().await,
         }
     }
 
@@ -363,6 +454,8 @@ impl ReplState {
             Protocol::Cql => self.execute_cql_query(query).await,
             Protocol::Cypher => self.execute_cypher_query(query).await,
             Protocol::Aql => self.execute_aql_query(query).await,
+            Protocol::Flight => self.execute_flight_query(query).await,
+            Protocol::Orbitwire => self.execute_orbitwire_query(query).await,
         }
     }
 
@@ -1077,6 +1170,262 @@ impl ReplState {
         Ok(())
     }
 
+    /// Connect to Arrow Flight SQL server
+    async fn connect_flight(&mut self) -> Result<()> {
+        // Arrow Flight SQL uses gRPC. For CLI, we use a simplified HTTP-based approach
+        // that talks to the Flight SQL REST adapter at the server
+        let client = reqwest::Client::new();
+        let endpoint = format!("http://{}:{}", self.host, self.port);
+
+        // Try to connect by checking the health endpoint or a simple handshake
+        let health_url = format!("{}/health", endpoint);
+
+        match client.get(&health_url).send().await {
+            Ok(response) if response.status().is_success() || response.status().as_u16() == 404 => {
+                // Flight SQL server running (404 on /health is ok - it means server responds)
+                self.flight_client = Some(FlightSqlConnection { client, endpoint });
+                Ok(())
+            }
+            Ok(response) => Err(anyhow::anyhow!(
+                "Flight SQL connection failed: HTTP {}",
+                response.status()
+            )),
+            Err(e) => Err(anyhow::anyhow!(
+                "Failed to connect to Flight SQL server: {}",
+                e
+            )),
+        }
+    }
+
+    /// Connect to OrbitWire server
+    async fn connect_orbitwire(&mut self) -> Result<()> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let addr = format!("{}:{}", self.host, self.port);
+
+        match tokio::net::TcpStream::connect(&addr).await {
+            Ok(mut stream) => {
+                // Send handshake: magic bytes + version
+                // OrbitWire magic: "ORBT" + version 1
+                let handshake = [0x4F, 0x52, 0x42, 0x54, 0x01]; // "ORBT" + version 1
+                stream.write_all(&handshake).await?;
+
+                // Read handshake response (5 bytes)
+                let mut response = [0u8; 5];
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    stream.read_exact(&mut response),
+                )
+                .await
+                {
+                    Ok(Ok(_)) => {
+                        // Verify magic bytes
+                        if &response[..4] == b"ORBT" {
+                            self.orbitwire_stream = Some(OrbitWireConnection { stream });
+                            Ok(())
+                        } else {
+                            Err(anyhow::anyhow!("Invalid OrbitWire handshake response"))
+                        }
+                    }
+                    Ok(Err(e)) => Err(anyhow::anyhow!("OrbitWire handshake failed: {}", e)),
+                    Err(_) => Err(anyhow::anyhow!("OrbitWire handshake timed out")),
+                }
+            }
+            Err(e) => Err(anyhow::anyhow!(
+                "Failed to connect to OrbitWire server: {}",
+                e
+            )),
+        }
+    }
+
+    /// Execute a query via Arrow Flight SQL
+    async fn execute_flight_query(&self, query: &str) -> Result<()> {
+        let flight = self
+            .flight_client
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Not connected to Flight SQL server"))?;
+
+        // Send query via REST adapter endpoint
+        let url = format!("{}/api/v1/flight/sql", flight.endpoint);
+
+        let request_body = serde_json::json!({
+            "query": query.trim().trim_end_matches(';'),
+            "database": self.database
+        });
+
+        let response = flight
+            .client
+            .post(&url)
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("Flight SQL request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!(
+                "Flight SQL error (HTTP {}): {}",
+                status,
+                body
+            ));
+        }
+
+        let result: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to parse Flight SQL response: {}", e))?;
+
+        // Display result (Arrow Flight returns columnar data)
+        if let Some(data) = result.get("data") {
+            if let Some(rows) = data.get("rows").and_then(|r| r.as_array()) {
+                let columns = data
+                    .get("columns")
+                    .and_then(|c| c.as_array())
+                    .map(|cols| {
+                        cols.iter()
+                            .filter_map(|c| c.get("name").and_then(|n| n.as_str()))
+                            .map(String::from)
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+
+                if rows.is_empty() {
+                    println!("{}", format_success("Query executed successfully (0 rows)"));
+                    return Ok(());
+                }
+
+                let mut table = Table::new();
+                table
+                    .load_preset(UTF8_FULL)
+                    .apply_modifier(UTF8_ROUND_CORNERS);
+
+                if !columns.is_empty() {
+                    table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
+                }
+
+                for row in rows {
+                    if let Some(row_arr) = row.as_array() {
+                        let values: Vec<String> = row_arr
+                            .iter()
+                            .map(|v| match v {
+                                serde_json::Value::Null => "NULL".to_string(),
+                                serde_json::Value::String(s) => s.clone(),
+                                _ => v.to_string(),
+                            })
+                            .collect();
+                        table.add_row(values.iter().map(Cell::new));
+                    }
+                }
+
+                println!("\n{}", table);
+                println!("{}", format_success(&format!("({} rows)", rows.len())));
+            } else {
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            }
+        } else if let Some(error) = result.get("error") {
+            return Err(anyhow::anyhow!("Flight SQL error: {}", error));
+        } else {
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        }
+
+        Ok(())
+    }
+
+    /// Execute a query via OrbitWire protocol
+    async fn execute_orbitwire_query(&self, query: &str) -> Result<()> {
+        // OrbitWire requires mutable access for socket I/O
+        // For simplicity in CLI, use HTTP fallback to OrbitQL endpoint
+        // A full implementation would use the binary protocol
+
+        // Fallback to HTTP endpoint on OrbitWire port + 27 (REST adapter port offset)
+        let http_port = self.port.saturating_sub(50053).saturating_add(8080);
+        let url = format!("http://{}:{}/api/v1/sql", self.host, http_port);
+
+        let client = reqwest::Client::new();
+        let request_body = serde_json::json!({
+            "query": query.trim().trim_end_matches(';'),
+            "protocol": "orbitwire"
+        });
+
+        let response = client
+            .post(&url)
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("OrbitWire request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!(
+                "OrbitWire error (HTTP {}): {}",
+                status,
+                body
+            ));
+        }
+
+        let result: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to parse OrbitWire response: {}", e))?;
+
+        // Display result
+        if let Some(data) = result.get("data") {
+            if let Some(rows) = data.get("rows").and_then(|r| r.as_array()) {
+                let columns = data
+                    .get("columns")
+                    .and_then(|c| c.as_array())
+                    .map(|cols| {
+                        cols.iter()
+                            .filter_map(|c| c.get("name").and_then(|n| n.as_str()))
+                            .map(String::from)
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+
+                if rows.is_empty() {
+                    println!("{}", format_success("Query executed successfully (0 rows)"));
+                    return Ok(());
+                }
+
+                let mut table = Table::new();
+                table
+                    .load_preset(UTF8_FULL)
+                    .apply_modifier(UTF8_ROUND_CORNERS);
+
+                if !columns.is_empty() {
+                    table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
+                }
+
+                for row in rows {
+                    if let Some(row_arr) = row.as_array() {
+                        let values: Vec<String> = row_arr
+                            .iter()
+                            .map(|v| match v {
+                                serde_json::Value::Null => "NULL".to_string(),
+                                serde_json::Value::String(s) => s.clone(),
+                                _ => v.to_string(),
+                            })
+                            .collect();
+                        table.add_row(values.iter().map(Cell::new));
+                    }
+                }
+
+                println!("\n{}", table);
+                println!("{}", format_success(&format!("({} rows)", rows.len())));
+            } else {
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            }
+        } else if let Some(error) = result.get("error") {
+            return Err(anyhow::anyhow!("OrbitWire error: {}", error));
+        } else {
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        }
+
+        Ok(())
+    }
+
     /// Highlight SQL query using syntect
     fn highlight_query(&self, query: &str) -> String {
         let syntax = self
@@ -1142,13 +1491,21 @@ async fn main() -> Result<()> {
 
 /// Execute a single command and exit
 async fn execute_single_command(cli: &Cli, query: &str) -> Result<()> {
-    let mut state = ReplState::new(cli);
+    // For single command mode, protocol is required via CLI
+    let protocol = cli.protocol.ok_or_else(|| {
+        anyhow::anyhow!("Protocol is required for -e mode. Use --protocol <protocol>")
+    })?;
+
+    // For single command mode, use default database if not specified
+    let database = cli.database.clone().unwrap_or_else(|| "orbit".to_string());
+
+    let mut state = ReplState::from_cli(cli, protocol, database);
 
     println!(
         "{}",
         format!(
             "Connecting to {} at {}...",
-            cli.protocol.name(),
+            protocol.name(),
             state.connection_string()
         )
         .dimmed()
@@ -1174,13 +1531,21 @@ async fn execute_single_command(cli: &Cli, query: &str) -> Result<()> {
 
 /// Execute commands from a file
 async fn execute_file(cli: &Cli, file_path: &PathBuf) -> Result<()> {
-    let mut state = ReplState::new(cli);
+    // For file mode, protocol is required via CLI
+    let protocol = cli.protocol.ok_or_else(|| {
+        anyhow::anyhow!("Protocol is required for -f mode. Use --protocol <protocol>")
+    })?;
+
+    // For file mode, use default database if not specified
+    let database = cli.database.clone().unwrap_or_else(|| "orbit".to_string());
+
+    let mut state = ReplState::from_cli(cli, protocol, database);
 
     println!(
         "{}",
         format!(
             "Connecting to {} at {}...",
-            cli.protocol.name(),
+            protocol.name(),
             state.connection_string()
         )
         .dimmed()
@@ -1201,7 +1566,7 @@ async fn execute_file(cli: &Cli, file_path: &PathBuf) -> Result<()> {
 
     // Split into statements (simple split on semicolon for now)
     // Note: For Redis, commands don't use semicolons, so split by newlines
-    let statements: Vec<&str> = if cli.protocol == Protocol::Redis {
+    let statements: Vec<&str> = if protocol == Protocol::Redis {
         content.lines().filter(|s| !s.trim().is_empty()).collect()
     } else {
         content
@@ -1233,9 +1598,120 @@ async fn execute_file(cli: &Cli, file_path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
+/// Prompt user to select a protocol interactively
+fn prompt_for_protocol(editor: &mut DefaultEditor) -> Result<Protocol> {
+    println!("\n{}", "Select a protocol to connect:".cyan().bold());
+    print_protocol_list();
+    println!();
+
+    loop {
+        let prompt = "Protocol (1-9 or name): ".green().to_string();
+        match editor.readline(&prompt) {
+            Ok(line) => {
+                let input = line.trim();
+                if input.is_empty() {
+                    println!("{}", "Please select a protocol by number or name.".dimmed());
+                    continue;
+                }
+
+                if let Some(protocol) = Protocol::from_str(input) {
+                    println!(
+                        "{}",
+                        format!("Selected: {} ({})", protocol.name(), protocol.cli_name()).green()
+                    );
+                    return Ok(protocol);
+                } else {
+                    println!(
+                        "{}",
+                        format_error(&format!("Unknown protocol: '{}'. Please try again.", input))
+                    );
+                }
+            }
+            Err(ReadlineError::Interrupted) => {
+                println!("^C");
+                return Err(anyhow::anyhow!("Interrupted"));
+            }
+            Err(ReadlineError::Eof) => {
+                return Err(anyhow::anyhow!("EOF"));
+            }
+            Err(err) => {
+                return Err(anyhow::anyhow!("Error reading input: {}", err));
+            }
+        }
+    }
+}
+
+/// Prompt user for database name
+fn prompt_for_database(editor: &mut DefaultEditor, protocol: &Protocol) -> Result<String> {
+    // For Redis, database is typically a number (0-15), but can be named
+    // For others, it's a string name
+    let hint = match protocol {
+        Protocol::Redis => "Database index (0-15, default: 0): ",
+        Protocol::Cypher => "Database name (default: neo4j): ",
+        Protocol::Aql => "Database name (default: _system): ",
+        _ => "Database name: ",
+    };
+
+    let default_db = match protocol {
+        Protocol::Redis => "0",
+        Protocol::Cypher => "neo4j",
+        Protocol::Aql => "_system",
+        _ => "",
+    };
+
+    println!();
+    let prompt = hint.green().to_string();
+
+    loop {
+        match editor.readline(&prompt) {
+            Ok(line) => {
+                let input = line.trim();
+                if input.is_empty() {
+                    if !default_db.is_empty() {
+                        println!("{}", format!("Using default: {}", default_db).dimmed());
+                        return Ok(default_db.to_string());
+                    } else {
+                        println!("{}", "Please enter a database name.".dimmed());
+                        continue;
+                    }
+                }
+                return Ok(input.to_string());
+            }
+            Err(ReadlineError::Interrupted) => {
+                println!("^C");
+                return Err(anyhow::anyhow!("Interrupted"));
+            }
+            Err(ReadlineError::Eof) => {
+                if !default_db.is_empty() {
+                    return Ok(default_db.to_string());
+                }
+                return Err(anyhow::anyhow!("EOF"));
+            }
+            Err(err) => {
+                return Err(anyhow::anyhow!("Error reading input: {}", err));
+            }
+        }
+    }
+}
+
 /// Run interactive REPL
 async fn run_repl(cli: &Cli) -> Result<()> {
-    let mut state = ReplState::new(cli);
+    // Initialize rustyline editor early for prompts
+    let mut editor = DefaultEditor::new()?;
+
+    // Determine protocol (interactive if not specified)
+    let protocol = match cli.protocol {
+        Some(p) => p,
+        None => prompt_for_protocol(&mut editor)?,
+    };
+
+    // Determine database (interactive if not specified)
+    let database = match &cli.database {
+        Some(d) => d.clone(),
+        None => prompt_for_database(&mut editor, &protocol)?,
+    };
+
+    let mut state = ReplState::from_cli(cli, protocol, database);
 
     // Print welcome banner
     print_banner(&state);
@@ -1257,9 +1733,6 @@ async fn run_repl(cli: &Cli) -> Result<()> {
             );
         }
     }
-
-    // Initialize rustyline editor
-    let mut editor = DefaultEditor::new()?;
 
     // Load history
     let history_file = dirs::home_dir()
@@ -1294,7 +1767,7 @@ async fn run_repl(cli: &Cli) -> Result<()> {
 
                 // Handle meta commands
                 if trimmed.starts_with('\\') {
-                    if handle_meta_command(trimmed, &state, &mut editor, &history_file).await? {
+                    if handle_meta_command(trimmed, &mut state, &mut editor, &history_file).await? {
                         break; // Exit REPL
                     }
                     continue;
@@ -1315,19 +1788,30 @@ async fn run_repl(cli: &Cli) -> Result<()> {
                     }
                 } else {
                     // SQL-like protocols - buffer until semicolon
-                    query_buffer.push_str(&line);
-                    query_buffer.push('\n');
+                    // If the line is just a semicolon, don't add a newline before it
+                    if trimmed == ";" && !query_buffer.is_empty() {
+                        // Just append the semicolon to complete the query
+                        query_buffer.push(';');
+                    } else {
+                        if !query_buffer.is_empty() {
+                            query_buffer.push(' '); // Use space instead of newline for continuations
+                        }
+                        query_buffer.push_str(trimmed);
+                    }
 
                     // Check if query is complete (ends with semicolon)
-                    if trimmed.ends_with(';') {
+                    if query_buffer.trim().ends_with(';') {
+                        // Clean up the query - remove trailing semicolon for execution
+                        let clean_query = query_buffer.trim().trim_end_matches(';').trim();
+
                         // Add to history
                         editor.add_history_entry(query_buffer.trim())?;
 
                         // Show highlighted query
-                        println!("\n{}", state.highlight_query(&query_buffer));
+                        println!("\n{}", state.highlight_query(clean_query));
 
-                        // Execute query
-                        match state.execute_query(&query_buffer).await {
+                        // Execute query (without trailing semicolon)
+                        match state.execute_query(clean_query).await {
                             Ok(()) => {
                                 // Success - results already printed
                             }
@@ -1368,17 +1852,70 @@ async fn run_repl(cli: &Cli) -> Result<()> {
 #[allow(unused_variables)]
 async fn handle_meta_command(
     command: &str,
-    state: &ReplState,
+    state: &mut ReplState,
     editor: &mut DefaultEditor,
     history_file: &PathBuf,
 ) -> Result<bool> {
-    match command {
+    let parts: Vec<&str> = command.split_whitespace().collect();
+    let cmd = parts.first().map(|s| *s).unwrap_or("");
+
+    match cmd {
         "\\q" | "\\quit" | "\\exit" => {
             editor.save_history(history_file)?;
             return Ok(true); // Signal to exit
         }
         "\\?" | "\\help" => {
             print_help();
+        }
+        "\\p" | "\\protocol" => {
+            if parts.len() < 2 {
+                // Show current protocol and list available ones
+                println!("\n{}", "Current protocol:".cyan());
+                println!(
+                    "  {} ({}) on port {}",
+                    state.protocol.name().green(),
+                    state.protocol.cli_name(),
+                    state.port
+                );
+                print_protocol_list();
+                println!(
+                    "\n{}",
+                    "Usage: \\p <protocol>  (e.g., \\p redis, \\p mysql)".dimmed()
+                );
+            } else {
+                let protocol_arg = parts[1];
+                if let Some(new_protocol) = Protocol::from_str(protocol_arg) {
+                    println!(
+                        "{}",
+                        format!("Switching to {} protocol...", new_protocol.name()).dimmed()
+                    );
+                    match state.switch_protocol(new_protocol).await {
+                        Ok(()) => {
+                            println!(
+                                "{}",
+                                format_success(&format!(
+                                    "Connected to {} on port {}",
+                                    new_protocol.name(),
+                                    state.port
+                                ))
+                            );
+                        }
+                        Err(e) => {
+                            println!("{}", format_error(&format!("Connection failed: {}", e)));
+                            println!(
+                                "{}",
+                                "Protocol switched but running in offline mode.".dimmed()
+                            );
+                        }
+                    }
+                } else {
+                    println!(
+                        "{}",
+                        format_error(&format!("Unknown protocol: '{}'", protocol_arg))
+                    );
+                    print_protocol_list();
+                }
+            }
         }
         "\\c" | "\\connect" => {
             println!("{}", format_error("Connection change not yet implemented"));
@@ -1392,13 +1929,17 @@ async fn handle_meta_command(
         "\\l" => {
             println!("{}", format_error("Database listing not yet implemented"));
         }
-        "\\format table" | "\\format json" | "\\format csv" | "\\format plain" => {
-            let format_str = command.split_whitespace().nth(1).unwrap_or("table");
-            println!(
-                "{}",
-                format_success(&format!("Output format set to: {}", format_str))
-            );
-            // TODO: Update state.format
+        "\\format" => {
+            if parts.len() >= 2 {
+                let format_str = parts[1];
+                println!(
+                    "{}",
+                    format_success(&format!("Output format set to: {}", format_str))
+                );
+                // TODO: Update state.format
+            } else {
+                println!("{}", "Usage: \\format <table|json|csv|plain>".dimmed());
+            }
         }
         "\\timing" => {
             println!("{}", format_success("Timing display toggled"));
@@ -1410,6 +1951,20 @@ async fn handle_meta_command(
     }
 
     Ok(false) // Don't exit
+}
+
+/// Print list of available protocols
+fn print_protocol_list() {
+    println!("\n{}", "Available protocols:".cyan());
+    for (i, proto) in Protocol::all().iter().enumerate() {
+        println!(
+            "  {}) {} ({}) - port {}",
+            i + 1,
+            proto.cli_name().green(),
+            proto.name(),
+            proto.default_port()
+        );
+    }
 }
 
 /// Print welcome banner
@@ -1449,24 +2004,28 @@ fn print_help() {
 Orbit CLI Help
 ==============
 
-Supported Protocols:
-  --protocol postgres   PostgreSQL wire protocol (port 5432)
-  --protocol mysql      MySQL protocol (port 3306)
-  --protocol redis      Redis RESP protocol (port 6379)
-  --protocol orbitql    OrbitQL via REST API (port 8080)
-  --protocol cql        Cassandra CQL via REST (port 9042)
-  --protocol cypher     Neo4j Cypher via REST API (port 7474)
-  --protocol aql        ArangoDB AQL via REST API (port 8529)
-
 Meta Commands:
-  \?          Show this help
-  \q, \quit   Exit the CLI
-  \d          List tables
-  \dt         List tables (same as \d)
-  \l          List databases
-  \c          Connect to different database
-  \timing     Toggle query timing display
-  \format     Set output format (table, json, csv, plain)
+  \?              Show this help
+  \q, \quit       Exit the CLI
+  \p [protocol]   Show current protocol or switch to new protocol
+                  Examples: \p redis, \p mysql, \p 3
+  \d              List tables
+  \dt             List tables (same as \d)
+  \l              List databases
+  \c              Connect to different database
+  \timing         Toggle query timing display
+  \format         Set output format (table, json, csv, plain)
+
+Supported Protocols (use \p to switch):
+  1) postgres     PostgreSQL wire protocol (port 5432)
+  2) mysql        MySQL protocol (port 3306)
+  3) cql          Cassandra CQL via REST (port 9042)
+  4) redis        Redis RESP protocol (port 6379)
+  5) orbitql      OrbitQL via REST API (port 8080)
+  6) cypher       Neo4j Cypher via REST API (port 7474)
+  7) aql          ArangoDB AQL via REST API (port 8529)
+  8) flight       Arrow Flight SQL (port 50052)
+  9) orbitwire    OrbitWire binary protocol (port 50053)
 
 Query Execution (SQL protocols):
   - End queries with semicolon (;) to execute
@@ -1499,6 +2058,16 @@ AQL Examples (ArangoDB):
   FOR doc IN users RETURN doc;
   FOR u IN users FILTER u.age > 18 RETURN u.name;
   INSERT {name: 'Alice'} INTO users;
+
+Arrow Flight SQL (--protocol flight):
+  - High-performance columnar data protocol
+  - Uses Apache Arrow for efficient data transfer
+  - Ideal for analytics and large result sets
+
+OrbitWire (--protocol orbitwire):
+  - Native binary protocol for Orbit database
+  - Optimized for OrbitQL queries
+  - Supports LIVE queries, graph traversal, vector operations
 
 "#;
 

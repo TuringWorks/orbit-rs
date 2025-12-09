@@ -15,6 +15,7 @@ This document provides the authoritative status of protocol implementations in O
 |----------|------------|--------|-------|----------|
 | **OrbitQL** | 95% | Production Ready | 50+ | Parser validation, Edge cases |
 | **Redis RESP** | 60% | Production Ready | 190+ | Sorted Sets, Lua scripting |
+| **PostgreSQL** | 90% | Production Ready | 460+ | User management execution |
 | **PostgreSQL** | 72% | Production Ready | 460+ | User management, cursors |
 | **MySQL** | 51% | Active Development | 35+ | Binary protocol, replication |
 | **CQL (Cassandra)** | 55% | Active Development | 51+ | UDTs, Materialized views |
@@ -24,6 +25,36 @@ This document provides the authoritative status of protocol implementations in O
 | **REST/HTTP** | 40% | Active Development | - | Authentication |
 
 ### Recent Improvements (2025-12-08)
+- **Full-Text Search (Cross-Protocol)**:
+  - PostgreSQL FTS functions: to_tsvector, to_tsquery, plainto_tsquery, phraseto_tsquery, websearch_to_tsquery ✅
+  - PostgreSQL FTS operators: @@ (match), @> (contains), <@ (contained by), || (concat), && (and), !! (not), <-> (followed by) ✅
+  - PostgreSQL FTS functions: setweight, ts_rank, ts_rank_cd, ts_headline, numnode, querytree, strip, ts_lexize ✅
+  - Redis RediSearch-compatible: FT.CREATE, FT.ADD, FT.SEARCH (TF-IDF), FT.DEL, FT.INFO ✅
+  - MySQL FULLTEXT: MATCH...AGAINST with NATURAL LANGUAGE, BOOLEAN, and QUERY EXPANSION modes ✅
+  - CQL SASI/SAI: CONTAINS, LIKE (prefix/suffix wildcards), fulltext search ✅
+- **PostgreSQL Two-Phase Commit**: Full 2PC support:
+  - PREPARE TRANSACTION 'transaction_id' ✅
+  - COMMIT PREPARED 'transaction_id' ✅
+  - ROLLBACK PREPARED 'transaction_id' ✅
+- **PostgreSQL DCL**: Data control commands:
+  - REASSIGN OWNED BY role TO new_role ✅
+  - SECURITY LABEL (all object types, providers) ✅
+- **PostgreSQL TCL**: Transaction control commands:
+  - SET TRANSACTION (isolation level, read only, deferrable) ✅
+  - SET CONSTRAINTS (deferred, immediate) ✅
+  - LOCK TABLE (all lock modes, NOWAIT) ✅
+- **PostgreSQL Utility**: Additional utility commands:
+  - LOAD (library loading) ✅
+  - REFRESH MATERIALIZED VIEW (CONCURRENTLY, WITH DATA) ✅
+  - IMPORT FOREIGN SCHEMA (LIMIT TO, EXCEPT, OPTIONS) ✅
+- **PostgreSQL DDL**: Comprehensive DDL parser (100+ statements, 6,300+ lines):
+  - CREATE/ALTER/DROP: Foreign Tables, FDW, Servers, User Mappings ✅
+  - CREATE/ALTER/DROP: Publications, Subscriptions (logical replication) ✅
+  - CREATE/ALTER/DROP: Event Triggers, Access Methods ✅
+  - CREATE/ALTER/DROP: Text Search (Configuration/Dictionary/Parser/Template) ✅
+  - CREATE/ALTER/DROP: Transforms, Languages, Statistics ✅
+  - CREATE/ALTER/DROP: Operators, Aggregates, Casts ✅
+  - CREATE/ALTER/DROP: Collations, Conversions, Tablespaces, Groups ✅
 - **OrbitQL**: SurrealDB-style DEFINE/REMOVE statements ✅, Control flow (IF/FOR/LET/THROW) ✅, SAVEPOINT support ✅
 - **OrbitQL**: Vector KNN search ✅, MATCH statement (Cypher-style) ✅, LIVE/KILL queries ✅
 - **PostgreSQL**: Sequence functions (nextval, currval, setval, lastval) ✅, Math functions (cbrt, div, factorial, gcd, lcm, sign) ✅
@@ -169,6 +200,14 @@ OrbitQL supports two wire protocols for client-server communication:
 | Vectors | 10 | ✅ Complete | ~25 |
 | Graph | 5 | ✅ Complete | ~20 |
 | GraphRAG | 3 | ✅ Complete | ~5 |
+| **Full-Text Search** | 5 | ✅ **NEW** | ~10 |
+
+### ✅ Full-Text Search (RediSearch-Compatible)
+- `FT.CREATE` - Create FTS index with schema (TEXT, TAG, NUMERIC, GEO, VECTOR fields) ✅
+- `FT.ADD` - Add document to FTS index ✅
+- `FT.SEARCH` - Search with TF-IDF scoring, relevance ranking ✅
+- `FT.DEL` - Delete document from FTS index ✅
+- `FT.INFO` - Get FTS index information ✅
 
 ### Critical Gaps
 
@@ -181,6 +220,7 @@ OrbitQL supports two wire protocols for client-server communication:
 
 ---
 
+## 2. PostgreSQL Wire Protocol (85% Complete)
 ## 2. PostgreSQL Wire Protocol (72% Complete)
 
 ### Wire Protocol Support
@@ -206,8 +246,12 @@ OrbitQL supports two wire protocols for client-server communication:
 | **DQL** | Set Operations (UNION, etc.) | 100% | ✅ |
 | **DML** | INSERT (ON CONFLICT) | 100% | ✅ |
 | **DML** | UPDATE/DELETE + RETURNING | 95% | ✅ |
-| **DDL** | CREATE TABLE/INDEX | 95% | ✅ |
-| **DDL** | ALTER TABLE | 85% | ✅ |
+| **DDL** | CREATE TABLE/INDEX/VIEW | 95% | ✅ |
+| **DDL** | CREATE FUNCTION/TRIGGER | 95% | ✅ |
+| **DDL** | CREATE (FDW/Server/Publication) | 100% | ✅ **NEW** |
+| **DDL** | CREATE (Text Search objects) | 100% | ✅ **NEW** |
+| **DDL** | ALTER (all object types) | 95% | ✅ **NEW** |
+| **DDL** | DROP (all object types) | 100% | ✅ **NEW** |
 | **DCL** | GRANT/REVOKE | 80% | ✅ |
 | **DCL** | CREATE ROLE | 60% | **Gap** |
 | **TCL** | Transactions, Savepoints | 100% | ✅ |
@@ -216,6 +260,15 @@ OrbitQL supports two wire protocols for client-server communication:
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| **Comprehensive DDL Parser** | | |
+| CREATE/ALTER/DROP Foreign Tables | ✅ **DONE** | Full FDW support |
+| CREATE/ALTER/DROP Publications/Subscriptions | ✅ **DONE** | Logical replication |
+| CREATE/ALTER/DROP Event Triggers | ✅ **DONE** | DDL event handling |
+| CREATE/ALTER/DROP Text Search objects | ✅ **DONE** | Configuration, Dictionary, Parser, Template |
+| CREATE/ALTER/DROP Transforms/Languages | ✅ **DONE** | Procedural language support |
+| CREATE/ALTER/DROP Operators/Aggregates | ✅ **DONE** | Custom operator support |
+| CREATE/ALTER/DROP Collations/Conversions | ✅ **DONE** | Character set support |
+| DROP FUNCTION/PROCEDURE/ROUTINE | ✅ **DONE** | Multiple functions with args |
 | **PostgreSQL 18 Protocol** | | |
 | NegotiateProtocolVersion | ✅ **DONE** | Protocol 3.2 negotiation in startup |
 | Variable-length cancel keys | ✅ **DONE** | 4-256 byte keys (v3.2) |
@@ -292,6 +345,13 @@ OrbitQL supports two wire protocols for client-server communication:
 | SHOW commands | 60% | SHOW TABLES, etc. |
 | Information_schema | 50% | Basic tables |
 
+### ✅ Full-Text Search (MySQL FULLTEXT)
+- `CREATE FULLTEXT INDEX` - Create FULLTEXT index on text columns ✅
+- `MATCH() AGAINST()` - Full-text search with three modes:
+  - `IN NATURAL LANGUAGE MODE` - TF-IDF scoring, relevance ranking ✅
+  - `IN BOOLEAN MODE` - Boolean operators (+must -exclude optional) ✅
+  - `WITH QUERY EXPANSION` - Query expansion using top results ✅
+
 ### Critical Gaps
 
 | Feature | Impact | Priority |
@@ -339,6 +399,16 @@ OrbitQL supports two wire protocols for client-server communication:
 | ANN OF clause | ✅ Complete |
 | similarity_cosine | ✅ Complete |
 | SAI index for vectors | ✅ Complete |
+
+### ✅ Full-Text Search (SASI/SAI Compatible)
+- `CREATE INDEX ... USING 'SASI'` - Create SASI secondary index ✅
+- `CONTAINS` - Full-text term matching ✅
+- `LIKE` with wildcards - Prefix and suffix matching ✅
+- Analyzer modes:
+  - `StandardAnalyzer` - Whitespace/punctuation tokenization ✅
+  - `NonTokenizingAnalyzer` - Exact matching ✅
+  - `CaseInsensitiveAnalyzer` - Case-insensitive matching ✅
+- Full-text search with TF-IDF relevance scoring ✅
 
 ### Critical Gaps
 
@@ -543,7 +613,10 @@ OrbitQL supports two wire protocols for client-server communication:
 | Protocol | Feature | Status |
 |----------|---------|--------|
 | PostgreSQL | Recursive CTEs | Pending |
-| PostgreSQL | Full-text search | Pending |
+| PostgreSQL | Full-text search | ✅ **DONE** |
+| Redis | Full-text search | ✅ **DONE** |
+| MySQL | Full-text search | ✅ **DONE** |
+| CQL | Full-text search | ✅ **DONE** |
 | Redis | Lua scripting | Pending |
 | Redis | Sorted Set operations | Pending |
 | CQL | TTL enforcement | Pending |

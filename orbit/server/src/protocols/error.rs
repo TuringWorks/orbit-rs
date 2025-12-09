@@ -24,8 +24,8 @@ pub enum ProtocolError {
     #[error("AQL query error: {0}")]
     AqlError(String),
 
-    /// SQL parsing error
-    #[error("SQL parse error: {0}")]
+    /// Query parsing error (generic, used by SQL and other query languages)
+    #[error("Query parse error: {0}")]
     ParseError(String),
 
     /// REST API error

@@ -3,6 +3,7 @@
 **Target**: Full PostgreSQL 18 Wire Protocol Compatibility
 **Reference**: https://www.postgresql.org/docs/18/index.html
 **Last Updated**: 2025-12-08
+**Current Estimated Coverage**: ~90%
 **Current Estimated Coverage**: ~85%
 
 ---
@@ -206,13 +207,13 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | ROLLBACK TO SAVEPOINT | ✅ | Rollback to savepoint |
 | START TRANSACTION | ✅ | Alias for BEGIN |
 | END | ✅ | Alias for COMMIT |
-| ABORT | ❌ | Alias for ROLLBACK |
-| SET TRANSACTION | ❌ | Transaction characteristics |
-| SET CONSTRAINTS | ❌ | Deferred constraints |
-| PREPARE TRANSACTION | ❌ | Two-phase commit |
-| COMMIT PREPARED | ❌ | Two-phase commit |
-| ROLLBACK PREPARED | ❌ | Two-phase commit |
-| LOCK | ❌ | Explicit table locking |
+| ABORT | ✅ | Alias for ROLLBACK |
+| SET TRANSACTION | ✅ | Transaction characteristics |
+| SET CONSTRAINTS | ✅ | Deferred constraints |
+| PREPARE TRANSACTION | ✅ | Two-phase commit |
+| COMMIT PREPARED | ✅ | Two-phase commit |
+| ROLLBACK PREPARED | ✅ | Two-phase commit |
+| LOCK | ✅ | Explicit table locking with all modes |
 
 ### Data Control Language (DCL)
 
@@ -220,8 +221,8 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 |---------|--------|-------|
 | GRANT | 🔶 | Basic parsing |
 | REVOKE | 🔶 | Basic parsing |
-| REASSIGN OWNED | ❌ | Object reassignment |
-| SECURITY LABEL | ❌ | Security labels |
+| REASSIGN OWNED | ✅ | Object reassignment |
+| SECURITY LABEL | ✅ | Security labels for all object types |
 
 ### Utility Commands
 
@@ -229,29 +230,29 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 |---------|--------|-------|
 | SHOW | ✅ | Server parameters |
 | SET | ✅ | Session parameters |
-| RESET | ❌ | Reset parameters |
+| RESET | ✅ | Reset session parameters |
 | EXPLAIN | 🔶 | Basic support, no ANALYZE |
-| ANALYZE | ❌ | Statistics collection |
-| VACUUM | ❌ | Table maintenance |
-| REINDEX | ❌ | Index rebuilding |
-| CLUSTER | ❌ | Table clustering |
-| CHECKPOINT | ❌ | Force checkpoint |
-| DISCARD | ❌ | Discard session state |
-| LOAD | ❌ | Load library |
-| REFRESH MATERIALIZED VIEW | ❌ | Mat view refresh |
-| IMPORT FOREIGN SCHEMA | ❌ | Foreign schema import |
-| LISTEN | ❌ | Notification listening |
-| UNLISTEN | ❌ | Stop listening |
-| NOTIFY | ❌ | Send notification |
-| PREPARE | ❌ | Prepared statements |
-| EXECUTE | ❌ | Execute prepared |
-| DEALLOCATE | ❌ | Deallocate prepared |
-| DECLARE | ❌ | Cursor declaration |
-| FETCH | ❌ | Fetch from cursor |
-| MOVE | ❌ | Move cursor |
-| CLOSE | ❌ | Close cursor |
-| CALL | ❌ | Procedure invocation |
-| DO | ❌ | Anonymous code block |
+| ANALYZE | ✅ | Statistics collection parsing |
+| VACUUM | ✅ | Table maintenance parsing |
+| REINDEX | ✅ | Index rebuilding parsing |
+| CLUSTER | ✅ | Table clustering parsing |
+| CHECKPOINT | ✅ | Force checkpoint |
+| DISCARD | ✅ | Discard session state |
+| LOAD | ✅ | Load library |
+| REFRESH MATERIALIZED VIEW | ✅ | Mat view refresh with CONCURRENTLY, WITH DATA |
+| IMPORT FOREIGN SCHEMA | ✅ | Foreign schema import with LIMIT TO/EXCEPT |
+| LISTEN | ✅ | Notification listening |
+| UNLISTEN | ✅ | Stop listening |
+| NOTIFY | ✅ | Send notification |
+| PREPARE | ✅ | Prepared statements |
+| EXECUTE | ✅ | Execute prepared |
+| DEALLOCATE | ✅ | Deallocate prepared |
+| DECLARE | ✅ | Cursor declaration |
+| FETCH | ✅ | Fetch from cursor |
+| MOVE | ✅ | Move cursor |
+| CLOSE | ✅ | Close cursor |
+| CALL | ✅ | Procedure invocation |
+| DO | ✅ | Anonymous code block |
 | VALUES | ✅ | Values expression |
 
 ---
@@ -349,8 +350,41 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 
 | Type | Status | OID | Notes |
 |------|--------|-----|-------|
-| tsvector | 🔶 | 3614 | Type defined, no operations |
-| tsquery | 🔶 | 3615 | Type defined, no operations |
+| tsvector | ✅ | 3614 | Full support with FTS functions |
+| tsquery | ✅ | 3615 | Full support with FTS operators |
+
+#### Text Search Functions
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| to_tsvector(text) | ✅ | Create tsvector from text |
+| to_tsvector(config, text) | ✅ | Create tsvector with config |
+| to_tsquery(text) | ✅ | Parse tsquery |
+| plainto_tsquery(text) | ✅ | Plain text to tsquery |
+| phraseto_tsquery(text) | ✅ | Phrase to tsquery |
+| websearch_to_tsquery(text) | ✅ | Web-style search |
+| setweight(tsvector, char) | ✅ | Set weight for lexemes |
+| ts_rank(tsvector, tsquery) | ✅ | Relevance ranking |
+| ts_rank_cd(tsvector, tsquery) | ✅ | Cover density ranking |
+| ts_headline(text, tsquery) | ✅ | Highlight matches |
+| numnode(tsquery) | ✅ | Number of query nodes |
+| querytree(tsquery) | ✅ | Query tree representation |
+| strip(tsvector) | ✅ | Remove positions and weights |
+| ts_lexize(regdictionary, text) | ✅ | Lexize text |
+| length(tsvector) | ✅ | Number of lexemes |
+| tsvector_concat(\|\|) | ✅ | Concatenate tsvectors |
+
+#### Text Search Operators
+
+| Operator | Status | Description |
+|----------|--------|-------------|
+| @@ | ✅ | tsvector matches tsquery |
+| @> | ✅ | tsquery contains tsquery |
+| <@ | ✅ | tsquery is contained by |
+| \|\| | ✅ | Concatenate tsvectors/tsqueries |
+| && | ✅ | AND tsqueries |
+| !! | ✅ | Negate tsquery |
+| <-> | ✅ | Phrase search (followed by) |
 
 ### UUID Type
 
@@ -1253,10 +1287,11 @@ SELECT add_retention_policy('conditions', INTERVAL '7 days');
    - LATERAL joins
    - Correlated updates/deletes
 
-4. **Full-Text Search**
-   - tsvector/tsquery operations
-   - to_tsvector(), to_tsquery()
-   - Text search operators
+4. **Full-Text Search** ✅ COMPLETED
+   - tsvector/tsquery operations ✅
+   - to_tsvector(), to_tsquery() and variants ✅
+   - Text search operators (@@ @> <@ || && !! <->) ✅
+   - ts_rank(), ts_headline(), setweight() ✅
 
 ### Phase 3: DDL and Schema Management (Priority: Medium)
 
@@ -1397,6 +1432,9 @@ This section tracks OrbitRS implementation of features new to PostgreSQL 18.
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2025-12-08 | 1.5.0 | Added full-text search support: tsvector/tsquery types, FTS functions (to_tsvector, to_tsquery, plainto_tsquery, phraseto_tsquery, websearch_to_tsquery, setweight, ts_rank, ts_rank_cd, ts_headline, numnode, querytree, strip, ts_lexize), FTS operators (@@, @>, <@, \|\|, &&, !!, <->) |
+| 2025-12-08 | 1.4.0 | Added two-phase commit (PREPARE/COMMIT/ROLLBACK PREPARED) and DCL commands (REASSIGN OWNED, SECURITY LABEL). Coverage increased to ~90% |
+| 2025-12-08 | 1.3.0 | Added TCL commands (SET TRANSACTION, SET CONSTRAINTS, LOCK) and utility commands (LOAD, REFRESH MATERIALIZED VIEW, IMPORT FOREIGN SCHEMA). Coverage increased to ~88% |
 | 2025-12-08 | 1.2.0 | Added comprehensive DDL parsing: CREATE/ALTER/DROP for Foreign Tables, FDW, Servers, User Mappings, Publications, Subscriptions, Event Triggers, Access Methods, Statistics, Text Search (Configuration/Dictionary/Parser/Template), Transforms, Languages, Operators, Aggregates, Casts, Collations, Conversions, Tablespaces, Groups, Routines. Coverage increased to ~85% |
 | 2025-12-07 | 1.1.0 | Added PostgreSQL 18 new features section; updated protocol and temporal constraint status |
 | 2025-01-XX | 1.0.0 | Initial specification |
