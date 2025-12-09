@@ -1,9 +1,11 @@
 //! Connection management for Orbit Desktop
-//! 
+//!
 //! This module handles connections to various database types including:
 //! - PostgreSQL (standard SQL)
 //! - OrbitQL (native Orbit protocol)
 //! - Redis (key-value operations)
+//! - Arrow Flight SQL (high-performance columnar protocol)
+//! - OrbitWire (native binary protocol)
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -35,6 +37,8 @@ pub enum ConnectionType {
     CQL,
     Cypher,
     AQL,
+    FlightSQL,
+    OrbitWire,
 }
 
 /// Connection status
@@ -129,6 +133,8 @@ impl ConnectionManager {
             ConnectionType::CQL => self.test_cql_connection(info).await,
             ConnectionType::Cypher => self.test_cypher_connection(info).await,
             ConnectionType::AQL => self.test_aql_connection(info).await,
+            ConnectionType::FlightSQL => self.test_flightsql_connection(info).await,
+            ConnectionType::OrbitWire => self.test_orbitwire_connection(info).await,
         }
     }
 
@@ -209,6 +215,14 @@ impl ConnectionManager {
             },
             ConnectionType::AQL => {
                 let conn = AQLConnection::new(info).await?;
+                Ok(Box::new(conn))
+            },
+            ConnectionType::FlightSQL => {
+                let conn = FlightSQLConnection::new(info).await?;
+                Ok(Box::new(conn))
+            },
+            ConnectionType::OrbitWire => {
+                let conn = OrbitWireConnection::new(info).await?;
                 Ok(Box::new(conn))
             },
         }
@@ -357,19 +371,83 @@ impl ConnectionManager {
         // AQL/ArangoDB uses HTTP REST API
         let base_url = format!("http://{}:{}", info.host, info.port);
         let client = reqwest::Client::new();
-        
+
         // Test with version endpoint
         let version_url = format!("{}/_api/version", base_url);
         let mut request = client.get(&version_url);
-        
+
         if let (Some(user), Some(pass)) = (&info.username, &info.password) {
             request = request.basic_auth(user, Some(pass));
         }
-        
+
         match request.send().await {
             Ok(response) if response.status().is_success() => Ok(ConnectionStatus::Connected),
             Ok(response) => Ok(ConnectionStatus::Error(format!("HTTP {}: {}", response.status(), response.status().canonical_reason().unwrap_or("Unknown")))),
             Err(e) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
+        }
+    }
+
+    async fn test_flightsql_connection(&self, info: &ConnectionInfo) -> Result<ConnectionStatus, ConnectionError> {
+        // Arrow Flight SQL uses gRPC, test via HTTP REST adapter
+        let base_url = format!("http://{}:{}", info.host, info.port);
+        let client = reqwest::Client::new();
+
+        // Try health endpoint or just test TCP connectivity
+        let health_url = format!("{}/health", base_url);
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            client.get(&health_url).send(),
+        )
+        .await
+        {
+            Ok(Ok(response)) if response.status().is_success() || response.status().as_u16() == 404 => {
+                // 404 is acceptable - means server is responding
+                Ok(ConnectionStatus::Connected)
+            }
+            Ok(Ok(response)) => Ok(ConnectionStatus::Error(format!(
+                "HTTP {}: {}",
+                response.status(),
+                response.status().canonical_reason().unwrap_or("Unknown")
+            ))),
+            Ok(Err(e)) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
+            Err(_) => Ok(ConnectionStatus::Error("Connection timeout".to_string())),
+        }
+    }
+
+    async fn test_orbitwire_connection(&self, info: &ConnectionInfo) -> Result<ConnectionStatus, ConnectionError> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let addr = format!("{}:{}", info.host, info.port);
+
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            tokio::net::TcpStream::connect(&addr),
+        )
+        .await
+        {
+            Ok(Ok(mut stream)) => {
+                // Send OrbitWire handshake: magic bytes + version
+                let handshake = [0x4F, 0x52, 0x42, 0x54, 0x01]; // "ORBT" + version 1
+                if let Err(e) = stream.write_all(&handshake).await {
+                    return Ok(ConnectionStatus::Error(format!("Handshake write failed: {}", e)));
+                }
+
+                // Read handshake response
+                let mut response = [0u8; 5];
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(3),
+                    stream.read_exact(&mut response),
+                )
+                .await
+                {
+                    Ok(Ok(())) if &response[..4] == b"ORBT" => Ok(ConnectionStatus::Connected),
+                    Ok(Ok(())) => Ok(ConnectionStatus::Error("Invalid handshake response".to_string())),
+                    Ok(Err(e)) => Ok(ConnectionStatus::Error(format!("Handshake read failed: {}", e))),
+                    Err(_) => Ok(ConnectionStatus::Error("Handshake timeout".to_string())),
+                }
+            }
+            Ok(Err(e)) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
+            Err(_) => Ok(ConnectionStatus::Error("Connection timeout".to_string())),
         }
     }
 }
@@ -612,10 +690,12 @@ impl MySQLConnection {
     }
 
     pub async fn execute_query(&self, query: &str) -> Result<Vec<mysql_async::Row>, ConnectionError> {
+        use mysql_async::prelude::Queryable;
+
         if let Some(pool) = &self.pool {
             let mut conn = pool.get_conn().await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            
+
             conn.query::<mysql_async::Row, _>(query).await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
         } else {
@@ -877,6 +957,198 @@ impl AQLConnection {
 impl DatabaseConnection for AQLConnection {
     fn connection_type(&self) -> ConnectionType {
         ConnectionType::AQL
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected
+    }
+
+    fn disconnect(&mut self) -> Result<(), ConnectionError> {
+        self.connected = false;
+        Ok(())
+    }
+}
+
+/// Arrow Flight SQL connection
+pub struct FlightSQLConnection {
+    client: reqwest::Client,
+    endpoint: String,
+    database: Option<String>,
+    connected: bool,
+}
+
+impl FlightSQLConnection {
+    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
+        let endpoint = format!("http://{}:{}", info.host, info.port);
+        let client = reqwest::Client::new();
+
+        // Test connection by checking if server responds
+        let health_url = format!("{}/health", endpoint);
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            client.get(&health_url).send(),
+        )
+        .await
+        {
+            Ok(Ok(response)) if response.status().is_success() || response.status().as_u16() == 404 => {
+                Ok(Self {
+                    client,
+                    endpoint,
+                    database: info.database.clone(),
+                    connected: true,
+                })
+            }
+            Ok(Ok(response)) => Err(ConnectionError::ConnectionFailed(format!(
+                "HTTP {}: {}",
+                response.status(),
+                response.status().canonical_reason().unwrap_or("Unknown")
+            ))),
+            Ok(Err(e)) => Err(ConnectionError::NetworkError(e.to_string())),
+            Err(_) => Err(ConnectionError::Timeout),
+        }
+    }
+
+    pub async fn execute_query(&self, query: &str) -> Result<serde_json::Value, ConnectionError> {
+        if !self.connected {
+            return Err(ConnectionError::ConnectionNotFound("Not connected".to_string()));
+        }
+
+        let url = format!("{}/api/v1/flight/sql", self.endpoint);
+        let request_body = serde_json::json!({
+            "query": query,
+            "database": self.database
+        });
+
+        match self.client.post(&url).json(&request_body).send().await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    response
+                        .json::<serde_json::Value>()
+                        .await
+                        .map_err(|e| ConnectionError::NetworkError(e.to_string()))
+                } else {
+                    Err(ConnectionError::ConnectionFailed(format!(
+                        "Query failed: {}",
+                        response.status()
+                    )))
+                }
+            }
+            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
+        }
+    }
+}
+
+impl DatabaseConnection for FlightSQLConnection {
+    fn connection_type(&self) -> ConnectionType {
+        ConnectionType::FlightSQL
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected
+    }
+
+    fn disconnect(&mut self) -> Result<(), ConnectionError> {
+        self.connected = false;
+        Ok(())
+    }
+}
+
+/// OrbitWire (native binary protocol) connection
+pub struct OrbitWireConnection {
+    client: reqwest::Client,
+    base_url: String,
+    database: Option<String>,
+    connected: bool,
+}
+
+impl OrbitWireConnection {
+    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let addr = format!("{}:{}", info.host, info.port);
+
+        // Test connection with OrbitWire handshake
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            tokio::net::TcpStream::connect(&addr),
+        )
+        .await
+        {
+            Ok(Ok(mut stream)) => {
+                // Send handshake
+                let handshake = [0x4F, 0x52, 0x42, 0x54, 0x01]; // "ORBT" + version 1
+                stream
+                    .write_all(&handshake)
+                    .await
+                    .map_err(|e| ConnectionError::NetworkError(e.to_string()))?;
+
+                // Read response
+                let mut response = [0u8; 5];
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(3),
+                    stream.read_exact(&mut response),
+                )
+                .await
+                {
+                    Ok(Ok(())) if &response[..4] == b"ORBT" => {
+                        // Connection successful, we'll use HTTP fallback for queries
+                        // since maintaining raw TCP state is complex for this use case
+                        let http_port = 8080; // Default REST API port
+                        let base_url = format!("http://{}:{}", info.host, http_port);
+                        let client = reqwest::Client::new();
+
+                        Ok(Self {
+                            client,
+                            base_url,
+                            database: info.database.clone(),
+                            connected: true,
+                        })
+                    }
+                    Ok(Ok(())) => Err(ConnectionError::ConnectionFailed(
+                        "Invalid handshake response".to_string(),
+                    )),
+                    Ok(Err(e)) => Err(ConnectionError::NetworkError(e.to_string())),
+                    Err(_) => Err(ConnectionError::Timeout),
+                }
+            }
+            Ok(Err(e)) => Err(ConnectionError::ConnectionFailed(e.to_string())),
+            Err(_) => Err(ConnectionError::Timeout),
+        }
+    }
+
+    pub async fn execute_query(&self, query: &str) -> Result<serde_json::Value, ConnectionError> {
+        if !self.connected {
+            return Err(ConnectionError::ConnectionNotFound("Not connected".to_string()));
+        }
+
+        let url = format!("{}/api/v1/sql", self.base_url);
+        let request_body = serde_json::json!({
+            "query": query,
+            "protocol": "orbitwire"
+        });
+
+        match self.client.post(&url).json(&request_body).send().await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    response
+                        .json::<serde_json::Value>()
+                        .await
+                        .map_err(|e| ConnectionError::NetworkError(e.to_string()))
+                } else {
+                    Err(ConnectionError::ConnectionFailed(format!(
+                        "Query failed: {}",
+                        response.status()
+                    )))
+                }
+            }
+            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
+        }
+    }
+}
+
+impl DatabaseConnection for OrbitWireConnection {
+    fn connection_type(&self) -> ConnectionType {
+        ConnectionType::OrbitWire
     }
 
     fn is_connected(&self) -> bool {

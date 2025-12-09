@@ -106,6 +106,12 @@ impl QueryExecutor {
             ConnectionType::AQL => {
                 self.execute_aql_query(&request, &connection).await
             }
+            ConnectionType::FlightSQL => {
+                self.execute_flightsql_query(&request, &connection).await
+            }
+            ConnectionType::OrbitWire => {
+                self.execute_orbitwire_query(&request, &connection).await
+            }
         };
         
         let execution_time = start_time.elapsed().as_secs_f64() * 1000.0; // Convert to milliseconds
@@ -304,17 +310,17 @@ impl QueryExecutor {
         let json_value = match value {
             redis::Value::Nil => serde_json::Value::Null,
             redis::Value::Int(i) => serde_json::Value::Number(i.into()),
-            redis::Value::BulkString(data) => {
+            redis::Value::Data(data) => {
                 String::from_utf8(data)
                     .map(serde_json::Value::String)
                     .unwrap_or(serde_json::Value::Null)
             }
-            redis::Value::Array(arr) => {
+            redis::Value::Bulk(arr) => {
                 serde_json::Value::Array(
                     arr.into_iter()
                         .map(|v| match v {
                             redis::Value::Int(i) => serde_json::Value::Number(i.into()),
-                            redis::Value::BulkString(d) => {
+                            redis::Value::Data(d) => {
                                 String::from_utf8(d)
                                     .map(serde_json::Value::String)
                                     .unwrap_or(serde_json::Value::Null)
@@ -324,7 +330,7 @@ impl QueryExecutor {
                         .collect()
                 )
             }
-            redis::Value::SimpleString(s) => serde_json::Value::String(s),
+            redis::Value::Status(s) => serde_json::Value::String(s),
             redis::Value::Okay => serde_json::Value::String("OK".to_string()),
         };
         
@@ -524,6 +530,7 @@ impl QueryExecutor {
                         }
                     }
                     
+                    let rows_count = result_rows.len();
                     Ok(QueryResult {
                         success: true,
                         data: Some(QueryResultData {
@@ -532,7 +539,7 @@ impl QueryExecutor {
                         }),
                         error: None,
                         execution_time: 0.0,
-                        rows_affected: Some(result_rows.len() as u64),
+                        rows_affected: Some(rows_count as u64),
                     })
                 } else {
                     Ok(QueryResult {
@@ -587,7 +594,7 @@ impl QueryExecutor {
                 if let Some(row_obj) = row_value.as_object() {
                     let mut row_map = HashMap::new();
                     for (key, value) in row_obj {
-                        if !columns.iter().any(|c: &ColumnInfo| c.name == key) {
+                        if !columns.iter().any(|c: &ColumnInfo| &c.name == key) {
                             columns.push(ColumnInfo {
                                 name: key.clone(),
                                 column_type: "unknown".to_string(),
@@ -611,6 +618,7 @@ impl QueryExecutor {
                 }
             }
             
+            let rows_count = result_rows.len();
             Ok(QueryResult {
                 success: true,
                 data: Some(QueryResultData {
@@ -619,7 +627,7 @@ impl QueryExecutor {
                 }),
                 error: None,
                 execution_time: 0.0,
-                rows_affected: Some(result_rows.len() as u64),
+                rows_affected: Some(rows_count as u64),
             })
         } else {
             Ok(QueryResult {
@@ -634,7 +642,108 @@ impl QueryExecutor {
             })
         }
     }
-    
+
+    async fn execute_flightsql_query(
+        &self,
+        request: &QueryRequest,
+        connection: &Connection,
+    ) -> Result<QueryResult, String> {
+        use crate::connections::FlightSQLConnection;
+
+        // Create connection
+        let flight_conn = FlightSQLConnection::new(&connection.info).await
+            .map_err(|e| format!("Failed to connect: {}", e))?;
+
+        // Execute query
+        let result = flight_conn.execute_query(&request.query).await
+            .map_err(|e| format!("Query execution failed: {}", e))?;
+
+        // Parse result
+        self.parse_json_result(result)
+    }
+
+    async fn execute_orbitwire_query(
+        &self,
+        request: &QueryRequest,
+        connection: &Connection,
+    ) -> Result<QueryResult, String> {
+        use crate::connections::OrbitWireConnection;
+
+        // Create connection
+        let wire_conn = OrbitWireConnection::new(&connection.info).await
+            .map_err(|e| format!("Failed to connect: {}", e))?;
+
+        // Execute query
+        let result = wire_conn.execute_query(&request.query).await
+            .map_err(|e| format!("Query execution failed: {}", e))?;
+
+        // Parse result
+        self.parse_json_result(result)
+    }
+
+    fn parse_json_result(&self, result: serde_json::Value) -> Result<QueryResult, String> {
+        if let Some(data) = result.get("data") {
+            let mut columns = Vec::new();
+            let mut result_rows = Vec::new();
+
+            // Extract columns
+            if let Some(cols) = data.get("columns").and_then(|c| c.as_array()) {
+                for col in cols {
+                    if let Some(name) = col.get("name").and_then(|n| n.as_str()) {
+                        columns.push(ColumnInfo {
+                            name: name.to_string(),
+                            column_type: col.get("type")
+                                .and_then(|t| t.as_str())
+                                .unwrap_or("unknown")
+                                .to_string(),
+                        });
+                    }
+                }
+            }
+
+            // Extract rows
+            if let Some(rows) = data.get("rows").and_then(|r| r.as_array()) {
+                for row in rows {
+                    if let Some(row_arr) = row.as_array() {
+                        let mut row_map = std::collections::HashMap::new();
+                        for (i, value) in row_arr.iter().enumerate() {
+                            let col_name = columns.get(i)
+                                .map(|c| c.name.clone())
+                                .unwrap_or_else(|| format!("column_{}", i));
+                            row_map.insert(col_name, value.clone());
+                        }
+                        result_rows.push(row_map);
+                    }
+                }
+            }
+
+            let rows_count = result_rows.len();
+            Ok(QueryResult {
+                success: true,
+                data: Some(QueryResultData {
+                    columns,
+                    rows: result_rows,
+                }),
+                error: None,
+                execution_time: 0.0,
+                rows_affected: Some(rows_count as u64),
+            })
+        } else if let Some(error) = result.get("error") {
+            Err(error.to_string())
+        } else {
+            Ok(QueryResult {
+                success: true,
+                data: Some(QueryResultData {
+                    columns: vec![],
+                    rows: vec![],
+                }),
+                error: None,
+                execution_time: 0.0,
+                rows_affected: Some(0),
+            })
+        }
+    }
+
     pub async fn explain_query(
         &mut self,
         request: QueryRequest,

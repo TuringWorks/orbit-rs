@@ -208,19 +208,19 @@ pub enum StorageError {
 
 impl StoredConnection {
     /// Convert to Connection with password decryption
-    pub fn to_connection(&self, enc_manager: &crate::encryption::EncryptionManager) -> Result<Connection, storage::StorageError> {
+    pub fn to_connection(&self, enc_manager: &crate::encryption::EncryptionManager) -> Result<Connection, StorageError> {
         use chrono::DateTime;
         use crate::connections::{ConnectionInfo, ConnectionType, ConnectionStatus};
-        
+
         // Decrypt password if present
         let password = if let Some(encrypted) = &self.info.password_encrypted {
             enc_manager.decrypt(encrypted)
-                .map_err(|e| storage::StorageError::ParseError(format!("Failed to decrypt password: {}", e)))
+                .map_err(|e| StorageError::ParseError(format!("Failed to decrypt password: {}", e)))
                 .ok()
         } else {
             None
         };
-        
+
         let connection_type = match self.info.connection_type.as_str() {
             "PostgreSQL" => ConnectionType::PostgreSQL,
             "OrbitQL" => ConnectionType::OrbitQL,
@@ -229,9 +229,11 @@ impl StoredConnection {
             "CQL" => ConnectionType::CQL,
             "Cypher" => ConnectionType::Cypher,
             "AQL" => ConnectionType::AQL,
-            _ => return Err(storage::StorageError::ParseError(format!("Unknown connection type: {}", self.info.connection_type))),
+            "FlightSQL" => ConnectionType::FlightSQL,
+            "OrbitWire" => ConnectionType::OrbitWire,
+            _ => return Err(StorageError::ParseError(format!("Unknown connection type: {}", self.info.connection_type))),
         };
-        
+
         Ok(Connection {
             id: self.id.clone(),
             info: ConnectionInfo {
@@ -248,8 +250,8 @@ impl StoredConnection {
             },
             status: ConnectionStatus::Disconnected,
             created_at: DateTime::parse_from_rfc3339(&self.created_at)
-                .unwrap_or_else(|_| chrono::Utc::now())
-                .with_timezone(&chrono::Utc),
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or_else(|_| chrono::Utc::now()),
             last_used: self.last_used.as_ref()
                 .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
                 .map(|dt| dt.with_timezone(&chrono::Utc)),
@@ -260,15 +262,15 @@ impl StoredConnection {
 
 impl Connection {
     /// Convert to StoredConnection with password encryption
-    pub fn to_stored(&self, enc_manager: &crate::encryption::EncryptionManager) -> Result<StoredConnection, storage::StorageError> {
+    pub fn to_stored(&self, enc_manager: &crate::encryption::EncryptionManager) -> Result<StoredConnection, StorageError> {
         // Encrypt password if present
         let password_encrypted = if let Some(password) = &self.info.password {
             Some(enc_manager.encrypt(password)
-                .map_err(|e| storage::StorageError::SerializeError(format!("Failed to encrypt password: {}", e)))?)
+                .map_err(|e| StorageError::SerializeError(format!("Failed to encrypt password: {}", e)))?)
         } else {
             None
         };
-        
+
         let connection_type = match self.info.connection_type {
             crate::connections::ConnectionType::PostgreSQL => "PostgreSQL",
             crate::connections::ConnectionType::OrbitQL => "OrbitQL",
@@ -277,6 +279,8 @@ impl Connection {
             crate::connections::ConnectionType::CQL => "CQL",
             crate::connections::ConnectionType::Cypher => "Cypher",
             crate::connections::ConnectionType::AQL => "AQL",
+            crate::connections::ConnectionType::FlightSQL => "FlightSQL",
+            crate::connections::ConnectionType::OrbitWire => "OrbitWire",
         };
         
         Ok(StoredConnection {
