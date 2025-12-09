@@ -695,14 +695,14 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | row_number() | ✅ | Sequential number |
 | rank() | ✅ | Rank with gaps |
 | dense_rank() | ✅ | Rank without gaps |
-| percent_rank() | ❌ | Relative rank |
-| cume_dist() | ❌ | Cumulative distribution |
-| ntile(n) | ❌ | Divide into buckets |
-| lag(expr,offset,default) | 🔶 | Previous row value |
-| lead(expr,offset,default) | 🔶 | Next row value |
-| first_value(expr) | ❌ | First in frame |
-| last_value(expr) | ❌ | Last in frame |
-| nth_value(expr,n) | ❌ | Nth in frame |
+| percent_rank() | ✅ | Relative rank |
+| cume_dist() | ✅ | Cumulative distribution |
+| ntile(n) | ✅ | Divide into buckets |
+| lag(expr,offset,default) | ✅ | Previous row value |
+| lead(expr,offset,default) | ✅ | Next row value |
+| first_value(expr) | ✅ | First in frame |
+| last_value(expr) | ✅ | Last in frame |
+| nth_value(expr,n) | ✅ | Nth in frame |
 
 ### JSON Functions
 
