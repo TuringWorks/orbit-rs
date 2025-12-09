@@ -1,0 +1,4449 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>OrbitRS Protocol Comparison Whitepaper</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css/github-markdown.min.css" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">OrbitRS Protocol Comparison Whitepaper</h1>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#orbitrs-protocol-comparison-whitepaper"
+id="toc-orbitrs-protocol-comparison-whitepaper">OrbitRS Protocol
+Comparison Whitepaper</a>
+<ul>
+<li><a
+href="#comprehensive-feature-by-feature-and-command-by-command-analysis"
+id="toc-comprehensive-feature-by-feature-and-command-by-command-analysis">Comprehensive
+Feature-by-Feature and Command-by-Command Analysis</a></li>
+<li><a href="#executive-summary" id="toc-executive-summary">Executive
+Summary</a></li>
+<li><a href="#table-of-contents" id="toc-table-of-contents">Table of
+Contents</a></li>
+<li><a href="#protocol-overview" id="toc-protocol-overview">1. Protocol
+Overview</a>
+<ul>
+<li><a href="#supported-protocols" id="toc-supported-protocols">1.1
+Supported Protocols</a></li>
+<li><a href="#protocol-hierarchy" id="toc-protocol-hierarchy">1.2
+Protocol Hierarchy</a></li>
+</ul></li>
+<li><a href="#architecture-comparison"
+id="toc-architecture-comparison">2. Architecture Comparison</a>
+<ul>
+<li><a href="#protocol-implementation-depth"
+id="toc-protocol-implementation-depth">2.1 Protocol Implementation
+Depth</a></li>
+<li><a href="#query-processing-pipeline"
+id="toc-query-processing-pipeline">2.2 Query Processing
+Pipeline</a></li>
+</ul></li>
+<li><a href="#feature-comparison-matrix"
+id="toc-feature-comparison-matrix">3. Feature Comparison Matrix</a>
+<ul>
+<li><a href="#core-database-features"
+id="toc-core-database-features">3.1 Core Database Features</a></li>
+<li><a href="#data-type-support" id="toc-data-type-support">3.2 Data
+Type Support</a></li>
+<li><a href="#advanced-features" id="toc-advanced-features">3.3 Advanced
+Features</a></li>
+</ul></li>
+<li><a href="#command-reference-by-protocol"
+id="toc-command-reference-by-protocol">4. Command Reference by
+Protocol</a>
+<ul>
+<li><a href="#redis-resp-commands-150-commands"
+id="toc-redis-resp-commands-150-commands">4.1 Redis (RESP) Commands
+(150+ Commands)</a></li>
+<li><a href="#postgresql-sql-statements-80-statement-types"
+id="toc-postgresql-sql-statements-80-statement-types">4.2 PostgreSQL SQL
+Statements (80+ Statement Types)</a></li>
+<li><a href="#mysql-wire-protocol-commands"
+id="toc-mysql-wire-protocol-commands">4.3 MySQL Wire Protocol
+Commands</a></li>
+<li><a href="#cql-cassandra-statements-45-operations"
+id="toc-cql-cassandra-statements-45-operations">4.4 CQL (Cassandra)
+Statements (45+ Operations)</a></li>
+<li><a href="#cypher-neo4j-query-language"
+id="toc-cypher-neo4j-query-language">4.5 Cypher (Neo4j) Query
+Language</a></li>
+<li><a href="#mongodb-operations" id="toc-mongodb-operations">4.6
+MongoDB Operations</a></li>
+<li><a href="#orbitql-statements-native-multi-model"
+id="toc-orbitql-statements-native-multi-model">4.7 OrbitQL Statements
+(Native Multi-Model)</a></li>
+<li><a href="#rest-api-endpoints" id="toc-rest-api-endpoints">4.8 REST
+API Endpoints</a></li>
+</ul></li>
+<li><a href="#data-model-comparison" id="toc-data-model-comparison">5.
+Data Model Comparison</a>
+<ul>
+<li><a href="#schema-flexibility" id="toc-schema-flexibility">5.1 Schema
+Flexibility</a></li>
+<li><a href="#relationship-modeling" id="toc-relationship-modeling">5.2
+Relationship Modeling</a></li>
+<li><a href="#query-patterns" id="toc-query-patterns">5.3 Query
+Patterns</a></li>
+</ul></li>
+<li><a href="#query-capabilities-comparison"
+id="toc-query-capabilities-comparison">6. Query Capabilities
+Comparison</a>
+<ul>
+<li><a href="#query-language-features"
+id="toc-query-language-features">6.1 Query Language Features</a></li>
+<li><a href="#aggregation-capabilities"
+id="toc-aggregation-capabilities">6.2 Aggregation Capabilities</a></li>
+</ul></li>
+<li><a href="#transaction-support-comparison"
+id="toc-transaction-support-comparison">7. Transaction Support
+Comparison</a>
+<ul>
+<li><a href="#acid-properties" id="toc-acid-properties">7.1 ACID
+Properties</a></li>
+<li><a href="#isolation-levels" id="toc-isolation-levels">7.2 Isolation
+Levels</a></li>
+<li><a href="#distributed-transaction-support"
+id="toc-distributed-transaction-support">7.3 Distributed Transaction
+Support</a></li>
+</ul></li>
+<li><a href="#performance-characteristics"
+id="toc-performance-characteristics">8. Performance Characteristics</a>
+<ul>
+<li><a href="#latency-comparison" id="toc-latency-comparison">8.1
+Latency Comparison</a></li>
+<li><a href="#throughput-characteristics"
+id="toc-throughput-characteristics">8.2 Throughput
+Characteristics</a></li>
+<li><a href="#scalability" id="toc-scalability">8.3 Scalability</a></li>
+</ul></li>
+<li><a href="#use-case-recommendations"
+id="toc-use-case-recommendations">9. Use Case Recommendations</a>
+<ul>
+<li><a href="#protocol-selection-guide"
+id="toc-protocol-selection-guide">9.1 Protocol Selection Guide</a></li>
+<li><a href="#multi-protocol-patterns"
+id="toc-multi-protocol-patterns">9.2 Multi-Protocol Patterns</a></li>
+</ul></li>
+<li><a href="#migration-guide" id="toc-migration-guide">10. Migration
+Guide</a>
+<ul>
+<li><a href="#from-single-protocol-to-multi-protocol"
+id="toc-from-single-protocol-to-multi-protocol">10.1 From Single
+Protocol to Multi-Protocol</a></li>
+<li><a href="#protocol-compatibility"
+id="toc-protocol-compatibility">10.2 Protocol Compatibility</a></li>
+<li><a href="#connection-string-examples"
+id="toc-connection-string-examples">10.3 Connection String
+Examples</a></li>
+</ul></li>
+<li><a href="#appendix-complete-command-reference"
+id="toc-appendix-complete-command-reference">Appendix: Complete Command
+Reference</a>
+<ul>
+<li><a href="#a.1-command-count-by-protocol"
+id="toc-a.1-command-count-by-protocol">A.1 Command Count by
+Protocol</a></li>
+</ul></li>
+<li><a href="#conclusion" id="toc-conclusion">Conclusion</a>
+<ul>
+<li><a href="#when-to-use-orbitrs" id="toc-when-to-use-orbitrs">When to
+Use OrbitRS</a></li>
+<li><a href="#getting-started" id="toc-getting-started">Getting
+Started</a></li>
+</ul></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="orbitrs-protocol-comparison-whitepaper">OrbitRS Protocol
+Comparison Whitepaper</h1>
+<h2
+id="comprehensive-feature-by-feature-and-command-by-command-analysis">Comprehensive
+Feature-by-Feature and Command-by-Command Analysis</h2>
+<p><strong>Version:</strong> 1.0 <strong>Date:</strong> December 2024
+<strong>Authors:</strong> OrbitRS Development Team</p>
+<hr />
+<h2 id="executive-summary">Executive Summary</h2>
+<p>OrbitRS is a revolutionary multi-protocol database engine written in
+Rust that natively implements <strong>8 database protocols</strong> from
+a single unified storage layer. This whitepaper provides an exhaustive
+feature-by-feature and command-by-command comparison across all
+supported protocols, enabling architects and developers to make informed
+decisions about which protocol interfaces best suit their workloads.</p>
+<p><strong>Key Statistics:</strong> - <strong>8 Native
+Protocols</strong>: PostgreSQL, MySQL, Redis (RESP), CQL (Cassandra),
+Cypher (Neo4j), MongoDB, OrbitQL, REST/gRPC - <strong>350+
+Commands</strong>: Comprehensive command coverage across all protocols -
+<strong>5 Data Models</strong>: Relational, Document, Key-Value, Graph,
+Time-Series - <strong>1 Unified Storage</strong>: All protocols share
+the same underlying data</p>
+<hr />
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol type="1">
+<li><a href="#1-protocol-overview">Protocol Overview</a></li>
+<li><a href="#2-architecture-comparison">Architecture
+Comparison</a></li>
+<li><a href="#3-feature-comparison-matrix">Feature Comparison
+Matrix</a></li>
+<li><a href="#4-command-reference-by-protocol">Command Reference by
+Protocol</a></li>
+<li><a href="#5-data-model-comparison">Data Model Comparison</a></li>
+<li><a href="#6-query-capabilities-comparison">Query Capabilities
+Comparison</a></li>
+<li><a href="#7-transaction-support-comparison">Transaction Support
+Comparison</a></li>
+<li><a href="#8-performance-characteristics">Performance
+Characteristics</a></li>
+<li><a href="#9-use-case-recommendations">Use Case
+Recommendations</a></li>
+<li><a href="#10-migration-guide">Migration Guide</a></li>
+<li><a href="#appendix-complete-command-reference">Appendix: Complete
+Command Reference</a></li>
+</ol>
+<hr />
+<h2 id="protocol-overview">1. Protocol Overview</h2>
+<h3 id="supported-protocols">1.1 Supported Protocols</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 17%" />
+<col style="width: 10%" />
+<col style="width: 26%" />
+<col style="width: 31%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr>
+<th>Protocol</th>
+<th>Port</th>
+<th>Wire Protocol</th>
+<th>Primary Use Case</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>PostgreSQL</strong></td>
+<td>5432</td>
+<td>PostgreSQL v3.0</td>
+<td>ACID transactions, complex queries</td>
+<td>Production</td>
+</tr>
+<tr>
+<td><strong>MySQL</strong></td>
+<td>3306</td>
+<td>MySQL 4.1+</td>
+<td>Web applications, LAMP stack</td>
+<td>Production</td>
+</tr>
+<tr>
+<td><strong>Redis (RESP)</strong></td>
+<td>6379</td>
+<td>RESP2/RESP3</td>
+<td>Caching, real-time data, pub/sub</td>
+<td>Production</td>
+</tr>
+<tr>
+<td><strong>CQL (Cassandra)</strong></td>
+<td>9042</td>
+<td>CQL v4</td>
+<td>Time-series, high-write throughput</td>
+<td>Production</td>
+</tr>
+<tr>
+<td><strong>Cypher (Neo4j)</strong></td>
+<td>7687</td>
+<td>Bolt v4/v5</td>
+<td>Graph traversal, relationships</td>
+<td>Production</td>
+</tr>
+<tr>
+<td><strong>MongoDB</strong></td>
+<td>27017</td>
+<td>MongoDB Wire</td>
+<td>Flexible documents, rapid prototyping</td>
+<td>Production</td>
+</tr>
+<tr>
+<td><strong>OrbitQL</strong></td>
+<td>5432</td>
+<td>PostgreSQL Wire</td>
+<td>Multi-model queries, AI/ML integration</td>
+<td>Production</td>
+</tr>
+<tr>
+<td><strong>REST API</strong></td>
+<td>8080</td>
+<td>HTTP/WebSocket</td>
+<td>Universal access, microservices</td>
+<td>Production</td>
+</tr>
+<tr>
+<td><strong>gRPC</strong></td>
+<td>50051</td>
+<td>Protocol Buffers</td>
+<td>High-performance RPC, actor management</td>
+<td>Production</td>
+</tr>
+</tbody>
+</table>
+<h3 id="protocol-hierarchy">1.2 Protocol Hierarchy</h3>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│                           OrbitRS Protocol Stack                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
+│  │PostgreSQL│ │  MySQL   │ │  Redis   │ │   CQL    │ │  Cypher  │           │
+│  │  :5432   │ │  :3306   │ │  :6379   │ │  :9042   │ │  :7687   │           │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘           │
+│       │            │            │            │            │                  │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐                                     │
+│  │ MongoDB  │ │ OrbitQL  │ │   REST   │                                     │
+│  │  :27017  │ │  :5432   │ │  :8080   │                                     │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘                                     │
+│       │            │            │                                            │
+│  ┌────┴────────────┴────────────┴────────────────────────────────────────┐  │
+│  │                      Unified Query Engine                              │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │  │
+│  │  │ SQL Engine  │  │Graph Engine │  │  KV Engine  │  │  TS Engine  │   │  │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘   │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                    │                                         │
+│  ┌─────────────────────────────────┴─────────────────────────────────────┐  │
+│  │                      Unified Storage Layer                             │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                    │  │
+│  │  │  Hot Tier   │  │  Warm Tier  │  │  Cold Tier  │                    │  │
+│  │  │  (RocksDB)  │  │ (Columnar)  │  │  (Iceberg)  │                    │  │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘                    │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘</code></pre>
+<hr />
+<h2 id="architecture-comparison">2. Architecture Comparison</h2>
+<h3 id="protocol-implementation-depth">2.1 Protocol Implementation
+Depth</h3>
+<table>
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 31%" />
+<col style="width: 25%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>Protocol</th>
+<th>Implementation Level</th>
+<th>Native Features</th>
+<th>OrbitRS Extensions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>PostgreSQL</strong></td>
+<td>Full wire protocol v3.0</td>
+<td>MVCC, prepared statements, COPY</td>
+<td>pgvector, JSON/JSONB</td>
+</tr>
+<tr>
+<td><strong>MySQL</strong></td>
+<td>Full wire protocol 4.1+</td>
+<td>Prepared statements, multi-result</td>
+<td>Batch optimization</td>
+</tr>
+<tr>
+<td><strong>Redis</strong></td>
+<td>Complete RESP2/RESP3</td>
+<td>All data structures, pub/sub</td>
+<td>Vector search, GraphRAG</td>
+</tr>
+<tr>
+<td><strong>CQL</strong></td>
+<td>Full CQL v4 protocol</td>
+<td>Batch, TTL, consistency levels</td>
+<td>ANN search, vector types</td>
+</tr>
+<tr>
+<td><strong>Cypher</strong></td>
+<td>Bolt v4/v5 protocol</td>
+<td>Pattern matching, procedures</td>
+<td>GraphRAG integration</td>
+</tr>
+<tr>
+<td><strong>MongoDB</strong></td>
+<td>OP_MSG protocol</td>
+<td>BSON, cursors, aggregation</td>
+<td>Vector search</td>
+</tr>
+<tr>
+<td><strong>OrbitQL</strong></td>
+<td>Native (PostgreSQL wire)</td>
+<td>Graph + SQL + Vector</td>
+<td>ML inference, LIVE queries</td>
+</tr>
+<tr>
+<td><strong>REST</strong></td>
+<td>OpenAPI compliant</td>
+<td>CRUD, WebSocket, SSE</td>
+<td>Actor management, CDC</td>
+</tr>
+</tbody>
+</table>
+<h3 id="query-processing-pipeline">2.2 Query Processing Pipeline</h3>
+<pre><code>┌─────────────────────────────────────────────────────────────────┐
+│                    Query Processing Pipeline                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Protocol Layer          Query Engine           Storage Layer    │
+│  ┌──────────────┐       ┌──────────────┐       ┌──────────────┐ │
+│  │              │       │              │       │              │ │
+│  │ PostgreSQL   │──────▶│   Parser     │──────▶│   RocksDB    │ │
+│  │ MySQL        │       │              │       │   (Hot)      │ │
+│  │ Redis        │──────▶│   Analyzer   │──────▶│              │ │
+│  │ CQL          │       │              │       │   Columnar   │ │
+│  │ Cypher       │──────▶│   Optimizer  │──────▶│   (Warm)     │ │
+│  │ MongoDB      │       │              │       │              │ │
+│  │ OrbitQL      │──────▶│   Executor   │──────▶│   Iceberg    │ │
+│  │ REST         │       │              │       │   (Cold)     │ │
+│  │              │       │              │       │              │ │
+│  └──────────────┘       └──────────────┘       └──────────────┘ │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘</code></pre>
+<hr />
+<h2 id="feature-comparison-matrix">3. Feature Comparison Matrix</h2>
+<h3 id="core-database-features">3.1 Core Database Features</h3>
+<table>
+<colgroup>
+<col style="width: 13%" />
+<col style="width: 18%" />
+<col style="width: 10%" />
+<col style="width: 10%" />
+<col style="width: 7%" />
+<col style="width: 12%" />
+<col style="width: 13%" />
+<col style="width: 13%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th style="text-align: center;">PostgreSQL</th>
+<th style="text-align: center;">MySQL</th>
+<th style="text-align: center;">Redis</th>
+<th style="text-align: center;">CQL</th>
+<th style="text-align: center;">Cypher</th>
+<th style="text-align: center;">MongoDB</th>
+<th style="text-align: center;">OrbitQL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ACID Transactions</strong></td>
+<td style="text-align: center;">✅ Full</td>
+<td style="text-align: center;">✅ Full</td>
+<td style="text-align: center;">✅ MULTI</td>
+<td style="text-align: center;">⚠️ Tunable</td>
+<td style="text-align: center;">✅ Full</td>
+<td style="text-align: center;">⚠️ Per-doc</td>
+<td style="text-align: center;">✅ Full</td>
+</tr>
+<tr>
+<td><strong>MVCC</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Joins</strong></td>
+<td style="text-align: center;">✅ All types</td>
+<td style="text-align: center;">✅ All types</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ Pattern</td>
+<td style="text-align: center;">⚠️ $lookup</td>
+<td style="text-align: center;">✅ All + Graph</td>
+</tr>
+<tr>
+<td><strong>Aggregations</strong></td>
+<td style="text-align: center;">✅ Full</td>
+<td style="text-align: center;">✅ Full</td>
+<td style="text-align: center;">⚠️ Limited</td>
+<td style="text-align: center;">⚠️ Limited</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ Pipeline</td>
+<td style="text-align: center;">✅ Full</td>
+</tr>
+<tr>
+<td><strong>Subqueries</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>CTEs (WITH)</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Window Functions</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">⚠️ $setWindowFields</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Prepared Statements</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Stored Procedures</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">⚠️ Lua</td>
+<td style="text-align: center;">✅ UDF</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">⚠️ $function</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Triggers</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">⚠️ Change Streams</td>
+<td style="text-align: center;">✅</td>
+</tr>
+</tbody>
+</table>
+<h3 id="data-type-support">3.2 Data Type Support</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 17%" />
+<col style="width: 10%" />
+<col style="width: 10%" />
+<col style="width: 7%" />
+<col style="width: 11%" />
+<col style="width: 13%" />
+<col style="width: 13%" />
+</colgroup>
+<thead>
+<tr>
+<th>Data Type</th>
+<th style="text-align: center;">PostgreSQL</th>
+<th style="text-align: center;">MySQL</th>
+<th style="text-align: center;">Redis</th>
+<th style="text-align: center;">CQL</th>
+<th style="text-align: center;">Cypher</th>
+<th style="text-align: center;">MongoDB</th>
+<th style="text-align: center;">OrbitQL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Integer</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Float/Decimal</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>String/Text</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Boolean</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Date/Time</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>UUID</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">⚠️</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>JSON/JSONB</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ Map</td>
+<td style="text-align: center;">✅ BSON</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Arrays</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ List</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Maps/Objects</strong></td>
+<td style="text-align: center;">✅ JSONB</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ Hash</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Sets</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Vectors</strong></td>
+<td style="text-align: center;">✅ pgvector</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ VECTOR.*</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Geospatial</strong></td>
+<td style="text-align: center;">✅ PostGIS</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ GEO*</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Binary/Blob</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+</tbody>
+</table>
+<h3 id="advanced-features">3.3 Advanced Features</h3>
+<table>
+<colgroup>
+<col style="width: 13%" />
+<col style="width: 18%" />
+<col style="width: 10%" />
+<col style="width: 10%" />
+<col style="width: 7%" />
+<col style="width: 12%" />
+<col style="width: 13%" />
+<col style="width: 13%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th style="text-align: center;">PostgreSQL</th>
+<th style="text-align: center;">MySQL</th>
+<th style="text-align: center;">Redis</th>
+<th style="text-align: center;">CQL</th>
+<th style="text-align: center;">Cypher</th>
+<th style="text-align: center;">MongoDB</th>
+<th style="text-align: center;">OrbitQL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Graph Traversal</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ GRAPH.*</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ Native</td>
+<td style="text-align: center;">⚠️ $graphLookup</td>
+<td style="text-align: center;">✅ Native</td>
+</tr>
+<tr>
+<td><strong>Vector Search</strong></td>
+<td style="text-align: center;">✅ pgvector</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ VECTOR.*</td>
+<td style="text-align: center;">✅ ANN</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ $vectorSearch</td>
+<td style="text-align: center;">✅ Native</td>
+</tr>
+<tr>
+<td><strong>Full-Text Search</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ FT.*</td>
+<td style="text-align: center;">✅ SAI</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ $text</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Time-Series</strong></td>
+<td style="text-align: center;">⚠️</td>
+<td style="text-align: center;">⚠️</td>
+<td style="text-align: center;">✅ TS.*</td>
+<td style="text-align: center;">✅ Native</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ Time-Series</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Pub/Sub</strong></td>
+<td style="text-align: center;">✅ LISTEN/NOTIFY</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ Native</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ Change Streams</td>
+<td style="text-align: center;">✅ LIVE</td>
+</tr>
+<tr>
+<td><strong>Streaming</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ XREAD</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ LIVE</td>
+</tr>
+<tr>
+<td><strong>ML Integration</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ ml::*</td>
+</tr>
+<tr>
+<td><strong>GraphRAG</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ GRAPHRAG.*</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ Native</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="command-reference-by-protocol">4. Command Reference by
+Protocol</h2>
+<h3 id="redis-resp-commands-150-commands">4.1 Redis (RESP) Commands
+(150+ Commands)</h3>
+<h4 id="string-commands-31-commands">String Commands (31 commands)</h4>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET</code></td>
+<td>Get string value</td>
+<td><code>GET key</code></td>
+</tr>
+<tr>
+<td><code>SET</code></td>
+<td>Set string value</td>
+<td><code>SET key value [EX seconds]</code></td>
+</tr>
+<tr>
+<td><code>MGET</code></td>
+<td>Get multiple values</td>
+<td><code>MGET key1 key2 key3</code></td>
+</tr>
+<tr>
+<td><code>MSET</code></td>
+<td>Set multiple values</td>
+<td><code>MSET k1 v1 k2 v2</code></td>
+</tr>
+<tr>
+<td><code>INCR</code></td>
+<td>Increment integer</td>
+<td><code>INCR counter</code></td>
+</tr>
+<tr>
+<td><code>DECR</code></td>
+<td>Decrement integer</td>
+<td><code>DECR counter</code></td>
+</tr>
+<tr>
+<td><code>INCRBY</code></td>
+<td>Increment by amount</td>
+<td><code>INCRBY counter 5</code></td>
+</tr>
+<tr>
+<td><code>APPEND</code></td>
+<td>Append to string</td>
+<td><code>APPEND key " suffix"</code></td>
+</tr>
+<tr>
+<td><code>STRLEN</code></td>
+<td>Get string length</td>
+<td><code>STRLEN key</code></td>
+</tr>
+<tr>
+<td><code>GETRANGE</code></td>
+<td>Get substring</td>
+<td><code>GETRANGE key 0 10</code></td>
+</tr>
+<tr>
+<td><code>SETEX</code></td>
+<td>Set with expiry</td>
+<td><code>SETEX key 3600 value</code></td>
+</tr>
+<tr>
+<td><code>SETNX</code></td>
+<td>Set if not exists</td>
+<td><code>SETNX key value</code></td>
+</tr>
+<tr>
+<td><code>GETSET</code></td>
+<td>Get old, set new</td>
+<td><code>GETSET key newvalue</code></td>
+</tr>
+<tr>
+<td><code>GETDEL</code></td>
+<td>Get and delete</td>
+<td><code>GETDEL key</code></td>
+</tr>
+<tr>
+<td><code>GETEX</code></td>
+<td>Get and set expiry</td>
+<td><code>GETEX key EX 100</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="hash-commands-11-commands">Hash Commands (11 commands)</h4>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HGET</code></td>
+<td>Get field value</td>
+<td><code>HGET hash field</code></td>
+</tr>
+<tr>
+<td><code>HSET</code></td>
+<td>Set field value</td>
+<td><code>HSET hash field value</code></td>
+</tr>
+<tr>
+<td><code>HMGET</code></td>
+<td>Get multiple fields</td>
+<td><code>HMGET hash f1 f2</code></td>
+</tr>
+<tr>
+<td><code>HMSET</code></td>
+<td>Set multiple fields</td>
+<td><code>HMSET hash f1 v1 f2 v2</code></td>
+</tr>
+<tr>
+<td><code>HGETALL</code></td>
+<td>Get all fields</td>
+<td><code>HGETALL hash</code></td>
+</tr>
+<tr>
+<td><code>HDEL</code></td>
+<td>Delete field</td>
+<td><code>HDEL hash field</code></td>
+</tr>
+<tr>
+<td><code>HEXISTS</code></td>
+<td>Check field exists</td>
+<td><code>HEXISTS hash field</code></td>
+</tr>
+<tr>
+<td><code>HKEYS</code></td>
+<td>Get all field names</td>
+<td><code>HKEYS hash</code></td>
+</tr>
+<tr>
+<td><code>HVALS</code></td>
+<td>Get all values</td>
+<td><code>HVALS hash</code></td>
+</tr>
+<tr>
+<td><code>HLEN</code></td>
+<td>Get field count</td>
+<td><code>HLEN hash</code></td>
+</tr>
+<tr>
+<td><code>HINCRBY</code></td>
+<td>Increment field</td>
+<td><code>HINCRBY hash field 1</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="list-commands-14-commands">List Commands (14 commands)</h4>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LPUSH</code></td>
+<td>Push to head</td>
+<td><code>LPUSH list value</code></td>
+</tr>
+<tr>
+<td><code>RPUSH</code></td>
+<td>Push to tail</td>
+<td><code>RPUSH list value</code></td>
+</tr>
+<tr>
+<td><code>LPOP</code></td>
+<td>Pop from head</td>
+<td><code>LPOP list</code></td>
+</tr>
+<tr>
+<td><code>RPOP</code></td>
+<td>Pop from tail</td>
+<td><code>RPOP list</code></td>
+</tr>
+<tr>
+<td><code>LRANGE</code></td>
+<td>Get range</td>
+<td><code>LRANGE list 0 -1</code></td>
+</tr>
+<tr>
+<td><code>LLEN</code></td>
+<td>Get length</td>
+<td><code>LLEN list</code></td>
+</tr>
+<tr>
+<td><code>LINDEX</code></td>
+<td>Get by index</td>
+<td><code>LINDEX list 0</code></td>
+</tr>
+<tr>
+<td><code>LSET</code></td>
+<td>Set by index</td>
+<td><code>LSET list 0 value</code></td>
+</tr>
+<tr>
+<td><code>LREM</code></td>
+<td>Remove elements</td>
+<td><code>LREM list 1 value</code></td>
+</tr>
+<tr>
+<td><code>LTRIM</code></td>
+<td>Trim list</td>
+<td><code>LTRIM list 0 99</code></td>
+</tr>
+<tr>
+<td><code>LINSERT</code></td>
+<td>Insert element</td>
+<td><code>LINSERT list BEFORE pivot value</code></td>
+</tr>
+<tr>
+<td><code>BLPOP</code></td>
+<td>Blocking pop head</td>
+<td><code>BLPOP list 0</code></td>
+</tr>
+<tr>
+<td><code>BRPOP</code></td>
+<td>Blocking pop tail</td>
+<td><code>BRPOP list 0</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="set-commands-8-commands">Set Commands (8 commands)</h4>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SADD</code></td>
+<td>Add member</td>
+<td><code>SADD set member</code></td>
+</tr>
+<tr>
+<td><code>SREM</code></td>
+<td>Remove member</td>
+<td><code>SREM set member</code></td>
+</tr>
+<tr>
+<td><code>SMEMBERS</code></td>
+<td>Get all members</td>
+<td><code>SMEMBERS set</code></td>
+</tr>
+<tr>
+<td><code>SCARD</code></td>
+<td>Get cardinality</td>
+<td><code>SCARD set</code></td>
+</tr>
+<tr>
+<td><code>SISMEMBER</code></td>
+<td>Check membership</td>
+<td><code>SISMEMBER set member</code></td>
+</tr>
+<tr>
+<td><code>SUNION</code></td>
+<td>Union sets</td>
+<td><code>SUNION set1 set2</code></td>
+</tr>
+<tr>
+<td><code>SINTER</code></td>
+<td>Intersect sets</td>
+<td><code>SINTER set1 set2</code></td>
+</tr>
+<tr>
+<td><code>SDIFF</code></td>
+<td>Difference sets</td>
+<td><code>SDIFF set1 set2</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="sorted-set-commands-10-commands">Sorted Set Commands (10
+commands)</h4>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ZADD</code></td>
+<td>Add with score</td>
+<td><code>ZADD zset 1.0 member</code></td>
+</tr>
+<tr>
+<td><code>ZREM</code></td>
+<td>Remove member</td>
+<td><code>ZREM zset member</code></td>
+</tr>
+<tr>
+<td><code>ZSCORE</code></td>
+<td>Get score</td>
+<td><code>ZSCORE zset member</code></td>
+</tr>
+<tr>
+<td><code>ZRANK</code></td>
+<td>Get rank</td>
+<td><code>ZRANK zset member</code></td>
+</tr>
+<tr>
+<td><code>ZRANGE</code></td>
+<td>Get range by rank</td>
+<td><code>ZRANGE zset 0 10</code></td>
+</tr>
+<tr>
+<td><code>ZRANGEBYSCORE</code></td>
+<td>Get range by score</td>
+<td><code>ZRANGEBYSCORE zset 0 100</code></td>
+</tr>
+<tr>
+<td><code>ZCARD</code></td>
+<td>Get cardinality</td>
+<td><code>ZCARD zset</code></td>
+</tr>
+<tr>
+<td><code>ZCOUNT</code></td>
+<td>Count in range</td>
+<td><code>ZCOUNT zset 0 100</code></td>
+</tr>
+<tr>
+<td><code>ZINCRBY</code></td>
+<td>Increment score</td>
+<td><code>ZINCRBY zset 1.0 member</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="stream-commands-14-commands">Stream Commands (14 commands)</h4>
+<table>
+<colgroup>
+<col style="width: 29%" />
+<col style="width: 41%" />
+<col style="width: 29%" />
+</colgroup>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>XADD</code></td>
+<td>Add to stream</td>
+<td><code>XADD stream * field value</code></td>
+</tr>
+<tr>
+<td><code>XREAD</code></td>
+<td>Read from stream</td>
+<td><code>XREAD STREAMS stream 0</code></td>
+</tr>
+<tr>
+<td><code>XREADGROUP</code></td>
+<td>Read as consumer group</td>
+<td><code>XREADGROUP GROUP g consumer STREAMS s &gt;</code></td>
+</tr>
+<tr>
+<td><code>XRANGE</code></td>
+<td>Get range</td>
+<td><code>XRANGE stream - +</code></td>
+</tr>
+<tr>
+<td><code>XREVRANGE</code></td>
+<td>Get reverse range</td>
+<td><code>XREVRANGE stream + -</code></td>
+</tr>
+<tr>
+<td><code>XLEN</code></td>
+<td>Get length</td>
+<td><code>XLEN stream</code></td>
+</tr>
+<tr>
+<td><code>XINFO</code></td>
+<td>Get stream info</td>
+<td><code>XINFO STREAM stream</code></td>
+</tr>
+<tr>
+<td><code>XGROUP</code></td>
+<td>Manage groups</td>
+<td><code>XGROUP CREATE stream group $</code></td>
+</tr>
+<tr>
+<td><code>XACK</code></td>
+<td>Acknowledge message</td>
+<td><code>XACK stream group id</code></td>
+</tr>
+<tr>
+<td><code>XCLAIM</code></td>
+<td>Claim message</td>
+<td><code>XCLAIM stream group consumer 0 id</code></td>
+</tr>
+<tr>
+<td><code>XPENDING</code></td>
+<td>Get pending</td>
+<td><code>XPENDING stream group</code></td>
+</tr>
+<tr>
+<td><code>XTRIM</code></td>
+<td>Trim stream</td>
+<td><code>XTRIM stream MAXLEN 1000</code></td>
+</tr>
+<tr>
+<td><code>XDEL</code></td>
+<td>Delete entry</td>
+<td><code>XDEL stream id</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="vector-commands-12-commands">Vector Commands (12 commands)</h4>
+<table>
+<colgroup>
+<col style="width: 29%" />
+<col style="width: 41%" />
+<col style="width: 29%" />
+</colgroup>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>VECTOR.CREATE</code></td>
+<td>Create index</td>
+<td><code>VECTOR.CREATE idx DIM 128 METRIC COSINE</code></td>
+</tr>
+<tr>
+<td><code>VECTOR.ADD</code></td>
+<td>Add vector</td>
+<td><code>VECTOR.ADD idx id [0.1, 0.2, ...]</code></td>
+</tr>
+<tr>
+<td><code>VECTOR.GET</code></td>
+<td>Get vector</td>
+<td><code>VECTOR.GET idx id</code></td>
+</tr>
+<tr>
+<td><code>VECTOR.DEL</code></td>
+<td>Delete vector</td>
+<td><code>VECTOR.DEL idx id</code></td>
+</tr>
+<tr>
+<td><code>VECTOR.SEARCH</code></td>
+<td>Search vectors</td>
+<td><code>VECTOR.SEARCH idx [0.1, ...] K 10</code></td>
+</tr>
+<tr>
+<td><code>VECTOR.INFO</code></td>
+<td>Get index info</td>
+<td><code>VECTOR.INFO idx</code></td>
+</tr>
+<tr>
+<td><code>VECTOR.COUNT</code></td>
+<td>Count vectors</td>
+<td><code>VECTOR.COUNT idx</code></td>
+</tr>
+<tr>
+<td><code>VECTOR.LIST</code></td>
+<td>List indices</td>
+<td><code>VECTOR.LIST</code></td>
+</tr>
+<tr>
+<td><code>VECTOR.STATS</code></td>
+<td>Get statistics</td>
+<td><code>VECTOR.STATS idx</code></td>
+</tr>
+<tr>
+<td><code>VECTOR.DROP</code></td>
+<td>Drop index</td>
+<td><code>VECTOR.DROP idx</code></td>
+</tr>
+<tr>
+<td><code>FT.CREATE</code></td>
+<td>Create FT index</td>
+<td><code>FT.CREATE idx ON HASH ...</code></td>
+</tr>
+<tr>
+<td><code>FT.SEARCH</code></td>
+<td>Full-text search</td>
+<td><code>FT.SEARCH idx "query"</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="time-series-commands-14-commands">Time Series Commands (14
+commands)</h4>
+<table>
+<colgroup>
+<col style="width: 29%" />
+<col style="width: 41%" />
+<col style="width: 29%" />
+</colgroup>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TS.CREATE</code></td>
+<td>Create series</td>
+<td><code>TS.CREATE ts:temp RETENTION 86400</code></td>
+</tr>
+<tr>
+<td><code>TS.ADD</code></td>
+<td>Add data point</td>
+<td><code>TS.ADD ts:temp * 25.5</code></td>
+</tr>
+<tr>
+<td><code>TS.GET</code></td>
+<td>Get latest</td>
+<td><code>TS.GET ts:temp</code></td>
+</tr>
+<tr>
+<td><code>TS.RANGE</code></td>
+<td>Get range</td>
+<td><code>TS.RANGE ts:temp - + AGGREGATION avg 60</code></td>
+</tr>
+<tr>
+<td><code>TS.MRANGE</code></td>
+<td>Multi-series range</td>
+<td><code>TS.MRANGE - + FILTER sensor=temp</code></td>
+</tr>
+<tr>
+<td><code>TS.ALTER</code></td>
+<td>Alter series</td>
+<td><code>TS.ALTER ts:temp RETENTION 172800</code></td>
+</tr>
+<tr>
+<td><code>TS.INFO</code></td>
+<td>Get info</td>
+<td><code>TS.INFO ts:temp</code></td>
+</tr>
+<tr>
+<td><code>TS.MADD</code></td>
+<td>Add multiple</td>
+<td><code>TS.MADD ts:temp * 25 ts:hum * 60</code></td>
+</tr>
+<tr>
+<td><code>TS.INCRBY</code></td>
+<td>Increment</td>
+<td><code>TS.INCRBY ts:counter 1</code></td>
+</tr>
+<tr>
+<td><code>TS.DECRBY</code></td>
+<td>Decrement</td>
+<td><code>TS.DECRBY ts:counter 1</code></td>
+</tr>
+<tr>
+<td><code>TS.CREATERULE</code></td>
+<td>Create rule</td>
+<td><code>TS.CREATERULE src dst AGGREGATION avg 60</code></td>
+</tr>
+<tr>
+<td><code>TS.DELETERULE</code></td>
+<td>Delete rule</td>
+<td><code>TS.DELETERULE src dst</code></td>
+</tr>
+<tr>
+<td><code>TS.QUERYINDEX</code></td>
+<td>Query index</td>
+<td><code>TS.QUERYINDEX sensor=*</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="graph-commands-8-commands">Graph Commands (8 commands)</h4>
+<table>
+<colgroup>
+<col style="width: 29%" />
+<col style="width: 41%" />
+<col style="width: 29%" />
+</colgroup>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GRAPH.QUERY</code></td>
+<td>Execute query</td>
+<td><code>GRAPH.QUERY g "MATCH (n) RETURN n"</code></td>
+</tr>
+<tr>
+<td><code>GRAPH.RO_QUERY</code></td>
+<td>Read-only query</td>
+<td><code>GRAPH.RO_QUERY g "MATCH (n) RETURN n"</code></td>
+</tr>
+<tr>
+<td><code>GRAPH.DELETE</code></td>
+<td>Delete graph</td>
+<td><code>GRAPH.DELETE g</code></td>
+</tr>
+<tr>
+<td><code>GRAPH.EXPLAIN</code></td>
+<td>Explain query</td>
+<td><code>GRAPH.EXPLAIN g "MATCH (n) RETURN n"</code></td>
+</tr>
+<tr>
+<td><code>GRAPH.PROFILE</code></td>
+<td>Profile query</td>
+<td><code>GRAPH.PROFILE g "MATCH (n) RETURN n"</code></td>
+</tr>
+<tr>
+<td><code>GRAPH.CONFIG</code></td>
+<td>Get/set config</td>
+<td><code>GRAPH.CONFIG GET MAX_QUEUED_QUERIES</code></td>
+</tr>
+<tr>
+<td><code>GRAPH.SLOWLOG</code></td>
+<td>Get slow queries</td>
+<td><code>GRAPH.SLOWLOG g</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="graphrag-commands-7-commands">GraphRAG Commands (7
+commands)</h4>
+<table>
+<colgroup>
+<col style="width: 29%" />
+<col style="width: 41%" />
+<col style="width: 29%" />
+</colgroup>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GRAPHRAG.INDEX</code></td>
+<td>Index documents</td>
+<td><code>GRAPHRAG.INDEX idx doc1 "content"</code></td>
+</tr>
+<tr>
+<td><code>GRAPHRAG.SEARCH</code></td>
+<td>Search with RAG</td>
+<td><code>GRAPHRAG.SEARCH idx "query" K 5</code></td>
+</tr>
+<tr>
+<td><code>GRAPHRAG.CHAT</code></td>
+<td>Chat with context</td>
+<td><code>GRAPHRAG.CHAT idx "question"</code></td>
+</tr>
+<tr>
+<td><code>GRAPHRAG.RETRIEVE</code></td>
+<td>Retrieve context</td>
+<td><code>GRAPHRAG.RETRIEVE idx "query"</code></td>
+</tr>
+<tr>
+<td><code>GRAPHRAG.DELETE</code></td>
+<td>Delete document</td>
+<td><code>GRAPHRAG.DELETE idx doc1</code></td>
+</tr>
+<tr>
+<td><code>GRAPHRAG.LIST</code></td>
+<td>List indices</td>
+<td><code>GRAPHRAG.LIST</code></td>
+</tr>
+<tr>
+<td><code>GRAPHRAG.INFO</code></td>
+<td>Get index info</td>
+<td><code>GRAPHRAG.INFO idx</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="pubsub-commands-6-commands">Pub/Sub Commands (6 commands)</h4>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PUBLISH</code></td>
+<td>Publish message</td>
+<td><code>PUBLISH channel message</code></td>
+</tr>
+<tr>
+<td><code>SUBSCRIBE</code></td>
+<td>Subscribe</td>
+<td><code>SUBSCRIBE channel</code></td>
+</tr>
+<tr>
+<td><code>UNSUBSCRIBE</code></td>
+<td>Unsubscribe</td>
+<td><code>UNSUBSCRIBE channel</code></td>
+</tr>
+<tr>
+<td><code>PSUBSCRIBE</code></td>
+<td>Pattern subscribe</td>
+<td><code>PSUBSCRIBE pattern*</code></td>
+</tr>
+<tr>
+<td><code>PUNSUBSCRIBE</code></td>
+<td>Pattern unsub</td>
+<td><code>PUNSUBSCRIBE pattern*</code></td>
+</tr>
+<tr>
+<td><code>PUBSUB</code></td>
+<td>Pub/sub info</td>
+<td><code>PUBSUB CHANNELS</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="transaction-commands-5-commands">Transaction Commands (5
+commands)</h4>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MULTI</code></td>
+<td>Start transaction</td>
+<td><code>MULTI</code></td>
+</tr>
+<tr>
+<td><code>EXEC</code></td>
+<td>Execute transaction</td>
+<td><code>EXEC</code></td>
+</tr>
+<tr>
+<td><code>DISCARD</code></td>
+<td>Discard transaction</td>
+<td><code>DISCARD</code></td>
+</tr>
+<tr>
+<td><code>WATCH</code></td>
+<td>Watch keys</td>
+<td><code>WATCH key1 key2</code></td>
+</tr>
+<tr>
+<td><code>UNWATCH</code></td>
+<td>Unwatch keys</td>
+<td><code>UNWATCH</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="postgresql-sql-statements-80-statement-types">4.2 PostgreSQL SQL
+Statements (80+ Statement Types)</h3>
+<h4 id="data-definition-language-ddl">Data Definition Language
+(DDL)</h4>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 39%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr>
+<th>Statement</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CREATE DATABASE</code></td>
+<td>Create database</td>
+<td><code>CREATE DATABASE mydb</code></td>
+</tr>
+<tr>
+<td><code>CREATE TABLE</code></td>
+<td>Create table</td>
+<td><code>CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT)</code></td>
+</tr>
+<tr>
+<td><code>CREATE INDEX</code></td>
+<td>Create index</td>
+<td><code>CREATE INDEX idx_name ON users(name)</code></td>
+</tr>
+<tr>
+<td><code>CREATE VIEW</code></td>
+<td>Create view</td>
+<td><code>CREATE VIEW active_users AS SELECT * FROM users WHERE active</code></td>
+</tr>
+<tr>
+<td><code>CREATE SCHEMA</code></td>
+<td>Create schema</td>
+<td><code>CREATE SCHEMA myschema</code></td>
+</tr>
+<tr>
+<td><code>CREATE FUNCTION</code></td>
+<td>Create function</td>
+<td><code>CREATE FUNCTION add(a INT, b INT) RETURNS INT AS $$ ... $$</code></td>
+</tr>
+<tr>
+<td><code>CREATE TRIGGER</code></td>
+<td>Create trigger</td>
+<td><code>CREATE TRIGGER tr AFTER INSERT ON users ...</code></td>
+</tr>
+<tr>
+<td><code>CREATE SEQUENCE</code></td>
+<td>Create sequence</td>
+<td><code>CREATE SEQUENCE user_id_seq</code></td>
+</tr>
+<tr>
+<td><code>CREATE TYPE</code></td>
+<td>Create type</td>
+<td><code>CREATE TYPE status AS ENUM ('active', 'inactive')</code></td>
+</tr>
+<tr>
+<td><code>CREATE EXTENSION</code></td>
+<td>Create extension</td>
+<td><code>CREATE EXTENSION vector</code></td>
+</tr>
+<tr>
+<td><code>ALTER TABLE</code></td>
+<td>Modify table</td>
+<td><code>ALTER TABLE users ADD COLUMN email TEXT</code></td>
+</tr>
+<tr>
+<td><code>ALTER SEQUENCE</code></td>
+<td>Modify sequence</td>
+<td><code>ALTER SEQUENCE user_id_seq RESTART WITH 100</code></td>
+</tr>
+<tr>
+<td><code>DROP TABLE</code></td>
+<td>Drop table</td>
+<td><code>DROP TABLE users CASCADE</code></td>
+</tr>
+<tr>
+<td><code>DROP INDEX</code></td>
+<td>Drop index</td>
+<td><code>DROP INDEX idx_name</code></td>
+</tr>
+<tr>
+<td><code>DROP VIEW</code></td>
+<td>Drop view</td>
+<td><code>DROP VIEW active_users</code></td>
+</tr>
+<tr>
+<td><code>TRUNCATE</code></td>
+<td>Truncate table</td>
+<td><code>TRUNCATE users RESTART IDENTITY</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="data-manipulation-language-dml">Data Manipulation Language
+(DML)</h4>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 39%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr>
+<th>Statement</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SELECT</code></td>
+<td>Query data</td>
+<td><code>SELECT * FROM users WHERE age &gt; 18</code></td>
+</tr>
+<tr>
+<td><code>INSERT</code></td>
+<td>Insert data</td>
+<td><code>INSERT INTO users (name) VALUES ('John')</code></td>
+</tr>
+<tr>
+<td><code>UPDATE</code></td>
+<td>Update data</td>
+<td><code>UPDATE users SET name = 'Jane' WHERE id = 1</code></td>
+</tr>
+<tr>
+<td><code>DELETE</code></td>
+<td>Delete data</td>
+<td><code>DELETE FROM users WHERE id = 1</code></td>
+</tr>
+<tr>
+<td><code>UPSERT</code></td>
+<td>Insert/update</td>
+<td><code>INSERT INTO users ... ON CONFLICT DO UPDATE</code></td>
+</tr>
+<tr>
+<td><code>COPY</code></td>
+<td>Bulk load</td>
+<td><code>COPY users FROM '/data/users.csv' CSV</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="query-clauses">Query Clauses</h4>
+<table>
+<colgroup>
+<col style="width: 26%" />
+<col style="width: 43%" />
+<col style="width: 30%" />
+</colgroup>
+<thead>
+<tr>
+<th>Clause</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>WHERE</code></td>
+<td>Filter rows</td>
+<td><code>WHERE age &gt; 18 AND active = true</code></td>
+</tr>
+<tr>
+<td><code>GROUP BY</code></td>
+<td>Group rows</td>
+<td><code>GROUP BY department</code></td>
+</tr>
+<tr>
+<td><code>HAVING</code></td>
+<td>Filter groups</td>
+<td><code>HAVING COUNT(*) &gt; 5</code></td>
+</tr>
+<tr>
+<td><code>ORDER BY</code></td>
+<td>Sort results</td>
+<td><code>ORDER BY created_at DESC</code></td>
+</tr>
+<tr>
+<td><code>LIMIT/OFFSET</code></td>
+<td>Paginate</td>
+<td><code>LIMIT 10 OFFSET 20</code></td>
+</tr>
+<tr>
+<td><code>DISTINCT</code></td>
+<td>Unique rows</td>
+<td><code>SELECT DISTINCT category FROM products</code></td>
+</tr>
+<tr>
+<td><code>JOIN</code></td>
+<td>Join tables</td>
+<td><code>LEFT JOIN orders ON users.id = orders.user_id</code></td>
+</tr>
+<tr>
+<td><code>UNION</code></td>
+<td>Combine results</td>
+<td><code>SELECT ... UNION SELECT ...</code></td>
+</tr>
+<tr>
+<td><code>WITH</code> (CTE)</td>
+<td>Common table expr</td>
+<td><code>WITH cte AS (SELECT ...) SELECT * FROM cte</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="transaction-control">Transaction Control</h4>
+<table>
+<thead>
+<tr>
+<th>Statement</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BEGIN</code></td>
+<td>Start transaction</td>
+<td><code>BEGIN TRANSACTION</code></td>
+</tr>
+<tr>
+<td><code>COMMIT</code></td>
+<td>Commit transaction</td>
+<td><code>COMMIT</code></td>
+</tr>
+<tr>
+<td><code>ROLLBACK</code></td>
+<td>Rollback transaction</td>
+<td><code>ROLLBACK</code></td>
+</tr>
+<tr>
+<td><code>SAVEPOINT</code></td>
+<td>Create savepoint</td>
+<td><code>SAVEPOINT sp1</code></td>
+</tr>
+<tr>
+<td><code>RELEASE</code></td>
+<td>Release savepoint</td>
+<td><code>RELEASE SAVEPOINT sp1</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="window-functions">Window Functions</h4>
+<table>
+<colgroup>
+<col style="width: 31%" />
+<col style="width: 40%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>Function</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROW_NUMBER()</code></td>
+<td>Row number</td>
+<td><code>ROW_NUMBER() OVER (ORDER BY id)</code></td>
+</tr>
+<tr>
+<td><code>RANK()</code></td>
+<td>Rank with gaps</td>
+<td><code>RANK() OVER (ORDER BY score DESC)</code></td>
+</tr>
+<tr>
+<td><code>DENSE_RANK()</code></td>
+<td>Rank without gaps</td>
+<td><code>DENSE_RANK() OVER (ORDER BY score DESC)</code></td>
+</tr>
+<tr>
+<td><code>LAG()</code></td>
+<td>Previous row</td>
+<td><code>LAG(value) OVER (ORDER BY date)</code></td>
+</tr>
+<tr>
+<td><code>LEAD()</code></td>
+<td>Next row</td>
+<td><code>LEAD(value) OVER (ORDER BY date)</code></td>
+</tr>
+<tr>
+<td><code>SUM() OVER</code></td>
+<td>Running sum</td>
+<td><code>SUM(amount) OVER (ORDER BY date)</code></td>
+</tr>
+<tr>
+<td><code>AVG() OVER</code></td>
+<td>Running average</td>
+<td><code>AVG(amount) OVER (ROWS 7 PRECEDING)</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="pgvector-operations">pgvector Operations</h4>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 39%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>&lt;=&gt;</code></td>
+<td>Cosine distance</td>
+<td><code>embedding &lt;=&gt; '[0.1,0.2,0.3]'</code></td>
+</tr>
+<tr>
+<td><code>&lt;-&gt;</code></td>
+<td>L2 distance</td>
+<td><code>embedding &lt;-&gt; '[0.1,0.2,0.3]'</code></td>
+</tr>
+<tr>
+<td><code>&lt;#&gt;</code></td>
+<td>Inner product</td>
+<td><code>embedding &lt;#&gt; '[0.1,0.2,0.3]'</code></td>
+</tr>
+<tr>
+<td><code>vector()</code></td>
+<td>Create vector</td>
+<td><code>vector('[0.1,0.2,0.3]')</code></td>
+</tr>
+<tr>
+<td><code>CREATE INDEX ... USING ivfflat</code></td>
+<td>IVF index</td>
+<td><code>CREATE INDEX ON items USING ivfflat (embedding)</code></td>
+</tr>
+<tr>
+<td><code>CREATE INDEX ... USING hnsw</code></td>
+<td>HNSW index</td>
+<td><code>CREATE INDEX ON items USING hnsw (embedding)</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="mysql-wire-protocol-commands">4.3 MySQL Wire Protocol
+Commands</h3>
+<table>
+<thead>
+<tr>
+<th>Command Code</th>
+<th>Name</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0x00</td>
+<td><code>COM_SLEEP</code></td>
+<td>Sleep</td>
+</tr>
+<tr>
+<td>0x01</td>
+<td><code>COM_QUIT</code></td>
+<td>Close connection</td>
+</tr>
+<tr>
+<td>0x02</td>
+<td><code>COM_INIT_DB</code></td>
+<td>Select database</td>
+</tr>
+<tr>
+<td>0x03</td>
+<td><code>COM_QUERY</code></td>
+<td>Execute SQL</td>
+</tr>
+<tr>
+<td>0x04</td>
+<td><code>COM_FIELD_LIST</code></td>
+<td>List fields</td>
+</tr>
+<tr>
+<td>0x05</td>
+<td><code>COM_CREATE_DB</code></td>
+<td>Create database</td>
+</tr>
+<tr>
+<td>0x06</td>
+<td><code>COM_DROP_DB</code></td>
+<td>Drop database</td>
+</tr>
+<tr>
+<td>0x07</td>
+<td><code>COM_REFRESH</code></td>
+<td>Refresh</td>
+</tr>
+<tr>
+<td>0x09</td>
+<td><code>COM_STATISTICS</code></td>
+<td>Get statistics</td>
+</tr>
+<tr>
+<td>0x0E</td>
+<td><code>COM_PING</code></td>
+<td>Ping server</td>
+</tr>
+<tr>
+<td>0x16</td>
+<td><code>COM_STMT_PREPARE</code></td>
+<td>Prepare statement</td>
+</tr>
+<tr>
+<td>0x17</td>
+<td><code>COM_STMT_EXECUTE</code></td>
+<td>Execute prepared</td>
+</tr>
+<tr>
+<td>0x18</td>
+<td><code>COM_STMT_SEND_LONG_DATA</code></td>
+<td>Send blob data</td>
+</tr>
+<tr>
+<td>0x19</td>
+<td><code>COM_STMT_CLOSE</code></td>
+<td>Close prepared</td>
+</tr>
+<tr>
+<td>0x1A</td>
+<td><code>COM_STMT_RESET</code></td>
+<td>Reset prepared</td>
+</tr>
+<tr>
+<td>0x1B</td>
+<td><code>COM_SET_OPTION</code></td>
+<td>Set option</td>
+</tr>
+<tr>
+<td>0x1C</td>
+<td><code>COM_STMT_FETCH</code></td>
+<td>Fetch rows</td>
+</tr>
+<tr>
+<td>0x1F</td>
+<td><code>COM_RESET_CONNECTION</code></td>
+<td>Reset connection</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="cql-cassandra-statements-45-operations">4.4 CQL (Cassandra)
+Statements (45+ Operations)</h3>
+<h4 id="schema-operations">Schema Operations</h4>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 39%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr>
+<th>Statement</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CREATE KEYSPACE</code></td>
+<td>Create keyspace</td>
+<td><code>CREATE KEYSPACE ks WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3}</code></td>
+</tr>
+<tr>
+<td><code>CREATE TABLE</code></td>
+<td>Create table</td>
+<td><code>CREATE TABLE users (id UUID PRIMARY KEY, name TEXT)</code></td>
+</tr>
+<tr>
+<td><code>CREATE INDEX</code></td>
+<td>Create index</td>
+<td><code>CREATE INDEX ON users (name)</code></td>
+</tr>
+<tr>
+<td><code>CREATE TYPE</code></td>
+<td>Create UDT</td>
+<td><code>CREATE TYPE address (street TEXT, city TEXT)</code></td>
+</tr>
+<tr>
+<td><code>CREATE MATERIALIZED VIEW</code></td>
+<td>Create MV</td>
+<td><code>CREATE MATERIALIZED VIEW users_by_email AS SELECT * FROM users WHERE email IS NOT NULL PRIMARY KEY (email, id)</code></td>
+</tr>
+<tr>
+<td><code>CREATE FUNCTION</code></td>
+<td>Create UDF</td>
+<td><code>CREATE FUNCTION my_func(input TEXT) RETURNS TEXT LANGUAGE java AS '...'</code></td>
+</tr>
+<tr>
+<td><code>CREATE AGGREGATE</code></td>
+<td>Create aggregate</td>
+<td><code>CREATE AGGREGATE my_agg(INT) SFUNC state_func STYPE INT</code></td>
+</tr>
+<tr>
+<td><code>ALTER TABLE</code></td>
+<td>Modify table</td>
+<td><code>ALTER TABLE users ADD email TEXT</code></td>
+</tr>
+<tr>
+<td><code>ALTER KEYSPACE</code></td>
+<td>Modify keyspace</td>
+<td><code>ALTER KEYSPACE ks WITH replication = {...}</code></td>
+</tr>
+<tr>
+<td><code>DROP TABLE</code></td>
+<td>Drop table</td>
+<td><code>DROP TABLE users</code></td>
+</tr>
+<tr>
+<td><code>DROP KEYSPACE</code></td>
+<td>Drop keyspace</td>
+<td><code>DROP KEYSPACE ks</code></td>
+</tr>
+<tr>
+<td><code>TRUNCATE</code></td>
+<td>Truncate table</td>
+<td><code>TRUNCATE users</code></td>
+</tr>
+<tr>
+<td><code>USE</code></td>
+<td>Select keyspace</td>
+<td><code>USE mykeyspace</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="data-operations">Data Operations</h4>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 39%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr>
+<th>Statement</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SELECT</code></td>
+<td>Query data</td>
+<td><code>SELECT * FROM users WHERE id = ?</code></td>
+</tr>
+<tr>
+<td><code>INSERT</code></td>
+<td>Insert data</td>
+<td><code>INSERT INTO users (id, name) VALUES (uuid(), 'John')</code></td>
+</tr>
+<tr>
+<td><code>UPDATE</code></td>
+<td>Update data</td>
+<td><code>UPDATE users SET name = 'Jane' WHERE id = ?</code></td>
+</tr>
+<tr>
+<td><code>DELETE</code></td>
+<td>Delete data</td>
+<td><code>DELETE FROM users WHERE id = ?</code></td>
+</tr>
+<tr>
+<td><code>BATCH</code></td>
+<td>Batch operations</td>
+<td><code>BEGIN BATCH INSERT ... UPDATE ... APPLY BATCH</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="cql-specific-features">CQL-Specific Features</h4>
+<table>
+<colgroup>
+<col style="width: 29%" />
+<col style="width: 41%" />
+<col style="width: 29%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TTL</code></td>
+<td>Time-to-live</td>
+<td><code>INSERT INTO users ... USING TTL 86400</code></td>
+</tr>
+<tr>
+<td><code>TIMESTAMP</code></td>
+<td>Write timestamp</td>
+<td><code>INSERT INTO users ... USING TIMESTAMP 1234567890</code></td>
+</tr>
+<tr>
+<td><code>IF NOT EXISTS</code></td>
+<td>Conditional insert</td>
+<td><code>INSERT INTO users ... IF NOT EXISTS</code></td>
+</tr>
+<tr>
+<td><code>IF EXISTS</code></td>
+<td>Conditional update</td>
+<td><code>UPDATE users SET ... IF EXISTS</code></td>
+</tr>
+<tr>
+<td><code>ALLOW FILTERING</code></td>
+<td>Allow full scan</td>
+<td><code>SELECT * FROM users WHERE age &gt; 18 ALLOW FILTERING</code></td>
+</tr>
+<tr>
+<td><code>PER PARTITION LIMIT</code></td>
+<td>Limit per partition</td>
+<td><code>SELECT * FROM events PER PARTITION LIMIT 10</code></td>
+</tr>
+<tr>
+<td><code>JSON</code></td>
+<td>JSON format</td>
+<td><code>SELECT JSON * FROM users</code></td>
+</tr>
+<tr>
+<td><code>DISTINCT</code></td>
+<td>Distinct partition keys</td>
+<td><code>SELECT DISTINCT user_id FROM events</code></td>
+</tr>
+<tr>
+<td><code>Counter operations</code></td>
+<td>Counter columns</td>
+<td><code>UPDATE counters SET count = count + 1 WHERE id = ?</code></td>
+</tr>
+<tr>
+<td><code>Collection operations</code></td>
+<td>List/Set/Map ops</td>
+<td><code>UPDATE users SET tags = tags + {'new_tag'} WHERE id = ?</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="consistency-levels">Consistency Levels</h4>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ONE</code></td>
+<td>One replica</td>
+</tr>
+<tr>
+<td><code>TWO</code></td>
+<td>Two replicas</td>
+</tr>
+<tr>
+<td><code>THREE</code></td>
+<td>Three replicas</td>
+</tr>
+<tr>
+<td><code>QUORUM</code></td>
+<td>Majority of replicas</td>
+</tr>
+<tr>
+<td><code>ALL</code></td>
+<td>All replicas</td>
+</tr>
+<tr>
+<td><code>LOCAL_QUORUM</code></td>
+<td>Quorum in local DC</td>
+</tr>
+<tr>
+<td><code>EACH_QUORUM</code></td>
+<td>Quorum in each DC</td>
+</tr>
+<tr>
+<td><code>LOCAL_ONE</code></td>
+<td>One in local DC</td>
+</tr>
+<tr>
+<td><code>ANY</code></td>
+<td>Any node (including hints)</td>
+</tr>
+<tr>
+<td><code>SERIAL</code></td>
+<td>Linearizable (for LWT)</td>
+</tr>
+<tr>
+<td><code>LOCAL_SERIAL</code></td>
+<td>Local linearizable</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="cypher-neo4j-query-language">4.5 Cypher (Neo4j) Query
+Language</h3>
+<h4 id="reading-clauses">Reading Clauses</h4>
+<table>
+<colgroup>
+<col style="width: 26%" />
+<col style="width: 43%" />
+<col style="width: 30%" />
+</colgroup>
+<thead>
+<tr>
+<th>Clause</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MATCH</code></td>
+<td>Pattern match</td>
+<td><code>MATCH (n:Person)-[:KNOWS]-&gt;(m)</code></td>
+</tr>
+<tr>
+<td><code>OPTIONAL MATCH</code></td>
+<td>Left outer match</td>
+<td><code>OPTIONAL MATCH (n)-[:OWNS]-&gt;(p)</code></td>
+</tr>
+<tr>
+<td><code>WHERE</code></td>
+<td>Filter</td>
+<td><code>WHERE n.age &gt; 18</code></td>
+</tr>
+<tr>
+<td><code>RETURN</code></td>
+<td>Return results</td>
+<td><code>RETURN n.name, count(m)</code></td>
+</tr>
+<tr>
+<td><code>WITH</code></td>
+<td>Intermediate results</td>
+<td><code>WITH n, count(m) AS friends</code></td>
+</tr>
+<tr>
+<td><code>UNWIND</code></td>
+<td>Expand list</td>
+<td><code>UNWIND [1,2,3] AS x</code></td>
+</tr>
+<tr>
+<td><code>ORDER BY</code></td>
+<td>Sort</td>
+<td><code>ORDER BY n.name DESC</code></td>
+</tr>
+<tr>
+<td><code>SKIP</code></td>
+<td>Skip rows</td>
+<td><code>SKIP 10</code></td>
+</tr>
+<tr>
+<td><code>LIMIT</code></td>
+<td>Limit rows</td>
+<td><code>LIMIT 25</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="writing-clauses">Writing Clauses</h4>
+<table>
+<colgroup>
+<col style="width: 26%" />
+<col style="width: 43%" />
+<col style="width: 30%" />
+</colgroup>
+<thead>
+<tr>
+<th>Clause</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CREATE</code></td>
+<td>Create nodes/rels</td>
+<td><code>CREATE (n:Person {name: 'John'})</code></td>
+</tr>
+<tr>
+<td><code>MERGE</code></td>
+<td>Create if not exists</td>
+<td><code>MERGE (n:Person {id: 1})</code></td>
+</tr>
+<tr>
+<td><code>SET</code></td>
+<td>Set properties</td>
+<td><code>SET n.name = 'Jane'</code></td>
+</tr>
+<tr>
+<td><code>DELETE</code></td>
+<td>Delete nodes/rels</td>
+<td><code>DELETE n</code></td>
+</tr>
+<tr>
+<td><code>DETACH DELETE</code></td>
+<td>Delete with rels</td>
+<td><code>DETACH DELETE n</code></td>
+</tr>
+<tr>
+<td><code>REMOVE</code></td>
+<td>Remove property</td>
+<td><code>REMOVE n.temp_field</code></td>
+</tr>
+<tr>
+<td><code>FOREACH</code></td>
+<td>Iterate and update</td>
+<td><code>FOREACH (x IN list | CREATE (:Item {val: x}))</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="pattern-syntax">Pattern Syntax</h4>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>(n)</code></td>
+<td>Any node</td>
+<td><code>MATCH (n)</code></td>
+</tr>
+<tr>
+<td><code>(n:Label)</code></td>
+<td>Labeled node</td>
+<td><code>MATCH (n:Person)</code></td>
+</tr>
+<tr>
+<td><code>(n {prop: val})</code></td>
+<td>Node with property</td>
+<td><code>MATCH (n {name: 'John'})</code></td>
+</tr>
+<tr>
+<td><code>--&gt;</code></td>
+<td>Outgoing relationship</td>
+<td><code>(a)--&gt;(b)</code></td>
+</tr>
+<tr>
+<td><code>&lt;--</code></td>
+<td>Incoming relationship</td>
+<td><code>(a)&lt;--(b)</code></td>
+</tr>
+<tr>
+<td><code>--</code></td>
+<td>Any direction</td>
+<td><code>(a)--(b)</code></td>
+</tr>
+<tr>
+<td><code>-[:TYPE]-&gt;</code></td>
+<td>Typed relationship</td>
+<td><code>(a)-[:KNOWS]-&gt;(b)</code></td>
+</tr>
+<tr>
+<td><code>-[r:TYPE]-&gt;</code></td>
+<td>Named relationship</td>
+<td><code>(a)-[r:KNOWS]-&gt;(b)</code></td>
+</tr>
+<tr>
+<td><code>-[*1..3]-&gt;</code></td>
+<td>Variable length</td>
+<td><code>(a)-[:KNOWS*1..3]-&gt;(b)</code></td>
+</tr>
+<tr>
+<td><code>-[:TYPE1|TYPE2]-&gt;</code></td>
+<td>Multiple types</td>
+<td><code>(a)-[:KNOWS|LIKES]-&gt;(b)</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="aggregation-functions">Aggregation Functions</h4>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>count()</code></td>
+<td>Count</td>
+<td><code>count(n)</code></td>
+</tr>
+<tr>
+<td><code>sum()</code></td>
+<td>Sum</td>
+<td><code>sum(n.amount)</code></td>
+</tr>
+<tr>
+<td><code>avg()</code></td>
+<td>Average</td>
+<td><code>avg(n.score)</code></td>
+</tr>
+<tr>
+<td><code>min()</code></td>
+<td>Minimum</td>
+<td><code>min(n.age)</code></td>
+</tr>
+<tr>
+<td><code>max()</code></td>
+<td>Maximum</td>
+<td><code>max(n.age)</code></td>
+</tr>
+<tr>
+<td><code>collect()</code></td>
+<td>Collect to list</td>
+<td><code>collect(n.name)</code></td>
+</tr>
+<tr>
+<td><code>percentileCont()</code></td>
+<td>Percentile</td>
+<td><code>percentileCont(n.score, 0.5)</code></td>
+</tr>
+<tr>
+<td><code>stDev()</code></td>
+<td>Standard deviation</td>
+<td><code>stDev(n.value)</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="graph-algorithms-via-procedures">Graph Algorithms (via
+Procedures)</h4>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 39%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr>
+<th>Procedure</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gds.shortestPath.dijkstra</code></td>
+<td>Shortest path</td>
+<td><code>CALL gds.shortestPath.dijkstra.stream(...)</code></td>
+</tr>
+<tr>
+<td><code>gds.pageRank</code></td>
+<td>PageRank</td>
+<td><code>CALL gds.pageRank.stream(...)</code></td>
+</tr>
+<tr>
+<td><code>gds.louvain</code></td>
+<td>Community detection</td>
+<td><code>CALL gds.louvain.stream(...)</code></td>
+</tr>
+<tr>
+<td><code>gds.betweenness</code></td>
+<td>Betweenness centrality</td>
+<td><code>CALL gds.betweenness.stream(...)</code></td>
+</tr>
+<tr>
+<td><code>gds.nodeSimilarity</code></td>
+<td>Node similarity</td>
+<td><code>CALL gds.nodeSimilarity.stream(...)</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="mongodb-operations">4.6 MongoDB Operations</h3>
+<h4 id="crud-operations">CRUD Operations</h4>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 39%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>find</code></td>
+<td>Query documents</td>
+<td><code>db.users.find({age: {$gt: 18}})</code></td>
+</tr>
+<tr>
+<td><code>findOne</code></td>
+<td>Query single doc</td>
+<td><code>db.users.findOne({_id: ObjectId(...)})</code></td>
+</tr>
+<tr>
+<td><code>insertOne</code></td>
+<td>Insert document</td>
+<td><code>db.users.insertOne({name: 'John'})</code></td>
+</tr>
+<tr>
+<td><code>insertMany</code></td>
+<td>Insert multiple</td>
+<td><code>db.users.insertMany([{...}, {...}])</code></td>
+</tr>
+<tr>
+<td><code>updateOne</code></td>
+<td>Update document</td>
+<td><code>db.users.updateOne({_id: ...}, {$set: {...}})</code></td>
+</tr>
+<tr>
+<td><code>updateMany</code></td>
+<td>Update multiple</td>
+<td><code>db.users.updateMany({active: false}, {$set: {...}})</code></td>
+</tr>
+<tr>
+<td><code>replaceOne</code></td>
+<td>Replace document</td>
+<td><code>db.users.replaceOne({_id: ...}, {...})</code></td>
+</tr>
+<tr>
+<td><code>deleteOne</code></td>
+<td>Delete document</td>
+<td><code>db.users.deleteOne({_id: ...})</code></td>
+</tr>
+<tr>
+<td><code>deleteMany</code></td>
+<td>Delete multiple</td>
+<td><code>db.users.deleteMany({active: false})</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="query-operators">Query Operators</h4>
+<table>
+<thead>
+<tr>
+<th>Operator</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>$eq</code></td>
+<td>Equal</td>
+<td><code>{age: {$eq: 25}}</code></td>
+</tr>
+<tr>
+<td><code>$ne</code></td>
+<td>Not equal</td>
+<td><code>{status: {$ne: 'deleted'}}</code></td>
+</tr>
+<tr>
+<td><code>$gt</code></td>
+<td>Greater than</td>
+<td><code>{age: {$gt: 18}}</code></td>
+</tr>
+<tr>
+<td><code>$gte</code></td>
+<td>Greater or equal</td>
+<td><code>{age: {$gte: 18}}</code></td>
+</tr>
+<tr>
+<td><code>$lt</code></td>
+<td>Less than</td>
+<td><code>{age: {$lt: 65}}</code></td>
+</tr>
+<tr>
+<td><code>$lte</code></td>
+<td>Less or equal</td>
+<td><code>{age: {$lte: 65}}</code></td>
+</tr>
+<tr>
+<td><code>$in</code></td>
+<td>In array</td>
+<td><code>{status: {$in: ['active', 'pending']}}</code></td>
+</tr>
+<tr>
+<td><code>$nin</code></td>
+<td>Not in array</td>
+<td><code>{status: {$nin: ['deleted']}}</code></td>
+</tr>
+<tr>
+<td><code>$and</code></td>
+<td>Logical AND</td>
+<td><code>{$and: [{age: {$gte: 18}}, {active: true}]}</code></td>
+</tr>
+<tr>
+<td><code>$or</code></td>
+<td>Logical OR</td>
+<td><code>{$or: [{age: {$lt: 18}}, {status: 'minor'}]}</code></td>
+</tr>
+<tr>
+<td><code>$not</code></td>
+<td>Logical NOT</td>
+<td><code>{age: {$not: {$lt: 18}}}</code></td>
+</tr>
+<tr>
+<td><code>$exists</code></td>
+<td>Field exists</td>
+<td><code>{email: {$exists: true}}</code></td>
+</tr>
+<tr>
+<td><code>$regex</code></td>
+<td>Regular expression</td>
+<td><code>{name: {$regex: /^John/}}</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="aggregation-pipeline">Aggregation Pipeline</h4>
+<table>
+<colgroup>
+<col style="width: 24%" />
+<col style="width: 44%" />
+<col style="width: 31%" />
+</colgroup>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>$match</code></td>
+<td>Filter</td>
+<td><code>{$match: {status: 'active'}}</code></td>
+</tr>
+<tr>
+<td><code>$group</code></td>
+<td>Group</td>
+<td><code>{$group: {_id: '$category', count: {$sum: 1}}}</code></td>
+</tr>
+<tr>
+<td><code>$project</code></td>
+<td>Projection</td>
+<td><code>{$project: {name: 1, _id: 0}}</code></td>
+</tr>
+<tr>
+<td><code>$sort</code></td>
+<td>Sort</td>
+<td><code>{$sort: {createdAt: -1}}</code></td>
+</tr>
+<tr>
+<td><code>$limit</code></td>
+<td>Limit</td>
+<td><code>{$limit: 10}</code></td>
+</tr>
+<tr>
+<td><code>$skip</code></td>
+<td>Skip</td>
+<td><code>{$skip: 20}</code></td>
+</tr>
+<tr>
+<td><code>$unwind</code></td>
+<td>Flatten array</td>
+<td><code>{$unwind: '$tags'}</code></td>
+</tr>
+<tr>
+<td><code>$lookup</code></td>
+<td>Join</td>
+<td><code>{$lookup: {from: 'orders', ...}}</code></td>
+</tr>
+<tr>
+<td><code>$graphLookup</code></td>
+<td>Recursive lookup</td>
+<td><code>{$graphLookup: {from: 'employees', ...}}</code></td>
+</tr>
+<tr>
+<td><code>$vectorSearch</code></td>
+<td>Vector search</td>
+<td><code>{$vectorSearch: {vector: [...], path: 'embedding', ...}}</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="orbitql-statements-native-multi-model">4.7 OrbitQL Statements
+(Native Multi-Model)</h3>
+<h4 id="sql-compatible-statements">SQL-Compatible Statements</h4>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 39%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr>
+<th>Statement</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SELECT</code></td>
+<td>Query data</td>
+<td><code>SELECT * FROM users WHERE age &gt; 18</code></td>
+</tr>
+<tr>
+<td><code>INSERT</code></td>
+<td>Insert data</td>
+<td><code>INSERT INTO users {name: 'John', age: 25}</code></td>
+</tr>
+<tr>
+<td><code>UPDATE</code></td>
+<td>Update data</td>
+<td><code>UPDATE users SET age = 26 WHERE name = 'John'</code></td>
+</tr>
+<tr>
+<td><code>DELETE</code></td>
+<td>Delete data</td>
+<td><code>DELETE FROM users WHERE id = 1</code></td>
+</tr>
+<tr>
+<td><code>CREATE</code></td>
+<td>Create schema</td>
+<td><code>CREATE TABLE users (id INT, name STRING)</code></td>
+</tr>
+<tr>
+<td><code>DROP</code></td>
+<td>Drop schema</td>
+<td><code>DROP TABLE users</code></td>
+</tr>
+<tr>
+<td><code>ALTER</code></td>
+<td>Alter schema</td>
+<td><code>ALTER TABLE users ADD COLUMN email STRING</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="graph-operations-surrealdb-style">Graph Operations
+(SurrealDB-style)</h4>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 39%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr>
+<th>Statement</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RELATE</code></td>
+<td>Create relationship</td>
+<td><code>RELATE users:john-&gt;follows-&gt;users:jane</code></td>
+</tr>
+<tr>
+<td><code>TRAVERSE</code></td>
+<td>Graph traversal</td>
+<td><code>SELECT -&gt;follows-&gt;user FROM users:john</code></td>
+</tr>
+<tr>
+<td><code>MATCH</code></td>
+<td>Pattern matching</td>
+<td><code>MATCH (n:User)-[:FOLLOWS]-&gt;(m)</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="real-time-queries">Real-time Queries</h4>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 39%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr>
+<th>Statement</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LIVE SELECT</code></td>
+<td>Subscribe to changes</td>
+<td><code>LIVE SELECT * FROM orders WHERE status = 'pending' DIFF</code></td>
+</tr>
+<tr>
+<td><code>KILL</code></td>
+<td>Stop subscription</td>
+<td><code>KILL $subscription_id</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="schema-definition-define">Schema Definition (DEFINE)</h4>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 39%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr>
+<th>Statement</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DEFINE NAMESPACE</code></td>
+<td>Define namespace</td>
+<td><code>DEFINE NAMESPACE myapp</code></td>
+</tr>
+<tr>
+<td><code>DEFINE DATABASE</code></td>
+<td>Define database</td>
+<td><code>DEFINE DATABASE production</code></td>
+</tr>
+<tr>
+<td><code>DEFINE TABLE</code></td>
+<td>Define table</td>
+<td><code>DEFINE TABLE users SCHEMALESS</code></td>
+</tr>
+<tr>
+<td><code>DEFINE FIELD</code></td>
+<td>Define field</td>
+<td><code>DEFINE FIELD email ON users TYPE string</code></td>
+</tr>
+<tr>
+<td><code>DEFINE INDEX</code></td>
+<td>Define index</td>
+<td><code>DEFINE INDEX email_idx ON users FIELDS email UNIQUE</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="ml-integration">ML Integration</h4>
+<table>
+<colgroup>
+<col style="width: 31%" />
+<col style="width: 40%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>Function</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ml::predict()</code></td>
+<td>Run prediction</td>
+<td><code>SELECT ml::predict('churn_model', {...}) FROM users</code></td>
+</tr>
+<tr>
+<td><code>ml::embed_text()</code></td>
+<td>Text embedding</td>
+<td><code>SELECT ml::embed_text('hello world')</code></td>
+</tr>
+<tr>
+<td><code>ml::classify()</code></td>
+<td>Classification</td>
+<td><code>SELECT ml::classify('sentiment', text) FROM reviews</code></td>
+</tr>
+<tr>
+<td><code>ml::cluster()</code></td>
+<td>Clustering</td>
+<td><code>SELECT ml::cluster('kmeans', features) FROM data</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="graph-functions">Graph Functions</h4>
+<table>
+<colgroup>
+<col style="width: 31%" />
+<col style="width: 40%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>Function</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>graph::shortest_path()</code></td>
+<td>Shortest path</td>
+<td><code>SELECT graph::shortest_path(a, b) FROM nodes</code></td>
+</tr>
+<tr>
+<td><code>graph::neighbors()</code></td>
+<td>Get neighbors</td>
+<td><code>SELECT graph::neighbors(node, 2) FROM nodes</code></td>
+</tr>
+<tr>
+<td><code>graph::connected()</code></td>
+<td>Check connected</td>
+<td><code>SELECT graph::connected(a, b) FROM nodes</code></td>
+</tr>
+<tr>
+<td><code>graph::pagerank()</code></td>
+<td>PageRank</td>
+<td><code>SELECT graph::pagerank() FROM nodes</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="vector-operations">Vector Operations</h4>
+<table>
+<colgroup>
+<col style="width: 26%" />
+<col style="width: 43%" />
+<col style="width: 30%" />
+</colgroup>
+<thead>
+<tr>
+<th>Syntax</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>&lt;=&gt;</code></td>
+<td>Cosine similarity</td>
+<td><code>embedding &lt;=&gt; $query_vector</code></td>
+</tr>
+<tr>
+<td><code>vector::similarity::cosine()</code></td>
+<td>Cosine function</td>
+<td><code>vector::similarity::cosine(a, b)</code></td>
+</tr>
+<tr>
+<td><code>vector::similarity::euclidean()</code></td>
+<td>Euclidean distance</td>
+<td><code>vector::similarity::euclidean(a, b)</code></td>
+</tr>
+<tr>
+<td><code>vector::similarity::dot()</code></td>
+<td>Dot product</td>
+<td><code>vector::similarity::dot(a, b)</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="rest-api-endpoints">4.8 REST API Endpoints</h3>
+<h4 id="actor-management">Actor Management</h4>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/v1/actors</code></td>
+<td>List actors (paginated)</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/v1/actors/{id}</code></td>
+<td>Get actor state</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/v1/actors</code></td>
+<td>Create actor</td>
+</tr>
+<tr>
+<td><code>PUT</code></td>
+<td><code>/api/v1/actors/{id}</code></td>
+<td>Update actor</td>
+</tr>
+<tr>
+<td><code>DELETE</code></td>
+<td><code>/api/v1/actors/{id}</code></td>
+<td>Deactivate actor</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/v1/actors/{id}/invoke</code></td>
+<td>Invoke method</td>
+</tr>
+</tbody>
+</table>
+<h4 id="query-endpoints">Query Endpoints</h4>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/v1/query</code></td>
+<td>Execute query</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/v1/query/history</code></td>
+<td>Query history</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/v1/query/explain</code></td>
+<td>Explain query</td>
+</tr>
+</tbody>
+</table>
+<h4 id="transaction-management">Transaction Management</h4>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/v1/transactions</code></td>
+<td>Begin transaction</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/v1/transactions/{id}/commit</code></td>
+<td>Commit</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/v1/transactions/{id}/abort</code></td>
+<td>Abort</td>
+</tr>
+</tbody>
+</table>
+<h4 id="cluster-information">Cluster Information</h4>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/v1/cluster/status</code></td>
+<td>Cluster status</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/v1/cluster/nodes</code></td>
+<td>List nodes</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/v1/cluster/config</code></td>
+<td>Configuration</td>
+</tr>
+</tbody>
+</table>
+<h4 id="real-time">Real-time</h4>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>WS</code></td>
+<td><code>/api/v1/ws/actors/{id}</code></td>
+<td>Actor events</td>
+</tr>
+<tr>
+<td><code>WS</code></td>
+<td><code>/api/v1/ws/events</code></td>
+<td>System events</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/v1/stream/query</code></td>
+<td>SSE query stream</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/v1/stream/cdc</code></td>
+<td>CDC stream</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="data-model-comparison">5. Data Model Comparison</h2>
+<h3 id="schema-flexibility">5.1 Schema Flexibility</h3>
+<table>
+<thead>
+<tr>
+<th>Protocol</th>
+<th>Schema Model</th>
+<th>Flexibility</th>
+<th>Best For</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>PostgreSQL</strong></td>
+<td>Schema-on-write</td>
+<td>Rigid</td>
+<td>Structured data, ACID</td>
+</tr>
+<tr>
+<td><strong>MySQL</strong></td>
+<td>Schema-on-write</td>
+<td>Rigid</td>
+<td>Web applications</td>
+</tr>
+<tr>
+<td><strong>Redis</strong></td>
+<td>Schemaless</td>
+<td>Maximum</td>
+<td>Caching, sessions</td>
+</tr>
+<tr>
+<td><strong>CQL</strong></td>
+<td>Schema-on-write</td>
+<td>Semi-rigid</td>
+<td>Time-series, IoT</td>
+</tr>
+<tr>
+<td><strong>Cypher</strong></td>
+<td>Schema-optional</td>
+<td>Flexible</td>
+<td>Relationships</td>
+</tr>
+<tr>
+<td><strong>MongoDB</strong></td>
+<td>Schema-on-read</td>
+<td>Flexible</td>
+<td>Documents, prototyping</td>
+</tr>
+<tr>
+<td><strong>OrbitQL</strong></td>
+<td>Hybrid</td>
+<td>Configurable</td>
+<td>Multi-model</td>
+</tr>
+</tbody>
+</table>
+<h3 id="relationship-modeling">5.2 Relationship Modeling</h3>
+<table>
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 20%" />
+<col style="width: 11%" />
+<col style="width: 8%" />
+<col style="width: 13%" />
+<col style="width: 15%" />
+<col style="width: 15%" />
+</colgroup>
+<thead>
+<tr>
+<th>Approach</th>
+<th style="text-align: center;">PostgreSQL</th>
+<th style="text-align: center;">Redis</th>
+<th style="text-align: center;">CQL</th>
+<th style="text-align: center;">Cypher</th>
+<th style="text-align: center;">MongoDB</th>
+<th style="text-align: center;">OrbitQL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Foreign Keys</strong></td>
+<td style="text-align: center;">✅ Native</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Joins</strong></td>
+<td style="text-align: center;">✅ All types</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ Pattern</td>
+<td style="text-align: center;">⚠️ $lookup</td>
+<td style="text-align: center;">✅ All + Graph</td>
+</tr>
+<tr>
+<td><strong>Embedded Docs</strong></td>
+<td style="text-align: center;">✅ JSONB</td>
+<td style="text-align: center;">✅ Hash</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ Props</td>
+<td style="text-align: center;">✅ Native</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Graph Edges</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ GRAPH.*</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ Native</td>
+<td style="text-align: center;">⚠️</td>
+<td style="text-align: center;">✅ RELATE</td>
+</tr>
+<tr>
+<td><strong>Denormalization</strong></td>
+<td style="text-align: center;">Manual</td>
+<td style="text-align: center;">Native</td>
+<td style="text-align: center;">Native</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">Native</td>
+<td style="text-align: center;">Hybrid</td>
+</tr>
+</tbody>
+</table>
+<h3 id="query-patterns">5.3 Query Patterns</h3>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Query Pattern Suitability                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Point Lookup          PostgreSQL ████████░░                                 │
+│  (key=value)           Redis      ██████████ (optimal)                       │
+│                        CQL        █████████░                                 │
+│                        MongoDB    ████████░░                                 │
+│                                                                              │
+│  Range Scan            PostgreSQL ██████████                                 │
+│  (key &gt; x)             Redis      ████░░░░░░                                 │
+│                        CQL        ████████░░                                 │
+│                        MongoDB    ████████░░                                 │
+│                                                                              │
+│  Complex Joins         PostgreSQL ██████████ (optimal)                       │
+│  (multi-table)         Redis      ░░░░░░░░░░                                 │
+│                        CQL        ░░░░░░░░░░                                 │
+│                        OrbitQL    █████████░                                 │
+│                                                                              │
+│  Graph Traversal       PostgreSQL ██░░░░░░░░                                 │
+│  (relationships)       Cypher     ██████████ (optimal)                       │
+│                        OrbitQL    █████████░                                 │
+│                        Redis      ████████░░ (GRAPH.*)                       │
+│                                                                              │
+│  Full-Text Search      PostgreSQL ████████░░                                 │
+│                        Redis      █████████░ (FT.*)                          │
+│                        MongoDB    ████████░░                                 │
+│                        OrbitQL    █████████░                                 │
+│                                                                              │
+│  Vector Similarity     PostgreSQL ████████░░ (pgvector)                      │
+│                        Redis      █████████░ (VECTOR.*)                      │
+│                        CQL        ████████░░ (ANN)                           │
+│                        OrbitQL    ██████████ (native)                        │
+│                                                                              │
+│  Time-Series           Redis      █████████░ (TS.*)                          │
+│                        CQL        ██████████ (optimal)                       │
+│                        OrbitQL    █████████░                                 │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘</code></pre>
+<hr />
+<h2 id="query-capabilities-comparison">6. Query Capabilities
+Comparison</h2>
+<h3 id="query-language-features">6.1 Query Language Features</h3>
+<table>
+<colgroup>
+<col style="width: 13%" />
+<col style="width: 18%" />
+<col style="width: 10%" />
+<col style="width: 10%" />
+<col style="width: 7%" />
+<col style="width: 12%" />
+<col style="width: 13%" />
+<col style="width: 13%" />
+</colgroup>
+<thead>
+<tr>
+<th>Feature</th>
+<th style="text-align: center;">PostgreSQL</th>
+<th style="text-align: center;">MySQL</th>
+<th style="text-align: center;">Redis</th>
+<th style="text-align: center;">CQL</th>
+<th style="text-align: center;">Cypher</th>
+<th style="text-align: center;">MongoDB</th>
+<th style="text-align: center;">OrbitQL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Declarative SQL</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">⚠️ SQL-like</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Imperative Commands</strong></td>
+<td style="text-align: center;">⚠️ PL/pgSQL</td>
+<td style="text-align: center;">⚠️</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">⚠️ UDF</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">⚠️</td>
+<td style="text-align: center;">⚠️</td>
+</tr>
+<tr>
+<td><strong>Pattern Matching</strong></td>
+<td style="text-align: center;">⚠️ LIKE</td>
+<td style="text-align: center;">⚠️ LIKE</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ Native</td>
+<td style="text-align: center;">⚠️</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Recursive Queries</strong></td>
+<td style="text-align: center;">✅ CTE</td>
+<td style="text-align: center;">✅ CTE</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ *1..n</td>
+<td style="text-align: center;">✅ $graphLookup</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Parameterized</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Prepared Statements</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Explain Plans</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+</tbody>
+</table>
+<h3 id="aggregation-capabilities">6.2 Aggregation Capabilities</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 17%" />
+<col style="width: 10%" />
+<col style="width: 10%" />
+<col style="width: 7%" />
+<col style="width: 11%" />
+<col style="width: 13%" />
+<col style="width: 13%" />
+</colgroup>
+<thead>
+<tr>
+<th>Function</th>
+<th style="text-align: center;">PostgreSQL</th>
+<th style="text-align: center;">MySQL</th>
+<th style="text-align: center;">Redis</th>
+<th style="text-align: center;">CQL</th>
+<th style="text-align: center;">Cypher</th>
+<th style="text-align: center;">MongoDB</th>
+<th style="text-align: center;">OrbitQL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>COUNT</code></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">⚠️</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>SUM</code></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">⚠️</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>AVG</code></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">⚠️</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>MIN/MAX</code></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">⚠️</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>GROUP_CONCAT</code></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅ collect</td>
+<td style="text-align: center;">✅ $push</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>STDDEV</code></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>PERCENTILE</code></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">⚠️</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>DISTINCT</code></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>ROLLUP</code></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><code>CUBE</code></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">⚠️</td>
+<td style="text-align: center;">✅</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="transaction-support-comparison">7. Transaction Support
+Comparison</h2>
+<h3 id="acid-properties">7.1 ACID Properties</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 17%" />
+<col style="width: 10%" />
+<col style="width: 10%" />
+<col style="width: 7%" />
+<col style="width: 11%" />
+<col style="width: 13%" />
+<col style="width: 13%" />
+</colgroup>
+<thead>
+<tr>
+<th>Property</th>
+<th style="text-align: center;">PostgreSQL</th>
+<th style="text-align: center;">MySQL</th>
+<th style="text-align: center;">Redis</th>
+<th style="text-align: center;">CQL</th>
+<th style="text-align: center;">Cypher</th>
+<th style="text-align: center;">MongoDB</th>
+<th style="text-align: center;">OrbitQL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Atomicity</strong></td>
+<td style="text-align: center;">✅ Full</td>
+<td style="text-align: center;">✅ Full</td>
+<td style="text-align: center;">✅ MULTI</td>
+<td style="text-align: center;">⚠️ Batch</td>
+<td style="text-align: center;">✅ Full</td>
+<td style="text-align: center;">⚠️ Doc</td>
+<td style="text-align: center;">✅ Full</td>
+</tr>
+<tr>
+<td><strong>Consistency</strong></td>
+<td style="text-align: center;">✅ Full</td>
+<td style="text-align: center;">✅ Full</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">⚠️ Eventual</td>
+<td style="text-align: center;">✅ Full</td>
+<td style="text-align: center;">⚠️</td>
+<td style="text-align: center;">✅ Full</td>
+</tr>
+<tr>
+<td><strong>Isolation</strong></td>
+<td style="text-align: center;">✅ 4 levels</td>
+<td style="text-align: center;">✅ 4 levels</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">⚠️ Snapshot</td>
+<td style="text-align: center;">✅ 4 levels</td>
+</tr>
+<tr>
+<td><strong>Durability</strong></td>
+<td style="text-align: center;">✅ Full</td>
+<td style="text-align: center;">✅ Full</td>
+<td style="text-align: center;">⚠️ AOF/RDB</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ Full</td>
+</tr>
+</tbody>
+</table>
+<h3 id="isolation-levels">7.2 Isolation Levels</h3>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th style="text-align: center;">PostgreSQL</th>
+<th style="text-align: center;">MySQL</th>
+<th style="text-align: center;">OrbitQL</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>READ UNCOMMITTED</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td>Dirty reads allowed</td>
+</tr>
+<tr>
+<td><strong>READ COMMITTED</strong></td>
+<td style="text-align: center;">✅ Default</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ Default</td>
+<td>No dirty reads</td>
+</tr>
+<tr>
+<td><strong>REPEATABLE READ</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ Default</td>
+<td style="text-align: center;">✅</td>
+<td>No phantom reads</td>
+</tr>
+<tr>
+<td><strong>SERIALIZABLE</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td>Full isolation</td>
+</tr>
+</tbody>
+</table>
+<h3 id="distributed-transaction-support">7.3 Distributed Transaction
+Support</h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th style="text-align: center;">PostgreSQL</th>
+<th style="text-align: center;">Redis</th>
+<th style="text-align: center;">CQL</th>
+<th style="text-align: center;">Cypher</th>
+<th style="text-align: center;">OrbitQL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>2-Phase Commit</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Saga Pattern</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Distributed Locks</strong></td>
+<td style="text-align: center;">⚠️ Advisory</td>
+<td style="text-align: center;">✅ SETNX</td>
+<td style="text-align: center;">⚠️ LWT</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Deadlock Detection</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="performance-characteristics">8. Performance Characteristics</h2>
+<h3 id="latency-comparison">8.1 Latency Comparison</h3>
+<table>
+<colgroup>
+<col style="width: 21%" />
+<col style="width: 16%" />
+<col style="width: 9%" />
+<col style="width: 9%" />
+<col style="width: 6%" />
+<col style="width: 10%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+</colgroup>
+<thead>
+<tr>
+<th>Operation Type</th>
+<th style="text-align: center;">PostgreSQL</th>
+<th style="text-align: center;">MySQL</th>
+<th style="text-align: center;">Redis</th>
+<th style="text-align: center;">CQL</th>
+<th style="text-align: center;">Cypher</th>
+<th style="text-align: center;">MongoDB</th>
+<th style="text-align: center;">OrbitQL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Point Read</strong></td>
+<td style="text-align: center;">1-5ms</td>
+<td style="text-align: center;">1-5ms</td>
+<td style="text-align: center;">&lt;1ms</td>
+<td style="text-align: center;">1-5ms</td>
+<td style="text-align: center;">5-20ms</td>
+<td style="text-align: center;">1-5ms</td>
+<td style="text-align: center;">1-5ms</td>
+</tr>
+<tr>
+<td><strong>Point Write</strong></td>
+<td style="text-align: center;">5-20ms</td>
+<td style="text-align: center;">5-20ms</td>
+<td style="text-align: center;">&lt;1ms</td>
+<td style="text-align: center;">1-5ms</td>
+<td style="text-align: center;">10-50ms</td>
+<td style="text-align: center;">2-10ms</td>
+<td style="text-align: center;">5-20ms</td>
+</tr>
+<tr>
+<td><strong>Range Scan</strong></td>
+<td style="text-align: center;">5-50ms</td>
+<td style="text-align: center;">5-50ms</td>
+<td style="text-align: center;">5-20ms</td>
+<td style="text-align: center;">5-30ms</td>
+<td style="text-align: center;">10-100ms</td>
+<td style="text-align: center;">5-50ms</td>
+<td style="text-align: center;">5-50ms</td>
+</tr>
+<tr>
+<td><strong>Complex Join</strong></td>
+<td style="text-align: center;">10-500ms</td>
+<td style="text-align: center;">10-500ms</td>
+<td style="text-align: center;">N/A</td>
+<td style="text-align: center;">N/A</td>
+<td style="text-align: center;">20-200ms</td>
+<td style="text-align: center;">20-200ms</td>
+<td style="text-align: center;">10-500ms</td>
+</tr>
+<tr>
+<td><strong>Aggregation</strong></td>
+<td style="text-align: center;">10-1000ms</td>
+<td style="text-align: center;">10-1000ms</td>
+<td style="text-align: center;">10-50ms</td>
+<td style="text-align: center;">10-500ms</td>
+<td style="text-align: center;">20-500ms</td>
+<td style="text-align: center;">10-500ms</td>
+<td style="text-align: center;">10-500ms</td>
+</tr>
+<tr>
+<td><strong>Graph Traversal</strong></td>
+<td style="text-align: center;">N/A</td>
+<td style="text-align: center;">N/A</td>
+<td style="text-align: center;">5-50ms</td>
+<td style="text-align: center;">N/A</td>
+<td style="text-align: center;">5-100ms</td>
+<td style="text-align: center;">20-200ms</td>
+<td style="text-align: center;">5-100ms</td>
+</tr>
+<tr>
+<td><strong>Vector Search</strong></td>
+<td style="text-align: center;">5-50ms</td>
+<td style="text-align: center;">N/A</td>
+<td style="text-align: center;">5-20ms</td>
+<td style="text-align: center;">5-50ms</td>
+<td style="text-align: center;">N/A</td>
+<td style="text-align: center;">10-50ms</td>
+<td style="text-align: center;">5-20ms</td>
+</tr>
+</tbody>
+</table>
+<h3 id="throughput-characteristics">8.2 Throughput Characteristics</h3>
+<table>
+<thead>
+<tr>
+<th>Protocol</th>
+<th style="text-align: center;">Read TPS</th>
+<th style="text-align: center;">Write TPS</th>
+<th>Best Workload</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>PostgreSQL</strong></td>
+<td style="text-align: center;">50K+</td>
+<td style="text-align: center;">10K+</td>
+<td>OLTP, complex queries</td>
+</tr>
+<tr>
+<td><strong>MySQL</strong></td>
+<td style="text-align: center;">50K+</td>
+<td style="text-align: center;">10K+</td>
+<td>Web applications</td>
+</tr>
+<tr>
+<td><strong>Redis</strong></td>
+<td style="text-align: center;">1M+</td>
+<td style="text-align: center;">500K+</td>
+<td>Caching, sessions</td>
+</tr>
+<tr>
+<td><strong>CQL</strong></td>
+<td style="text-align: center;">100K+</td>
+<td style="text-align: center;">500K+</td>
+<td>Time-series, logs</td>
+</tr>
+<tr>
+<td><strong>Cypher</strong></td>
+<td style="text-align: center;">10K+</td>
+<td style="text-align: center;">5K+</td>
+<td>Graph analytics</td>
+</tr>
+<tr>
+<td><strong>MongoDB</strong></td>
+<td style="text-align: center;">100K+</td>
+<td style="text-align: center;">50K+</td>
+<td>Documents</td>
+</tr>
+<tr>
+<td><strong>OrbitQL</strong></td>
+<td style="text-align: center;">50K+</td>
+<td style="text-align: center;">10K+</td>
+<td>Multi-model</td>
+</tr>
+</tbody>
+</table>
+<h3 id="scalability">8.3 Scalability</h3>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Scalability Characteristics                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Horizontal Scale       PostgreSQL ████████░░ (with extensions)              │
+│  (add nodes)            Redis      █████████░ (Cluster)                      │
+│                         CQL        ██████████ (native)                       │
+│                         MongoDB    █████████░ (sharding)                     │
+│                         OrbitQL    █████████░ (Raft cluster)                 │
+│                                                                              │
+│  Vertical Scale         PostgreSQL ██████████                                │
+│  (bigger node)          MySQL      ██████████                                │
+│                         Redis      █████████░                                │
+│                         All        █████████░                                │
+│                                                                              │
+│  Multi-Region           CQL        ██████████ (native)                       │
+│                         MongoDB    █████████░                                │
+│                         OrbitQL    ████████░░ (planned)                      │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘</code></pre>
+<hr />
+<h2 id="use-case-recommendations">9. Use Case Recommendations</h2>
+<h3 id="protocol-selection-guide">9.1 Protocol Selection Guide</h3>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 53%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>Use Case</th>
+<th>Recommended Protocol</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>User Sessions</strong></td>
+<td>Redis</td>
+<td>Sub-ms latency, TTL support</td>
+</tr>
+<tr>
+<td><strong>Financial Transactions</strong></td>
+<td>PostgreSQL/OrbitQL</td>
+<td>Full ACID, audit trail</td>
+</tr>
+<tr>
+<td><strong>Product Catalog</strong></td>
+<td>MongoDB/PostgreSQL</td>
+<td>Flexible schema, rich queries</td>
+</tr>
+<tr>
+<td><strong>Social Network</strong></td>
+<td>Cypher/OrbitQL</td>
+<td>Native graph traversal</td>
+</tr>
+<tr>
+<td><strong>IoT Time-Series</strong></td>
+<td>CQL/Redis TS</td>
+<td>High write throughput</td>
+</tr>
+<tr>
+<td><strong>Real-time Analytics</strong></td>
+<td>Redis/OrbitQL</td>
+<td>In-memory, pub/sub</td>
+</tr>
+<tr>
+<td><strong>Content Management</strong></td>
+<td>MongoDB</td>
+<td>Document flexibility</td>
+</tr>
+<tr>
+<td><strong>E-commerce Orders</strong></td>
+<td>PostgreSQL</td>
+<td>ACID, complex joins</td>
+</tr>
+<tr>
+<td><strong>Recommendation Engine</strong></td>
+<td>Cypher + OrbitQL</td>
+<td>Graph + ML</td>
+</tr>
+<tr>
+<td><strong>Search</strong></td>
+<td>Redis FT/PostgreSQL FTS</td>
+<td>Full-text indexing</td>
+</tr>
+<tr>
+<td><strong>Caching</strong></td>
+<td>Redis</td>
+<td>Speed, data structures</td>
+</tr>
+<tr>
+<td><strong>AI/ML Applications</strong></td>
+<td>OrbitQL</td>
+<td>Native ML integration</td>
+</tr>
+</tbody>
+</table>
+<h3 id="multi-protocol-patterns">9.2 Multi-Protocol Patterns</h3>
+<h4 id="pattern-1-cqrs-with-protocol-separation">Pattern 1: CQRS with
+Protocol Separation</h4>
+<pre><code>Write Path: PostgreSQL (ACID transactions)
+     │
+     ▼
+Read Path: Redis (cached queries) + Cypher (graph queries)</code></pre>
+<h4 id="pattern-2-event-sourcing">Pattern 2: Event Sourcing</h4>
+<pre><code>Event Store: CQL (append-only, partitioned by time)
+     │
+     ▼
+Projections: PostgreSQL (materialized views)
+     │
+     ▼
+Cache: Redis (hot data)</code></pre>
+<h4 id="pattern-3-microservices-integration">Pattern 3: Microservices
+Integration</h4>
+<pre><code>Service A ──▶ PostgreSQL (orders)
+Service B ──▶ MongoDB (products)  ──▶ Unified Storage
+Service C ──▶ Redis (sessions)
+Service D ──▶ Cypher (recommendations)</code></pre>
+<hr />
+<h2 id="migration-guide">10. Migration Guide</h2>
+<h3 id="from-single-protocol-to-multi-protocol">10.1 From Single
+Protocol to Multi-Protocol</h3>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Action</th>
+<th>Tools</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Identify data patterns</td>
+<td>Query analysis</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Map to appropriate protocols</td>
+<td>This whitepaper</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Update connection strings</td>
+<td>Configuration</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Migrate schema</td>
+<td>DDL scripts</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Test with existing drivers</td>
+<td>Integration tests</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Gradual traffic migration</td>
+<td>Feature flags</td>
+</tr>
+</tbody>
+</table>
+<h3 id="protocol-compatibility">10.2 Protocol Compatibility</h3>
+<table>
+<thead>
+<tr>
+<th>From</th>
+<th>To (OrbitRS)</th>
+<th>Compatibility Level</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PostgreSQL</td>
+<td>PostgreSQL :5432</td>
+<td>100% wire compatible</td>
+</tr>
+<tr>
+<td>MySQL</td>
+<td>MySQL :3306</td>
+<td>100% wire compatible</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>Redis :6379</td>
+<td>100% RESP compatible</td>
+</tr>
+<tr>
+<td>Cassandra</td>
+<td>CQL :9042</td>
+<td>100% CQL v4 compatible</td>
+</tr>
+<tr>
+<td>Neo4j</td>
+<td>Cypher :7687</td>
+<td>Bolt v4/v5 compatible</td>
+</tr>
+<tr>
+<td>MongoDB</td>
+<td>MongoDB :27017</td>
+<td>Wire protocol compatible</td>
+</tr>
+</tbody>
+</table>
+<h3 id="connection-string-examples">10.3 Connection String Examples</h3>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># PostgreSQL</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="ex">postgresql://user:pass@orbit-host:5432/mydb</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co"># MySQL</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="ex">mysql://user:pass@orbit-host:3306/mydb</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Redis</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="ex">redis://orbit-host:6379</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Cassandra</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="ex">cassandra://orbit-host:9042/keyspace</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Neo4j (Bolt)</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="ex">bolt://orbit-host:7687</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a><span class="co"># MongoDB</span></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a><span class="ex">mongodb://orbit-host:27017/mydb</span></span></code></pre></div>
+<hr />
+<h2 id="appendix-complete-command-reference">Appendix: Complete Command
+Reference</h2>
+<h3 id="a.1-command-count-by-protocol">A.1 Command Count by
+Protocol</h3>
+<table>
+<thead>
+<tr>
+<th>Protocol</th>
+<th>Category</th>
+<th style="text-align: center;">Command Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Redis</strong></td>
+<td>String</td>
+<td style="text-align: center;">31</td>
+</tr>
+<tr>
+<td></td>
+<td>Hash</td>
+<td style="text-align: center;">11</td>
+</tr>
+<tr>
+<td></td>
+<td>List</td>
+<td style="text-align: center;">14</td>
+</tr>
+<tr>
+<td></td>
+<td>Set</td>
+<td style="text-align: center;">8</td>
+</tr>
+<tr>
+<td></td>
+<td>Sorted Set</td>
+<td style="text-align: center;">10</td>
+</tr>
+<tr>
+<td></td>
+<td>Stream</td>
+<td style="text-align: center;">14</td>
+</tr>
+<tr>
+<td></td>
+<td>Vector</td>
+<td style="text-align: center;">12</td>
+</tr>
+<tr>
+<td></td>
+<td>Time Series</td>
+<td style="text-align: center;">14</td>
+</tr>
+<tr>
+<td></td>
+<td>Graph</td>
+<td style="text-align: center;">8</td>
+</tr>
+<tr>
+<td></td>
+<td>GraphRAG</td>
+<td style="text-align: center;">7</td>
+</tr>
+<tr>
+<td></td>
+<td>Pub/Sub</td>
+<td style="text-align: center;">6</td>
+</tr>
+<tr>
+<td></td>
+<td>Transaction</td>
+<td style="text-align: center;">5</td>
+</tr>
+<tr>
+<td></td>
+<td>Server/Connection</td>
+<td style="text-align: center;">10+</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Total</strong></td>
+<td style="text-align: center;"><strong>150+</strong></td>
+</tr>
+<tr>
+<td><strong>PostgreSQL</strong></td>
+<td>DDL</td>
+<td style="text-align: center;">30+</td>
+</tr>
+<tr>
+<td></td>
+<td>DML</td>
+<td style="text-align: center;">6</td>
+</tr>
+<tr>
+<td></td>
+<td>TCL</td>
+<td style="text-align: center;">5</td>
+</tr>
+<tr>
+<td></td>
+<td>DCL</td>
+<td style="text-align: center;">2</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Total</strong></td>
+<td style="text-align: center;"><strong>80+</strong></td>
+</tr>
+<tr>
+<td><strong>MySQL</strong></td>
+<td>Wire Protocol</td>
+<td style="text-align: center;">18</td>
+</tr>
+<tr>
+<td><strong>CQL</strong></td>
+<td>Schema</td>
+<td style="text-align: center;">20+</td>
+</tr>
+<tr>
+<td></td>
+<td>Data</td>
+<td style="text-align: center;">6</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Total</strong></td>
+<td style="text-align: center;"><strong>45+</strong></td>
+</tr>
+<tr>
+<td><strong>Cypher</strong></td>
+<td>Reading</td>
+<td style="text-align: center;">9</td>
+</tr>
+<tr>
+<td></td>
+<td>Writing</td>
+<td style="text-align: center;">7</td>
+</tr>
+<tr>
+<td></td>
+<td>Schema</td>
+<td style="text-align: center;">4</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Total</strong></td>
+<td style="text-align: center;"><strong>20+</strong></td>
+</tr>
+<tr>
+<td><strong>MongoDB</strong></td>
+<td>CRUD</td>
+<td style="text-align: center;">9</td>
+</tr>
+<tr>
+<td></td>
+<td>Aggregation</td>
+<td style="text-align: center;">10+</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Total</strong></td>
+<td style="text-align: center;"><strong>20+</strong></td>
+</tr>
+<tr>
+<td><strong>OrbitQL</strong></td>
+<td>SQL</td>
+<td style="text-align: center;">15+</td>
+</tr>
+<tr>
+<td></td>
+<td>Graph</td>
+<td style="text-align: center;">5</td>
+</tr>
+<tr>
+<td></td>
+<td>ML</td>
+<td style="text-align: center;">4</td>
+</tr>
+<tr>
+<td></td>
+<td>Real-time</td>
+<td style="text-align: center;">2</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Total</strong></td>
+<td style="text-align: center;"><strong>30+</strong></td>
+</tr>
+<tr>
+<td><strong>REST</strong></td>
+<td>Endpoints</td>
+<td style="text-align: center;">20+</td>
+</tr>
+<tr>
+<td><strong>GRAND TOTAL</strong></td>
+<td></td>
+<td style="text-align: center;"><strong>350+</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="conclusion">Conclusion</h2>
+<p>OrbitRS provides a unique approach to database architecture by
+unifying 8 major database protocols under a single storage layer. This
+whitepaper has demonstrated:</p>
+<ol type="1">
+<li><strong>Protocol Depth</strong>: Each protocol is fully implemented
+with native wire compatibility</li>
+<li><strong>Feature Parity</strong>: Advanced features like vector
+search, graph queries, and ML integration work across protocols</li>
+<li><strong>Unified Storage</strong>: All data accessible through any
+protocol interface</li>
+<li><strong>Performance</strong>: Competitive with specialized databases
+for each workload type</li>
+</ol>
+<h3 id="when-to-use-orbitrs">When to Use OrbitRS</h3>
+<ul>
+<li><strong>Polyglot Persistence</strong>: Replace 3-5 databases with
+one</li>
+<li><strong>Multi-Model Applications</strong>: Combine SQL, graph, and
+document queries</li>
+<li><strong>AI/ML Integration</strong>: Built-in vector search and ML
+inference</li>
+<li><strong>Operational Simplicity</strong>: Single backup, single
+cluster, unified monitoring</li>
+</ul>
+<h3 id="getting-started">Getting Started</h3>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Start OrbitRS (all protocols enabled)</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./orbit-server</span> <span class="at">--config</span> orbit-server.toml</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Connect with any client</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="ex">psql</span> <span class="at">-h</span> localhost <span class="at">-p</span> 5432 <span class="at">-U</span> orbit</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="ex">redis-cli</span> <span class="at">-p</span> 6379</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="ex">mongosh</span> <span class="at">--port</span> 27017</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="ex">cqlsh</span> localhost 9042</span></code></pre></div>
+<hr />
+<p><em>© 2024 OrbitRS Development Team. All rights reserved.</em>
+<em>For the latest documentation, visit:
+https://github.com/TuringWorks/orbit-rs</em></p>
+</body>
+</html>
