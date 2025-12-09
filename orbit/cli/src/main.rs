@@ -238,12 +238,6 @@ struct FlightSqlConnection {
     endpoint: String,
 }
 
-/// Flight SQL connection wrapper
-struct FlightSqlConnection {
-    client: reqwest::Client,
-    endpoint: String,
-}
-
 impl ReplState {
     fn new(
         protocol: Protocol,
