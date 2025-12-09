@@ -203,6 +203,8 @@ pub enum Token {
     Savepoint,
     Transaction,
     Abort,
+    Session,
+    Local,
 
     // Keywords - Utility Commands
     Discard,
@@ -238,6 +240,24 @@ pub enum Token {
     Skip,
     Locked,
     IndexCleanup,
+    // TCL Commands
+    Lock,
+    Constraints,
+    Deferred,
+    Immediate,
+    Nowait,
+    Deferrable,
+    // Utility Commands
+    Load,
+    Import,
+    Remote,
+    Characteristics,
+    // Lock Modes
+    Access,
+    Exclusive,
+    Mode,
+    Share,
+    // Row is already defined above
     Isolation,
     Level,
     Read,
@@ -620,6 +640,23 @@ impl Lexer {
             ("SKIP", Token::Skip),
             ("LOCKED", Token::Locked),
             ("INDEX_CLEANUP", Token::IndexCleanup),
+            // TCL keywords
+            ("LOCK", Token::Lock),
+            ("CONSTRAINTS", Token::Constraints),
+            ("DEFERRED", Token::Deferred),
+            ("IMMEDIATE", Token::Immediate),
+            ("NOWAIT", Token::Nowait),
+            ("DEFERRABLE", Token::Deferrable),
+            // Utility keywords
+            ("LOAD", Token::Load),
+            ("IMPORT", Token::Import),
+            ("REMOTE", Token::Remote),
+            ("CHARACTERISTICS", Token::Characteristics),
+            // Lock modes
+            ("ACCESS", Token::Access),
+            ("EXCLUSIVE", Token::Exclusive),
+            ("MODE", Token::Mode),
+            ("SHARE", Token::Share),
             // Text search keywords
             ("CONFIGURATION", Token::Configuration),
             ("DICTIONARY", Token::Dictionary),
@@ -710,6 +747,8 @@ impl Lexer {
             ("ROLLBACK", Token::Rollback),
             ("SAVEPOINT", Token::Savepoint),
             ("TRANSACTION", Token::Transaction),
+            ("SESSION", Token::Session),
+            ("LOCAL", Token::Local),
             ("ISOLATION", Token::Isolation),
             ("LEVEL", Token::Level),
             ("READ", Token::Read),

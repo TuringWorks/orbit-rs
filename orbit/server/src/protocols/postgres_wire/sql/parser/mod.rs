@@ -216,6 +216,49 @@ impl SqlParser {
                 utility_commands::parse_do(self)
             }
 
+            // Additional TCL Commands
+            Some(Token::Lock) => {
+                self.advance()?;
+                utility_commands::parse_lock(self)
+            }
+
+            // Additional Utility Commands
+            Some(Token::Load) => {
+                self.advance()?;
+                utility_commands::parse_load(self)
+            }
+            Some(Token::Refresh) => {
+                self.advance()?;
+                // REFRESH MATERIALIZED VIEW
+                if self.matches(&[Token::Materialized]) {
+                    self.advance()?;
+                    utility_commands::parse_refresh_materialized_view(self)
+                } else {
+                    Err(ParseError {
+                        message: "Expected MATERIALIZED after REFRESH".to_string(),
+                        position: self.position,
+                        expected: vec!["MATERIALIZED".to_string()],
+                        found: self.current_token.clone(),
+                    })
+                }
+            }
+            Some(Token::Import) => {
+                self.advance()?;
+                // IMPORT FOREIGN SCHEMA
+                if self.matches(&[Token::Foreign]) {
+                    self.advance()?;
+                    self.expect(Token::Schema)?;
+                    utility_commands::parse_import_foreign_schema(self)
+                } else {
+                    Err(ParseError {
+                        message: "Expected FOREIGN after IMPORT".to_string(),
+                        position: self.position,
+                        expected: vec!["FOREIGN".to_string()],
+                        found: self.current_token.clone(),
+                    })
+                }
+            }
+
             // COMMENT ON statement
             Some(Token::CommentKeyword) => ddl::parse_comment_on(self),
 
@@ -742,6 +785,46 @@ impl SqlParser {
 
     fn parse_set_statement(&mut self) -> ParseResult<Statement> {
         self.expect(Token::Set)?;
+
+        // Check for SET TRANSACTION
+        if self.matches(&[Token::Transaction]) {
+            self.advance()?;
+            return utility_commands::parse_set_transaction(self);
+        }
+
+        // Check for SET SESSION CHARACTERISTICS AS TRANSACTION
+        if self.matches(&[Token::Session]) {
+            self.advance()?;
+            if self.matches(&[Token::Characteristics]) {
+                self.advance()?;
+                self.expect(Token::As)?;
+                self.expect(Token::Transaction)?;
+                let mut stmt = utility_commands::parse_set_transaction(self)?;
+                // Mark as session characteristics
+                if let Statement::SetTransaction(ref mut s) = stmt {
+                    s.session_characteristics = true;
+                }
+                return Ok(stmt);
+            }
+            // SESSION AUTHORIZATION or other session variables
+            // Fall through to regular SET handling with "session" as part of variable
+        }
+
+        // Check for SET CONSTRAINTS
+        if self.matches(&[Token::Constraints]) {
+            self.advance()?;
+            return utility_commands::parse_set_constraints(self);
+        }
+
+        // Check for SET LOCAL
+        if self.matches(&[Token::Local]) {
+            self.advance()?;
+            if self.matches(&[Token::Transaction]) {
+                self.advance()?;
+                return utility_commands::parse_set_transaction(self);
+            }
+            // SET LOCAL <variable> - treat as regular SET for now
+        }
 
         // Parse variable name
         let variable = if let Some(Token::Identifier(name)) = &self.current_token {

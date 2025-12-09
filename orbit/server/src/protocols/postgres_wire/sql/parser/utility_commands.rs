@@ -894,3 +894,476 @@ pub fn parse_do(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     Ok(Statement::Do(DoStatement { language, code }))
 }
+
+// ===== Additional TCL Commands =====
+
+pub fn parse_set_transaction(parser: &mut SqlParser) -> ParseResult<Statement> {
+    // SET TRANSACTION or SET SESSION CHARACTERISTICS AS TRANSACTION already consumed
+    // We're called after TRANSACTION keyword
+
+    let mut isolation_level = None;
+    let mut read_only = None;
+    let mut deferrable = None;
+
+    loop {
+        if parser.matches(&[Token::Isolation]) {
+            parser.advance()?;
+            parser.expect(Token::Level)?;
+
+            isolation_level = Some(if parser.matches(&[Token::Read]) {
+                parser.advance()?;
+                if parser.matches(&[Token::Uncommitted]) {
+                    parser.advance()?;
+                    TransactionIsolationLevel::ReadUncommitted
+                } else if parser.matches(&[Token::Committed]) {
+                    parser.advance()?;
+                    TransactionIsolationLevel::ReadCommitted
+                } else {
+                    return Err(super::ParseError {
+                        message: "Expected UNCOMMITTED or COMMITTED".to_string(),
+                        position: parser.position,
+                        expected: vec!["UNCOMMITTED".to_string(), "COMMITTED".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                }
+            } else if parser.matches(&[Token::Repeatable]) {
+                parser.advance()?;
+                parser.expect(Token::Read)?;
+                TransactionIsolationLevel::RepeatableRead
+            } else if parser.matches(&[Token::Serializable]) {
+                parser.advance()?;
+                TransactionIsolationLevel::Serializable
+            } else {
+                return Err(super::ParseError {
+                    message: "Expected isolation level".to_string(),
+                    position: parser.position,
+                    expected: vec!["READ".to_string(), "REPEATABLE".to_string(), "SERIALIZABLE".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            });
+        } else if parser.matches(&[Token::Read]) {
+            parser.advance()?;
+            if parser.matches(&[Token::Only]) {
+                parser.advance()?;
+                read_only = Some(true);
+            } else if parser.matches(&[Token::Write]) {
+                parser.advance()?;
+                read_only = Some(false);
+            } else {
+                return Err(super::ParseError {
+                    message: "Expected ONLY or WRITE".to_string(),
+                    position: parser.position,
+                    expected: vec!["ONLY".to_string(), "WRITE".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            }
+        } else if parser.matches(&[Token::Deferrable]) {
+            parser.advance()?;
+            deferrable = Some(true);
+        } else if parser.matches(&[Token::Not]) {
+            parser.advance()?;
+            if parser.matches(&[Token::Deferrable]) {
+                parser.advance()?;
+                deferrable = Some(false);
+            } else {
+                return Err(super::ParseError {
+                    message: "Expected DEFERRABLE".to_string(),
+                    position: parser.position,
+                    expected: vec!["DEFERRABLE".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            }
+        } else {
+            break;
+        }
+
+        // Check for comma separator
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    Ok(Statement::SetTransaction(SetTransactionStatement {
+        isolation_level,
+        read_only,
+        deferrable,
+        session_characteristics: false,
+    }))
+}
+
+pub fn parse_set_constraints(parser: &mut SqlParser) -> ParseResult<Statement> {
+    // SET CONSTRAINTS already consumed
+
+    let constraints = if parser.matches(&[Token::All]) {
+        parser.advance()?;
+        ConstraintTarget::All
+    } else {
+        let mut names = Vec::new();
+        loop {
+            if let Some(Token::Identifier(name)) = &parser.current_token {
+                names.push(name.clone());
+                parser.advance()?;
+            } else {
+                break;
+            }
+
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        ConstraintTarget::Named(names)
+    };
+
+    let mode = if parser.matches(&[Token::Deferred]) {
+        parser.advance()?;
+        ConstraintMode::Deferred
+    } else if parser.matches(&[Token::Immediate]) {
+        parser.advance()?;
+        ConstraintMode::Immediate
+    } else {
+        return Err(super::ParseError {
+            message: "Expected DEFERRED or IMMEDIATE".to_string(),
+            position: parser.position,
+            expected: vec!["DEFERRED".to_string(), "IMMEDIATE".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::SetConstraints(SetConstraintsStatement {
+        constraints,
+        mode,
+    }))
+}
+
+pub fn parse_lock(parser: &mut SqlParser) -> ParseResult<Statement> {
+    // LOCK already consumed
+
+    // Optional TABLE keyword
+    if parser.matches(&[Token::Table]) {
+        parser.advance()?;
+    }
+
+    let mut tables = Vec::new();
+    loop {
+        let only = if parser.matches(&[Token::Only]) {
+            parser.advance()?;
+            true
+        } else {
+            false
+        };
+
+        let table_name = utilities::parse_table_name(parser)?;
+        tables.push(LockTarget { table_name, only });
+
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    // Parse lock mode (optional, defaults to ACCESS EXCLUSIVE)
+    let mode = if parser.matches(&[Token::In]) {
+        parser.advance()?;
+
+        let lock_mode = parse_lock_mode(parser)?;
+
+        parser.expect(Token::Mode)?;
+
+        lock_mode
+    } else {
+        LockMode::AccessExclusive
+    };
+
+    // Parse NOWAIT
+    let nowait = if parser.matches(&[Token::Nowait]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    Ok(Statement::Lock(LockStatement {
+        tables,
+        mode,
+        nowait,
+    }))
+}
+
+fn parse_lock_mode(parser: &mut SqlParser) -> ParseResult<LockMode> {
+    if parser.matches(&[Token::Access]) {
+        parser.advance()?;
+        if parser.matches(&[Token::Share]) {
+            parser.advance()?;
+            Ok(LockMode::AccessShare)
+        } else if parser.matches(&[Token::Exclusive]) {
+            parser.advance()?;
+            Ok(LockMode::AccessExclusive)
+        } else {
+            Err(super::ParseError {
+                message: "Expected SHARE or EXCLUSIVE".to_string(),
+                position: parser.position,
+                expected: vec!["SHARE".to_string(), "EXCLUSIVE".to_string()],
+                found: parser.current_token.clone(),
+            })
+        }
+    } else if parser.matches(&[Token::Row]) {
+        parser.advance()?;
+        if parser.matches(&[Token::Share]) {
+            parser.advance()?;
+            Ok(LockMode::RowShare)
+        } else if parser.matches(&[Token::Exclusive]) {
+            parser.advance()?;
+            Ok(LockMode::RowExclusive)
+        } else {
+            Err(super::ParseError {
+                message: "Expected SHARE or EXCLUSIVE".to_string(),
+                position: parser.position,
+                expected: vec!["SHARE".to_string(), "EXCLUSIVE".to_string()],
+                found: parser.current_token.clone(),
+            })
+        }
+    } else if parser.matches(&[Token::Share]) {
+        parser.advance()?;
+        if parser.matches(&[Token::Update]) {
+            parser.advance()?;
+            parser.expect(Token::Exclusive)?;
+            Ok(LockMode::ShareUpdateExclusive)
+        } else if parser.matches(&[Token::Row]) {
+            parser.advance()?;
+            parser.expect(Token::Exclusive)?;
+            Ok(LockMode::ShareRowExclusive)
+        } else {
+            Ok(LockMode::Share)
+        }
+    } else if parser.matches(&[Token::Exclusive]) {
+        parser.advance()?;
+        Ok(LockMode::Exclusive)
+    } else {
+        Err(super::ParseError {
+            message: "Expected lock mode".to_string(),
+            position: parser.position,
+            expected: vec![
+                "ACCESS".to_string(),
+                "ROW".to_string(),
+                "SHARE".to_string(),
+                "EXCLUSIVE".to_string(),
+            ],
+            found: parser.current_token.clone(),
+        })
+    }
+}
+
+// ===== Additional Utility Commands =====
+
+pub fn parse_load(parser: &mut SqlParser) -> ParseResult<Statement> {
+    // LOAD already consumed
+
+    let filename = if let Some(Token::StringLiteral(s)) = &parser.current_token {
+        let f = s.clone();
+        parser.advance()?;
+        f
+    } else {
+        return Err(super::ParseError {
+            message: "Expected filename".to_string(),
+            position: parser.position,
+            expected: vec!["string literal".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::Load(LoadStatement { filename }))
+}
+
+pub fn parse_refresh_materialized_view(parser: &mut SqlParser) -> ParseResult<Statement> {
+    // REFRESH MATERIALIZED VIEW already consumed
+    // Called after MATERIALIZED keyword
+
+    parser.expect(Token::View)?;
+
+    let concurrently = if parser.matches(&[Token::Concurrently]) {
+        parser.advance()?;
+        true
+    } else {
+        false
+    };
+
+    let view_name = utilities::parse_table_name(parser)?;
+
+    let with_data = if parser.matches(&[Token::With]) {
+        parser.advance()?;
+        if parser.matches(&[Token::Data]) {
+            parser.advance()?;
+            Some(true)
+        } else if parser.matches(&[Token::No]) {
+            parser.advance()?;
+            parser.expect(Token::Data)?;
+            Some(false)
+        } else {
+            return Err(super::ParseError {
+                message: "Expected DATA or NO DATA".to_string(),
+                position: parser.position,
+                expected: vec!["DATA".to_string(), "NO DATA".to_string()],
+                found: parser.current_token.clone(),
+            });
+        }
+    } else {
+        None
+    };
+
+    Ok(Statement::RefreshMaterializedView(
+        RefreshMaterializedViewStatement {
+            concurrently,
+            view_name,
+            with_data,
+        },
+    ))
+}
+
+pub fn parse_import_foreign_schema(parser: &mut SqlParser) -> ParseResult<Statement> {
+    // IMPORT FOREIGN SCHEMA already consumed
+
+    let remote_schema = if let Some(Token::Identifier(name)) = &parser.current_token {
+        let n = name.clone();
+        parser.advance()?;
+        n
+    } else {
+        return Err(super::ParseError {
+            message: "Expected schema name".to_string(),
+            position: parser.position,
+            expected: vec!["identifier".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse LIMIT TO or EXCEPT (optional)
+    let import_type = if parser.matches(&[Token::Limit]) {
+        parser.advance()?;
+        parser.expect(Token::To)?;
+        parser.expect(Token::LeftParen)?;
+        let tables = parse_identifier_list(parser)?;
+        parser.expect(Token::RightParen)?;
+        ImportForeignSchemaType::LimitTo(tables)
+    } else if parser.matches(&[Token::Except]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        let tables = parse_identifier_list(parser)?;
+        parser.expect(Token::RightParen)?;
+        ImportForeignSchemaType::Except(tables)
+    } else {
+        ImportForeignSchemaType::All
+    };
+
+    parser.expect(Token::From)?;
+    parser.expect(Token::Server)?;
+
+    let server_name = if let Some(Token::Identifier(name)) = &parser.current_token {
+        let n = name.clone();
+        parser.advance()?;
+        n
+    } else {
+        return Err(super::ParseError {
+            message: "Expected server name".to_string(),
+            position: parser.position,
+            expected: vec!["identifier".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    parser.expect(Token::Into)?;
+
+    let local_schema = if let Some(Token::Identifier(name)) = &parser.current_token {
+        let n = name.clone();
+        parser.advance()?;
+        n
+    } else {
+        return Err(super::ParseError {
+            message: "Expected schema name".to_string(),
+            position: parser.position,
+            expected: vec!["identifier".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse OPTIONS (optional)
+    let options = if parser.matches(&[Token::Options]) {
+        parser.advance()?;
+        parser.expect(Token::LeftParen)?;
+        let opts = parse_options_list(parser)?;
+        parser.expect(Token::RightParen)?;
+        opts
+    } else {
+        Vec::new()
+    };
+
+    Ok(Statement::ImportForeignSchema(ImportForeignSchemaStatement {
+        remote_schema,
+        import_type,
+        server_name,
+        local_schema,
+        options,
+    }))
+}
+
+fn parse_identifier_list(parser: &mut SqlParser) -> ParseResult<Vec<String>> {
+    let mut identifiers = Vec::new();
+
+    loop {
+        if let Some(Token::Identifier(name)) = &parser.current_token {
+            identifiers.push(name.clone());
+            parser.advance()?;
+        } else {
+            break;
+        }
+
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    Ok(identifiers)
+}
+
+fn parse_options_list(parser: &mut SqlParser) -> ParseResult<Vec<(String, String)>> {
+    let mut options = Vec::new();
+
+    loop {
+        // Parse option name
+        let name = if let Some(Token::Identifier(n)) = &parser.current_token {
+            let name = n.clone();
+            parser.advance()?;
+            name
+        } else {
+            break;
+        };
+
+        // Parse option value
+        let value = if let Some(Token::StringLiteral(v)) = &parser.current_token {
+            let val = v.clone();
+            parser.advance()?;
+            val
+        } else if let Some(Token::Identifier(v)) = &parser.current_token {
+            let val = v.clone();
+            parser.advance()?;
+            val
+        } else {
+            String::new()
+        };
+
+        options.push((name, value));
+
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    Ok(options)
+}

@@ -3,7 +3,7 @@
 **Target**: Full PostgreSQL 18 Wire Protocol Compatibility
 **Reference**: https://www.postgresql.org/docs/18/index.html
 **Last Updated**: 2025-12-08
-**Current Estimated Coverage**: ~85%
+**Current Estimated Coverage**: ~88%
 
 ---
 
@@ -206,13 +206,13 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | ROLLBACK TO SAVEPOINT | ✅ | Rollback to savepoint |
 | START TRANSACTION | ✅ | Alias for BEGIN |
 | END | ✅ | Alias for COMMIT |
-| ABORT | ❌ | Alias for ROLLBACK |
-| SET TRANSACTION | ❌ | Transaction characteristics |
-| SET CONSTRAINTS | ❌ | Deferred constraints |
+| ABORT | ✅ | Alias for ROLLBACK |
+| SET TRANSACTION | ✅ | Transaction characteristics |
+| SET CONSTRAINTS | ✅ | Deferred constraints |
 | PREPARE TRANSACTION | ❌ | Two-phase commit |
 | COMMIT PREPARED | ❌ | Two-phase commit |
 | ROLLBACK PREPARED | ❌ | Two-phase commit |
-| LOCK | ❌ | Explicit table locking |
+| LOCK | ✅ | Explicit table locking with all modes |
 
 ### Data Control Language (DCL)
 
@@ -237,9 +237,9 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | CLUSTER | ✅ | Table clustering parsing |
 | CHECKPOINT | ✅ | Force checkpoint |
 | DISCARD | ✅ | Discard session state |
-| LOAD | ❌ | Load library |
-| REFRESH MATERIALIZED VIEW | ❌ | Mat view refresh |
-| IMPORT FOREIGN SCHEMA | ❌ | Foreign schema import |
+| LOAD | ✅ | Load library |
+| REFRESH MATERIALIZED VIEW | ✅ | Mat view refresh with CONCURRENTLY, WITH DATA |
+| IMPORT FOREIGN SCHEMA | ✅ | Foreign schema import with LIMIT TO/EXCEPT |
 | LISTEN | ✅ | Notification listening |
 | UNLISTEN | ✅ | Stop listening |
 | NOTIFY | ✅ | Send notification |
@@ -1397,6 +1397,7 @@ This section tracks OrbitRS implementation of features new to PostgreSQL 18.
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2025-12-08 | 1.3.0 | Added TCL commands (SET TRANSACTION, SET CONSTRAINTS, LOCK) and utility commands (LOAD, REFRESH MATERIALIZED VIEW, IMPORT FOREIGN SCHEMA). Coverage increased to ~88% |
 | 2025-12-08 | 1.2.0 | Added comprehensive DDL parsing: CREATE/ALTER/DROP for Foreign Tables, FDW, Servers, User Mappings, Publications, Subscriptions, Event Triggers, Access Methods, Statistics, Text Search (Configuration/Dictionary/Parser/Template), Transforms, Languages, Operators, Aggregates, Casts, Collations, Conversions, Tablespaces, Groups, Routines. Coverage increased to ~85% |
 | 2025-12-07 | 1.1.0 | Added PostgreSQL 18 new features section; updated protocol and temporal constraint status |
 | 2025-01-XX | 1.0.0 | Initial specification |

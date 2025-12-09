@@ -266,6 +266,16 @@ pub enum Statement {
     // Procedural Commands
     Call(CallStatement),
     Do(DoStatement),
+
+    // Additional TCL Commands
+    SetTransaction(SetTransactionStatement),
+    SetConstraints(SetConstraintsStatement),
+    Lock(LockStatement),
+
+    // Additional Utility Commands
+    Load(LoadStatement),
+    RefreshMaterializedView(RefreshMaterializedViewStatement),
+    ImportForeignSchema(ImportForeignSchemaStatement),
 }
 
 // ===== DDL Statements =====
@@ -3255,4 +3265,95 @@ pub struct CallStatement {
 pub struct DoStatement {
     pub language: Option<String>,
     pub code: String,
+}
+
+// ===== Additional TCL Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetTransactionStatement {
+    pub isolation_level: Option<TransactionIsolationLevel>,
+    pub read_only: Option<bool>,
+    pub deferrable: Option<bool>,
+    pub session_characteristics: bool, // SET SESSION CHARACTERISTICS AS TRANSACTION
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TransactionIsolationLevel {
+    ReadUncommitted,
+    ReadCommitted,
+    RepeatableRead,
+    Serializable,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetConstraintsStatement {
+    pub constraints: ConstraintTarget,
+    pub mode: ConstraintMode,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstraintTarget {
+    All,
+    Named(Vec<String>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstraintMode {
+    Deferred,
+    Immediate,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LockStatement {
+    pub tables: Vec<LockTarget>,
+    pub mode: LockMode,
+    pub nowait: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LockTarget {
+    pub table_name: TableName,
+    pub only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LockMode {
+    AccessShare,
+    RowShare,
+    RowExclusive,
+    ShareUpdateExclusive,
+    Share,
+    ShareRowExclusive,
+    Exclusive,
+    AccessExclusive,
+}
+
+// ===== Additional Utility Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LoadStatement {
+    pub filename: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RefreshMaterializedViewStatement {
+    pub concurrently: bool,
+    pub view_name: TableName,
+    pub with_data: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportForeignSchemaStatement {
+    pub remote_schema: String,
+    pub import_type: ImportForeignSchemaType,
+    pub server_name: String,
+    pub local_schema: String,
+    pub options: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ImportForeignSchemaType {
+    All,
+    LimitTo(Vec<String>),
+    Except(Vec<String>),
 }

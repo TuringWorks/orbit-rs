@@ -15,7 +15,7 @@ This document provides the authoritative status of protocol implementations in O
 |----------|------------|--------|-------|----------|
 | **OrbitQL** | 95% | Production Ready | 50+ | Parser validation, Edge cases |
 | **Redis RESP** | 60% | Production Ready | 190+ | Sorted Sets, Lua scripting |
-| **PostgreSQL** | 85% | Production Ready | 460+ | User management, cursors |
+| **PostgreSQL** | 88% | Production Ready | 460+ | User management, cursors |
 | **MySQL** | 51% | Active Development | 35+ | Binary protocol, replication |
 | **CQL (Cassandra)** | 55% | Active Development | 51+ | UDTs, Materialized views |
 | **Cypher/Bolt** | 85% | Production Ready | 105+ | DISTINCT, subqueries |
@@ -24,6 +24,14 @@ This document provides the authoritative status of protocol implementations in O
 | **REST/HTTP** | 40% | Active Development | - | Authentication |
 
 ### Recent Improvements (2025-12-08)
+- **PostgreSQL TCL**: Transaction control commands:
+  - SET TRANSACTION (isolation level, read only, deferrable) ✅
+  - SET CONSTRAINTS (deferred, immediate) ✅
+  - LOCK TABLE (all lock modes, NOWAIT) ✅
+- **PostgreSQL Utility**: Additional utility commands:
+  - LOAD (library loading) ✅
+  - REFRESH MATERIALIZED VIEW (CONCURRENTLY, WITH DATA) ✅
+  - IMPORT FOREIGN SCHEMA (LIMIT TO, EXCEPT, OPTIONS) ✅
 - **PostgreSQL DDL**: Comprehensive DDL parser (100+ statements, 6,300+ lines):
   - CREATE/ALTER/DROP: Foreign Tables, FDW, Servers, User Mappings ✅
   - CREATE/ALTER/DROP: Publications, Subscriptions (logical replication) ✅
