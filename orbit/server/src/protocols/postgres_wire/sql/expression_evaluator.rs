@@ -510,6 +510,20 @@ impl ExpressionEvaluator {
                 self.text_search_followed_by(&left_val, &right_val)
             }
 
+            // Comparison operators
+            BinaryOperator::IsDistinctFrom => self.is_distinct_from(&left_val, &right_val),
+            BinaryOperator::IsNotDistinctFrom => self.is_not_distinct_from(&left_val, &right_val),
+            
+            // Regex operators
+            BinaryOperator::RegexMatch => self.regex_match(&left_val, &right_val, false, false),
+            BinaryOperator::RegexMatchCaseInsensitive => {
+                self.regex_match(&left_val, &right_val, true, false)
+            }
+            BinaryOperator::RegexNotMatch => self.regex_match(&left_val, &right_val, false, true),
+            BinaryOperator::RegexNotMatchCaseInsensitive => {
+                self.regex_match(&left_val, &right_val, true, true)
+            }
+
             // Bitwise operators
             BinaryOperator::BitwiseAnd => self.bitwise_and(&left_val, &right_val),
             BinaryOperator::BitwiseOr => self.bitwise_or(&left_val, &right_val),
@@ -1495,6 +1509,71 @@ impl ExpressionEvaluator {
             _ => Err(ProtocolError::PostgresError(
                 "Bit shift requires integer operands".to_string(),
             )),
+        }
+    }
+
+    /// IS DISTINCT FROM - null-safe not equal
+    fn is_distinct_from(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Null, SqlValue::Null) => Ok(SqlValue::Boolean(false)),
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Boolean(true)),
+            _ => Ok(SqlValue::Boolean(
+                self.compare_values(left, right)? != std::cmp::Ordering::Equal,
+            )),
+        }
+    }
+
+    /// IS NOT DISTINCT FROM - null-safe equal
+    fn is_not_distinct_from(&self, left: &SqlValue, right: &SqlValue) -> ProtocolResult<SqlValue> {
+        match (left, right) {
+            (SqlValue::Null, SqlValue::Null) => Ok(SqlValue::Boolean(true)),
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Boolean(false)),
+            _ => Ok(SqlValue::Boolean(
+                self.compare_values(left, right)? == std::cmp::Ordering::Equal,
+            )),
+        }
+    }
+
+    /// Regex match operator (~, ~*, !~, !~*)
+    fn regex_match(
+        &self,
+        text: &SqlValue,
+        pattern: &SqlValue,
+        case_insensitive: bool,
+        negated: bool,
+    ) -> ProtocolResult<SqlValue> {
+        let text_str = match text {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.clone(),
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => return Err(ProtocolError::PostgresError(
+                "Regex match requires text operand".to_string(),
+            )),
+        };
+
+        let pattern_str = match pattern {
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => s.clone(),
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => return Err(ProtocolError::PostgresError(
+                "Regex match requires text pattern".to_string(),
+            )),
+        };
+
+        // Build regex with case-insensitive flag if needed
+        let regex_pattern = if case_insensitive {
+            format!("(?i){}", pattern_str)
+        } else {
+            pattern_str
+        };
+
+        match regex::Regex::new(&regex_pattern) {
+            Ok(re) => {
+                let matches = re.is_match(&text_str);
+                Ok(SqlValue::Boolean(if negated { !matches } else { matches }))
+            }
+            Err(e) => Err(ProtocolError::PostgresError(format!(
+                "Invalid regex pattern: {}",
+                e
+            ))),
         }
     }
 

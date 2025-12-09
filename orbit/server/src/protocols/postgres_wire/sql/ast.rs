@@ -1232,10 +1232,16 @@ pub enum BinaryOperator {
     // Pattern matching
     Match,
     NotMatch,
+    RegexMatch,              // ~ operator
+    RegexMatchCaseInsensitive, // ~* operator
+    RegexNotMatch,           // !~ operator
+    RegexNotMatchCaseInsensitive, // !~* operator
 
     // Null tests
     Is,
     IsNot,
+    IsDistinctFrom,          // IS DISTINCT FROM
+    IsNotDistinctFrom,       // IS NOT DISTINCT FROM
 
     // Set operations
     In,

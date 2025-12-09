@@ -811,18 +811,18 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | NOT BETWEEN | ✅ | Not in range |
 | IS NULL | ✅ | Null check |
 | IS NOT NULL | ✅ | Not null check |
-| IS DISTINCT FROM | ❌ | Null-safe not equal |
-| IS NOT DISTINCT FROM | ❌ | Null-safe equal |
+| IS DISTINCT FROM | ✅ | Null-safe not equal |
+| IS NOT DISTINCT FROM | ✅ | Null-safe equal |
 | IN | ✅ | Set membership |
 | NOT IN | ✅ | Not in set |
 | LIKE | ✅ | Pattern match |
 | NOT LIKE | ✅ | Not match |
 | ILIKE | ✅ | Case-insensitive like |
 | SIMILAR TO | ❌ | Regex pattern |
-| ~ | ❌ | Regex match |
-| ~* | ❌ | Case-insensitive regex |
-| !~ | ❌ | Not regex match |
-| !~* | ❌ | Not case-insensitive |
+| ~ | ✅ | Regex match |
+| ~* | ✅ | Case-insensitive regex |
+| !~ | ✅ | Not regex match |
+| !~* | ✅ | Not case-insensitive |
 
 ### Logical Operators
 

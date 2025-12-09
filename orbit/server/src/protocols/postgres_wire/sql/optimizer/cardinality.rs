@@ -266,6 +266,16 @@ impl CardinalityEstimator {
             // Is/IsNot operators
             BinaryOperator::Is => self.config.default_eq_selectivity,
             BinaryOperator::IsNot => 1.0 - self.config.default_eq_selectivity,
+            BinaryOperator::IsDistinctFrom => 1.0 - self.config.default_eq_selectivity,
+            BinaryOperator::IsNotDistinctFrom => self.config.default_eq_selectivity,
+
+            // Regex operators
+            BinaryOperator::RegexMatch | BinaryOperator::RegexMatchCaseInsensitive => {
+                self.config.default_like_selectivity
+            }
+            BinaryOperator::RegexNotMatch | BinaryOperator::RegexNotMatchCaseInsensitive => {
+                1.0 - self.config.default_like_selectivity
+            }
 
             // Text Search operators
             BinaryOperator::TextSearchMatch => 0.1, // @@ match operator - relatively selective
