@@ -96,6 +96,10 @@ enum Protocol {
     Cypher,
     /// AQL (ArangoDB queries via REST API)
     Aql,
+    /// Arrow Flight SQL (high-performance columnar protocol)
+    Flight,
+    /// OrbitWire (native binary protocol)
+    Orbitwire,
 }
 
 impl Protocol {
@@ -108,6 +112,8 @@ impl Protocol {
             Protocol::Orbitql => 8080,
             Protocol::Cypher => 7474,
             Protocol::Aql => 8529,
+            Protocol::Flight => 50052,
+            Protocol::Orbitwire => 50053,
         }
     }
 
@@ -120,6 +126,8 @@ impl Protocol {
             Protocol::Orbitql => "OrbitQL",
             Protocol::Cypher => "Cypher",
             Protocol::Aql => "AQL",
+            Protocol::Flight => "Arrow Flight SQL",
+            Protocol::Orbitwire => "OrbitWire",
         }
     }
 }
@@ -168,6 +176,21 @@ struct ReplState {
     redis_client: Option<redis::Client>,
     // OrbitQL/REST HTTP client
     http_client: Option<reqwest::Client>,
+    // OrbitWire connection
+    orbitwire_stream: Option<OrbitWireConnection>,
+    // Arrow Flight SQL connection
+    flight_client: Option<FlightSqlConnection>,
+}
+
+/// OrbitWire connection wrapper
+struct OrbitWireConnection {
+    stream: tokio::net::TcpStream,
+}
+
+/// Flight SQL connection wrapper
+struct FlightSqlConnection {
+    client: reqwest::Client,
+    endpoint: String,
 }
 
 impl ReplState {
@@ -189,6 +212,8 @@ impl ReplState {
             mysql_pool: None,
             redis_client: None,
             http_client: None,
+            orbitwire_stream: None,
+            flight_client: None,
         }
     }
 
