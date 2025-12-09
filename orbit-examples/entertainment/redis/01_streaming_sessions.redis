@@ -1,0 +1,41 @@
+# Redis: Streaming Platform Real-Time Operations
+# Handles high-velocity session data, bookmarks, and trending lists.
+
+# 1. User Session Management (Hash)
+# Triggered when a user logs in or opens the app.
+HSET session:user:1001 user_id "1001" device "SmartTV_LivingRoom" ip "192.168.1.50" login_time "1717200000"
+EXPIRE session:user:1001 3600
+
+# 2. Continue Watching (Bookmark)
+# Stores the playback position in seconds for specific content.
+# Key: bookmark:user:{user_id}:content:{content_id}
+SET bookmark:user:1001:content:mv_88392 1245
+# Expire bookmarks after 30 days if not active
+EXPIRE bookmark:user:1001:content:mv_88392 2592000
+
+# 3. Trending Leaderboard (Sorted Set)
+# Increment score when a movie is played.
+# Key: trending:movies:daily
+ZINCRBY trending:movies:daily 1 "mv_88392"
+ZINCRBY trending:movies:daily 1 "mv_99100"
+
+# Get Top 3 Trending Movies
+ZREVRANGE trending:movies:daily 0 2 WITHSCORES
+
+# 4. User Profile Cache (JSON - Orbit RedisJSON Compat)
+# Storing user preferences for quick personalization.
+JSON.SET user:profile:1001 $ '{"id": 1001, "preferences": {"genres": ["Sci-Fi", "Action"], "autoplay": true}, "subscription": "Premium_4K"}'
+
+# Update autoplay setting
+JSON.SET user:profile:1001 $.preferences.autoplay false
+
+# Retrieve user subscription tier
+JSON.GET user:profile:1001 $.subscription
+
+# 5. Rate Limiting (Streams/Concurrency)
+# Prevent account sharing abuse (allow max 3 concurrent streams).
+# Increment active streams counter
+INCR streams:user:1001
+# (Application logic checks if value > 3 then denies)
+# On stream end:
+DECR streams:user:1001

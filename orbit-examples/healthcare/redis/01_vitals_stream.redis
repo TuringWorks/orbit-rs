@@ -1,0 +1,205 @@
+# =============================================================================
+# OrbitRS Healthcare Examples - Real-time Vitals Monitoring (Redis)
+# =============================================================================
+# Comprehensive patient vitals streaming, caching, alerting, and analytics
+# This demonstrates OrbitRS Redis protocol for healthcare IoT/monitoring
+# =============================================================================
+
+# =============================================================================
+# PATIENT SESSION & REAL-TIME VITALS
+# =============================================================================
+
+# Store current patient vitals as hash (snapshot)
+HSET patient:vitals:mrn_888 \
+    heart_rate 78 \
+    blood_pressure_sys 120 \
+    blood_pressure_dia 80 \
+    spo2 98 \
+    temperature 98.6 \
+    respiratory_rate 16 \
+    timestamp 1702123456789 \
+    room "ICU-4A" \
+    bed "Bed-2" \
+    nurse_station "NS-4"
+
+# Get all vitals for a patient
+HGETALL patient:vitals:mrn_888
+
+# Get specific vital sign
+HGET patient:vitals:mrn_888 heart_rate
+
+# =============================================================================
+# TIME-SERIES VITAL SIGNS (Redis Streams)
+# =============================================================================
+
+# Stream vitals data from bedside monitors (auto-generated IDs)
+XADD stream:vitals:mrn_888 * \
+    type heart_rate \
+    value 78 \
+    unit bpm \
+    device_id "monitor-icu4a-001" \
+    quality "good"
+
+XADD stream:vitals:mrn_888 * \
+    type blood_pressure \
+    systolic 120 \
+    diastolic 80 \
+    unit mmHg \
+    device_id "monitor-icu4a-001"
+
+XADD stream:vitals:mrn_888 * \
+    type spo2 \
+    value 98 \
+    unit percent \
+    device_id "oximeter-icu4a-002"
+
+XADD stream:vitals:mrn_888 * \
+    type temperature \
+    value 98.6 \
+    unit fahrenheit \
+    device_id "thermometer-icu4a-003"
+
+# Read last 10 vitals entries
+XREVRANGE stream:vitals:mrn_888 + - COUNT 10
+
+# Read vitals from last 5 minutes (using timestamp)
+XRANGE stream:vitals:mrn_888 1702123000000-0 +
+
+# Get stream length (total readings)
+XLEN stream:vitals:mrn_888
+
+# =============================================================================
+# CONSUMER GROUPS FOR VITAL PROCESSING
+# =============================================================================
+
+# Create consumer groups for different processing needs
+XGROUP CREATE stream:vitals:mrn_888 nurses-station $ MKSTREAM
+XGROUP CREATE stream:vitals:mrn_888 alert-processor $ MKSTREAM
+XGROUP CREATE stream:vitals:mrn_888 analytics-etl $ MKSTREAM
+
+# Nurse station reads new vitals
+XREADGROUP GROUP nurses-station nurse-1 COUNT 5 STREAMS stream:vitals:mrn_888 >
+
+# Alert processor reads for threshold monitoring
+XREADGROUP GROUP alert-processor alert-svc-1 COUNT 10 STREAMS stream:vitals:mrn_888 >
+
+# =============================================================================
+# CRITICAL ALERTS (Pub/Sub)
+# =============================================================================
+
+# Alert channels for different severity levels
+SUBSCRIBE alert:critical
+SUBSCRIBE alert:warning
+SUBSCRIBE alert:icu_wing_4
+
+# Publish critical alerts (would be triggered by alert processor)
+PUBLISH alert:critical "CODE_BLUE|Patient MRN-888|ICU-4A Bed-2|Cardiac Arrest|Immediate response required"
+PUBLISH alert:warning "HR_HIGH|Patient MRN-888|ICU-4A Bed-2|Heart Rate: 125 bpm|Threshold: 120 bpm"
+PUBLISH alert:icu_wing_4 "VITALS_ABNORMAL|Patient MRN-888|Multiple vital signs out of range"
+
+# =============================================================================
+# CACHING LAYER FOR EHR DATA
+# =============================================================================
+
+# Cache patient demographics (TTL 30 minutes)
+SET cache:patient:mrn_888 '{"name":"John Doe","dob":"1950-03-15","allergies":["Penicillin","Sulfa"],"blood_type":"O+"}' EX 1800
+
+# Cache active medications (frequently accessed)
+SADD cache:meds:mrn_888 "Lisinopril 10mg" "Metformin 500mg" "Aspirin 81mg"
+EXPIRE cache:meds:mrn_888 1800
+
+# Cache lab results pending review
+ZADD labs:pending:dr_smith 1702123456 "lab:mrn_888:cbc" 1702123457 "lab:mrn_456:metabolic"
+
+# Get labs pending for a doctor (sorted by timestamp)
+ZRANGE labs:pending:dr_smith 0 -1
+
+# =============================================================================
+# MEDICATION ADMINISTRATION RECORD (MAR)
+# =============================================================================
+
+# Track when medications were given
+HSET mar:mrn_888:2024-12-09 \
+    "Lisinopril_10mg_0800" "given|nurse_id:N123|1702123456" \
+    "Metformin_500mg_0800" "given|nurse_id:N123|1702123460" \
+    "Aspirin_81mg_0800" "pending"
+
+# Get all meds for today
+HGETALL mar:mrn_888:2024-12-09
+
+# =============================================================================
+# PATIENT LOCATION TRACKING
+# =============================================================================
+
+# Real-time patient location (for tracking during transports)
+GEOADD hospital:patient_locations -122.4194 37.7749 "patient:mrn_888"
+GEOADD hospital:patient_locations -122.4190 37.7751 "patient:mrn_456"
+
+# Find all patients near ICU (within 50 meters)
+GEORADIUS hospital:patient_locations -122.4195 37.7750 50 m
+
+# =============================================================================
+# SESSION & RATE LIMITING
+# =============================================================================
+
+# Provider session management (EHR login)
+SET session:provider:dr_smith '{"user_id":"P001","role":"Physician","department":"Cardiology","login_time":1702123456}' EX 3600
+
+# Rate limit API calls (HIPAA audit consideration)
+INCR ratelimit:provider:dr_smith:hour
+EXPIRE ratelimit:provider:dr_smith:hour 3600
+
+# Check if rate limit exceeded (max 1000 requests/hour)
+GET ratelimit:provider:dr_smith:hour
+
+# =============================================================================
+# VECTOR SEARCH FOR CLINICAL NOTES (OrbitRS Extension)
+# =============================================================================
+
+# Store clinical note embeddings for semantic search
+# FT.CREATE idx:notes ON HASH PREFIX 1 note: SCHEMA content TEXT embedding VECTOR HNSW 6 DIM 1536 DISTANCE_METRIC COSINE
+
+# Search for similar clinical documentation
+# FT.SEARCH idx:notes "*=>[KNN 5 @embedding $query_vec]" PARAMS 2 query_vec "\x00\x00..." DIALECT 2
+
+# =============================================================================
+# FULL-TEXT SEARCH FOR MEDICATIONS (OrbitRS Extension)
+# =============================================================================
+
+# Create FTS index for medication lookup
+FT.CREATE idx:medications SCHEMA name TEXT WEIGHT 5 generic_name TEXT dosage TEXT
+
+# Add medications to index
+FT.ADD idx:medications med:1 1.0 FIELDS name "Lisinopril" generic_name "lisinopril" dosage "10mg tablet"
+FT.ADD idx:medications med:2 1.0 FIELDS name "Lipitor" generic_name "atorvastatin" dosage "20mg tablet"
+FT.ADD idx:medications med:3 1.0 FIELDS name "Metformin" generic_name "metformin" dosage "500mg tablet"
+
+# Search medications
+FT.SEARCH idx:medications "lisin*" LIMIT 0 10
+
+# =============================================================================
+# STATISTICS & ANALYTICS
+# =============================================================================
+
+# Track vital sign anomalies per shift
+HINCRBY stats:vitals:anomalies:2024-12-09:day heart_rate_high 1
+HINCRBY stats:vitals:anomalies:2024-12-09:day spo2_low 2
+
+# Track ICU occupancy
+PFADD stats:icu_occupancy:2024-12-09 "patient:mrn_888" "patient:mrn_456" "patient:mrn_789"
+PFCOUNT stats:icu_occupancy:2024-12-09
+
+# Bitmap for tracking which patients had vitals checked today
+SETBIT vitals:checked:2024-12-09 888 1
+SETBIT vitals:checked:2024-12-09 456 1
+BITCOUNT vitals:checked:2024-12-09
+
+# =============================================================================
+# CLEANUP & EXPIRATION
+# =============================================================================
+
+# Set TTL on old vitals streams (retain 7 days)
+EXPIRE stream:vitals:mrn_888 604800
+
+# Trim stream to last 10000 entries
+XTRIM stream:vitals:mrn_888 MAXLEN ~ 10000

@@ -1,0 +1,51 @@
+# =============================================================================
+# OrbitRS Car Rental Examples - Availability Cache (Redis)
+# =============================================================================
+# High-performance inventory checking and filtering
+# =============================================================================
+
+# 1. Initialize Sets of Vehicles by Class
+# ---------------------------------------
+# Set: available_vehicles:{class_id} => {vehicle_id}
+SADD available_vehicles:economy 101 102 103 104
+SADD available_vehicles:suv 201 202 203
+SADD available_vehicles:luxury 301 302
+
+# 2. Maintain Sets of Vehicles by Location
+# ----------------------------------------
+# Set: location:{airport_code} => {vehicle_id}
+SADD location:SFO 101 103 201 301 302
+SADD location:LAX 102 104 202 203
+
+# 3. Query: Find Available Economy Cars at SFO
+# --------------------------------------------
+# INTERSECT the class set and the location set
+# Returns vehicle_ids that are both Economy AND at SFO
+SINTER available_vehicles:economy location:SFO
+
+# 4. Booking Process (Atomic Move)
+# --------------------------------
+# When a user selects a car, atomically move it from "available" to "held"
+# We use SMOVE to ensure no double booking race conditions.
+# Returns 1 if successful, 0 if vehicle was already taken.
+SMOVE available_vehicles:economy held_vehicles:economy 101
+
+# Set a TTL on the hold (e.g., 10 minutes)
+# Create a key specifically for this hold to track expiration
+SET hold:101:user_123 "pending_payment" EX 600
+
+# 5. Pricing Cache
+# ----------------
+# Rapidly retrieve base rates without hitting SQL
+HSET rates:economy base 45.00 hourly 10.00
+HSET rates:suv base 85.00 hourly 15.00
+HSET rates:luxury base 150.00 hourly 25.00
+
+# Get all rates for Economy
+HGETALL rates:economy
+
+# 6. Global stats (for dashboards)
+# --------------------------------
+# Fast counter updates
+HINCRBY stats:global total_bookings 1
+HINCRBY stats:daily:2024-05-20 bookings 1

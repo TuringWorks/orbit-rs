@@ -1,0 +1,28 @@
+# =============================================================================
+# OrbitRS Aviation Examples - Vertiport Operations (Redis)
+# =============================================================================
+# Slot management for Take-off and Landing Logging (TOL)
+# =============================================================================
+
+# 1. Vertiport Slot Availability
+# Vertiport 'SFO_DOWNTOWN' has 4 pads: Pad A, B, C, D
+# Managing availability with Sets
+SADD available_pads:SFO_DOWNTOWN "Pad A" "Pad B" "Pad C" "Pad D"
+
+# 2. Reserve a Pad (Atomic Move)
+# EVTOL-01 requests landing
+SMOVE available_pads:SFO_DOWNTOWN occupied_pads:SFO_DOWNTOWN "Pad A"
+
+# 3. Charging Status
+# Track which vehicle is plugged into which charger
+SET charger:SFO_DOWNTOWN:1:vehicle "EVTOL-01"
+SET charger:SFO_DOWNTOWN:1:status "CHARGING_FAST"
+SET charger:SFO_DOWNTOWN:1:eta_full_min 12
+
+# 4. Airspace Corridor Density (Geospatial)
+# Track active eVTOLs in the 'Bay Area Corridor'
+GEOADD active_flights -122.4194 37.7749 "EVTOL-01"
+GEOADD active_flights -122.3890 37.6180 "EVTOL-02"
+
+# Check proximity for collision avoidance assistance
+GEODIST active_flights "EVTOL-01" "EVTOL-02" m

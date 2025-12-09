@@ -1,0 +1,20 @@
+# =============================================================================
+# OrbitRS Aviation Examples - Flight Concierge (Redis)
+# =============================================================================
+# Catering, Ground Transport, and VIP Preferences
+# =============================================================================
+
+# 1. VIP Preferences (Hash)
+HSET vip:profile:1001 drink_preference "Sparkling Water" newspaper "WSJ" seat_config "Club Seating"
+
+# 2. Flight Catering Order (List)
+# Order for Request ID 555
+RPUSH catering:req_555 "Fruit Platter" "Lobster Thermidor" "Vintage Champagne"
+
+# 3. Ground Transport Status (Pub/Sub)
+# Driver updates location for pickup at FBO
+PUBLISH ground:req_555 "Driver Arrived at Teterboro FBO - Black Escalade"
+
+# 4. Tail Assignment Cache (Set)
+# Which aircraft are available at TEB (Teterboro) right now?
+SADD airport:TEB:available_tails "N999GJ" "N888QS"

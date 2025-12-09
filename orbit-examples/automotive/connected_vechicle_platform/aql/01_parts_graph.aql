@@ -1,0 +1,38 @@
+// Automotive Parts Supply Chain (AQL - ArangoDB)
+// Managing complex dependencies between Vehicles, Systems, Parts, and Suppliers.
+// Ideal for recall scenarios: "Which vehicles contain a part from Supplier X made in Batch Y?"
+
+// 1. Create Collections
+if (!db._collection("components")) db._create("components");
+if (!db._collection("depends_on")) db._createEdgeCollection("depends_on");
+
+// 2. Insert Nodes (Vertices)
+// Top Level: Vehicle Model
+var v1 = db.components.save({ _key: "ModelX_2024", type: "Vehicle", name: "Orbit Model X 2024" });
+
+// Sub-Systems
+var s1 = db.components.save({ _key: "BrakeSystem_ABS", type: "System", name: "ABS Module Gen3" });
+
+// Parts
+var p1 = db.components.save({ _key: "Sensor_WheelSpeed", type: "Part", batch: "B2024-01", supplier: "MegaCorp" });
+var p2 = db.components.save({ _key: "Chip_Controller", type: "Part", batch: "C99", supplier: "MicroChipz" });
+
+// 3. Define Relationships (Edges)
+// Vehicle -> System -> Part
+db.depends_on.save({ _from: v1._id, _to: s1._id, type: "CONTAINS" });
+db.depends_on.save({ _from: s1._id, _to: p1._id, type: "CONTAINS" });
+db.depends_on.save({ _from: s1._id, _to: p2._id, type: "CONTAINS" });
+
+
+// 4. Query: Recall Impact Analysis
+// "Find all Vehicle Models that rely on 'Sensor_WheelSpeed' from batch 'B2024-01'"
+var query = `
+    FOR part IN components
+    FILTER part.type == 'Part' AND part._key == 'Sensor_WheelSpeed' AND part.batch == 'B2024-01'
+    FOR v, e, p IN 1..5 INBOUND part depends_on
+    FILTER v.type == 'Vehicle'
+    RETURN DISTINCT v.name
+`;
+
+var result = db._query(query).toArray();
+print("Recall Impact:", result);

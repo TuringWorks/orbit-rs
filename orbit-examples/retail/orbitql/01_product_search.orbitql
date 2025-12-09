@@ -1,0 +1,19 @@
+/* 
+ * OrbitRS Retail Examples - Product Search (OrbitQL)
+ * Unified query across SQL (Inventory) and MongoDB (Catalog)
+ */
+
+QUERY FindAvailableLaptops {
+    FROM products AS p
+    JOIN inventory AS i ON p.sku = i.sku
+    WHERE p.category = "Laptops"
+      AND p.specs.ram >= "16GB"      // Querying JSON field in Mongo
+      AND i.quantity_on_hand > 5     // Querying SQL column
+    RETURN {
+        p.name,
+        p.price,
+        i.location,
+        i.quantity_on_hand
+    }
+    ORDER BY p.price ASC
+}

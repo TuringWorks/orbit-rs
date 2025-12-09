@@ -1,0 +1,24 @@
+/*
+ * OrbitRS Humanoid Robot Manufacturing - AI Training (OrbitQL)
+ * Searching for similar failure modes in training episodes using Vector Search
+ */
+
+// Scenario: A robot fell over while carrying a box.
+// Find similar past episodes to reinforce learning.
+
+QUERY FindSimilarFailures {
+    FROM training_episodes
+    WHERE episode_type = "FALL_EVENT"
+      AND task_context = "CARRYING_OBJECT"
+    
+    // Semantic search on the description or embedding of the failure video/log
+    ANN(embedding_vector, [0.12, -0.45, 0.88, ...], 5)
+    
+    RETURN {
+        episode_id,
+        description,
+        recovery_strategy_used,
+        outcome_score,
+        video_url
+    }
+}

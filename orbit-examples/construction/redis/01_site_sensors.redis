@@ -1,0 +1,22 @@
+# Construction Site IoT (Redis)
+# Real-time monitoring of safety sensors and equipment.
+
+# 1. Crane Load Sensor (Stream)
+# Streaming weight data to detect overload conditions immediately.
+XADD sensor:crane:01 * weight_kg 4500 wind_mph 15 angle 45
+
+# 2. Air Quality Monitor (Hash)
+# Latest reading for dashboard display.
+HSET sensor:air:site_01 pm25 12 pm10 25 co2 450 status "Good"
+
+# 3. Noise Level Alert (Pub/Sub)
+# If decibels exceed city ordinance limits, trigger alert.
+PUBLISH site:alerts "Noise violation detected at North Gate: 95dB"
+
+# 4. Equipment Geo-Fencing (Geo)
+# Ensure heavy machinery stays in designated zones.
+GEOADD asset:locations -122.4194 37.7749 "Bulldozer_05"
+GEOADD asset:locations -122.4195 37.7750 "Excavator_02"
+
+# Check distance between two assets (Collision warning check)
+GEODIST asset:locations "Bulldozer_05" "Excavator_02" m

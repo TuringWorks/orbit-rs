@@ -20,7 +20,8 @@ Precision farming, crop monitoring, yield prediction with ML-powered agricultura
 - Soil and weather analytics
 - Equipment and IoT sensor integration
 - Supply chain tracking (farm to table)
-- Livestock management
+- Livestock management (smart herds, pedigree graphs)
+- Ranch operations and grazing geofencing
 - Market pricing and trading
 - Precision irrigation and fertilization
 

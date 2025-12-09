@@ -1,0 +1,17 @@
+# =============================================================================
+# OrbitRS Energy Examples - Smart Grid State (Redis)
+# =============================================================================
+# Load balancing and substation status
+# =============================================================================
+
+# 1. Substation Load (Key-Value)
+# Current load in MegaWatts
+SET substation:SUB-01:load_mw 45.5
+
+# 2. Demand Response Event (Pub/Sub)
+# Signal smart meters to reduce load
+PUBLISH grid:events:demand_response "REDUCE_LOAD_LEVEL_2"
+
+# 3. Solar Generation Cache (Hash)
+# current output for a solar farm
+HSET solar_farm:SF-99 output_mw 12.4 irradiance 850 panel_temp_c 45

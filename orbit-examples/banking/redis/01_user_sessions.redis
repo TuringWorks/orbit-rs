@@ -1,0 +1,305 @@
+# =============================================================================
+# OrbitRS Banking Examples - Session Cache & Real-time Banking (Redis)
+# =============================================================================
+# Comprehensive banking patterns: sessions, fraud detection, rate limiting,
+# real-time notifications, leaderboards, and caching
+# =============================================================================
+
+# =============================================================================
+# USER SESSION MANAGEMENT
+# =============================================================================
+
+# Store complete session with hash (more flexible than simple string)
+HSET session:user_1001 \
+    token "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+    user_id "1001" \
+    customer_number "CUST-100001" \
+    email "john.doe@email.com" \
+    role "PREMIUM" \
+    device_id "iPhone15-ABC123" \
+    device_type "mobile" \
+    ip_address "192.168.1.50" \
+    login_time "1702123456789" \
+    last_activity "1702123500000" \
+    mfa_verified "true" \
+    permissions "view_accounts,transfer,bill_pay,invest"
+
+# Set session expiration (15 minutes)
+EXPIRE session:user_1001 900
+
+# Get session data
+HGETALL session:user_1001
+
+# Update last activity (session refresh)
+HSET session:user_1001 last_activity "1702123600000"
+EXPIRE session:user_1001 900
+
+# Track active sessions for a user (multi-device)
+SADD user_sessions:user_1001 "session:user_1001:mobile" "session:user_1001:web"
+EXPIRE user_sessions:user_1001 86400
+
+# =============================================================================
+# TWO-FACTOR AUTHENTICATION
+# =============================================================================
+
+# Store 2FA code with 3-minute TTL
+SET 2fa:user_1001 "592834" EX 180
+
+# Store 2FA with metadata for audit
+HSET 2fa_request:user_1001 \
+    code "592834" \
+    delivery_method "SMS" \
+    phone_last4 "5678" \
+    created_at "1702123456789" \
+    attempts "0" \
+    max_attempts "3"
+EXPIRE 2fa_request:user_1001 180
+
+# Increment attempt count on verification
+HINCRBY 2fa_request:user_1001 attempts 1
+
+# =============================================================================
+# FRAUD DETECTION - VELOCITY CHECKS
+# =============================================================================
+
+# Transaction velocity: count transactions per minute
+INCR velocity:txn:user_1001:minute
+EXPIRE velocity:txn:user_1001:minute 60 NX
+
+# Transaction velocity: count per hour
+INCR velocity:txn:user_1001:hour
+EXPIRE velocity:txn:user_1001:hour 3600 NX
+
+# Amount velocity: total amount in last hour (using sorted set)
+ZADD velocity:amount:user_1001 1702123456 "txn_001:500.00"
+ZADD velocity:amount:user_1001 1702123500 "txn_002:250.00"
+ZREMRANGEBYSCORE velocity:amount:user_1001 -inf 1702119856  # Remove older than 1 hour
+
+# Card transaction velocity per card
+INCR velocity:card:4532-xxxx-xxxx-1234:minute
+EXPIRE velocity:card:4532-xxxx-xxxx-1234:minute 60 NX
+
+# Geographic velocity: track transaction locations
+GEOADD geo:txn:user_1001:day -122.4194 37.7749 "txn_001"  # San Francisco
+GEOADD geo:txn:user_1001:day -73.9857 40.7484 "txn_002"   # New York
+# Alert if distance > threshold in short time
+
+# Check geographic distance (potential card theft)
+GEODIST geo:txn:user_1001:day "txn_001" "txn_002" km
+
+# =============================================================================
+# REAL-TIME FRAUD ALERTS (Pub/Sub)
+# =============================================================================
+
+# Subscribe to fraud alert channels
+SUBSCRIBE alert:fraud:high_risk
+SUBSCRIBE alert:fraud:user_1001
+SUBSCRIBE alert:fraud:card_compromised
+
+# Publish fraud alert
+PUBLISH alert:fraud:high_risk "FRAUD_DETECTED|user_1001|TXN-12345|$5000|UNUSUAL_LOCATION|BLOCK_REQUIRED"
+PUBLISH alert:fraud:user_1001 "SUSPICIOUS_ACTIVITY|TXN-12345|New device login from unusual location"
+
+# =============================================================================
+# REAL-TIME NOTIFICATIONS (Streams)
+# =============================================================================
+
+# Transaction notification stream
+XADD stream:notifications:user_1001 * \
+    type "TRANSACTION" \
+    title "Purchase Approved" \
+    message "Your purchase of $45.50 at Whole Foods was approved" \
+    merchant "Whole Foods" \
+    amount "45.50" \
+    timestamp "1702123456789" \
+    read "false"
+
+# Balance alert notification
+XADD stream:notifications:user_1001 * \
+    type "BALANCE_ALERT" \
+    title "Low Balance Warning" \
+    message "Your checking account balance is below $100" \
+    account "xxxx1234" \
+    balance "87.50" \
+    threshold "100.00" \
+    timestamp "1702123500000" \
+    read "false"
+
+# Security alert
+XADD stream:notifications:user_1001 * \
+    type "SECURITY" \
+    title "New Device Login" \
+    message "Your account was accessed from a new device: Chrome on Windows" \
+    device_info "Chrome/Windows 11" \
+    ip_address "192.168.1.100" \
+    timestamp "1702123600000" \
+    read "false"
+
+# Read unread notifications
+XRANGE stream:notifications:user_1001 - + COUNT 20
+
+# Consumer group for notification processing
+XGROUP CREATE stream:notifications:user_1001 notification-processor $ MKSTREAM
+XREADGROUP GROUP notification-processor worker-1 COUNT 10 STREAMS stream:notifications:user_1001 >
+
+# =============================================================================
+# RATE LIMITING
+# =============================================================================
+
+# API rate limit: 1000 requests per hour
+INCR ratelimit:api:user_1001:hour
+EXPIRE ratelimit:api:user_1001:hour 3600 NX
+
+# Check current rate
+GET ratelimit:api:user_1001:hour
+
+# Transfer limit: daily transfer count
+INCR ratelimit:transfer:user_1001:day
+EXPIRE ratelimit:transfer:user_1001:day 86400 NX
+
+# Transfer amount limit (track daily total)
+INCRBYFLOAT transfer:daily_amount:user_1001 500.00
+EXPIRE transfer:daily_amount:user_1001 86400 NX
+
+# =============================================================================
+# CACHING - FREQUENTLY ACCESSED DATA
+# =============================================================================
+
+# Cache customer profile (JSON, 30 min TTL)
+SET cache:customer:1001 '{"customer_id":"1001","name":"John Doe","tier":"PREMIUM","credit_score":750,"accounts":["CHK-001","SAV-001","CC-001"]}' EX 1800
+
+# Cache account balances (shorter TTL for accuracy)
+HSET cache:balances:user_1001 \
+    "CHK-001" "1234.56" \
+    "SAV-001" "5678.90" \
+    "CC-001" "-450.00"
+EXPIRE cache:balances:user_1001 60
+
+# Cache exchange rates (updated every minute)
+HSET cache:fx_rates \
+    "EUR/USD" "1.0856" \
+    "GBP/USD" "1.2650" \
+    "JPY/USD" "0.0067" \
+    updated_at "1702123456789"
+EXPIRE cache:fx_rates 60
+
+# Cache ATM locations for mobile app
+GEOADD cache:atm_locations -122.4194 37.7749 "atm:sf_001"
+GEOADD cache:atm_locations -122.4150 37.7850 "atm:sf_002"
+GEOADD cache:atm_locations -122.4100 37.7800 "atm:sf_003"
+
+# Find nearest ATMs (within 5km)
+GEORADIUS cache:atm_locations -122.4180 37.7760 5 km WITHDIST ASC LIMIT 5
+
+# =============================================================================
+# REAL-TIME SPENDING ANALYTICS
+# =============================================================================
+
+# Daily spending by category (sorted set)
+ZINCRBY spending:user_1001:2024-12-09:category 45.50 "Groceries"
+ZINCRBY spending:user_1001:2024-12-09:category 25.00 "Transportation"
+ZINCRBY spending:user_1001:2024-12-09:category 12.99 "Entertainment"
+
+# Get top spending categories today
+ZREVRANGE spending:user_1001:2024-12-09:category 0 4 WITHSCORES
+
+# Monthly spending trend
+ZINCRBY spending:user_1001:2024-12:total 83.49 "day_09"
+ZRANGE spending:user_1001:2024-12:total 0 -1 WITHSCORES
+
+# =============================================================================
+# ACCOUNT LOCKS & SECURITY
+# =============================================================================
+
+# Failed login attempts tracking
+INCR security:failed_login:user_1001
+EXPIRE security:failed_login:user_1001 900  # 15 min window
+
+# Lock account after 5 failed attempts
+GET security:failed_login:user_1001
+# If >= 5, set lock
+SET security:account_locked:user_1001 "LOCKED_FAILED_LOGIN" EX 1800
+
+# Card temporary lock (user-initiated)
+SET security:card_locked:4532-xxxx-xxxx-1234 "USER_LOCKED" EX 86400
+
+# =============================================================================
+# PENDING TRANSACTIONS QUEUE
+# =============================================================================
+
+# Queue pending transactions for processing
+LPUSH queue:pending_transactions '{"txn_id":"TXN-001","amount":500.00,"from":"CHK-001","to":"external:123456789","status":"PENDING_APPROVAL"}'
+
+# Process pending transactions (worker)
+BRPOP queue:pending_transactions 30
+
+# Priority queue for high-value transactions
+ZADD queue:priority_transactions 1000 '{"txn_id":"TXN-002","amount":50000.00,"priority":"HIGH"}'
+ZADD queue:priority_transactions 100 '{"txn_id":"TXN-003","amount":500.00","priority":"NORMAL"}'
+
+# Process highest priority first
+ZPOPMAX queue:priority_transactions
+
+# =============================================================================
+# REAL-TIME STOCK PRICES (Pub/Sub for trading)
+# =============================================================================
+
+# Publish stock price updates
+PUBLISH market:stocks:AAPL '{"symbol":"AAPL","price":175.25,"change":2.50,"volume":45000000}'
+PUBLISH market:stocks:GOOGL '{"symbol":"GOOGL","price":140.50,"change":-1.25,"volume":22000000}'
+
+# Subscribe to watched stocks
+SUBSCRIBE market:stocks:AAPL market:stocks:GOOGL market:stocks:MSFT
+
+# =============================================================================
+# LEADERBOARD: TOP SAVERS (Gamification)
+# =============================================================================
+
+# Track monthly savings contributions
+ZINCRBY leaderboard:savers:2024-12 500.00 "user_1001"
+ZINCRBY leaderboard:savers:2024-12 750.00 "user_2002"
+ZINCRBY leaderboard:savers:2024-12 300.00 "user_3003"
+
+# Get top 10 savers
+ZREVRANGE leaderboard:savers:2024-12 0 9 WITHSCORES
+
+# Get user's rank
+ZREVRANK leaderboard:savers:2024-12 "user_1001"
+
+# =============================================================================
+# FULL-TEXT SEARCH (OrbitRS Extension)
+# =============================================================================
+
+# Create FTS index for merchant search
+FT.CREATE idx:merchants SCHEMA name TEXT WEIGHT 5 category TEXT address TEXT
+
+# Add merchants
+FT.ADD idx:merchants merchant:1 1.0 FIELDS name "Whole Foods Market" category "Groceries" address "123 Main St"
+FT.ADD idx:merchants merchant:2 1.0 FIELDS name "Starbucks Coffee" category "Food & Drink" address "456 Oak Ave"
+
+# Search merchants
+FT.SEARCH idx:merchants "coffee" LIMIT 0 10
+
+# =============================================================================
+# VECTOR SEARCH FOR SIMILAR TRANSACTIONS (OrbitRS Extension)
+# =============================================================================
+
+# Store transaction embeddings for anomaly detection
+# FT.CREATE idx:txn_embeddings ON HASH PREFIX 1 txn: SCHEMA embedding VECTOR HNSW 6 DIM 256 DISTANCE_METRIC COSINE
+
+# Find similar transactions to detect patterns
+# FT.SEARCH idx:txn_embeddings "*=>[KNN 10 @embedding $query_vec]" PARAMS 2 query_vec "\x00..." DIALECT 2
+
+# =============================================================================
+# CLEANUP & MAINTENANCE
+# =============================================================================
+
+# Trim notification streams (keep last 1000)
+XTRIM stream:notifications:user_1001 MAXLEN ~ 1000
+
+# Clear expired rate limits (handled automatically by TTL)
+
+# Archive old spending data (before cleanup)
+RENAME spending:user_1001:2024-11:category archive:spending:user_1001:2024-11:category
+EXPIRE archive:spending:user_1001:2024-11:category 2592000  # 30 days
+

@@ -1,0 +1,22 @@
+# Livestock Real-Time Tracking (Redis)
+# Tracking animal movements via GPS/RFID collars for grazing management.
+
+# 1. Update Animal Locations (Geo)
+# GEOADD key lon lat member
+GEOADD ranch:herd:cattle -98.5795 29.4241 "TAG-001"
+GEOADD ranch:herd:cattle -98.5790 29.4245 "TAG-002"
+
+# 2. Check for Strays (Geofence)
+# Defined Safe Zone Center: -98.58, 29.42
+# Find all animals OUTSIDE the 1km radius (Logic handled by app comparing radius)
+# Here we find animals INSIDE:
+GEORADIUS ranch:herd:cattle -98.58 29.42 1 km WITHDIST
+
+# 3. Store Real-Time Vitals (Hash)
+# Smart collar data: Body Temp, Activity Level (Steps)
+HSET animal:vitals:TAG-001 temp_c 38.5 activity_level "HIGH" heart_rate 60
+HSET animal:vitals:TAG-002 temp_c 39.1 activity_level "LOW" heart_rate 55
+
+# 4. Estrus Detection Alert (Pub/Sub)
+# High activity + specific temp change might indicate estrus (breeding window).
+PUBLISH ranch:alerts "POSSIBLE_ESTRUS: TAG-001 Activity Spike Detected"

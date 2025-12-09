@@ -5,7 +5,7 @@
 // ============================================================================
 
 // Switch to travel database
-use travel;
+db = db.getSiblingDB('travel');
 
 // Create vacation packages collection
 db.createCollection("vacation_packages");
