@@ -235,6 +235,37 @@ pub enum Statement {
     DropFunction(DropFunctionStatement),
     DropProcedure(DropProcedureStatement),
     DropOwned(DropOwnedStatement),
+
+    // Utility Commands
+    Reset(ResetStatement),
+    Discard(DiscardStatement),
+
+    // Cursor Commands
+    DeclareCursor(DeclareCursorStatement),
+    FetchCursor(FetchCursorStatement),
+    MoveCursor(MoveCursorStatement),
+    CloseCursor(CloseCursorStatement),
+
+    // Notification Commands
+    Listen(ListenStatement),
+    Unlisten(UnlistenStatement),
+    Notify(NotifyStatement),
+
+    // Prepared Statement Commands
+    Prepare(PrepareStatement),
+    Execute(ExecuteStatement),
+    Deallocate(DeallocateStatement),
+
+    // Maintenance Commands
+    Vacuum(VacuumStatement),
+    Analyze(AnalyzeStatement),
+    Reindex(ReindexStatement),
+    Cluster(ClusterStatement),
+    Checkpoint,
+
+    // Procedural Commands
+    Call(CallStatement),
+    Do(DoStatement),
 }
 
 // ===== DDL Statements =====
@@ -3024,4 +3055,204 @@ pub struct DropProcedureStatement {
 pub struct DropOwnedStatement {
     pub roles: Vec<String>,
     pub cascade: bool,
+}
+
+// ===== Utility Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResetStatement {
+    pub target: ResetTarget,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResetTarget {
+    Parameter(String),
+    All,
+    TimeZone,
+    Role,
+    SessionAuthorization,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DiscardStatement {
+    pub target: DiscardTarget,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DiscardTarget {
+    All,
+    Plans,
+    Sequences,
+    Temporary,
+    Temp,
+}
+
+// ===== Cursor Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeclareCursorStatement {
+    pub name: String,
+    pub binary: bool,
+    pub insensitive: bool,
+    pub scroll: Option<bool>, // None = default, Some(true) = SCROLL, Some(false) = NO SCROLL
+    pub hold: bool,           // WITH HOLD
+    pub query: Box<SelectStatement>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FetchCursorStatement {
+    pub direction: FetchDirection,
+    pub cursor_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FetchDirection {
+    Next,
+    Prior,
+    First,
+    Last,
+    Absolute(i64),
+    Relative(i64),
+    Count(i64),
+    All,
+    Forward,
+    ForwardCount(i64),
+    ForwardAll,
+    Backward,
+    BackwardCount(i64),
+    BackwardAll,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MoveCursorStatement {
+    pub direction: FetchDirection,
+    pub cursor_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CloseCursorStatement {
+    pub cursor_name: CloseCursorTarget,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CloseCursorTarget {
+    Named(String),
+    All,
+}
+
+// ===== Notification Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ListenStatement {
+    pub channel: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnlistenStatement {
+    pub channel: UnlistenTarget,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum UnlistenTarget {
+    Channel(String),
+    All,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NotifyStatement {
+    pub channel: String,
+    pub payload: Option<String>,
+}
+
+// ===== Prepared Statement Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrepareStatement {
+    pub name: String,
+    pub data_types: Vec<SqlType>,
+    pub statement: Box<Statement>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExecuteStatement {
+    pub name: String,
+    pub parameters: Vec<Expression>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeallocateStatement {
+    pub target: DeallocateTarget,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DeallocateTarget {
+    Named(String),
+    All,
+}
+
+// ===== Maintenance Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VacuumStatement {
+    pub full: bool,
+    pub freeze: bool,
+    pub verbose: bool,
+    pub analyze: bool,
+    pub disable_page_skipping: bool,
+    pub skip_locked: bool,
+    pub index_cleanup: Option<bool>,
+    pub truncate: Option<bool>,
+    pub parallel: Option<i32>,
+    pub tables: Vec<VacuumTable>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VacuumTable {
+    pub name: TableName,
+    pub columns: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnalyzeStatement {
+    pub verbose: bool,
+    pub skip_locked: bool,
+    pub tables: Vec<VacuumTable>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReindexStatement {
+    pub target_type: ReindexTarget,
+    pub concurrently: bool,
+    pub verbose: bool,
+    pub name: Option<TableName>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ReindexTarget {
+    Index,
+    Table,
+    Schema,
+    Database,
+    System,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClusterStatement {
+    pub verbose: bool,
+    pub table_name: Option<TableName>,
+    pub index_name: Option<String>,
+}
+
+// ===== Procedural Commands =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallStatement {
+    pub procedure_name: TableName,
+    pub arguments: Vec<Expression>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DoStatement {
+    pub language: Option<String>,
+    pub code: String,
 }

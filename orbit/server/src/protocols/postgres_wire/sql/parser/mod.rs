@@ -10,6 +10,7 @@ pub mod expressions;
 pub mod select;
 pub mod tcl;
 pub mod utilities;
+pub mod utility_commands;
 
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::{
@@ -116,9 +117,104 @@ impl SqlParser {
             Some(Token::Commit) => self.parse_commit_statement(),
             Some(Token::Rollback) => self.parse_rollback_statement(),
             Some(Token::Savepoint) => self.parse_savepoint_statement(),
+            Some(Token::Abort) => {
+                self.advance()?;
+                Ok(Statement::Rollback(
+                    crate::protocols::postgres_wire::sql::ast::RollbackStatement {
+                        chain: false,
+                        to_savepoint: None,
+                    },
+                ))
+            }
 
             // Session Management
             Some(Token::Set) => self.parse_set_statement(),
+            Some(Token::Reset) => {
+                self.advance()?;
+                utility_commands::parse_reset(self)
+            }
+            Some(Token::Discard) => {
+                self.advance()?;
+                utility_commands::parse_discard(self)
+            }
+
+            // Cursor Commands
+            Some(Token::Declare) => {
+                self.advance()?;
+                utility_commands::parse_declare_cursor(self)
+            }
+            Some(Token::Fetch) => {
+                self.advance()?;
+                utility_commands::parse_fetch(self)
+            }
+            Some(Token::Move) => {
+                self.advance()?;
+                utility_commands::parse_move(self)
+            }
+            Some(Token::Close) => {
+                self.advance()?;
+                utility_commands::parse_close(self)
+            }
+
+            // Notification Commands
+            Some(Token::Listen) => {
+                self.advance()?;
+                utility_commands::parse_listen(self)
+            }
+            Some(Token::Unlisten) => {
+                self.advance()?;
+                utility_commands::parse_unlisten(self)
+            }
+            Some(Token::Notify) => {
+                self.advance()?;
+                utility_commands::parse_notify(self)
+            }
+
+            // Prepared Statement Commands
+            Some(Token::Prepare) => {
+                self.advance()?;
+                utility_commands::parse_prepare(self)
+            }
+            Some(Token::Execute) => {
+                self.advance()?;
+                utility_commands::parse_execute(self)
+            }
+            Some(Token::Deallocate) => {
+                self.advance()?;
+                utility_commands::parse_deallocate(self)
+            }
+
+            // Maintenance Commands
+            Some(Token::Vacuum) => {
+                self.advance()?;
+                utility_commands::parse_vacuum(self)
+            }
+            Some(Token::Analyze) => {
+                self.advance()?;
+                utility_commands::parse_analyze(self)
+            }
+            Some(Token::Reindex) => {
+                self.advance()?;
+                utility_commands::parse_reindex(self)
+            }
+            Some(Token::Cluster) => {
+                self.advance()?;
+                utility_commands::parse_cluster(self)
+            }
+            Some(Token::Checkpoint) => {
+                self.advance()?;
+                utility_commands::parse_checkpoint(self)
+            }
+
+            // Procedural Commands
+            Some(Token::Call) => {
+                self.advance()?;
+                utility_commands::parse_call(self)
+            }
+            Some(Token::Do) => {
+                self.advance()?;
+                utility_commands::parse_do(self)
+            }
 
             // COMMENT ON statement
             Some(Token::CommentKeyword) => ddl::parse_comment_on(self),

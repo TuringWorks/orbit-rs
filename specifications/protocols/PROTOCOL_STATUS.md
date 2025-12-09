@@ -15,7 +15,7 @@ This document provides the authoritative status of protocol implementations in O
 |----------|------------|--------|-------|----------|
 | **OrbitQL** | 95% | Production Ready | 50+ | Parser validation, Edge cases |
 | **Redis RESP** | 60% | Production Ready | 190+ | Sorted Sets, Lua scripting |
-| **PostgreSQL** | 72% | Production Ready | 460+ | User management, cursors |
+| **PostgreSQL** | 85% | Production Ready | 460+ | User management, cursors |
 | **MySQL** | 51% | Active Development | 35+ | Binary protocol, replication |
 | **CQL (Cassandra)** | 55% | Active Development | 51+ | UDTs, Materialized views |
 | **Cypher/Bolt** | 85% | Production Ready | 105+ | DISTINCT, subqueries |
@@ -24,6 +24,14 @@ This document provides the authoritative status of protocol implementations in O
 | **REST/HTTP** | 40% | Active Development | - | Authentication |
 
 ### Recent Improvements (2025-12-08)
+- **PostgreSQL DDL**: Comprehensive DDL parser (100+ statements, 6,300+ lines):
+  - CREATE/ALTER/DROP: Foreign Tables, FDW, Servers, User Mappings ✅
+  - CREATE/ALTER/DROP: Publications, Subscriptions (logical replication) ✅
+  - CREATE/ALTER/DROP: Event Triggers, Access Methods ✅
+  - CREATE/ALTER/DROP: Text Search (Configuration/Dictionary/Parser/Template) ✅
+  - CREATE/ALTER/DROP: Transforms, Languages, Statistics ✅
+  - CREATE/ALTER/DROP: Operators, Aggregates, Casts ✅
+  - CREATE/ALTER/DROP: Collations, Conversions, Tablespaces, Groups ✅
 - **OrbitQL**: SurrealDB-style DEFINE/REMOVE statements ✅, Control flow (IF/FOR/LET/THROW) ✅, SAVEPOINT support ✅
 - **OrbitQL**: Vector KNN search ✅, MATCH statement (Cypher-style) ✅, LIVE/KILL queries ✅
 - **PostgreSQL**: Sequence functions (nextval, currval, setval, lastval) ✅, Math functions (cbrt, div, factorial, gcd, lcm, sign) ✅
@@ -181,7 +189,7 @@ OrbitQL supports two wire protocols for client-server communication:
 
 ---
 
-## 2. PostgreSQL Wire Protocol (72% Complete)
+## 2. PostgreSQL Wire Protocol (85% Complete)
 
 ### Wire Protocol Support
 
@@ -206,8 +214,12 @@ OrbitQL supports two wire protocols for client-server communication:
 | **DQL** | Set Operations (UNION, etc.) | 100% | ✅ |
 | **DML** | INSERT (ON CONFLICT) | 100% | ✅ |
 | **DML** | UPDATE/DELETE + RETURNING | 95% | ✅ |
-| **DDL** | CREATE TABLE/INDEX | 95% | ✅ |
-| **DDL** | ALTER TABLE | 85% | ✅ |
+| **DDL** | CREATE TABLE/INDEX/VIEW | 95% | ✅ |
+| **DDL** | CREATE FUNCTION/TRIGGER | 95% | ✅ |
+| **DDL** | CREATE (FDW/Server/Publication) | 100% | ✅ **NEW** |
+| **DDL** | CREATE (Text Search objects) | 100% | ✅ **NEW** |
+| **DDL** | ALTER (all object types) | 95% | ✅ **NEW** |
+| **DDL** | DROP (all object types) | 100% | ✅ **NEW** |
 | **DCL** | GRANT/REVOKE | 80% | ✅ |
 | **DCL** | CREATE ROLE | 60% | **Gap** |
 | **TCL** | Transactions, Savepoints | 100% | ✅ |
@@ -216,6 +228,15 @@ OrbitQL supports two wire protocols for client-server communication:
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| **Comprehensive DDL Parser** | | |
+| CREATE/ALTER/DROP Foreign Tables | ✅ **DONE** | Full FDW support |
+| CREATE/ALTER/DROP Publications/Subscriptions | ✅ **DONE** | Logical replication |
+| CREATE/ALTER/DROP Event Triggers | ✅ **DONE** | DDL event handling |
+| CREATE/ALTER/DROP Text Search objects | ✅ **DONE** | Configuration, Dictionary, Parser, Template |
+| CREATE/ALTER/DROP Transforms/Languages | ✅ **DONE** | Procedural language support |
+| CREATE/ALTER/DROP Operators/Aggregates | ✅ **DONE** | Custom operator support |
+| CREATE/ALTER/DROP Collations/Conversions | ✅ **DONE** | Character set support |
+| DROP FUNCTION/PROCEDURE/ROUTINE | ✅ **DONE** | Multiple functions with args |
 | **PostgreSQL 18 Protocol** | | |
 | NegotiateProtocolVersion | ✅ **DONE** | Protocol 3.2 negotiation in startup |
 | Variable-length cancel keys | ✅ **DONE** | 4-256 byte keys (v3.2) |

@@ -1,5 +1,5 @@
 //! Orbit Desktop - Desktop UI for Orbit-RS Database Management
-//! 
+//!
 //! This is a Tauri-based desktop application that provides a UI similar to RedisInsights
 //! for managing Orbit-RS databases, running PostgreSQL queries, OrbitQL queries, and Redis commands.
 
@@ -8,23 +8,25 @@
     windows_subsystem = "windows"
 )]
 
+use chrono;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::{Manager, State};
 use tokio::sync::RwLock;
-use chrono;
 mod connections;
-mod queries;
-mod models;
-mod storage;
 mod encryption;
+mod models;
+mod queries;
+mod storage;
 
-use connections::{ConnectionManager, Connection, ConnectionInfo, ConnectionStatus, ConnectionType};
-use queries::{QueryExecutor, QueryResult, QueryRequest};
-use models::{ModelManager, ModelInfo, MLFunctionInfo};
-use storage::{StorageManager, AppStorage};
+use connections::{
+    Connection, ConnectionInfo, ConnectionManager, ConnectionStatus, ConnectionType,
+};
 use encryption::EncryptionManager;
+use models::{MLFunctionInfo, ModelInfo, ModelManager};
+use queries::{QueryExecutor, QueryRequest, QueryResult};
+use storage::{AppStorage, StorageManager};
 
 /// Application state
 struct AppState {
@@ -76,20 +78,25 @@ async fn create_connection(
         Ok(id) => id,
         Err(e) => return Ok(ApiResponse::error(e.to_string())),
     };
-    
+
     // Save to storage
-    let mut storage = state.storage.load()
+    let mut storage = state
+        .storage
+        .load()
         .map_err(|e| format!("Failed to load storage: {}", e))?;
-    
+
     if let Some(conn) = manager.get_connection(&connection_id).await {
-        let stored_conn = conn.to_stored(&state.encryption)
+        let stored_conn = conn
+            .to_stored(&state.encryption)
             .map_err(|e| format!("Failed to encrypt connection: {}", e))?;
         storage.connections.push(stored_conn);
-        
-        state.storage.save(&storage)
+
+        state
+            .storage
+            .save(&storage)
             .map_err(|e| format!("Failed to save storage: {}", e))?;
     }
-    
+
     Ok(ApiResponse::success(connection_id))
 }
 
@@ -107,12 +114,14 @@ async fn test_connection(
 
 #[tauri::command]
 async fn get_connections(
-    state: tauri::State<'_, AppState>
+    state: tauri::State<'_, AppState>,
 ) -> Result<ApiResponse<Vec<Connection>>, String> {
     // Load connections from storage
-    let storage = state.storage.load()
+    let storage = state
+        .storage
+        .load()
         .map_err(|e| format!("Failed to load storage: {}", e))?;
-    
+
     let mut connections = Vec::new();
     for stored_conn in &storage.connections {
         match stored_conn.to_connection(&state.encryption) {
@@ -122,7 +131,7 @@ async fn get_connections(
             }
         }
     }
-    
+
     // Update connection manager with loaded connections
     {
         let mut manager = state.connections.write().await;
@@ -131,7 +140,7 @@ async fn get_connections(
             // Active connections will be created on demand
         }
     }
-    
+
     Ok(ApiResponse::success(connections))
 }
 
@@ -154,19 +163,23 @@ async fn delete_connection(
 ) -> Result<ApiResponse<bool>, String> {
     let mut manager = state.connections.write().await;
     match manager.delete_connection(&connection_id).await {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => return Ok(ApiResponse::error(e.to_string())),
     }
-    
+
     // Remove from storage
-    let mut storage = state.storage.load()
+    let mut storage = state
+        .storage
+        .load()
         .map_err(|e| format!("Failed to load storage: {}", e))?;
-    
+
     storage.connections.retain(|c| c.id != connection_id);
-    
-    state.storage.save(&storage)
+
+    state
+        .storage
+        .save(&storage)
         .map_err(|e| format!("Failed to save storage: {}", e))?;
-    
+
     Ok(ApiResponse::success(true))
 }
 
@@ -192,7 +205,9 @@ async fn get_query_history(
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<Vec<QueryRequest>>, String> {
     let executor = state.query_executor.read().await;
-    let history = executor.get_history(&connection_id, limit.unwrap_or(50)).await
+    let history = executor
+        .get_history(&connection_id, limit.unwrap_or(50))
+        .await
         .map_err(|e| e.to_string())?;
     Ok(ApiResponse::success(history))
 }
@@ -264,12 +279,24 @@ async fn delete_model(
 #[tauri::command]
 async fn get_system_info() -> Result<ApiResponse<HashMap<String, serde_json::Value>>, String> {
     let mut info = HashMap::new();
-    
-    info.insert("version".to_string(), serde_json::Value::String("0.1.0".to_string()));
-    info.insert("os".to_string(), serde_json::Value::String(std::env::consts::OS.to_string()));
-    info.insert("arch".to_string(), serde_json::Value::String(std::env::consts::ARCH.to_string()));
-    info.insert("timestamp".to_string(), serde_json::Value::String(chrono::Utc::now().to_rfc3339()));
-    
+
+    info.insert(
+        "version".to_string(),
+        serde_json::Value::String("0.1.0".to_string()),
+    );
+    info.insert(
+        "os".to_string(),
+        serde_json::Value::String(std::env::consts::OS.to_string()),
+    );
+    info.insert(
+        "arch".to_string(),
+        serde_json::Value::String(std::env::consts::ARCH.to_string()),
+    );
+    info.insert(
+        "timestamp".to_string(),
+        serde_json::Value::String(chrono::Utc::now().to_rfc3339()),
+    );
+
     Ok(ApiResponse::success(info))
 }
 
@@ -278,9 +305,11 @@ async fn save_settings(
     settings: HashMap<String, serde_json::Value>,
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<bool>, String> {
-    let mut storage = state.storage.load()
+    let mut storage = state
+        .storage
+        .load()
         .map_err(|e| format!("Failed to load storage: {}", e))?;
-    
+
     // Update settings from provided values
     if let Some(theme) = settings.get("theme").and_then(|v| v.as_str()) {
         storage.settings.theme = theme.to_string();
@@ -303,10 +332,12 @@ async fn save_settings(
     if let Some(word_wrap) = settings.get("word_wrap").and_then(|v| v.as_bool()) {
         storage.settings.word_wrap = word_wrap;
     }
-    
-    state.storage.save(&storage)
+
+    state
+        .storage
+        .save(&storage)
         .map_err(|e| format!("Failed to save settings: {}", e))?;
-    
+
     Ok(ApiResponse::success(true))
 }
 
@@ -314,18 +345,41 @@ async fn save_settings(
 async fn load_settings(
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<HashMap<String, serde_json::Value>>, String> {
-    let storage = state.storage.load()
+    let storage = state
+        .storage
+        .load()
         .map_err(|e| format!("Failed to load storage: {}", e))?;
-    
+
     let mut settings = HashMap::new();
-    settings.insert("theme".to_string(), serde_json::Value::String(storage.settings.theme));
-    settings.insert("auto_save".to_string(), serde_json::Value::Bool(storage.settings.auto_save));
-    settings.insert("query_timeout".to_string(), serde_json::Value::Number(storage.settings.query_timeout.into()));
-    settings.insert("editor_font_size".to_string(), serde_json::Value::Number(storage.settings.editor_font_size.into()));
-    settings.insert("editor_theme".to_string(), serde_json::Value::String(storage.settings.editor_theme));
-    settings.insert("show_line_numbers".to_string(), serde_json::Value::Bool(storage.settings.show_line_numbers));
-    settings.insert("word_wrap".to_string(), serde_json::Value::Bool(storage.settings.word_wrap));
-    
+    settings.insert(
+        "theme".to_string(),
+        serde_json::Value::String(storage.settings.theme),
+    );
+    settings.insert(
+        "auto_save".to_string(),
+        serde_json::Value::Bool(storage.settings.auto_save),
+    );
+    settings.insert(
+        "query_timeout".to_string(),
+        serde_json::Value::Number(storage.settings.query_timeout.into()),
+    );
+    settings.insert(
+        "editor_font_size".to_string(),
+        serde_json::Value::Number(storage.settings.editor_font_size.into()),
+    );
+    settings.insert(
+        "editor_theme".to_string(),
+        serde_json::Value::String(storage.settings.editor_theme),
+    );
+    settings.insert(
+        "show_line_numbers".to_string(),
+        serde_json::Value::Bool(storage.settings.show_line_numbers),
+    );
+    settings.insert(
+        "word_wrap".to_string(),
+        serde_json::Value::Bool(storage.settings.word_wrap),
+    );
+
     Ok(ApiResponse::success(settings))
 }
 
@@ -333,7 +387,7 @@ async fn load_settings(
 #[tauri::command]
 async fn show_about_dialog(app: tauri::AppHandle) {
     let window = app.get_window("main").unwrap();
-    
+
     tauri::api::dialog::message(
         Some(&window),
         "About Orbit Desktop",
@@ -350,18 +404,18 @@ pub fn run() {
 
     tracing::info!("Starting Orbit Desktop application");
 
-    let config = tauri::generate_context!().config();
-    
+    let context = tauri::generate_context!();
+    let config = context.config();
+
     // Initialize storage and encryption
-    let storage = StorageManager::new(&config)
-        .expect("Failed to initialize storage manager");
-    let encryption = EncryptionManager::new(&config)
-        .expect("Failed to initialize encryption manager");
-    
+    let storage = StorageManager::new(config).expect("Failed to initialize storage manager");
+    let encryption =
+        EncryptionManager::new(config).expect("Failed to initialize encryption manager");
+
     // Load connections from storage
     let storage_data = storage.load().unwrap_or_default();
     let mut connection_manager = ConnectionManager::new();
-    
+
     // Load connections into manager
     for stored_conn in &storage_data.connections {
         if let Ok(conn) = stored_conn.to_connection(&encryption) {
@@ -369,7 +423,7 @@ pub fn run() {
             // For now, just store the metadata
         }
     }
-    
+
     let app_state = AppState {
         connections: RwLock::new(connection_manager),
         query_executor: RwLock::new(QueryExecutor::new()),
@@ -377,23 +431,21 @@ pub fn run() {
         storage,
         encryption,
     };
-    
+
     tauri::Builder::default()
         .manage(app_state)
         .menu(create_menu())
-        .on_menu_event(|event| {
-            match event.menu_item_id() {
-                "quit" => {
-                    std::process::exit(0);
-                }
-                "about" => {
-                    let app = event.window().app_handle();
-                    tauri::async_runtime::spawn(async move {
-                        show_about_dialog(app).await;
-                    });
-                }
-                _ => {}
+        .on_menu_event(|event| match event.menu_item_id() {
+            "quit" => {
+                std::process::exit(0);
             }
+            "about" => {
+                let app = event.window().app_handle();
+                tauri::async_runtime::spawn(async move {
+                    show_about_dialog(app).await;
+                });
+            }
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             // Connection management
@@ -402,18 +454,15 @@ pub fn run() {
             get_connections,
             disconnect,
             delete_connection,
-            
             // Query execution
             execute_query,
             get_query_history,
             explain_query,
-            
             // ML model management
             list_ml_functions,
             list_models,
             get_model_info,
             delete_model,
-            
             // System
             get_system_info,
             save_settings,
@@ -429,15 +478,18 @@ pub fn run() {
 }
 
 fn create_menu() -> tauri::Menu {
-    use tauri::{Menu, MenuItem, Submenu, CustomMenuItem};
+    use tauri::{CustomMenuItem, Menu, MenuItem, Submenu};
 
     let quit = CustomMenuItem::new("quit", "Quit");
     let about = CustomMenuItem::new("about", "About");
-    
-    let app_menu = Submenu::new("Orbit Desktop", Menu::new()
-        .add_item(about)
-        .add_native_item(MenuItem::Separator)
-        .add_item(quit));
+
+    let app_menu = Submenu::new(
+        "Orbit Desktop",
+        Menu::new()
+            .add_item(about)
+            .add_native_item(MenuItem::Separator)
+            .add_item(quit),
+    );
 
     Menu::new().add_submenu(app_menu)
 }

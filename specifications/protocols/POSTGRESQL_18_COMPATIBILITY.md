@@ -229,29 +229,29 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 |---------|--------|-------|
 | SHOW | ✅ | Server parameters |
 | SET | ✅ | Session parameters |
-| RESET | ❌ | Reset parameters |
+| RESET | ✅ | Reset session parameters |
 | EXPLAIN | 🔶 | Basic support, no ANALYZE |
-| ANALYZE | ❌ | Statistics collection |
-| VACUUM | ❌ | Table maintenance |
-| REINDEX | ❌ | Index rebuilding |
-| CLUSTER | ❌ | Table clustering |
-| CHECKPOINT | ❌ | Force checkpoint |
-| DISCARD | ❌ | Discard session state |
+| ANALYZE | ✅ | Statistics collection parsing |
+| VACUUM | ✅ | Table maintenance parsing |
+| REINDEX | ✅ | Index rebuilding parsing |
+| CLUSTER | ✅ | Table clustering parsing |
+| CHECKPOINT | ✅ | Force checkpoint |
+| DISCARD | ✅ | Discard session state |
 | LOAD | ❌ | Load library |
 | REFRESH MATERIALIZED VIEW | ❌ | Mat view refresh |
 | IMPORT FOREIGN SCHEMA | ❌ | Foreign schema import |
-| LISTEN | ❌ | Notification listening |
-| UNLISTEN | ❌ | Stop listening |
-| NOTIFY | ❌ | Send notification |
-| PREPARE | ❌ | Prepared statements |
-| EXECUTE | ❌ | Execute prepared |
-| DEALLOCATE | ❌ | Deallocate prepared |
-| DECLARE | ❌ | Cursor declaration |
-| FETCH | ❌ | Fetch from cursor |
-| MOVE | ❌ | Move cursor |
-| CLOSE | ❌ | Close cursor |
-| CALL | ❌ | Procedure invocation |
-| DO | ❌ | Anonymous code block |
+| LISTEN | ✅ | Notification listening |
+| UNLISTEN | ✅ | Stop listening |
+| NOTIFY | ✅ | Send notification |
+| PREPARE | ✅ | Prepared statements |
+| EXECUTE | ✅ | Execute prepared |
+| DEALLOCATE | ✅ | Deallocate prepared |
+| DECLARE | ✅ | Cursor declaration |
+| FETCH | ✅ | Fetch from cursor |
+| MOVE | ✅ | Move cursor |
+| CLOSE | ✅ | Close cursor |
+| CALL | ✅ | Procedure invocation |
+| DO | ✅ | Anonymous code block |
 | VALUES | ✅ | Values expression |
 
 ---

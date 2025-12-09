@@ -1,5 +1,5 @@
 //! Persistent storage for connections, settings, and query history
-//! 
+//!
 //! This module handles saving and loading application data to/from disk
 //! using JSON files in the user's application data directory.
 
@@ -118,20 +118,23 @@ impl StorageManager {
             .as_ref()
             .map(|s| s.as_str())
             .unwrap_or("orbit-desktop");
-        
+
         let storage_dir = app_data_dir(config)
-            .ok_or_else(|| StorageError::ConfigError("Could not determine app data directory".to_string()))?
+            .ok_or_else(|| {
+                StorageError::ConfigError("Could not determine app data directory".to_string())
+            })?
             .join(app_name);
-        
+
         // Create directory if it doesn't exist
-        std::fs::create_dir_all(&storage_dir)
-            .map_err(|e| StorageError::IoError(format!("Failed to create storage directory: {}", e)))?;
-        
+        std::fs::create_dir_all(&storage_dir).map_err(|e| {
+            StorageError::IoError(format!("Failed to create storage directory: {}", e))
+        })?;
+
         let storage_file = storage_dir.join("storage.json");
-        
+
         info!("Storage directory: {:?}", storage_dir);
         info!("Storage file: {:?}", storage_file);
-        
+
         Ok(Self {
             storage_dir,
             storage_file,
@@ -149,34 +152,40 @@ impl StorageManager {
 
         let content = std::fs::read_to_string(&self.storage_file)
             .map_err(|e| StorageError::IoError(format!("Failed to read storage file: {}", e)))?;
-        
-        let storage: AppStorage = serde_json::from_str(&content)
-            .map_err(|e| StorageError::ParseError(format!("Failed to parse storage file: {}", e)))?;
-        
-        info!("Loaded storage with {} connections and {} query history entries", 
-              storage.connections.len(), 
-              storage.query_history.len());
-        
+
+        let storage: AppStorage = serde_json::from_str(&content).map_err(|e| {
+            StorageError::ParseError(format!("Failed to parse storage file: {}", e))
+        })?;
+
+        info!(
+            "Loaded storage with {} connections and {} query history entries",
+            storage.connections.len(),
+            storage.query_history.len()
+        );
+
         Ok(storage)
     }
 
     /// Save application storage to disk
     pub fn save(&self, storage: &AppStorage) -> Result<(), StorageError> {
-        let content = serde_json::to_string_pretty(storage)
-            .map_err(|e| StorageError::SerializeError(format!("Failed to serialize storage: {}", e)))?;
-        
+        let content = serde_json::to_string_pretty(storage).map_err(|e| {
+            StorageError::SerializeError(format!("Failed to serialize storage: {}", e))
+        })?;
+
         // Write to temporary file first, then rename (atomic write)
         let temp_file = self.storage_file.with_extension("tmp");
         std::fs::write(&temp_file, content)
             .map_err(|e| StorageError::IoError(format!("Failed to write storage file: {}", e)))?;
-        
+
         std::fs::rename(&temp_file, &self.storage_file)
             .map_err(|e| StorageError::IoError(format!("Failed to rename storage file: {}", e)))?;
-        
-        info!("Saved storage with {} connections and {} query history entries", 
-              storage.connections.len(), 
-              storage.query_history.len());
-        
+
+        info!(
+            "Saved storage with {} connections and {} query history entries",
+            storage.connections.len(),
+            storage.query_history.len()
+        );
+
         Ok(())
     }
 
@@ -208,13 +217,17 @@ pub enum StorageError {
 
 impl StoredConnection {
     /// Convert to Connection with password decryption
-    pub fn to_connection(&self, enc_manager: &crate::encryption::EncryptionManager) -> Result<Connection, StorageError> {
+    pub fn to_connection(
+        &self,
+        enc_manager: &crate::encryption::EncryptionManager,
+    ) -> Result<Connection, StorageError> {
+        use crate::connections::{ConnectionInfo, ConnectionStatus, ConnectionType};
         use chrono::DateTime;
-        use crate::connections::{ConnectionInfo, ConnectionType, ConnectionStatus};
 
         // Decrypt password if present
         let password = if let Some(encrypted) = &self.info.password_encrypted {
-            enc_manager.decrypt(encrypted)
+            enc_manager
+                .decrypt(encrypted)
                 .map_err(|e| StorageError::ParseError(format!("Failed to decrypt password: {}", e)))
                 .ok()
         } else {
@@ -231,7 +244,12 @@ impl StoredConnection {
             "AQL" => ConnectionType::AQL,
             "FlightSQL" => ConnectionType::FlightSQL,
             "OrbitWire" => ConnectionType::OrbitWire,
-            _ => return Err(StorageError::ParseError(format!("Unknown connection type: {}", self.info.connection_type))),
+            _ => {
+                return Err(StorageError::ParseError(format!(
+                    "Unknown connection type: {}",
+                    self.info.connection_type
+                )))
+            }
         };
 
         Ok(Connection {
@@ -252,7 +270,9 @@ impl StoredConnection {
             created_at: DateTime::parse_from_rfc3339(&self.created_at)
                 .map(|dt| dt.with_timezone(&chrono::Utc))
                 .unwrap_or_else(|_| chrono::Utc::now()),
-            last_used: self.last_used.as_ref()
+            last_used: self
+                .last_used
+                .as_ref()
                 .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
                 .map(|dt| dt.with_timezone(&chrono::Utc)),
             query_count: self.query_count,
@@ -262,11 +282,15 @@ impl StoredConnection {
 
 impl Connection {
     /// Convert to StoredConnection with password encryption
-    pub fn to_stored(&self, enc_manager: &crate::encryption::EncryptionManager) -> Result<StoredConnection, StorageError> {
+    pub fn to_stored(
+        &self,
+        enc_manager: &crate::encryption::EncryptionManager,
+    ) -> Result<StoredConnection, StorageError> {
         // Encrypt password if present
         let password_encrypted = if let Some(password) = &self.info.password {
-            Some(enc_manager.encrypt(password)
-                .map_err(|e| StorageError::SerializeError(format!("Failed to encrypt password: {}", e)))?)
+            Some(enc_manager.encrypt(password).map_err(|e| {
+                StorageError::SerializeError(format!("Failed to encrypt password: {}", e))
+            })?)
         } else {
             None
         };
@@ -282,7 +306,7 @@ impl Connection {
             crate::connections::ConnectionType::FlightSQL => "FlightSQL",
             crate::connections::ConnectionType::OrbitWire => "OrbitWire",
         };
-        
+
         Ok(StoredConnection {
             id: self.id.clone(),
             info: StoredConnectionInfo {
@@ -303,4 +327,3 @@ impl Connection {
         })
     }
 }
-

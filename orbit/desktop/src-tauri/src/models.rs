@@ -94,7 +94,7 @@ impl ModelManager {
     pub fn new() -> Self {
         ModelManager
     }
-    
+
     pub async fn get_models(&self, connection_id: &str) -> Result<Vec<MLModel>, String> {
         // Return sample ML models
         let models = vec![
@@ -106,7 +106,11 @@ impl ModelManager {
                 accuracy: Some(0.92),
                 created_at: "2024-01-15T10:30:00Z".to_string(),
                 last_trained: Some("2024-01-20T15:45:00Z".to_string()),
-                features: vec!["age".to_string(), "income".to_string(), "credit_score".to_string()],
+                features: vec![
+                    "age".to_string(),
+                    "income".to_string(),
+                    "credit_score".to_string(),
+                ],
                 target: Some("approved".to_string()),
                 metadata: std::collections::HashMap::new(),
             },
@@ -118,22 +122,28 @@ impl ModelManager {
                 accuracy: None,
                 created_at: "2024-01-22T08:15:00Z".to_string(),
                 last_trained: None,
-                features: vec!["tenure".to_string(), "monthly_charges".to_string(), "contract_type".to_string()],
+                features: vec![
+                    "tenure".to_string(),
+                    "monthly_charges".to_string(),
+                    "contract_type".to_string(),
+                ],
                 target: Some("churn".to_string()),
                 metadata: std::collections::HashMap::new(),
             },
         ];
-        
+
         Ok(models)
     }
-    
+
     pub async fn get_ml_functions(&self) -> Result<Vec<MLFunction>, String> {
         // Return sample ML functions
         let functions = vec![
             MLFunction {
                 name: "ML_XGBOOST".to_string(),
                 category: "Boosting".to_string(),
-                description: "XGBoost gradient boosting algorithm for classification and regression".to_string(),
+                description:
+                    "XGBoost gradient boosting algorithm for classification and regression"
+                        .to_string(),
                 parameters: vec![
                     FunctionParameter {
                         name: "features".to_string(),
@@ -168,12 +178,14 @@ impl ModelManager {
                         description: "Target column for prediction".to_string(),
                     },
                 ],
-                example: "SELECT ML_LIGHTGBM(ARRAY[feature1, feature2], target) FROM data;".to_string(),
+                example: "SELECT ML_LIGHTGBM(ARRAY[feature1, feature2], target) FROM data;"
+                    .to_string(),
             },
             MLFunction {
                 name: "ML_CATBOOST".to_string(),
                 category: "Boosting".to_string(),
-                description: "CatBoost gradient boosting with categorical feature support".to_string(),
+                description: "CatBoost gradient boosting with categorical feature support"
+                    .to_string(),
                 parameters: vec![
                     FunctionParameter {
                         name: "features".to_string(),
@@ -188,23 +200,25 @@ impl ModelManager {
                         description: "Target column for prediction".to_string(),
                     },
                 ],
-                example: "SELECT ML_CATBOOST(ARRAY[cat_feature, num_feature], outcome) FROM dataset;".to_string(),
+                example:
+                    "SELECT ML_CATBOOST(ARRAY[cat_feature, num_feature], outcome) FROM dataset;"
+                        .to_string(),
             },
         ];
-        
+
         Ok(functions)
     }
-    
+
     pub async fn train_model(&self, _request: TrainModelRequest) -> Result<MLModel, String> {
         // Placeholder implementation
         Ok(MLModel::default())
     }
-    
+
     pub async fn delete_model(&self, _connection_id: &str, _model_id: &str) -> Result<(), String> {
         // Placeholder implementation
         Ok(())
     }
-    
+
     pub async fn predict(&self, _request: PredictionRequest) -> Result<PredictionResult, String> {
         // Placeholder implementation
         Ok(PredictionResult {
@@ -213,8 +227,12 @@ impl ModelManager {
             model_id: String::new(),
         })
     }
-    
-    pub async fn get_model_info(&self, _connection_id: &str, _model_name: &str) -> Result<MLModel, String> {
+
+    pub async fn get_model_info(
+        &self,
+        _connection_id: &str,
+        _model_name: &str,
+    ) -> Result<MLModel, String> {
         // Placeholder implementation
         Ok(MLModel::default())
     }
