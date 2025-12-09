@@ -2136,6 +2136,25 @@ impl SqlExecutor {
                     .collect();
                 format!("({})", values.join(","))
             }
+            
+            // Object Identifier types
+            SqlValue::Oid(oid)
+            | SqlValue::Regclass(oid)
+            | SqlValue::Regcollation(oid)
+            | SqlValue::Regconfig(oid)
+            | SqlValue::Regdictionary(oid)
+            | SqlValue::Regnamespace(oid)
+            | SqlValue::Regoper(oid)
+            | SqlValue::Regoperator(oid)
+            | SqlValue::Regproc(oid)
+            | SqlValue::Regprocedure(oid)
+            | SqlValue::Regrole(oid)
+            | SqlValue::Regtype(oid) => oid.to_string(),
+            
+            // PostgreSQL-specific types
+            SqlValue::PgLsn(lsn) => format!("{:X}/{:X}", lsn >> 32, lsn & 0xFFFFFFFF),
+            SqlValue::PgSnapshot(s) => s.clone(),
+            
             SqlValue::Custom { type_name, data } => format!("{}:{}", type_name, hex::encode(data)),
         }
     }
@@ -4369,6 +4388,25 @@ impl SqlExecutor {
                 Some(dim) => format!("sparsevec({dim})"),
                 None => "sparsevec".to_string(),
             },
+            
+            // Object Identifier types
+            SqlType::Oid => "oid".to_string(),
+            SqlType::Regproc => "regproc".to_string(),
+            SqlType::Regprocedure => "regprocedure".to_string(),
+            SqlType::Regoper => "regoper".to_string(),
+            SqlType::Regoperator => "regoperator".to_string(),
+            SqlType::Regclass => "regclass".to_string(),
+            SqlType::Regtype => "regtype".to_string(),
+            SqlType::Regrole => "regrole".to_string(),
+            SqlType::Regnamespace => "regnamespace".to_string(),
+            SqlType::Regconfig => "regconfig".to_string(),
+            SqlType::Regdictionary => "regdictionary".to_string(),
+            SqlType::Regcollation => "regcollation".to_string(),
+            
+            // PostgreSQL-specific types
+            SqlType::PgLsn => "pg_lsn".to_string(),
+            SqlType::PgSnapshot => "pg_snapshot".to_string(),
+            
             SqlType::Custom { type_name } => type_name.clone(),
             SqlType::Composite { type_name } => type_name.clone(),
             SqlType::Range { element_type } => {

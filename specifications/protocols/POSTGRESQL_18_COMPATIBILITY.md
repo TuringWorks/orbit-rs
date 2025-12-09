@@ -459,31 +459,31 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 
 | Type | Status | OID | Notes |
 |------|--------|-----|-------|
-| domain (user-defined) | ❌ | - | CREATE DOMAIN |
+| domain (user-defined) | ✅ | - | CREATE DOMAIN |
 
 ### Object Identifier Types
 
 | Type | Status | OID | Notes |
 |------|--------|-----|-------|
-| oid | ❌ | 26 | Object identifier |
-| regclass | ❌ | 2205 | Relation name |
-| regcollation | ❌ | 4191 | Collation name |
-| regconfig | ❌ | 3734 | Text search config |
-| regdictionary | ❌ | 3769 | Text search dictionary |
-| regnamespace | ❌ | 4089 | Schema name |
-| regoper | ❌ | 2203 | Operator name |
-| regoperator | ❌ | 2204 | Operator with args |
-| regproc | ❌ | 24 | Function name |
-| regprocedure | ❌ | 2202 | Function with args |
-| regrole | ❌ | 4096 | Role name |
-| regtype | ❌ | 2206 | Type name |
+| oid | ✅ | 26 | Object identifier |
+| regclass | ✅ | 2205 | Relation name |
+| regcollation | ✅ | 4191 | Collation name |
+| regconfig | ✅ | 3734 | Text search config |
+| regdictionary | ✅ | 3769 | Text search dictionary |
+| regnamespace | ✅ | 4089 | Schema name |
+| regoper | ✅ | 2203 | Operator name |
+| regoperator | ✅ | 2204 | Operator with args |
+| regproc | ✅ | 24 | Function name |
+| regprocedure | ✅ | 2202 | Function with args |
+| regrole | ✅ | 4096 | Role name |
+| regtype | ✅ | 2206 | Type name |
 
 ### PostgreSQL-Specific Types
 
 | Type | Status | OID | Notes |
 |------|--------|-----|-------|
-| pg_lsn | ❌ | 3220 | Log sequence number |
-| pg_snapshot | ❌ | 5038 | Transaction snapshot |
+| pg_lsn | ✅ | 3220 | Log sequence number |
+| pg_snapshot | ✅ | 5038 | Transaction snapshot |
 
 ### Vector Types (pgvector Extension)
 
