@@ -1,6 +1,6 @@
 # PostgreSQL 18 Compatibility Status
 
-**Last Updated**: 2025-12-08
+**Last Updated**: 2025-12-09
 **Purpose**: Track OrbitRS implementation status of PostgreSQL 18 features
 **Reference**: See [postgresql18-reference-rust.md](./Protocol-specs/postgresql18-reference-rust.md) for full PostgreSQL 18 specification
 
@@ -277,7 +277,27 @@ WHEN NOT MATCHED THEN
 
 ---
 
-### 2.6 Sequence Functions
+### 2.7 Advanced Function Support (String, Date/Time, Statistics)
+
+**Status**: ✅ Implemented
+
+OrbitRS now supports an extended set of PostgreSQL functions for advanced string manipulation, date/time operations, and statistical analysis.
+
+**Implemented Functions**:
+
+| Category | Functions | Status |
+|----------|-----------|--------|
+| **String/Regex** | `regexp_match`, `regexp_matches`, `regexp_replace`, `regexp_split_to_array`, `regexp_like`, `regexp_count`, `regexp_instr`, `regexp_substr` | ✅ |
+| **String Utils** | `string_to_array`, `quote_nullable`, `overlay` | ✅ |
+| **Cryptographic** | `sha224`, `sha256`, `sha384`, `sha512` | ✅ |
+| **Date/Time** | `make_date`, `make_time`, `make_timestamp`, `localtime`, `clock_timestamp`, `age`, `to_char` | ✅ |
+| **Statistics** | `covar_pop`, `covar_samp`, `corr`, `regr_slope`, `regr_intercept`, `regr_r2`, `regr_count`, `regr_avgx`, `regr_avgy`, `regr_sxx`, `regr_syy`, `regr_sxy` | ✅ |
+
+**Implementation Location**: `orbit/server/src/protocols/postgres_wire/sql/expression_evaluator.rs`
+
+---
+
+### 2.8 Sequence Functions
 
 **Status**: ✅ Fully Implemented
 
@@ -487,6 +507,7 @@ cargo test -p orbit-server -- generated_column
 
 | Date | Changes |
 |------|---------|
+| 2025-12-09 | Implemented advanced string/regex (regexp_*, sha*), date/time (make_*, age), and statistical (covar, corr, regr) functions |
 | 2025-12-08 | Added sequence functions (nextval, currval, setval, lastval) with SequenceAccessor trait |
 | 2025-12-08 | Added math functions (cbrt, div, factorial, gcd, lcm, sign) |
 | 2025-12-08 | Added 17 sequence-related tests |

@@ -1,6 +1,6 @@
 # OrbitRS Protocol Implementation Status
 
-**Last Updated**: 2025-12-08
+**Last Updated**: 2025-12-09
 **Orbit-RS Version**: 0.1.0
 **Total Tests**: 2,560+ passing
 **Compiler Warnings**: 0 (zero-warnings policy compliant)
@@ -15,8 +15,7 @@ This document provides the authoritative status of protocol implementations in O
 |----------|------------|--------|-------|----------|
 | **OrbitQL** | 95% | Production Ready | 50+ | Parser validation, Edge cases |
 | **Redis RESP** | 60% | Production Ready | 190+ | Sorted Sets, Lua scripting |
-| **PostgreSQL** | 90% | Production Ready | 460+ | User management execution |
-| **PostgreSQL** | 72% | Production Ready | 460+ | User management, cursors |
+| **PostgreSQL** | 75% | Production Ready | 460+ | User management, cursors |
 | **MySQL** | 51% | Active Development | 35+ | Binary protocol, replication |
 | **CQL (Cassandra)** | 55% | Active Development | 51+ | UDTs, Materialized views |
 | **Cypher/Bolt** | 85% | Production Ready | 105+ | DISTINCT, subqueries |
@@ -24,7 +23,7 @@ This document provides the authoritative status of protocol implementations in O
 | **MongoDB** | 50% | Early Development | 6+ | Aggregation stages, Change streams |
 | **REST/HTTP** | 40% | Active Development | - | Authentication |
 
-### Recent Improvements (2025-12-08)
+### Recent Improvements (2025-12-09)
 - **Full-Text Search (Cross-Protocol)**:
   - PostgreSQL FTS functions: to_tsvector, to_tsquery, plainto_tsquery, phraseto_tsquery, websearch_to_tsquery ✅
   - PostgreSQL FTS operators: @@ (match), @> (contains), <@ (contained by), || (concat), && (and), !! (not), <-> (followed by) ✅
@@ -60,7 +59,7 @@ This document provides the authoritative status of protocol implementations in O
 - **PostgreSQL**: Sequence functions (nextval, currval, setval, lastval) ✅, Math functions (cbrt, div, factorial, gcd, lcm, sign) ✅
 - **PostgreSQL (PG18)**: NegotiateProtocolVersion ✅, Temporal constraints (WITHOUT OVERLAPS) ✅, Variable-length cancel keys ✅
 - **PostgreSQL (PG18)**: UUIDv7 functions ✅, GENERATED columns (STORED/VIRTUAL) ✅, OLD/NEW in RETURNING ✅
-- **PostgreSQL**: RETURNING clause ✅, EXTRACT/DATE_TRUNC functions ✅, Window frame modes (ROWS/RANGE/GROUPS) ✅, EXCLUDE clause ✅
+- **PostgreSQL**: RETURNING clause ✅, Advanced String/Regex ✅, Date/Time ✅, Statistics ✅, Window frame modes ✅
 - **Redis**: Full MULTI/EXEC/DISCARD/WATCH/UNWATCH transaction support ✅ (100% coverage)
 - **Cypher**: Implicit GROUP BY with aggregations in RETURN and WITH clauses ✅
 
@@ -220,8 +219,7 @@ OrbitQL supports two wire protocols for client-server communication:
 
 ---
 
-## 2. PostgreSQL Wire Protocol (85% Complete)
-## 2. PostgreSQL Wire Protocol (72% Complete)
+## 2. PostgreSQL Wire Protocol (75% Complete)
 
 ### Wire Protocol Support
 
@@ -660,6 +658,7 @@ OrbitQL supports two wire protocols for client-server communication:
 
 | Date | Changes |
 |------|---------|
+| 2025-12-09 | **PostgreSQL**: Implemented advanced string (regex/sha), date/time (make_*/age), and statistical (covar/corr/regr) functions |
 | 2025-12-08 | **OrbitQL Major Update**: Added SurrealDB-style DEFINE/REMOVE, Control flow (IF/FOR/LET/THROW), Vector KNN, MATCH, SAVEPOINT support |
 | 2025-12-08 | Added PostgreSQL sequence functions (nextval, currval, setval, lastval) and math functions (cbrt, div, factorial, gcd, lcm, sign) |
 | 2025-12-07 | **Major Update**: Tier 1 features completed - PostgreSQL RETURNING/Date-Time/Window frames, Redis transactions, Cypher GROUP BY |

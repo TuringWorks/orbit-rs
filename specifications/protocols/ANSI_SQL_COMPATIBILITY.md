@@ -2,7 +2,7 @@
 
 **Target**: SQL:2023 (ISO/IEC 9075:2023) Standard Compliance
 **Reference**: https://www.iso.org/standard/76583.html
-**Last Updated**: 2025-12-08
+**Last Updated**: 2025-12-09
 **Current Estimated Coverage**: ~70%
 
 ---
@@ -479,20 +479,20 @@ This document specifies OrbitRS's compliance with the ANSI/ISO SQL standard. The
 |---------|--------|-------|
 | T611-01: RANK | ✅ | Full support |
 | T611-02: DENSE_RANK | ✅ | Full support |
-| T611-03: PERCENT_RANK | ❌ | Not implemented |
-| T611-04: CUME_DIST | ❌ | Not implemented |
+| T611-03: PERCENT_RANK | ✅ | Full support |
+| T611-04: CUME_DIST | ✅ | Full support |
 | T611-05: ROW_NUMBER | ✅ | Full support |
 
 ### T612: Advanced OLAP Operations
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| T612-01: NTILE | ❌ | Not implemented |
-| T612-02: LAG | 🔶 | Basic support |
-| T612-03: LEAD | 🔶 | Basic support |
-| T612-04: FIRST_VALUE | ❌ | Not implemented |
-| T612-05: LAST_VALUE | ❌ | Not implemented |
-| T612-06: NTH_VALUE | ❌ | Not implemented |
+| T612-01: NTILE | ✅ | Full support |
+| T612-02: LAG | ✅ | Full support |
+| T612-03: LEAD | ✅ | Full support |
+| T612-04: FIRST_VALUE | ✅ | Full support |
+| T612-05: LAST_VALUE | ✅ | Full support |
+| T612-06: NTH_VALUE | ✅ | Full support |
 
 ---
 
