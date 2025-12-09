@@ -253,8 +253,8 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | avg() / AVG | ✅ | Average |
 | min() / MIN | ✅ | Minimum |
 | max() / MAX | ✅ | Maximum |
-| ARRAY_AGG | ❌ | Aggregate to array |
-| STRING_AGG | ❌ | Concatenate strings |
+| ARRAY_AGG | ✅ | Aggregate to array |
+| STRING_AGG | ✅ | Concatenate strings |
 | array::group() | ❌ | Group to array |
 | string::join() | ❌ | Join strings |
 

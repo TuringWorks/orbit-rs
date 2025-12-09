@@ -1,27 +1,31 @@
 # ArangoDB AQL Compatibility Specification
 
-**Target**: ArangoDB AQL (ArangoDB Query Language) 3.x
+**Target**: ArangoDB AQL (ArangoDB Query Language) 3.10+
 **Reference**: https://www.arangodb.com/docs/stable/aql/
-**Last Updated**: 2025-12-08
+**Last Updated**: 2025-12-09
 **Current Estimated Coverage**: ~50%
 
 ---
 
 ## Overview
 
-This document specifies OrbitRS's compatibility with ArangoDB's AQL (ArangoDB Query Language). AQL is a declarative query language for multi-model databases, supporting document, graph, and key-value data models.
+This document specifies OrbitRS's compatibility with ArangoDB's AQL (ArangoDB Query Language). AQL is a declarative query language for multi-model databases, supporting document, graph, and key-value data models. The goal is to support the full AQL feature set to enable OrbitRS to serve as a drop-in replacement for ArangoDB in most use cases.
 
 ## Table of Contents
 
-1. [AQL Operations](#aql-operations)
+1. [High-Level Operations](#high-level-operations)
 2. [Data Types](#data-types)
-3. [Functions](#functions)
-4. [Graph Operations](#graph-operations)
-5. [Implementation Status](#implementation-status)
+3. [Operators](#operators)
+4. [Functions](#functions)
+5. [Graph Operations](#graph-operations)
+6. [System Features](#system-features)
+7. [Client Compatibility](#client-compatibility)
 
 ---
 
-## AQL Operations
+## High-Level Operations
+
+AQL uses high-level operations (statements) to manipulate data. Note that AQL does not strictly distinguish between DDL and DML in the same way SQL does; many operations can be mixed.
 
 ### Legend
 - ✅ **Implemented** - Fully functional
@@ -32,65 +36,35 @@ This document specifies OrbitRS's compatibility with ArangoDB's AQL (ArangoDB Qu
 
 | Operation | Status | Notes |
 |-----------|--------|-------|
-| FOR | ✅ | Iterate over collections/arrays |
-| RETURN | ✅ | Project results |
-| FILTER | ✅ | Filter results |
-| SORT | ✅ | Sort results |
-| LIMIT | ✅ | Slice results |
-| LET | ✅ | Assign variables |
-| COLLECT | 🔶 | Group results |
-| WINDOW | ❌ | Window operations |
-| WITH | ❌ | Collection hints |
+| FOR | ✅ | Iterate over collections, arrays, or ranges (`1..10`) |
+| RETURN | ✅ | Project results (`RETURN doc`, `RETURN { a: doc.a }`) |
+| FILTER | ✅ | Filter results (`FILTER doc.age > 10`) |
+| SORT | ✅ | Sort results (`SORT doc.name ASC, doc.age DESC`) |
+| LIMIT | ✅ | Slice results (`LIMIT 10`, `LIMIT 5, 10`) |
+| LET | ✅ | Assign variables (`LET a = 1`) |
+| COLLECT | 🔶 | Group results (`COLLECT city = doc.city WITH COUNT INTO length`). Missing `AGGREGATE` syntax. |
+| WINDOW | ❌ | Window operations (aggregation over sliding windows) |
+| WITH | ❌ | Collection hints for locking/loading |
+| DISTINCT | ✅ | Unique results (`FOR doc IN ... RETURN DISTINCT doc`) |
 
 ### Data Modification Operations
 
 | Operation | Status | Notes |
 |-----------|--------|-------|
-| INSERT | ✅ | Insert documents |
-| UPDATE | ✅ | Update documents |
-| REPLACE | ✅ | Replace documents |
-| REMOVE | ✅ | Remove documents |
-| UPSERT | ✅ | Insert or update |
+| INSERT | ✅ | Insert documents (`INSERT { ... } INTO collection`) |
+| UPDATE | ✅ | Update documents (`UPDATE key WITH { ... } IN collection`) |
+| REPLACE | ✅ | Replace documents (`REPLACE key WITH { ... } IN collection`) |
+| REMOVE | ✅ | Remove documents (`REMOVE key IN collection`) |
+| UPSERT | ✅ | Insert or update (`UPSERT search INSERT insert UPDATE update IN collection`) |
 
-### Subqueries
+### Options and Hints
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Subquery in FOR | ✅ | Nested iteration |
-| Subquery in LET | ✅ | Variable assignment |
-| Subquery in FILTER | ✅ | Filtering |
-| Subquery in RETURN | ✅ | Projection |
-
-### Array Operations
-
-| Operation | Status | Notes |
-|-----------|--------|-------|
-| Array expansion ([*]) | ✅ | Expand arrays |
-| Array filtering ([? expr]) | ✅ | Filter arrays |
-| Array projection ([* expr]) | ✅ | Transform arrays |
-| Array slicing | ✅ | Extract subarray |
-| Array operators (ANY, ALL, NONE) | ✅ | Quantifiers |
-
-### Graph Traversal
-
-| Operation | Status | Notes |
-|-----------|--------|-------|
-| FOR v IN 1..3 OUTBOUND | 🔶 | Outbound traversal |
-| FOR v IN 1..3 INBOUND | 🔶 | Inbound traversal |
-| FOR v IN 1..3 ANY | 🔶 | Any direction |
-| SHORTEST_PATH | ❌ | Shortest path |
-| K_SHORTEST_PATHS | ❌ | K shortest paths |
-| ALL_SHORTEST_PATHS | ❌ | All shortest paths |
-| K_PATHS | ❌ | K paths |
-| PRUNE | ❌ | Prune traversal |
-
-### Index Hints
-
-| Hint | Status | Notes |
-|------|--------|-------|
-| OPTIONS {indexHint: "..."} | ❌ | Index selection |
-| OPTIONS {forceIndexHint: true} | ❌ | Force index |
-| OPTIONS {disableIndex: true} | ❌ | Disable index |
+| OPTIONS { ... } | ❌ | General options clause for operations |
+| indexHint | ❌ | Index selection hint |
+| forceIndexHint | ❌ | Force index usage |
+| maxIterations | ❌ | Limit traversal iterations |
 
 ---
 
@@ -101,26 +75,81 @@ This document specifies OrbitRS's compatibility with ArangoDB's AQL (ArangoDB Qu
 | Type | Status | Notes |
 |------|--------|-------|
 | null | ✅ | Null value |
-| boolean | ✅ | true/false |
-| number | ✅ | 64-bit IEEE 754 |
-| string | ✅ | UTF-8 strings |
+| boolean | ✅ | `true` / `false` |
+| number | ✅ | 64-bit IEEE 754 double precision |
+| string | ✅ | UTF-8 encoded strings |
 
 ### Compound Types
 
 | Type | Status | Notes |
 |------|--------|-------|
-| array | ✅ | Ordered list |
-| object | ✅ | Key-value pairs |
+| array | ✅ | Ordered list of values (`[1, 2, 3]`) |
+| object | ✅ | Unordered key-value pairs (`{ "a": 1 }`) |
 
-### Special Values
+### System Attributes
 
-| Value | Status | Notes |
-|-------|--------|-------|
-| _key | ✅ | Document key |
-| _id | ✅ | Document ID |
-| _rev | ✅ | Revision ID |
-| _from | ✅ | Edge source |
-| _to | ✅ | Edge target |
+ArangoDB documents have special system attributes starting with `_`.
+
+| Attribute | Status | Notes |
+|-----------|--------|-------|
+| _key | ✅ | Primary key (string), unique within collection |
+| _id | ✅ | Document ID (`collection/_key`), unique within database |
+| _rev | ✅ | Revision ID (string) |
+| _from | ✅ | Source document ID (edges only) |
+| _to | ✅ | Target document ID (edges only) |
+
+---
+
+## Operators
+
+### Arithmetic Operators
+
+| Operator | Status | Description |
+|----------|--------|-------------|
+| + | ✅ | Addition |
+| - | ✅ | Subtraction |
+| * | ✅ | Multiplication |
+| / | ✅ | Division |
+| % | ✅ | Modulo |
+
+### Comparison Operators
+
+| Operator | Status | Description |
+|----------|--------|-------------|
+| == | ✅ | Equal |
+| != | ✅ | Not equal |
+| < | ✅ | Less than |
+| <= | ✅ | Less than or equal |
+| > | ✅ | Greater than |
+| >= | ✅ | Greater than or equal |
+| IN | ✅ | Test if value is in array |
+| NOT IN | ✅ | Test if value is not in array |
+| LIKE | ✅ | String pattern matching (`%`, `_`) |
+| =~ | ✅ | Regex match |
+| !~ | ✅ | Negated regex match |
+
+### Logical Operators
+
+| Operator | Status | Description |
+|----------|--------|-------------|
+| AND / && | ✅ | Logical AND |
+| OR / \|\| | ✅ | Logical OR |
+| NOT / ! | ✅ | Logical NOT |
+
+### Range Operators
+
+| Operator | Status | Description |
+|----------|--------|-------------|
+| .. | ✅ | Configure range (`0..10`) |
+
+### Array Operators
+
+| Operator | Status | Description |
+|----------|--------|-------------|
+| [*] | ✅ | Array expansion (all elements) |
+| [**] | ❌ | Array expansion (recursive/flatten) |
+| [? filter] | ✅ | Inline array filter |
+| [limit] | ✅ | Inline array slicing/access |
 
 ---
 
@@ -130,365 +159,285 @@ This document specifies OrbitRS's compatibility with ArangoDB's AQL (ArangoDB Qu
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| CONCAT() | ✅ | Concatenate strings |
-| CONCAT_SEPARATOR() | ✅ | Concat with separator |
-| CHAR_LENGTH() | ✅ | Character length |
-| CONTAINS() | ✅ | Contains substring |
-| FIND_FIRST() | ✅ | Find first occurrence |
-| FIND_LAST() | ✅ | Find last occurrence |
-| LEFT() | ✅ | Left substring |
-| RIGHT() | ✅ | Right substring |
-| LOWER() | ✅ | Lowercase |
-| UPPER() | ✅ | Uppercase |
-| LTRIM() | ✅ | Left trim |
-| RTRIM() | ✅ | Right trim |
-| TRIM() | ✅ | Trim whitespace |
-| REVERSE() | ✅ | Reverse string |
-| SPLIT() | ✅ | Split string |
-| SUBSTITUTE() | ✅ | Replace substring |
-| SUBSTRING() | ✅ | Extract substring |
-| LIKE() | ✅ | Pattern matching |
-| REGEX_TEST() | ✅ | Regex test |
-| REGEX_REPLACE() | ✅ | Regex replace |
-| REGEX_SPLIT() | ✅ | Regex split |
-| REGEX_MATCHES() | ✅ | Regex matches |
+| CHAR_LENGTH(str) | ✅ | Length in characters |
+| CONCAT(str1, str2, ...) | ✅ | Concatenate strings |
+| CONCAT_SEPARATOR(sep, str1, ...) | ✅ | Concatenate with separator |
+| CONTAINS(text, search) | ✅ | Check if search is in text |
+| FIND_FIRST(text, search) | ✅ | Index of first occurrence |
+| FIND_LAST(text, search) | ✅ | Index of last occurrence |
+| JSON_PARSE(str) | ❌ | Parse JSON string |
+| JSON_STRINGIFY(val) | ❌ | Serialize to JSON string |
+| LEFT(str, n) | ✅ | Left n characters |
+| LENGTH(str) | ✅ | Byte length (alias for implementation) |
+| LIKE(text, pattern) | ✅ | Pattern matching |
+| LOWER(str) | ✅ | Convert to lowercase |
+| LTRIM(str) | ✅ | Trim left whitespace |
+| MD5(text) | ✅ | Calculate MD5 hash |
+| RANDOM_TOKEN(length) | ❌ | Generate random token |
+| REGEX_MATCHES(text, regex) | ✅ | Return matches |
+| REGEX_REPLACE(text, regex, rep) | ✅ | Replace matches |
+| REGEX_SPLIT(text, regex) | ✅ | Split by regex |
+| REGEX_TEST(text, regex) | ✅ | Test regex match |
+| REVERSE(str) | ✅ | Reverse string |
+| RIGHT(str, n) | ✅ | Right n characters |
+| RTRIM(str) | ✅ | Trim right whitespace |
+| SHA1(text) | ✅ | SHA1 hash |
+| SHA256(text) | ✅ | SHA256 hash |
+| SHA512(text) | ✅ | SHA512 hash |
+| SPLIT(text, separator) | ✅ | Split string |
+| SUBSTITUTE(text, search, replace) | ✅ | Replace substring |
+| SUBSTRING(text, offset, length) | ✅ | Extract substring |
+| TO_BASE64(text) | ❌ | Encode base64 |
+| TO_HEX(val) | ❌ | Convert to hex |
+| TRIM(str) | ✅ | Trim whitespace |
+| UPPER(str) | ✅ | Convert to uppercase |
+| UUID() | ✅ | Generate UUID |
 
 ### Numeric Functions
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| ABS() | ✅ | Absolute value |
-| ACOS() | ✅ | Arc cosine |
-| ASIN() | ✅ | Arc sine |
-| ATAN() | ✅ | Arc tangent |
-| ATAN2() | ✅ | Arc tangent 2 |
-| AVERAGE() | ✅ | Average |
-| CEIL() | ✅ | Ceiling |
-| COS() | ✅ | Cosine |
-| DEGREES() | ✅ | Radians to degrees |
-| EXP() | ✅ | Exponential |
-| EXP2() | ✅ | Base-2 exponential |
-| FLOOR() | ✅ | Floor |
-| LOG() | ✅ | Natural logarithm |
-| LOG2() | ✅ | Base-2 logarithm |
-| LOG10() | ✅ | Base-10 logarithm |
-| MAX() | ✅ | Maximum |
-| MEDIAN() | ✅ | Median |
-| MIN() | ✅ | Minimum |
-| PERCENTILE() | ✅ | Percentile |
+| ABS(num) | ✅ | Absolute value |
+| ACOS(num) | ✅ | Arc cosine |
+| ASIN(num) | ✅ | Arc sine |
+| ATAN(num) | ✅ | Arc tangent |
+| ATAN2(y, x) | ✅ | Arc tangent 2 |
+| AVERAGE(arr) | ✅ | Average of array values |
+| CEIL(num) | ✅ | Ceiling |
+| COS(num) | ✅ | Cosine |
+| DEGREES(rad) | ✅ | Radians to degrees |
+| EXP(num) | ✅ | Exponential `e^num` |
+| EXP2(num) | ✅ | `2^num` |
+| FLOOR(num) | ✅ | Floor |
+| LOG(num) | ✅ | Natural logarithm |
+| LOG2(num) | ✅ | Base-2 logarithm |
+| LOG10(num) | ✅ | Base-10 logarithm |
+| MAX(arr) | ✅ | Maximum value |
+| MEDIAN(arr) | ✅ | Median value |
+| MIN(arr) | ✅ | Minimum value |
+| PERCENTILE(arr, p) | ✅ | p-th percentile |
 | PI() | ✅ | Pi constant |
-| POW() | ✅ | Power |
-| RADIANS() | ✅ | Degrees to radians |
-| RAND() | ✅ | Random number |
-| RANGE() | ✅ | Number range |
-| ROUND() | ✅ | Round |
-| SIN() | ✅ | Sine |
-| SQRT() | ✅ | Square root |
-| STDDEV_POPULATION() | ✅ | Population std dev |
-| STDDEV_SAMPLE() | ✅ | Sample std dev |
-| SUM() | ✅ | Sum |
-| TAN() | ✅ | Tangent |
-| VARIANCE_POPULATION() | ✅ | Population variance |
-| VARIANCE_SAMPLE() | ✅ | Sample variance |
+| POW(base, exp) | ✅ | Power |
+| RADIANS(deg) | ✅ | Degrees to radians |
+| RAND() | ✅ | Random number [0, 1) |
+| RANGE(start, end, step) | ✅ | Generate range array |
+| ROUND(num) | ✅ | Round to nearest integer |
+| SIN(num) | ✅ | Sine |
+| SQRT(num) | ✅ | Square root |
+| STDDEV_POPULATION(arr) | ✅ | Population standard deviation |
+| STDDEV_SAMPLE(arr) | ✅ | Sample standard deviation |
+| SUM(arr) | ✅ | Sum values |
+| TAN(num) | ✅ | Tangent |
+| VARIANCE_POPULATION(arr) | ✅ | Population variance |
+| VARIANCE_SAMPLE(arr) | ✅ | Sample variance |
 
 ### Date Functions
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| DATE_NOW() | ✅ | Current timestamp |
-| DATE_ISO8601() | ✅ | Format as ISO 8601 |
-| DATE_TIMESTAMP() | ✅ | Unix timestamp |
-| IS_DATESTRING() | ✅ | Check date string |
-| DATE_DAYOFWEEK() | ✅ | Day of week |
-| DATE_YEAR() | ✅ | Extract year |
-| DATE_MONTH() | ✅ | Extract month |
-| DATE_DAY() | ✅ | Extract day |
-| DATE_HOUR() | ✅ | Extract hour |
-| DATE_MINUTE() | ✅ | Extract minute |
-| DATE_SECOND() | ✅ | Extract second |
-| DATE_MILLISECOND() | ✅ | Extract millisecond |
-| DATE_DAYOFYEAR() | ✅ | Day of year |
-| DATE_ISOWEEK() | ✅ | ISO week |
-| DATE_LEAPYEAR() | ✅ | Is leap year |
-| DATE_QUARTER() | ✅ | Quarter |
-| DATE_DAYS_IN_MONTH() | ✅ | Days in month |
-| DATE_ADD() | ✅ | Add duration |
-| DATE_SUBTRACT() | ✅ | Subtract duration |
-| DATE_DIFF() | ✅ | Date difference |
-| DATE_COMPARE() | ✅ | Compare dates |
-| DATE_FORMAT() | ✅ | Format date |
-| DATE_TRUNC() | ✅ | Truncate date |
-| DATE_ROUND() | ✅ | Round date |
+| DATE_ADD(date, amount, unit) | ✅ | Add to date |
+| DATE_COMPARE(date1, date2) | ✅ | Compare dates (-1, 0, 1) |
+| DATE_DAY(date) | ✅ | Day of month |
+| DATE_DAYOFWEEK(date) | ✅ | Day of week (0-6) |
+| DATE_DAYOFYEAR(date) | ✅ | Day of year |
+| DATE_DAYS_IN_MONTH(date) | ✅ | Days in month |
+| DATE_DIFF(date1, date2, unit) | ✅ | Difference between dates |
+| DATE_FORMAT(date, format) | ✅ | Format date string |
+| DATE_HOUR(date) | ✅ | Hour part |
+| DATE_ISO8601(date) | ✅ | Convert to ISO8601 string |
+| DATE_ISOWEEK(date) | ✅ | ISO week number |
+| DATE_LEAPYEAR(date) | ✅ | Assert leap year |
+| DATE_MILLISECOND(date) | ✅ | Millisecond part |
+| DATE_MINUTE(date) | ✅ | Minute part |
+| DATE_MONTH(date) | ✅ | Month part |
+| DATE_NOW() | ✅ | Current Unix timestamp (ms) |
+| DATE_QUARTER(date) | ✅ | Quarter (1-4) |
+| DATE_ROUND(date, amount, unit) | ✅ | Round date |
+| DATE_SECOND(date) | ✅ | Second part |
+| DATE_SUBTRACT(date, amount, unit) | ✅ | Subtract from date |
+| DATE_TIMESTAMP(date) | ✅ | Convert to timestamp |
+| DATE_TRUNC(date, unit) | ✅ | Truncate date |
+| DATE_YEAR(date) | ✅ | Year part |
+| IS_DATESTRING(str) | ✅ | Check format |
 
 ### Array Functions
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| APPEND() | ✅ | Append element |
-| COUNT() | ✅ | Count elements |
-| FIRST() | ✅ | First element |
-| FLATTEN() | ✅ | Flatten array |
-| INTERSECTION() | ✅ | Array intersection |
-| LAST() | ✅ | Last element |
-| LENGTH() | ✅ | Array length |
-| MINUS() | ✅ | Array difference |
-| NTH() | ✅ | Nth element |
-| OUTERSECTION() | ✅ | Symmetric difference |
-| POP() | ✅ | Remove last |
-| POSITION() | ✅ | Find position |
-| PUSH() | ✅ | Add element |
-| REMOVE_NTH() | ✅ | Remove nth |
-| REMOVE_VALUE() | ✅ | Remove value |
-| REMOVE_VALUES() | ✅ | Remove values |
-| REVERSE() | ✅ | Reverse array |
-| SHIFT() | ✅ | Remove first |
-| SLICE() | ✅ | Extract slice |
-| SORTED() | ✅ | Sort array |
-| SORTED_UNIQUE() | ✅ | Sort and deduplicate |
-| UNION() | ✅ | Array union |
-| UNION_DISTINCT() | ✅ | Unique union |
-| UNIQUE() | ✅ | Remove duplicates |
-| UNSHIFT() | ✅ | Add to front |
+| APPEND(arr, vals) | ✅ | Append elements |
+| COUNT(arr) | ✅ | Count elements |
+| FIRST(arr) | ✅ | First element |
+| FLATTEN(arr, depth) | ✅ | Flatten nested arrays |
+| INTERSECTION(arr1, arr2) | ✅ | Intersection of arrays |
+| INTERLEAVE(arr1, arr2) | ❌ | Interleave arrays |
+| LAST(arr) | ✅ | Last element |
+| LENGTH(arr) | ✅ | Count elements (alias) |
+| MINUS(arr1, arr2) | ✅ | Subtract arr2 from arr1 |
+| NTH(arr, n) | ✅ | Get n-th element |
+| OUTERSECTION(arr1, arr2) | ✅ | Values in one but not both |
+| POP(arr) | ✅ | Remove last element |
+| POSITION(arr, val) | ✅ | Find index of value |
+| PUSH(arr, val) | ✅ | Append value |
+| REMOVE_NTH(arr, n) | ✅ | Remove element at n |
+| REMOVE_VALUE(arr, val) | ✅ | Remove first occurrence |
+| REMOVE_VALUES(arr, vals) | ✅ | Remove all occurrences |
+| REVERSE(arr) | ✅ | Reverse array |
+| SHIFT(arr) | ✅ | Remove first element |
+| SLICE(arr, start, len) | ✅ | Extract sub-array |
+| SORTED_UNIQUE(arr) | ✅ | Dedup and sort |
+| UNION(arr1, arr2) | ✅ | Join arrays |
+| UNION_DISTINCT(arr1, arr2) | ✅ | Join and dedup |
+| UNIQUE(arr) | ✅ | Return unique values |
+| UNSHIFT(arr, val) | ✅ | Prepend value |
 
-### Document/Object Functions
-
-| Function | Status | Notes |
-|----------|--------|-------|
-| ATTRIBUTES() | ✅ | Object keys |
-| COUNT() | ✅ | Count attributes |
-| HAS() | ✅ | Has attribute |
-| IS_SAME_COLLECTION() | ✅ | Same collection check |
-| KEEP() | ✅ | Keep attributes |
-| KEYS() | ✅ | Object keys |
-| MATCHES() | ✅ | Pattern matching |
-| MERGE() | ✅ | Merge objects |
-| MERGE_RECURSIVE() | ✅ | Recursive merge |
-| PARSE_IDENTIFIER() | ✅ | Parse document ID |
-| TRANSLATE() | ✅ | Translate values |
-| UNSET() | ✅ | Remove attributes |
-| UNSET_RECURSIVE() | ✅ | Recursive unset |
-| VALUES() | ✅ | Object values |
-| ZIP() | ✅ | Zip arrays to object |
-
-### Type Check Functions
+### Object / Document Functions
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| IS_NULL() | ✅ | Is null |
-| IS_BOOL() | ✅ | Is boolean |
-| IS_NUMBER() | ✅ | Is number |
-| IS_STRING() | ✅ | Is string |
-| IS_ARRAY() | ✅ | Is array |
-| IS_OBJECT() | ✅ | Is object |
-| IS_DOCUMENT() | ✅ | Is document |
-| IS_DATESTRING() | ✅ | Is date string |
-| IS_KEY() | ✅ | Is valid key |
+| ATTRIBUTES(obj) | ✅ | Get keys |
+| HAS(obj, key) | ✅ | Check key existence |
+| IS_SAME_COLLECTION(col, id) | ✅ | Check ID belongs to collection |
+| KEEP(obj, keys) | ✅ | Keep only specific keys |
+| KEYS(obj) | ✅ | Alias for ATTRIBUTES |
+| MATCHES(obj, example) | ✅ | Check if matches example |
+| MERGE(obj1, obj2) | ✅ | Merge objects (shallow) |
+| MERGE_RECURSIVE(obj1, obj2) | ✅ | Recursive merge |
+| PARSE_IDENTIFIER(id) | ✅ | Parse ID into keys/collection |
+| TRANSLATE(val, map, default) | ✅ | Map value |
+| UNSET(obj, keys) | ✅ | Remove keys |
+| UNSET_RECURSIVE(obj, keys) | ✅ | Remove keys recursively |
+| VALUES(obj) | ✅ | Get values |
+| ZIP(keys, values) | ✅ | Create object from arrays |
 
-### Type Cast Functions
+### Type Check & Cast Functions
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| TO_BOOL() | ✅ | Cast to boolean |
-| TO_NUMBER() | ✅ | Cast to number |
-| TO_STRING() | ✅ | Cast to string |
-| TO_ARRAY() | ✅ | Cast to array |
-| TO_LIST() | ✅ | Cast to list |
+| IS_ARRAY(val) | ✅ | Check if array |
+| IS_BOOL(val) | ✅ | Check if boolean |
+| IS_DATESTRING(val) | ✅ | Check if date string |
+| IS_DOCUMENT(val) | ✅ | Check if document |
+| IS_KEY(val) | ✅ | Check if valid key |
+| IS_LIST(val) | ✅ | Alias for IS_ARRAY |
+| IS_NULL(val) | ✅ | Check if null |
+| IS_NUMBER(val) | ✅ | Check if number |
+| IS_OBJECT(val) | ✅ | Check if object |
+| IS_STRING(val) | ✅ | Check if string |
+| TO_ARRAY(val) | ✅ | Cast to array |
+| TO_BOOL(val) | ✅ | Cast to boolean |
+| TO_LIST(val) | ✅ | Alias for TO_ARRAY |
+| TO_NUMBER(val) | ✅ | Cast to number |
+| TO_STRING(val) | ✅ | Cast to string |
+| TYPENAME(val) | ❌ | Get type name |
 
 ### Geo Functions
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| DISTANCE() | ❌ | Calculate distance |
-| GEO_CONTAINS() | ❌ | Contains check |
-| GEO_DISTANCE() | ❌ | Geo distance |
-| GEO_EQUALS() | ❌ | Geo equals |
-| GEO_INTERSECTS() | ❌ | Geo intersects |
-| GEO_AREA() | ❌ | Calculate area |
-| GEO_POINT() | ❌ | Create point |
-| GEO_MULTIPOINT() | ❌ | Create multipoint |
-| GEO_POLYGON() | ❌ | Create polygon |
-| GEO_MULTIPOLYGON() | ❌ | Create multipolygon |
-| GEO_LINESTRING() | ❌ | Create linestring |
-| GEO_MULTILINESTRING() | ❌ | Create multilinestring |
-| IS_IN_POLYGON() | ❌ | Point in polygon |
+| DISTANCE(lat1, lon1, lat2, lon2) | ❌ | Haversine distance |
+| GEO_AREA(geo) | ❌ | Area of polygon |
+| GEO_CONTAINS(geo1, geo2) | ❌ | Check containment |
+| GEO_DISTANCE(geo1, geo2) | ❌ | Distance between objects |
+| GEO_EQUALS(geo1, geo2) | ❌ | Check equality |
+| GEO_INTERSECTS(geo1, geo2) | ❌ | Check intersection |
+| GEO_POINT(lon, lat) | ❌ | Create point |
+| GEO_POLYGON(points) | ❌ | Create polygon |
+| IS_IN_POLYGON(poly, lat, lon) | ❌ | Point in polygon |
 
 ### Fulltext Functions
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| FULLTEXT() | ❌ | Fulltext search |
+| FULLTEXT(coll, attr, query) | ❌ | Fulltext search (See ArangoSearch) |
 
 ### Miscellaneous Functions
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| APPLY() | ✅ | Apply function |
-| ASSERT() | ✅ | Assert condition |
-| CALL() | ❌ | Call user function |
+| APPLY(func, args) | ✅ | Dynamically apply function |
+| ASSERT(cond, msg) | ✅ | Throw error if false |
+| CALL(func, args) | ❌ | Call user-defined function |
 | COLLECTIONS() | ✅ | List collections |
-| CURRENT_DATABASE() | ✅ | Current database |
-| CURRENT_USER() | ✅ | Current user |
-| DECODE_REV() | ✅ | Decode revision |
-| DOCUMENT() | ✅ | Get document |
-| FAIL() | ✅ | Fail query |
-| HASH() | ✅ | Hash value |
-| MD5() | ✅ | MD5 hash |
-| NOT_NULL() | ✅ | First non-null |
-| PASSTHRU() | ✅ | Pass through |
-| SCHEMA_GET() | ❌ | Get schema |
-| SCHEMA_VALIDATE() | ❌ | Validate schema |
-| SHA1() | ✅ | SHA1 hash |
-| SHA256() | ✅ | SHA256 hash |
-| SHA512() | ✅ | SHA512 hash |
-| SLEEP() | ✅ | Sleep |
-| UUID() | ✅ | Generate UUID |
-| V8() | ❌ | Execute JavaScript |
-| VERSION() | ✅ | ArangoDB version |
-| WARN() | ✅ | Warning message |
+| CURRENT_DATABASE() | ✅ | Get database name |
+| CURRENT_USER() | ✅ | Get current user |
+| DECODE_REV(rev) | ✅ | Decode revision string |
+| DOCUMENT(id) | ✅ | Retrieve document by ID |
+| FAIL(msg) | ✅ | Throw error |
+| HASH(val) | ✅ | Calculate hash |
+| NOT_NULL(args...) | ✅ | First non-null arg |
+| PASSTHRU(val) | ✅ | No-op |
+| SLEEP(seconds) | ✅ | Sleep execution |
+| V8(script) | ❌ | Execute V8 JavaScript |
+| VERSION() | ✅ | Server version |
+| WARN(msg) | ✅ | Emit warning |
 
 ---
 
 ## Graph Operations
 
-### Graph Traversal
+OrbitRS supports basic graph traversals but lacks advanced graph algorithms.
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| OUTBOUND traversal | 🔶 | Follow outgoing edges |
-| INBOUND traversal | 🔶 | Follow incoming edges |
-| ANY traversal | 🔶 | Follow any direction |
-| Min/max depth | 🔶 | Depth constraints |
-| Named graphs | 🔶 | Graph collections |
-| Edge collections | ✅ | Direct edge access |
+### Traversal
+
+Format: `FOR v, e, p IN [min..max] OUTBOUND|INBOUND|ANY start_vertex GRAPH graph_name|edge_collections`
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| OUTBOUND | 🔶 | Follow outgoing edges |
+| INBOUND | 🔶 | Follow incoming edges |
+| ANY | 🔶 | Follow edges in any direction |
+| min..max | 🔶 | Depth constraints (1..1 supported) |
+| GRAPH name | 🔶 | Named graph support |
+| EDGE collections | ✅ | Direct edge collection usage |
+| Options | ❌ | `uniqueVertices`, `bsf` (Breadth-First), etc. |
+| PRUNE | ❌ | Prune condition |
 
 ### Path Finding
 
-| Algorithm | Status | Notes |
-|-----------|--------|-------|
-| SHORTEST_PATH | ❌ | Shortest path |
-| K_SHORTEST_PATHS | ❌ | K shortest paths |
-| ALL_SHORTEST_PATHS | ❌ | All shortest paths |
-| K_PATHS | ❌ | K paths |
+| Feature | Status | Notes |
+|---------|--------|-------|
+| SHORTEST_PATH | ❌ | Find shortest path between vertices |
+| K_SHORTEST_PATHS | ❌ | Find top K shortest paths |
+| K_PATHS | ❌ | Find all paths |
+| ALL_SHORTEST_PATHS | ❌ | Find all shortest paths |
 
 ### Graph Functions
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| GRAPH_EDGES() | ❌ | Get graph edges |
-| GRAPH_VERTICES() | ❌ | Get graph vertices |
-| GRAPH_NEIGHBORS() | ❌ | Get neighbors |
-| GRAPH_COMMON_NEIGHBORS() | ❌ | Common neighbors |
-| GRAPH_COMMON_PROPERTIES() | ❌ | Common properties |
-| GRAPH_PATHS() | ❌ | Find paths |
-| GRAPH_SHORTEST_PATH() | ❌ | Shortest path |
-| GRAPH_DISTANCE_TO() | ❌ | Distance to vertex |
-| GRAPH_ABSOLUTE_ECCENTRICITY() | ❌ | Eccentricity |
-| GRAPH_ECCENTRICITY() | ❌ | Eccentricity |
-| GRAPH_ABSOLUTE_CLOSENESS() | ❌ | Closeness |
-| GRAPH_CLOSENESS() | ❌ | Closeness |
-| GRAPH_ABSOLUTE_BETWEENNESS() | ❌ | Betweenness |
-| GRAPH_BETWEENNESS() | ❌ | Betweenness |
-| GRAPH_RADIUS() | ❌ | Graph radius |
-| GRAPH_DIAMETER() | ❌ | Graph diameter |
+| GRAPH_VERTICES | ❌ | Get all vertices |
+| GRAPH_EDGES | ❌ | Get all edges |
+| GRAPH_NEIGHBORS | ❌ | Get neighbors |
 
 ---
 
-## Implementation Status
+## System Features
 
-### Overall Coverage
+### Transactions
 
-| Category | Coverage | Notes |
-|----------|----------|-------|
-| Query Operations | ~90% | Core operations |
-| Data Modification | ~90% | Full CRUD |
-| Array Operations | ~90% | Comprehensive |
-| String Functions | ~95% | Nearly complete |
-| Numeric Functions | ~95% | Nearly complete |
-| Date Functions | ~95% | Nearly complete |
-| Array Functions | ~95% | Nearly complete |
-| Object Functions | ~90% | Good coverage |
-| Type Functions | ~95% | Nearly complete |
-| Graph Traversal | ~40% | Basic support |
-| Graph Algorithms | ~5% | Minimal |
-| Geo Functions | ~0% | Not implemented |
-| Fulltext | ~0% | Not implemented |
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Stream Transactions | 🔶 | Basic support via driver |
+| JS Transactions | ❌ | `db._executeTransaction` (server-side JS) |
 
-### ArangoDB Compatibility
+### Explanation & Profiling
 
-| Feature Category | Compatibility | Notes |
-|------------------|---------------|-------|
-| Document Model | ~90% | Strong support |
-| Key-Value | ~90% | Full support |
-| Graph Model | ~40% | Basic traversal |
-| Multi-Model | ~75% | Good integration |
-| Functions | ~80% | Most functions |
-| Indexes | ~60% | Basic indexes |
-
-### Priority Roadmap
-
-**High Priority**:
-1. ✅ Core AQL operations (FOR, FILTER, RETURN)
-2. ✅ Data modification (INSERT, UPDATE, DELETE)
-3. ✅ Array operations
-4. 🔶 Graph traversal
-5. ❌ Path finding algorithms
-
-**Medium Priority**:
-1. ❌ SHORTEST_PATH
-2. ❌ Graph algorithms
-3. ❌ Geo functions
-4. ❌ Fulltext search
-5. ❌ User-defined functions
-
-**Low Priority**:
-1. ❌ Advanced graph analytics
-2. ❌ Schema validation
-3. ❌ JavaScript execution (V8)
-
----
-
-## Known Limitations
-
-1. **Graph Algorithms**: Limited path finding support
-2. **Geospatial**: No geo functions implemented
-3. **Full-Text Search**: Not implemented
-4. **User Functions**: JavaScript execution not supported
-5. **Schema Validation**: Not implemented
-6. **Advanced Traversal**: PRUNE not supported
-7. **Index Hints**: Not implemented
-8. **Window Operations**: Not implemented
-9. **Graph Analytics**: No centrality measures
-10. **V8 Execution**: JavaScript functions not supported
+| Feature | Status | Notes |
+|---------|--------|-------|
+| EXPLAIN | 🔶 | Basic query plan visualization |
+| PROFILE | ❌ | Execution profiling |
 
 ---
 
 ## Client Compatibility
 
-### Tested Drivers
+OrbitRS aims to support standard ArangoDB drivers.
 
 | Driver | Status | Notes |
 |--------|--------|-------|
-| Python-arango | 🔶 | Basic queries work |
-| ArangoJS | 🔶 | Basic queries work |
-| arangodb-java-driver | 🔶 | Basic queries work |
-| arangodbgo | 🔶 | Basic queries work |
+| **ArangoJS** (Node.js) | 🔶 | Basic queries work; authentication handshake supported. |
+| **Python-arango** | 🔶 | Basic queries work. |
+| **ArangoDB-Java-Driver** | 🔶 | Basic support. |
+| **ArangoDB-Go-Driver** | 🔶 | Basic support. |
 
----
-
-## Version Compatibility
-
-| ArangoDB Version | Compatibility | Notes |
-|------------------|---------------|-------|
-| ArangoDB 3.11 | 🔶 | Core features |
-| ArangoDB 3.10 | 🔶 | Core features |
-| ArangoDB 3.9 | ✅ | Good support |
-| ArangoDB 3.8 | ✅ | Good support |
-
----
-
-## References
-
-- [ArangoDB AQL Documentation](https://www.arangodb.com/docs/stable/aql/)
-- [AQL Functions Reference](https://www.arangodb.com/docs/stable/aql/functions.html)
-- [AQL Graph Traversals](https://www.arangodb.com/docs/stable/aql/graphs.html)
-- [ArangoDB Drivers](https://www.arangodb.com/docs/stable/drivers/)
+**Note**: Advanced driver features like connection pooling, custom serialization, and cluster management APIs may encounter issues.

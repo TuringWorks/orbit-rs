@@ -599,35 +599,56 @@ impl QueryExecutor {
         use crate::orbitql::ast::AggregateFunction;
         use serde_json::json;
 
-        // Extract values for the aggregate expression
-        let values: Vec<Option<serde_json::Value>> = if let Some(expr) = &agg.expression {
-            rows.iter()
-                .map(|row| self.extract_value_for_expression(row, expr))
-                .collect()
+        // Extract values for ALL arguments
+        let mut arg_values: Vec<Vec<Option<serde_json::Value>>> = if agg.args.is_empty() {
+            // COUNT(*) case - dummy column
+            vec![rows.iter().map(|_| Some(json!(1))).collect()]
         } else {
-            // COUNT(*) - all rows count
-            rows.iter().map(|_| Some(json!(1))).collect()
+            agg.args
+                .iter()
+                .map(|expr| {
+                    rows.iter()
+                        .map(|row| self.extract_value_for_expression(row, expr))
+                        .collect()
+                })
+                .collect()
         };
 
         // Handle DISTINCT
-        let values = if agg.distinct {
+        if agg.distinct && !arg_values.is_empty() {
+            let row_count = arg_values[0].len();
             let mut seen = std::collections::HashSet::new();
-            values
-                .into_iter()
-                .filter(|v| {
-                    let key = v.as_ref().map(|x| x.to_string()).unwrap_or_default();
-                    seen.insert(key)
-                })
-                .collect()
-        } else {
-            values
-        };
+            let mut distinct_indices = Vec::new();
+
+            for i in 0..row_count {
+                // Create a key representing the tuple of values at index i
+                let mut key_parts = Vec::new();
+                for col in &arg_values {
+                    let val_str = col[i].as_ref().map(|v| v.to_string()).unwrap_or_default();
+                    key_parts.push(val_str);
+                }
+                let key = key_parts.join("|");
+
+                if seen.insert(key) {
+                    distinct_indices.push(i);
+                }
+            }
+
+            // Filter columns to keep only distinct indices
+            for col in &mut arg_values {
+                *col = distinct_indices.iter().map(|&i| col[i].clone()).collect();
+            }
+        }
+
+        // Helper to get the primary value column (first argument)
+        // For COUNT(*), this is the dummy column
+        let values = &arg_values[0];
 
         match agg.function {
             AggregateFunction::Count => {
                 // COUNT counts non-null values (or all rows for COUNT(*))
-                let count = if agg.expression.is_none() {
-                    rows.len() // COUNT(*)
+                let count = if agg.args.is_empty() {
+                    values.len() // COUNT(*) (possibly distinct filtered)
                 } else {
                     values.iter().filter(|v| v.is_some()).count()
                 };
@@ -678,11 +699,14 @@ impl QueryExecutor {
                     Ok(json!(max))
                 }
             }
-            AggregateFunction::First => {
-                Ok(values.into_iter().find_map(|v| v).unwrap_or(json!(null)))
-            }
+            AggregateFunction::First => Ok(values
+                .iter()
+                .cloned()
+                .find_map(|v| v)
+                .unwrap_or(json!(null))),
             AggregateFunction::Last => Ok(values
-                .into_iter()
+                .iter()
+                .cloned()
                 .rev()
                 .find_map(|v| v)
                 .unwrap_or(json!(null))),
@@ -715,6 +739,53 @@ impl QueryExecutor {
                         / (nums.len() - 1) as f64;
                     Ok(json!(variance))
                 }
+            }
+            AggregateFunction::ArrayAgg => {
+                let arr: Vec<serde_json::Value> = values.iter().filter_map(|v| v.clone()).collect();
+                Ok(json!(arr))
+            }
+            AggregateFunction::StringAgg => {
+                let mut result = String::new();
+                let mut first = true;
+                // Delimiters (second argument)
+                let delims = if arg_values.len() > 1 {
+                    Some(&arg_values[1])
+                } else {
+                    None
+                };
+
+                for (i, val_opt) in values.iter().enumerate() {
+                    if let Some(val) = val_opt {
+                        // Extract string representation
+                        let s = if val.is_string() {
+                            val.as_str().unwrap().to_string()
+                        } else {
+                            val.to_string()
+                        };
+
+                        if !first {
+                            // Append delimiter
+                            if let Some(delims_vec) = delims {
+                                if i < delims_vec.len() {
+                                    // Safety check
+                                    if let Some(d) = &delims_vec[i] {
+                                        if d.is_string() {
+                                            result.push_str(d.as_str().unwrap());
+                                        } else {
+                                            result.push_str(&d.to_string());
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Default delimiter comma if not provided
+                                result.push(',');
+                            }
+                        }
+                        result.push_str(&s);
+                        first = false;
+                    }
+                }
+                Ok(json!(result))
             }
         }
     }
@@ -1361,5 +1432,52 @@ mod tests {
         let result = result.unwrap();
         // Should have 3 users from sample data
         assert_eq!(result.rows.len(), 3);
+    }
+
+    #[test]
+    fn test_aggregate_functions_extended() {
+        use crate::orbitql::ast::{AggregateFunction, Expression};
+        use crate::orbitql::planner::AggregateExpression;
+        use crate::orbitql::QueryValue;
+        use serde_json::json;
+        use std::collections::HashMap;
+
+        let executor = QueryExecutor::new();
+        let rows = vec![
+            HashMap::from([("name".to_string(), json!("Alice"))]),
+            HashMap::from([("name".to_string(), json!("Bob"))]),
+        ];
+
+        // Test ArrayAgg
+        let array_agg = AggregateExpression {
+            function: AggregateFunction::ArrayAgg,
+            args: vec![Expression::Identifier("name".to_string())],
+            distinct: false,
+            alias: None,
+        };
+
+        let result = executor
+            .compute_aggregate(&rows, &array_agg)
+            .expect("ArrayAgg failed");
+        let arr = result.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0], json!("Alice"));
+        assert_eq!(arr[1], json!("Bob"));
+
+        // Test StringAgg
+        let string_agg = AggregateExpression {
+            function: AggregateFunction::StringAgg,
+            args: vec![
+                Expression::Identifier("name".to_string()),
+                Expression::Literal(QueryValue::String(", ".to_string())),
+            ],
+            distinct: false,
+            alias: None,
+        };
+
+        let result = executor
+            .compute_aggregate(&rows, &string_agg)
+            .expect("StringAgg failed");
+        assert_eq!(result, json!("Alice, Bob"));
     }
 }

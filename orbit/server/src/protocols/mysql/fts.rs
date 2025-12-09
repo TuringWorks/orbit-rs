@@ -140,7 +140,8 @@ impl TextIndex {
             if let Some(postings) = self.inverted_index.get(term) {
                 let idf = (num_docs / postings.len() as f32).ln().max(0.0) + 1.0;
                 for (doc_id, tf) in postings {
-                    *doc_scores.entry(doc_id.clone()).or_insert(0.0) += tf * idf * 2.0; // Boost must terms
+                    *doc_scores.entry(doc_id.clone()).or_insert(0.0) += tf * idf * 2.0;
+                    // Boost must terms
                 }
             }
         }
@@ -161,7 +162,12 @@ impl TextIndex {
             .flat_map(|term| {
                 self.inverted_index
                     .get(term)
-                    .map(|postings| postings.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>())
+                    .map(|postings| {
+                        postings
+                            .iter()
+                            .map(|(id, _)| id.clone())
+                            .collect::<Vec<_>>()
+                    })
                     .unwrap_or_default()
             })
             .collect();
@@ -332,10 +338,8 @@ impl MysqlFts {
         }
 
         // Extract terms from top 3 results for query expansion
-        let mut expanded_terms: Vec<String> = query
-            .split_whitespace()
-            .map(|s| s.to_lowercase())
-            .collect();
+        let mut expanded_terms: Vec<String> =
+            query.split_whitespace().map(|s| s.to_lowercase()).collect();
 
         for result in initial_results.iter().take(3) {
             for (_, value) in &result.fields {
@@ -368,7 +372,10 @@ impl MysqlFts {
             for (field, entry) in schema.fields() {
                 if entry.field_type().is_indexed() {
                     let term_obj = Term::from_field_text(field, &term);
-                    clauses.push((Occur::Should, Box::new(TermQuery::new(term_obj, IndexRecordOption::Basic))));
+                    clauses.push((
+                        Occur::Should,
+                        Box::new(TermQuery::new(term_obj, IndexRecordOption::Basic)),
+                    ));
                 }
             }
         }
@@ -396,7 +403,10 @@ impl MysqlFts {
             for (field, entry) in schema.fields() {
                 if entry.field_type().is_indexed() {
                     let term_obj = Term::from_field_text(field, &word);
-                    clauses.push((occur, Box::new(TermQuery::new(term_obj, IndexRecordOption::Basic))));
+                    clauses.push((
+                        occur,
+                        Box::new(TermQuery::new(term_obj, IndexRecordOption::Basic)),
+                    ));
                 }
             }
         }

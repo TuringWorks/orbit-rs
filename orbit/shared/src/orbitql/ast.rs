@@ -323,7 +323,7 @@ pub enum Expression {
     // Aggregations
     Aggregate {
         function: AggregateFunction,
-        expression: Option<Box<Expression>>,
+        args: Vec<Expression>,
         distinct: bool,
     },
 
@@ -463,6 +463,8 @@ pub enum AggregateFunction {
     Last,
     StdDev,
     Variance,
+    ArrayAgg,
+    StringAgg,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

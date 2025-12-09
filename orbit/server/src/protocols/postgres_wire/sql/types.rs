@@ -180,7 +180,7 @@ pub enum SqlValue {
     Vector(Vec<f32>),
     HalfVec(Vec<f32>),          // Using f32 for now until half crate is added
     SparseVec(Vec<(u32, f32)>), // (index, value) pairs
-    
+
     // Object Identifier types (stored as u32)
     Oid(u32),
     Regclass(u32),
@@ -194,11 +194,11 @@ pub enum SqlValue {
     Regprocedure(u32),
     Regrole(u32),
     Regtype(u32),
-    
+
     // PostgreSQL-specific types
-    PgLsn(u64),           // Log sequence number
-    PgSnapshot(String),   // Transaction snapshot (simplified as string)
-    
+    PgLsn(u64),         // Log sequence number
+    PgSnapshot(String), // Transaction snapshot (simplified as string)
+
     Custom {
         type_name: String,
         data: Vec<u8>,
@@ -344,7 +344,7 @@ impl SqlType {
             SqlType::Vector { .. } => 16388,    // Custom OID for vector
             SqlType::HalfVec { .. } => 16389,   // Custom OID for halfvec
             SqlType::SparseVec { .. } => 16390, // Custom OID for sparsevec
-            
+
             // Object Identifier types
             SqlType::Oid => 26,
             SqlType::Regproc => 24,
@@ -358,12 +358,12 @@ impl SqlType {
             SqlType::Regconfig => 3734,
             SqlType::Regdictionary => 3769,
             SqlType::Regcollation => 4191,
-            
+
             // PostgreSQL-specific types
             SqlType::PgLsn => 3220,
             SqlType::PgSnapshot => 5038,
-            
-            _ => 0,                             // Unknown type
+
+            _ => 0, // Unknown type
         }
     }
 
@@ -466,7 +466,7 @@ impl SqlValue {
                 dimensions: Some(v.len() as u32),
             },
             SqlValue::SparseVec(_) => SqlType::SparseVec { dimensions: None },
-            
+
             // Object Identifier types
             SqlValue::Oid(_) => SqlType::Oid,
             SqlValue::Regclass(_) => SqlType::Regclass,
@@ -480,11 +480,11 @@ impl SqlValue {
             SqlValue::Regprocedure(_) => SqlType::Regprocedure,
             SqlValue::Regrole(_) => SqlType::Regrole,
             SqlValue::Regtype(_) => SqlType::Regtype,
-            
+
             // PostgreSQL-specific types
             SqlValue::PgLsn(_) => SqlType::PgLsn,
             SqlValue::PgSnapshot(_) => SqlType::PgSnapshot,
-            
+
             SqlValue::Custom { type_name, .. } => SqlType::Custom {
                 type_name: type_name.clone(),
             },
@@ -541,7 +541,7 @@ impl SqlValue {
                 format!("[{}]", elements.join(","))
             }
             SqlValue::Point(x, y) => format!("({x},{y})"),
-            
+
             // Object Identifier types
             SqlValue::Oid(oid)
             | SqlValue::Regclass(oid)
@@ -555,11 +555,11 @@ impl SqlValue {
             | SqlValue::Regprocedure(oid)
             | SqlValue::Regrole(oid)
             | SqlValue::Regtype(oid) => oid.to_string(),
-            
+
             // PostgreSQL-specific types
             SqlValue::PgLsn(lsn) => format!("{:X}/{:X}", lsn >> 32, lsn & 0xFFFFFFFF),
             SqlValue::PgSnapshot(s) => s.clone(),
-            
+
             _ => format!("{self:?}"), // Fallback for complex types
         }
     }

@@ -492,6 +492,11 @@ impl ProjectionPushdown {
                 self.extract_column_references(object, columns);
                 self.extract_column_references(index, columns);
             }
+            Expression::Aggregate { args, .. } => {
+                for arg in args {
+                    self.extract_column_references(arg, columns);
+                }
+            }
             _ => {} // Other expressions don't contain column references
         }
     }

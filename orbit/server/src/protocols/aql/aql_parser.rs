@@ -1513,9 +1513,7 @@ impl AqlTokenParser {
 
             // Expect ( for window specification
             if !matches!(self.current_token(), Some(AqlToken::LeftParen)) {
-                return Err(ProtocolError::AqlError(
-                    "Expected ( after OVER".to_string(),
-                ));
+                return Err(ProtocolError::AqlError("Expected ( after OVER".to_string()));
             }
             self.advance();
 
@@ -2299,11 +2297,7 @@ impl AqlTokenParser {
                     self.advance();
                     k
                 }
-                _ => {
-                    return Err(ProtocolError::AqlError(
-                        "Expected property key".to_string(),
-                    ))
-                }
+                _ => return Err(ProtocolError::AqlError("Expected property key".to_string())),
             };
 
             // Check for colon (explicit key: value) or shorthand ({key} = {key: key})

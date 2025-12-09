@@ -24,6 +24,7 @@ This document provides the authoritative status of protocol implementations in O
 | **REST/HTTP** | 40% | Active Development | - | Authentication |
 
 ### Recent Improvements (2025-12-09)
+- **OrbitQL**: Added `ARRAY_AGG` and `STRING_AGG` functions with multi-argument support via AST refactoring ✅
 - **Full-Text Search (Cross-Protocol)**:
   - PostgreSQL FTS functions: to_tsvector, to_tsquery, plainto_tsquery, phraseto_tsquery, websearch_to_tsquery ✅
   - PostgreSQL FTS operators: @@ (match), @> (contains), <@ (contained by), || (concat), && (and), !! (not), <-> (followed by) ✅
@@ -660,7 +661,7 @@ OrbitQL supports two wire protocols for client-server communication:
 |------|---------|
 | 2025-12-09 | **PostgreSQL**: Implemented advanced string (regex/sha), date/time (make_*/age), and statistical (covar/corr/regr) functions |
 | 2025-12-08 | **OrbitQL Major Update**: Added SurrealDB-style DEFINE/REMOVE, Control flow (IF/FOR/LET/THROW), Vector KNN, MATCH, SAVEPOINT support |
-| 2025-12-08 | Added PostgreSQL sequence functions (nextval, currval, setval, lastval) and math functions (cbrt, div, factorial, gcd, lcm, sign) |
+| 2025-12-08 | - PostgreSQL: Advanced functions (STDDEV/VARIANCE/Window functions) - OrbitQL: Aggregate functions (ARRAY_AGG, STRING_AGG) with AST refactor |
 | 2025-12-07 | **Major Update**: Tier 1 features completed - PostgreSQL RETURNING/Date-Time/Window frames, Redis transactions, Cypher GROUP BY |
 | 2025-12-07 | Consolidated from PROTOCOL_GAP_ANALYSIS.md, COMPREHENSIVE_FEATURE_GAP_ANALYSIS.md, PROTOCOL_COMPLETION_ANALYSIS.md |
 | 2025-12-06 | Initial protocol completion analysis |

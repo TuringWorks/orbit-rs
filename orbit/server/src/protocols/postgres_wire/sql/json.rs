@@ -460,39 +460,48 @@ impl JsonOperations {
     /// Returns Vec of (key as text, value as json)
     pub fn json_each(json: &JsonValue) -> ProtocolResult<Vec<(SqlValue, SqlValue)>> {
         match json {
-            JsonValue::Object(map) => {
-                Ok(map.iter().map(|(k, v)| {
-                    (SqlValue::Text(k.clone()), SqlValue::Json(v.clone()))
-                }).collect())
-            }
+            JsonValue::Object(map) => Ok(map
+                .iter()
+                .map(|(k, v)| (SqlValue::Text(k.clone()), SqlValue::Json(v.clone())))
+                .collect()),
             _ => Err(ProtocolError::PostgresError(
-                "json_each requires a JSON object".to_string()
-            ))
+                "json_each requires a JSON object".to_string(),
+            )),
         }
     }
 
     /// Expand JSON object to rows of (key, value) pairs as text (json_each_text)
     pub fn json_each_text(json: &JsonValue) -> ProtocolResult<Vec<(SqlValue, SqlValue)>> {
         match json {
-            JsonValue::Object(map) => {
-                Ok(map.iter().map(|(k, v)| {
-                    (SqlValue::Text(k.clone()), SqlValue::Text(json_value_to_text(v)))
-                }).collect())
-            }
+            JsonValue::Object(map) => Ok(map
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        SqlValue::Text(k.clone()),
+                        SqlValue::Text(json_value_to_text(v)),
+                    )
+                })
+                .collect()),
             _ => Err(ProtocolError::PostgresError(
-                "json_each_text requires a JSON object".to_string()
-            ))
+                "json_each_text requires a JSON object".to_string(),
+            )),
         }
     }
 
     /// Extract JSON at path using variadic text arguments (json_extract_path)
-    pub fn json_extract_path(json: &JsonValue, path_elements: Vec<String>) -> ProtocolResult<SqlValue> {
+    pub fn json_extract_path(
+        json: &JsonValue,
+        path_elements: Vec<String>,
+    ) -> ProtocolResult<SqlValue> {
         let path = JsonPath::from_text_array(&path_elements)?;
         Self::json_path_extract(json, &path)
     }
 
     /// Extract JSON at path as text using variadic arguments (json_extract_path_text)
-    pub fn json_extract_path_text(json: &JsonValue, path_elements: Vec<String>) -> ProtocolResult<SqlValue> {
+    pub fn json_extract_path_text(
+        json: &JsonValue,
+        path_elements: Vec<String>,
+    ) -> ProtocolResult<SqlValue> {
         let path = JsonPath::from_text_array(&path_elements)?;
         Self::json_path_extract_text(json, &path)
     }
@@ -505,7 +514,6 @@ impl JsonOperations {
             .map_err(|e| ProtocolError::PostgresError(format!("Pretty print failed: {}", e)))?;
         Ok(SqlValue::Text(pretty))
     }
-
 }
 
 /// Helper function to convert JSON value to text (PostgreSQL semantics)

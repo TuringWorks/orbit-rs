@@ -347,7 +347,7 @@ impl UnifiedTableStorage {
                     .collect();
                 UniversalValue::List(list)
             }
-            
+
             // Object Identifier types - store as integers
             SqlValue::Oid(oid)
             | SqlValue::Regclass(oid)
@@ -361,11 +361,11 @@ impl UnifiedTableStorage {
             | SqlValue::Regprocedure(oid)
             | SqlValue::Regrole(oid)
             | SqlValue::Regtype(oid) => UniversalValue::Int(*oid as i64),
-            
+
             // PostgreSQL-specific types
             SqlValue::PgLsn(lsn) => UniversalValue::Int(*lsn as i64),
             SqlValue::PgSnapshot(s) => UniversalValue::String(s.clone()),
-            
+
             SqlValue::Custom { type_name, data } => {
                 let mut map = BTreeMap::new();
                 map.insert(
