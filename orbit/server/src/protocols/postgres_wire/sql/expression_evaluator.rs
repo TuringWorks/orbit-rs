@@ -2119,6 +2119,173 @@ impl ExpressionEvaluator {
     fn evaluate_pi(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         if !args.is_empty() {
             return Err(ProtocolError::PostgresError(
+                "DIV requires exactly two arguments".to_string(),
+            ));
+        }
+
+        match (&args[0], &args[1]) {
+            (SqlValue::Integer(a), SqlValue::Integer(b)) => {
+                if *b == 0 {
+                    Err(ProtocolError::PostgresError("Division by zero".to_string()))
+                } else {
+                    Ok(SqlValue::Integer(a / b))
+                }
+            }
+            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => {
+                if *b == 0 {
+                    Err(ProtocolError::PostgresError("Division by zero".to_string()))
+                } else {
+                    Ok(SqlValue::BigInt(a / b))
+                }
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => {
+                let a = Self::to_f64_static(&args[0])?;
+                let b = Self::to_f64_static(&args[1])?;
+                match (a, b) {
+                    (Some(a), Some(b)) => {
+                        if b == 0.0 {
+                            Err(ProtocolError::PostgresError("Division by zero".to_string()))
+                        } else {
+                            Ok(SqlValue::BigInt((a / b).trunc() as i64))
+                        }
+                    }
+                    _ => Ok(SqlValue::Null),
+                }
+            }
+        }
+    }
+
+    /// Evaluate factorial(n) - n!
+    fn evaluate_factorial(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "FACTORIAL requires exactly one argument".to_string(),
+            ));
+        }
+
+        let n = match &args[0] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "FACTORIAL requires integer argument".to_string(),
+                ))
+            }
+        };
+
+        if n < 0 {
+            return Err(ProtocolError::PostgresError(
+                "FACTORIAL of negative number".to_string(),
+            ));
+        }
+
+        if n > 20 {
+            return Err(ProtocolError::PostgresError(
+                "FACTORIAL argument too large (max 20)".to_string(),
+            ));
+        }
+
+        let result: i64 = (1..=n).product();
+        Ok(SqlValue::BigInt(result))
+    }
+
+    /// Evaluate gcd(a, b) - greatest common divisor
+    fn evaluate_gcd(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "GCD requires exactly two arguments".to_string(),
+            ));
+        }
+
+        let a = match &args[0] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "GCD requires integer arguments".to_string(),
+                ))
+            }
+        };
+
+        let b = match &args[1] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "GCD requires integer arguments".to_string(),
+                ))
+            }
+        };
+
+        fn gcd(mut a: i64, mut b: i64) -> i64 {
+            a = a.abs();
+            b = b.abs();
+            while b != 0 {
+                let t = b;
+                b = a % b;
+                a = t;
+            }
+            a
+        }
+
+        Ok(SqlValue::BigInt(gcd(a, b)))
+    }
+
+    /// Evaluate lcm(a, b) - least common multiple
+    fn evaluate_lcm(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "LCM requires exactly two arguments".to_string(),
+            ));
+        }
+
+        let a = match &args[0] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "LCM requires integer arguments".to_string(),
+                ))
+            }
+        };
+
+        let b = match &args[1] {
+            SqlValue::Integer(i) => *i as i64,
+            SqlValue::BigInt(i) => *i,
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "LCM requires integer arguments".to_string(),
+                ))
+            }
+        };
+
+        fn gcd(mut a: i64, mut b: i64) -> i64 {
+            a = a.abs();
+            b = b.abs();
+            while b != 0 {
+                let t = b;
+                b = a % b;
+                a = t;
+            }
+            a
+        }
+
+        if a == 0 || b == 0 {
+            Ok(SqlValue::BigInt(0))
+        } else {
+            Ok(SqlValue::BigInt((a.abs() / gcd(a, b)) * b.abs()))
+        }
+    }
+
+    fn evaluate_pi(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if !args.is_empty() {
+            return Err(ProtocolError::PostgresError(
                 "PI requires no arguments".to_string(),
             ));
         }

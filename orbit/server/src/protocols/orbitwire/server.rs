@@ -309,6 +309,7 @@ impl ConnectionHandler {
     async fn handle_begin(&self, frame: Frame) -> Result<Vec<Frame>, HandlerError> {
         let stream_id = frame.stream_id;
         let payload = frame.payload;
+        let mut payload = frame.payload;
 
         // Parse begin options
         let isolation = if payload.len() >= 1 {
