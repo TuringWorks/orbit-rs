@@ -229,6 +229,7 @@ struct ReplState {
 
 /// OrbitWire connection wrapper
 struct OrbitWireConnection {
+    #[allow(dead_code)]
     stream: tokio::net::TcpStream,
 }
 

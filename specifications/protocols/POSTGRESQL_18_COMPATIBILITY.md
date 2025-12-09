@@ -663,10 +663,10 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | bit_and(expr) | ❌ | Bitwise AND |
 | bit_or(expr) | ❌ | Bitwise OR |
 | bit_xor(expr) | ❌ | Bitwise XOR |
-| json_agg(expr) | ❌ | Aggregate to JSON |
-| jsonb_agg(expr) | ❌ | Aggregate to JSONB |
-| json_object_agg(k,v) | ❌ | Object aggregate |
-| jsonb_object_agg(k,v) | ❌ | Object aggregate |
+| json_agg(expr) | ✅ | Aggregate to JSON |
+| jsonb_agg(expr) | ✅ | Aggregate to JSONB |
+| json_object_agg(k,v) | ✅ | Object aggregate |
+| jsonb_object_agg(k,v) | ✅ | Object aggregate |
 | xmlagg(expr) | ❌ | XML aggregate |
 | range_agg(expr) | ❌ | Range aggregate |
 | range_intersect_agg(expr) | ❌ | Range intersection |
@@ -710,35 +710,35 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 |----------|--------|-------|
 | -> | ✅ | JSON object field |
 | ->> | ✅ | JSON field as text |
-| #> | ❌ | JSON path |
-| #>> | ❌ | JSON path as text |
+| #> | ✅ | JSON path |
+| #>> | ✅ | JSON path as text |
 | @> | ✅ | Contains (JSON/Range) |
 | <@ | ✅ | Contained by (JSON/Range) |
-| ? | ❌ | Key exists |
-| ?| | ❌ | Any key exists |
-| ?& | ❌ | All keys exist |
-| || | ❌ | Concatenate |
-| - | ❌ | Delete key |
-| #- | ❌ | Delete path |
+| ? | ✅ | Key exists |
+| ?| | ✅ | Any key exists |
+| ?& | ✅ | All keys exist |
+| || | ✅ | Concatenate |
+| - | ✅ | Delete key |
+| #- | ✅ | Delete path |
 | @? | ❌ | JSONPath exists |
 | @@ | ❌ | JSONPath match |
-| json_array_length(j) | ❌ | Array length |
-| json_each(j) | ❌ | Expand to rows |
-| json_extract_path(j,...) | ❌ | Extract path |
-| json_object_keys(j) | ❌ | Get keys |
+| json_array_length(j) | ✅ | Array length |
+| json_each(j) | ✅ | Expand to rows |
+| json_extract_path(j,...) | ✅ | Extract path |
+| json_object_keys(j) | ✅ | Get keys |
 | json_populate_record() | ❌ | Populate record |
 | json_to_record(j) | ❌ | To record |
-| json_typeof(j) | ❌ | Get type name |
-| jsonb_set(j,path,val) | ❌ | Set value |
-| jsonb_insert(j,path,val) | ❌ | Insert value |
+| json_typeof(j) | ✅ | Get type name |
+| jsonb_set(j,path,val) | ✅ | Set value |
+| jsonb_insert(j,path,val) | ✅ | Insert value |
 | jsonb_path_query(j,path) | ❌ | JSONPath query |
-| jsonb_pretty(j) | ❌ | Pretty print |
-| jsonb_strip_nulls(j) | ❌ | Remove nulls |
-| to_json(val) | ❌ | Convert to JSON |
-| to_jsonb(val) | ❌ | Convert to JSONB |
-| row_to_json(row) | ❌ | Row to JSON |
-| json_build_object(...) | ❌ | Build JSON object |
-| json_build_array(...) | ❌ | Build JSON array |
+| jsonb_pretty(j) | ✅ | Pretty print |
+| jsonb_strip_nulls(j) | ✅ | Remove nulls |
+| to_json(val) | ✅ | Convert to JSON |
+| to_jsonb(val) | ✅ | Convert to JSONB |
+| row_to_json(row) | ✅ | Row to JSON |
+| json_build_object(...) | ✅ | Build JSON object |
+| json_build_array(...) | ✅ | Build JSON array |
 | JSON_QUERY() | ❌ | SQL/JSON query |
 | JSON_VALUE() | ❌ | SQL/JSON value |
 | JSON_EXISTS() | ❌ | SQL/JSON exists |
