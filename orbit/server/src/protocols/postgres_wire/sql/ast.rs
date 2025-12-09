@@ -73,6 +73,168 @@ pub enum Statement {
 
     // Truncate
     Truncate(TruncateStatement),
+
+    // Extended DDL - Types
+    CreateType(CreateTypeStatement),
+    DropType(DropTypeStatement),
+    AlterType(AlterTypeStatement),
+
+    // Extended DDL - Domains
+    CreateDomain(CreateDomainStatement),
+    DropDomain(DropDomainStatement),
+    AlterDomain(AlterDomainStatement),
+
+    // Extended DDL - Roles/Users
+    CreateRole(CreateRoleStatement),
+    DropRole(DropRoleStatement),
+    AlterRole(AlterRoleStatement),
+
+    // Extended DDL - Policies (Row-Level Security)
+    CreatePolicy(CreatePolicyStatement),
+    DropPolicy(DropPolicyStatement),
+    AlterPolicy(AlterPolicyStatement),
+
+    // Extended DDL - Rules
+    CreateRule(CreateRuleStatement),
+    DropRule(DropRuleStatement),
+
+    // Extended DDL - Groups
+    CreateGroup(CreateGroupStatement),
+    DropGroup(DropGroupStatement),
+    AlterGroup(AlterGroupStatement),
+
+    // Extended DDL - Tablespaces
+    CreateTablespace(CreateTablespaceStatement),
+    DropTablespace(DropTablespaceStatement),
+    AlterTablespace(AlterTablespaceStatement),
+
+    // Extended DDL - Aggregates
+    CreateAggregate(CreateAggregateStatement),
+    DropAggregate(DropAggregateStatement),
+    AlterAggregate(AlterAggregateStatement),
+
+    // Extended DDL - Operators
+    CreateOperator(CreateOperatorStatement),
+    DropOperator(DropOperatorStatement),
+    AlterOperator(AlterOperatorStatement),
+
+    // Extended DDL - Casts
+    CreateCast(CreateCastStatement),
+    DropCast(DropCastStatement),
+
+    // Extended DDL - Collations
+    CreateCollation(CreateCollationStatement),
+    DropCollation(DropCollationStatement),
+    AlterCollation(AlterCollationStatement),
+
+    // Extended DDL - Conversions
+    CreateConversion(CreateConversionStatement),
+    DropConversion(DropConversionStatement),
+    AlterConversion(AlterConversionStatement),
+
+    // Extended DDL - Foreign Data Wrappers
+    CreateForeignDataWrapper(CreateForeignDataWrapperStatement),
+    DropForeignDataWrapper(DropForeignDataWrapperStatement),
+    AlterForeignDataWrapper(AlterForeignDataWrapperStatement),
+
+    // Extended DDL - Foreign Tables
+    CreateForeignTable(CreateForeignTableStatement),
+    DropForeignTable(DropForeignTableStatement),
+    AlterForeignTable(AlterForeignTableStatement),
+
+    // Extended DDL - Servers
+    CreateServer(CreateServerStatement),
+    DropServer(DropServerStatement),
+    AlterServer(AlterServerStatement),
+
+    // Extended DDL - User Mappings
+    CreateUserMapping(CreateUserMappingStatement),
+    DropUserMapping(DropUserMappingStatement),
+    AlterUserMapping(AlterUserMappingStatement),
+
+    // Extended DDL - Publications
+    CreatePublication(CreatePublicationStatement),
+    DropPublication(DropPublicationStatement),
+    AlterPublication(AlterPublicationStatement),
+
+    // Extended DDL - Subscriptions
+    CreateSubscription(CreateSubscriptionStatement),
+    DropSubscription(DropSubscriptionStatement),
+    AlterSubscription(AlterSubscriptionStatement),
+
+    // Extended DDL - Event Triggers
+    CreateEventTrigger(CreateEventTriggerStatement),
+    DropEventTrigger(DropEventTriggerStatement),
+    AlterEventTrigger(AlterEventTriggerStatement),
+
+    // Extended DDL - Access Methods
+    CreateAccessMethod(CreateAccessMethodStatement),
+    DropAccessMethod(DropAccessMethodStatement),
+
+    // Extended DDL - Statistics
+    CreateStatistics(CreateStatisticsStatement),
+    DropStatistics(DropStatisticsStatement),
+    AlterStatistics(AlterStatisticsStatement),
+
+    // Extended DDL - Text Search
+    CreateTextSearchConfiguration(CreateTextSearchConfigurationStatement),
+    DropTextSearchConfiguration(DropTextSearchConfigurationStatement),
+    AlterTextSearchConfiguration(AlterTextSearchConfigurationStatement),
+    CreateTextSearchDictionary(CreateTextSearchDictionaryStatement),
+    DropTextSearchDictionary(DropTextSearchDictionaryStatement),
+    AlterTextSearchDictionary(AlterTextSearchDictionaryStatement),
+    CreateTextSearchParser(CreateTextSearchParserStatement),
+    DropTextSearchParser(DropTextSearchParserStatement),
+    AlterTextSearchParser(AlterTextSearchParserStatement),
+    CreateTextSearchTemplate(CreateTextSearchTemplateStatement),
+    DropTextSearchTemplate(DropTextSearchTemplateStatement),
+    AlterTextSearchTemplate(AlterTextSearchTemplateStatement),
+
+    // Extended DDL - Transforms
+    CreateTransform(CreateTransformStatement),
+    DropTransform(DropTransformStatement),
+
+    // Extended DDL - Languages
+    CreateLanguage(CreateLanguageStatement),
+    DropLanguage(DropLanguageStatement),
+    AlterLanguage(AlterLanguageStatement),
+
+    // Extended DDL - Operator Classes/Families
+    CreateOperatorClass(CreateOperatorClassStatement),
+    DropOperatorClass(DropOperatorClassStatement),
+    AlterOperatorClass(AlterOperatorClassStatement),
+    CreateOperatorFamily(CreateOperatorFamilyStatement),
+    DropOperatorFamily(DropOperatorFamilyStatement),
+    AlterOperatorFamily(AlterOperatorFamilyStatement),
+
+    // Extended DDL - Routines
+    AlterRoutine(AlterRoutineStatement),
+    DropRoutine(DropRoutineStatement),
+
+    // Extended DDL - Large Objects
+    AlterLargeObject(AlterLargeObjectStatement),
+
+    // Extended DDL - Default Privileges
+    AlterDefaultPrivileges(AlterDefaultPrivilegesStatement),
+
+    // Extended DDL - System
+    AlterSystem(AlterSystemStatement),
+
+    // Extended DDL - Alter statements for existing objects
+    AlterDatabase(AlterDatabaseStatement),
+    AlterIndex(AlterIndexStatement),
+    AlterView(AlterViewStatement),
+    AlterSchema(AlterSchemaStatement),
+    AlterFunction(AlterFunctionStatement),
+    AlterProcedure(AlterProcedureStatement),
+    AlterTrigger(AlterTriggerStatement),
+    AlterMaterializedView(AlterMaterializedViewStatement),
+    AlterExtension(AlterExtensionStatement),
+
+    // Extended DDL - Drop statements
+    DropFunction(DropFunctionStatement),
+    DropProcedure(DropProcedureStatement),
+    DropOwned(DropOwnedStatement),
 }
 
 // ===== DDL Statements =====
@@ -377,10 +539,15 @@ pub enum TableConstraint {
     PrimaryKey {
         name: Option<String>,
         columns: Vec<String>,
+        /// PostgreSQL 18: WITHOUT OVERLAPS for temporal primary keys
+        /// The column name that should use WITHOUT OVERLAPS (must be a range type)
+        without_overlaps: Option<String>,
     },
     Unique {
         name: Option<String>,
         columns: Vec<String>,
+        /// PostgreSQL 18: WITHOUT OVERLAPS for temporal unique constraints
+        without_overlaps: Option<String>,
     },
     ForeignKey {
         name: Option<String>,
@@ -389,6 +556,9 @@ pub enum TableConstraint {
         references_columns: Vec<String>,
         on_delete: Option<ReferentialAction>,
         on_update: Option<ReferentialAction>,
+        /// PostgreSQL 18: PERIOD for temporal foreign keys
+        period_column: Option<String>,
+        references_period: Option<String>,
     },
     Check {
         name: Option<String>,
@@ -1032,6 +1202,24 @@ pub enum BinaryOperator {
     BitwiseXor,
     LeftShift,
     RightShift,
+
+    // Range operators (PostgreSQL range types)
+    /// @> operator: range contains element/range
+    RangeContains,
+    /// <@ operator: element/range is contained by range
+    RangeContainedBy,
+    /// && operator: ranges overlap
+    RangeOverlaps,
+    /// -|- operator: ranges are adjacent
+    RangeAdjacent,
+    /// << operator: range is strictly left of range
+    RangeStrictlyLeft,
+    /// >> operator: range is strictly right of range
+    RangeStrictlyRight,
+    /// &< operator: range does not extend right of range
+    RangeNotExtendRight,
+    /// &> operator: range does not extend left of range
+    RangeNotExtendLeft,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1429,4 +1617,1411 @@ impl From<String> for TableName {
 pub struct SetStatement {
     pub variable: String,
     pub value: Vec<Expression>,
+}
+
+// ===== Extended DDL - Type Statements =====
+
+/// CREATE TYPE statement for enum, composite, range, and base types
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTypeStatement {
+    pub if_not_exists: bool,
+    pub name: TableName, // schema.name support
+    pub type_definition: TypeDefinition,
+}
+
+/// Type definition variants
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypeDefinition {
+    /// ENUM type: CREATE TYPE name AS ENUM ('value1', 'value2', ...)
+    Enum { values: Vec<String> },
+    /// Composite type: CREATE TYPE name AS (column1 type1, column2 type2, ...)
+    Composite { attributes: Vec<TypeAttribute> },
+    /// Range type: CREATE TYPE name AS RANGE (SUBTYPE = subtype, ...)
+    Range {
+        subtype: SqlType,
+        options: Vec<RangeTypeOption>,
+    },
+    /// Base type: CREATE TYPE name (INPUT = ..., OUTPUT = ..., ...)
+    Base { options: Vec<BaseTypeOption> },
+    /// Shell type: CREATE TYPE name (placeholder for forward references)
+    Shell,
+}
+
+/// Attribute for composite types
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeAttribute {
+    pub name: String,
+    pub data_type: SqlType,
+    pub collation: Option<String>,
+}
+
+/// Options for range types
+#[derive(Debug, Clone, PartialEq)]
+pub enum RangeTypeOption {
+    Subtype(SqlType),
+    SubtypeOpClass(String),
+    Collation(String),
+    Canonical(String),
+    SubtypeDiff(String),
+    Multirange(String),
+}
+
+/// Options for base types
+#[derive(Debug, Clone, PartialEq)]
+pub enum BaseTypeOption {
+    Input(String),
+    Output(String),
+    Receive(String),
+    Send(String),
+    TypeModIn(String),
+    TypeModOut(String),
+    Analyze(String),
+    Subscript(String),
+    InternalLength(i32),
+    PassedByValue,
+    Alignment(String),
+    Storage(String),
+    Like(String),
+    Category(char),
+    Preferred(bool),
+    DefaultValue(String),
+    Element(SqlType),
+    Delimiter(char),
+    Collatable(bool),
+}
+
+/// DROP TYPE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropTypeStatement {
+    pub if_exists: bool,
+    pub names: Vec<TableName>,
+    pub cascade: bool,
+}
+
+/// ALTER TYPE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterTypeStatement {
+    pub name: TableName,
+    pub action: AlterTypeAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterTypeAction {
+    /// ADD VALUE 'new_value' [BEFORE|AFTER 'existing_value']
+    AddValue {
+        if_not_exists: bool,
+        value: String,
+        position: Option<EnumValuePosition>,
+    },
+    /// RENAME VALUE 'old_value' TO 'new_value'
+    RenameValue {
+        old_value: String,
+        new_value: String,
+    },
+    /// RENAME TO new_name
+    Rename(String),
+    /// SET SCHEMA new_schema
+    SetSchema(String),
+    /// ADD ATTRIBUTE name data_type
+    AddAttribute { name: String, data_type: SqlType },
+    /// DROP ATTRIBUTE name
+    DropAttribute { name: String, cascade: bool },
+    /// ALTER ATTRIBUTE name SET DATA TYPE data_type
+    AlterAttribute { name: String, data_type: SqlType },
+    /// OWNER TO new_owner
+    Owner(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum EnumValuePosition {
+    Before(String),
+    After(String),
+}
+
+// ===== Extended DDL - Domain Statements =====
+
+/// CREATE DOMAIN statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateDomainStatement {
+    pub if_not_exists: bool,
+    pub name: TableName,
+    pub data_type: SqlType,
+    pub collation: Option<String>,
+    pub default: Option<Expression>,
+    pub constraints: Vec<DomainConstraint>,
+}
+
+/// Domain constraint
+#[derive(Debug, Clone, PartialEq)]
+pub struct DomainConstraint {
+    pub name: Option<String>,
+    pub constraint_type: DomainConstraintType,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DomainConstraintType {
+    NotNull,
+    Null,
+    Check(Expression),
+}
+
+/// DROP DOMAIN statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropDomainStatement {
+    pub if_exists: bool,
+    pub names: Vec<TableName>,
+    pub cascade: bool,
+}
+
+/// ALTER DOMAIN statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterDomainStatement {
+    pub name: TableName,
+    pub action: AlterDomainAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterDomainAction {
+    SetDefault(Expression),
+    DropDefault,
+    SetNotNull,
+    DropNotNull,
+    AddConstraint(DomainConstraint),
+    DropConstraint { name: String, cascade: bool },
+    RenameConstraint { old_name: String, new_name: String },
+    ValidateConstraint(String),
+    Owner(String),
+    Rename(String),
+    SetSchema(String),
+}
+
+// ===== Extended DDL - Role/User Statements =====
+
+/// CREATE ROLE/USER statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateRoleStatement {
+    pub if_not_exists: bool,
+    pub name: String,
+    pub is_user: bool, // true for CREATE USER (implies LOGIN)
+    pub options: Vec<RoleOption>,
+}
+
+/// Role options
+#[derive(Debug, Clone, PartialEq)]
+pub enum RoleOption {
+    SuperUser(bool),           // SUPERUSER / NOSUPERUSER
+    CreateDb(bool),            // CREATEDB / NOCREATEDB
+    CreateRole(bool),          // CREATEROLE / NOCREATEROLE
+    Inherit(bool),             // INHERIT / NOINHERIT
+    Login(bool),               // LOGIN / NOLOGIN
+    Replication(bool),         // REPLICATION / NOREPLICATION
+    BypassRls(bool),           // BYPASSRLS / NOBYPASSRLS
+    ConnectionLimit(i32),      // CONNECTION LIMIT n
+    Password(Option<String>),  // PASSWORD 'password' / PASSWORD NULL
+    EncryptedPassword(String), // ENCRYPTED PASSWORD 'password'
+    ValidUntil(String),        // VALID UNTIL 'timestamp'
+    InRole(Vec<String>),       // IN ROLE role1, role2
+    Role(Vec<String>),         // ROLE role1, role2 (this role can be granted)
+    Admin(Vec<String>),        // ADMIN role1, role2 (can grant this role)
+}
+
+/// DROP ROLE/USER statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropRoleStatement {
+    pub if_exists: bool,
+    pub names: Vec<String>,
+    pub is_user: bool, // true for DROP USER
+}
+
+/// ALTER ROLE/USER statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterRoleStatement {
+    pub name: String,
+    pub is_user: bool,
+    pub action: AlterRoleAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterRoleAction {
+    /// ALTER ROLE name WITH options
+    SetOptions(Vec<RoleOption>),
+    /// ALTER ROLE name RENAME TO new_name
+    Rename(String),
+    /// ALTER ROLE name SET parameter TO value
+    SetConfig {
+        parameter: String,
+        value: Expression,
+    },
+    /// ALTER ROLE name RESET parameter
+    ResetConfig(String),
+    /// ALTER ROLE name RESET ALL
+    ResetAllConfig,
+}
+
+// ===== Extended DDL - Policy Statements (Row-Level Security) =====
+
+/// CREATE POLICY statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreatePolicyStatement {
+    pub name: String,
+    pub table: TableName,
+    pub permissive: bool, // true for PERMISSIVE (default), false for RESTRICTIVE
+    pub command: PolicyCommand,
+    pub roles: Vec<String>,             // TO roles
+    pub using_expr: Option<Expression>, // USING expression
+    pub check_expr: Option<Expression>, // WITH CHECK expression
+}
+
+/// Policy command type
+#[derive(Debug, Clone, PartialEq)]
+pub enum PolicyCommand {
+    All,
+    Select,
+    Insert,
+    Update,
+    Delete,
+}
+
+/// DROP POLICY statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropPolicyStatement {
+    pub if_exists: bool,
+    pub name: String,
+    pub table: TableName,
+    pub cascade: bool,
+}
+
+/// ALTER POLICY statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterPolicyStatement {
+    pub name: String,
+    pub table: TableName,
+    pub action: AlterPolicyAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterPolicyAction {
+    Rename(String),
+    SetRoles(Vec<String>),
+    SetUsing(Option<Expression>),
+    SetCheck(Option<Expression>),
+}
+
+// ===== Extended DDL - Rule Statements =====
+
+/// CREATE RULE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateRuleStatement {
+    pub or_replace: bool,
+    pub name: String,
+    pub table: TableName,
+    pub event: RuleEvent,
+    pub where_clause: Option<Expression>,
+    pub action: RuleAction,
+}
+
+/// Rule event type
+#[derive(Debug, Clone, PartialEq)]
+pub enum RuleEvent {
+    Select,
+    Insert,
+    Update,
+    Delete,
+}
+
+/// Rule action
+#[derive(Debug, Clone, PartialEq)]
+pub enum RuleAction {
+    Nothing,
+    Instead(Vec<Statement>),
+    Also(Vec<Statement>),
+}
+
+/// DROP RULE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropRuleStatement {
+    pub if_exists: bool,
+    pub name: String,
+    pub table: TableName,
+    pub cascade: bool,
+}
+
+// ===== Extended DDL - Group Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateGroupStatement {
+    pub name: String,
+    pub with_options: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropGroupStatement {
+    pub if_exists: bool,
+    pub names: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterGroupStatement {
+    pub name: String,
+    pub action: AlterGroupAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterGroupAction {
+    AddUser(Vec<String>),
+    DropUser(Vec<String>),
+    Rename(String),
+}
+
+// ===== Extended DDL - Tablespace Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTablespaceStatement {
+    pub if_not_exists: bool,
+    pub name: String,
+    pub owner: Option<String>,
+    pub location: String,
+    pub options: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropTablespaceStatement {
+    pub if_exists: bool,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterTablespaceStatement {
+    pub name: String,
+    pub action: AlterTablespaceAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterTablespaceAction {
+    Rename(String),
+    Owner(String),
+    SetOptions(Vec<(String, String)>),
+    ResetOptions(Vec<String>),
+}
+
+// ===== Extended DDL - Aggregate Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateAggregateStatement {
+    pub or_replace: bool,
+    pub name: TableName,
+    pub args: Vec<SqlType>,
+    pub sfunc: String,
+    pub stype: SqlType,
+    pub options: Vec<AggregateOption>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AggregateOption {
+    SFunc(String),
+    SType(SqlType),
+    SSpace(i64),
+    FinalFunc(String),
+    FinalFuncExtra,
+    FinalFuncModify(String),
+    CombineFunc(String),
+    SerialFunc(String),
+    DeserialFunc(String),
+    InitCond(String),
+    MInitCond(String),
+    SortOp(String),
+    Parallel(String),
+    // Moving-aggregate options (PostgreSQL)
+    MSFunc(String),     // Moving-aggregate state function
+    MInvFunc(String),   // Moving-aggregate inverse function
+    MSType(SqlType),    // Moving-aggregate state type
+    MSSpace(i64),       // Moving-aggregate state size
+    MFinalFunc(String), // Moving-aggregate final function
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropAggregateStatement {
+    pub if_exists: bool,
+    pub names: Vec<(TableName, Vec<SqlType>)>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterAggregateStatement {
+    pub name: TableName,
+    pub args: Vec<SqlType>,
+    pub action: AlterAggregateAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterAggregateAction {
+    Rename(String),
+    Owner(String),
+    SetSchema(String),
+}
+
+// ===== Extended DDL - Operator Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateOperatorStatement {
+    pub name: String,
+    pub left_type: Option<SqlType>,
+    pub right_type: Option<SqlType>,
+    pub procedure: String,
+    pub options: Vec<OperatorOption>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum OperatorOption {
+    Commutator(String),
+    Negator(String),
+    Restrict(String),
+    Join(String),
+    Hashes,
+    Merges,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropOperatorStatement {
+    pub if_exists: bool,
+    pub operators: Vec<(String, Option<SqlType>, Option<SqlType>)>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterOperatorStatement {
+    pub name: String,
+    pub left_type: Option<SqlType>,
+    pub right_type: Option<SqlType>,
+    pub action: AlterOperatorAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterOperatorAction {
+    Owner(String),
+    SetSchema(String),
+    SetRestrict(String),
+    SetJoin(String),
+}
+
+// ===== Extended DDL - Cast Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateCastStatement {
+    pub source_type: SqlType,
+    pub target_type: SqlType,
+    pub function: Option<String>,
+    pub context: CastContext,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CastContext {
+    Implicit,
+    Assignment,
+    Explicit,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropCastStatement {
+    pub if_exists: bool,
+    pub source_type: SqlType,
+    pub target_type: SqlType,
+    pub cascade: bool,
+}
+
+// ===== Extended DDL - Collation Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateCollationStatement {
+    pub if_not_exists: bool,
+    pub name: TableName,
+    pub options: CollationOptions,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CollationOptions {
+    From(TableName),
+    Definition {
+        locale: Option<String>,
+        lc_collate: Option<String>,
+        lc_ctype: Option<String>,
+        provider: Option<String>,
+        deterministic: Option<bool>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropCollationStatement {
+    pub if_exists: bool,
+    pub names: Vec<TableName>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterCollationStatement {
+    pub name: TableName,
+    pub action: AlterCollationAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterCollationAction {
+    RefreshVersion,
+    Rename(String),
+    Owner(String),
+    SetSchema(String),
+}
+
+// ===== Extended DDL - Conversion Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateConversionStatement {
+    pub default: bool,
+    pub name: TableName,
+    pub source_encoding: String,
+    pub dest_encoding: String,
+    pub function: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropConversionStatement {
+    pub if_exists: bool,
+    pub names: Vec<TableName>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterConversionStatement {
+    pub name: TableName,
+    pub action: AlterConversionAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterConversionAction {
+    Rename(String),
+    Owner(String),
+    SetSchema(String),
+}
+
+// ===== Extended DDL - Foreign Data Wrapper Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateForeignDataWrapperStatement {
+    pub if_not_exists: bool,
+    pub name: String,
+    pub handler: Option<String>,
+    pub validator: Option<String>,
+    pub options: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropForeignDataWrapperStatement {
+    pub if_exists: bool,
+    pub names: Vec<String>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterForeignDataWrapperStatement {
+    pub name: String,
+    pub action: AlterForeignDataWrapperAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterForeignDataWrapperAction {
+    SetHandler(Option<String>),
+    SetValidator(Option<String>),
+    SetOptions(Vec<(String, String)>),
+    Owner(String),
+    Rename(String),
+}
+
+// ===== Extended DDL - Foreign Table Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateForeignTableStatement {
+    pub if_not_exists: bool,
+    pub name: TableName,
+    pub columns: Vec<ColumnDefinition>,
+    pub server: String,
+    pub options: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropForeignTableStatement {
+    pub if_exists: bool,
+    pub names: Vec<TableName>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterForeignTableStatement {
+    pub name: TableName,
+    pub action: AlterForeignTableAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterForeignTableAction {
+    AddColumn(ColumnDefinition),
+    DropColumn { name: String, cascade: bool },
+    SetOptions(Vec<(String, String)>),
+    Owner(String),
+    Rename(String),
+    SetSchema(String),
+}
+
+// ===== Extended DDL - Server Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateServerStatement {
+    pub if_not_exists: bool,
+    pub name: String,
+    pub server_type: Option<String>,
+    pub version: Option<String>,
+    pub foreign_data_wrapper: String,
+    pub options: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropServerStatement {
+    pub if_exists: bool,
+    pub names: Vec<String>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterServerStatement {
+    pub name: String,
+    pub action: AlterServerAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterServerAction {
+    SetVersion(Option<String>),
+    SetOptions(Vec<(String, String)>),
+    Owner(String),
+    Rename(String),
+}
+
+// ===== Extended DDL - User Mapping Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateUserMappingStatement {
+    pub if_not_exists: bool,
+    pub user: String,
+    pub server: String,
+    pub options: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropUserMappingStatement {
+    pub if_exists: bool,
+    pub user: String,
+    pub server: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterUserMappingStatement {
+    pub user: String,
+    pub server: String,
+    pub options: Vec<(String, String)>,
+}
+
+// ===== Extended DDL - Publication Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreatePublicationStatement {
+    pub if_not_exists: bool,
+    pub name: String,
+    pub for_all_tables: bool,
+    pub tables: Vec<TableName>,
+    pub options: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropPublicationStatement {
+    pub if_exists: bool,
+    pub names: Vec<String>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterPublicationStatement {
+    pub name: String,
+    pub action: AlterPublicationAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterPublicationAction {
+    AddTable(Vec<TableName>),
+    DropTable(Vec<TableName>),
+    SetTable(Vec<TableName>),
+    SetOptions(Vec<(String, String)>),
+    Owner(String),
+    Rename(String),
+}
+
+// ===== Extended DDL - Subscription Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateSubscriptionStatement {
+    pub if_not_exists: bool,
+    pub name: String,
+    pub connection: String,
+    pub publication: Vec<String>,
+    pub options: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropSubscriptionStatement {
+    pub if_exists: bool,
+    pub name: String,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterSubscriptionStatement {
+    pub name: String,
+    pub action: AlterSubscriptionAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterSubscriptionAction {
+    SetConnection(String),
+    SetPublication(Vec<String>),
+    AddPublication(Vec<String>),
+    DropPublication(Vec<String>),
+    SetOptions(Vec<(String, String)>),
+    Enable,
+    Disable,
+    Refresh,
+    Owner(String),
+    Rename(String),
+}
+
+// ===== Extended DDL - Event Trigger Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateEventTriggerStatement {
+    pub name: String,
+    pub event: String,
+    pub when_clause: Option<Vec<(String, Vec<String>)>>,
+    pub function: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropEventTriggerStatement {
+    pub if_exists: bool,
+    pub name: String,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterEventTriggerStatement {
+    pub name: String,
+    pub action: AlterEventTriggerAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterEventTriggerAction {
+    Enable,
+    EnableReplica,
+    EnableAlways,
+    Disable,
+    Owner(String),
+    Rename(String),
+}
+
+// ===== Extended DDL - Access Method Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateAccessMethodStatement {
+    pub name: String,
+    pub method_type: AccessMethodType,
+    pub handler: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AccessMethodType {
+    Index,
+    Table,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropAccessMethodStatement {
+    pub if_exists: bool,
+    pub name: String,
+    pub cascade: bool,
+}
+
+// ===== Extended DDL - Statistics Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateStatisticsStatement {
+    pub if_not_exists: bool,
+    pub name: TableName,
+    pub kinds: Vec<String>,
+    pub table: TableName,
+    pub columns: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropStatisticsStatement {
+    pub if_exists: bool,
+    pub names: Vec<TableName>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterStatisticsStatement {
+    pub name: TableName,
+    pub action: AlterStatisticsAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterStatisticsAction {
+    Owner(String),
+    Rename(String),
+    SetSchema(String),
+    SetStatisticsTarget(i32),
+}
+
+// ===== Extended DDL - Text Search Configuration Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTextSearchConfigurationStatement {
+    pub if_not_exists: bool,
+    pub name: TableName,
+    pub source: Option<TableName>,
+    pub parser: Option<TableName>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropTextSearchConfigurationStatement {
+    pub if_exists: bool,
+    pub names: Vec<TableName>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterTextSearchConfigurationStatement {
+    pub name: TableName,
+    pub action: AlterTextSearchConfigurationAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterTextSearchConfigurationAction {
+    AddMapping {
+        token_type: String,
+        dictionaries: Vec<TableName>,
+    },
+    AlterMapping {
+        token_type: String,
+        dictionaries: Vec<TableName>,
+    },
+    DropMapping {
+        if_exists: bool,
+        token_type: String,
+    },
+    Owner(String),
+    Rename(String),
+    SetSchema(String),
+}
+
+// ===== Extended DDL - Text Search Dictionary Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTextSearchDictionaryStatement {
+    pub if_not_exists: bool,
+    pub name: TableName,
+    pub template: TableName,
+    pub options: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropTextSearchDictionaryStatement {
+    pub if_exists: bool,
+    pub names: Vec<TableName>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterTextSearchDictionaryStatement {
+    pub name: TableName,
+    pub action: AlterTextSearchDictionaryAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterTextSearchDictionaryAction {
+    SetOptions(Vec<(String, String)>),
+    Owner(String),
+    Rename(String),
+    SetSchema(String),
+}
+
+// ===== Extended DDL - Text Search Parser Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTextSearchParserStatement {
+    pub if_not_exists: bool,
+    pub name: TableName,
+    pub start_func: String,
+    pub gettoken_func: String,
+    pub end_func: String,
+    pub lextypes_func: String,
+    pub headline_func: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropTextSearchParserStatement {
+    pub if_exists: bool,
+    pub names: Vec<TableName>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterTextSearchParserStatement {
+    pub name: TableName,
+    pub action: AlterTextSearchParserAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterTextSearchParserAction {
+    Rename(String),
+    SetSchema(String),
+}
+
+// ===== Extended DDL - Text Search Template Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTextSearchTemplateStatement {
+    pub if_not_exists: bool,
+    pub name: TableName,
+    pub init_func: Option<String>,
+    pub lexize_func: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropTextSearchTemplateStatement {
+    pub if_exists: bool,
+    pub names: Vec<TableName>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterTextSearchTemplateStatement {
+    pub name: TableName,
+    pub action: AlterTextSearchTemplateAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterTextSearchTemplateAction {
+    Rename(String),
+    SetSchema(String),
+}
+
+// ===== Extended DDL - Transform Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateTransformStatement {
+    pub or_replace: bool,
+    pub type_name: SqlType,
+    pub language: String,
+    pub from_sql: Option<String>,
+    pub to_sql: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropTransformStatement {
+    pub if_exists: bool,
+    pub type_name: SqlType,
+    pub language: String,
+    pub cascade: bool,
+}
+
+// ===== Extended DDL - Language Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateLanguageStatement {
+    pub or_replace: bool,
+    pub trusted: bool,
+    pub procedural: bool,
+    pub name: String,
+    pub handler: Option<String>,
+    pub inline_handler: Option<String>,
+    pub validator: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropLanguageStatement {
+    pub if_exists: bool,
+    pub name: String,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterLanguageStatement {
+    pub name: String,
+    pub action: AlterLanguageAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterLanguageAction {
+    Rename(String),
+    Owner(String),
+}
+
+// ===== Extended DDL - Operator Class Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateOperatorClassStatement {
+    pub default: bool,
+    pub name: TableName,
+    pub data_type: SqlType,
+    pub index_method: String,
+    pub family: Option<TableName>,
+    pub operators: Vec<OperatorClassItem>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum OperatorClassItem {
+    Operator {
+        strategy: i32,
+        name: String,
+        for_search: bool,
+    },
+    Function {
+        support: i32,
+        name: String,
+    },
+    Storage(SqlType),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropOperatorClassStatement {
+    pub if_exists: bool,
+    pub name: TableName,
+    pub index_method: String,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterOperatorClassStatement {
+    pub name: TableName,
+    pub index_method: String,
+    pub action: AlterOperatorClassAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterOperatorClassAction {
+    Rename(String),
+    Owner(String),
+    SetSchema(String),
+}
+
+// ===== Extended DDL - Operator Family Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateOperatorFamilyStatement {
+    pub if_not_exists: bool,
+    pub name: TableName,
+    pub index_method: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropOperatorFamilyStatement {
+    pub if_exists: bool,
+    pub name: TableName,
+    pub index_method: String,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterOperatorFamilyStatement {
+    pub name: TableName,
+    pub index_method: String,
+    pub action: AlterOperatorFamilyAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterOperatorFamilyAction {
+    Add(Vec<OperatorClassItem>),
+    Drop(Vec<OperatorFamilyDropItem>),
+    Rename(String),
+    Owner(String),
+    SetSchema(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum OperatorFamilyDropItem {
+    Operator {
+        strategy: i32,
+        left_type: SqlType,
+        right_type: SqlType,
+    },
+    Function {
+        support: i32,
+        left_type: SqlType,
+        right_type: SqlType,
+    },
+}
+
+// ===== Extended DDL - Routine Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterRoutineStatement {
+    pub name: TableName,
+    pub args: Vec<SqlType>,
+    pub action: AlterRoutineAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterRoutineAction {
+    Rename(String),
+    Owner(String),
+    SetSchema(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropRoutineStatement {
+    pub if_exists: bool,
+    pub routines: Vec<(TableName, Vec<SqlType>)>,
+    pub cascade: bool,
+}
+
+// ===== Extended DDL - Large Object Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterLargeObjectStatement {
+    pub oid: i64,
+    pub owner: String,
+}
+
+// ===== Extended DDL - Default Privileges =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterDefaultPrivilegesStatement {
+    pub target: Option<DefaultPrivilegesTarget>,
+    pub action: DefaultPrivilegesAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DefaultPrivilegesTarget {
+    pub for_role: Option<Vec<String>>,
+    pub in_schema: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DefaultPrivilegesAction {
+    Grant {
+        privileges: Vec<Privilege>,
+        object_type: String,
+        grantees: Vec<String>,
+        with_grant_option: bool,
+    },
+    Revoke {
+        privileges: Vec<Privilege>,
+        object_type: String,
+        grantees: Vec<String>,
+        cascade: bool,
+    },
+}
+
+// ===== Extended DDL - System Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterSystemStatement {
+    pub action: AlterSystemAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterSystemAction {
+    Set { parameter: String, value: String },
+    Reset(String),
+    ResetAll,
+}
+
+// ===== Extended DDL - Alter Statements for Existing Objects =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterDatabaseStatement {
+    pub name: String,
+    pub action: AlterDatabaseAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterDatabaseAction {
+    Rename(String),
+    Owner(String),
+    SetTablespace(String),
+    SetConfig { parameter: String, value: String },
+    ResetConfig(String),
+    ResetAllConfig,
+    RefreshCollationVersion,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterIndexStatement {
+    pub if_exists: bool,
+    pub name: TableName,
+    pub action: AlterIndexAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterIndexAction {
+    Rename(String),
+    SetTablespace(String),
+    AttachPartition(TableName),
+    SetOptions(Vec<(String, String)>),
+    ResetOptions(Vec<String>),
+    AlterColumn { column: i32, set_statistics: i32 },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterViewStatement {
+    pub if_exists: bool,
+    pub name: TableName,
+    pub action: AlterViewAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterViewAction {
+    Rename(String),
+    Owner(String),
+    SetSchema(String),
+    SetOptions(Vec<(String, String)>),
+    ResetOptions(Vec<String>),
+    AlterColumn {
+        column: String,
+        action: AlterColumnAction,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterSchemaStatement {
+    pub name: String,
+    pub action: AlterSchemaAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterSchemaAction {
+    Rename(String),
+    Owner(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterFunctionStatement {
+    pub name: TableName,
+    pub args: Vec<SqlType>,
+    pub action: AlterFunctionAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterFunctionAction {
+    Rename(String),
+    Owner(String),
+    SetSchema(String),
+    SetConfig { parameter: String, value: String },
+    ResetConfig(String),
+    ResetAllConfig,
+    SecurityDefiner(bool),
+    Parallel(String),
+    Cost(f64),
+    Rows(f64),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterProcedureStatement {
+    pub name: TableName,
+    pub args: Vec<SqlType>,
+    pub action: AlterProcedureAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterProcedureAction {
+    Rename(String),
+    Owner(String),
+    SetSchema(String),
+    SetConfig { parameter: String, value: String },
+    ResetConfig(String),
+    ResetAllConfig,
+    SecurityDefiner(bool),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterTriggerStatement {
+    pub name: String,
+    pub table: TableName,
+    pub action: AlterTriggerAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterTriggerAction {
+    Rename(String),
+    DependsOnExtension(String),
+    NoDependsOnExtension(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterMaterializedViewStatement {
+    pub if_exists: bool,
+    pub name: TableName,
+    pub action: AlterMaterializedViewAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterMaterializedViewAction {
+    Rename(String),
+    Owner(String),
+    SetSchema(String),
+    SetTablespace(String),
+    SetOptions(Vec<(String, String)>),
+    ResetOptions(Vec<String>),
+    AlterColumn {
+        column: String,
+        action: AlterColumnAction,
+    },
+    ClusterOn(String),
+    SetWithoutCluster,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterExtensionStatement {
+    pub name: String,
+    pub action: AlterExtensionAction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterExtensionAction {
+    UpdateTo(Option<String>),
+    SetSchema(String),
+    AddMember {
+        object_type: String,
+        object_name: String,
+    },
+    DropMember {
+        object_type: String,
+        object_name: String,
+    },
+}
+
+// ===== Extended DDL - Additional Drop Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropFunctionStatement {
+    pub if_exists: bool,
+    pub functions: Vec<(TableName, Vec<SqlType>)>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropProcedureStatement {
+    pub if_exists: bool,
+    pub procedures: Vec<(TableName, Vec<SqlType>)>,
+    pub cascade: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropOwnedStatement {
+    pub roles: Vec<String>,
+    pub cascade: bool,
 }

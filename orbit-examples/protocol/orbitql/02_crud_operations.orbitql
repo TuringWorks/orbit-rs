@@ -1,0 +1,379 @@
+-- ============================================================================
+-- OrbitQL Protocol Examples - CRUD Operations
+-- ============================================================================
+-- Demonstrates SELECT, INSERT, UPDATE, DELETE, UPSERT operations
+-- ============================================================================
+
+-- ============================================================================
+-- INSERT OPERATIONS
+-- ============================================================================
+
+-- Simple insert
+INSERT INTO users (name, email, age) VALUES ('Alice', 'alice@example.com', 30);
+
+-- Insert with record ID (SurrealDB-style)
+INSERT INTO users:alice { name: 'Alice', email: 'alice@example.com', age: 30 };
+
+-- Insert multiple records
+INSERT INTO users VALUES
+    ('Bob', 'bob@example.com', 25),
+    ('Charlie', 'charlie@example.com', 35),
+    ('Diana', 'diana@example.com', 28);
+
+-- Insert with object notation
+INSERT INTO users {
+    name: 'Eve',
+    email: 'eve@example.com',
+    age: 32,
+    metadata: {
+        source: 'signup',
+        referral: 'friend'
+    }
+};
+
+-- Insert from SELECT (SQL-style)
+INSERT INTO archived_users
+SELECT * FROM users WHERE status = 'inactive';
+
+-- Insert with ON CONFLICT (upsert behavior)
+INSERT INTO users (email, name)
+VALUES ('alice@example.com', 'Alice Smith')
+ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name;
+
+-- ============================================================================
+-- SELECT OPERATIONS
+-- ============================================================================
+
+-- Basic SELECT
+SELECT * FROM users;
+
+-- SELECT with specific fields
+SELECT name, email, age FROM users;
+
+-- SELECT with alias
+SELECT
+    name AS user_name,
+    email AS contact_email,
+    age * 12 AS age_in_months
+FROM users;
+
+-- SELECT with WHERE clause
+SELECT * FROM users WHERE age >= 18 AND status = 'active';
+
+-- SELECT with pattern matching
+SELECT * FROM users WHERE email LIKE '%@example.com';
+SELECT * FROM users WHERE name ILIKE 'al%';
+
+-- SELECT with IN clause
+SELECT * FROM users WHERE status IN ('active', 'pending', 'verified');
+
+-- SELECT with BETWEEN
+SELECT * FROM users WHERE age BETWEEN 25 AND 35;
+
+-- SELECT with NULL handling
+SELECT * FROM users WHERE deleted_at IS NULL;
+SELECT * FROM users WHERE phone IS NOT NULL;
+
+-- SELECT with ORDER BY
+SELECT * FROM users ORDER BY created_at DESC;
+SELECT * FROM users ORDER BY last_name ASC, first_name ASC;
+SELECT * FROM users ORDER BY age DESC NULLS LAST;
+
+-- SELECT with LIMIT and OFFSET
+SELECT * FROM users LIMIT 10;
+SELECT * FROM users LIMIT 10 OFFSET 20;
+
+-- SELECT with GROUP BY
+SELECT
+    status,
+    COUNT(*) AS user_count,
+    AVG(age) AS avg_age
+FROM users
+GROUP BY status;
+
+-- SELECT with GROUP BY and HAVING
+SELECT
+    department,
+    COUNT(*) AS emp_count,
+    SUM(salary) AS total_salary
+FROM employees
+GROUP BY department
+HAVING COUNT(*) > 5;
+
+-- SELECT with DISTINCT
+SELECT DISTINCT status FROM users;
+SELECT DISTINCT ON (department) * FROM employees ORDER BY salary DESC;
+
+-- ============================================================================
+-- JOIN OPERATIONS
+-- ============================================================================
+
+-- INNER JOIN
+SELECT u.name, o.order_id, o.total
+FROM users u
+INNER JOIN orders o ON u.id = o.user_id;
+
+-- LEFT JOIN
+SELECT u.name, COUNT(o.order_id) AS order_count
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+GROUP BY u.id, u.name;
+
+-- RIGHT JOIN
+SELECT o.order_id, u.name
+FROM orders o
+RIGHT JOIN users u ON o.user_id = u.id;
+
+-- FULL OUTER JOIN
+SELECT u.name, o.order_id
+FROM users u
+FULL JOIN orders o ON u.id = o.user_id;
+
+-- CROSS JOIN
+SELECT u.name, p.product_name
+FROM users u
+CROSS JOIN products p;
+
+-- Multiple JOINs
+SELECT
+    u.name AS customer,
+    p.name AS product,
+    o.quantity,
+    o.total_price
+FROM orders o
+JOIN users u ON o.user_id = u.id
+JOIN products p ON o.product_id = p.id
+WHERE o.created_at >= CURRENT_DATE - INTERVAL '30 days';
+
+-- Self JOIN
+SELECT
+    e.name AS employee,
+    m.name AS manager
+FROM employees e
+LEFT JOIN employees m ON e.manager_id = m.id;
+
+-- ============================================================================
+-- SUBQUERIES
+-- ============================================================================
+
+-- Scalar subquery
+SELECT name,
+    (SELECT COUNT(*) FROM orders WHERE orders.user_id = users.id) AS order_count
+FROM users;
+
+-- Subquery in WHERE
+SELECT * FROM users
+WHERE id IN (SELECT user_id FROM orders WHERE total > 1000);
+
+-- EXISTS subquery
+SELECT * FROM users u
+WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);
+
+-- NOT EXISTS
+SELECT * FROM users u
+WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);
+
+-- Subquery in FROM (derived table)
+SELECT dept_name, avg_salary
+FROM (
+    SELECT department AS dept_name, AVG(salary) AS avg_salary
+    FROM employees
+    GROUP BY department
+) AS dept_salaries
+WHERE avg_salary > 50000;
+
+-- ============================================================================
+-- COMMON TABLE EXPRESSIONS (CTEs)
+-- ============================================================================
+
+-- Simple CTE
+WITH active_users AS (
+    SELECT * FROM users WHERE status = 'active'
+)
+SELECT * FROM active_users WHERE age > 25;
+
+-- Multiple CTEs
+WITH
+    high_value_orders AS (
+        SELECT user_id, SUM(total) AS total_spent
+        FROM orders
+        GROUP BY user_id
+        HAVING SUM(total) > 10000
+    ),
+    vip_users AS (
+        SELECT u.*, hvo.total_spent
+        FROM users u
+        JOIN high_value_orders hvo ON u.id = hvo.user_id
+    )
+SELECT * FROM vip_users ORDER BY total_spent DESC;
+
+-- Recursive CTE (for hierarchical data)
+WITH RECURSIVE org_tree AS (
+    -- Base case: top-level employees (no manager)
+    SELECT id, name, manager_id, 1 AS level
+    FROM employees
+    WHERE manager_id IS NULL
+
+    UNION ALL
+
+    -- Recursive case: employees with managers
+    SELECT e.id, e.name, e.manager_id, ot.level + 1
+    FROM employees e
+    JOIN org_tree ot ON e.manager_id = ot.id
+)
+SELECT * FROM org_tree ORDER BY level, name;
+
+-- ============================================================================
+-- SET OPERATIONS
+-- ============================================================================
+
+-- UNION (combine and deduplicate)
+SELECT name, email FROM customers
+UNION
+SELECT name, email FROM suppliers;
+
+-- UNION ALL (combine without deduplication)
+SELECT name FROM active_users
+UNION ALL
+SELECT name FROM archived_users;
+
+-- INTERSECT
+SELECT product_id FROM orders_2023
+INTERSECT
+SELECT product_id FROM orders_2024;
+
+-- EXCEPT (difference)
+SELECT email FROM newsletter_subscribers
+EXCEPT
+SELECT email FROM unsubscribed_users;
+
+-- ============================================================================
+-- UPDATE OPERATIONS
+-- ============================================================================
+
+-- Simple UPDATE
+UPDATE users SET status = 'inactive' WHERE last_login < CURRENT_DATE - INTERVAL '90 days';
+
+-- UPDATE multiple fields
+UPDATE users SET
+    status = 'verified',
+    verified_at = time::now(),
+    verification_level = 2
+WHERE email_verified = true AND phone_verified = true;
+
+-- UPDATE with expression
+UPDATE products SET price = price * 1.1 WHERE category = 'electronics';
+
+-- UPDATE with compound operators (SurrealDB-style)
+UPDATE users SET login_count += 1 WHERE id = 'user:123';
+UPDATE inventory SET quantity -= 5 WHERE product_id = 'prod:456';
+
+-- UPDATE with RETURNING
+UPDATE users SET status = 'premium'
+WHERE subscription_end > CURRENT_DATE
+RETURNING id, name, status;
+
+-- UPDATE with JOIN (SQL-style)
+UPDATE orders o
+SET status = 'shipped'
+FROM shipments s
+WHERE o.id = s.order_id AND s.shipped_at IS NOT NULL;
+
+-- ============================================================================
+-- DELETE OPERATIONS
+-- ============================================================================
+
+-- Simple DELETE
+DELETE FROM sessions WHERE expires_at < time::now();
+
+-- DELETE with complex condition
+DELETE FROM users
+WHERE status = 'inactive'
+AND last_login < CURRENT_DATE - INTERVAL '365 days'
+AND email_verified = false;
+
+-- DELETE with RETURNING
+DELETE FROM notifications
+WHERE user_id = 'user:123' AND read = true
+RETURNING id, message;
+
+-- DELETE with subquery
+DELETE FROM products
+WHERE id NOT IN (SELECT DISTINCT product_id FROM order_items);
+
+-- ============================================================================
+-- UPSERT OPERATIONS
+-- ============================================================================
+
+-- UPSERT (insert or update)
+UPSERT INTO users {
+    id: 'user:alice',
+    name: 'Alice',
+    email: 'alice@example.com',
+    login_count: 1
+};
+
+-- UPSERT with conditional update
+UPSERT INTO stats {
+    user_id: $user_id,
+    page: $page,
+    visits: 1
+} SET visits += 1;
+
+-- ============================================================================
+-- MERGE OPERATIONS (SQL Standard)
+-- ============================================================================
+
+MERGE INTO target_table t
+USING source_table s ON t.id = s.id
+WHEN MATCHED THEN
+    UPDATE SET t.value = s.value, t.updated_at = time::now()
+WHEN NOT MATCHED THEN
+    INSERT (id, value, created_at) VALUES (s.id, s.value, time::now());
+
+-- ============================================================================
+-- AGGREGATE FUNCTIONS
+-- ============================================================================
+
+-- Basic aggregations
+SELECT
+    COUNT(*) AS total_users,
+    COUNT(DISTINCT status) AS unique_statuses,
+    AVG(age) AS average_age,
+    SUM(balance) AS total_balance,
+    MIN(created_at) AS first_user,
+    MAX(created_at) AS latest_user
+FROM users;
+
+-- Conditional aggregation
+SELECT
+    COUNT(CASE WHEN status = 'active' THEN 1 END) AS active_count,
+    COUNT(CASE WHEN status = 'inactive' THEN 1 END) AS inactive_count,
+    SUM(CASE WHEN age >= 18 THEN 1 ELSE 0 END) AS adults
+FROM users;
+
+-- ============================================================================
+-- WINDOW FUNCTIONS
+-- ============================================================================
+
+-- ROW_NUMBER
+SELECT
+    name,
+    department,
+    salary,
+    ROW_NUMBER() OVER (PARTITION BY department ORDER BY salary DESC) AS rank
+FROM employees;
+
+-- Running total
+SELECT
+    order_date,
+    amount,
+    SUM(amount) OVER (ORDER BY order_date) AS running_total
+FROM orders;
+
+-- Moving average
+SELECT
+    date,
+    value,
+    AVG(value) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS moving_avg_7day
+FROM metrics;

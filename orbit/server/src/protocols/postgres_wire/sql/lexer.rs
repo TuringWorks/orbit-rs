@@ -59,6 +59,97 @@ pub enum Token {
     Always,
     Stored,
     Virtual,
+    // PostgreSQL 18 - Temporal constraints
+    Overlaps,
+    Period,
+
+    // Extended DDL keywords
+    Type,
+    Domain,
+    Role,
+    User,
+    // Group is already defined for GROUP BY
+    Tablespace,
+    Policy,
+    Rule,
+    Aggregate,
+    Operator,
+    Collation,
+    Conversion,
+    Statistics,
+    Publication,
+    Subscription,
+    EventTrigger,
+    // Security keywords
+    Login,
+    NoLogin,
+    SuperUser,
+    NoSuperUser,
+    CreateDb,
+    NoCreateDb,
+    CreateRole,
+    NoCreateRole,
+    Inherit,
+    NoInherit,
+    Replication,
+    NoReplication,
+    BypassRls,
+    NoBypassRls,
+    ConnectionLimit,
+    ValidUntil,
+    Password,
+    Encrypted,
+    // Policy keywords
+    Permissive,
+    Restrictive,
+    // Type keywords
+    Enum,
+    Composite,
+    // Domain keywords use already-defined Constraint, Check, Null, Default
+
+    // Additional DDL keywords
+    Cast,
+    Language,
+    Transform,
+    AccessMethod,
+    Server,
+    Wrapper,
+    Data,
+    Mapping,
+    Options,
+    Location, // For CREATE TABLESPACE LOCATION
+    Reset,    // For RESET and ALTER TABLESPACE RESET
+    // Text search keywords
+    TextSearch,
+    Configuration,
+    Dictionary,
+    Parser,
+    Template,
+    // Large object
+    LargeObject,
+    // Operator keywords
+    Class,
+    Family,
+    Routine,
+    // System
+    System,
+    // Privileges
+    Privileges,
+    // Owned
+    OwnedBy,
+    // Refresh
+    Refresh,
+    // Rename
+    Rename,
+    // Restrict
+    Restrict,
+    // Validate
+    Validate,
+    // Enable/Disable
+    Enable,
+    Disable,
+    // Force
+    // Force is already defined for DROP DATABASE
 
     // Keywords - DML
     Select,
@@ -72,6 +163,9 @@ pub enum Token {
     Values,
     Set,
     Where,
+    // PostgreSQL 18 - OLD/NEW table references in RETURNING
+    Old,
+    New,
     Group,
     By,
     Having,
@@ -119,7 +213,6 @@ pub enum Token {
     To,
     Option,
     For,
-    Restrict,
     Public,
     Execute,
     Usage,
@@ -127,7 +220,6 @@ pub enum Token {
     Sequence,
     Database,
     Owner,
-    Template,
     Encoding,
     Force,
     Work,
@@ -139,7 +231,6 @@ pub enum Token {
     Nothing,
     Returning,
     Procedure,
-    Language,
     Returns,
     Out,
     InOut,
@@ -181,7 +272,6 @@ pub enum Token {
     Exists,
     Any,
     Some,
-    Cast,
     As,
     If,
     Replace,
@@ -287,6 +377,16 @@ pub enum Token {
     JsonExtractText,     // ->> (JSON field extraction as text)
     JsonPathExtract,     // #> (JSON path extraction)
     JsonPathExtractText, // #>> (JSON path extraction as text)
+
+    // Operators - Range (PostgreSQL range types)
+    RangeContains,       // @> (contains element/range)
+    RangeContainedBy,    // <@ (is contained by)
+    RangeOverlaps,       // && (overlaps)
+    RangeAdjacent,       // -|- (adjacent to)
+    RangeStrictlyLeft,   // << (strictly left of)
+    RangeStrictlyRight,  // >> (strictly right of)
+    RangeNotExtendRight, // &< (does not extend right of)
+    RangeNotExtendLeft,  // &> (does not extend left of)
 
     // Operators - Other
     Concat,
@@ -395,12 +495,92 @@ impl Lexer {
             ("ALWAYS", Token::Always),
             ("STORED", Token::Stored),
             ("VIRTUAL", Token::Virtual),
+            // Extended DDL Keywords
+            ("TYPE", Token::Type),
+            ("DOMAIN", Token::Domain),
+            ("ROLE", Token::Role),
+            ("USER", Token::User),
+            ("TABLESPACE", Token::Tablespace),
+            ("POLICY", Token::Policy),
+            ("RULE", Token::Rule),
+            ("AGGREGATE", Token::Aggregate),
+            ("OPERATOR", Token::Operator),
+            ("COLLATION", Token::Collation),
+            ("CONVERSION", Token::Conversion),
+            ("STATISTICS", Token::Statistics),
+            ("PUBLICATION", Token::Publication),
+            ("SUBSCRIPTION", Token::Subscription),
+            ("EVENT", Token::EventTrigger),
+            // Security/Role keywords
+            ("LOGIN", Token::Login),
+            ("NOLOGIN", Token::NoLogin),
+            ("SUPERUSER", Token::SuperUser),
+            ("NOSUPERUSER", Token::NoSuperUser),
+            ("CREATEDB", Token::CreateDb),
+            ("NOCREATEDB", Token::NoCreateDb),
+            ("CREATEROLE", Token::CreateRole),
+            ("NOCREATEROLE", Token::NoCreateRole),
+            ("INHERIT", Token::Inherit),
+            ("NOINHERIT", Token::NoInherit),
+            ("REPLICATION", Token::Replication),
+            ("NOREPLICATION", Token::NoReplication),
+            ("BYPASSRLS", Token::BypassRls),
+            ("NOBYPASSRLS", Token::NoBypassRls),
+            ("CONNECTION", Token::ConnectionLimit),
+            ("VALID", Token::ValidUntil),
+            ("PASSWORD", Token::Password),
+            ("ENCRYPTED", Token::Encrypted),
+            // Policy keywords
+            ("PERMISSIVE", Token::Permissive),
+            ("RESTRICTIVE", Token::Restrictive),
+            // Type keywords
+            ("ENUM", Token::Enum),
+            ("COMPOSITE", Token::Composite),
+            // Additional DDL keywords
+            ("CAST", Token::Cast),
+            ("LANGUAGE", Token::Language),
+            ("TRANSFORM", Token::Transform),
+            ("ACCESS", Token::AccessMethod),
+            ("SERVER", Token::Server),
+            ("WRAPPER", Token::Wrapper),
+            ("DATA", Token::Data),
+            ("MAPPING", Token::Mapping),
+            ("OPTIONS", Token::Options),
+            ("LOCATION", Token::Location),
+            ("RESET", Token::Reset),
+            // Text search keywords
+            ("CONFIGURATION", Token::Configuration),
+            ("DICTIONARY", Token::Dictionary),
+            ("PARSER", Token::Parser),
+            ("TEMPLATE", Token::Template),
+            // Operator keywords
+            ("CLASS", Token::Class),
+            ("FAMILY", Token::Family),
+            ("ROUTINE", Token::Routine),
+            // System
+            ("SYSTEM", Token::System),
+            // Privileges
+            ("PRIVILEGES", Token::Privileges),
+            // Refresh
+            ("REFRESH", Token::Refresh),
+            // Rename
+            ("RENAME", Token::Rename),
+            // Restrict
+            ("RESTRICT", Token::Restrict),
+            // Validate
+            ("VALIDATE", Token::Validate),
+            // Enable/Disable
+            ("ENABLE", Token::Enable),
+            ("DISABLE", Token::Disable),
             // DML Keywords
             ("SELECT", Token::Select),
             ("INSERT", Token::Insert),
             ("UPDATE", Token::Update),
             ("DELETE", Token::Delete),
             ("MERGE", Token::Merge),
+            // PostgreSQL 18 - OLD/NEW table references in RETURNING
+            ("OLD", Token::Old),
+            ("NEW", Token::New),
             ("COPY", Token::Copy),
             ("STDIN", Token::Stdin),
             ("STDOUT", Token::Stdout),
@@ -469,7 +649,6 @@ impl Lexer {
             ("TO", Token::To),
             ("OPTION", Token::Option),
             ("FOR", Token::For),
-            ("RESTRICT", Token::Restrict),
             ("PUBLIC", Token::Public),
             ("EXECUTE", Token::Execute),
             ("USAGE", Token::Usage),
@@ -477,7 +656,6 @@ impl Lexer {
             ("SEQUENCE", Token::Sequence),
             ("DATABASE", Token::Database),
             ("OWNER", Token::Owner),
-            ("TEMPLATE", Token::Template),
             ("ENCODING", Token::Encoding),
             ("FORCE", Token::Force),
             ("WORK", Token::Work),
@@ -489,7 +667,6 @@ impl Lexer {
             ("NOTHING", Token::Nothing),
             ("RETURNING", Token::Returning),
             ("PROCEDURE", Token::Procedure),
-            ("LANGUAGE", Token::Language),
             ("RETURNS", Token::Returns),
             ("OUT", Token::Out),
             ("INOUT", Token::InOut),
@@ -512,7 +689,6 @@ impl Lexer {
             ("EXISTS", Token::Exists),
             ("ANY", Token::Any),
             ("SOME", Token::Some),
-            ("CAST", Token::Cast),
             ("AS", Token::As),
             ("IF", Token::If),
             ("REPLACE", Token::Replace),
@@ -571,6 +747,9 @@ impl Lexer {
             ("WITH", Token::With),
             ("WITHOUT", Token::Without),
             ("ZONE", Token::Zone),
+            // PostgreSQL 18 - Temporal constraints
+            ("OVERLAPS", Token::Overlaps),
+            ("PERIOD", Token::Period),
             // Vector Types
             ("VECTOR", Token::Vector),
             ("HALFVEC", Token::HalfVec),
@@ -943,6 +1122,11 @@ impl Lexer {
                                 } else {
                                     return Token::Arrow;
                                 }
+                            } else if self.current_char == Some('|') && self.peek() == Some('-') {
+                                // -|- (adjacent)
+                                self.advance();
+                                self.advance();
+                                return Token::RangeAdjacent;
                             }
                             return Token::Minus;
                         }
@@ -1002,7 +1186,12 @@ impl Lexer {
                                 }
                                 Some('<') => {
                                     self.advance();
-                                    Token::LeftShift
+                                    Token::RangeStrictlyLeft // << (strictly left of)
+                                }
+                                Some('@') => {
+                                    // <@ (contained by)
+                                    self.advance();
+                                    Token::RangeContainedBy
                                 }
                                 _ => Token::LessThan,
                             };
@@ -1016,7 +1205,7 @@ impl Lexer {
                                 }
                                 Some('>') => {
                                     self.advance();
-                                    Token::RightShift
+                                    Token::RangeStrictlyRight // >> (strictly right of)
                                 }
                                 _ => Token::GreaterThan,
                             };
@@ -1033,7 +1222,24 @@ impl Lexer {
                         }
                         '&' => {
                             self.advance();
-                            return Token::BitwiseAnd;
+                            return match self.current_char {
+                                Some('&') => {
+                                    // && (overlaps)
+                                    self.advance();
+                                    Token::RangeOverlaps
+                                }
+                                Some('<') => {
+                                    // &< (does not extend right of)
+                                    self.advance();
+                                    Token::RangeNotExtendRight
+                                }
+                                Some('>') => {
+                                    // &> (does not extend left of)
+                                    self.advance();
+                                    Token::RangeNotExtendLeft
+                                }
+                                _ => Token::BitwiseAnd,
+                            };
                         }
                         '~' => {
                             self.advance();
@@ -1085,16 +1291,23 @@ impl Lexer {
                                     self.advance();
                                     if self.current_char == Some('>') {
                                         self.advance();
-                                        Token::JsonPathExtractText // #>>
+                                        Token::JsonPathExtractText
                                     } else {
-                                        Token::JsonPathExtract // #>
+                                        Token::JsonPathExtract
                                     }
                                 }
-                                _ => {
-                                    // Standalone # - not a valid token in our SQL dialect
-                                    // Skip and continue
-                                    continue;
+                                _ => Token::Identifier("#".to_string()),
+                            };
+                        }
+                        '@' => {
+                            self.advance();
+                            return match self.current_char {
+                                Some('>') => {
+                                    // @> (contains)
+                                    self.advance();
+                                    Token::RangeContains
                                 }
+                                _ => Token::Identifier("@".to_string()),
                             };
                         }
 

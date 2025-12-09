@@ -11,7 +11,79 @@ All notable changes to the Orbit-RS project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-12-02
+## [Unreleased] - 2025-12-08
+
+### Added
+
+- **PostgreSQL Sequence Functions** (2025-12-08): Full sequence function support for PostgreSQL compatibility
+  - **SequenceAccessor Trait**: New trait in `expression_evaluator.rs` for synchronous sequence access
+  - **ExecutorSequenceAccessor**: Implementation using `std::sync::RwLock` for thread-safe sequence operations
+  - **Sequence Functions Implemented**:
+    - `nextval(sequence_name)` - Advance and return next sequence value
+    - `currval(sequence_name)` - Return current value (requires prior nextval in session)
+    - `setval(sequence_name, value, is_called)` - Set sequence to specific value
+    - `lastval()` - Return last sequence value from any sequence in session
+  - **Session Tracking**: Added `sequence_last_value` field for per-session lastval() tracking
+  - **Tests**: 17 new sequence tests covering CREATE/ALTER/DROP SEQUENCE, all functions, cycling, and overflow
+
+- **PostgreSQL Math Functions** (2025-12-08): Additional mathematical functions for PostgreSQL 18 compatibility
+  - `cbrt(x)` - Cube root function
+  - `div(x, y)` - Integer division (truncated toward zero)
+  - `factorial(n)` - Factorial function
+  - `gcd(a, b)` - Greatest common divisor
+  - `lcm(a, b)` - Least common multiple
+  - `sign(x)` - Sign of number (-1, 0, or 1)
+
+- **PostgreSQL Stored Functions and Triggers** (2025-12-08): Full support for CREATE FUNCTION and CREATE TRIGGER storage
+  - **StoredFunction struct**: New serializable structure for stored function definitions
+  - **StoredTrigger struct**: New serializable structure for trigger definitions
+  - **CREATE FUNCTION**: Stores SQL/PL/pgSQL functions with parameters, return types, and volatility
+  - **CREATE TRIGGER**: Stores trigger definitions with timing, events, and associated functions
+  - **DROP TRIGGER**: Removes triggers with IF EXISTS support
+  - **Function overloading**: Supports multiple functions with same name but different parameter types
+  - **Tests**: 11 new tests for function and trigger creation/deletion
+
+- **PostgreSQL Extended DDL Support** (2025-12-08): Comprehensive DDL statement support for PostgreSQL compatibility
+  - **CREATE/DROP/ALTER TYPE**: Full support for ENUM, COMPOSITE, and RANGE types
+    - ENUM types with ADD VALUE, RENAME VALUE, position control (BEFORE/AFTER)
+    - Composite types with attributes and collation
+    - Range types with subtype specification
+  - **CREATE/DROP/ALTER DOMAIN**: Domain type support with constraints
+    - CHECK constraints with expressions
+    - NOT NULL and NULL constraints
+    - DEFAULT values
+    - SET/DROP DEFAULT, SET/DROP NOT NULL, ADD/DROP CONSTRAINT
+  - **CREATE/DROP/ALTER ROLE**: Complete role management
+    - All PostgreSQL role options (SUPERUSER, CREATEDB, CREATEROLE, LOGIN, etc.)
+    - Password management (PASSWORD, ENCRYPTED PASSWORD, VALID UNTIL)
+    - Connection limits
+    - Role inheritance (IN ROLE, ROLE, ADMIN)
+  - **CREATE/DROP/ALTER USER**: User management (aliased to role with LOGIN)
+  - **CREATE/DROP/ALTER POLICY**: Row-level security policy support
+    - PERMISSIVE and RESTRICTIVE policies
+    - FOR command (SELECT, INSERT, UPDATE, DELETE, ALL)
+    - USING and WITH CHECK expressions
+    - TO roles specification
+  - **CREATE/DROP RULE**: Query rewrite rules
+    - DO NOTHING, INSTEAD, ALSO actions
+    - WHERE conditions
+  - **Context-sensitive keywords**: Type, Domain, Role, User, Policy, etc. can be used as identifiers
+  - **Tests**: 22 new tests covering all extended DDL operations
+
+### Changed
+
+- **Sequence Storage Lock Type** (2025-12-08): Changed sequences storage from `tokio::sync::RwLock` to `std::sync::RwLock`
+  - Enables synchronous access from expression evaluator during query execution
+  - Maintains thread safety while avoiding async boundary crossing
+
+### Documentation
+
+- **Specification Updates** (2025-12-08): Updated all specification documents
+  - `specifications/PRD.md` - Updated test counts and PostgreSQL feature coverage
+  - `specifications/protocols/PROTOCOL_STATUS.md` - Added sequence and math functions, updated coverage metrics
+  - `specifications/protocols/POSTGRESQL18_COMPATIBILITY_STATUS.md` - Added Section 2.6 for Sequence Functions
+  - `specifications/protocols/POSTGRESQL_18_COMPATIBILITY.md` - Updated function implementation status
+  - `specifications/protocols/CLIENT_TOOLS_PROTOCOL_SUPPORT.md` - Updated PostgreSQL capabilities
 
 ### Fixed
 

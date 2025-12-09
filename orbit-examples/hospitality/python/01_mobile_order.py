@@ -364,7 +364,7 @@ def main():
     
     items = [
         {
-            'name': 'Grande Latte',
+            'name': 'Coconut Latte',
             'modifiers': ['Oat Milk', 'Extra Shot'],
             'quantity': 1
         },

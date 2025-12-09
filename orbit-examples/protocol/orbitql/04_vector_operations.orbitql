@@ -1,0 +1,298 @@
+-- ============================================================================
+-- OrbitQL Protocol Examples - Vector Operations
+-- ============================================================================
+-- Demonstrates vector search, embeddings, and similarity operations
+-- ============================================================================
+
+-- ============================================================================
+-- VECTOR INDEX DEFINITIONS
+-- ============================================================================
+
+-- Define vector index with HNSW algorithm
+DEFINE INDEX idx_doc_embedding ON TABLE documents FIELDS embedding
+    MTREE DIMENSION 384 DIST COSINE
+    TYPE HNSW(16, 64);  -- M=16, efConstruction=64
+
+-- Define vector index with IVF-Flat
+DEFINE INDEX idx_product_embedding ON TABLE products FIELDS feature_vector
+    MTREE DIMENSION 512 DIST EUCLIDEAN
+    TYPE IVF(100);  -- 100 clusters
+
+-- Define vector index with Hamming distance (for binary vectors)
+DEFINE INDEX idx_hash ON TABLE images FIELDS binary_hash
+    MTREE DIMENSION 256 DIST HAMMING;
+
+-- ============================================================================
+-- VECTOR SIMILARITY SEARCH
+-- ============================================================================
+
+-- Basic KNN search using <-> operator (L2/Euclidean distance)
+SELECT id, title, content
+FROM documents
+ORDER BY embedding <-> $query_embedding
+LIMIT 10;
+
+-- Cosine similarity search using <=> operator
+SELECT id, name, description
+FROM products
+WHERE category = 'electronics'
+ORDER BY feature_vector <=> $query_vector
+LIMIT 5;
+
+-- Inner product search using <#> operator
+SELECT id, title
+FROM articles
+ORDER BY embedding <#> $query_embedding DESC
+LIMIT 20;
+
+-- ============================================================================
+-- VECTOR FUNCTIONS
+-- ============================================================================
+
+-- Get vector dimensions
+SELECT vector_dims(embedding) AS dimensions FROM documents LIMIT 1;
+
+-- Get vector magnitude/norm
+SELECT id, vector_norm(embedding) AS magnitude FROM documents;
+
+-- Compute L2 distance
+SELECT
+    id,
+    title,
+    vector::distance::euclidean(embedding, $query) AS l2_distance
+FROM documents
+ORDER BY l2_distance
+LIMIT 10;
+
+-- Compute cosine distance
+SELECT
+    id,
+    name,
+    vector::distance::cosine(feature_vector, $query) AS cosine_dist
+FROM products
+ORDER BY cosine_dist
+LIMIT 10;
+
+-- Compute cosine similarity (1 - cosine_distance)
+SELECT
+    id,
+    title,
+    vector::similarity::cosine(embedding, $query) AS similarity
+FROM documents
+WHERE similarity > 0.8
+ORDER BY similarity DESC;
+
+-- Manhattan distance (L1)
+SELECT
+    id,
+    vector::distance::manhattan(embedding, $query) AS l1_distance
+FROM documents
+ORDER BY l1_distance
+LIMIT 10;
+
+-- Dot product
+SELECT
+    id,
+    vector::dot(embedding, $query) AS dot_product
+FROM documents
+ORDER BY dot_product DESC
+LIMIT 10;
+
+-- ============================================================================
+-- VECTOR ARITHMETIC
+-- ============================================================================
+
+-- Vector addition
+SELECT vector::add(v1.embedding, v2.embedding) AS combined
+FROM vectors v1, vectors v2
+WHERE v1.id = 'vec1' AND v2.id = 'vec2';
+
+-- Vector subtraction (king - man + woman = queen)
+SELECT
+    name,
+    vector::similarity::cosine(
+        embedding,
+        vector::subtract(
+            vector::add(
+                (SELECT embedding FROM words WHERE word = 'king'),
+                (SELECT embedding FROM words WHERE word = 'woman')
+            ),
+            (SELECT embedding FROM words WHERE word = 'man')
+        )
+    ) AS similarity
+FROM words
+ORDER BY similarity DESC
+LIMIT 5;
+
+-- Scalar multiplication
+SELECT vector::multiply(embedding, 2.0) AS scaled FROM documents WHERE id = 'doc1';
+
+-- Normalize vector
+SELECT vector::normalize(embedding) AS unit_vector FROM documents WHERE id = 'doc1';
+
+-- ============================================================================
+-- HYBRID SEARCH (Vector + Keyword)
+-- ============================================================================
+
+-- Combine BM25 text search with vector similarity
+SELECT
+    id,
+    title,
+    content,
+    search::score(1) AS text_score,
+    1 - (embedding <=> $query_embedding) AS vector_score,
+    (search::score(1) * 0.3 + (1 - (embedding <=> $query_embedding)) * 0.7) AS hybrid_score
+FROM documents
+WHERE content @@ plainto_tsquery($search_text)
+ORDER BY hybrid_score DESC
+LIMIT 20;
+
+-- Reciprocal Rank Fusion (RRF) for combining results
+WITH
+    text_results AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY search::score(1) DESC) AS text_rank
+        FROM documents
+        WHERE content @@ plainto_tsquery($search_text)
+        LIMIT 100
+    ),
+    vector_results AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> $query_embedding) AS vector_rank
+        FROM documents
+        LIMIT 100
+    )
+SELECT
+    d.id,
+    d.title,
+    (1.0 / (60 + COALESCE(tr.text_rank, 1000)) +
+     1.0 / (60 + COALESCE(vr.vector_rank, 1000))) AS rrf_score
+FROM documents d
+LEFT JOIN text_results tr ON d.id = tr.id
+LEFT JOIN vector_results vr ON d.id = vr.id
+WHERE tr.id IS NOT NULL OR vr.id IS NOT NULL
+ORDER BY rrf_score DESC
+LIMIT 20;
+
+-- ============================================================================
+-- EMBEDDING GENERATION
+-- ============================================================================
+
+-- Generate embedding using ML model
+UPDATE documents
+SET embedding = ml::embed_text(content, 'sentence-transformers/all-MiniLM-L6-v2')
+WHERE embedding IS NULL;
+
+-- Batch embedding generation
+UPDATE products
+SET feature_vector = ml::embed_text(
+    string::concat(name, ' ', description),
+    'text-embedding-ada-002'
+)
+WHERE feature_vector IS NULL
+LIMIT 100;
+
+-- Image embedding
+UPDATE images
+SET embedding = ml::embed_image(image_url, 'clip-vit-base-patch32')
+WHERE embedding IS NULL;
+
+-- ============================================================================
+-- VECTOR CLUSTERING
+-- ============================================================================
+
+-- K-means clustering
+SELECT
+    id,
+    title,
+    ml::cluster_kmeans(embedding, 10) AS cluster_id
+FROM documents;
+
+-- Find cluster centroids
+SELECT
+    cluster_id,
+    vector::avg(embedding) AS centroid,
+    COUNT(*) AS cluster_size
+FROM (
+    SELECT id, embedding, ml::cluster_kmeans(embedding, 10) AS cluster_id
+    FROM documents
+) clustered
+GROUP BY cluster_id;
+
+-- ============================================================================
+-- NEAREST NEIGHBOR WITH FILTERS
+-- ============================================================================
+
+-- Filtered vector search (pre-filter)
+SELECT id, title
+FROM documents
+WHERE category = 'technology' AND published_at > '2024-01-01'
+ORDER BY embedding <=> $query_embedding
+LIMIT 10;
+
+-- Post-filter (search then filter - less efficient)
+SELECT * FROM (
+    SELECT id, title, category
+    FROM documents
+    ORDER BY embedding <=> $query_embedding
+    LIMIT 100
+) results
+WHERE category = 'technology'
+LIMIT 10;
+
+-- Radius search (within distance threshold)
+SELECT id, title, embedding <-> $query AS distance
+FROM documents
+WHERE embedding <-> $query < 0.5
+ORDER BY distance;
+
+-- ============================================================================
+-- VECTOR AGGREGATIONS
+-- ============================================================================
+
+-- Average embedding per category
+SELECT
+    category,
+    vector::avg(embedding) AS centroid
+FROM documents
+GROUP BY category;
+
+-- Find most representative document per cluster
+SELECT DISTINCT ON (cluster_id)
+    cluster_id,
+    id,
+    title,
+    vector::distance::cosine(embedding, centroid) AS dist_to_centroid
+FROM (
+    SELECT
+        d.*,
+        ml::cluster_kmeans(embedding, 10) AS cluster_id,
+        vector::avg(embedding) OVER (PARTITION BY ml::cluster_kmeans(embedding, 10)) AS centroid
+    FROM documents d
+) clustered
+ORDER BY cluster_id, dist_to_centroid;
+
+-- ============================================================================
+-- MULTIMODAL SEARCH
+-- ============================================================================
+
+-- Search across text and images
+SELECT
+    id,
+    type,
+    title,
+    CASE
+        WHEN type = 'text' THEN vector::similarity::cosine(text_embedding, $query_embedding)
+        WHEN type = 'image' THEN vector::similarity::cosine(image_embedding, $query_embedding)
+    END AS similarity
+FROM content
+ORDER BY similarity DESC
+LIMIT 20;
+
+-- Cross-modal retrieval (text query -> image results)
+SELECT
+    id,
+    image_url,
+    caption,
+    vector::similarity::cosine(clip_embedding, $text_query_embedding) AS relevance
+FROM images
+ORDER BY relevance DESC
+LIMIT 10;

@@ -6,7 +6,7 @@ category: "architecture"
 permalink: /PRD.html
 ---
 
-> **Last Updated**: December 5, 2025
+> **Last Updated**: December 8, 2025
 > **Status**: Production-Ready Multi-Protocol Database Platform
 > **Architecture Reference**: See [`docs/content/architecture/ORBIT_ARCHITECTURE.md`](content/architecture/ORBIT_ARCHITECTURE.md) for detailed architecture patterns, transaction layer (MVCC, 2PC, Saga), query execution (vectorized, SIMD), network layer (gRPC, Protocol Buffers), and hybrid storage architecture.
 > **Protocol Analysis**: See [`protocols/PROTOCOL_COMPLETION_ANALYSIS.md`](protocols/PROTOCOL_COMPLETION_ANALYSIS.md) for detailed protocol implementation status and gaps.
@@ -47,7 +47,7 @@ permalink: /PRD.html
 |--------|-------|
 | Lines of Code | 365,000+ |
 | Source Files | 530+ |
-| Test Coverage | 2,352+ tests |
+| Test Coverage | 2,400+ tests |
 | Compiler Warnings | 0 (zero warnings policy) |
 | Workspace Crates | 15 |
 
@@ -168,9 +168,16 @@ orbit/server/src/
 │   │   ├── aql_parser.rs            # AQL parser
 │   │   └── data_model.rs            # Multi-model data
 │   │
-│   ├── orbitql/                     # OrbitQL multi-model
-│   │   ├── mod.rs                   # OrbitQL module
-│   │   └── executor.rs              # Query executor
+│   ├── orbitql/                     # OrbitQL multi-model query language
+│   │   ├── mod.rs                   # OrbitQL module exports
+│   │   ├── lexer.rs                 # Token lexer (SurrealDB-style keywords)
+│   │   ├── ast.rs                   # Abstract Syntax Tree definitions
+│   │   ├── parser.rs                # Recursive descent parser
+│   │   ├── executor.rs              # Query executor
+│   │   ├── optimizer.rs             # Query optimization
+│   │   ├── planner.rs               # Query planning
+│   │   ├── streaming.rs             # LIVE query support
+│   │   └── ml_functions.rs          # ML function integration
 │   │
 │   ├── ml/                          # ML SQL integration
 │   │   ├── mod.rs                   # ML module
@@ -532,6 +539,21 @@ npm run compile
 | gRPC | 50051 | `orbit-proto` | Complete |
 | Neo4j Bolt | 7687 | `protocols/cypher/` | Active |
 | ArangoDB | 8529 | `protocols/aql/` | Active |
+| Arrow Flight SQL | 50052 | `protocols/flight/` | Specified |
+| OrbitWire | 50053 | `protocols/orbitwire/` | Specified |
+
+### OrbitQL Wire Protocols
+
+OrbitQL queries can be executed via two purpose-built wire protocols:
+
+| Protocol | Best For | Key Features |
+|----------|----------|--------------|
+| **Arrow Flight SQL** | Analytics, bulk data | Zero-copy columnar transfer, gRPC/HTTP2, client ecosystem |
+| **OrbitWire** | Interactive, CLI | Low-latency, stream multiplexing, LIVE queries |
+
+**Detailed Specifications**:
+- [`protocols/Protocol-specs/arrow-flight-sql-specification.md`](protocols/Protocol-specs/arrow-flight-sql-specification.md) - Arrow Flight SQL integration
+- [`protocols/Protocol-specs/orbitwire-protocol-specification.md`](protocols/Protocol-specs/orbitwire-protocol-specification.md) - Custom OrbitWire binary protocol
 
 ### Redis RESP Commands (124+)
 
@@ -958,8 +980,9 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 
 | Protocol | Status | Completion | Tests | Key Components |
 |----------|--------|------------|-------|----------------|
+| **OrbitQL** | Complete | 95% | 50+ | SurrealDB-style DEFINE/REMOVE, TRAVERSE/RELATE/MATCH, Vector KNN, Control flow (IF/FOR/LET), LIVE queries, ML functions |
 | **Redis RESP** | Complete | 97% | 183 | String, Hash, List, Set, SortedSet, Stream, PubSub, Vector, TimeSeries, Graph, CLUSTER |
-| **PostgreSQL** | Complete | 90% | 412 | Wire protocol, SQL parser, Query engine, JSONB, pgvector, CTEs, Window functions |
+| **PostgreSQL** | Complete | 96% | 460+ | Wire protocol (v3/v3.2), SQL parser (complete DDL/DML/DCL/TCL), Query engine, JSONB, pgvector, CTEs, Window functions, PG18 features, Sequences, Full-text search types |
 | **MySQL** | Complete | 80% | 32 | Wire protocol, Auth, Binary protocol (prepared statements) |
 | **CQL (Cassandra)** | Complete | 75% | 23 | Wire protocol, CQL parser, BATCH operations, LWT |
 | **AQL (ArangoDB)** | Active | 75% | 102 | Parser, Query engine, Graph traversal, PRUNE, OPTIONS, SEARCH |
@@ -974,6 +997,14 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | Core Actor System | Complete | 555 | `orbit-shared/src/lib.rs` |
 | Distributed Transactions | Complete | 22 | `shared/src/transactions/` |
 | REST API | Complete | 4 | `protocols/rest/` |
+| **OrbitQL Features** | | | |
+| Lexer/Parser | Complete | ~20 | `orbitql/lexer.rs`, `orbitql/ast.rs` |
+| DEFINE/REMOVE (SurrealDB-style) | Complete | ~10 | `orbitql/parser.rs` |
+| Graph (TRAVERSE/RELATE/MATCH) | Complete | ~10 | `orbitql/executor.rs` |
+| Vector KNN Search | Complete | ~5 | `orbitql/executor.rs` |
+| Control Flow (IF/FOR/LET/THROW) | Complete | ~5 | `orbitql/ast.rs` |
+| LIVE Queries / KILL | Complete | - | `orbitql/streaming.rs` |
+| Transaction SAVEPOINTs | Complete | - | `orbitql/executor.rs` |
 | **Redis RESP Features** | | | |
 | String/Hash/List/Set/SortedSet | Complete | ~80 | `resp/commands/*.rs` |
 | Stream/PubSub | Complete | ~20 | `resp/commands/stream.rs`, `pubsub.rs` |
@@ -983,12 +1014,30 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | CLUSTER Commands | Complete | 7 | `resp/commands/cluster.rs` |
 | ACL Commands | Complete | ~5 | `resp/commands/acl.rs` |
 | **PostgreSQL Features** | | | |
-| Wire Protocol | Complete | - | `postgres_wire/protocol.rs` |
-| SQL Parser (DML/DDL/DQL) | Complete | ~200 | `sql/parser/*.rs` |
+| Wire Protocol (v3/v3.2) | Complete | - | `postgres_wire/protocol.rs` |
+| SQL Parser (DDL/DML/DCL/TCL) | Complete | ~200 | `sql/parser/*.rs` (100+ DDL statements: CREATE/ALTER/DROP for all PG objects) |
 | Query Engine | Complete | ~100 | `sql/query_engine.rs` |
 | JSONB Operators | Complete | 12 | `jsonb/operators.rs` |
 | pgvector Support | Complete | ~50 | `sql/pgvector*.rs` |
 | Window Functions | Complete | ~30 | `sql/window_functions.rs` |
+| **PostgreSQL 18 Features** | | | |
+| NegotiateProtocolVersion | Complete | - | `postgres_wire/protocol.rs`, `messages.rs` |
+| Variable-length Cancel Keys | Complete | - | `postgres_wire/protocol.rs` |
+| UUIDv7 Functions | Complete | 6 | `sql/expression_evaluator.rs` |
+| GENERATED Columns (STORED/VIRTUAL) | Complete | 10 | `sql/executor.rs` |
+| OLD/NEW in RETURNING | Complete | 4 | `sql/executor.rs` |
+| Temporal Constraints (WITHOUT OVERLAPS) | Complete | 13 | `sql/parser/ddl.rs`, `sql/executor.rs` |
+| Sequence Functions (nextval/currval/setval/lastval) | Complete | 17 | `sql/executor.rs`, `sql/expression_evaluator.rs` |
+| Math Functions (cbrt/div/factorial/gcd/lcm/sign) | Complete | - | `sql/expression_evaluator.rs` |
+| MERGE with RETURNING | Partial | 3 | `sql/parser/dml.rs` |
+| Comprehensive DDL Parser | Complete | - | `sql/parser/ddl.rs` (6300+ lines) |
+| CREATE/ALTER/DROP: Foreign Tables, FDW, Servers | Complete | - | `sql/parser/ddl.rs` |
+| CREATE/ALTER/DROP: Publications, Subscriptions | Complete | - | `sql/parser/ddl.rs` |
+| CREATE/ALTER/DROP: Event Triggers, Access Methods | Complete | - | `sql/parser/ddl.rs` |
+| CREATE/ALTER/DROP: Text Search (Config/Dict/Parser/Template) | Complete | - | `sql/parser/ddl.rs` |
+| CREATE/ALTER/DROP: Transforms, Languages, Statistics | Complete | - | `sql/parser/ddl.rs` |
+| CREATE/ALTER/DROP: Operators, Aggregates, Casts | Complete | - | `sql/parser/ddl.rs` |
+| CREATE/ALTER/DROP: Collations, Conversions, Tablespaces | Complete | - | `sql/parser/ddl.rs` |
 | **Cypher/Bolt Features** | | | |
 | Bolt Protocol v4/v5 | Complete | - | `bolt_protocol.rs` |
 | Cypher Parser | Complete | ~40 | `cypher_parser.rs` |
@@ -1007,7 +1056,7 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | **Infrastructure** | | | |
 | Kubernetes Operator | Active | 0 | `orbit-operator/` |
 
-**Total Tests: 2,352+** (as of December 2025)
+**Total Tests: 2,420+** (as of December 2025)
 
 ---
 

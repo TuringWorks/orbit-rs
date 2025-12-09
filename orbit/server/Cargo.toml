@@ -84,6 +84,13 @@ http-body-util = "0.1"
 # parquet = { version = "55.2", optional = true, default-features = false }
 # opendal = { version = "0.51", optional = true, features = ["services-azblob", "services-memory"] }
 
+# Full-Text Search (Tantivy)
+tantivy = { version = "0.22", optional = true }
+tantivy-jieba = { version = "0.11", optional = true }  # Chinese tokenization
+
+# LZ4 compression for OrbitWire
+lz4_flex = "0.11"
+
 [features]
 # Default features - all production-ready features enabled
 default = [
@@ -129,6 +136,7 @@ default = [
     "gpu-graph-traversal",
     "heterogeneous-compute",
     "tracing",
+    "fts",
 ]
 
 # Core System Features
@@ -148,6 +156,8 @@ protocol-arangodb = ["actor-system", "model-graph"]
 protocol-grpc = ["networking"]
 protocol-rest = ["networking"]
 protocol-mcp = ["networking"]
+protocol-flight-sql = ["networking"]
+protocol-orbitwire = ["networking"]
 
 # Storage Engines
 storage-memory = []
@@ -220,6 +230,10 @@ benchmarks = []
 testing = []
 tracing = ["metrics"]
 debug-tools = []
+
+# Full-Text Search
+fts = ["tantivy"]
+fts-chinese = ["fts", "tantivy-jieba"]
 
 [dev-dependencies]
 mockall.workspace = true

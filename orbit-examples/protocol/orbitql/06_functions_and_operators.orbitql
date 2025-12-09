@@ -1,0 +1,419 @@
+-- ============================================================================
+-- OrbitQL Protocol Examples - Functions and Operators
+-- ============================================================================
+-- Demonstrates built-in functions and operators based on the specification
+-- ============================================================================
+
+-- ============================================================================
+-- AGGREGATE FUNCTIONS
+-- ============================================================================
+
+-- Basic aggregates
+SELECT
+    COUNT(*) AS total_users,
+    COUNT(DISTINCT department) AS unique_departments,
+    SUM(salary) AS total_payroll,
+    AVG(salary) AS avg_salary,
+    MIN(salary) AS min_salary,
+    MAX(salary) AS max_salary
+FROM employees;
+
+-- SurrealDB-style aggregate functions
+SELECT
+    count() AS total,
+    math::sum(price) AS total_price,
+    math::mean(price) AS avg_price,
+    math::min(price) AS min_price,
+    math::max(price) AS max_price
+FROM products;
+
+-- Statistical aggregates
+SELECT
+    STDDEV(salary) AS salary_stddev,
+    VARIANCE(salary) AS salary_variance
+FROM employees;
+
+-- ============================================================================
+-- MATH FUNCTIONS
+-- ============================================================================
+
+-- Basic math
+SELECT
+    math::abs(-42) AS absolute,
+    math::ceil(3.14) AS ceiling,
+    math::floor(3.99) AS floor_val,
+    math::round(3.567, 2) AS rounded,
+    math::sqrt(16) AS square_root,
+    math::pow(2, 10) AS power,
+    math::exp(1) AS e_value;
+
+-- Logarithms
+SELECT
+    math::ln(2.718281828) AS natural_log,
+    math::log(100) AS log_base_10,
+    math::log(8, 2) AS log_base_2;
+
+-- Trigonometric functions
+SELECT
+    math::sin(math::pi() / 2) AS sine,
+    math::cos(0) AS cosine,
+    math::tan(math::pi() / 4) AS tangent;
+
+-- Constants
+SELECT
+    math::pi() AS pi,
+    math::e() AS euler_number,
+    math::inf() AS infinity;
+
+-- PostgreSQL-compatible functions
+SELECT
+    FACTORIAL(5) AS factorial_5,        -- 120
+    GCD(48, 18) AS gcd_result,          -- 6
+    LCM(12, 18) AS lcm_result;          -- 36
+
+-- Random numbers
+SELECT
+    math::random() AS random_0_1,
+    math::random(1, 100) AS random_1_100,
+    rand::uuid() AS random_uuid;
+
+-- ============================================================================
+-- STRING FUNCTIONS
+-- ============================================================================
+
+-- Basic string operations
+SELECT
+    string::len('Hello World') AS length,
+    string::lowercase('HELLO') AS lower,
+    string::uppercase('hello') AS upper,
+    string::trim('  hello  ') AS trimmed;
+
+-- String manipulation
+SELECT
+    string::concat('Hello', ' ', 'World') AS concatenated,
+    string::join(', ', ['a', 'b', 'c']) AS joined,
+    string::split('a,b,c', ',') AS split_array,
+    string::reverse('hello') AS reversed;
+
+-- String searching
+SELECT
+    string::contains('hello world', 'world') AS contains,
+    string::startsWith('hello', 'he') AS starts_with,
+    string::endsWith('hello', 'lo') AS ends_with,
+    string::indexOf('hello', 'l') AS index_of;
+
+-- Substring operations
+SELECT
+    string::slice('hello world', 0, 5) AS substring,
+    string::replace('hello world', 'world', 'universe') AS replaced,
+    string::repeat('ab', 3) AS repeated;
+
+-- Pattern matching
+SELECT
+    string::matches('test@email.com', '^[a-z]+@[a-z]+\\.[a-z]+$') AS is_email,
+    string::is::email('test@example.com') AS email_check,
+    string::is::url('https://example.com') AS url_check;
+
+-- PostgreSQL-compatible string functions
+SELECT
+    CONCAT('Hello', ' ', 'World') AS concat_result,
+    UPPER('hello') AS upper_result,
+    LOWER('HELLO') AS lower_result,
+    LENGTH('hello') AS len_result,
+    SUBSTRING('hello world' FROM 1 FOR 5) AS substr_result,
+    POSITION('world' IN 'hello world') AS position_result,
+    REPLACE('hello', 'l', 'L') AS replace_result,
+    TRIM('  hello  ') AS trim_result,
+    LPAD('42', 5, '0') AS lpad_result,
+    RPAD('hello', 10, '.') AS rpad_result;
+
+-- ============================================================================
+-- TIME FUNCTIONS
+-- ============================================================================
+
+-- Current time
+SELECT
+    time::now() AS current_time,
+    CURRENT_DATE AS today,
+    CURRENT_TIME AS time_now,
+    CURRENT_TIMESTAMP AS timestamp_now;
+
+-- Time extraction
+SELECT
+    time::year(created_at) AS year,
+    time::month(created_at) AS month,
+    time::day(created_at) AS day,
+    time::hour(created_at) AS hour,
+    time::minute(created_at) AS minute,
+    time::second(created_at) AS second,
+    time::wday(created_at) AS weekday
+FROM events;
+
+-- PostgreSQL EXTRACT
+SELECT
+    EXTRACT(YEAR FROM created_at) AS year,
+    EXTRACT(MONTH FROM created_at) AS month,
+    EXTRACT(DOW FROM created_at) AS day_of_week,
+    EXTRACT(EPOCH FROM created_at) AS unix_timestamp
+FROM events;
+
+-- Time manipulation
+SELECT
+    time::floor(created_at, 'hour') AS hour_start,
+    time::round(created_at, 'day') AS nearest_day,
+    DATE_TRUNC('month', created_at) AS month_start
+FROM events;
+
+-- Time arithmetic
+SELECT
+    time::now() + duration::days(7) AS next_week,
+    time::now() - duration::hours(24) AS yesterday,
+    created_at + INTERVAL '30 days' AS plus_30_days
+FROM events;
+
+-- Age calculation
+SELECT
+    AGE(NOW(), birth_date) AS age,
+    AGE(end_date, start_date) AS duration
+FROM people;
+
+-- Time formatting
+SELECT
+    time::format(created_at, '%Y-%m-%d') AS date_formatted,
+    time::format(created_at, '%H:%M:%S') AS time_formatted
+FROM events;
+
+-- ============================================================================
+-- ARRAY FUNCTIONS
+-- ============================================================================
+
+-- Array creation and manipulation
+SELECT
+    array::len([1, 2, 3, 4, 5]) AS length,
+    array::first([1, 2, 3]) AS first_element,
+    array::last([1, 2, 3]) AS last_element;
+
+-- Array operations
+SELECT
+    array::push([1, 2], 3) AS pushed,              -- [1, 2, 3]
+    array::append([1, 2], [3, 4]) AS appended,     -- [1, 2, 3, 4]
+    array::insert([1, 3], 1, 2) AS inserted,       -- [1, 2, 3]
+    array::remove([1, 2, 3], 1) AS removed,        -- [1, 3]
+    array::reverse([1, 2, 3]) AS reversed;         -- [3, 2, 1]
+
+-- Array searching
+SELECT
+    array::contains([1, 2, 3], 2) AS contains,
+    array::find([1, 2, 3, 2], 2) AS first_index,
+    array::filter([1, 2, 3, 4, 5], |$x| $x > 2) AS filtered;
+
+-- Array aggregation
+SELECT
+    array::distinct([1, 2, 2, 3, 3, 3]) AS unique,
+    array::flatten([[1, 2], [3, 4]]) AS flattened,
+    array::sort([3, 1, 4, 1, 5]) AS sorted;
+
+-- Set operations on arrays
+SELECT
+    array::union([1, 2, 3], [3, 4, 5]) AS union_result,
+    array::intersect([1, 2, 3], [2, 3, 4]) AS intersect_result,
+    array::difference([1, 2, 3], [2, 3, 4]) AS diff_result;
+
+-- ============================================================================
+-- JSON FUNCTIONS
+-- ============================================================================
+
+-- JSON extraction (PostgreSQL operators)
+SELECT
+    metadata->'name' AS name_json,              -- Returns JSON
+    metadata->>'name' AS name_text,             -- Returns text
+    metadata->'address'->>'city' AS city,       -- Nested extraction
+    metadata#>'{address,street}' AS street;     -- Path extraction
+
+-- JSON containment
+SELECT * FROM users
+WHERE metadata @> '{"role": "admin"}';          -- Contains
+
+SELECT * FROM users
+WHERE metadata <@ '{"role": "admin", "active": true}';  -- Is contained
+
+-- JSON functions
+SELECT
+    jsonb_typeof(metadata) AS json_type,
+    jsonb_array_length(tags) AS tag_count,
+    jsonb_object_keys(metadata) AS keys;
+
+-- Building JSON
+SELECT
+    jsonb_build_object('name', name, 'email', email) AS user_json,
+    jsonb_build_array(1, 2, 3) AS number_array;
+
+-- Modifying JSON
+SELECT
+    jsonb_set(metadata, '{status}', '"active"') AS updated,
+    metadata || '{"verified": true}' AS merged,
+    metadata - 'temp_field' AS removed_field;
+
+-- ============================================================================
+-- TYPE CONVERSION FUNCTIONS
+-- ============================================================================
+
+-- Type casting
+SELECT
+    type::string(42) AS int_to_string,
+    type::int("42") AS string_to_int,
+    type::float("3.14") AS string_to_float,
+    type::bool("true") AS string_to_bool,
+    type::datetime("2024-01-01T00:00:00Z") AS string_to_datetime;
+
+-- PostgreSQL CAST
+SELECT
+    CAST(42 AS VARCHAR) AS int_to_varchar,
+    CAST('42' AS INTEGER) AS varchar_to_int,
+    CAST('2024-01-01' AS DATE) AS string_to_date,
+    42::TEXT AS int_to_text_shorthand;
+
+-- ============================================================================
+-- CONDITIONAL FUNCTIONS
+-- ============================================================================
+
+-- CASE expression
+SELECT
+    name,
+    CASE status
+        WHEN 'active' THEN 'Active User'
+        WHEN 'inactive' THEN 'Inactive User'
+        ELSE 'Unknown Status'
+    END AS status_label
+FROM users;
+
+-- Searched CASE
+SELECT
+    name,
+    CASE
+        WHEN age < 18 THEN 'Minor'
+        WHEN age < 65 THEN 'Adult'
+        ELSE 'Senior'
+    END AS age_group
+FROM users;
+
+-- COALESCE (first non-null)
+SELECT
+    COALESCE(nickname, first_name, 'Anonymous') AS display_name
+FROM users;
+
+-- NULLIF
+SELECT
+    NULLIF(count, 0) AS safe_count  -- Returns NULL if count is 0
+FROM stats;
+
+-- GREATEST / LEAST
+SELECT
+    GREATEST(a, b, c) AS max_value,
+    LEAST(a, b, c) AS min_value
+FROM values;
+
+-- ============================================================================
+-- VECTOR FUNCTIONS (Already in 04, but key ones here too)
+-- ============================================================================
+
+-- Distance functions
+SELECT
+    vector::distance::euclidean(v1, v2) AS l2_dist,
+    vector::distance::cosine(v1, v2) AS cosine_dist,
+    vector::distance::manhattan(v1, v2) AS l1_dist;
+
+-- Similarity functions
+SELECT
+    vector::similarity::cosine(v1, v2) AS cosine_sim,
+    vector::similarity::jaccard(v1, v2) AS jaccard_sim;
+
+-- Vector operations
+SELECT
+    vector::normalize(embedding) AS unit_vector,
+    vector::magnitude(embedding) AS norm,
+    vector_dims(embedding) AS dimensions,
+    vector_norm(embedding) AS vector_length;
+
+-- ============================================================================
+-- CRYPTO FUNCTIONS
+-- ============================================================================
+
+-- Hashing
+SELECT
+    crypto::md5('password') AS md5_hash,
+    crypto::sha256('password') AS sha256_hash,
+    crypto::sha512('password') AS sha512_hash;
+
+-- Password hashing
+SELECT
+    crypto::argon2::generate('password') AS hashed_password,
+    crypto::argon2::compare('password', $stored_hash) AS is_valid;
+
+-- Random generation
+SELECT
+    crypto::random_bytes(32) AS random_bytes,
+    rand::uuid() AS random_uuid,
+    rand::string(16) AS random_string;
+
+-- ============================================================================
+-- GEO FUNCTIONS
+-- ============================================================================
+
+-- Distance calculation
+SELECT
+    geo::distance(
+        { type: 'Point', coordinates: [-122.4194, 37.7749] },
+        { type: 'Point', coordinates: [-73.9857, 40.7484] }
+    ) AS distance_meters;
+
+-- Point in polygon
+SELECT * FROM locations
+WHERE geo::contains(
+    { type: 'Polygon', coordinates: [[[-122.5, 37.7], [-122.4, 37.7], [-122.4, 37.8], [-122.5, 37.8], [-122.5, 37.7]]] },
+    location
+);
+
+-- Haversine distance
+SELECT
+    geo::haversine(
+        { lat: 37.7749, lon: -122.4194 },
+        { lat: 40.7484, lon: -73.9857 }
+    ) AS distance_km;
+
+-- ============================================================================
+-- OPERATORS
+-- ============================================================================
+
+-- Comparison operators
+SELECT * FROM users WHERE age = 30;
+SELECT * FROM users WHERE age != 30;
+SELECT * FROM users WHERE age <> 30;
+SELECT * FROM users WHERE age < 30;
+SELECT * FROM users WHERE age <= 30;
+SELECT * FROM users WHERE age > 30;
+SELECT * FROM users WHERE age >= 30;
+
+-- Logical operators
+SELECT * FROM users WHERE age > 18 AND status = 'active';
+SELECT * FROM users WHERE role = 'admin' OR role = 'moderator';
+SELECT * FROM users WHERE NOT is_banned;
+
+-- Pattern matching operators
+SELECT * FROM users WHERE name LIKE 'A%';
+SELECT * FROM users WHERE name ILIKE 'a%';
+SELECT * FROM users WHERE name NOT LIKE '%test%';
+SELECT * FROM users WHERE email ~ '^[a-z]+@';  -- Regex match
+
+-- Range operators
+SELECT * FROM events WHERE date_range && '[2024-01-01, 2024-12-31]';  -- Overlaps
+SELECT * FROM events WHERE '[10, 20]' @> age;  -- Contains
+
+-- Null operators
+SELECT * FROM users WHERE deleted_at IS NULL;
+SELECT * FROM users WHERE phone IS NOT NULL;
+
+-- Set membership
+SELECT * FROM users WHERE status IN ('active', 'pending', 'verified');
+SELECT * FROM users WHERE id NOT IN (SELECT user_id FROM banned_users);
+SELECT * FROM users WHERE age BETWEEN 18 AND 65;

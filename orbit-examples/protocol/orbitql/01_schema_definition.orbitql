@@ -1,0 +1,205 @@
+-- ============================================================================
+-- OrbitQL Protocol Examples - Schema Definition (DEFINE Statements)
+-- ============================================================================
+-- Demonstrates SurrealDB-style DEFINE statements for schema management
+-- ============================================================================
+
+-- ============================================================================
+-- NAMESPACE AND DATABASE MANAGEMENT
+-- ============================================================================
+
+-- Define a namespace (top-level container)
+DEFINE NAMESPACE production;
+
+-- Define a database within a namespace
+DEFINE DATABASE ecommerce;
+
+-- Switch to namespace/database context
+USE NS production DB ecommerce;
+
+-- ============================================================================
+-- TABLE DEFINITIONS (SCHEMAFULL vs SCHEMALESS)
+-- ============================================================================
+
+-- SCHEMAFULL table: Strict schema enforcement (like traditional SQL)
+DEFINE TABLE users SCHEMAFULL;
+
+-- SCHEMALESS table: Flexible schema (document-style)
+DEFINE TABLE events SCHEMALESS;
+
+-- Table with DROP behavior (auto-delete when all records removed)
+DEFINE TABLE sessions SCHEMALESS DROP;
+
+-- Table as a view (materialized from SELECT)
+DEFINE TABLE active_users AS
+    SELECT * FROM users WHERE status = 'active';
+
+-- ============================================================================
+-- FIELD DEFINITIONS
+-- ============================================================================
+
+-- Basic field with type
+DEFINE FIELD email ON TABLE users TYPE string;
+
+-- Field with default value
+DEFINE FIELD created_at ON TABLE users TYPE datetime DEFAULT time::now();
+
+-- Field with assertion (validation)
+DEFINE FIELD age ON TABLE users TYPE int
+    ASSERT $value >= 0 AND $value <= 150;
+
+-- Field with flexible type (any JSON)
+DEFINE FIELD metadata ON TABLE users FLEXIBLE TYPE object;
+
+-- Nested field definition
+DEFINE FIELD address.street ON TABLE users TYPE string;
+DEFINE FIELD address.city ON TABLE users TYPE string;
+DEFINE FIELD address.zip ON TABLE users TYPE string;
+
+-- Array field
+DEFINE FIELD tags ON TABLE users TYPE array<string>;
+
+-- ============================================================================
+-- INDEX DEFINITIONS
+-- ============================================================================
+
+-- Simple index
+DEFINE INDEX idx_email ON TABLE users FIELDS email;
+
+-- Unique index
+DEFINE INDEX idx_username ON TABLE users FIELDS username UNIQUE;
+
+-- Composite index
+DEFINE INDEX idx_location ON TABLE users FIELDS address.city, address.zip;
+
+-- Full-text search index
+DEFINE INDEX idx_search ON TABLE products SEARCH ANALYZER ascii;
+
+-- Vector index for similarity search (HNSW)
+DEFINE INDEX idx_embedding ON TABLE products FIELDS embedding
+    MTREE DIMENSION 384 DIST COSINE;
+
+-- Vector index with Euclidean distance
+DEFINE INDEX idx_image_vec ON TABLE images FIELDS feature_vector
+    MTREE DIMENSION 512 DIST EUCLIDEAN;
+
+-- ============================================================================
+-- ANALYZER DEFINITIONS (Full-Text Search)
+-- ============================================================================
+
+-- Basic analyzer with tokenizers and filters
+DEFINE ANALYZER custom_analyzer
+    TOKENIZERS blank, class
+    FILTERS lowercase, snowball(english);
+
+-- ASCII analyzer (for search)
+DEFINE ANALYZER ascii
+    TOKENIZERS class
+    FILTERS lowercase, ascii;
+
+-- ============================================================================
+-- FUNCTION DEFINITIONS
+-- ============================================================================
+
+-- Custom function with parameters
+DEFINE FUNCTION fn::greet($name: string) {
+    RETURN string::concat("Hello, ", $name, "!");
+};
+
+-- Function with multiple parameters
+DEFINE FUNCTION fn::calculate_tax($amount: float, $rate: float) {
+    LET $tax = $amount * $rate;
+    RETURN {
+        subtotal: $amount,
+        tax: $tax,
+        total: $amount + $tax
+    };
+};
+
+-- Function for validation
+DEFINE FUNCTION fn::is_valid_email($email: string) {
+    RETURN string::matches($email, '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
+};
+
+-- ============================================================================
+-- EVENT DEFINITIONS (Triggers)
+-- ============================================================================
+
+-- Event on record creation
+DEFINE EVENT user_created ON TABLE users WHEN $event = "CREATE" THEN {
+    CREATE audit_log SET
+        action = "user_created",
+        user_id = $after.id,
+        timestamp = time::now();
+};
+
+-- Event on record update
+DEFINE EVENT user_updated ON TABLE users WHEN $event = "UPDATE" THEN {
+    UPDATE users SET updated_at = time::now() WHERE id = $after.id;
+};
+
+-- Event on record deletion
+DEFINE EVENT user_deleted ON TABLE users WHEN $event = "DELETE" THEN {
+    CREATE audit_log SET
+        action = "user_deleted",
+        user_id = $before.id,
+        timestamp = time::now();
+};
+
+-- ============================================================================
+-- USER AND ACCESS CONTROL
+-- ============================================================================
+
+-- Define a root user
+DEFINE USER admin ON ROOT PASSWORD 'secure_password' ROLES OWNER;
+
+-- Define a namespace user
+DEFINE USER developer ON NAMESPACE production PASSWORD 'dev_password' ROLES EDITOR;
+
+-- Define a database user
+DEFINE USER reader ON DATABASE ecommerce PASSWORD 'reader_password' ROLES VIEWER;
+
+-- ============================================================================
+-- SCOPE DEFINITIONS (Authentication)
+-- ============================================================================
+
+-- Define a scope for user authentication
+DEFINE SCOPE user_scope SESSION 24h
+    SIGNIN (
+        SELECT * FROM users
+        WHERE email = $email
+        AND crypto::argon2::compare(password, $password)
+    )
+    SIGNUP (
+        CREATE users SET
+            email = $email,
+            password = crypto::argon2::generate($password),
+            created_at = time::now()
+    );
+
+-- ============================================================================
+-- PARAM DEFINITIONS (Global Parameters)
+-- ============================================================================
+
+-- Define global parameters
+DEFINE PARAM $default_limit VALUE 100;
+DEFINE PARAM $app_version VALUE "1.0.0";
+DEFINE PARAM $max_results VALUE 1000;
+
+-- ============================================================================
+-- PERMISSIONS (Row-Level Security)
+-- ============================================================================
+
+-- Table-level permissions
+DEFINE TABLE private_data SCHEMAFULL
+    PERMISSIONS
+        FOR select WHERE user = $auth.id
+        FOR create WHERE $auth.role = 'admin'
+        FOR update WHERE user = $auth.id OR $auth.role = 'admin'
+        FOR delete WHERE $auth.role = 'admin';
+
+-- Field-level permissions
+DEFINE FIELD salary ON TABLE employees TYPE float
+    PERMISSIONS
+        FOR select WHERE $auth.role IN ['admin', 'hr']
+        FOR update WHERE $auth.role = 'admin';

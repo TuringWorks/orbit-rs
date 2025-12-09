@@ -1,8 +1,8 @@
 # OrbitRS Protocol Implementation Status
 
-**Last Updated**: 2025-12-07
+**Last Updated**: 2025-12-08
 **Orbit-RS Version**: 0.1.0
-**Total Tests**: 2,540+ passing
+**Total Tests**: 2,560+ passing
 **Compiler Warnings**: 0 (zero-warnings policy compliant)
 
 This document provides the authoritative status of protocol implementations in OrbitRS, including completion percentages, feature matrices, gaps, and priorities.
@@ -13,8 +13,9 @@ This document provides the authoritative status of protocol implementations in O
 
 | Protocol | Completion | Status | Tests | Key Gaps |
 |----------|------------|--------|-------|----------|
+| **OrbitQL** | 95% | Production Ready | 50+ | Parser validation, Edge cases |
 | **Redis RESP** | 60% | Production Ready | 190+ | Sorted Sets, Lua scripting |
-| **PostgreSQL** | 65% | Production Ready | 425+ | Sequences, user management |
+| **PostgreSQL** | 72% | Production Ready | 460+ | User management, cursors |
 | **MySQL** | 51% | Active Development | 35+ | Binary protocol, replication |
 | **CQL (Cassandra)** | 55% | Active Development | 51+ | UDTs, Materialized views |
 | **Cypher/Bolt** | 85% | Production Ready | 105+ | DISTINCT, subqueries |
@@ -22,10 +23,106 @@ This document provides the authoritative status of protocol implementations in O
 | **MongoDB** | 50% | Early Development | 6+ | Aggregation stages, Change streams |
 | **REST/HTTP** | 40% | Active Development | - | Authentication |
 
-### Recent Improvements (2025-12-07)
+### Recent Improvements (2025-12-08)
+- **OrbitQL**: SurrealDB-style DEFINE/REMOVE statements ✅, Control flow (IF/FOR/LET/THROW) ✅, SAVEPOINT support ✅
+- **OrbitQL**: Vector KNN search ✅, MATCH statement (Cypher-style) ✅, LIVE/KILL queries ✅
+- **PostgreSQL**: Sequence functions (nextval, currval, setval, lastval) ✅, Math functions (cbrt, div, factorial, gcd, lcm, sign) ✅
+- **PostgreSQL (PG18)**: NegotiateProtocolVersion ✅, Temporal constraints (WITHOUT OVERLAPS) ✅, Variable-length cancel keys ✅
+- **PostgreSQL (PG18)**: UUIDv7 functions ✅, GENERATED columns (STORED/VIRTUAL) ✅, OLD/NEW in RETURNING ✅
 - **PostgreSQL**: RETURNING clause ✅, EXTRACT/DATE_TRUNC functions ✅, Window frame modes (ROWS/RANGE/GROUPS) ✅, EXCLUDE clause ✅
 - **Redis**: Full MULTI/EXEC/DISCARD/WATCH/UNWATCH transaction support ✅ (100% coverage)
 - **Cypher**: Implicit GROUP BY with aggregations in RETURN and WITH clauses ✅
+
+---
+
+## 0. OrbitQL Protocol (95% Complete)
+
+OrbitQL is Orbit-RS's native unified multi-model query language, inspired by SurrealDB's SurrealQL, with extensions for graph, vector, time-series, and ML operations.
+
+### Statement Categories
+
+| Category | Feature | Status |
+|----------|---------|--------|
+| **DQL** | SELECT with JOINs, CTEs, Window Functions | ✅ Complete |
+| **DML** | INSERT, UPDATE, DELETE, UPSERT, MERGE | ✅ Complete |
+| **Schema (SurrealDB-style)** | DEFINE TABLE/FIELD/INDEX/FUNCTION/EVENT | ✅ Complete |
+| **Schema** | REMOVE TABLE/FIELD/INDEX/FUNCTION/EVENT | ✅ Complete |
+| **Schema** | DEFINE USER/SCOPE/TOKEN/NAMESPACE/DATABASE | ✅ Complete |
+| **Graph** | TRAVERSE, RELATE, MATCH | ✅ Complete |
+| **Transactions** | BEGIN, COMMIT, ROLLBACK, SAVEPOINT | ✅ Complete |
+| **Control Flow** | IF/ELSE, FOR, LET, RETURN | ✅ Complete |
+| **Control Flow** | BREAK, CONTINUE, THROW | ✅ Complete |
+| **Real-time** | LIVE SELECT, KILL | ✅ Complete |
+| **Utility** | USE, INFO, SHOW, SLEEP | ✅ Complete |
+
+### Vector Operations
+
+| Feature | Status |
+|---------|--------|
+| HNSW Index (DEFINE INDEX ... HNSW) | ✅ Complete |
+| M-Tree Index (DEFINE INDEX ... MTREE) | ✅ Complete |
+| vector::distance::cosine/euclidean/manhattan | ✅ Complete |
+| vector::similarity::cosine/jaccard/dot | ✅ Complete |
+| KNN Search (ORDER BY distance LIMIT k) | ✅ Complete |
+| Hybrid Search (vector + full-text) | ✅ Complete |
+| ml::embed_text() | ✅ Complete |
+
+### Built-in Functions (SurrealDB-style)
+
+| Namespace | Functions | Status |
+|-----------|-----------|--------|
+| `string::` | concat, len, uppercase, lowercase, trim, contains | ✅ Complete |
+| `math::` | abs, ceil, floor, round, sqrt, pow, random | ✅ Complete |
+| `time::` | now, year, month, day, hour, floor, format | ✅ Complete |
+| `array::` | len, first, last, push, append, contains, sort | ✅ Complete |
+| `crypto::` | md5, sha256, sha512, argon2::generate/compare | ✅ Complete |
+| `geo::` | distance, contains, haversine | ✅ Complete |
+| `rand::` | uuid, string | ✅ Complete |
+| `vector::` | distance::*, similarity::*, normalize, magnitude | ✅ Complete |
+| `ml::` | embed_text, predict, train_model | ✅ Complete |
+
+### Key Files
+
+| Component | Location |
+|-----------|----------|
+| Lexer | `orbit/shared/src/orbitql/lexer.rs` |
+| AST | `orbit/shared/src/orbitql/ast.rs` |
+| Parser | `orbit/shared/src/orbitql/parser.rs` |
+| Executor | `orbit/shared/src/orbitql/executor.rs` |
+| Streaming | `orbit/shared/src/orbitql/streaming.rs` |
+
+### Reference Documentation
+
+- [OrbitQL Reference Specification](./Protocol-specs/orbitql-reference-rust.md)
+- [OrbitQL Grammar README](./grammars-generated/orbitql/README.md)
+- [OrbitQL Examples](../../orbit-examples/protocol/orbitql/)
+
+### Wire Protocols (Client Transport)
+
+OrbitQL supports two wire protocols for client-server communication:
+
+| Protocol | Port | Use Case | Status |
+|----------|------|----------|--------|
+| **Arrow Flight SQL** | 50052 | High-performance columnar transport, analytics | ✅ Specified |
+| **OrbitWire** | 50053 | Low-latency binary protocol, CLI/Desktop | ✅ Specified |
+
+#### Arrow Flight SQL
+- High-performance columnar data transport based on Apache Arrow and gRPC
+- Zero-copy data transfer with efficient memory layout
+- Native support for streaming large result sets
+- Compatible with existing Arrow Flight SQL clients (Python, Rust, Java)
+- Ideal for analytics workloads and bulk data transfer
+
+**Specification**: [Arrow Flight SQL Specification](./Protocol-specs/arrow-flight-sql-specification.md)
+
+#### OrbitWire Protocol
+- Custom binary wire protocol optimized for OrbitQL features
+- Multiplexed streams for concurrent queries
+- First-class LIVE query subscription support
+- Optimized encodings for graph paths, vectors, and spatial data
+- Ideal for interactive CLI and desktop applications
+
+**Specification**: [OrbitWire Protocol Specification](./Protocol-specs/orbitwire-protocol-specification.md)
 
 ---
 
@@ -84,17 +181,19 @@ This document provides the authoritative status of protocol implementations in O
 
 ---
 
-## 2. PostgreSQL Wire Protocol (65% Complete)
+## 2. PostgreSQL Wire Protocol (72% Complete)
 
 ### Wire Protocol Support
 
 | Feature | Status | Version |
 |---------|--------|---------|
-| Authentication (MD5, Plain) | ✅ Complete | v3 |
+| Authentication (MD5, Plain, SCRAM-SHA-256) | ✅ Complete | v3 |
 | Simple Query | ✅ Complete | v3 |
 | Extended Query | ✅ Complete | v3 |
 | Prepared Statements | ✅ Complete | v3 |
 | COPY Protocol | ⚠️ Partial | v3 |
+| NegotiateProtocolVersion | ✅ Complete | v3.2 (PG18) |
+| Variable-length Cancel Keys | ✅ Complete | v3.2 (PG18) |
 | Streaming Replication | ❌ Not Implemented | - |
 
 ### SQL Parser Coverage
@@ -117,6 +216,31 @@ This document provides the authoritative status of protocol implementations in O
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| **PostgreSQL 18 Protocol** | | |
+| NegotiateProtocolVersion | ✅ **DONE** | Protocol 3.2 negotiation in startup |
+| Variable-length cancel keys | ✅ **DONE** | 4-256 byte keys (v3.2) |
+| **PostgreSQL 18 SQL** | | |
+| UUIDv7 functions | ✅ **DONE** | uuidv7(), uuid_generate_v7(), uuid_max() |
+| GENERATED ALWAYS AS (STORED) | ✅ **DONE** | Computed on INSERT/UPDATE |
+| GENERATED ALWAYS AS (VIRTUAL) | ✅ **DONE** | Computed on SELECT |
+| OLD/NEW in RETURNING | ✅ **DONE** | Access previous values |
+| WITHOUT OVERLAPS constraints | ✅ **DONE** | PRIMARY KEY, UNIQUE with temporal |
+| PERIOD keyword (FK) | ✅ **DONE** | Temporal foreign key parsing |
+| Temporal overlap checking | ✅ **DONE** | INSERT/UPDATE validation |
+| MERGE with RETURNING | 🔶 **PARTIAL** | Parsing complete |
+| **Sequence Functions** | | |
+| nextval() | ✅ **DONE** | Advance and return next value |
+| currval() | ✅ **DONE** | Return current value |
+| setval() | ✅ **DONE** | Set sequence value |
+| lastval() | ✅ **DONE** | Return last sequence value in session |
+| **Math Functions** | | |
+| cbrt() | ✅ **DONE** | Cube root |
+| div() | ✅ **DONE** | Integer division |
+| factorial() | ✅ **DONE** | Factorial |
+| gcd() | ✅ **DONE** | Greatest common divisor |
+| lcm() | ✅ **DONE** | Least common multiple |
+| sign() | ✅ **DONE** | Sign of number |
+| **Standard Features** | | |
 | RETURNING clause | ✅ **DONE** | INSERT/UPDATE/DELETE |
 | EXTRACT function | ✅ **DONE** | All field types (YEAR, MONTH, DAY, HOUR, etc.) |
 | DATE_TRUNC function | ✅ **DONE** | All precision levels |
@@ -142,8 +266,7 @@ This document provides the authoritative status of protocol implementations in O
 | Feature | Impact | Priority |
 |---------|--------|----------|
 | CREATE ROLE/USER | No user management | Critical |
-| CREATE SEQUENCE | SERIAL columns broken | Critical |
-| TRUNCATE execution | Must use DELETE | Medium |
+| DECLARE CURSOR | Cursor-based iteration | Medium |
 | System catalogs (pg_catalog) | Tool compatibility | High |
 | Stored procedures (PL/pgSQL) | Business logic | High |
 
@@ -409,7 +532,7 @@ This document provides the authoritative status of protocol implementations in O
 | PostgreSQL | Window frame execution | ✅ **DONE** |
 | Redis | MULTI/EXEC transactions | ✅ **DONE** |
 | Cypher | GROUP BY execution | ✅ **DONE** |
-| PostgreSQL | SEQUENCE support | Pending |
+| PostgreSQL | SEQUENCE support | ✅ **DONE** |
 | PostgreSQL | User management | Pending |
 | MySQL | Stored procedures | Pending |
 | MongoDB | Authentication | Pending |
@@ -441,13 +564,13 @@ This document provides the authoritative status of protocol implementations in O
 | Protocol | Unit Tests | Integration | Total |
 |----------|------------|-------------|-------|
 | Redis RESP | 155+ | 35+ | 190+ |
-| PostgreSQL | 390+ | 35+ | 425+ |
+| PostgreSQL | 410+ | 35+ | 445+ |
 | MySQL | 30+ | 5+ | 35+ |
 | CQL | 45+ | 6+ | 51+ |
 | Cypher/Bolt | 95+ | 10+ | 105+ |
 | AQL | 85+ | 5+ | 90+ |
 | MongoDB | 5+ | 1+ | 6+ |
-| **Total** | **805+** | **97+** | **902+** |
+| **Total** | **825+** | **97+** | **922+** |
 
 ---
 
@@ -464,10 +587,12 @@ This document provides the authoritative status of protocol implementations in O
 
 | Date | Changes |
 |------|---------|
+| 2025-12-08 | **OrbitQL Major Update**: Added SurrealDB-style DEFINE/REMOVE, Control flow (IF/FOR/LET/THROW), Vector KNN, MATCH, SAVEPOINT support |
+| 2025-12-08 | Added PostgreSQL sequence functions (nextval, currval, setval, lastval) and math functions (cbrt, div, factorial, gcd, lcm, sign) |
 | 2025-12-07 | **Major Update**: Tier 1 features completed - PostgreSQL RETURNING/Date-Time/Window frames, Redis transactions, Cypher GROUP BY |
 | 2025-12-07 | Consolidated from PROTOCOL_GAP_ANALYSIS.md, COMPREHENSIVE_FEATURE_GAP_ANALYSIS.md, PROTOCOL_COMPLETION_ANALYSIS.md |
 | 2025-12-06 | Initial protocol completion analysis |
 
 ---
 
-*Document generated: December 7, 2025*
+*Document generated: December 8, 2025*

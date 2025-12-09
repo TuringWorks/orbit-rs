@@ -1,55 +1,214 @@
-WITH alice AS ({ name: "Alice", type: "Person", title: "Engineer at Acme" })
-WITH bob AS ({ name: "Bob", type: "Person", title: "Specialist at CityNet" })
-WITH acme AS ({ name: "Acme Corp", type: "Organization", summary: "Technology company" })
-WITH citynet AS ({ name: "CityNet ISP", type: "Organization", summary: "Internet service provider" })
-WITH metropolis AS ({ name: "Metropolis", type: "Location", summary: "Urban tech hub" })
-INSERT INTO entities VALUES alice, bob, acme, citynet, metropolis
-UPDATE entities SET embedding = ML_EMBED_TEXT(coalesce(summary, title, name), "sentence-transformers") WHERE embedding IS NULL
-RELATE entities[name="Alice"]->works_at->entities[name="Acme Corp"] SET started_at = time::now()
-RELATE entities[name="Bob"]->works_at->entities[name="CityNet ISP"] SET started_at = time::now()
-RELATE entities[name="Acme Corp"]->located_in->entities[name="Metropolis"]
-RELATE entities[name="CityNet ISP"]->located_in->entities[name="Metropolis"]
-RELATE entities[name="CityNet ISP"]->partner_of->entities[name="Acme Corp"]
-SELECT t.name AS candidate,
-       ML_PREDICT("kg_link_predictor", ARRAY[
-         1 - (t.embedding <=> ML_EMBED_TEXT(h.name || " works_at", "sentence-transformers")),
-         COUNT(h->*),
-         COUNT(t->*)
-       ]) AS link_probability
+-- ============================================================================
+-- OrbitQL Graph ML Examples
+-- ============================================================================
+-- Demonstrates graph operations with ML embeddings and link prediction
+-- ============================================================================
+
+-- ============================================================================
+-- SCHEMA DEFINITION
+-- ============================================================================
+
+-- Define entity table with vector embeddings
+DEFINE TABLE entities SCHEMAFULL;
+DEFINE FIELD name ON TABLE entities TYPE string;
+DEFINE FIELD type ON TABLE entities TYPE string;
+DEFINE FIELD title ON TABLE entities TYPE string;
+DEFINE FIELD summary ON TABLE entities TYPE string;
+DEFINE FIELD embedding ON TABLE entities TYPE array<float>;
+
+-- Define vector index for similarity search
+DEFINE INDEX idx_entity_embedding ON TABLE entities FIELDS embedding
+    MTREE DIMENSION 384 DIST COSINE;
+
+-- ============================================================================
+-- ENTITY CREATION
+-- ============================================================================
+
+-- Create person entities
+INSERT INTO entities {
+    name: 'Alice',
+    type: 'Person',
+    title: 'Engineer at Acme'
+};
+
+INSERT INTO entities {
+    name: 'Bob',
+    type: 'Person',
+    title: 'Specialist at CityNet'
+};
+
+-- Create organization entities
+INSERT INTO entities {
+    name: 'Acme Corp',
+    type: 'Organization',
+    summary: 'Technology company'
+};
+
+INSERT INTO entities {
+    name: 'CityNet ISP',
+    type: 'Organization',
+    summary: 'Internet service provider'
+};
+
+-- Create location entity
+INSERT INTO entities {
+    name: 'Metropolis',
+    type: 'Location',
+    summary: 'Urban tech hub'
+};
+
+-- ============================================================================
+-- GENERATE EMBEDDINGS
+-- ============================================================================
+
+-- Generate embeddings for all entities without embeddings
+UPDATE entities
+SET embedding = ml::embed_text(
+    COALESCE(summary, title, name),
+    'sentence-transformers/all-MiniLM-L6-v2'
+)
+WHERE embedding IS NULL;
+
+-- ============================================================================
+-- CREATE RELATIONSHIPS (RELATE)
+-- ============================================================================
+
+-- Person works at Organization
+RELATE entities[name = 'Alice']->works_at->entities[name = 'Acme Corp']
+SET started_at = time::now();
+
+RELATE entities[name = 'Bob']->works_at->entities[name = 'CityNet ISP']
+SET started_at = time::now();
+
+-- Organizations located in Location
+RELATE entities[name = 'Acme Corp']->located_in->entities[name = 'Metropolis'];
+RELATE entities[name = 'CityNet ISP']->located_in->entities[name = 'Metropolis'];
+
+-- Partnership between organizations
+RELATE entities[name = 'CityNet ISP']->partner_of->entities[name = 'Acme Corp'];
+
+-- ============================================================================
+-- LINK PREDICTION USING ML
+-- ============================================================================
+
+-- Predict potential organization connections for Alice
+SELECT
+    t.name AS candidate,
+    ml::predict('kg_link_predictor', ARRAY[
+        1 - vector::distance::cosine(
+            t.embedding,
+            ml::embed_text(
+                string::concat(h.name, ' works_at'),
+                'sentence-transformers/all-MiniLM-L6-v2'
+            )
+        ),
+        COUNT(h->*),
+        COUNT(t->*)
+    ]) AS link_probability
 FROM entities AS h
-JOIN entities AS t ON t.type = "Organization"
-WHERE h.name = "Alice" AND NOT (h->works_at->t)
+JOIN entities AS t ON t.type = 'Organization'
+WHERE h.name = 'Alice'
+    AND NOT EXISTS (SELECT 1 FROM works_at WHERE in = h.id AND out = t.id)
 ORDER BY link_probability DESC
-LIMIT 5
-SELECT ML_TRAIN_MODEL("kg_temporal_link_predictor", "gradient_boosting",
-  ARRAY[
-    1 - (t.embedding <=> ML_EMBED_TEXT(h.name || " interacts_with", "sentence-transformers")),
-    COUNT(h->interacts_with WHERE ts > time::now() - duration::days(1)),
-    COUNT(t->interacts_with WHERE ts > time::now() - duration::days(1))
-  ],
-  CASE WHEN (h->works_at->t) THEN 1 ELSE 0 END
+LIMIT 5;
+
+-- ============================================================================
+-- TRAIN TEMPORAL LINK PREDICTOR
+-- ============================================================================
+
+-- Add temporal interaction data
+RELATE entities[name = 'Alice']->interacts_with->entities[name = 'CityNet ISP']
+SET ts = time::now() - duration::hours(1);
+
+RELATE entities[name = 'Alice']->interacts_with->entities[name = 'Acme Corp']
+SET ts = time::now() - duration::hours(2);
+
+RELATE entities[name = 'Bob']->interacts_with->entities[name = 'Acme Corp']
+SET ts = time::now() - duration::minutes(3);
+
+-- Train a temporal link prediction model
+SELECT ml::train_model(
+    'kg_temporal_link_predictor',
+    'gradient_boosting',
+    ARRAY[
+        1 - vector::distance::cosine(
+            t.embedding,
+            ml::embed_text(
+                string::concat(h.name, ' interacts_with'),
+                'sentence-transformers/all-MiniLM-L6-v2'
+            )
+        ),
+        COUNT(SELECT * FROM interacts_with WHERE in = h.id AND ts > time::now() - duration::days(1)),
+        COUNT(SELECT * FROM interacts_with WHERE in = t.id AND ts > time::now() - duration::days(1))
+    ],
+    CASE WHEN EXISTS (SELECT 1 FROM works_at WHERE in = h.id AND out = t.id) THEN 1 ELSE 0 END
 )
 FROM entities AS h
-JOIN entities AS t ON t.type = "Organization"
-WHERE h.name = "Alice"
-SELECT e.name,
-       ML_PREDICT("kg_node_classifier", ARRAY[
-         COUNT(e->*),
-         1 - (e.embedding <=> ML_EMBED_TEXT("organization", "sentence-transformers"))
-       ]) AS organization_probability
+JOIN entities AS t ON t.type = 'Organization'
+WHERE h.name = 'Alice';
+
+-- ============================================================================
+-- NODE CLASSIFICATION
+-- ============================================================================
+
+-- Classify entity types using ML
+SELECT
+    e.name,
+    ml::predict('kg_node_classifier', ARRAY[
+        COUNT(e->*),
+        1 - vector::distance::cosine(
+            e.embedding,
+            ml::embed_text('organization', 'sentence-transformers/all-MiniLM-L6-v2')
+        )
+    ]) AS organization_probability
 FROM entities AS e
-ORDER BY organization_probability DESC
-RELATE entities[name="Alice"]->interacts_with->entities[name="CityNet ISP"] SET ts = time::now() - duration::hours(1)
-RELATE entities[name="Alice"]->interacts_with->entities[name="Acme Corp"] SET ts = time::now() - duration::hours(2)
-RELATE entities[name="Bob"]->interacts_with->entities[name="Acme Corp"] SET ts = time::now() - duration::minutes(3)
-SELECT t.name AS candidate,
-       ML_PREDICT("kg_temporal_link_predictor", ARRAY[
-         1 - (t.embedding <=> ML_EMBED_TEXT(h.name || " interacts_with", "sentence-transformers")),
-         COUNT(h->interacts_with WHERE ts > time::now() - duration::days(1)),
-         COUNT(t->interacts_with WHERE ts > time::now() - duration::days(1))
-       ]) AS link_probability
+ORDER BY organization_probability DESC;
+
+-- ============================================================================
+-- TEMPORAL LINK PREDICTION
+-- ============================================================================
+
+-- Predict future interactions for Alice
+SELECT
+    t.name AS candidate,
+    ml::predict('kg_temporal_link_predictor', ARRAY[
+        1 - vector::distance::cosine(
+            t.embedding,
+            ml::embed_text(
+                string::concat(h.name, ' interacts_with'),
+                'sentence-transformers/all-MiniLM-L6-v2'
+            )
+        ),
+        COUNT(SELECT * FROM interacts_with WHERE in = h.id AND ts > time::now() - duration::days(1)),
+        COUNT(SELECT * FROM interacts_with WHERE in = t.id AND ts > time::now() - duration::days(1))
+    ]) AS link_probability
 FROM entities AS h
-JOIN entities AS t ON t.type = "Organization"
-WHERE h.name = "Alice" AND NOT (h->works_at->t)
+JOIN entities AS t ON t.type = 'Organization'
+WHERE h.name = 'Alice'
+    AND NOT EXISTS (SELECT 1 FROM works_at WHERE in = h.id AND out = t.id)
 ORDER BY link_probability DESC
-LIMIT 5
+LIMIT 5;
+
+-- ============================================================================
+-- GRAPH TRAVERSAL WITH ML SCORING
+-- ============================================================================
+
+-- Find related entities with similarity scores
+SELECT
+    e.name,
+    e.type,
+    vector::similarity::cosine(e.embedding, $query_embedding) AS similarity
+FROM entities e
+WHERE e.type IN ('Person', 'Organization')
+ORDER BY similarity DESC
+LIMIT 10;
+
+-- Community detection via graph structure
+SELECT
+    e.name,
+    e.type,
+    COUNT(e->*) AS outgoing_connections,
+    COUNT(e<-*) AS incoming_connections,
+    graph::pagerank(e.id, '*') AS influence_score
+FROM entities e
+ORDER BY influence_score DESC;

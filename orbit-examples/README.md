@@ -54,48 +54,67 @@ grpcurl -plaintext localhost:50051 list
 ```text
 orbit-examples/
 ├── README.md                          # This file
-├── QUICK_START.md                     # Quick start guide
-├── PROTOCOL_COMPARISON.md             # Protocol selection guide
 │
-├── mongodb/                           # MongoDB wire protocol examples
+├── protocol/                          # Protocol-specific examples
+│   ├── mongodb/                       # MongoDB wire protocol
+│   ├── mysql/                         # MySQL wire protocol
+│   ├── cql/                           # Cassandra CQL
+│   ├── cross-protocol/                # Multi-protocol integration
+│   ├── graphrag/                      # GraphRAG examples
+│   └── ml-protocol-examples/          # ML/AI protocol examples
+│
+├── banking/                           # Banking & Financial Services
 │   ├── README.md
-│   ├── 01_basic_crud.js
-│   ├── 02_aggregation_pipeline.js
-│   ├── 03_ml_integration.js
-│   ├── python/
-│   └── scenarios/
+│   ├── sql/01_schema_core.sql         # Accounts, transactions, loans
+│   ├── orbitql/01_queries.orbitql     # Analytics queries
+│   └── workflows/01_transaction_processing.md
 │
-├── mysql/                             # MySQL wire protocol examples
+├── financial-markets/                 # Trading & Capital Markets
 │   ├── README.md
-│   ├── 01_basic_sql.sql
-│   ├── 02_ml_functions.sql
-│   └── python/
+│   └── workflows/01_order_execution.md
 │
-├── cql/                               # CQL (Cassandra) protocol examples
+├── healthcare/                        # Healthcare & Medical Records
 │   ├── README.md
-│   ├── 01_keyspace_setup.cql
-│   ├── 02_wide_column_modeling.cql
-│   └── python/
+│   ├── sql/01_schema_ehr.sql          # Electronic Health Records
+│   └── workflows/01_patient_admission.md
 │
-├── cross-protocol/                    # Cross-protocol integration
+├── logistics/                         # Supply Chain & Logistics
 │   ├── README.md
-│   ├── 01_write_postgres_read_redis.py
-│   └── 02_multi_protocol_transaction.py
+│   └── workflows/01_order_fulfillment.md
 │
-├── ml-protocol-examples/              # ML/AI examples
+├── energy/                            # Energy & Utilities
 │   ├── README.md
-│   ├── 01_healthcare_ml.sql
-│   ├── python/
-│   ├── cypher/
-│   └── aql/
+│   └── workflows/01_grid_management.md
 │
-├── graphrag/                          # GraphRAG examples
+├── media/                             # Media & Entertainment
 │   ├── README.md
-│   ├── python/
-│   ├── cypher/
-│   └── aql/
+│   └── workflows/01_content_recommendation.md
 │
-├── insurance/                         # Insurance industry examples
+├── education/                         # Education & EdTech
+│   ├── README.md
+│   └── workflows/01_personalized_learning.md
+│
+├── real-estate/                       # Real Estate & PropTech
+│   ├── README.md
+│   └── workflows/01_property_listing.md
+│
+├── agriculture/                       # Agriculture & AgTech
+│   ├── README.md
+│   └── workflows/01_precision_farming.md
+│
+├── defense/                           # Defense & Aerospace
+│   ├── README.md
+│   └── workflows/01_mission_planning.md
+│
+├── space/                             # Space Operations
+│   ├── README.md
+│   └── workflows/01_satellite_operations.md
+│
+├── government/                        # Government Services
+│   ├── README.md
+│   └── workflows/01_permit_processing.md
+│
+├── insurance/                         # Insurance (9 types)
 │   ├── README.md
 │   ├── sql/                           # 9 insurance schemas
 │   ├── redis/                         # Quote caching, risk scoring
@@ -104,35 +123,41 @@ orbit-examples/
 │   ├── cql/                           # Premium history
 │   └── workflows/                     # End-to-end workflows
 │
-├── telco/                             # Telecommunications examples
+├── telco/                             # Telecommunications
 │   ├── README.md
 │   ├── sql/                           # Network, billing schemas
 │   ├── redis/                         # Real-time operations
-│   └── python/                        # Subscriber onboarding
+│   ├── python/                        # Subscriber onboarding
+│   └── workflows/01_subscriber_onboarding.md
 │
-├── retail/                            # Retail & E-commerce examples
+├── retail/                            # Retail & E-Commerce
 │   ├── README.md
 │   ├── sql/                           # Products, orders, customers
 │   ├── redis/                         # Shopping cart, inventory
 │   ├── mongodb/                       # Product catalog
 │   ├── cypher/                        # Recommendations
 │   ├── cql/                           # Sales analytics
-│   └── python/                        # Order processing
+│   ├── python/                        # Order processing
+│   └── workflows/01_order_processing.md
 │
-├── hospitality/                       # Coffeehouse & Restaurant examples
+├── hospitality/                       # Coffeehouse & Restaurants
 │   ├── README.md
 │   ├── sql/                           # Menu, POS schemas
 │   ├── redis/                         # Order queue, loyalty
-│   └── python/                        # Mobile ordering
+│   ├── python/                        # Mobile ordering
+│   └── workflows/01_mobile_ordering.md
 │
-└── manufacturing/                     # Electronics Manufacturing examples
+└── manufacturing/                     # Electronics Manufacturing
     ├── README.md
     ├── sql/                           # Products, BOM, production
     ├── redis/                         # ML predictions, real-time ops
     ├── orbitql/                       # Analytics queries
     ├── python/                        # Work order processing
+    ├── workflows/01_work_order_processing.md
     └── run_tests.sh                   # Test automation
 ```
+
+**Total**: 17 industry examples, 68+ files, 16 comprehensive workflows
 
 
 ## 🎯 Examples by Protocol

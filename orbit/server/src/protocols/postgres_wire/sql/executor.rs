@@ -9,20 +9,26 @@ use crate::protocols::common::storage::{
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::{
     ast::{
-        AccessMode, AlterSequenceStatement, AlterTableStatement, AssignmentTarget, BeginStatement,
-        ColumnConstraint, CommitStatement, CopyDirection, CopySource, CopyStatement, CopyTarget,
-        CreateDatabaseStatement, CreateExtensionStatement, CreateFunctionStatement,
-        CreateIndexStatement, CreateSchemaStatement, CreateSequenceStatement, CreateTableStatement,
+        AccessMode, AlterDomainStatement, AlterPolicyStatement, AlterRoleStatement,
+        AlterSequenceStatement, AlterTableStatement, AlterTypeStatement, AssignmentTarget,
+        BeginStatement, ColumnConstraint, CommitStatement, CopyDirection, CopySource,
+        CopyStatement, CopyTarget, CreateDatabaseStatement, CreateDomainStatement,
+        CreateExtensionStatement, CreateFunctionStatement, CreateIndexStatement,
+        CreatePolicyStatement, CreateRoleStatement, CreateRuleStatement, CreateSchemaStatement,
+        CreateSequenceStatement, CreateTableStatement, CreateTriggerStatement, CreateTypeStatement,
         CreateViewStatement, DeleteStatement, DescribeStatement, DropDatabaseStatement,
-        DropExtensionStatement, DropIndexStatement, DropSchemaStatement, DropSequenceStatement,
-        DropTableStatement, DropViewStatement, ExplainStatement, Expression, FromClause,
+        DropDomainStatement, DropExtensionStatement, DropIndexStatement, DropPolicyStatement,
+        DropRoleStatement, DropRuleStatement, DropSchemaStatement, DropSequenceStatement,
+        DropTableStatement, DropTriggerStatement, DropTypeStatement, DropViewStatement,
+        ExplainStatement, Expression, FromClause, FunctionLanguage, FunctionVolatility,
         GeneratedColumnStorage, GrantStatement, IndexType, InsertSource, InsertStatement,
-        IsolationLevel, JoinCondition, JoinType, MergeStatement, Privilege,
-        ReleaseSavepointStatement, RevokeStatement, RollbackStatement, SavepointStatement,
-        SelectItem, SelectStatement, SetStatement, ShowStatement, ShowVariable, Statement,
-        TableConstraint, TableName, TruncateStatement, UpdateStatement, UseStatement,
+        IsolationLevel, JoinCondition, JoinType, MergeAction, MergeInsertValues, MergeStatement,
+        ParameterMode, Privilege, ReleaseSavepointStatement, RevokeStatement, RollbackStatement,
+        SavepointStatement, SelectItem, SelectStatement, SetStatement, ShowStatement, ShowVariable,
+        Statement, TableConstraint, TableName, TriggerEvent, TriggerForEach, TriggerTiming,
+        TruncateStatement, TypeDefinition, UpdateStatement, UseStatement,
     },
-    expression_evaluator::{EvaluationContext, ExpressionEvaluator},
+    expression_evaluator::{EvaluationContext, ExpressionEvaluator, SequenceAccessor},
     parser::SqlParser,
     types::{SqlType, SqlValue},
 };
@@ -202,6 +208,9 @@ pub struct TableConstraintSchema {
     pub columns: Vec<String>,
     pub referenced_table: Option<String>,
     pub referenced_columns: Option<Vec<String>>,
+    /// PostgreSQL 18: WITHOUT OVERLAPS temporal column for PRIMARY KEY/UNIQUE
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub without_overlaps: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -261,6 +270,223 @@ pub struct SequenceMetadata {
     pub cache: i64,
     pub cycle: bool,
     pub is_called: bool,
+}
+
+/// Stored function definition
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StoredFunction {
+    pub name: String,
+    pub schema: Option<String>,
+    pub parameters: Vec<FunctionParameterDef>,
+    pub return_type: Option<String>,
+    pub language: FunctionLanguageType,
+    pub body: String,
+    pub volatility: FunctionVolatilityType,
+    pub or_replace: bool,
+}
+
+/// Function parameter definition (serializable)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FunctionParameterDef {
+    pub name: Option<String>,
+    pub data_type: String,
+    pub mode: ParameterModeType,
+    pub default_value: Option<String>,
+}
+
+/// Function language type (serializable)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum FunctionLanguageType {
+    Sql,
+    PlPgSql,
+    Internal,
+}
+
+/// Function volatility type (serializable)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum FunctionVolatilityType {
+    Immutable,
+    Stable,
+    Volatile,
+}
+
+/// Parameter mode type (serializable)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ParameterModeType {
+    In,
+    Out,
+    InOut,
+    Variadic,
+}
+
+/// Stored trigger definition
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StoredTrigger {
+    pub name: String,
+    pub table_name: String,
+    pub table_schema: Option<String>,
+    pub timing: TriggerTimingType,
+    pub events: Vec<TriggerEventType>,
+    pub for_each: TriggerForEachType,
+    pub when_clause: Option<String>,
+    pub function_name: String,
+    pub function_schema: Option<String>,
+    pub function_args: Vec<String>,
+    pub enabled: bool,
+}
+
+/// Trigger timing type (serializable)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum TriggerTimingType {
+    Before,
+    After,
+    InsteadOf,
+}
+
+/// Trigger event type (serializable)
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum TriggerEventType {
+    Insert,
+    Update(Option<Vec<String>>),
+    Delete,
+    Truncate,
+}
+
+/// Trigger for each type (serializable)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum TriggerForEachType {
+    Row,
+    Statement,
+}
+
+/// Sequence accessor implementation that directly wraps the executor's sequence storage
+/// This allows expression evaluators to call nextval, currval, setval, lastval
+/// with real-time updates to the underlying storage.
+pub struct ExecutorSequenceAccessor {
+    sequences: Arc<std::sync::RwLock<HashMap<String, SequenceMetadata>>>,
+    last_value: Arc<std::sync::RwLock<Option<(String, i64)>>>,
+}
+
+impl ExecutorSequenceAccessor {
+    pub fn new(
+        sequences: Arc<std::sync::RwLock<HashMap<String, SequenceMetadata>>>,
+        last_value: Arc<std::sync::RwLock<Option<(String, i64)>>>,
+    ) -> Self {
+        Self {
+            sequences,
+            last_value,
+        }
+    }
+}
+
+impl SequenceAccessor for ExecutorSequenceAccessor {
+    fn nextval(&self, sequence_name: &str) -> ProtocolResult<i64> {
+        let mut sequences = self.sequences.write().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
+
+        let seq = sequences
+            .get_mut(sequence_name)
+            .ok_or_else(|| ProtocolError::not_found("Sequence", sequence_name))?;
+
+        let next_value = if seq.is_called {
+            let next = seq.current_value + seq.increment;
+            if seq.increment > 0 && next > seq.max_value {
+                if seq.cycle {
+                    seq.min_value
+                } else {
+                    return Err(ProtocolError::PostgresError(format!(
+                        "nextval: reached maximum value of sequence \"{}\" ({})",
+                        sequence_name, seq.max_value
+                    )));
+                }
+            } else if seq.increment < 0 && next < seq.min_value {
+                if seq.cycle {
+                    seq.max_value
+                } else {
+                    return Err(ProtocolError::PostgresError(format!(
+                        "nextval: reached minimum value of sequence \"{}\" ({})",
+                        sequence_name, seq.min_value
+                    )));
+                }
+            } else {
+                next
+            }
+        } else {
+            seq.is_called = true;
+            seq.current_value
+        };
+
+        seq.current_value = next_value;
+
+        // Update last_value for lastval()
+        if let Ok(mut last) = self.last_value.write() {
+            *last = Some((sequence_name.to_string(), next_value));
+        }
+
+        Ok(next_value)
+    }
+
+    fn currval(&self, sequence_name: &str) -> ProtocolResult<i64> {
+        let sequences = self.sequences.read().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
+
+        let seq = sequences
+            .get(sequence_name)
+            .ok_or_else(|| ProtocolError::not_found("Sequence", sequence_name))?;
+
+        if !seq.is_called {
+            return Err(ProtocolError::PostgresError(format!(
+                "currval of sequence \"{}\" is not yet defined in this session",
+                sequence_name
+            )));
+        }
+
+        Ok(seq.current_value)
+    }
+
+    fn setval(&self, sequence_name: &str, value: i64, is_called: bool) -> ProtocolResult<i64> {
+        let mut sequences = self.sequences.write().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
+
+        let seq = sequences
+            .get_mut(sequence_name)
+            .ok_or_else(|| ProtocolError::not_found("Sequence", sequence_name))?;
+
+        if value < seq.min_value || value > seq.max_value {
+            return Err(ProtocolError::PostgresError(format!(
+                "setval: value {} is out of bounds for sequence \"{}\" ({} to {})",
+                value, sequence_name, seq.min_value, seq.max_value
+            )));
+        }
+
+        seq.current_value = value;
+        seq.is_called = is_called;
+
+        // Update last_value for lastval()
+        if is_called {
+            if let Ok(mut last) = self.last_value.write() {
+                *last = Some((sequence_name.to_string(), value));
+            }
+        }
+
+        Ok(value)
+    }
+
+    fn lastval(&self) -> ProtocolResult<i64> {
+        let last = self.last_value.read().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire last value lock".to_string())
+        })?;
+
+        match &*last {
+            Some((_, value)) => Ok(*value),
+            None => Err(ProtocolError::PostgresError(
+                "lastval is not yet defined in this session".to_string(),
+            )),
+        }
+    }
 }
 
 /// Transaction state
@@ -349,7 +575,14 @@ pub struct SqlExecutor {
     views: Arc<RwLock<HashMap<String, ViewSchema>>>,
     schemas: Arc<RwLock<HashMap<String, SchemaDefinition>>>,
     extensions: Arc<RwLock<HashMap<String, ExtensionDefinition>>>,
-    sequences: Arc<RwLock<HashMap<String, SequenceMetadata>>>,
+    /// Sequences use std::sync::RwLock for synchronous access in expression evaluation
+    sequences: Arc<std::sync::RwLock<HashMap<String, SequenceMetadata>>>,
+
+    /// Stored functions (CREATE FUNCTION)
+    functions: Arc<RwLock<HashMap<String, StoredFunction>>>,
+
+    /// Stored triggers (CREATE TRIGGER)
+    triggers: Arc<RwLock<HashMap<String, StoredTrigger>>>,
 
     // Data storage (in-memory for demonstration)
     // In production, this would integrate with OrbitClient
@@ -381,6 +614,9 @@ pub struct SqlExecutor {
     // Expression evaluator
     #[allow(dead_code)]
     expression_evaluator: Arc<RwLock<ExpressionEvaluator>>,
+
+    // Session-level sequence state for lastval()
+    sequence_last_value: Arc<std::sync::RwLock<Option<(String, i64)>>>,
 }
 
 impl SqlExecutor {
@@ -478,7 +714,9 @@ impl SqlExecutor {
             views: Arc::new(RwLock::new(HashMap::new())),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             extensions: Arc::new(RwLock::new(HashMap::new())),
-            sequences: Arc::new(RwLock::new(HashMap::new())),
+            sequences: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            functions: Arc::new(RwLock::new(HashMap::new())),
+            triggers: Arc::new(RwLock::new(HashMap::new())),
             table_data: Arc::new(RwLock::new(HashMap::new())),
             current_transaction: Arc::new(RwLock::new(None)),
             transaction_log: Arc::new(RwLock::new(Vec::new())),
@@ -491,6 +729,7 @@ impl SqlExecutor {
             current_schema: Arc::new(RwLock::new("public".to_string())),
             vector_extensions: Arc::new(RwLock::new(HashMap::new())),
             expression_evaluator: Arc::new(RwLock::new(ExpressionEvaluator::new())),
+            sequence_last_value: Arc::new(std::sync::RwLock::new(None)),
         }
     }
 
@@ -502,6 +741,19 @@ impl SqlExecutor {
     /// Get storage metrics
     pub async fn storage_metrics(&self) -> crate::protocols::common::storage::StorageMetrics {
         self.storage.metrics().await
+    }
+
+    /// Create a sequence accessor for expression evaluation
+    /// This allows expression evaluators to call nextval, currval, setval, lastval
+    /// The accessor directly uses the executor's sequence storage for real-time updates.
+    pub fn create_sequence_accessor(&self) -> Arc<dyn SequenceAccessor> {
+        // Create a sequence accessor that directly wraps our sequence storage
+        // We need to convert SequenceMetadata to SequenceMetadataRef
+        // Since we're using std::sync::RwLock, we can share the same lock
+        Arc::new(ExecutorSequenceAccessor::new(
+            self.sequences.clone(),
+            self.sequence_last_value.clone(),
+        ))
     }
 
     /// Set the current database context
@@ -572,15 +824,9 @@ impl SqlExecutor {
             // COPY operations
             Statement::Copy(stmt) => self.execute_copy(stmt).await,
 
-            // Trigger operations (no-op for now, just return success)
-            Statement::CreateTrigger(_stmt) => Ok(ExecutionResult::Show {
-                variable: "CREATE TRIGGER".to_string(),
-                value: "OK".to_string(),
-            }),
-            Statement::DropTrigger(_stmt) => Ok(ExecutionResult::Show {
-                variable: "DROP TRIGGER".to_string(),
-                value: "OK".to_string(),
-            }),
+            // Trigger operations
+            Statement::CreateTrigger(stmt) => self.execute_create_trigger(stmt).await,
+            Statement::DropTrigger(stmt) => self.execute_drop_trigger(stmt).await,
 
             // Comment operations (no-op for now, just return success)
             Statement::CommentOn(_stmt) => Ok(ExecutionResult::Show {
@@ -595,19 +841,288 @@ impl SqlExecutor {
 
             // Truncate operation
             Statement::Truncate(stmt) => self.execute_truncate(stmt).await,
+
+            // Extended DDL - Types
+            Statement::CreateType(stmt) => self.execute_create_type(stmt).await,
+            Statement::DropType(stmt) => self.execute_drop_type(stmt).await,
+            Statement::AlterType(stmt) => self.execute_alter_type(stmt).await,
+
+            // Extended DDL - Domains
+            Statement::CreateDomain(stmt) => self.execute_create_domain(stmt).await,
+            Statement::DropDomain(stmt) => self.execute_drop_domain(stmt).await,
+            Statement::AlterDomain(stmt) => self.execute_alter_domain(stmt).await,
+
+            // Extended DDL - Roles/Users
+            Statement::CreateRole(stmt) => self.execute_create_role(stmt).await,
+            Statement::DropRole(stmt) => self.execute_drop_role(stmt).await,
+            Statement::AlterRole(stmt) => self.execute_alter_role(stmt).await,
+
+            // Extended DDL - Policies
+            Statement::CreatePolicy(stmt) => self.execute_create_policy(stmt).await,
+            Statement::DropPolicy(stmt) => self.execute_drop_policy(stmt).await,
+            Statement::AlterPolicy(stmt) => self.execute_alter_policy(stmt).await,
+
+            // Extended DDL - Rules
+            Statement::CreateRule(stmt) => self.execute_create_rule(stmt).await,
+            Statement::DropRule(stmt) => self.execute_drop_rule(stmt).await,
+
+            // Catch-all for unimplemented statement types
+            _ => Err(ProtocolError::not_implemented(
+                "Statement type",
+                "This SQL statement is not yet implemented",
+            )),
         }
     }
 
     async fn execute_create_function(
         &self,
-        _stmt: CreateFunctionStatement,
+        stmt: CreateFunctionStatement,
     ) -> ProtocolResult<ExecutionResult> {
-        // TODO: Implement function creation logic
-        // For now, just return success to satisfy the parser test
+        // Get function name and schema from FunctionName enum
+        let (function_name, schema) = match &stmt.name {
+            crate::protocols::postgres_wire::sql::ast::FunctionName::Simple(name) => {
+                (name.clone(), None)
+            }
+            crate::protocols::postgres_wire::sql::ast::FunctionName::Qualified { schema, name } => {
+                (name.clone(), Some(schema.clone()))
+            }
+        };
+
+        // Generate a unique key for the function (name + parameter types for overloading)
+        let param_types: Vec<String> = stmt
+            .args
+            .as_ref()
+            .map(|args| args.iter().map(|p| format!("{:?}", p.data_type)).collect())
+            .unwrap_or_default();
+        let function_key = format!("{}({})", function_name, param_types.join(","));
+
+        // Check if function already exists (unless OR REPLACE)
+        let mut functions = self.functions.write().await;
+        if functions.contains_key(&function_key) && !stmt.or_replace {
+            return Err(ProtocolError::already_exists("Function", &function_name));
+        }
+
+        // Convert parameters
+        let parameters: Vec<FunctionParameterDef> = stmt
+            .args
+            .as_ref()
+            .map(|args| {
+                args.iter()
+                    .map(|p| FunctionParameterDef {
+                        name: p.name.clone(),
+                        data_type: format!("{:?}", p.data_type),
+                        mode: p
+                            .mode
+                            .as_ref()
+                            .map(|m| match m {
+                                ParameterMode::In => ParameterModeType::In,
+                                ParameterMode::Out => ParameterModeType::Out,
+                                ParameterMode::InOut => ParameterModeType::InOut,
+                                ParameterMode::Variadic => ParameterModeType::Variadic,
+                            })
+                            .unwrap_or(ParameterModeType::In),
+                        default_value: p.default.as_ref().map(|e| format!("{:?}", e)),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Convert language
+        let language = stmt
+            .language
+            .as_ref()
+            .map(|l| match l {
+                FunctionLanguage::Sql => FunctionLanguageType::Sql,
+                FunctionLanguage::PlPgSql => FunctionLanguageType::PlPgSql,
+                FunctionLanguage::Other(_) => FunctionLanguageType::Internal,
+            })
+            .unwrap_or(FunctionLanguageType::Sql);
+
+        // Convert volatility
+        let volatility = stmt
+            .volatility
+            .as_ref()
+            .map(|v| match v {
+                FunctionVolatility::Immutable => FunctionVolatilityType::Immutable,
+                FunctionVolatility::Stable => FunctionVolatilityType::Stable,
+                FunctionVolatility::Volatile => FunctionVolatilityType::Volatile,
+            })
+            .unwrap_or(FunctionVolatilityType::Volatile);
+
+        // Create stored function
+        let stored_function = StoredFunction {
+            name: function_name.clone(),
+            schema,
+            parameters,
+            return_type: stmt.return_type.map(|t| format!("{:?}", t)),
+            language,
+            body: stmt.body.clone(),
+            volatility,
+            or_replace: stmt.or_replace,
+        };
+
+        functions.insert(function_key, stored_function);
+
         Ok(ExecutionResult::Show {
             variable: "CREATE FUNCTION".to_string(),
-            value: "OK".to_string(),
+            value: function_name,
         })
+    }
+
+    async fn execute_create_trigger(
+        &self,
+        stmt: CreateTriggerStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let trigger_name = stmt.name.clone();
+        let table_name = stmt.table.name.clone();
+        let table_schema = stmt.table.schema.clone();
+
+        // Generate unique key for trigger (trigger_name + table_name)
+        let trigger_key = format!("{}_{}", trigger_name, table_name);
+
+        // Check if trigger already exists (unless OR REPLACE)
+        let mut triggers = self.triggers.write().await;
+        if triggers.contains_key(&trigger_key) && !stmt.or_replace {
+            return Err(ProtocolError::already_exists("Trigger", &trigger_name));
+        }
+
+        // Convert timing
+        let timing = match stmt.timing {
+            TriggerTiming::Before => TriggerTimingType::Before,
+            TriggerTiming::After => TriggerTimingType::After,
+            TriggerTiming::InsteadOf => TriggerTimingType::InsteadOf,
+        };
+
+        // Convert events
+        let events: Vec<TriggerEventType> = stmt
+            .events
+            .iter()
+            .map(|e| match e {
+                TriggerEvent::Insert => TriggerEventType::Insert,
+                TriggerEvent::Update(cols) => TriggerEventType::Update(cols.clone()),
+                TriggerEvent::Delete => TriggerEventType::Delete,
+                TriggerEvent::Truncate => TriggerEventType::Truncate,
+            })
+            .collect();
+
+        // Convert for_each
+        let for_each = match stmt.for_each {
+            TriggerForEach::Row => TriggerForEachType::Row,
+            TriggerForEach::Statement => TriggerForEachType::Statement,
+        };
+
+        // Get function name from FunctionName enum
+        let (function_name, function_schema) = match &stmt.function {
+            crate::protocols::postgres_wire::sql::ast::FunctionName::Simple(name) => {
+                (name.clone(), None)
+            }
+            crate::protocols::postgres_wire::sql::ast::FunctionName::Qualified { schema, name } => {
+                (name.clone(), Some(schema.clone()))
+            }
+        };
+
+        // Convert function args to strings
+        let function_args: Vec<String> = stmt
+            .function_args
+            .iter()
+            .map(|e| format!("{:?}", e))
+            .collect();
+
+        // Create stored trigger
+        let stored_trigger = StoredTrigger {
+            name: trigger_name.clone(),
+            table_name,
+            table_schema,
+            timing,
+            events,
+            for_each,
+            when_clause: stmt.when_clause.map(|e| format!("{:?}", e)),
+            function_name,
+            function_schema,
+            function_args,
+            enabled: true,
+        };
+
+        triggers.insert(trigger_key, stored_trigger);
+
+        Ok(ExecutionResult::Show {
+            variable: "CREATE TRIGGER".to_string(),
+            value: trigger_name,
+        })
+    }
+
+    async fn execute_drop_trigger(
+        &self,
+        stmt: DropTriggerStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let trigger_name = stmt.name.clone();
+        let table_name = stmt.table.name.clone();
+        let trigger_key = format!("{}_{}", trigger_name, table_name);
+
+        let mut triggers = self.triggers.write().await;
+
+        if triggers.remove(&trigger_key).is_none() && !stmt.if_exists {
+            return Err(ProtocolError::not_found("Trigger", &trigger_name));
+        }
+
+        Ok(ExecutionResult::Show {
+            variable: "DROP TRIGGER".to_string(),
+            value: trigger_name,
+        })
+    }
+
+    /// Get triggers for a specific table (used during DML operations)
+    #[allow(dead_code)]
+    async fn get_triggers_for_table(
+        &self,
+        table_name: &str,
+        event: &TriggerEventType,
+        timing: TriggerTimingType,
+    ) -> Vec<StoredTrigger> {
+        let triggers = self.triggers.read().await;
+        triggers
+            .values()
+            .filter(|t| {
+                t.table_name == table_name
+                    && t.timing == timing
+                    && t.enabled
+                    && t.events.iter().any(|e| match (e, event) {
+                        (TriggerEventType::Insert, TriggerEventType::Insert) => true,
+                        (TriggerEventType::Delete, TriggerEventType::Delete) => true,
+                        (TriggerEventType::Truncate, TriggerEventType::Truncate) => true,
+                        (TriggerEventType::Update(_), TriggerEventType::Update(_)) => true,
+                        _ => false,
+                    })
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Get a stored function by name (used for function calls)
+    #[allow(dead_code)]
+    pub async fn get_function(&self, name: &str) -> Option<StoredFunction> {
+        let functions = self.functions.read().await;
+        // Try exact match first, then try without parameter types
+        functions.get(name).cloned().or_else(|| {
+            functions
+                .iter()
+                .find(|(k, _)| k.starts_with(&format!("{}(", name)))
+                .map(|(_, v)| v.clone())
+        })
+    }
+
+    /// List all stored functions
+    #[allow(dead_code)]
+    pub async fn list_functions(&self) -> Vec<StoredFunction> {
+        let functions = self.functions.read().await;
+        functions.values().cloned().collect()
+    }
+
+    /// List all stored triggers
+    #[allow(dead_code)]
+    pub async fn list_triggers(&self) -> Vec<StoredTrigger> {
+        let triggers = self.triggers.read().await;
+        triggers.values().cloned().collect()
     }
 
     // DDL Implementation methods
@@ -738,22 +1253,34 @@ impl SqlExecutor {
                 TableConstraint::PrimaryKey {
                     name,
                     columns: cols,
+                    without_overlaps,
                 } => TableConstraintSchema {
                     name: name.clone(),
-                    constraint_type: "PRIMARY KEY".to_string(),
+                    constraint_type: if without_overlaps.is_some() {
+                        "PRIMARY KEY (TEMPORAL)".to_string()
+                    } else {
+                        "PRIMARY KEY".to_string()
+                    },
                     columns: cols.clone(),
                     referenced_table: None,
                     referenced_columns: None,
+                    without_overlaps: without_overlaps.clone(),
                 },
                 TableConstraint::Unique {
                     name,
                     columns: cols,
+                    without_overlaps,
                 } => TableConstraintSchema {
                     name: name.clone(),
-                    constraint_type: "UNIQUE".to_string(),
+                    constraint_type: if without_overlaps.is_some() {
+                        "UNIQUE (TEMPORAL)".to_string()
+                    } else {
+                        "UNIQUE".to_string()
+                    },
                     columns: cols.clone(),
                     referenced_table: None,
                     referenced_columns: None,
+                    without_overlaps: without_overlaps.clone(),
                 },
                 TableConstraint::ForeignKey {
                     name,
@@ -767,6 +1294,7 @@ impl SqlExecutor {
                     columns: cols.clone(),
                     referenced_table: Some(references_table.full_name()),
                     referenced_columns: Some(references_columns.clone()),
+                    without_overlaps: None,
                 },
                 TableConstraint::Check { name, .. } => TableConstraintSchema {
                     name: name.clone(),
@@ -774,6 +1302,7 @@ impl SqlExecutor {
                     columns: Vec::new(),
                     referenced_table: None,
                     referenced_columns: None,
+                    without_overlaps: None,
                 },
             };
             constraints.push(constraint_schema);
@@ -1091,27 +1620,188 @@ impl SqlExecutor {
             if let Some(generated) = &col_schema.generated {
                 // Only compute STORED generated columns (VIRTUAL are computed on read)
                 if generated.storage == GeneratedColumnStorageType::Stored {
-                    // Parse the expression text back into an AST
-                    let expr = self.parse_generated_expression(&generated.expression_text)?;
-
-                    // Create evaluation context from the current row
-                    let context = EvaluationContext {
-                        current_row: row.clone(),
-                        table_data: HashMap::new(),
-                        variables: HashMap::new(),
-                        current_table: None,
-                        window_frame: None,
-                    };
-
-                    // Evaluate the expression
-                    let mut evaluator = ExpressionEvaluator::new();
-                    let value = evaluator.evaluate(&expr, &context)?;
-
-                    // Insert the computed value
-                    row.insert(col_schema.name.clone(), value);
+                    self.compute_single_generated_column(col_schema, generated, row)?;
                 }
             }
         }
+        Ok(())
+    }
+
+    /// Compute values for VIRTUAL generated columns (PostgreSQL 18)
+    /// Called during SELECT to compute values on-the-fly without storing them
+    fn compute_virtual_columns(
+        &self,
+        table_schema: &TableSchema,
+        row: &mut HashMap<String, SqlValue>,
+    ) -> ProtocolResult<()> {
+        for col_schema in &table_schema.columns {
+            if let Some(generated) = &col_schema.generated {
+                // Only compute VIRTUAL generated columns
+                if generated.storage == GeneratedColumnStorageType::Virtual {
+                    self.compute_single_generated_column(col_schema, generated, row)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// PostgreSQL 18: Check for temporal constraint overlaps (WITHOUT OVERLAPS)
+    /// This validates that a new row doesn't violate temporal PRIMARY KEY or UNIQUE constraints
+    /// by checking if any existing row has the same key values AND overlapping time ranges
+    fn check_temporal_overlaps(
+        &self,
+        table_schema: &TableSchema,
+        new_row: &HashMap<String, SqlValue>,
+        existing_data: &[HashMap<String, SqlValue>],
+    ) -> ProtocolResult<()> {
+        for constraint in &table_schema.constraints {
+            if let Some(ref range_col) = constraint.without_overlaps {
+                // This is a temporal constraint - check for overlaps
+                let key_columns: Vec<&String> = constraint
+                    .columns
+                    .iter()
+                    .filter(|c| *c != range_col)
+                    .collect();
+
+                // Get the new row's range value
+                let new_range = match new_row.get(range_col) {
+                    Some(SqlValue::Text(range_str)) => self.parse_tstzrange(range_str),
+                    _ => continue, // No range value or not a string, skip
+                };
+
+                let Some((new_start, new_end)) = new_range else {
+                    continue;
+                };
+
+                // Check against all existing rows
+                for existing_row in existing_data {
+                    // First check if key columns match
+                    let keys_match = key_columns.iter().all(|col| {
+                        let new_val = new_row.get(*col);
+                        let existing_val = existing_row.get(*col);
+                        match (new_val, existing_val) {
+                            (Some(a), Some(b)) => a == b,
+                            _ => false,
+                        }
+                    });
+
+                    if !keys_match {
+                        continue; // Different keys, no conflict
+                    }
+
+                    // Keys match - check for range overlap
+                    let existing_range = match existing_row.get(range_col) {
+                        Some(SqlValue::Text(range_str)) => self.parse_tstzrange(range_str),
+                        _ => continue,
+                    };
+
+                    if let Some((existing_start, existing_end)) = existing_range {
+                        // Ranges overlap if: new_start < existing_end AND new_end > existing_start
+                        if new_start < existing_end && new_end > existing_start {
+                            let constraint_name = constraint
+                                .name
+                                .clone()
+                                .unwrap_or_else(|| constraint.constraint_type.clone());
+                            return Err(ProtocolError::PostgresError(format!(
+                                "conflicting key value violates exclusion constraint \"{}\": \
+                                 range overlap for key ({}) with existing row",
+                                constraint_name,
+                                key_columns
+                                    .iter()
+                                    .map(|c| c.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Parse a TSTZRANGE string into start/end timestamps
+    /// Format: [start,end), (start,end], etc.
+    fn parse_tstzrange(&self, range_str: &str) -> Option<(i64, i64)> {
+        // Remove brackets/parentheses and split by comma
+        let trimmed = range_str.trim();
+        if trimmed.len() < 3 {
+            return None;
+        }
+
+        let inner = &trimmed[1..trimmed.len() - 1];
+        let parts: Vec<&str> = inner.split(',').collect();
+        if parts.len() != 2 {
+            return None;
+        }
+
+        // Parse timestamps - for simplicity, we use basic parsing
+        // Real implementation would handle various timestamp formats
+        let start = self.parse_timestamp_to_micros(parts[0].trim())?;
+        let end = self.parse_timestamp_to_micros(parts[1].trim())?;
+
+        Some((start, end))
+    }
+
+    /// Parse a timestamp string to microseconds since epoch
+    fn parse_timestamp_to_micros(&self, ts: &str) -> Option<i64> {
+        // Handle common PostgreSQL timestamp formats
+        let trimmed = ts.trim().trim_matches('"').trim_matches('\'');
+        if trimmed.is_empty() || trimmed == "-infinity" {
+            return Some(i64::MIN);
+        }
+        if trimmed == "infinity" {
+            return Some(i64::MAX);
+        }
+
+        // Try parsing as ISO 8601 date/datetime
+        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(trimmed) {
+            return Some(dt.timestamp_micros());
+        }
+
+        // Try with space separator (PostgreSQL style: 2024-01-01 00:00:00)
+        if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%d %H:%M:%S") {
+            return Some(dt.and_utc().timestamp_micros());
+        }
+
+        // Try date only
+        if let Ok(d) = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+            return d
+                .and_hms_opt(0, 0, 0)
+                .map(|dt| dt.and_utc().timestamp_micros());
+        }
+
+        None
+    }
+
+    /// Compute a single generated column value
+    fn compute_single_generated_column(
+        &self,
+        col_schema: &ColumnSchema,
+        generated: &GeneratedColumnSchema,
+        row: &mut HashMap<String, SqlValue>,
+    ) -> ProtocolResult<()> {
+        // Parse the expression text back into an AST
+        let expr = self.parse_generated_expression(&generated.expression_text)?;
+
+        // Create evaluation context from the current row
+        let context = EvaluationContext {
+            current_row: row.clone(),
+            table_data: HashMap::new(),
+            variables: HashMap::new(),
+            current_table: None,
+            window_frame: None,
+        };
+
+        // Evaluate the expression
+        let mut evaluator = ExpressionEvaluator::new();
+        // Set sequence accessor for sequence functions in generated columns
+        let seq_accessor = self.create_sequence_accessor();
+        evaluator.set_sequence_accessor(seq_accessor);
+        let value = evaluator.evaluate(&expr, &context)?;
+
+        // Insert the computed value
+        row.insert(col_schema.name.clone(), value);
         Ok(())
     }
 
@@ -1182,13 +1872,13 @@ impl SqlExecutor {
                     }
                     SelectItem::Wildcard => {
                         // Return all columns in the row
-                        for (_col_name, value) in row {
+                        for value in row.values() {
                             result_row.push(Some(self.sql_value_to_string(value)));
                         }
                     }
                     SelectItem::QualifiedWildcard { .. } => {
                         // Return all columns in the row
-                        for (_col_name, value) in row {
+                        for value in row.values() {
                             result_row.push(Some(self.sql_value_to_string(value)));
                         }
                     }
@@ -1207,20 +1897,40 @@ impl SqlExecutor {
         expr: &Expression,
         row: &HashMap<String, SqlValue>,
     ) -> ProtocolResult<Option<String>> {
+        self.evaluate_returning_expr_with_old_new(expr, row, None)
+    }
+
+    /// Evaluate a single expression in RETURNING clause with OLD/NEW support (PostgreSQL 18)
+    /// For UPDATE: old_row contains pre-update values, row contains post-update values
+    /// For DELETE: old_row contains deleted values, row is same as old_row
+    /// For INSERT: old_row is None, row contains inserted values
+    fn evaluate_returning_expr_with_old_new(
+        &self,
+        expr: &Expression,
+        new_row: &HashMap<String, SqlValue>,
+        old_row: Option<&HashMap<String, SqlValue>>,
+    ) -> ProtocolResult<Option<String>> {
         match expr {
             Expression::Column(col_ref) => {
-                // Look up column value in the row
-                if let Some(value) = row.get(&col_ref.name) {
-                    Ok(Some(self.sql_value_to_string(value)))
-                } else {
-                    // Try case-insensitive match
-                    for (col_name, value) in row {
-                        if col_name.eq_ignore_ascii_case(&col_ref.name) {
-                            return Ok(Some(self.sql_value_to_string(value)));
+                // Check for OLD.column or NEW.column syntax (PostgreSQL 18)
+                if let Some(table_qualifier) = &col_ref.table {
+                    let qualifier_upper = table_qualifier.to_uppercase();
+                    if qualifier_upper == "OLD" {
+                        // Return value from old row
+                        if let Some(old) = old_row {
+                            return self.lookup_column_value(&col_ref.name, old);
+                        } else {
+                            // OLD not available (e.g., in INSERT)
+                            return Ok(None);
                         }
+                    } else if qualifier_upper == "NEW" {
+                        // Return value from new row
+                        return self.lookup_column_value(&col_ref.name, new_row);
                     }
-                    Ok(None)
                 }
+
+                // Default: look up in new_row (standard behavior)
+                self.lookup_column_value(&col_ref.name, new_row)
             }
             Expression::Literal(sql_val) => Ok(Some(self.sql_value_to_string(sql_val))),
             _ => {
@@ -1229,6 +1939,87 @@ impl SqlExecutor {
                 Ok(Some("expr".to_string()))
             }
         }
+    }
+
+    /// Helper to look up a column value in a row (case-insensitive)
+    fn lookup_column_value(
+        &self,
+        col_name: &str,
+        row: &HashMap<String, SqlValue>,
+    ) -> ProtocolResult<Option<String>> {
+        if let Some(value) = row.get(col_name) {
+            Ok(Some(self.sql_value_to_string(value)))
+        } else {
+            // Try case-insensitive match
+            for (name, value) in row {
+                if name.eq_ignore_ascii_case(col_name) {
+                    return Ok(Some(self.sql_value_to_string(value)));
+                }
+            }
+            Ok(None)
+        }
+    }
+
+    /// Evaluate RETURNING clause with OLD/NEW support (PostgreSQL 18)
+    /// Each entry in row_pairs is (old_row, new_row)
+    /// For INSERT: old_row is None
+    /// For UPDATE: old_row is pre-update, new_row is post-update
+    /// For DELETE: old_row is deleted row, new_row is same as old_row
+    fn evaluate_returning_clause_with_old_new(
+        &self,
+        returning_items: &[SelectItem],
+        row_pairs: &[(Option<HashMap<String, SqlValue>>, HashMap<String, SqlValue>)],
+        _table_schema: &TableSchema,
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let mut result_rows = Vec::new();
+
+        for (old_row, new_row) in row_pairs {
+            let mut result_row = Vec::new();
+
+            for item in returning_items {
+                match item {
+                    SelectItem::Expression { expr, .. } => {
+                        let value = self.evaluate_returning_expr_with_old_new(
+                            expr,
+                            new_row,
+                            old_row.as_ref(),
+                        )?;
+                        result_row.push(value);
+                    }
+                    SelectItem::Wildcard => {
+                        // Return all columns from new_row
+                        for value in new_row.values() {
+                            result_row.push(Some(self.sql_value_to_string(value)));
+                        }
+                    }
+                    SelectItem::QualifiedWildcard { qualifier } => {
+                        let qualifier_upper = qualifier.to_uppercase();
+                        if qualifier_upper == "OLD" {
+                            // OLD.* - return all columns from old row
+                            if let Some(old) = old_row {
+                                for value in old.values() {
+                                    result_row.push(Some(self.sql_value_to_string(value)));
+                                }
+                            }
+                        } else if qualifier_upper == "NEW" {
+                            // NEW.* - return all columns from new row
+                            for value in new_row.values() {
+                                result_row.push(Some(self.sql_value_to_string(value)));
+                            }
+                        } else {
+                            // Regular qualified wildcard
+                            for value in new_row.values() {
+                                result_row.push(Some(self.sql_value_to_string(value)));
+                            }
+                        }
+                    }
+                }
+            }
+
+            result_rows.push(result_row);
+        }
+
+        Ok(result_rows)
     }
 
     /// Convert SqlValue to string representation
@@ -1454,8 +2245,14 @@ impl SqlExecutor {
                 .entry(table_name.clone())
                 .or_insert_with(Vec::new);
 
+            // PostgreSQL 18: Check temporal constraint overlaps before inserting
             let mut inserted_rows = Vec::new();
             for row in rows_to_insert {
+                // Check against existing data + already inserted rows in this batch
+                let mut all_existing: Vec<HashMap<String, SqlValue>> = data.clone();
+                all_existing.extend(inserted_rows.clone());
+                self.check_temporal_overlaps(&table_schema, &row, &all_existing)?;
+
                 inserted_rows.push(row.clone());
                 data.push(row);
                 count += 1;
@@ -1536,11 +2333,18 @@ impl SqlExecutor {
                 .entry(table_name.clone())
                 .or_insert_with(Vec::new);
 
-            let count = rows_to_insert.len();
+            // PostgreSQL 18: Check temporal constraint overlaps before inserting
+            let mut count = 0;
             let mut inserted_rows = Vec::new();
             for row in rows_to_insert {
+                // Check against existing data + already inserted rows in this batch
+                let mut all_existing: Vec<HashMap<String, SqlValue>> = data.clone();
+                all_existing.extend(inserted_rows.clone());
+                self.check_temporal_overlaps(&table_schema, &row, &all_existing)?;
+
                 inserted_rows.push(row.clone());
                 data.push(row);
+                count += 1;
             }
             drop(table_data);
 
@@ -1581,17 +2385,21 @@ impl SqlExecutor {
         drop(tables);
 
         let mut count = 0;
-        let mut updated_rows: Vec<HashMap<String, SqlValue>> = Vec::new();
+        // PostgreSQL 18: Track (old_row, new_row) pairs for OLD/NEW in RETURNING
+        let mut row_pairs: Vec<(Option<HashMap<String, SqlValue>>, HashMap<String, SqlValue>)> =
+            Vec::new();
         let mut table_data = self.table_data.write().await;
 
         if let Some(data) = table_data.get_mut(&table_name) {
-            for row in data.iter_mut() {
+            // Use index-based iteration to allow for temporal overlap checking
+            let num_rows = data.len();
+            for i in 0..num_rows {
                 let mut should_update = true;
 
                 // Evaluate WHERE clause if present
                 if let Some(where_expr) = &stmt.where_clause {
                     let context =
-                        EvaluationContext::with_row_and_table(row.clone(), table_name.clone());
+                        EvaluationContext::with_row_and_table(data[i].clone(), table_name.clone());
 
                     match self.evaluate_where_condition(where_expr, &context).await {
                         Ok(SqlValue::Boolean(b)) => should_update = b,
@@ -1602,6 +2410,13 @@ impl SqlExecutor {
                 }
 
                 if should_update {
+                    // PostgreSQL 18: Save old row values before modification for OLD reference
+                    let old_row = if stmt.returning.is_some() {
+                        Some(data[i].clone())
+                    } else {
+                        None
+                    };
+
                     // Apply updates
                     for assignment in &stmt.set {
                         // Get the column name being updated
@@ -1634,34 +2449,47 @@ impl SqlExecutor {
                         // Handle different assignment target types
                         match &assignment.target {
                             AssignmentTarget::Column(col_name) => {
-                                row.insert(col_name.clone(), value);
+                                data[i].insert(col_name.clone(), value);
                             }
                             AssignmentTarget::Columns(col_names) => {
                                 // For multiple column assignments, use first column for simplicity
                                 if let Some(first_col) = col_names.first() {
-                                    row.insert(first_col.clone(), value);
+                                    data[i].insert(first_col.clone(), value);
                                 }
                             }
                         }
                     }
 
                     // Recompute STORED generated column values after update
-                    self.compute_generated_columns(&table_schema, row)?;
+                    self.compute_generated_columns(&table_schema, &mut data[i])?;
 
-                    // Collect updated row for RETURNING clause
+                    // PostgreSQL 18: Check temporal constraint overlaps after update
+                    // We need to check the updated row against all OTHER rows
+                    let other_rows: Vec<HashMap<String, SqlValue>> = data
+                        .iter()
+                        .enumerate()
+                        .filter(|(idx, _)| *idx != i)
+                        .map(|(_, r)| r.clone())
+                        .collect();
+                    self.check_temporal_overlaps(&table_schema, &data[i], &other_rows)?;
+
+                    // Collect (old_row, new_row) pair for RETURNING clause with OLD/NEW support
                     if stmt.returning.is_some() {
-                        updated_rows.push(row.clone());
+                        row_pairs.push((old_row, data[i].clone()));
                     }
                     count += 1;
                 }
             }
         }
 
-        // Process RETURNING clause if present
+        // Process RETURNING clause if present (with PostgreSQL 18 OLD/NEW support)
         let (returning_columns, returning_rows) = if let Some(returning_items) = &stmt.returning {
             let columns = self.extract_returning_columns(returning_items);
-            let rows =
-                self.evaluate_returning_clause(returning_items, &updated_rows, &table_schema)?;
+            let rows = self.evaluate_returning_clause_with_old_new(
+                returning_items,
+                &row_pairs,
+                &table_schema,
+            )?;
             (Some(columns), Some(rows))
         } else {
             (None, None)
@@ -1686,7 +2514,10 @@ impl SqlExecutor {
         drop(tables);
 
         let mut count = 0;
-        let mut deleted_rows: Vec<HashMap<String, SqlValue>> = Vec::new();
+        // PostgreSQL 18: Track (old_row, new_row) pairs for OLD/NEW in RETURNING
+        // For DELETE: old_row is the deleted row, new_row is same as old_row
+        let mut row_pairs: Vec<(Option<HashMap<String, SqlValue>>, HashMap<String, SqlValue>)> =
+            Vec::new();
         let mut table_data = self.table_data.write().await;
 
         if let Some(data) = table_data.get_mut(&table_name) {
@@ -1709,9 +2540,9 @@ impl SqlExecutor {
                 }
 
                 if should_delete {
-                    // Collect the row before deletion for RETURNING clause
+                    // PostgreSQL 18: For DELETE, OLD is the deleted row, NEW is same as OLD
                     if stmt.returning.is_some() {
-                        deleted_rows.push(row.clone());
+                        row_pairs.push((Some(row.clone()), row.clone()));
                     }
                     indices_to_remove.push(i);
                 }
@@ -1724,11 +2555,14 @@ impl SqlExecutor {
             }
         }
 
-        // Process RETURNING clause if present
+        // Process RETURNING clause if present (with PostgreSQL 18 OLD/NEW support)
         let (returning_columns, returning_rows) = if let Some(returning_items) = &stmt.returning {
             let columns = self.extract_returning_columns(returning_items);
-            let rows =
-                self.evaluate_returning_clause(returning_items, &deleted_rows, &table_schema)?;
+            let rows = self.evaluate_returning_clause_with_old_new(
+                returning_items,
+                &row_pairs,
+                &table_schema,
+            )?;
             (Some(columns), Some(rows))
         } else {
             (None, None)
@@ -1741,31 +2575,284 @@ impl SqlExecutor {
         })
     }
 
-    async fn execute_merge(&self, _stmt: MergeStatement) -> ProtocolResult<ExecutionResult> {
-        // Placeholder for MERGE execution
-        // For the test case: MERGE INTO test_merge t USING (VALUES (1, 'new')) AS s(id, val) ON t.id = s.id WHEN NOT MATCHED THEN INSERT VALUES (s.id, s.val) RETURNING NEW.val;
+    async fn execute_merge(&self, stmt: MergeStatement) -> ProtocolResult<ExecutionResult> {
+        // PostgreSQL 18 MERGE statement execution
+        // MERGE INTO target USING source ON condition
+        // WHEN MATCHED THEN UPDATE/DELETE
+        // WHEN NOT MATCHED THEN INSERT
+        // RETURNING ...
 
-        // We need to implement enough logic to pass the test.
-        // 1. Resolve source
-        // 2. Resolve target
-        // 3. Perform join/lookup
-        // 4. Execute actions
+        let table_name = stmt.table.full_name();
 
-        // For now, let's just return a dummy result if it's the specific test case, or try to implement basic logic.
-        // Since we are in the executor, we can't easily do the full join logic without the planner.
-        // But we can try to handle the specific case of USING VALUES.
+        // Get target table schema
+        let tables = self.tables.read().await;
+        let table_schema = tables
+            .get(&table_name)
+            .ok_or_else(|| ProtocolError::table_not_found(&table_name))?
+            .clone();
+        drop(tables);
 
-        // Let's return a dummy result to satisfy the test for now, assuming the parser works.
-        // The test expects "RETURNING NEW.val".
+        // Step 1: Resolve source data
+        let source_rows = self.resolve_merge_source(&stmt.source).await?;
 
-        // If we want to be more correct, we should implement this in execution_strategy.rs where we have access to MVCC.
-        // But here we return ExecutionResult.
+        // Step 2: Get target table data
+        let mut table_data = self.table_data.write().await;
+        let target_data = table_data
+            .entry(table_name.clone())
+            .or_insert_with(Vec::new);
 
-        // Let's return a result that mimics a successful merge with returning.
+        // Track changes for RETURNING clause
+        let mut merge_results: Vec<(
+            Option<HashMap<String, SqlValue>>, // OLD row (for UPDATE/DELETE)
+            Option<HashMap<String, SqlValue>>, // NEW row (for UPDATE/INSERT)
+            String,                            // Action type: "UPDATE", "INSERT", "DELETE"
+        )> = Vec::new();
+
+        let mut merge_count = 0;
+
+        // Step 3: Process each source row
+        for source_row in source_rows {
+            // Find matching target row based on ON condition
+            let mut matched_index: Option<usize> = None;
+
+            for (i, target_row) in target_data.iter().enumerate() {
+                // Evaluate ON condition with both source and target row
+                let mut combined_row = target_row.clone();
+                // Add source columns with alias prefix if present
+                if let Some(alias) = &stmt.alias {
+                    for (key, value) in target_row {
+                        combined_row.insert(format!("{}.{}", alias, key), value.clone());
+                    }
+                }
+                // Add source row columns
+                for (key, value) in &source_row {
+                    combined_row.insert(key.clone(), value.clone());
+                }
+
+                let context =
+                    EvaluationContext::with_row_and_table(combined_row, table_name.clone());
+
+                match self.evaluate_where_condition(&stmt.on, &context).await {
+                    Ok(SqlValue::Boolean(true)) => {
+                        matched_index = Some(i);
+                        break;
+                    }
+                    _ => continue,
+                }
+            }
+
+            // Step 4: Execute appropriate WHEN clause
+            if let Some(index) = matched_index {
+                // WHEN MATCHED - execute first matching MATCHED clause
+                for when_clause in &stmt.when_clauses {
+                    if !when_clause.matched {
+                        continue;
+                    }
+
+                    // Check optional condition
+                    if let Some(condition) = &when_clause.condition {
+                        let mut combined_row = target_data[index].clone();
+                        for (key, value) in &source_row {
+                            combined_row.insert(key.clone(), value.clone());
+                        }
+                        let context =
+                            EvaluationContext::with_row_and_table(combined_row, table_name.clone());
+
+                        match self.evaluate_where_condition(condition, &context).await {
+                            Ok(SqlValue::Boolean(true)) => {}
+                            _ => continue,
+                        }
+                    }
+
+                    // Execute action
+                    match &when_clause.action {
+                        MergeAction::Update(update) => {
+                            let old_row = target_data[index].clone();
+                            let mut new_row = old_row.clone();
+
+                            // Apply updates
+                            for assignment in &update.assignments {
+                                let col_name = match &assignment.target {
+                                    AssignmentTarget::Column(name) => name.clone(),
+                                    AssignmentTarget::Columns(names) => {
+                                        names.first().cloned().unwrap_or_default()
+                                    }
+                                };
+
+                                // Check if generated column
+                                if table_schema.columns.iter().any(|c| {
+                                    c.name.eq_ignore_ascii_case(&col_name) && c.generated.is_some()
+                                }) {
+                                    return Err(ProtocolError::PostgresError(format!(
+                                        "cannot update generated column \"{}\"",
+                                        col_name
+                                    )));
+                                }
+
+                                let value = match &assignment.value {
+                                    Expression::Literal(val) => val.clone(),
+                                    Expression::Column(col_ref) => {
+                                        // Try to get from source row
+                                        source_row
+                                            .get(&col_ref.name)
+                                            .cloned()
+                                            .unwrap_or(SqlValue::Null)
+                                    }
+                                    _ => SqlValue::Text("complex_expr".to_string()),
+                                };
+
+                                new_row.insert(col_name, value);
+                            }
+
+                            // Recompute generated columns
+                            self.compute_generated_columns(&table_schema, &mut new_row)?;
+
+                            // Check temporal constraints
+                            let other_rows: Vec<HashMap<String, SqlValue>> = target_data
+                                .iter()
+                                .enumerate()
+                                .filter(|(i, _)| *i != index)
+                                .map(|(_, r)| r.clone())
+                                .collect();
+                            self.check_temporal_overlaps(&table_schema, &new_row, &other_rows)?;
+
+                            target_data[index] = new_row.clone();
+                            merge_results.push((
+                                Some(old_row),
+                                Some(new_row),
+                                "UPDATE".to_string(),
+                            ));
+                            merge_count += 1;
+                        }
+                        MergeAction::Delete => {
+                            let old_row = target_data.remove(index);
+                            merge_results.push((Some(old_row.clone()), None, "DELETE".to_string()));
+                            merge_count += 1;
+                        }
+                        MergeAction::DoNothing => {
+                            // Do nothing
+                        }
+                        _ => {}
+                    }
+                    break; // Execute only first matching clause
+                }
+            } else {
+                // WHEN NOT MATCHED - execute first matching NOT MATCHED clause
+                for when_clause in &stmt.when_clauses {
+                    if when_clause.matched {
+                        continue;
+                    }
+
+                    // Check optional condition
+                    if let Some(condition) = &when_clause.condition {
+                        let context = EvaluationContext::with_row_and_table(
+                            source_row.clone(),
+                            table_name.clone(),
+                        );
+
+                        match self.evaluate_where_condition(condition, &context).await {
+                            Ok(SqlValue::Boolean(true)) => {}
+                            _ => continue,
+                        }
+                    }
+
+                    // Execute action
+                    if let MergeAction::Insert(insert) = &when_clause.action {
+                        let mut new_row = HashMap::new();
+
+                        match &insert.values {
+                            MergeInsertValues::Values(values) => {
+                                let insert_columns = if let Some(cols) = &insert.columns {
+                                    cols.clone()
+                                } else {
+                                    table_schema
+                                        .columns
+                                        .iter()
+                                        .map(|c| c.name.clone())
+                                        .collect()
+                                };
+
+                                for (i, value_expr) in values.iter().enumerate() {
+                                    if i < insert_columns.len() {
+                                        let col_name = &insert_columns[i];
+
+                                        // Check if generated column
+                                        if table_schema.columns.iter().any(|c| {
+                                            c.name.eq_ignore_ascii_case(col_name)
+                                                && c.generated.is_some()
+                                        }) {
+                                            return Err(ProtocolError::PostgresError(format!(
+                                                "cannot insert into generated column \"{}\"",
+                                                col_name
+                                            )));
+                                        }
+
+                                        let value = match value_expr {
+                                            Expression::Literal(val) => val.clone(),
+                                            Expression::Column(col_ref) => source_row
+                                                .get(&col_ref.name)
+                                                .cloned()
+                                                .unwrap_or(SqlValue::Null),
+                                            _ => SqlValue::Text("complex_expr".to_string()),
+                                        };
+
+                                        new_row.insert(col_name.clone(), value);
+                                    }
+                                }
+                            }
+                            MergeInsertValues::DefaultValues => {
+                                // Use default values from schema
+                                for col in &table_schema.columns {
+                                    if let Some(default_value) = &col.default {
+                                        new_row.insert(col.name.clone(), default_value.clone());
+                                    }
+                                }
+                            }
+                        }
+
+                        // Compute generated columns
+                        self.compute_generated_columns(&table_schema, &mut new_row)?;
+
+                        // Check temporal constraints
+                        self.check_temporal_overlaps(&table_schema, &new_row, target_data)?;
+
+                        target_data.push(new_row.clone());
+                        merge_results.push((None, Some(new_row), "INSERT".to_string()));
+                        merge_count += 1;
+                    }
+                    break; // Execute only first matching clause
+                }
+            }
+        }
+
+        drop(table_data);
+
+        // Step 5: Process RETURNING clause if present
+        let (columns, rows) = if let Some(returning_items) = &stmt.returning {
+            let cols = self.extract_returning_columns(returning_items);
+
+            // Evaluate RETURNING for each merge result
+            let mut result_rows = Vec::new();
+            for (old_row, new_row, _action) in &merge_results {
+                // For MERGE: OLD = old row (UPDATE/DELETE), NEW = new row (UPDATE/INSERT)
+                let row_pair = (old_row.clone(), new_row.clone().unwrap_or_default());
+                let rows = self.evaluate_returning_clause_with_old_new(
+                    returning_items,
+                    &vec![row_pair],
+                    &table_schema,
+                )?;
+                result_rows.extend(rows);
+            }
+
+            (cols, result_rows)
+        } else {
+            (Vec::new(), Vec::new())
+        };
+
         Ok(ExecutionResult::Merge {
-            count: 1,
-            rows: vec![vec![Some("new".to_string())]],
-            columns: vec!["val".to_string()],
+            count: merge_count,
+            columns,
+            rows,
         })
     }
 
@@ -1827,6 +2914,97 @@ impl SqlExecutor {
         }
     }
 
+    /// Resolve source data for MERGE statement
+    async fn resolve_merge_source(
+        &self,
+        source: &FromClause,
+    ) -> ProtocolResult<Vec<HashMap<String, SqlValue>>> {
+        match source {
+            FromClause::Table { name, alias: _ } => {
+                // Source is a table - read all rows
+                let table_name = name.full_name();
+                let table_data = self.table_data.read().await;
+                Ok(table_data.get(&table_name).cloned().unwrap_or_default())
+            }
+            FromClause::Values { values, alias } => {
+                // Source is VALUES clause
+                let mut rows = Vec::new();
+
+                // Get column names from alias if present
+                let column_names = if let Some(table_alias) = alias {
+                    table_alias.columns.clone().unwrap_or_default()
+                } else {
+                    // Generate default column names (column1, column2, ...)
+                    if let Some(first_row) = values.first() {
+                        (0..first_row.len())
+                            .map(|i| format!("column{}", i + 1))
+                            .collect()
+                    } else {
+                        Vec::new()
+                    }
+                };
+
+                for value_row in values {
+                    let mut row = HashMap::new();
+                    for (i, value_expr) in value_row.iter().enumerate() {
+                        if i < column_names.len() {
+                            let col_name = &column_names[i];
+                            let value = match value_expr {
+                                Expression::Literal(val) => (*val).clone(),
+                                _ => SqlValue::Text("complex_expr".to_string()),
+                            };
+                            row.insert(col_name.clone(), value);
+                        }
+                    }
+                    rows.push(row);
+                }
+
+                Ok(rows)
+            }
+            FromClause::Subquery { query, alias: _ } => {
+                // Source is a subquery - execute it
+                let result = self.execute_select(*query.clone()).await?;
+                match result {
+                    ExecutionResult::Select { rows, columns, .. } => {
+                        let mut source_rows = Vec::new();
+                        for row in rows {
+                            let mut row_map = HashMap::new();
+                            for (i, col_name) in columns.iter().enumerate() {
+                                if i < row.len() {
+                                    let value = if let Some(val_str) = &row[i] {
+                                        // Try to parse as different types
+                                        if let Ok(i) = val_str.parse::<i64>() {
+                                            if i >= i32::MIN as i64 && i <= i32::MAX as i64 {
+                                                SqlValue::Integer(i as i32)
+                                            } else {
+                                                SqlValue::BigInt(i)
+                                            }
+                                        } else if let Ok(f) = val_str.parse::<f64>() {
+                                            SqlValue::DoublePrecision(f)
+                                        } else {
+                                            SqlValue::Text(val_str.clone())
+                                        }
+                                    } else {
+                                        SqlValue::Null
+                                    };
+                                    row_map.insert(col_name.clone(), value);
+                                }
+                            }
+                            source_rows.push(row_map);
+                        }
+                        Ok(source_rows)
+                    }
+                    _ => Err(ProtocolError::PostgresError(
+                        "MERGE source subquery must return rows".to_string(),
+                    )),
+                }
+            }
+            _ => Err(ProtocolError::PostgresError(
+                "Unsupported MERGE source type".to_string(),
+            )),
+        }
+    }
+
     /// Helper method to evaluate WHERE conditions
     async fn evaluate_where_condition(
         &self,
@@ -1834,6 +3012,9 @@ impl SqlExecutor {
         context: &EvaluationContext,
     ) -> ProtocolResult<SqlValue> {
         let mut evaluator = self.expression_evaluator.write().await;
+        // Set the sequence accessor for sequence functions (nextval, currval, etc.)
+        let seq_accessor = self.create_sequence_accessor();
+        evaluator.set_sequence_accessor(seq_accessor);
         evaluator.evaluate(expr, context)
     }
 
@@ -2311,17 +3492,33 @@ impl SqlExecutor {
             }
         }
 
-        // Check if table exists in schema
+        // Check if table exists in schema and get schema for VIRTUAL column support
         let tables = self.tables.read().await;
-        if !tables.contains_key(&table_name_str) {
-            return Err(ProtocolError::relation_not_found(&table_name_str));
-        }
+        let table_schema = tables
+            .get(&table_name_str)
+            .cloned()
+            .ok_or_else(|| ProtocolError::relation_not_found(&table_name_str))?;
         drop(tables);
+
+        // Check if table has VIRTUAL generated columns
+        let has_virtual_columns = table_schema.columns.iter().any(|col| {
+            col.generated
+                .as_ref()
+                .is_some_and(|g| g.storage == GeneratedColumnStorageType::Virtual)
+        });
 
         // Get table data
         let table_data = self.table_data.read().await;
         if let Some(data) = table_data.get(&table_name_str) {
-            for row in data {
+            for stored_row in data {
+                // Clone the row so we can add virtual column values
+                let mut row = stored_row.clone();
+
+                // PostgreSQL 18: Compute VIRTUAL generated columns on read
+                if has_virtual_columns {
+                    self.compute_virtual_columns(&table_schema, &mut row)?;
+                }
+
                 // Apply WHERE clause if present
                 let should_include = if let Some(where_expr) = where_clause {
                     let context =
@@ -2366,6 +3563,9 @@ impl SqlExecutor {
         // Evaluate context item (JSON document)
         let context = EvaluationContext::empty();
         let mut evaluator = self.expression_evaluator.write().await;
+        // Set sequence accessor for sequence functions
+        let seq_accessor = self.create_sequence_accessor();
+        evaluator.set_sequence_accessor(seq_accessor);
         let json_val = evaluator.evaluate(&json_table.context_item, &context)?;
         drop(evaluator);
 
@@ -4208,8 +5408,10 @@ impl SqlExecutor {
             is_called: false,
         };
 
-        // Store sequence in our sequences map
-        let mut sequences = self.sequences.write().await;
+        // Store sequence in our sequences map (using std::sync::RwLock for sync access)
+        let mut sequences = self.sequences.write().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
         if sequences.contains_key(&sequence_name) && !stmt.if_not_exists {
             return Err(ProtocolError::already_exists("Sequence", &sequence_name));
         }
@@ -4227,7 +5429,9 @@ impl SqlExecutor {
     ) -> ProtocolResult<ExecutionResult> {
         let sequence_name = stmt.name.to_string();
 
-        let mut sequences = self.sequences.write().await;
+        let mut sequences = self.sequences.write().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
         let sequence = sequences.get_mut(&sequence_name);
 
         match sequence {
@@ -4282,7 +5486,9 @@ impl SqlExecutor {
         stmt: DropSequenceStatement,
     ) -> ProtocolResult<ExecutionResult> {
         let mut dropped = Vec::new();
-        let mut sequences = self.sequences.write().await;
+        let mut sequences = self.sequences.write().map_err(|_| {
+            ProtocolError::PostgresError("Failed to acquire sequence lock".to_string())
+        })?;
 
         for name in &stmt.names {
             let sequence_name = name.to_string();
@@ -4331,15 +5537,16 @@ impl SqlExecutor {
                 Some(crate::protocols::postgres_wire::sql::ast::TruncateIdentity::Restart)
             ) {
                 // Look for sequences owned by this table
-                let mut sequences = self.sequences.write().await;
-                for seq in sequences.values_mut() {
-                    // Reset sequence to start value
-                    seq.current_value = if seq.increment > 0 {
-                        seq.min_value
-                    } else {
-                        seq.max_value
-                    };
-                    seq.is_called = false;
+                if let Ok(mut sequences) = self.sequences.write() {
+                    for seq in sequences.values_mut() {
+                        // Reset sequence to start value
+                        seq.current_value = if seq.increment > 0 {
+                            seq.min_value
+                        } else {
+                            seq.max_value
+                        };
+                        seq.is_called = false;
+                    }
                 }
             }
         }
@@ -4347,6 +5554,177 @@ impl SqlExecutor {
         Ok(ExecutionResult::Show {
             variable: "TRUNCATE TABLE".to_string(),
             value: truncated.join(", "),
+        })
+    }
+
+    // ===== Extended DDL: TYPE Operations =====
+
+    async fn execute_create_type(
+        &self,
+        stmt: CreateTypeStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let type_name = stmt.name.full_name();
+
+        // Check if type already exists (for IF NOT EXISTS)
+        // For now, just acknowledge the type creation
+        let type_kind = match &stmt.type_definition {
+            TypeDefinition::Enum { values } => format!("ENUM with {} values", values.len()),
+            TypeDefinition::Composite { attributes } => {
+                format!("COMPOSITE with {} attributes", attributes.len())
+            }
+            TypeDefinition::Range { .. } => "RANGE".to_string(),
+            TypeDefinition::Base { .. } => "BASE".to_string(),
+            TypeDefinition::Shell => "SHELL".to_string(),
+        };
+
+        Ok(ExecutionResult::Show {
+            variable: "CREATE TYPE".to_string(),
+            value: format!("{} ({})", type_name, type_kind),
+        })
+    }
+
+    async fn execute_drop_type(&self, stmt: DropTypeStatement) -> ProtocolResult<ExecutionResult> {
+        let type_names: Vec<String> = stmt.names.iter().map(|n| n.full_name()).collect();
+
+        Ok(ExecutionResult::Show {
+            variable: "DROP TYPE".to_string(),
+            value: type_names.join(", "),
+        })
+    }
+
+    async fn execute_alter_type(
+        &self,
+        stmt: AlterTypeStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let type_name = stmt.name.full_name();
+
+        Ok(ExecutionResult::Show {
+            variable: "ALTER TYPE".to_string(),
+            value: type_name,
+        })
+    }
+
+    // ===== Extended DDL: DOMAIN Operations =====
+
+    async fn execute_create_domain(
+        &self,
+        stmt: CreateDomainStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let domain_name = stmt.name.full_name();
+
+        Ok(ExecutionResult::Show {
+            variable: "CREATE DOMAIN".to_string(),
+            value: domain_name,
+        })
+    }
+
+    async fn execute_drop_domain(
+        &self,
+        stmt: DropDomainStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let domain_names: Vec<String> = stmt.names.iter().map(|n| n.full_name()).collect();
+
+        Ok(ExecutionResult::Show {
+            variable: "DROP DOMAIN".to_string(),
+            value: domain_names.join(", "),
+        })
+    }
+
+    async fn execute_alter_domain(
+        &self,
+        stmt: AlterDomainStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let domain_name = stmt.name.full_name();
+
+        Ok(ExecutionResult::Show {
+            variable: "ALTER DOMAIN".to_string(),
+            value: domain_name,
+        })
+    }
+
+    // ===== Extended DDL: ROLE/USER Operations =====
+
+    async fn execute_create_role(
+        &self,
+        stmt: CreateRoleStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let object_type = if stmt.is_user { "USER" } else { "ROLE" };
+
+        Ok(ExecutionResult::Show {
+            variable: format!("CREATE {}", object_type),
+            value: stmt.name.clone(),
+        })
+    }
+
+    async fn execute_drop_role(&self, stmt: DropRoleStatement) -> ProtocolResult<ExecutionResult> {
+        let object_type = if stmt.is_user { "USER" } else { "ROLE" };
+
+        Ok(ExecutionResult::Show {
+            variable: format!("DROP {}", object_type),
+            value: stmt.names.join(", "),
+        })
+    }
+
+    async fn execute_alter_role(
+        &self,
+        stmt: AlterRoleStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let object_type = if stmt.is_user { "USER" } else { "ROLE" };
+
+        Ok(ExecutionResult::Show {
+            variable: format!("ALTER {}", object_type),
+            value: stmt.name.clone(),
+        })
+    }
+
+    // ===== Extended DDL: POLICY Operations =====
+
+    async fn execute_create_policy(
+        &self,
+        stmt: CreatePolicyStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        Ok(ExecutionResult::Show {
+            variable: "CREATE POLICY".to_string(),
+            value: format!("{} ON {}", stmt.name, stmt.table.full_name()),
+        })
+    }
+
+    async fn execute_drop_policy(
+        &self,
+        stmt: DropPolicyStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        Ok(ExecutionResult::Show {
+            variable: "DROP POLICY".to_string(),
+            value: format!("{} ON {}", stmt.name, stmt.table.full_name()),
+        })
+    }
+
+    async fn execute_alter_policy(
+        &self,
+        stmt: AlterPolicyStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        Ok(ExecutionResult::Show {
+            variable: "ALTER POLICY".to_string(),
+            value: format!("{} ON {}", stmt.name, stmt.table.full_name()),
+        })
+    }
+
+    // ===== Extended DDL: RULE Operations =====
+
+    async fn execute_create_rule(
+        &self,
+        stmt: CreateRuleStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        Ok(ExecutionResult::Show {
+            variable: "CREATE RULE".to_string(),
+            value: format!("{} ON {}", stmt.name, stmt.table.full_name()),
+        })
+    }
+
+    async fn execute_drop_rule(&self, stmt: DropRuleStatement) -> ProtocolResult<ExecutionResult> {
+        Ok(ExecutionResult::Show {
+            variable: "DROP RULE".to_string(),
+            value: format!("{} ON {}", stmt.name, stmt.table.full_name()),
         })
     }
 }

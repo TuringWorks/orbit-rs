@@ -209,6 +209,15 @@ impl ExpressionParser {
                     Token::VectorDistance => BinaryOperator::VectorDistance,
                     Token::VectorInnerProduct => BinaryOperator::VectorInnerProduct,
                     Token::VectorCosineDistance => BinaryOperator::VectorCosineDistance,
+                    // Range operators (PostgreSQL range types)
+                    Token::RangeContains => BinaryOperator::RangeContains,
+                    Token::RangeContainedBy => BinaryOperator::RangeContainedBy,
+                    Token::RangeOverlaps => BinaryOperator::RangeOverlaps,
+                    Token::RangeAdjacent => BinaryOperator::RangeAdjacent,
+                    Token::RangeStrictlyLeft => BinaryOperator::RangeStrictlyLeft,
+                    Token::RangeStrictlyRight => BinaryOperator::RangeStrictlyRight,
+                    Token::RangeNotExtendRight => BinaryOperator::RangeNotExtendRight,
+                    Token::RangeNotExtendLeft => BinaryOperator::RangeNotExtendLeft,
                     _ => break,
                 };
 
@@ -714,6 +723,49 @@ impl ExpressionParser {
             // Other keywords that can be used as identifiers
             Token::Sequence => Some("sequence".to_string()),
             Token::Key => Some("key".to_string()),
+            // PostgreSQL 18 - OLD/NEW table references in RETURNING clause
+            Token::Old => Some("OLD".to_string()),
+            Token::New => Some("NEW".to_string()),
+            // Extended DDL keywords that can be used as identifiers
+            Token::Type => Some("type".to_string()),
+            Token::Domain => Some("domain".to_string()),
+            Token::Role => Some("role".to_string()),
+            Token::User => Some("user".to_string()),
+            Token::Tablespace => Some("tablespace".to_string()),
+            Token::Policy => Some("policy".to_string()),
+            Token::Rule => Some("rule".to_string()),
+            Token::Aggregate => Some("aggregate".to_string()),
+            Token::Operator => Some("operator".to_string()),
+            Token::Collation => Some("collation".to_string()),
+            Token::Conversion => Some("conversion".to_string()),
+            Token::Statistics => Some("statistics".to_string()),
+            Token::Publication => Some("publication".to_string()),
+            Token::Subscription => Some("subscription".to_string()),
+            // Security/Role keywords that can be used as identifiers
+            Token::Login => Some("login".to_string()),
+            Token::NoLogin => Some("nologin".to_string()),
+            Token::SuperUser => Some("superuser".to_string()),
+            Token::NoSuperUser => Some("nosuperuser".to_string()),
+            Token::CreateDb => Some("createdb".to_string()),
+            Token::NoCreateDb => Some("nocreatedb".to_string()),
+            Token::CreateRole => Some("createrole".to_string()),
+            Token::NoCreateRole => Some("nocreaterole".to_string()),
+            Token::Inherit => Some("inherit".to_string()),
+            Token::NoInherit => Some("noinherit".to_string()),
+            Token::Replication => Some("replication".to_string()),
+            Token::NoReplication => Some("noreplication".to_string()),
+            Token::BypassRls => Some("bypassrls".to_string()),
+            Token::NoBypassRls => Some("nobypassrls".to_string()),
+            Token::ConnectionLimit => Some("connection".to_string()),
+            Token::ValidUntil => Some("valid".to_string()),
+            Token::Password => Some("password".to_string()),
+            Token::Encrypted => Some("encrypted".to_string()),
+            // Policy keywords
+            Token::Permissive => Some("permissive".to_string()),
+            Token::Restrictive => Some("restrictive".to_string()),
+            // Type keywords
+            Token::Enum => Some("enum".to_string()),
+            Token::Composite => Some("composite".to_string()),
             _ => None,
         }
     }

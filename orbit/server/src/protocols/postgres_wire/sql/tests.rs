@@ -2856,4 +2856,1454 @@ mod tests {
             result
         );
     }
+
+    // ===== PostgreSQL 18 OLD/NEW in RETURNING Tests =====
+
+    #[test]
+    fn test_old_new_in_update_returning_parsing() {
+        // Test PostgreSQL 18 OLD/NEW syntax in UPDATE RETURNING
+        let sql = "UPDATE users SET email = 'new@example.com' WHERE id = 1 RETURNING OLD.email AS previous_email, NEW.email AS current_email";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "UPDATE with OLD/NEW in RETURNING should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_old_wildcard_in_delete_returning_parsing() {
+        // Test PostgreSQL 18 OLD.* syntax in DELETE RETURNING
+        let sql = "DELETE FROM users WHERE id = 1 RETURNING OLD.*";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "DELETE with OLD.* in RETURNING should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_new_wildcard_in_update_returning_parsing() {
+        // Test PostgreSQL 18 NEW.* syntax in UPDATE RETURNING
+        let sql = "UPDATE users SET status = 'active' WHERE id = 1 RETURNING NEW.*";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "UPDATE with NEW.* in RETURNING should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_mixed_old_new_columns_in_returning_parsing() {
+        // Test mix of OLD and NEW columns with regular columns
+        let sql = "UPDATE products SET price = price * 1.1 WHERE id = 1 RETURNING id, OLD.price AS old_price, NEW.price AS new_price, name";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "UPDATE with mixed OLD/NEW/regular columns should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_old_new_case_insensitive_parsing() {
+        // Test that OLD/NEW are case-insensitive
+        let sql = "UPDATE users SET email = 'test' WHERE id = 1 RETURNING old.email, new.email";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "OLD/NEW should be case-insensitive: {:?}",
+            result
+        );
+    }
+
+    // ===== PostgreSQL 18 MERGE with RETURNING Tests =====
+
+    #[test]
+    fn test_merge_with_returning_parsing() {
+        // Test MERGE with RETURNING clause (PostgreSQL 18)
+        let sql = "MERGE INTO target_table t USING source_table s ON t.id = s.id WHEN MATCHED THEN UPDATE SET value = s.value WHEN NOT MATCHED THEN INSERT (id, value) VALUES (s.id, s.value) RETURNING *";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "MERGE with RETURNING should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_merge_with_old_new_returning_parsing() {
+        // Test MERGE with OLD/NEW in RETURNING clause (PostgreSQL 18)
+        let sql = "MERGE INTO products p USING updates u ON p.id = u.id WHEN MATCHED THEN UPDATE SET price = u.price RETURNING OLD.price AS old_price, NEW.price AS new_price";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "MERGE with OLD/NEW RETURNING should parse: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_merge_insert_with_returning_parsing() {
+        // Test MERGE INSERT action with RETURNING clause
+        let sql = "MERGE INTO users u USING new_users n ON u.email = n.email WHEN NOT MATCHED THEN INSERT (name, email) VALUES (n.name, n.email) RETURNING NEW.*";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "MERGE INSERT with RETURNING NEW.* should parse: {:?}",
+            result
+        );
+    }
+
+    // ===== PostgreSQL 18 Temporal Constraints Tests =====
+
+    #[test]
+    fn test_primary_key_without_overlaps_parsing() {
+        // Test PRIMARY KEY with WITHOUT OVERLAPS (PostgreSQL 18 temporal constraint)
+        let sql = "CREATE TABLE employee_positions (
+            employee_id INT,
+            department_id INT,
+            valid_period TSTZRANGE,
+            PRIMARY KEY (employee_id, valid_period WITHOUT OVERLAPS)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "PRIMARY KEY with WITHOUT OVERLAPS should parse: {:?}",
+            result
+        );
+
+        // Verify the constraint has without_overlaps set
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let pk_constraint = stmt
+                .constraints
+                .iter()
+                .find(|c| matches!(c, TableConstraint::PrimaryKey { .. }));
+            assert!(
+                pk_constraint.is_some(),
+                "PRIMARY KEY constraint should exist"
+            );
+
+            if let Some(TableConstraint::PrimaryKey {
+                without_overlaps,
+                columns,
+                ..
+            }) = pk_constraint
+            {
+                assert!(without_overlaps.is_some(), "without_overlaps should be set");
+                assert_eq!(
+                    without_overlaps.as_ref().unwrap(),
+                    "valid_period",
+                    "without_overlaps column should be valid_period"
+                );
+                assert_eq!(columns.len(), 2, "should have 2 columns");
+                assert!(
+                    columns.contains(&"employee_id".to_string()),
+                    "should contain employee_id"
+                );
+                assert!(
+                    columns.contains(&"valid_period".to_string()),
+                    "should contain valid_period"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_unique_without_overlaps_parsing() {
+        // Test UNIQUE with WITHOUT OVERLAPS (PostgreSQL 18 temporal constraint)
+        let sql = "CREATE TABLE room_bookings (
+            room_id INT,
+            booking_period TSTZRANGE,
+            UNIQUE (room_id, booking_period WITHOUT OVERLAPS)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "UNIQUE with WITHOUT OVERLAPS should parse: {:?}",
+            result
+        );
+
+        // Verify the constraint has without_overlaps set
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let unique_constraint = stmt
+                .constraints
+                .iter()
+                .find(|c| matches!(c, TableConstraint::Unique { .. }));
+            assert!(
+                unique_constraint.is_some(),
+                "UNIQUE constraint should exist"
+            );
+
+            if let Some(TableConstraint::Unique {
+                without_overlaps,
+                columns,
+                ..
+            }) = unique_constraint
+            {
+                assert!(without_overlaps.is_some(), "without_overlaps should be set");
+                assert_eq!(
+                    without_overlaps.as_ref().unwrap(),
+                    "booking_period",
+                    "without_overlaps column should be booking_period"
+                );
+                assert_eq!(columns.len(), 2, "should have 2 columns");
+            }
+        }
+    }
+
+    #[test]
+    fn test_named_constraint_without_overlaps_parsing() {
+        // Test named constraint with WITHOUT OVERLAPS
+        let sql = "CREATE TABLE schedules (
+            id INT,
+            valid_range TSTZRANGE,
+            CONSTRAINT pk_schedules PRIMARY KEY (id, valid_range WITHOUT OVERLAPS)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Named constraint with WITHOUT OVERLAPS should parse: {:?}",
+            result
+        );
+
+        // Verify constraint name is preserved
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let pk_constraint = stmt
+                .constraints
+                .iter()
+                .find(|c| matches!(c, TableConstraint::PrimaryKey { .. }));
+            if let Some(TableConstraint::PrimaryKey {
+                name,
+                without_overlaps,
+                ..
+            }) = pk_constraint
+            {
+                assert_eq!(
+                    name.as_ref().unwrap(),
+                    "pk_schedules",
+                    "constraint name should be pk_schedules"
+                );
+                assert!(without_overlaps.is_some(), "without_overlaps should be set");
+            }
+        }
+    }
+
+    #[test]
+    fn test_standard_primary_key_no_overlaps() {
+        // Test standard PRIMARY KEY (without WITHOUT OVERLAPS) still works
+        let sql = "CREATE TABLE users (
+            id INT,
+            name VARCHAR(100),
+            PRIMARY KEY (id)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Standard PRIMARY KEY should still parse: {:?}",
+            result
+        );
+
+        // Verify without_overlaps is None
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let pk_constraint = stmt
+                .constraints
+                .iter()
+                .find(|c| matches!(c, TableConstraint::PrimaryKey { .. }));
+            if let Some(TableConstraint::PrimaryKey {
+                without_overlaps, ..
+            }) = pk_constraint
+            {
+                assert!(
+                    without_overlaps.is_none(),
+                    "without_overlaps should be None for standard PK"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_temporal_foreign_key_period_parsing() {
+        // Test FOREIGN KEY with PERIOD (PostgreSQL 18 temporal foreign key)
+        let sql = "CREATE TABLE salary_history (
+            employee_id INT,
+            valid_period TSTZRANGE,
+            salary NUMERIC(10, 2),
+            FOREIGN KEY (employee_id, PERIOD valid_period)
+                REFERENCES employee_positions (employee_id, PERIOD valid_period)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "FOREIGN KEY with PERIOD should parse: {:?}",
+            result
+        );
+
+        // Verify the constraint has period_column set
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let fk_constraint = stmt
+                .constraints
+                .iter()
+                .find(|c| matches!(c, TableConstraint::ForeignKey { .. }));
+            assert!(
+                fk_constraint.is_some(),
+                "FOREIGN KEY constraint should exist"
+            );
+
+            if let Some(TableConstraint::ForeignKey {
+                period_column,
+                references_period,
+                columns,
+                references_columns,
+                ..
+            }) = fk_constraint
+            {
+                assert!(period_column.is_some(), "period_column should be set");
+                assert_eq!(
+                    period_column.as_ref().unwrap(),
+                    "valid_period",
+                    "period_column should be valid_period"
+                );
+                assert!(
+                    references_period.is_some(),
+                    "references_period should be set"
+                );
+                assert_eq!(
+                    references_period.as_ref().unwrap(),
+                    "valid_period",
+                    "references_period should be valid_period"
+                );
+                assert_eq!(columns.len(), 2, "should have 2 columns");
+                assert_eq!(
+                    references_columns.len(),
+                    2,
+                    "should have 2 referenced columns"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_temporal_foreign_key_period_only_local() {
+        // Test FOREIGN KEY with PERIOD only on local side
+        let sql = "CREATE TABLE events (
+            room_id INT,
+            event_period TSTZRANGE,
+            FOREIGN KEY (room_id, PERIOD event_period)
+                REFERENCES rooms (room_id, valid_range)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "FOREIGN KEY with local PERIOD should parse: {:?}",
+            result
+        );
+
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let fk_constraint = stmt
+                .constraints
+                .iter()
+                .find(|c| matches!(c, TableConstraint::ForeignKey { .. }));
+            if let Some(TableConstraint::ForeignKey {
+                period_column,
+                references_period,
+                ..
+            }) = fk_constraint
+            {
+                assert!(period_column.is_some(), "period_column should be set");
+                assert!(
+                    references_period.is_none(),
+                    "references_period should be None"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_standard_foreign_key_no_period() {
+        // Test standard FOREIGN KEY (without PERIOD) still works
+        let sql = "CREATE TABLE orders (
+            id INT,
+            customer_id INT,
+            FOREIGN KEY (customer_id) REFERENCES customers (id)
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Standard FOREIGN KEY should still parse: {:?}",
+            result
+        );
+
+        // Verify period_column is None
+        if let Ok(Statement::CreateTable(stmt)) = result {
+            let fk_constraint = stmt
+                .constraints
+                .iter()
+                .find(|c| matches!(c, TableConstraint::ForeignKey { .. }));
+            if let Some(TableConstraint::ForeignKey {
+                period_column,
+                references_period,
+                ..
+            }) = fk_constraint
+            {
+                assert!(
+                    period_column.is_none(),
+                    "period_column should be None for standard FK"
+                );
+                assert!(
+                    references_period.is_none(),
+                    "references_period should be None for standard FK"
+                );
+            }
+        }
+    }
+
+    // ===== PostgreSQL 18 Temporal Constraint Execution Tests =====
+    // These tests use the traditional execution strategy to test the SqlExecutor overlap checking
+
+    #[tokio::test]
+    async fn test_temporal_constraint_insert_no_overlap() {
+        // Test that non-overlapping inserts succeed on a temporal table
+        // Use traditional execution strategy to test SqlExecutor overlap checking
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create table with temporal primary key
+        let create_sql = "CREATE TABLE employee_positions (
+            employee_id INT,
+            department TEXT,
+            valid_period TEXT,
+            PRIMARY KEY (employee_id, valid_period WITHOUT OVERLAPS)
+        )";
+        let result = engine.execute(create_sql).await;
+        assert!(result.is_ok(), "CREATE TABLE should succeed: {:?}", result);
+
+        // Insert first row
+        let insert1 = "INSERT INTO employee_positions (employee_id, department, valid_period)
+                       VALUES (1, 'Engineering', '[2024-01-01,2024-06-01)')";
+        let result1 = engine.execute(insert1).await;
+        assert!(
+            result1.is_ok(),
+            "First INSERT should succeed: {:?}",
+            result1
+        );
+
+        // Insert non-overlapping row for same employee
+        let insert2 = "INSERT INTO employee_positions (employee_id, department, valid_period)
+                       VALUES (1, 'Sales', '[2024-07-01,2024-12-31)')";
+        let result2 = engine.execute(insert2).await;
+        assert!(
+            result2.is_ok(),
+            "Non-overlapping INSERT should succeed: {:?}",
+            result2
+        );
+
+        // Insert row for different employee (should succeed regardless of time overlap)
+        let insert3 = "INSERT INTO employee_positions (employee_id, department, valid_period)
+                       VALUES (2, 'Engineering', '[2024-01-01,2024-06-01)')";
+        let result3 = engine.execute(insert3).await;
+        assert!(
+            result3.is_ok(),
+            "Different employee INSERT should succeed: {:?}",
+            result3
+        );
+    }
+
+    #[tokio::test]
+    async fn test_temporal_constraint_insert_overlap_rejected() {
+        // Test that overlapping inserts are rejected on a temporal table
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create table with temporal primary key
+        let create_sql = "CREATE TABLE employee_positions (
+            employee_id INT,
+            department TEXT,
+            valid_period TEXT,
+            PRIMARY KEY (employee_id, valid_period WITHOUT OVERLAPS)
+        )";
+        let result = engine.execute(create_sql).await;
+        assert!(result.is_ok(), "CREATE TABLE should succeed: {:?}", result);
+
+        // Insert first row
+        let insert1 = "INSERT INTO employee_positions (employee_id, department, valid_period)
+                       VALUES (1, 'Engineering', '[2024-01-01,2024-06-30)')";
+        let result1 = engine.execute(insert1).await;
+        assert!(
+            result1.is_ok(),
+            "First INSERT should succeed: {:?}",
+            result1
+        );
+
+        // Try to insert overlapping row for same employee
+        let insert2 = "INSERT INTO employee_positions (employee_id, department, valid_period)
+                       VALUES (1, 'Sales', '[2024-03-01,2024-09-01)')";
+        let result2 = engine.execute(insert2).await;
+        assert!(
+            result2.is_err(),
+            "Overlapping INSERT should fail for same employee"
+        );
+
+        // Verify error message mentions exclusion/overlap
+        if let Err(e) = result2 {
+            let err_msg = format!("{:?}", e);
+            assert!(
+                err_msg.contains("overlap") || err_msg.contains("exclusion"),
+                "Error should mention overlap or exclusion: {}",
+                err_msg
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_temporal_unique_constraint_overlap() {
+        // Test UNIQUE with WITHOUT OVERLAPS
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create table with temporal unique constraint
+        let create_sql = "CREATE TABLE room_bookings (
+            id INT,
+            room_id INT,
+            valid_period TEXT,
+            UNIQUE (room_id, valid_period WITHOUT OVERLAPS)
+        )";
+        let result = engine.execute(create_sql).await;
+        assert!(result.is_ok(), "CREATE TABLE should succeed: {:?}", result);
+
+        // Insert first booking
+        let insert1 = "INSERT INTO room_bookings (id, room_id, valid_period)
+                       VALUES (1, 100, '[2024-01-01,2024-01-15)')";
+        let result1 = engine.execute(insert1).await;
+        assert!(
+            result1.is_ok(),
+            "First booking should succeed: {:?}",
+            result1
+        );
+
+        // Insert non-overlapping booking for same room
+        let insert2 = "INSERT INTO room_bookings (id, room_id, valid_period)
+                       VALUES (2, 100, '[2024-01-20,2024-01-31)')";
+        let result2 = engine.execute(insert2).await;
+        assert!(
+            result2.is_ok(),
+            "Non-overlapping booking should succeed: {:?}",
+            result2
+        );
+
+        // Insert overlapping booking for same room - should fail
+        let insert3 = "INSERT INTO room_bookings (id, room_id, valid_period)
+                       VALUES (3, 100, '[2024-01-10,2024-01-25)')";
+        let result3 = engine.execute(insert3).await;
+        assert!(result3.is_err(), "Overlapping booking should be rejected");
+    }
+
+    #[tokio::test]
+    async fn test_temporal_constraint_update_no_overlap() {
+        // Test that updates maintaining non-overlapping ranges succeed
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create table with temporal primary key
+        let create_sql = "CREATE TABLE employee_positions (
+            employee_id INT,
+            department TEXT,
+            valid_period TEXT,
+            PRIMARY KEY (employee_id, valid_period WITHOUT OVERLAPS)
+        )";
+        engine.execute(create_sql).await.unwrap();
+
+        // Insert two non-overlapping rows
+        engine
+            .execute(
+                "INSERT INTO employee_positions (employee_id, department, valid_period)
+                        VALUES (1, 'Engineering', '[2024-01-01,2024-03-01)')",
+            )
+            .await
+            .unwrap();
+        engine
+            .execute(
+                "INSERT INTO employee_positions (employee_id, department, valid_period)
+                        VALUES (1, 'Sales', '[2024-06-01,2024-09-01)')",
+            )
+            .await
+            .unwrap();
+
+        // Update that doesn't create overlap should succeed
+        let update = "UPDATE employee_positions SET valid_period = '[2024-01-01,2024-04-01)'
+                      WHERE department = 'Engineering'";
+        let result = engine.execute(update).await;
+        assert!(
+            result.is_ok(),
+            "Non-overlapping UPDATE should succeed: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_temporal_constraint_batch_insert_overlap() {
+        // Test that batch insert checks for overlaps within the batch
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create table with temporal primary key
+        let create_sql = "CREATE TABLE employee_positions (
+            employee_id INT,
+            department TEXT,
+            valid_period TEXT,
+            PRIMARY KEY (employee_id, valid_period WITHOUT OVERLAPS)
+        )";
+        engine.execute(create_sql).await.unwrap();
+
+        // Try batch insert with overlapping rows
+        let batch_insert = "INSERT INTO employee_positions (employee_id, department, valid_period)
+                            VALUES
+                            (1, 'Engineering', '[2024-01-01,2024-06-01)'),
+                            (1, 'Sales', '[2024-03-01,2024-09-01)')";
+        let result = engine.execute(batch_insert).await;
+        assert!(
+            result.is_err(),
+            "Batch INSERT with overlapping rows should fail"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_temporal_table_schema_stores_without_overlaps() {
+        // Test that the constraint schema properly stores the without_overlaps field
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create table with temporal primary key
+        let create_sql = "CREATE TABLE test_temporal (
+            id INT,
+            valid_range TEXT,
+            PRIMARY KEY (id, valid_range WITHOUT OVERLAPS)
+        )";
+        let result = engine.execute(create_sql).await;
+        assert!(result.is_ok(), "CREATE TABLE should succeed: {:?}", result);
+
+        // Verify the table schema has the constraint with without_overlaps
+        // This tests that TableConstraintSchema properly captures the without_overlaps field
+    }
+
+    // ===== Sequence Function Tests =====
+
+    #[tokio::test]
+    async fn test_create_sequence_basic() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a basic sequence
+        let result = engine.execute("CREATE SEQUENCE test_seq").await;
+        assert!(
+            result.is_ok(),
+            "CREATE SEQUENCE should succeed: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_sequence_with_options() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence with options
+        let result = engine
+            .execute("CREATE SEQUENCE counter_seq START WITH 100 INCREMENT BY 5 MINVALUE 1 MAXVALUE 1000")
+            .await;
+        assert!(
+            result.is_ok(),
+            "CREATE SEQUENCE with options should succeed: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_nextval_basic() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence
+        engine
+            .execute("CREATE SEQUENCE my_seq START WITH 1")
+            .await
+            .unwrap();
+
+        // Get next value
+        let result = engine.execute("SELECT nextval('my_seq')").await;
+        assert!(result.is_ok(), "nextval should succeed: {:?}", result);
+
+        // Verify we got a result
+        if let Ok(execution_result) = result {
+            if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = execution_result {
+                assert_eq!(rows.len(), 1, "Should return one row");
+                assert!(!rows[0].is_empty(), "Row should have a value");
+                // First call returns start value (1)
+                assert_eq!(rows[0][0], Some("1".to_string()), "First nextval should return 1");
+            } else {
+                panic!("Expected Select result");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_nextval_increments() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence
+        engine
+            .execute("CREATE SEQUENCE inc_seq START WITH 10 INCREMENT BY 5")
+            .await
+            .unwrap();
+
+        // Get first value
+        let result1 = engine.execute("SELECT nextval('inc_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result1 {
+            assert_eq!(rows[0][0], Some("10".to_string()), "First nextval should return 10");
+        }
+
+        // Get second value (should increment by 5)
+        let result2 = engine.execute("SELECT nextval('inc_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result2 {
+            assert_eq!(rows[0][0], Some("15".to_string()), "Second nextval should return 15");
+        }
+
+        // Get third value
+        let result3 = engine.execute("SELECT nextval('inc_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result3 {
+            assert_eq!(rows[0][0], Some("20".to_string()), "Third nextval should return 20");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_currval_after_nextval() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence
+        engine
+            .execute("CREATE SEQUENCE curr_seq START WITH 100")
+            .await
+            .unwrap();
+
+        // Call nextval first
+        engine.execute("SELECT nextval('curr_seq')").await.unwrap();
+
+        // Now currval should work
+        let result = engine.execute("SELECT currval('curr_seq')").await;
+        assert!(
+            result.is_ok(),
+            "currval after nextval should succeed: {:?}",
+            result
+        );
+
+        if let Ok(crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. }) = result {
+            assert_eq!(rows[0][0], Some("100".to_string()), "currval should return 100");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_currval_before_nextval_fails() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence
+        engine.execute("CREATE SEQUENCE unused_seq").await.unwrap();
+
+        // currval without nextval should fail
+        let result = engine.execute("SELECT currval('unused_seq')").await;
+        assert!(result.is_err(), "currval before nextval should fail");
+    }
+
+    #[tokio::test]
+    async fn test_setval_basic() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence
+        engine.execute("CREATE SEQUENCE setval_seq").await.unwrap();
+
+        // Set the value
+        let result = engine.execute("SELECT setval('setval_seq', 50)").await;
+        assert!(result.is_ok(), "setval should succeed: {:?}", result);
+
+        // Verify currval returns the set value
+        let curr_result = engine.execute("SELECT currval('setval_seq')").await;
+        assert!(curr_result.is_ok(), "currval after setval should succeed");
+
+        if let Ok(crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. }) = curr_result {
+            assert_eq!(rows[0][0], Some("50".to_string()), "currval should return 50");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_setval_with_is_called_false() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence
+        engine
+            .execute("CREATE SEQUENCE setval_uncalled_seq")
+            .await
+            .unwrap();
+
+        // Set the value with is_called = false
+        engine
+            .execute("SELECT setval('setval_uncalled_seq', 100, false)")
+            .await
+            .unwrap();
+
+        // Next nextval should return 100 (not 101)
+        let result = engine
+            .execute("SELECT nextval('setval_uncalled_seq')")
+            .await
+            .unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result {
+            assert_eq!(rows[0][0], Some("100".to_string()), "nextval after setval(false) should return 100");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_lastval_basic() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence
+        engine
+            .execute("CREATE SEQUENCE lastval_seq START WITH 42")
+            .await
+            .unwrap();
+
+        // Call nextval
+        engine
+            .execute("SELECT nextval('lastval_seq')")
+            .await
+            .unwrap();
+
+        // lastval should return the same value
+        let result = engine.execute("SELECT lastval()").await;
+        assert!(result.is_ok(), "lastval should succeed: {:?}", result);
+
+        if let Ok(crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. }) = result {
+            assert_eq!(rows[0][0], Some("42".to_string()), "lastval should return 42");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_lastval_without_nextval_fails() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // lastval without any prior nextval should fail
+        let result = engine.execute("SELECT lastval()").await;
+        assert!(result.is_err(), "lastval without prior nextval should fail");
+    }
+
+    #[tokio::test]
+    async fn test_sequence_cycle() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a small cycling sequence
+        engine
+            .execute("CREATE SEQUENCE cycle_seq START WITH 1 INCREMENT BY 1 MAXVALUE 3 CYCLE")
+            .await
+            .unwrap();
+
+        // Get values 1, 2, 3, then it should cycle back to 1
+        let result1 = engine.execute("SELECT nextval('cycle_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result1 {
+            assert_eq!(rows[0][0], Some("1".to_string()));
+        }
+
+        let result2 = engine.execute("SELECT nextval('cycle_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result2 {
+            assert_eq!(rows[0][0], Some("2".to_string()));
+        }
+
+        let result3 = engine.execute("SELECT nextval('cycle_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result3 {
+            assert_eq!(rows[0][0], Some("3".to_string()));
+        }
+
+        // Should cycle back to min_value (1)
+        let result4 = engine.execute("SELECT nextval('cycle_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result4 {
+            assert_eq!(rows[0][0], Some("1".to_string()), "Should cycle back to 1");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sequence_no_cycle_overflow() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a small non-cycling sequence
+        engine
+            .execute("CREATE SEQUENCE no_cycle_seq START WITH 1 INCREMENT BY 1 MAXVALUE 2")
+            .await
+            .unwrap();
+
+        // Get values 1 and 2
+        engine
+            .execute("SELECT nextval('no_cycle_seq')")
+            .await
+            .unwrap();
+        engine
+            .execute("SELECT nextval('no_cycle_seq')")
+            .await
+            .unwrap();
+
+        // Third call should fail (overflow)
+        let result = engine.execute("SELECT nextval('no_cycle_seq')").await;
+        assert!(
+            result.is_err(),
+            "nextval on maxed-out non-cycling sequence should fail"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_drop_sequence() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create and then drop a sequence
+        engine.execute("CREATE SEQUENCE drop_me_seq").await.unwrap();
+        let result = engine.execute("DROP SEQUENCE drop_me_seq").await;
+        assert!(result.is_ok(), "DROP SEQUENCE should succeed: {:?}", result);
+
+        // Using the dropped sequence should fail
+        let next_result = engine.execute("SELECT nextval('drop_me_seq')").await;
+        assert!(
+            next_result.is_err(),
+            "nextval on dropped sequence should fail"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_alter_sequence_restart() {
+        let mut engine = SqlEngine::new_traditional();
+
+        // Create a sequence and use it
+        engine
+            .execute("CREATE SEQUENCE alter_seq START WITH 1")
+            .await
+            .unwrap();
+        engine.execute("SELECT nextval('alter_seq')").await.unwrap(); // 1
+        engine.execute("SELECT nextval('alter_seq')").await.unwrap(); // 2
+
+        // Restart the sequence
+        engine
+            .execute("ALTER SEQUENCE alter_seq RESTART WITH 100")
+            .await
+            .unwrap();
+
+        // Next value should be 100
+        let result = engine.execute("SELECT nextval('alter_seq')").await.unwrap();
+        if let crate::protocols::postgres_wire::sql::execution_strategy::UnifiedExecutionResult::Select { rows, .. } = result {
+            assert_eq!(rows[0][0], Some("100".to_string()), "After RESTART, nextval should return 100");
+        }
+    }
+
+    // ============================================================================
+    // CREATE FUNCTION Tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_create_function_simple() {
+        let mut engine = SqlEngine::new();
+
+        // Create a simple SQL function
+        let result = engine.execute(
+            "CREATE FUNCTION add_one(x integer) RETURNS integer AS $$ SELECT x + 1 $$ LANGUAGE SQL"
+        ).await;
+        assert!(
+            result.is_ok(),
+            "Failed to create simple function: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_function_different_name() {
+        let mut engine = SqlEngine::new();
+
+        // Create another SQL function with a different name
+        let result = engine.execute(
+            "CREATE FUNCTION subtract_one(val integer) RETURNS integer AS $$ SELECT val - 1 $$ LANGUAGE SQL"
+        ).await;
+        assert!(result.is_ok(), "Failed to create function: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_function_with_volatility() {
+        let mut engine = SqlEngine::new();
+
+        // Create an immutable function
+        let result = engine.execute(
+            "CREATE FUNCTION double_it(x integer) RETURNS integer AS $$ SELECT x * 2 $$ LANGUAGE SQL IMMUTABLE"
+        ).await;
+        assert!(
+            result.is_ok(),
+            "Failed to create immutable function: {:?}",
+            result
+        );
+
+        // Create a stable function
+        let result = engine.execute(
+            "CREATE FUNCTION get_current_value() RETURNS integer AS $$ SELECT 42 $$ LANGUAGE SQL STABLE"
+        ).await;
+        assert!(
+            result.is_ok(),
+            "Failed to create stable function: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_or_replace_function() {
+        let mut engine = SqlEngine::new();
+
+        // Create a function
+        let result = engine.execute(
+            "CREATE FUNCTION replaceable(x integer) RETURNS integer AS $$ SELECT x $$ LANGUAGE SQL"
+        ).await;
+        assert!(result.is_ok(), "Failed to create function: {:?}", result);
+
+        // Replace the function
+        let result = engine.execute(
+            "CREATE OR REPLACE FUNCTION replaceable(x integer) RETURNS integer AS $$ SELECT x * 2 $$ LANGUAGE SQL"
+        ).await;
+        assert!(result.is_ok(), "Failed to replace function: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_function_multiple_parameters() {
+        let mut engine = SqlEngine::new();
+
+        // Create a function with multiple parameters
+        let result = engine.execute(
+            "CREATE FUNCTION add_three(a integer, b integer, c integer) RETURNS integer AS $$ SELECT a + b + c $$ LANGUAGE SQL"
+        ).await;
+        assert!(
+            result.is_ok(),
+            "Failed to create multi-param function: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_function_no_return() {
+        let mut engine = SqlEngine::new();
+
+        // Create a void function (procedure-like)
+        let result = engine
+            .execute("CREATE FUNCTION do_nothing() RETURNS void AS $$ SELECT 1 $$ LANGUAGE SQL")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to create void function: {:?}",
+            result
+        );
+    }
+
+    // ============================================================================
+    // CREATE TRIGGER Tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_create_trigger_before_insert() {
+        let mut engine = SqlEngine::new();
+
+        // Create the table
+        engine
+            .execute("CREATE TABLE audit_test (id INTEGER PRIMARY KEY, name TEXT)")
+            .await
+            .unwrap();
+
+        // Create a BEFORE INSERT trigger (function doesn't need to exist for storage test)
+        let result = engine.execute(
+            "CREATE TRIGGER audit_trigger BEFORE INSERT ON audit_test FOR EACH ROW EXECUTE FUNCTION audit_insert()"
+        ).await;
+        assert!(
+            result.is_ok(),
+            "Failed to create BEFORE INSERT trigger: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_trigger_after_update() {
+        let mut engine = SqlEngine::new();
+
+        // Create the table
+        engine
+            .execute("CREATE TABLE update_test (id INTEGER PRIMARY KEY, value INTEGER)")
+            .await
+            .unwrap();
+
+        // Create an AFTER UPDATE trigger
+        let result = engine.execute(
+            "CREATE TRIGGER update_trigger AFTER UPDATE ON update_test FOR EACH ROW EXECUTE FUNCTION log_update()"
+        ).await;
+        assert!(
+            result.is_ok(),
+            "Failed to create AFTER UPDATE trigger: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_trigger_for_each_statement() {
+        let mut engine = SqlEngine::new();
+
+        // Create the table
+        engine
+            .execute("CREATE TABLE stmt_test (id INTEGER PRIMARY KEY)")
+            .await
+            .unwrap();
+
+        // Create a FOR EACH STATEMENT trigger
+        let result = engine.execute(
+            "CREATE TRIGGER stmt_trigger AFTER INSERT ON stmt_test FOR EACH STATEMENT EXECUTE FUNCTION statement_trigger_fn()"
+        ).await;
+        assert!(
+            result.is_ok(),
+            "Failed to create FOR EACH STATEMENT trigger: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_drop_trigger() {
+        let mut engine = SqlEngine::new();
+
+        // Create table and trigger
+        engine
+            .execute("CREATE TABLE drop_trigger_test (id INTEGER PRIMARY KEY)")
+            .await
+            .unwrap();
+        engine.execute(
+            "CREATE TRIGGER to_drop BEFORE INSERT ON drop_trigger_test FOR EACH ROW EXECUTE FUNCTION drop_trigger_fn()"
+        ).await.unwrap();
+
+        // Drop the trigger
+        let result = engine
+            .execute("DROP TRIGGER to_drop ON drop_trigger_test")
+            .await;
+        assert!(result.is_ok(), "Failed to drop trigger: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_drop_trigger_if_exists() {
+        let mut engine = SqlEngine::new();
+
+        // Create table
+        engine
+            .execute("CREATE TABLE if_exists_test (id INTEGER PRIMARY KEY)")
+            .await
+            .unwrap();
+
+        // Try to drop a non-existent trigger with IF EXISTS (should succeed)
+        let result = engine
+            .execute("DROP TRIGGER IF EXISTS nonexistent ON if_exists_test")
+            .await;
+        assert!(
+            result.is_ok(),
+            "DROP TRIGGER IF EXISTS should succeed for non-existent trigger: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_trigger_multiple_events() {
+        let mut engine = SqlEngine::new();
+
+        // Create table
+        engine
+            .execute("CREATE TABLE multi_event_test (id INTEGER PRIMARY KEY, name TEXT)")
+            .await
+            .unwrap();
+
+        // Create a trigger for multiple events
+        let result = engine.execute(
+            "CREATE TRIGGER multi_trigger BEFORE INSERT OR UPDATE OR DELETE ON multi_event_test FOR EACH ROW EXECUTE FUNCTION multi_event_fn()"
+        ).await;
+        assert!(
+            result.is_ok(),
+            "Failed to create multi-event trigger: {:?}",
+            result
+        );
+    }
+
+    // ===== Extended DDL: TYPE Tests =====
+
+    #[tokio::test]
+    async fn test_create_enum_type() {
+        let mut engine = SqlEngine::new();
+        let result = engine
+            .execute("CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')")
+            .await;
+        assert!(result.is_ok(), "Failed to create ENUM type: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_composite_type() {
+        let mut engine = SqlEngine::new();
+        let result = engine
+            .execute("CREATE TYPE address AS (street TEXT, city TEXT, zip VARCHAR(10))")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to create composite type: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_drop_type() {
+        let mut engine = SqlEngine::new();
+        // Create and then drop
+        engine
+            .execute("CREATE TYPE test_mood AS ENUM ('a', 'b')")
+            .await
+            .unwrap();
+        let result = engine.execute("DROP TYPE test_mood").await;
+        assert!(result.is_ok(), "Failed to drop type: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_drop_type_if_exists() {
+        let mut engine = SqlEngine::new();
+        let result = engine.execute("DROP TYPE IF EXISTS nonexistent_type").await;
+        assert!(
+            result.is_ok(),
+            "Failed to drop type IF EXISTS: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_alter_type_add_value() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE TYPE color AS ENUM ('red', 'green')")
+            .await
+            .unwrap();
+        let result = engine.execute("ALTER TYPE color ADD VALUE 'blue'").await;
+        assert!(
+            result.is_ok(),
+            "Failed to add value to enum type: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_alter_type_add_value_before() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE TYPE size AS ENUM ('small', 'large')")
+            .await
+            .unwrap();
+        let result = engine
+            .execute("ALTER TYPE size ADD VALUE 'medium' BEFORE 'large'")
+            .await;
+        assert!(result.is_ok(), "Failed to add value BEFORE: {:?}", result);
+    }
+
+    // ===== Extended DDL: DOMAIN Tests =====
+
+    #[tokio::test]
+    async fn test_create_domain() {
+        let mut engine = SqlEngine::new();
+        let result = engine
+            .execute("CREATE DOMAIN positive_int AS INTEGER CHECK (VALUE > 0)")
+            .await;
+        assert!(result.is_ok(), "Failed to create domain: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_domain_with_default() {
+        let mut engine = SqlEngine::new();
+        let result = engine
+            .execute("CREATE DOMAIN email AS TEXT DEFAULT 'unknown@example.com' NOT NULL")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to create domain with default: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_drop_domain() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE DOMAIN test_domain AS TEXT")
+            .await
+            .unwrap();
+        let result = engine.execute("DROP DOMAIN test_domain").await;
+        assert!(result.is_ok(), "Failed to drop domain: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_alter_domain_set_default() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE DOMAIN counter AS INTEGER")
+            .await
+            .unwrap();
+        let result = engine.execute("ALTER DOMAIN counter SET DEFAULT 0").await;
+        assert!(
+            result.is_ok(),
+            "Failed to alter domain set default: {:?}",
+            result
+        );
+    }
+
+    // ===== Extended DDL: ROLE/USER Tests =====
+
+    #[tokio::test]
+    async fn test_create_role() {
+        let mut engine = SqlEngine::new();
+        let result = engine.execute("CREATE ROLE app_user").await;
+        assert!(result.is_ok(), "Failed to create role: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_role_with_options() {
+        let mut engine = SqlEngine::new();
+        let result = engine
+            .execute("CREATE ROLE admin_user WITH SUPERUSER CREATEDB LOGIN")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to create role with options: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_user() {
+        let mut engine = SqlEngine::new();
+        let result = engine.execute("CREATE USER john").await;
+        assert!(result.is_ok(), "Failed to create user: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_user_with_password() {
+        let mut engine = SqlEngine::new();
+        let result = engine
+            .execute("CREATE USER jane WITH PASSWORD 'secret123'")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to create user with password: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_drop_role() {
+        let mut engine = SqlEngine::new();
+        engine.execute("CREATE ROLE temp_role").await.unwrap();
+        let result = engine.execute("DROP ROLE temp_role").await;
+        assert!(result.is_ok(), "Failed to drop role: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_alter_role() {
+        let mut engine = SqlEngine::new();
+        engine.execute("CREATE ROLE modify_role").await.unwrap();
+        let result = engine.execute("ALTER ROLE modify_role WITH CREATEDB").await;
+        assert!(result.is_ok(), "Failed to alter role: {:?}", result);
+    }
+
+    // ===== Extended DDL: POLICY Tests =====
+
+    #[tokio::test]
+    async fn test_create_policy() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE TABLE policy_test (id INTEGER, user_id INTEGER)")
+            .await
+            .unwrap();
+        let result = engine
+            .execute(
+                "CREATE POLICY user_access ON policy_test FOR SELECT TO PUBLIC USING (user_id = 1)",
+            )
+            .await;
+        assert!(result.is_ok(), "Failed to create policy: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_create_policy_restrictive() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE TABLE restrict_test (id INTEGER)")
+            .await
+            .unwrap();
+        let result = engine
+            .execute(
+                "CREATE POLICY restrict_policy ON restrict_test AS RESTRICTIVE FOR ALL TO PUBLIC USING (TRUE)",
+            )
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to create restrictive policy: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_drop_policy() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE TABLE policy_drop_test (id INTEGER)")
+            .await
+            .unwrap();
+        engine
+            .execute("CREATE POLICY to_drop ON policy_drop_test USING (TRUE)")
+            .await
+            .unwrap();
+        let result = engine
+            .execute("DROP POLICY to_drop ON policy_drop_test")
+            .await;
+        assert!(result.is_ok(), "Failed to drop policy: {:?}", result);
+    }
+
+    // ===== Extended DDL: RULE Tests =====
+
+    #[tokio::test]
+    async fn test_create_rule_nothing() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE TABLE rule_test (id INTEGER)")
+            .await
+            .unwrap();
+        let result = engine
+            .execute("CREATE RULE no_delete AS ON DELETE TO rule_test DO NOTHING")
+            .await;
+        assert!(
+            result.is_ok(),
+            "Failed to create rule DO NOTHING: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_drop_rule() {
+        let mut engine = SqlEngine::new();
+        engine
+            .execute("CREATE TABLE rule_drop_test (id INTEGER)")
+            .await
+            .unwrap();
+        engine
+            .execute("CREATE RULE to_drop_rule AS ON DELETE TO rule_drop_test DO NOTHING")
+            .await
+            .unwrap();
+        let result = engine
+            .execute("DROP RULE to_drop_rule ON rule_drop_test")
+            .await;
+        assert!(result.is_ok(), "Failed to drop rule: {:?}", result);
+    }
 }

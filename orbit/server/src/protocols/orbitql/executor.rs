@@ -152,6 +152,67 @@ impl<'a> StatementExecutor<'a> {
             Statement::Relate(relate) => self.execute_relate_strategy(relate).await,
             Statement::GraphRAG(graphrag) => self.execute_graphrag_strategy(graphrag).await,
             Statement::Traverse(traverse) => self.execute_traverse_strategy(traverse).await,
+            // Additional statement types - stub implementations
+            Statement::Upsert(_) => Err(SpatialError::OperationError(
+                "UPSERT not yet implemented".to_string(),
+            )),
+            Statement::Merge(_) => Err(SpatialError::OperationError(
+                "MERGE not yet implemented".to_string(),
+            )),
+            Statement::Match(_) => Err(SpatialError::OperationError(
+                "MATCH not yet implemented".to_string(),
+            )),
+            Statement::Define(_) => Err(SpatialError::OperationError(
+                "DEFINE not yet implemented".to_string(),
+            )),
+            Statement::Remove(_) => Err(SpatialError::OperationError(
+                "REMOVE not yet implemented".to_string(),
+            )),
+            Statement::Kill(_) => Err(SpatialError::OperationError(
+                "KILL not yet implemented".to_string(),
+            )),
+            Statement::Let(_) => Err(SpatialError::OperationError(
+                "LET not yet implemented".to_string(),
+            )),
+            Statement::For(_) => Err(SpatialError::OperationError(
+                "FOR not yet implemented".to_string(),
+            )),
+            Statement::If(_) => Err(SpatialError::OperationError(
+                "IF not yet implemented".to_string(),
+            )),
+            Statement::Return(_) => Err(SpatialError::OperationError(
+                "RETURN not yet implemented".to_string(),
+            )),
+            Statement::Break(_) => Err(SpatialError::OperationError(
+                "BREAK not yet implemented".to_string(),
+            )),
+            Statement::Continue(_) => Err(SpatialError::OperationError(
+                "CONTINUE not yet implemented".to_string(),
+            )),
+            Statement::Throw(_) => Err(SpatialError::OperationError(
+                "THROW not yet implemented".to_string(),
+            )),
+            Statement::Use(_) => Err(SpatialError::OperationError(
+                "USE not yet implemented".to_string(),
+            )),
+            Statement::Info(_) => Err(SpatialError::OperationError(
+                "INFO not yet implemented".to_string(),
+            )),
+            Statement::Show(_) => Err(SpatialError::OperationError(
+                "SHOW not yet implemented".to_string(),
+            )),
+            Statement::Rebuild(_) => Err(SpatialError::OperationError(
+                "REBUILD not yet implemented".to_string(),
+            )),
+            Statement::Alter(_) => Err(SpatialError::OperationError(
+                "ALTER not yet implemented".to_string(),
+            )),
+            Statement::Truncate(_) => Err(SpatialError::OperationError(
+                "TRUNCATE not yet implemented".to_string(),
+            )),
+            Statement::Savepoint(_) => Err(SpatialError::OperationError(
+                "SAVEPOINT not yet implemented".to_string(),
+            )),
         }
     }
 

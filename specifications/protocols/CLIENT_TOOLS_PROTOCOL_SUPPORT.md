@@ -1,6 +1,6 @@
 # Client Tools Protocol Support
 
-**Last Updated**: 2025-12-07
+**Last Updated**: 2025-12-08
 **Purpose**: Document protocol support across OrbitRS client tools (CLI, Desktop, SDKs)
 **Related**: See [PROTOCOL_STATUS.md](./PROTOCOL_STATUS.md) for server-side protocol implementation status
 
@@ -231,6 +231,8 @@ orbit/server/src/protocols/postgres_wire/sql/
 - DCL: GRANT/REVOKE permission management
 - TCL: Transaction control with savepoints
 - Vector operations: COSINE_DISTANCE, EUCLIDEAN_DISTANCE
+- Sequence functions: nextval, currval, setval, lastval
+- Math functions: cbrt, div, factorial, gcd, lcm, sign, and 50+ standard functions
 
 ---
 
@@ -362,7 +364,7 @@ orbit/engine/src/procedures/
 
 | Protocol Port | Wire Protocol | Parser Used | Notes |
 |---------------|---------------|-------------|-------|
-| 5432 | PostgreSQL | PostgreSQL SQL | Full SQL with extensions |
+| 5432 | PostgreSQL (v3/v3.2) | PostgreSQL SQL | Full SQL with extensions, PG18 features, sequences |
 | 3306 | MySQL | MySQL (adapter) | Translated to internal SQL |
 | 6379 | Redis RESP | RESP Command | Direct command parsing |
 | 9042 | CQL Native | CQL | Native Cassandra parsing |
@@ -584,6 +586,8 @@ serde_json = "1"
 
 | Date | Changes |
 |------|---------|
+| 2025-12-08 | Added sequence functions (nextval, currval, setval, lastval) and math functions to PostgreSQL capabilities |
+| 2025-12-07 | Updated PostgreSQL wire protocol to v3/v3.2 with PG18 features support |
 | 2025-12-07 | Expanded Parser/Lexer Architecture section to document all 6 parsers (PostgreSQL, OrbitQL, Cypher, CQL, AQL, PL/pgSQL) |
 | 2025-12-07 | Added Cypher (Neo4j) and AQL (ArangoDB) support - CLI now has full protocol parity with Desktop |
 | 2025-12-07 | Updated to reflect full CLI protocol implementation (PostgreSQL, MySQL, Redis, OrbitQL, CQL) |

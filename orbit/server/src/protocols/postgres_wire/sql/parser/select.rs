@@ -332,6 +332,27 @@ impl SelectParser {
 
                     select_items.push(SelectItem::Expression { expr, alias });
                 }
+            } else if matches!(tokens[*pos], Token::Old | Token::New) {
+                // PostgreSQL 18 - OLD.* and NEW.* in RETURNING clause
+                let qualifier = match &tokens[*pos] {
+                    Token::Old => "OLD".to_string(),
+                    Token::New => "NEW".to_string(),
+                    _ => unreachable!(),
+                };
+
+                // Check for qualified wildcard (OLD.* or NEW.*)
+                if *pos + 2 < tokens.len()
+                    && matches!(tokens[*pos + 1], Token::Dot)
+                    && matches!(tokens[*pos + 2], Token::Multiply)
+                {
+                    *pos += 3; // consume OLD/NEW, dot, asterisk
+                    select_items.push(SelectItem::QualifiedWildcard { qualifier });
+                } else {
+                    // Parse as expression (OLD.column or NEW.column)
+                    let expr = self.expression_parser.parse_expression(tokens, pos)?;
+                    let alias = self.parse_alias(tokens, pos)?;
+                    select_items.push(SelectItem::Expression { expr, alias });
+                }
             } else {
                 // Parse complex expression
                 let expr = self.expression_parser.parse_expression(tokens, pos)?;

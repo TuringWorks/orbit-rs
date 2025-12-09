@@ -33,7 +33,9 @@ pub struct PostgresWireProtocol {
     parameters: HashMap<String, String>,
     query_engine: Arc<QueryEngine>,
     process_id: i32,
-    secret_key: i32,
+    /// PostgreSQL 18 (protocol 3.2): Variable-length cancel key (4-256 bytes)
+    /// Default: 4 bytes for backward compatibility with protocol 3.0
+    secret_key: Vec<u8>,
     prepared_statements: HashMap<String, String>,
     portals: HashMap<String, (String, Vec<Option<bytes::Bytes>>)>,
 }
@@ -64,7 +66,7 @@ impl PostgresWireProtocol {
             parameters: HashMap::new(),
             query_engine: Arc::new(QueryEngine::new()),
             process_id: std::process::id() as i32,
-            secret_key: Self::random(),
+            secret_key: Self::random_secret_key(),
             prepared_statements: HashMap::new(),
             portals: HashMap::new(),
         }
@@ -80,7 +82,7 @@ impl PostgresWireProtocol {
             parameters: HashMap::new(),
             query_engine,
             process_id: std::process::id() as i32,
-            secret_key: Self::random(),
+            secret_key: Self::random_secret_key(),
             prepared_statements: HashMap::new(),
             portals: HashMap::new(),
         }
@@ -272,6 +274,42 @@ impl PostgresWireProtocol {
             protocol_version, parameters
         );
 
+        // PostgreSQL 18 Protocol Version Negotiation
+        // Protocol version format: major * 65536 + minor (e.g., 3.0 = 196608, 3.2 = 196610)
+        let major = protocol_version >> 16;
+        let minor = protocol_version & 0xFFFF;
+
+        // We support protocol 3.0 (fully) and 3.2 (partially - message types defined)
+        // If client requests protocol > 3.0, we negotiate down to 3.0
+        const SUPPORTED_MAJOR: i32 = 3;
+        const SUPPORTED_MINOR: i32 = 0;
+
+        // Check for unrecognized protocol options (those starting with _pq_.)
+        let unrecognized_options: Vec<String> = parameters
+            .keys()
+            .filter(|k| k.starts_with("_pq_."))
+            .cloned()
+            .collect();
+
+        // Send NegotiateProtocolVersion if needed (PG18 protocol 3.2 feature)
+        if major != SUPPORTED_MAJOR || minor > SUPPORTED_MINOR || !unrecognized_options.is_empty() {
+            if major == SUPPORTED_MAJOR && minor > SUPPORTED_MINOR {
+                // Client requested a newer minor version, negotiate to our supported version
+                info!(
+                    "Protocol negotiation: client requested {}.{}, negotiating to {}.{}",
+                    major, minor, SUPPORTED_MAJOR, SUPPORTED_MINOR
+                );
+            }
+            if !unrecognized_options.is_empty() {
+                info!("Unrecognized protocol options: {:?}", unrecognized_options);
+            }
+            BackendMessage::NegotiateProtocolVersion {
+                newest_minor_version: SUPPORTED_MINOR,
+                unrecognized_options,
+            }
+            .encode(buf);
+        }
+
         self.username = parameters.get("user").cloned();
         self.database = parameters.get("database").cloned();
         self.parameters = parameters;
@@ -300,10 +338,10 @@ impl PostgresWireProtocol {
         }
         .encode(buf);
 
-        // Send backend key data
+        // Send backend key data (PostgreSQL 18: supports variable-length keys)
         BackendMessage::BackendKeyData {
             process_id: self.process_id,
-            secret_key: self.secret_key,
+            secret_key: self.secret_key.clone(),
         }
         .encode(buf);
 
@@ -480,23 +518,34 @@ impl PostgresWireProtocol {
     fn send_query_result(&self, result: &QueryResult, buf: &mut BytesMut) {
         match result {
             QueryResult::Select { columns, rows } => {
-                // Send row description
-                let fields: Vec<FieldDescription> = columns
-                    .iter()
-                    .map(|col| FieldDescription {
+                let mut fields: Vec<FieldDescription> = Vec::with_capacity(columns.len());
+                for (i, col) in columns.iter().enumerate() {
+                    let mut oid = type_oids::TEXT;
+                    let mut size: i16 = -1;
+                    if let Some(first_row) = rows.get(0) {
+                        if let Some(Some(val)) = first_row.get(i) {
+                            if val.chars().all(|c| c.is_ascii_digit()) {
+                                oid = type_oids::INT4;
+                                size = 4;
+                            } else if val.parse::<f64>().is_ok() {
+                                oid = type_oids::FLOAT8;
+                                size = 8;
+                            }
+                        }
+                    }
+                    fields.push(FieldDescription {
                         name: col.clone(),
                         table_oid: 0,
                         column_id: 0,
-                        type_oid: type_oids::TEXT, // Default to TEXT
-                        type_size: -1,
+                        type_oid: oid,
+                        type_size: size,
                         type_modifier: -1,
                         format: 0,
-                    })
-                    .collect();
+                    });
+                }
 
                 BackendMessage::RowDescription { fields }.encode(buf);
 
-                // Send data rows
                 for row in rows {
                     let values: Vec<Option<bytes::Bytes>> = row
                         .iter()
@@ -505,7 +554,6 @@ impl PostgresWireProtocol {
                     BackendMessage::DataRow { values }.encode(buf);
                 }
 
-                // Send command complete
                 BackendMessage::CommandComplete {
                     tag: format!("SELECT {}", rows.len()),
                 }
@@ -601,7 +649,12 @@ impl Default for PostgresWireProtocol {
 // Add rand dependency for secret_key generation
 use rand::Rng;
 impl PostgresWireProtocol {
-    fn random() -> i32 {
-        rand::thread_rng().gen()
+    /// Generate a random cancel key
+    /// PostgreSQL 18 (protocol 3.2): Supports 4-256 bytes
+    /// Default: 4 bytes for backward compatibility with protocol 3.0 clients
+    fn random_secret_key() -> Vec<u8> {
+        let mut key = vec![0u8; 4]; // 4 bytes for compatibility
+        rand::thread_rng().fill(&mut key[..]);
+        key
     }
 }

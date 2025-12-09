@@ -115,11 +115,7 @@ impl VectorQueryEngine {
         if sql_upper.contains("EXTENSION") && sql_upper.contains("VECTOR") {
             let mut extensions = self.extensions.write().await;
             extensions.insert("vector".to_string(), true);
-
-            Ok(QueryResult::Select {
-                columns: vec!["message".to_string()],
-                rows: vec![vec![Some("CREATE EXTENSION".to_string())]],
-            })
+            Ok(QueryResult::Update { count: 0 })
         } else {
             Err(ProtocolError::PostgresError(
                 "Unsupported extension".to_string(),
@@ -176,10 +172,7 @@ impl VectorQueryEngine {
         let mut tables = self.tables.write().await;
         tables.insert(table_name, table);
 
-        Ok(QueryResult::Select {
-            columns: vec!["message".to_string()],
-            rows: vec![vec![Some("CREATE TABLE".to_string())]],
-        })
+        Ok(QueryResult::Update { count: 0 })
     }
 
     /// Parse column definitions from CREATE TABLE
