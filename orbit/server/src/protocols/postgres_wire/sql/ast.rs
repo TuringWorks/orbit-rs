@@ -1270,6 +1270,22 @@ pub enum BinaryOperator {
     RangeNotExtendRight,
     /// &> operator: range does not extend left of range
     RangeNotExtendLeft,
+
+    // Text Search operators
+    /// @@ operator: tsvector matches tsquery
+    TextSearchMatch,
+    /// @> operator: tsquery contains tsquery
+    TextSearchContains,
+    /// <@ operator: tsquery is contained by tsquery
+    TextSearchContainedBy,
+    /// || operator: concatenate tsvectors or tsqueries
+    TextSearchConcat,
+    /// && operator: AND tsqueries
+    TextSearchAnd,
+    /// !! operator: negate tsquery
+    TextSearchNot,
+    /// <-> operator: followed by (phrase search)
+    TextSearchFollowedBy,
 }
 
 #[derive(Debug, Clone, PartialEq)]

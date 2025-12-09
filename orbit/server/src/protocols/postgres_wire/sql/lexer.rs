@@ -257,7 +257,7 @@ pub enum Token {
     Provider,
     Large,
     Object,
-    Event,
+    // Event is handled by EventTrigger (which maps to "EVENT" keyword)
     // Utility Commands
     Load,
     Import,
@@ -668,7 +668,7 @@ impl Lexer {
             ("PROVIDER", Token::Provider),
             ("LARGE", Token::Large),
             ("OBJECT", Token::Object),
-            ("EVENT", Token::Event),
+            // EVENT is already mapped to EventTrigger above
             // Utility keywords
             ("LOAD", Token::Load),
             ("IMPORT", Token::Import),

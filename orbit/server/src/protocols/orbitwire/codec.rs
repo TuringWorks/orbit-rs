@@ -364,12 +364,16 @@ mod tests {
         let mut codec = OrbitWireCodec::client();
         let mut buf = BytesMut::new();
 
+        // Add handshake first (client sends magic bytes on connect)
+        let handshake = Handshake::new();
+        buf.put_slice(&handshake.encode());
+
         let frame = Frame::new(1, MessageType::Query, Bytes::from("SELECT 1"));
 
-        // Encode
+        // Encode frame after handshake
         codec.encode(frame.clone(), &mut buf).unwrap();
 
-        // Should have magic bytes + frame
+        // Should have magic bytes (5) + frame
         assert!(buf.len() > 5);
 
         // Create server codec and decode

@@ -146,7 +146,15 @@ orbit-examples/
 │   ├── redis/                         # Order queue, loyalty
 │   ├── python/                        # Mobile ordering
 │   └── workflows/01_mobile_ordering.md
-│
+
+├── travel/                            # Travel Booking Platform
+│   ├── README.md
+│   ├── sql/                           # Flights, hotels, cars, packages
+│   ├── redis/                         # Search cache, pricing, loyalty
+│   ├── mongodb/                       # Packages, preferences, reviews
+│   ├── python/                        # Booking workflows
+│   └── workflows/01_flight_booking_workflow.md
+
 └── manufacturing/                     # Electronics Manufacturing
     ├── README.md
     ├── sql/                           # Products, BOM, production
@@ -157,7 +165,7 @@ orbit-examples/
     └── run_tests.sh                   # Test automation
 ```
 
-**Total**: 17 industry examples, 68+ files, 16 comprehensive workflows
+**Total**: 18 industry examples, 70+ files, 17 comprehensive workflows
 
 
 ## 🎯 Examples by Protocol
@@ -531,6 +539,13 @@ Complete end-to-end industry examples using multiple protocols - **17 industries
 - POS and mobile ordering
 - Loyalty programs and kitchen operations
 - **[View Hospitality Examples](hospitality/)**
+
+### Travel (Booking Platform)
+- Flight, hotel, and car rental bookings
+- **Vacation packages** with bundled discounts
+- **Dynamic pricing** and loyalty rewards
+- Multi-city itinerary planning
+- **[View Travel Examples](travel/)**
 
 ### Manufacturing (Electronics Assembly)
 - **8 ML models**: Predictive maintenance, quality, demand forecasting

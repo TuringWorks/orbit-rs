@@ -550,7 +550,7 @@ mod tests {
         assert!(session.has_transaction());
 
         // Create savepoint
-        let sp_id = session.create_savepoint("sp1").unwrap();
+        let _sp_id = session.create_savepoint("sp1").unwrap();
 
         // Cannot begin another transaction
         assert!(session

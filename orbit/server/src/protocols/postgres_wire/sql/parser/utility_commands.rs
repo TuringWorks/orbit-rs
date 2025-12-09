@@ -512,10 +512,10 @@ pub fn parse_vacuum(parser: &mut SqlParser) -> ParseResult<Statement> {
     let mut freeze = false;
     let mut verbose = false;
     let mut analyze = false;
-    let mut disable_page_skipping = false;
+    let disable_page_skipping = false;
     let mut skip_locked = false;
     let mut index_cleanup: Option<bool> = None;
-    let mut truncate: Option<bool> = None;
+    let truncate: Option<bool> = None;
     let mut parallel: Option<i32> = None;
 
     // Parse options in parentheses or as keywords
@@ -943,7 +943,11 @@ pub fn parse_set_transaction(parser: &mut SqlParser) -> ParseResult<Statement> {
                 return Err(super::ParseError {
                     message: "Expected isolation level".to_string(),
                     position: parser.position,
-                    expected: vec!["READ".to_string(), "REPEATABLE".to_string(), "SERIALIZABLE".to_string()],
+                    expected: vec![
+                        "READ".to_string(),
+                        "REPEATABLE".to_string(),
+                        "SERIALIZABLE".to_string(),
+                    ],
                     found: parser.current_token.clone(),
                 });
             });
@@ -1306,13 +1310,15 @@ pub fn parse_import_foreign_schema(parser: &mut SqlParser) -> ParseResult<Statem
         Vec::new()
     };
 
-    Ok(Statement::ImportForeignSchema(ImportForeignSchemaStatement {
-        remote_schema,
-        import_type,
-        server_name,
-        local_schema,
-        options,
-    }))
+    Ok(Statement::ImportForeignSchema(
+        ImportForeignSchemaStatement {
+            remote_schema,
+            import_type,
+            server_name,
+            local_schema,
+            options,
+        },
+    ))
 }
 
 fn parse_identifier_list(parser: &mut SqlParser) -> ParseResult<Vec<String>> {
@@ -1539,7 +1545,7 @@ pub fn parse_security_label(parser: &mut SqlParser) -> ParseResult<Statement> {
 fn parse_security_label_object_type(
     parser: &mut SqlParser,
 ) -> ParseResult<(SecurityLabelObjectType, Option<String>)> {
-    let mut column_name = None;
+    let column_name = None;
 
     let object_type = match &parser.current_token {
         Some(Token::Table) => {
@@ -1563,7 +1569,8 @@ fn parse_security_label_object_type(
             parser.advance()?;
             SecurityLabelObjectType::Domain
         }
-        Some(Token::Event) => {
+        Some(Token::EventTrigger) => {
+            // EVENT TRIGGER - EventTrigger is a single token for "EVENT"
             parser.advance()?;
             parser.expect(Token::Trigger)?;
             SecurityLabelObjectType::EventTrigger

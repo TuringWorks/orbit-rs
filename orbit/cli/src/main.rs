@@ -228,6 +228,7 @@ struct ReplState {
 }
 
 /// OrbitWire connection wrapper
+#[allow(dead_code)]
 struct OrbitWireConnection {
     stream: tokio::net::TcpStream,
 }
@@ -1782,19 +1783,30 @@ async fn run_repl(cli: &Cli) -> Result<()> {
                     }
                 } else {
                     // SQL-like protocols - buffer until semicolon
-                    query_buffer.push_str(&line);
-                    query_buffer.push('\n');
+                    // If the line is just a semicolon, don't add a newline before it
+                    if trimmed == ";" && !query_buffer.is_empty() {
+                        // Just append the semicolon to complete the query
+                        query_buffer.push(';');
+                    } else {
+                        if !query_buffer.is_empty() {
+                            query_buffer.push(' '); // Use space instead of newline for continuations
+                        }
+                        query_buffer.push_str(trimmed);
+                    }
 
                     // Check if query is complete (ends with semicolon)
-                    if trimmed.ends_with(';') {
+                    if query_buffer.trim().ends_with(';') {
+                        // Clean up the query - remove trailing semicolon for execution
+                        let clean_query = query_buffer.trim().trim_end_matches(';').trim();
+
                         // Add to history
                         editor.add_history_entry(query_buffer.trim())?;
 
                         // Show highlighted query
-                        println!("\n{}", state.highlight_query(&query_buffer));
+                        println!("\n{}", state.highlight_query(clean_query));
 
-                        // Execute query
-                        match state.execute_query(&query_buffer).await {
+                        // Execute query (without trailing semicolon)
+                        match state.execute_query(clean_query).await {
                             Ok(()) => {
                                 // Success - results already printed
                             }

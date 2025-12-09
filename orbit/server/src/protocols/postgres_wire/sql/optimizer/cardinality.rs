@@ -266,6 +266,14 @@ impl CardinalityEstimator {
             // Is/IsNot operators
             BinaryOperator::Is => self.config.default_eq_selectivity,
             BinaryOperator::IsNot => 1.0 - self.config.default_eq_selectivity,
+
+            // Text Search operators
+            BinaryOperator::TextSearchMatch => 0.1, // @@ match operator - relatively selective
+            BinaryOperator::TextSearchContains | BinaryOperator::TextSearchContainedBy => 0.2,
+            BinaryOperator::TextSearchConcat
+            | BinaryOperator::TextSearchAnd
+            | BinaryOperator::TextSearchNot
+            | BinaryOperator::TextSearchFollowedBy => 1.0, // These produce tsquery, not filter
         }
     }
 

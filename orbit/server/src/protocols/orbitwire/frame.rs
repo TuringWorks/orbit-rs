@@ -17,7 +17,7 @@ pub const FRAME_HEADER_SIZE: usize = 14;
 pub const MAX_PAYLOAD_SIZE: usize = 16 * 1024 * 1024 - FRAME_HEADER_SIZE;
 
 /// Frame flags
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct FrameFlags {
     /// End of stream marker
     pub end_stream: bool,
@@ -260,7 +260,7 @@ impl MessageType {
 }
 
 /// OrbitWire frame
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Frame {
     /// Frame flags
     pub flags: FrameFlags,

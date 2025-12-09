@@ -149,9 +149,26 @@ impl AqlQueryEngine {
 
     /// Execute parsed AQL query
     async fn execute_parsed_query(&self, query: AqlQuery) -> ProtocolResult<AqlQueryResult> {
-        let storage = self.storage.as_ref().ok_or_else(|| {
-            ProtocolError::AqlError("Storage backend required for query execution".to_string())
-        })?;
+        // Check if query requires storage (has FOR, INSERT, UPDATE, REMOVE, REPLACE, UPSERT)
+        let needs_storage = query.clauses.iter().any(|clause| {
+            matches!(
+                clause,
+                AqlClause::For { .. }
+                    | AqlClause::Insert { .. }
+                    | AqlClause::Update { .. }
+                    | AqlClause::Replace { .. }
+                    | AqlClause::Remove { .. }
+                    | AqlClause::Upsert { .. }
+            )
+        });
+
+        // Get storage reference if available, or error if query requires it
+        let storage_opt = self.storage.as_ref();
+        if needs_storage && storage_opt.is_none() {
+            return Err(ProtocolError::AqlError(
+                "Storage backend required for query execution".to_string(),
+            ));
+        }
 
         // Execution context for variables
         let mut context: HashMap<String, AqlValue> = HashMap::new();
@@ -167,7 +184,10 @@ impl AqlQueryEngine {
                     variable,
                     data_source,
                 } => {
-                    // Execute FOR clause - iterate over collection
+                    // Execute FOR clause - iterate over collection (storage is guaranteed present)
+                    let storage = storage_opt.ok_or_else(|| {
+                        ProtocolError::AqlError("Storage backend required for FOR clause".to_string())
+                    })?;
                     for_documents = self.execute_for_clause(storage, data_source).await?;
                     for_variable = Some(variable.clone());
                 }
@@ -236,6 +256,8 @@ impl AqlQueryEngine {
                     options: _,
                 } => {
                     // Execute INSERT clause - create new document
+                    // Storage is guaranteed to exist (checked at start of function)
+                    let storage = storage_opt.unwrap();
                     let doc_result = self
                         .execute_insert(storage, document, collection, &context)
                         .await?;
@@ -248,6 +270,8 @@ impl AqlQueryEngine {
                     options: _,
                 } => {
                     // Execute UPDATE clause - modify existing document
+                    // Storage is guaranteed to exist (checked at start of function)
+                    let storage = storage_opt.unwrap();
                     if let Some(ref var) = for_variable {
                         // Update based on FOR iteration
                         for doc in &for_documents {
@@ -274,6 +298,8 @@ impl AqlQueryEngine {
                     collection,
                 } => {
                     // Execute REPLACE clause - replace entire document
+                    // Storage is guaranteed to exist (checked at start of function)
+                    let storage = storage_opt.unwrap();
                     if let Some(ref var) = for_variable {
                         for doc in &for_documents {
                             let mut ctx = context.clone();
@@ -294,6 +320,8 @@ impl AqlQueryEngine {
                 }
                 AqlClause::Remove { key, collection } => {
                     // Execute REMOVE clause - delete document
+                    // Storage is guaranteed to exist (checked at start of function)
+                    let storage = storage_opt.unwrap();
                     if let Some(ref var) = for_variable {
                         for doc in &for_documents {
                             let mut ctx = context.clone();
@@ -318,6 +346,8 @@ impl AqlQueryEngine {
                     collection,
                 } => {
                     // Execute UPSERT clause - insert or update/replace
+                    // Storage is guaranteed to exist (checked at start of function)
+                    let storage = storage_opt.unwrap();
                     let upserted = self
                         .execute_upsert(
                             storage,

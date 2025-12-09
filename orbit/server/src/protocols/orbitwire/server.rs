@@ -202,7 +202,7 @@ impl ConnectionHandler {
     }
 
     /// Handle Authenticate message
-    async fn handle_authenticate(&self, frame: Frame) -> Result<Vec<Frame>, HandlerError> {
+    async fn handle_authenticate(&self, _frame: Frame) -> Result<Vec<Frame>, HandlerError> {
         // In a real implementation, this would validate credentials
         let mut session = self.session.write().await;
         session.set_user("authenticated_user");
@@ -212,7 +212,7 @@ impl ConnectionHandler {
     }
 
     /// Handle Goodbye message
-    async fn handle_goodbye(&self, frame: Frame) -> Result<Vec<Frame>, HandlerError> {
+    async fn handle_goodbye(&self, _frame: Frame) -> Result<Vec<Frame>, HandlerError> {
         let ack = Frame::connection_frame(MessageType::GoodbyeAck, Bytes::new());
         Ok(vec![ack])
     }
@@ -308,7 +308,7 @@ impl ConnectionHandler {
     /// Handle Begin message
     async fn handle_begin(&self, frame: Frame) -> Result<Vec<Frame>, HandlerError> {
         let stream_id = frame.stream_id;
-        let mut payload = frame.payload;
+        let payload = frame.payload;
 
         // Parse begin options
         let isolation = if payload.len() >= 1 {
@@ -521,6 +521,7 @@ pub enum HandlerError {
     UnsupportedMessageType(MessageType),
     InvalidMessage(String),
     SessionError(SessionError),
+    #[allow(dead_code)]
     Fatal(String),
 }
 

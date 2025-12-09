@@ -107,11 +107,11 @@ impl FlightSqlServer {
     }
 
     /// Handle DoPut request - upload data or execute prepared statement
-    #[instrument(skip(self, stream))]
+    #[instrument(skip(self, _stream))]
     pub async fn do_put(
         &self,
-        stream: FlightDataStream,
-        session: Arc<RwLock<FlightSession>>,
+        _stream: FlightDataStream,
+        _session: Arc<RwLock<FlightSession>>,
     ) -> Result<PutResult, FlightSqlError> {
         debug!("DoPut request");
 
@@ -127,11 +127,11 @@ impl FlightSqlServer {
     }
 
     /// Handle DoExchange - bidirectional streaming (for LIVE queries)
-    #[instrument(skip(self, stream))]
+    #[instrument(skip(self, _stream))]
     pub async fn do_exchange(
         &self,
-        stream: FlightDataStream,
-        session: Arc<RwLock<FlightSession>>,
+        _stream: FlightDataStream,
+        _session: Arc<RwLock<FlightSession>>,
     ) -> Result<FlightDataStream, FlightSqlError> {
         debug!("DoExchange request for LIVE query");
 
@@ -299,7 +299,7 @@ impl FlightSqlServer {
     async fn handle_statement_query_info(
         &self,
         stmt: &StatementQuery,
-        session: Arc<RwLock<FlightSession>>,
+        _session: Arc<RwLock<FlightSession>>,
     ) -> Result<FlightInfo, FlightSqlError> {
         debug!("Getting flight info for query: {}", stmt.query);
 
@@ -353,7 +353,7 @@ impl FlightSqlServer {
     /// Handle GetDbSchemas info
     async fn handle_get_schemas_info(
         &self,
-        cmd: &GetDbSchemas,
+        _cmd: &GetDbSchemas,
     ) -> Result<FlightInfo, FlightSqlError> {
         let schema = SchemaInfo::new(vec![
             FieldInfo::new("catalog_name", ArrowDataType::Utf8, true),
