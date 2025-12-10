@@ -747,6 +747,83 @@ impl SimpleLocalRegistry {
                 let result = actor.zmscore(&members);
                 Ok(serde_json::to_value(result)?)
             }
+            "zrangebylex" => {
+                if args.len() < 2 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "SortedSetActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected at least 2 arguments (min, max)".to_string(),
+                    });
+                }
+                let min: String = serde_json::from_value(args[0].clone())?;
+                let max: String = serde_json::from_value(args[1].clone())?;
+                let offset: Option<usize> = if args.len() > 2 {
+                    serde_json::from_value(args[2].clone()).ok()
+                } else {
+                    None
+                };
+                let count: Option<usize> = if args.len() > 3 {
+                    serde_json::from_value(args[3].clone()).ok()
+                } else {
+                    None
+                };
+                let result = actor.zrangebylex(&min, &max, offset, count);
+                Ok(serde_json::to_value(result)?)
+            }
+            "zrevrangebylex" => {
+                if args.len() < 2 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "SortedSetActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected at least 2 arguments (max, min)".to_string(),
+                    });
+                }
+                let max: String = serde_json::from_value(args[0].clone())?;
+                let min: String = serde_json::from_value(args[1].clone())?;
+                let offset: Option<usize> = if args.len() > 2 {
+                    serde_json::from_value(args[2].clone()).ok()
+                } else {
+                    None
+                };
+                let count: Option<usize> = if args.len() > 3 {
+                    serde_json::from_value(args[3].clone()).ok()
+                } else {
+                    None
+                };
+                let result = actor.zrevrangebylex(&max, &min, offset, count);
+                Ok(serde_json::to_value(result)?)
+            }
+            "zremrangebylex" => {
+                if args.len() != 2 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "SortedSetActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 2 arguments (min, max)".to_string(),
+                    });
+                }
+                let min: String = serde_json::from_value(args[0].clone())?;
+                let max: String = serde_json::from_value(args[1].clone())?;
+                let result = actor.zremrangebylex(&min, &max);
+                Ok(serde_json::to_value(result)?)
+            }
+            "zrandmember" => {
+                let count: i64 = if !args.is_empty() {
+                    serde_json::from_value(args[0].clone())?
+                } else {
+                    1
+                };
+                let with_scores: bool = if args.len() > 1 {
+                    serde_json::from_value(args[1].clone())?
+                } else {
+                    false
+                };
+                let result = actor.zrandmember(count, with_scores);
+                Ok(serde_json::to_value(result)?)
+            }
+            "get_all_members" => {
+                let result = actor.get_all_members();
+                Ok(serde_json::to_value(result)?)
+            }
             _ => Err(OrbitError::InvocationFailed {
                 addressable_type: "SortedSetActor".to_string(),
                 method: method.to_string(),

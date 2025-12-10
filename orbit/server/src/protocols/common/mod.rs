@@ -4,4 +4,5 @@
 //! that can be used by any protocol adapter (MySQL, CQL, PostgreSQL, etc.)
 
 pub mod formatting;
+pub mod graph_algorithms;
 pub mod storage;

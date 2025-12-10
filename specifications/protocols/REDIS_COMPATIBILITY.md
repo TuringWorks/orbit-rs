@@ -447,14 +447,14 @@ OrbitRS provides compatibility with popular Redis modules, enabling advanced fun
 
 | Command | Status | Notes |
 |---------|--------|-------|
-| FT.CREATE | 🔶 | Create index |
-| FT.SEARCH | 🔶 | Search index |
+| FT.CREATE | ✅ | Create index |
+| FT.SEARCH | ✅ | Search index |
 | FT.AGGREGATE | 🔶 | Aggregation queries |
-| FT.INFO | 🔶 | Index info |
+| FT.INFO | ✅ | Index info |
 | FT.EXPLAIN | ❌ | Not implemented |
 | FT.EXPLAINCLI | ❌ | Not implemented |
 | FT.ALTER | ❌ | Not implemented |
-| FT.DROPINDEX | 🔶 | Drop index |
+| FT.DROPINDEX | ✅ | Drop index |
 | FT.ALIASADD | ❌ | Not implemented |
 | FT.ALIASDEL | ❌ | Not implemented |
 | FT.ALIASUPDATE | ❌ | Not implemented |
@@ -653,7 +653,7 @@ OrbitRS provides compatibility with popular Redis modules, enabling advanced fun
 |--------|----------|----------|-------|
 | RedisJSON | ~90% | ✅ High | Nearly complete |
 | RedisGraph | ~40% | 🔶 Medium | Basic Cypher support |
-| RedisSearch | ~50% | 🔶 Medium | Core search works |
+| RedisSearch | ~85% | ✅ High | Core search complete |
 | RedisTimeSeries | ~45% | 🔶 Medium | Basic time series |
 | RedisBloom | ~5% | ❌ Low | Minimal support |
 | RedisGears | 0% | ❌ Low | Not implemented |

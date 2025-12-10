@@ -1846,6 +1846,185 @@ impl SortedSetActor {
     pub fn zmscore(&self, members: &[String]) -> Vec<Option<f64>> {
         members.iter().map(|member| self.zscore(member)).collect()
     }
+
+    /// Parse lexicographical bound (e.g., "[a", "(b", "-", "+")
+    fn parse_lex_bound(bound: &str) -> Option<(String, bool)> {
+        if bound == "-" {
+            return Some((String::new(), true)); // Minimum
+        }
+        if bound == "+" {
+            return Some(("\u{FFFF}".repeat(100), true)); // Maximum (high unicode)
+        }
+        if let Some(stripped) = bound.strip_prefix('[') {
+            return Some((stripped.to_string(), true)); // Inclusive
+        }
+        if let Some(stripped) = bound.strip_prefix('(') {
+            return Some((stripped.to_string(), false)); // Exclusive
+        }
+        None
+    }
+
+    /// ZRANGEBYLEX - Get members in lexicographical range (assumes same score)
+    pub fn zrangebylex(
+        &self,
+        min: &str,
+        max: &str,
+        offset: Option<usize>,
+        count: Option<usize>,
+    ) -> Vec<String> {
+        let (min_val, min_inclusive) = match Self::parse_lex_bound(min) {
+            Some(v) => v,
+            None => return Vec::new(),
+        };
+        let (max_val, max_inclusive) = match Self::parse_lex_bound(max) {
+            Some(v) => v,
+            None => return Vec::new(),
+        };
+
+        // Collect all members in lexicographic order
+        let mut all_members: Vec<String> = self.member_scores.keys().cloned().collect();
+        all_members.sort();
+
+        // Filter by range
+        let filtered: Vec<String> = all_members
+            .into_iter()
+            .filter(|member| {
+                let above_min = if min_inclusive {
+                    member.as_str() >= min_val.as_str()
+                } else {
+                    member.as_str() > min_val.as_str()
+                };
+                let below_max = if max_inclusive {
+                    member.as_str() <= max_val.as_str()
+                } else {
+                    member.as_str() < max_val.as_str()
+                };
+                above_min && below_max
+            })
+            .collect();
+
+        // Apply LIMIT offset count
+        let offset = offset.unwrap_or(0);
+        let count = count.unwrap_or(filtered.len());
+
+        filtered.into_iter().skip(offset).take(count).collect()
+    }
+
+    /// ZREVRANGEBYLEX - Get members in reverse lexicographical range
+    pub fn zrevrangebylex(
+        &self,
+        max: &str,
+        min: &str,
+        offset: Option<usize>,
+        count: Option<usize>,
+    ) -> Vec<String> {
+        let (min_val, min_inclusive) = match Self::parse_lex_bound(min) {
+            Some(v) => v,
+            None => return Vec::new(),
+        };
+        let (max_val, max_inclusive) = match Self::parse_lex_bound(max) {
+            Some(v) => v,
+            None => return Vec::new(),
+        };
+
+        // Collect all members in reverse lexicographic order
+        let mut all_members: Vec<String> = self.member_scores.keys().cloned().collect();
+        all_members.sort();
+        all_members.reverse();
+
+        // Filter by range
+        let filtered: Vec<String> = all_members
+            .into_iter()
+            .filter(|member| {
+                let above_min = if min_inclusive {
+                    member.as_str() >= min_val.as_str()
+                } else {
+                    member.as_str() > min_val.as_str()
+                };
+                let below_max = if max_inclusive {
+                    member.as_str() <= max_val.as_str()
+                } else {
+                    member.as_str() < max_val.as_str()
+                };
+                above_min && below_max
+            })
+            .collect();
+
+        // Apply LIMIT offset count
+        let offset = offset.unwrap_or(0);
+        let count = count.unwrap_or(filtered.len());
+
+        filtered.into_iter().skip(offset).take(count).collect()
+    }
+
+    /// ZREMRANGEBYLEX - Remove members in lexicographical range
+    pub fn zremrangebylex(&mut self, min: &str, max: &str) -> usize {
+        let members_to_remove = self.zrangebylex(min, max, None, None);
+        self.zrem(members_to_remove)
+    }
+
+    /// ZRANDMEMBER - Get random member(s) from sorted set
+    pub fn zrandmember(&self, count: i64, with_scores: bool) -> Vec<(String, Option<f64>)> {
+        use std::collections::HashSet;
+
+        if self.member_scores.is_empty() {
+            return Vec::new();
+        }
+
+        let members: Vec<_> = self.member_scores.keys().cloned().collect();
+        let allow_duplicates = count < 0;
+        let count = count.unsigned_abs() as usize;
+
+        let mut result = Vec::new();
+        let mut used_indices = HashSet::new();
+
+        for _ in 0..count {
+            if !allow_duplicates && used_indices.len() >= members.len() {
+                break;
+            }
+
+            // Simple random selection using timestamp-based randomness
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos() as usize;
+            let idx = (now + result.len()) % members.len();
+
+            if !allow_duplicates {
+                // Find an unused index
+                let mut search_idx = idx;
+                while used_indices.contains(&search_idx) {
+                    search_idx = (search_idx + 1) % members.len();
+                }
+                used_indices.insert(search_idx);
+                let member = &members[search_idx];
+                let score = if with_scores {
+                    self.member_scores.get(member).copied()
+                } else {
+                    None
+                };
+                result.push((member.clone(), score));
+            } else {
+                let member = &members[idx];
+                let score = if with_scores {
+                    self.member_scores.get(member).copied()
+                } else {
+                    None
+                };
+                result.push((member.clone(), score));
+            }
+        }
+
+        result
+    }
+
+    /// Get all members with their scores (for set operations)
+    pub fn get_all_members(&self) -> Vec<(String, f64)> {
+        self.member_scores
+            .iter()
+            .map(|(m, s)| (m.clone(), *s))
+            .collect()
+    }
 }
 
 impl Default for SortedSetActor {

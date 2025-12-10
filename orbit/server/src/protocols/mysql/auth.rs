@@ -200,10 +200,10 @@ impl MySqlAuth {
                 // Clear password is sent as-is
                 self.validate_clear_password(&response.auth_response.unwrap())
             }
-            AuthPlugin::CachingSha2Password => {
-                // For simplicity, accept any auth for now (can be enhanced later)
-                true
-            }
+            AuthPlugin::CachingSha2Password => self.validate_caching_sha2_password(
+                &response.username,
+                &response.auth_response.unwrap(),
+            ),
         };
 
         if valid {
@@ -251,6 +251,34 @@ impl MySqlAuth {
         provided_password == expected_password
     }
 
+    /// Validate caching_sha2_password authentication
+    fn validate_caching_sha2_password(&self, _username: &str, auth_response: &[u8]) -> bool {
+        // If no password is configured, accept any auth response
+        if self.expected_password.is_none() {
+            return !auth_response.is_empty();
+        }
+
+        let expected_password = self.expected_password.as_ref().unwrap();
+
+        // Perform SHA256 caching_sha2_password validation
+        // scramble = XOR(SHA256(password), SHA256(SHA256(SHA256(password)) + nonce))
+        // We verify by reconstructing the scramble and comparing
+
+        let calculated_scramble =
+            Self::compute_caching_sha2_password_hash(expected_password, &self.auth_data);
+
+        // Debug logging (would remove in production)
+        // println!("Auth debug: expected len={}, got len={}", calculated_scramble.len(), auth_response.len());
+
+        // In caching_sha2_password, the client sends the scrambled password.
+        // We compare what we calculated vs what client sent.
+        if auth_response.len() != calculated_scramble.len() {
+            return false;
+        }
+
+        auth_response == calculated_scramble
+    }
+
     /// Compute native password hash (simplified version using SHA256)
     pub fn compute_native_password_hash(password: &str, auth_data: &[u8]) -> Vec<u8> {
         // Simplified hash for demonstration - in production use proper MySQL SHA1-based auth
@@ -258,6 +286,30 @@ impl MySqlAuth {
         hasher.update(password.as_bytes());
         hasher.update(auth_data);
         hasher.finalize().to_vec()
+    }
+
+    /// Compute caching_sha2_password hash
+    /// scramble = XOR(SHA256(password), SHA256(SHA256(SHA256(password)) + nonce))
+    pub fn compute_caching_sha2_password_hash(password: &str, nonce: &[u8]) -> Vec<u8> {
+        let mut hasher = Sha256::new();
+        hasher.update(password.as_bytes());
+        let digest1 = hasher.finalize(); // SHA256(password)
+
+        let mut hasher = Sha256::new();
+        hasher.update(digest1);
+        let digest2 = hasher.finalize(); // SHA256(SHA256(password))
+
+        let mut hasher = Sha256::new();
+        hasher.update(digest2);
+        hasher.update(nonce);
+        let digest3 = hasher.finalize(); // SHA256(SHA256(SHA256(password)) + nonce)
+
+        // XOR digest1 with digest3
+        digest1
+            .iter()
+            .zip(digest3.iter())
+            .map(|(a, b)| a ^ b)
+            .collect()
     }
 }
 

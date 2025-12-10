@@ -102,33 +102,23 @@ orbit-examples/
 │   ├── README.md
 │   └── workflows/01_precision_farming.md
 │
-│   ├── README.md
-│   ├── sql/01_schema_ehr.sql          # Electronic Health Records
-│   └── workflows/01_patient_admission.md
 │
-├── logistics/                         # Supply Chain & Logistics
+├── entertainment/                     # Studio & Production
 │   ├── README.md
-│   └── workflows/01_order_fulfillment.md
+│   ├── sql/                           # Production budgets
+│   ├── mongodb/                       # Content catalog
+│   ├── redis/                         # Streaming sessions
+│   ├── cypher/                        # Knowledge graph
+│   └── workflows/01_content_ingestion.md
 │
-├── energy/                            # Energy & Utilities
+├── data_center/                       # Data Center & Orbital Ops
 │   ├── README.md
-│   └── workflows/01_grid_management.md
-│
-├── media/                             # Media & Entertainment
-│   ├── README.md
-│   └── workflows/01_content_recommendation.md
-│
-├── education/                         # Education & EdTech
-│   ├── README.md
-│   └── workflows/01_personalized_learning.md
-│
-├── real-estate/                       # Real Estate & PropTech
-│   ├── README.md
-│   └── workflows/01_property_listing.md
-│
-├── agriculture/                       # Agriculture & AgTech
-│   ├── README.md
-│   └── workflows/01_precision_farming.md
+│   ├── sql/                           # Asset management
+│   ├── cql/                           # Telemetry (Cassandra)
+│   ├── redis/                         # Real-time alerts
+│   ├── cypher/                        # Network topology
+│   ├── mongodb/                       # Hardware inventory
+│   └── workflows/01_predictive_maintenance.md
 │
 ├── defense/                           # Defense & Aerospace
 │   ├── README.md
@@ -246,7 +236,7 @@ orbit-examples/
 │   └── workflows/01_fdc_interdiction.md
 ```
 
-**Total**: 25 industry examples, 100+ files, 24 comprehensive workflows
+**Total**: 27 industry examples, 120+ files, 26 comprehensive workflows
 
 
 ## 🎯 Examples by Protocol
@@ -694,11 +684,23 @@ Complete end-to-end industry examples using multiple protocols - **17 industries
 - **Customer 360 View** (Interactions, Preferences)
 - **[View Car Dealership Examples](car_dealership/)**
 
-### Field Service Management
-- **2 Protocols**: SQL, Cypher
-- **Work Order Scheduling** and Invoicing
-- **Technician Skill Graph** (Matching skills & location)
-- **[View Field Service Examples](field_service/)**
+├── Entertainment (Studio)
+│   ├── **4 Protocols**: SQL, Mongo, Redis, Cypher
+│   ├── **Production Management** and Budgeting
+│   ├── **Content Catalog** and Streaming Sessions
+│   ├── **[View Entertainment Examples](entertainment/)**
+│
+├── Data Center & Orbital Ops
+│   ├── **5 Protocols**: SQL, Mongo, CQL, Redis, Cypher
+│   ├── **Terrestrial & Orbital** Asset Management
+│   ├── **Live Telemetry** and Network Topology
+│   ├── **[View Data Center Examples](data_center/)**
+│
+├── Field Service Management
+│   ├── **2 Protocols**: SQL, Cypher
+│   ├── **Work Order Scheduling** and Invoicing
+│   ├── **Technician Skill Graph** (Matching skills & location)
+│   ├── **[View Field Service Examples](field_service/)**
 
 ---
 

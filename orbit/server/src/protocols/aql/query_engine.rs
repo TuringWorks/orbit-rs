@@ -11,11 +11,53 @@ use crate::protocols::aql::aql_parser::{
 use crate::protocols::aql::{
     AqlDocument, AqlGraphRAGEngine, AqlParser, AqlQuery, AqlStorage, AqlValue,
 };
+use crate::protocols::common::graph_algorithms as graph_algo;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use orbit_client::OrbitClient;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{info, warn};
+
+/// Convert AqlValue to serde_json::Value for graph properties
+fn aql_value_to_json(value: &AqlValue) -> serde_json::Value {
+    match value {
+        AqlValue::Null => serde_json::Value::Null,
+        AqlValue::Bool(b) => serde_json::Value::Bool(*b),
+        AqlValue::Number(n) => serde_json::Value::Number(n.clone()),
+        AqlValue::String(s) => serde_json::Value::String(s.clone()),
+        AqlValue::Array(arr) => {
+            serde_json::Value::Array(arr.iter().map(aql_value_to_json).collect())
+        }
+        AqlValue::Object(obj) => {
+            let map: serde_json::Map<String, serde_json::Value> = obj
+                .iter()
+                .map(|(k, v)| (k.clone(), aql_value_to_json(v)))
+                .collect();
+            serde_json::Value::Object(map)
+        }
+        AqlValue::DateTime(dt) => serde_json::Value::String(dt.to_rfc3339()),
+    }
+}
+
+/// Convert serde_json::Value to AqlValue for graph properties
+fn json_to_aql_value(value: &serde_json::Value) -> AqlValue {
+    match value {
+        serde_json::Value::Null => AqlValue::Null,
+        serde_json::Value::Bool(b) => AqlValue::Bool(*b),
+        serde_json::Value::Number(n) => AqlValue::Number(n.clone()),
+        serde_json::Value::String(s) => AqlValue::String(s.clone()),
+        serde_json::Value::Array(arr) => {
+            AqlValue::Array(arr.iter().map(json_to_aql_value).collect())
+        }
+        serde_json::Value::Object(obj) => {
+            let map: HashMap<String, AqlValue> = obj
+                .iter()
+                .map(|(k, v)| (k.clone(), json_to_aql_value(v)))
+                .collect();
+            AqlValue::Object(map)
+        }
+    }
+}
 
 /// AQL query execution result
 #[derive(Debug, Clone)]
@@ -771,7 +813,7 @@ impl AqlQueryEngine {
                     .map(|arg| self.evaluate_expression(arg, context))
                     .collect::<ProtocolResult<Vec<_>>>()?;
 
-                self.evaluate_builtin_function(name, &evaluated_args)
+                self.evaluate_builtin_function(name, &evaluated_args, context)
             }
             AqlExpression::BinaryOp { op, left, right } => {
                 let left_val = self.evaluate_expression(left, context)?;
@@ -1442,8 +1484,117 @@ impl AqlQueryEngine {
         }
     }
 
+    /// Build a graph from context data (vertices and edges arrays)
+    /// This extracts graph data from the query context for use with shared graph algorithms
+    fn build_graph_from_context(
+        &self,
+        context: &HashMap<String, AqlValue>,
+        graph_name: Option<&str>,
+    ) -> graph_algo::Graph {
+        let mut graph = graph_algo::Graph::new();
+
+        // Look for vertices in context - check common variable names
+        let vertex_keys = if let Some(name) = graph_name {
+            vec![
+                format!("{}_vertices", name),
+                format!("{}Vertices", name),
+                "vertices".to_string(),
+                "nodes".to_string(),
+            ]
+        } else {
+            vec!["vertices".to_string(), "nodes".to_string()]
+        };
+
+        for key in &vertex_keys {
+            if let Some(AqlValue::Array(vertices)) = context.get(key) {
+                for vertex in vertices {
+                    if let AqlValue::Object(props) = vertex {
+                        if let Some(AqlValue::String(id)) = props.get("_key").or(props.get("_id")) {
+                            let mut properties = HashMap::new();
+                            for (k, v) in props {
+                                if k != "_key" && k != "_id" {
+                                    properties.insert(k.clone(), aql_value_to_json(v));
+                                }
+                            }
+                            graph.add_node(id.clone(), properties);
+                        }
+                    }
+                }
+                break;
+            }
+        }
+
+        // Look for edges in context
+        let edge_keys = if let Some(name) = graph_name {
+            vec![
+                format!("{}_edges", name),
+                format!("{}Edges", name),
+                "edges".to_string(),
+            ]
+        } else {
+            vec!["edges".to_string()]
+        };
+
+        for key in &edge_keys {
+            if let Some(AqlValue::Array(edges)) = context.get(key) {
+                for edge in edges {
+                    if let AqlValue::Object(props) = edge {
+                        let from = props.get("_from").and_then(|v| {
+                            if let AqlValue::String(s) = v {
+                                Some(s.clone())
+                            } else {
+                                None
+                            }
+                        });
+                        let to = props.get("_to").and_then(|v| {
+                            if let AqlValue::String(s) = v {
+                                Some(s.clone())
+                            } else {
+                                None
+                            }
+                        });
+
+                        if let (Some(from_id), Some(to_id)) = (from, to) {
+                            let weight = props
+                                .get("weight")
+                                .or(props.get("cost"))
+                                .and_then(|v| {
+                                    if let AqlValue::Number(n) = v {
+                                        n.as_f64()
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .unwrap_or(1.0);
+
+                            let edge_type =
+                                props.get("_type").or(props.get("type")).and_then(|v| {
+                                    if let AqlValue::String(s) = v {
+                                        Some(s.clone())
+                                    } else {
+                                        None
+                                    }
+                                });
+
+                            graph.add_edge(from_id, to_id, weight, edge_type);
+                        }
+                    }
+                }
+                break;
+            }
+        }
+
+        graph
+    }
+
     /// Evaluate built-in AQL functions
-    fn evaluate_builtin_function(&self, name: &str, args: &[AqlValue]) -> ProtocolResult<AqlValue> {
+    /// The context parameter provides access to query variables including graph data
+    fn evaluate_builtin_function(
+        &self,
+        name: &str,
+        args: &[AqlValue],
+        context: &HashMap<String, AqlValue>,
+    ) -> ProtocolResult<AqlValue> {
         match name.to_uppercase().as_str() {
             // ============ String Functions ============
             "LENGTH" => {
@@ -2688,6 +2839,1294 @@ impl AqlQueryEngine {
                 Ok(AqlValue::Number(serde_json::Number::from(
                     hasher.finish() as i64
                 )))
+            }
+
+            // ============ Geo Functions ============
+            "GEO_POINT" => {
+                // GEO_POINT(longitude, latitude) - Create a GeoJSON point
+                if let (Some(AqlValue::Number(lon)), Some(AqlValue::Number(lat))) =
+                    (args.first(), args.get(1))
+                {
+                    let lon_f = lon.as_f64().unwrap_or(0.0);
+                    let lat_f = lat.as_f64().unwrap_or(0.0);
+                    let mut point = HashMap::new();
+                    point.insert("type".to_string(), AqlValue::String("Point".to_string()));
+                    point.insert(
+                        "coordinates".to_string(),
+                        AqlValue::Array(vec![
+                            AqlValue::Number(
+                                serde_json::Number::from_f64(lon_f)
+                                    .unwrap_or(serde_json::Number::from(0)),
+                            ),
+                            AqlValue::Number(
+                                serde_json::Number::from_f64(lat_f)
+                                    .unwrap_or(serde_json::Number::from(0)),
+                            ),
+                        ]),
+                    );
+                    Ok(AqlValue::Object(point))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "GEO_POLYGON" => {
+                // GEO_POLYGON(points) - Create a GeoJSON polygon
+                // points is array of [lon, lat] arrays or array of GeoJSON points
+                if let Some(AqlValue::Array(points)) = args.first() {
+                    let mut ring: Vec<AqlValue> = Vec::new();
+                    for point in points {
+                        match point {
+                            AqlValue::Array(coords) if coords.len() >= 2 => {
+                                ring.push(AqlValue::Array(coords.clone()));
+                            }
+                            AqlValue::Object(obj) => {
+                                if let Some(AqlValue::Array(coords)) = obj.get("coordinates") {
+                                    ring.push(AqlValue::Array(coords.clone()));
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    // Close the ring if not already closed
+                    if !ring.is_empty() && ring.first() != ring.last() {
+                        if let Some(first) = ring.first().cloned() {
+                            ring.push(first);
+                        }
+                    }
+                    let mut polygon = HashMap::new();
+                    polygon.insert("type".to_string(), AqlValue::String("Polygon".to_string()));
+                    polygon.insert(
+                        "coordinates".to_string(),
+                        AqlValue::Array(vec![AqlValue::Array(ring)]),
+                    );
+                    Ok(AqlValue::Object(polygon))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "GEO_LINESTRING" => {
+                // GEO_LINESTRING(points) - Create a GeoJSON LineString
+                if let Some(AqlValue::Array(points)) = args.first() {
+                    let mut coords: Vec<AqlValue> = Vec::new();
+                    for point in points {
+                        match point {
+                            AqlValue::Array(c) if c.len() >= 2 => {
+                                coords.push(AqlValue::Array(c.clone()));
+                            }
+                            AqlValue::Object(obj) => {
+                                if let Some(AqlValue::Array(c)) = obj.get("coordinates") {
+                                    coords.push(AqlValue::Array(c.clone()));
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    let mut linestring = HashMap::new();
+                    linestring.insert(
+                        "type".to_string(),
+                        AqlValue::String("LineString".to_string()),
+                    );
+                    linestring.insert("coordinates".to_string(), AqlValue::Array(coords));
+                    Ok(AqlValue::Object(linestring))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "GEO_MULTIPOINT" => {
+                // GEO_MULTIPOINT(points) - Create a GeoJSON MultiPoint
+                if let Some(AqlValue::Array(points)) = args.first() {
+                    let mut coords: Vec<AqlValue> = Vec::new();
+                    for point in points {
+                        match point {
+                            AqlValue::Array(c) if c.len() >= 2 => {
+                                coords.push(AqlValue::Array(c.clone()));
+                            }
+                            AqlValue::Object(obj) => {
+                                if let Some(AqlValue::Array(c)) = obj.get("coordinates") {
+                                    coords.push(AqlValue::Array(c.clone()));
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    let mut multipoint = HashMap::new();
+                    multipoint.insert(
+                        "type".to_string(),
+                        AqlValue::String("MultiPoint".to_string()),
+                    );
+                    multipoint.insert("coordinates".to_string(), AqlValue::Array(coords));
+                    Ok(AqlValue::Object(multipoint))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "DISTANCE" => {
+                // DISTANCE(lat1, lon1, lat2, lon2) - Haversine distance in meters
+                if args.len() >= 4 {
+                    let lat1 = match &args[0] {
+                        AqlValue::Number(n) => n.as_f64().unwrap_or(0.0),
+                        _ => return Ok(AqlValue::Null),
+                    };
+                    let lon1 = match &args[1] {
+                        AqlValue::Number(n) => n.as_f64().unwrap_or(0.0),
+                        _ => return Ok(AqlValue::Null),
+                    };
+                    let lat2 = match &args[2] {
+                        AqlValue::Number(n) => n.as_f64().unwrap_or(0.0),
+                        _ => return Ok(AqlValue::Null),
+                    };
+                    let lon2 = match &args[3] {
+                        AqlValue::Number(n) => n.as_f64().unwrap_or(0.0),
+                        _ => return Ok(AqlValue::Null),
+                    };
+
+                    // Haversine formula
+                    let r = 6371000.0; // Earth radius in meters
+                    let lat1_rad = lat1.to_radians();
+                    let lat2_rad = lat2.to_radians();
+                    let delta_lat = (lat2 - lat1).to_radians();
+                    let delta_lon = (lon2 - lon1).to_radians();
+
+                    let a = (delta_lat / 2.0).sin().powi(2)
+                        + lat1_rad.cos() * lat2_rad.cos() * (delta_lon / 2.0).sin().powi(2);
+                    let c = 2.0 * a.sqrt().asin();
+                    let distance = r * c;
+
+                    Ok(AqlValue::Number(
+                        serde_json::Number::from_f64(distance)
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ))
+                } else {
+                    Ok(AqlValue::Null)
+                }
+            }
+            "GEO_DISTANCE" => {
+                // GEO_DISTANCE(geo1, geo2) - Distance between two GeoJSON objects in meters
+                fn extract_coords(geo: &AqlValue) -> Option<(f64, f64)> {
+                    match geo {
+                        AqlValue::Object(obj) => {
+                            if let Some(AqlValue::Array(coords)) = obj.get("coordinates") {
+                                // For Point: [lon, lat]
+                                if coords.len() >= 2 {
+                                    let lon = match &coords[0] {
+                                        AqlValue::Number(n) => n.as_f64()?,
+                                        _ => return None,
+                                    };
+                                    let lat = match &coords[1] {
+                                        AqlValue::Number(n) => n.as_f64()?,
+                                        _ => return None,
+                                    };
+                                    return Some((lat, lon));
+                                }
+                            }
+                            None
+                        }
+                        AqlValue::Array(coords) if coords.len() >= 2 => {
+                            let lon = match &coords[0] {
+                                AqlValue::Number(n) => n.as_f64()?,
+                                _ => return None,
+                            };
+                            let lat = match &coords[1] {
+                                AqlValue::Number(n) => n.as_f64()?,
+                                _ => return None,
+                            };
+                            Some((lat, lon))
+                        }
+                        _ => None,
+                    }
+                }
+
+                if let (Some(geo1), Some(geo2)) = (args.first(), args.get(1)) {
+                    if let (Some((lat1, lon1)), Some((lat2, lon2))) =
+                        (extract_coords(geo1), extract_coords(geo2))
+                    {
+                        // Haversine formula
+                        let r = 6371000.0;
+                        let lat1_rad = lat1.to_radians();
+                        let lat2_rad = lat2.to_radians();
+                        let delta_lat = (lat2 - lat1).to_radians();
+                        let delta_lon = (lon2 - lon1).to_radians();
+
+                        let a = (delta_lat / 2.0).sin().powi(2)
+                            + lat1_rad.cos() * lat2_rad.cos() * (delta_lon / 2.0).sin().powi(2);
+                        let c = 2.0 * a.sqrt().asin();
+                        let distance = r * c;
+
+                        return Ok(AqlValue::Number(
+                            serde_json::Number::from_f64(distance)
+                                .unwrap_or(serde_json::Number::from(0)),
+                        ));
+                    }
+                }
+                Ok(AqlValue::Null)
+            }
+            "GEO_AREA" => {
+                // GEO_AREA(geoJson) - Calculate area in square meters using spherical excess formula
+                fn extract_polygon_ring(geo: &AqlValue) -> Option<Vec<(f64, f64)>> {
+                    match geo {
+                        AqlValue::Object(obj) => {
+                            if let Some(AqlValue::Array(coords)) = obj.get("coordinates") {
+                                // Polygon: [[[lon, lat], ...]]
+                                if let Some(AqlValue::Array(ring)) = coords.first() {
+                                    let mut points = Vec::new();
+                                    for point in ring {
+                                        if let AqlValue::Array(p) = point {
+                                            if p.len() >= 2 {
+                                                let lon = match &p[0] {
+                                                    AqlValue::Number(n) => n.as_f64()?,
+                                                    _ => return None,
+                                                };
+                                                let lat = match &p[1] {
+                                                    AqlValue::Number(n) => n.as_f64()?,
+                                                    _ => return None,
+                                                };
+                                                points.push((lon, lat));
+                                            }
+                                        }
+                                    }
+                                    return Some(points);
+                                }
+                            }
+                            None
+                        }
+                        _ => None,
+                    }
+                }
+
+                if let Some(geo) = args.first() {
+                    if let Some(ring) = extract_polygon_ring(geo) {
+                        if ring.len() >= 3 {
+                            // Shoelace formula for area (simplified, works for small areas)
+                            // For more accuracy, use spherical excess formula
+                            let r = 6371000.0; // Earth radius in meters
+                            let mut area = 0.0;
+                            let n = ring.len();
+                            for i in 0..n {
+                                let j = (i + 1) % n;
+                                let (lon1, lat1) = ring[i];
+                                let (lon2, lat2) = ring[j];
+                                area += lon1.to_radians() * lat2.to_radians();
+                                area -= lon2.to_radians() * lat1.to_radians();
+                            }
+                            area = area.abs() * r * r / 2.0;
+                            return Ok(AqlValue::Number(
+                                serde_json::Number::from_f64(area)
+                                    .unwrap_or(serde_json::Number::from(0)),
+                            ));
+                        }
+                    }
+                }
+                Ok(AqlValue::Number(serde_json::Number::from(0)))
+            }
+            "GEO_CONTAINS" => {
+                // GEO_CONTAINS(geoJsonA, geoJsonB) - Check if A contains B
+                // Simplified: checks if point B is inside polygon A
+                fn point_in_polygon(point: (f64, f64), polygon: &[(f64, f64)]) -> bool {
+                    let (px, py) = point;
+                    let mut inside = false;
+                    let n = polygon.len();
+                    let mut j = n - 1;
+                    for i in 0..n {
+                        let (xi, yi) = polygon[i];
+                        let (xj, yj) = polygon[j];
+                        if ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)
+                        {
+                            inside = !inside;
+                        }
+                        j = i;
+                    }
+                    inside
+                }
+
+                fn extract_point(geo: &AqlValue) -> Option<(f64, f64)> {
+                    match geo {
+                        AqlValue::Object(obj) => {
+                            if let Some(AqlValue::Array(coords)) = obj.get("coordinates") {
+                                if coords.len() >= 2 {
+                                    let lon = match &coords[0] {
+                                        AqlValue::Number(n) => n.as_f64()?,
+                                        _ => return None,
+                                    };
+                                    let lat = match &coords[1] {
+                                        AqlValue::Number(n) => n.as_f64()?,
+                                        _ => return None,
+                                    };
+                                    return Some((lon, lat));
+                                }
+                            }
+                            None
+                        }
+                        _ => None,
+                    }
+                }
+
+                fn extract_polygon(geo: &AqlValue) -> Option<Vec<(f64, f64)>> {
+                    match geo {
+                        AqlValue::Object(obj) => {
+                            if let Some(AqlValue::Array(coords)) = obj.get("coordinates") {
+                                if let Some(AqlValue::Array(ring)) = coords.first() {
+                                    let mut points = Vec::new();
+                                    for point in ring {
+                                        if let AqlValue::Array(p) = point {
+                                            if p.len() >= 2 {
+                                                let lon = match &p[0] {
+                                                    AqlValue::Number(n) => n.as_f64()?,
+                                                    _ => return None,
+                                                };
+                                                let lat = match &p[1] {
+                                                    AqlValue::Number(n) => n.as_f64()?,
+                                                    _ => return None,
+                                                };
+                                                points.push((lon, lat));
+                                            }
+                                        }
+                                    }
+                                    return Some(points);
+                                }
+                            }
+                            None
+                        }
+                        _ => None,
+                    }
+                }
+
+                if let (Some(geo_a), Some(geo_b)) = (args.first(), args.get(1)) {
+                    // Check if polygon A contains point B
+                    if let (Some(polygon), Some(point)) =
+                        (extract_polygon(geo_a), extract_point(geo_b))
+                    {
+                        return Ok(AqlValue::Bool(point_in_polygon(point, &polygon)));
+                    }
+                }
+                Ok(AqlValue::Bool(false))
+            }
+            "GEO_EQUALS" => {
+                // GEO_EQUALS(geo1, geo2) - Check if two geo objects are equal
+                Ok(AqlValue::Bool(args.first() == args.get(1)))
+            }
+            "GEO_INTERSECTS" => {
+                // GEO_INTERSECTS(geo1, geo2) - Check if two geo objects intersect
+                // Simplified: for point-polygon, checks containment; for polygon-polygon, checks any point overlap
+                // Reuse point_in_polygon logic from GEO_CONTAINS
+                fn point_in_polygon(point: (f64, f64), polygon: &[(f64, f64)]) -> bool {
+                    let (px, py) = point;
+                    let mut inside = false;
+                    let n = polygon.len();
+                    let mut j = n - 1;
+                    for i in 0..n {
+                        let (xi, yi) = polygon[i];
+                        let (xj, yj) = polygon[j];
+                        if ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)
+                        {
+                            inside = !inside;
+                        }
+                        j = i;
+                    }
+                    inside
+                }
+
+                fn extract_point(geo: &AqlValue) -> Option<(f64, f64)> {
+                    match geo {
+                        AqlValue::Object(obj) => {
+                            if obj.get("type") == Some(&AqlValue::String("Point".to_string())) {
+                                if let Some(AqlValue::Array(coords)) = obj.get("coordinates") {
+                                    if coords.len() >= 2 {
+                                        let lon = match &coords[0] {
+                                            AqlValue::Number(n) => n.as_f64()?,
+                                            _ => return None,
+                                        };
+                                        let lat = match &coords[1] {
+                                            AqlValue::Number(n) => n.as_f64()?,
+                                            _ => return None,
+                                        };
+                                        return Some((lon, lat));
+                                    }
+                                }
+                            }
+                            None
+                        }
+                        _ => None,
+                    }
+                }
+
+                fn extract_polygon(geo: &AqlValue) -> Option<Vec<(f64, f64)>> {
+                    match geo {
+                        AqlValue::Object(obj) => {
+                            if obj.get("type") == Some(&AqlValue::String("Polygon".to_string())) {
+                                if let Some(AqlValue::Array(coords)) = obj.get("coordinates") {
+                                    if let Some(AqlValue::Array(ring)) = coords.first() {
+                                        let mut points = Vec::new();
+                                        for point in ring {
+                                            if let AqlValue::Array(p) = point {
+                                                if p.len() >= 2 {
+                                                    let lon = match &p[0] {
+                                                        AqlValue::Number(n) => n.as_f64()?,
+                                                        _ => return None,
+                                                    };
+                                                    let lat = match &p[1] {
+                                                        AqlValue::Number(n) => n.as_f64()?,
+                                                        _ => return None,
+                                                    };
+                                                    points.push((lon, lat));
+                                                }
+                                            }
+                                        }
+                                        return Some(points);
+                                    }
+                                }
+                            }
+                            None
+                        }
+                        _ => None,
+                    }
+                }
+
+                if let (Some(geo1), Some(geo2)) = (args.first(), args.get(1)) {
+                    // Point in polygon
+                    if let (Some(point), Some(polygon)) =
+                        (extract_point(geo1), extract_polygon(geo2))
+                    {
+                        return Ok(AqlValue::Bool(point_in_polygon(point, &polygon)));
+                    }
+                    if let (Some(polygon), Some(point)) =
+                        (extract_polygon(geo1), extract_point(geo2))
+                    {
+                        return Ok(AqlValue::Bool(point_in_polygon(point, &polygon)));
+                    }
+                    // Polygon-polygon: check if any vertex of one is in the other
+                    if let (Some(poly1), Some(poly2)) =
+                        (extract_polygon(geo1), extract_polygon(geo2))
+                    {
+                        for p in &poly1 {
+                            if point_in_polygon(*p, &poly2) {
+                                return Ok(AqlValue::Bool(true));
+                            }
+                        }
+                        for p in &poly2 {
+                            if point_in_polygon(*p, &poly1) {
+                                return Ok(AqlValue::Bool(true));
+                            }
+                        }
+                    }
+                }
+                Ok(AqlValue::Bool(false))
+            }
+            "IS_IN_POLYGON" => {
+                // IS_IN_POLYGON(polygon, latitude, longitude) or IS_IN_POLYGON(polygon, [lon, lat])
+                fn point_in_polygon(point: (f64, f64), polygon: &[(f64, f64)]) -> bool {
+                    let (px, py) = point;
+                    let mut inside = false;
+                    let n = polygon.len();
+                    let mut j = n - 1;
+                    for i in 0..n {
+                        let (xi, yi) = polygon[i];
+                        let (xj, yj) = polygon[j];
+                        if ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)
+                        {
+                            inside = !inside;
+                        }
+                        j = i;
+                    }
+                    inside
+                }
+
+                fn extract_polygon_points(geo: &AqlValue) -> Option<Vec<(f64, f64)>> {
+                    match geo {
+                        AqlValue::Object(obj) => {
+                            if let Some(AqlValue::Array(coords)) = obj.get("coordinates") {
+                                if let Some(AqlValue::Array(ring)) = coords.first() {
+                                    let mut points = Vec::new();
+                                    for point in ring {
+                                        if let AqlValue::Array(p) = point {
+                                            if p.len() >= 2 {
+                                                let lon = match &p[0] {
+                                                    AqlValue::Number(n) => n.as_f64()?,
+                                                    _ => return None,
+                                                };
+                                                let lat = match &p[1] {
+                                                    AqlValue::Number(n) => n.as_f64()?,
+                                                    _ => return None,
+                                                };
+                                                points.push((lon, lat));
+                                            }
+                                        }
+                                    }
+                                    return Some(points);
+                                }
+                            }
+                            None
+                        }
+                        AqlValue::Array(arr) => {
+                            // Direct array of points
+                            let mut points = Vec::new();
+                            for point in arr {
+                                if let AqlValue::Array(p) = point {
+                                    if p.len() >= 2 {
+                                        let lon = match &p[0] {
+                                            AqlValue::Number(n) => n.as_f64()?,
+                                            _ => return None,
+                                        };
+                                        let lat = match &p[1] {
+                                            AqlValue::Number(n) => n.as_f64()?,
+                                            _ => return None,
+                                        };
+                                        points.push((lon, lat));
+                                    }
+                                }
+                            }
+                            if points.is_empty() {
+                                None
+                            } else {
+                                Some(points)
+                            }
+                        }
+                        _ => None,
+                    }
+                }
+
+                if let Some(polygon) = args.first() {
+                    if let Some(poly_points) = extract_polygon_points(polygon) {
+                        // Check if second arg is array [lon, lat] or separate lat, lon args
+                        if args.len() >= 3 {
+                            // IS_IN_POLYGON(polygon, lat, lon)
+                            if let (Some(AqlValue::Number(lat)), Some(AqlValue::Number(lon))) =
+                                (args.get(1), args.get(2))
+                            {
+                                let lat_f = lat.as_f64().unwrap_or(0.0);
+                                let lon_f = lon.as_f64().unwrap_or(0.0);
+                                return Ok(AqlValue::Bool(point_in_polygon(
+                                    (lon_f, lat_f),
+                                    &poly_points,
+                                )));
+                            }
+                        } else if args.len() >= 2 {
+                            // IS_IN_POLYGON(polygon, [lon, lat])
+                            if let Some(AqlValue::Array(coords)) = args.get(1) {
+                                if coords.len() >= 2 {
+                                    if let (
+                                        Some(AqlValue::Number(lon)),
+                                        Some(AqlValue::Number(lat)),
+                                    ) = (coords.first(), coords.get(1))
+                                    {
+                                        let lon_f = lon.as_f64().unwrap_or(0.0);
+                                        let lat_f = lat.as_f64().unwrap_or(0.0);
+                                        return Ok(AqlValue::Bool(point_in_polygon(
+                                            (lon_f, lat_f),
+                                            &poly_points,
+                                        )));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(AqlValue::Bool(false))
+            }
+
+            // ============ Fulltext Functions ============
+            "FULLTEXT" => {
+                // FULLTEXT(collection, attribute, query) - Full-text search
+                // Returns matching documents from collection where attribute matches query
+                // This is a stub that returns empty array - real implementation needs FTS index
+                Ok(AqlValue::Array(vec![]))
+            }
+            "TOKENS" => {
+                // TOKENS(input, analyzer) - Tokenize text using analyzer
+                if let Some(AqlValue::String(text)) = args.first() {
+                    // Simple whitespace tokenization
+                    let tokens: Vec<AqlValue> = text
+                        .split_whitespace()
+                        .map(|s| AqlValue::String(s.to_lowercase()))
+                        .collect();
+                    Ok(AqlValue::Array(tokens))
+                } else {
+                    Ok(AqlValue::Array(vec![]))
+                }
+            }
+            "PHRASE" => {
+                // PHRASE(tokens, text, analyzer) - Build phrase for search
+                if let Some(AqlValue::String(text)) = args.get(1).or(args.first()) {
+                    Ok(AqlValue::String(text.clone()))
+                } else {
+                    Ok(AqlValue::String(String::new()))
+                }
+            }
+            "ANALYZER" => {
+                // ANALYZER(expr, analyzer) - Set analyzer for expression
+                // Just return the expression as-is
+                Ok(args.first().cloned().unwrap_or(AqlValue::Null))
+            }
+            "BOOST" => {
+                // BOOST(expr, factor) - Boost relevance of expression
+                // Just return the expression as-is (boosting affects scoring)
+                Ok(args.first().cloned().unwrap_or(AqlValue::Null))
+            }
+            "BM25" | "TFIDF" => {
+                // BM25(doc) / TFIDF(doc) - Get relevance score
+                // Return 0 as default score
+                Ok(AqlValue::Number(serde_json::Number::from(0)))
+            }
+
+            // ============ Graph Functions ============
+            // These functions use the shared graph_algorithms module from protocols/common
+            // Graph data is extracted from context (vertices, edges arrays)
+            "SHORTEST_PATH" => {
+                // SHORTEST_PATH(startVertex, targetVertex, options) - Find shortest path
+                // Uses shared Dijkstra implementation from protocols/common/graph_algorithms
+                let graph = self.build_graph_from_context(context, None);
+
+                let start = args.first().and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let target = args.get(1).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+
+                if let (Some(start_id), Some(target_id)) = (start, target) {
+                    let path_result = graph_algo::dijkstra(&graph, start_id, target_id);
+
+                    let mut result = HashMap::new();
+                    result.insert(
+                        "vertices".to_string(),
+                        AqlValue::Array(
+                            path_result
+                                .path
+                                .iter()
+                                .map(|id| AqlValue::String(id.clone()))
+                                .collect(),
+                        ),
+                    );
+                    result.insert("edges".to_string(), AqlValue::Array(vec![]));
+                    result.insert(
+                        "distance".to_string(),
+                        AqlValue::Number(
+                            serde_json::Number::from_f64(path_result.cost)
+                                .unwrap_or_else(|| serde_json::Number::from(0)),
+                        ),
+                    );
+                    result.insert("found".to_string(), AqlValue::Bool(path_result.found));
+                    Ok(AqlValue::Object(result))
+                } else {
+                    let mut result = HashMap::new();
+                    result.insert("vertices".to_string(), AqlValue::Array(vec![]));
+                    result.insert("edges".to_string(), AqlValue::Array(vec![]));
+                    result.insert(
+                        "distance".to_string(),
+                        AqlValue::Number(serde_json::Number::from(0)),
+                    );
+                    result.insert("found".to_string(), AqlValue::Bool(false));
+                    Ok(AqlValue::Object(result))
+                }
+            }
+            "K_SHORTEST_PATHS" => {
+                // K_SHORTEST_PATHS(startVertex, targetVertex, k, options) - Find k shortest paths
+                let graph = self.build_graph_from_context(context, None);
+
+                let start = args.first().and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let target = args.get(1).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let k = args
+                    .get(2)
+                    .and_then(|v| {
+                        if let AqlValue::Number(n) = v {
+                            n.as_u64().map(|n| n as usize)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(1);
+
+                if let (Some(start_id), Some(target_id)) = (start, target) {
+                    let k_result = graph_algo::k_shortest_paths(&graph, start_id, target_id, k);
+
+                    let paths: Vec<AqlValue> = k_result
+                        .paths
+                        .iter()
+                        .map(|path_result| {
+                            let mut obj = HashMap::new();
+                            obj.insert(
+                                "vertices".to_string(),
+                                AqlValue::Array(
+                                    path_result
+                                        .path
+                                        .iter()
+                                        .map(|id| AqlValue::String(id.clone()))
+                                        .collect(),
+                                ),
+                            );
+                            obj.insert(
+                                "cost".to_string(),
+                                AqlValue::Number(
+                                    serde_json::Number::from_f64(path_result.cost)
+                                        .unwrap_or_else(|| serde_json::Number::from(0)),
+                                ),
+                            );
+                            AqlValue::Object(obj)
+                        })
+                        .collect();
+
+                    Ok(AqlValue::Array(paths))
+                } else {
+                    Ok(AqlValue::Array(vec![]))
+                }
+            }
+            "K_PATHS" => {
+                // K_PATHS(startVertex, targetVertex, k, options) - Alias for K_SHORTEST_PATHS
+                let graph = self.build_graph_from_context(context, None);
+
+                let start = args.first().and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let target = args.get(1).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let k = args
+                    .get(2)
+                    .and_then(|v| {
+                        if let AqlValue::Number(n) = v {
+                            n.as_u64().map(|n| n as usize)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(1);
+
+                if let (Some(start_id), Some(target_id)) = (start, target) {
+                    let k_result = graph_algo::k_shortest_paths(&graph, start_id, target_id, k);
+                    let paths: Vec<AqlValue> = k_result
+                        .paths
+                        .iter()
+                        .map(|path_result| {
+                            let mut obj = HashMap::new();
+                            obj.insert(
+                                "vertices".to_string(),
+                                AqlValue::Array(
+                                    path_result
+                                        .path
+                                        .iter()
+                                        .map(|id| AqlValue::String(id.clone()))
+                                        .collect(),
+                                ),
+                            );
+                            obj.insert(
+                                "cost".to_string(),
+                                AqlValue::Number(
+                                    serde_json::Number::from_f64(path_result.cost)
+                                        .unwrap_or_else(|| serde_json::Number::from(0)),
+                                ),
+                            );
+                            AqlValue::Object(obj)
+                        })
+                        .collect();
+                    Ok(AqlValue::Array(paths))
+                } else {
+                    Ok(AqlValue::Array(vec![]))
+                }
+            }
+            "ALL_SHORTEST_PATHS" => {
+                // ALL_SHORTEST_PATHS(startVertex, targetVertex, options) - Find all shortest paths
+                let graph = self.build_graph_from_context(context, None);
+
+                let start = args.first().and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let target = args.get(1).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+
+                if let (Some(start_id), Some(target_id)) = (start, target) {
+                    let all_result = graph_algo::all_shortest_paths(&graph, start_id, target_id);
+
+                    let paths: Vec<AqlValue> = all_result
+                        .paths
+                        .iter()
+                        .map(|path| {
+                            AqlValue::Array(
+                                path.iter().map(|id| AqlValue::String(id.clone())).collect(),
+                            )
+                        })
+                        .collect();
+
+                    let mut result = HashMap::new();
+                    result.insert("paths".to_string(), AqlValue::Array(paths));
+                    result.insert(
+                        "count".to_string(),
+                        AqlValue::Number(serde_json::Number::from(all_result.paths.len())),
+                    );
+                    Ok(AqlValue::Object(result))
+                } else {
+                    let mut result = HashMap::new();
+                    result.insert("paths".to_string(), AqlValue::Array(vec![]));
+                    result.insert(
+                        "count".to_string(),
+                        AqlValue::Number(serde_json::Number::from(0)),
+                    );
+                    Ok(AqlValue::Object(result))
+                }
+            }
+            "GRAPH_VERTICES" => {
+                // GRAPH_VERTICES(graphName, startVertex, options) - Get vertices from BFS traversal
+                let graph_name = args.first().and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let graph = self.build_graph_from_context(context, graph_name);
+
+                let start = args.get(1).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let max_depth = args.get(2).and_then(|v| {
+                    if let AqlValue::Object(opts) = v {
+                        opts.get("maxDepth").and_then(|d| {
+                            if let AqlValue::Number(n) = d {
+                                n.as_u64().map(|n| n as usize)
+                            } else {
+                                None
+                            }
+                        })
+                    } else {
+                        None
+                    }
+                });
+
+                if let Some(start_id) = start {
+                    let traversal = graph_algo::bfs_traversal(&graph, start_id, max_depth);
+                    let vertices: Vec<AqlValue> = traversal
+                        .visited
+                        .iter()
+                        .map(|id| {
+                            if let Some(node) = graph.nodes.get(id) {
+                                let mut obj = HashMap::new();
+                                obj.insert("_key".to_string(), AqlValue::String(id.clone()));
+                                for (k, v) in &node.properties {
+                                    obj.insert(k.clone(), json_to_aql_value(v));
+                                }
+                                AqlValue::Object(obj)
+                            } else {
+                                AqlValue::String(id.clone())
+                            }
+                        })
+                        .collect();
+                    Ok(AqlValue::Array(vertices))
+                } else {
+                    // Return all vertices if no start vertex specified
+                    let vertices: Vec<AqlValue> = graph
+                        .nodes
+                        .iter()
+                        .map(|(id, node)| {
+                            let mut obj = HashMap::new();
+                            obj.insert("_key".to_string(), AqlValue::String(id.clone()));
+                            for (k, v) in &node.properties {
+                                obj.insert(k.clone(), json_to_aql_value(v));
+                            }
+                            AqlValue::Object(obj)
+                        })
+                        .collect();
+                    Ok(AqlValue::Array(vertices))
+                }
+            }
+            "GRAPH_EDGES" => {
+                // GRAPH_EDGES(graphName, startVertex, options) - Get edges from traversal
+                let graph_name = args.first().and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let graph = self.build_graph_from_context(context, graph_name);
+
+                let start = args.get(1).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+
+                if let Some(start_id) = start {
+                    // Get neighbors (edges) from start vertex
+                    let neighbor_result = graph_algo::get_neighbors(
+                        &graph,
+                        start_id,
+                        graph_algo::NeighborDirection::Outgoing,
+                    );
+                    let edges: Vec<AqlValue> = neighbor_result
+                        .edges
+                        .iter()
+                        .map(|edge| {
+                            let mut obj = HashMap::new();
+                            obj.insert("_from".to_string(), AqlValue::String(edge.from.clone()));
+                            obj.insert("_to".to_string(), AqlValue::String(edge.to.clone()));
+                            obj.insert(
+                                "weight".to_string(),
+                                AqlValue::Number(
+                                    serde_json::Number::from_f64(edge.weight)
+                                        .unwrap_or_else(|| serde_json::Number::from(1)),
+                                ),
+                            );
+                            if let Some(ref et) = edge.edge_type {
+                                obj.insert("_type".to_string(), AqlValue::String(et.clone()));
+                            }
+                            AqlValue::Object(obj)
+                        })
+                        .collect();
+                    Ok(AqlValue::Array(edges))
+                } else {
+                    Ok(AqlValue::Array(vec![]))
+                }
+            }
+            "GRAPH_NEIGHBORS" => {
+                // GRAPH_NEIGHBORS(graphName, startVertex, options) - Get neighbors of vertex
+                let graph_name = args.first().and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let graph = self.build_graph_from_context(context, graph_name);
+
+                let start = args.get(1).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+
+                // Parse direction from options
+                let direction = args
+                    .get(2)
+                    .and_then(|v| {
+                        if let AqlValue::Object(opts) = v {
+                            opts.get("direction").and_then(|d| {
+                                if let AqlValue::String(s) = d {
+                                    match s.to_uppercase().as_str() {
+                                        "INBOUND" => Some(graph_algo::NeighborDirection::Incoming),
+                                        "OUTBOUND" => Some(graph_algo::NeighborDirection::Outgoing),
+                                        "ANY" | "BOTH" => Some(graph_algo::NeighborDirection::Both),
+                                        _ => None,
+                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(graph_algo::NeighborDirection::Both);
+
+                if let Some(start_id) = start {
+                    let result = graph_algo::get_neighbors(&graph, start_id, direction);
+                    let neighbors: Vec<AqlValue> = result
+                        .neighbors
+                        .iter()
+                        .map(|id| {
+                            if let Some(node) = graph.nodes.get(id) {
+                                let mut obj = HashMap::new();
+                                obj.insert("_key".to_string(), AqlValue::String(id.clone()));
+                                for (k, v) in &node.properties {
+                                    obj.insert(k.clone(), json_to_aql_value(v));
+                                }
+                                AqlValue::Object(obj)
+                            } else {
+                                AqlValue::String(id.clone())
+                            }
+                        })
+                        .collect();
+                    Ok(AqlValue::Array(neighbors))
+                } else {
+                    Ok(AqlValue::Array(vec![]))
+                }
+            }
+            "GRAPH_COMMON_NEIGHBORS" => {
+                // GRAPH_COMMON_NEIGHBORS(graphName, vertex1, vertex2, options)
+                let graph_name = args.first().and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let graph = self.build_graph_from_context(context, graph_name);
+
+                let vertex1 = args.get(1).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let vertex2 = args.get(2).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+
+                if let (Some(v1), Some(v2)) = (vertex1, vertex2) {
+                    let common = graph_algo::common_neighbors(&graph, v1, v2);
+                    let neighbors: Vec<AqlValue> = common
+                        .iter()
+                        .map(|id| {
+                            if let Some(node) = graph.nodes.get(id) {
+                                let mut obj = HashMap::new();
+                                obj.insert("_key".to_string(), AqlValue::String(id.clone()));
+                                for (k, v) in &node.properties {
+                                    obj.insert(k.clone(), json_to_aql_value(v));
+                                }
+                                AqlValue::Object(obj)
+                            } else {
+                                AqlValue::String(id.clone())
+                            }
+                        })
+                        .collect();
+                    Ok(AqlValue::Array(neighbors))
+                } else {
+                    Ok(AqlValue::Array(vec![]))
+                }
+            }
+            "GRAPH_COMMON_PROPERTIES" => {
+                // GRAPH_COMMON_PROPERTIES(graphName, vertex1, vertex2, options)
+                // Returns properties that both vertices share with the same value
+                let graph_name = args.first().and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let graph = self.build_graph_from_context(context, graph_name);
+
+                let vertex1 = args.get(1).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let vertex2 = args.get(2).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+
+                if let (Some(v1), Some(v2)) = (vertex1, vertex2) {
+                    if let (Some(node1), Some(node2)) = (graph.nodes.get(v1), graph.nodes.get(v2)) {
+                        let mut common_props = HashMap::new();
+                        for (k, v) in &node1.properties {
+                            if let Some(other_v) = node2.properties.get(k) {
+                                if v == other_v {
+                                    common_props.insert(k.clone(), json_to_aql_value(v));
+                                }
+                            }
+                        }
+                        Ok(AqlValue::Object(common_props))
+                    } else {
+                        Ok(AqlValue::Object(HashMap::new()))
+                    }
+                } else {
+                    Ok(AqlValue::Object(HashMap::new()))
+                }
+            }
+            "GRAPH_PATHS" => {
+                // GRAPH_PATHS(graphName, options) - Get all paths via DFS traversal
+                let graph_name = args.first().and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let graph = self.build_graph_from_context(context, graph_name);
+
+                // Get start vertex and max depth from options
+                let (start, max_depth) = if let Some(AqlValue::Object(opts)) = args.get(1) {
+                    let start = opts.get("startVertex").and_then(|v| {
+                        if let AqlValue::String(s) = v {
+                            Some(s.as_str())
+                        } else {
+                            None
+                        }
+                    });
+                    let max_depth = opts.get("maxDepth").and_then(|v| {
+                        if let AqlValue::Number(n) = v {
+                            n.as_u64().map(|n| n as usize)
+                        } else {
+                            None
+                        }
+                    });
+                    (start, max_depth)
+                } else {
+                    (None, None)
+                };
+
+                if let Some(start_id) = start {
+                    let traversal = graph_algo::dfs_traversal(&graph, start_id, max_depth);
+                    // Return the traversal path (visited nodes in DFS order)
+                    let path: Vec<AqlValue> = traversal
+                        .visited
+                        .iter()
+                        .map(|id| AqlValue::String(id.clone()))
+                        .collect();
+                    Ok(AqlValue::Array(vec![AqlValue::Array(path)]))
+                } else {
+                    // No start vertex - return empty
+                    Ok(AqlValue::Array(vec![]))
+                }
+            }
+            "GRAPH_SHORTEST_PATH" => {
+                // GRAPH_SHORTEST_PATH(graphName, startVertex, targetVertex, options)
+                let graph_name = args.first().and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let graph = self.build_graph_from_context(context, graph_name);
+
+                let start = args.get(1).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let target = args.get(2).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+
+                if let (Some(start_id), Some(target_id)) = (start, target) {
+                    let path_result = graph_algo::dijkstra(&graph, start_id, target_id);
+
+                    let mut result = HashMap::new();
+                    result.insert(
+                        "vertices".to_string(),
+                        AqlValue::Array(
+                            path_result
+                                .path
+                                .iter()
+                                .map(|id| AqlValue::String(id.clone()))
+                                .collect(),
+                        ),
+                    );
+                    result.insert("edges".to_string(), AqlValue::Array(vec![]));
+                    result.insert(
+                        "distance".to_string(),
+                        AqlValue::Number(
+                            serde_json::Number::from_f64(path_result.cost)
+                                .unwrap_or_else(|| serde_json::Number::from(0)),
+                        ),
+                    );
+                    result.insert("found".to_string(), AqlValue::Bool(path_result.found));
+                    Ok(AqlValue::Object(result))
+                } else {
+                    let mut result = HashMap::new();
+                    result.insert("vertices".to_string(), AqlValue::Array(vec![]));
+                    result.insert("edges".to_string(), AqlValue::Array(vec![]));
+                    result.insert(
+                        "distance".to_string(),
+                        AqlValue::Number(serde_json::Number::from(0)),
+                    );
+                    result.insert("found".to_string(), AqlValue::Bool(false));
+                    Ok(AqlValue::Object(result))
+                }
+            }
+            "GRAPH_DISTANCE_TO" => {
+                // GRAPH_DISTANCE_TO(graphName, startVertex, targetVertex, options)
+                let graph_name = args.first().and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let graph = self.build_graph_from_context(context, graph_name);
+
+                let start = args.get(1).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let target = args.get(2).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
+                });
+
+                if let (Some(start_id), Some(target_id)) = (start, target) {
+                    if let Some(distance) = graph_algo::graph_distance(&graph, start_id, target_id)
+                    {
+                        Ok(AqlValue::Number(serde_json::Number::from(distance)))
+                    } else {
+                        // No path found
+                        Ok(AqlValue::Number(serde_json::Number::from(-1)))
+                    }
+                } else {
+                    Ok(AqlValue::Number(serde_json::Number::from(-1)))
+                }
+            }
+            "PREGEL_RESULT" => {
+                // PREGEL_RESULT(id) - Get Pregel algorithm result
+                // Pregel is a distributed graph processing framework
+                // This requires a separate Pregel engine which is not yet implemented
+                Ok(AqlValue::Array(vec![]))
             }
 
             // ============ Default Case ============
