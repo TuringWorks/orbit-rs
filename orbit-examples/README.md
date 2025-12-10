@@ -141,6 +141,14 @@ orbit-examples/
 │   ├── cql/                           # Premium history
 │   └── workflows/                     # End-to-end workflows
 │
+├── adtech/                            # Advertising Technology
+│   ├── README.md
+│   ├── sql/                           # Campaigns, Inventory (Buy/Sell side)
+│   ├── redis/                         # RTB, Frequency Capping
+│   ├── mongodb/                       # DMP User Profiles
+│   ├── cypher/                        # Identity Graph
+│   └── workflows/01_rtb_auction.md
+│
 ├── telco/                             # Telecommunications
 │   ├── README.md
 │   ├── sql/                           # Network, billing schemas

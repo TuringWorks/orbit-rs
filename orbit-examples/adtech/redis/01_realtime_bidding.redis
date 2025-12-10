@@ -1,0 +1,57 @@
+# AdTech Logic: Real-Time Bidding (RTB) & Auction Engine
+# Purpose: Handle sub-millisecond decision making for incoming ad requests.
+# Includes Frequency Capping (don't show ad too often) and Budget Pacing.
+
+# ==========================================
+# 1. Frequency Capping
+# ==========================================
+# Requirement: User U-123 should see Campaign C-999 max 3 times per hour.
+
+# Key: freq:C-999:U-123:<hour_timestamp>
+# Val: count
+
+INCR freq:C-999:U-123:2024121010
+EXPIRE freq:C-999:U-123:2024121010 3600 # Expire after 1 hour
+
+# Check in logic:
+# count = GET freq:C-999:U-123:2024121010
+# IF count >= 3 THEN DO_NOT_BID
+
+# ==========================================
+# 2. Budget Pacing (Token Bucket)
+# ==========================================
+# Requirement: Campaign C-999 has $1000/day. We want to spend it evenly.
+# "Fast pacing" spends it all in the morning. "Smooth pacing" spreads it out.
+# Redis key stores remaining budget for the current minute/hour.
+
+# Debit budget for a successful bid ($1.50 CPM -> $0.0015 per impression)
+DECRBYFLOAT budget:C-999:remaining_today 0.0015
+
+# Atomic check before bidding
+# If returns negative, we overspent -> Logic should catch this or handle rollback
+# Better: generic "avail_check"
+GET budget:C-999:remaining_today
+# If val < 0.0015 THEN PAUSE_BIDDING
+
+# ==========================================
+# 3. Geo Targeting (GeoSpatial)
+# ==========================================
+# Purpose: Find campaigns targeting specific locations efficiently.
+
+# Store Campaigns by tailored Geo-Sets
+# e.g. "campaigns targeting NY"
+SADD targeting:geo:US:NY "C-999" "C-888"
+
+# Or use GEO commands for "Hyper-local" ads (e.g. coffee shop)
+# Add active local campaigns
+GEOADD ads:local_campaigns -74.0060 40.7128 "C-Local-Coffee"
+
+# User is at lat/lon. Find ads within 1km.
+GEORADIUS ads:local_campaigns -74.0060 40.7128 1 km
+# Returns ["C-Local-Coffee"] -> Eligible to bid.
+
+# ==========================================
+# 4. Bid Request Cache
+# ==========================================
+# Store the raw bid request for potential "win" notification correlation (short TTL)
+SETEX bid_req:req_abc_123 300 "{\"device\": \"iphone\", \"app\": \"flappy_bird\", ...}"

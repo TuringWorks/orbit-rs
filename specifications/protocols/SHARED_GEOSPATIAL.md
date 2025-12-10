@@ -16,8 +16,8 @@ OrbitRS provides comprehensive shared geospatial functionality through the `orbi
 | **Redis** | `protocols/resp/spatial_commands.rs` | GEO commands + extensions | ✅ Integrated |
 | **AQL** | `protocols/aql/query_engine.rs` | GEO_* functions | ✅ Integrated |
 | **Cypher** | `protocols/cypher/bolt_protocol.rs` | point(), distance() | ✅ Integrated |
-| **MongoDB** | - | $geoNear, $geoWithin | ⏳ Planned |
-| **CQL** | - | Geospatial UDFs | ⏳ Planned |
+| **MongoDB** | `protocols/mongodb/spatial.rs` | $geoNear, $geoWithin, $near | ✅ Integrated |
+| **CQL** | `protocols/cql/spatial.rs` | geo_* UDFs | ✅ Integrated |
 
 ## Architecture
 
@@ -338,6 +338,108 @@ impl RedisSpatialCommands {
 }
 ```
 
+### MongoDB Integration
+
+```rust
+// protocols/mongodb/spatial.rs
+use orbit_shared::spatial::{crs::utils::haversine_distance, Point, Polygon, SpatialOperations};
+
+pub struct MongoSpatialEngine {
+    spatial_functions: SpatialFunctions,
+}
+
+impl MongoSpatialEngine {
+    /// Execute $geoNear aggregation stage
+    pub fn geo_near(
+        &self,
+        documents: &[(String, HashMap<String, JsonValue>)],
+        config: &GeoNearConfig,
+        location_field: &str,
+    ) -> MongoSpatialResult<Vec<GeoNearResult>> {
+        // Uses haversine_distance() for spherical queries
+        // Uses Point::distance_2d() for flat queries
+    }
+
+    /// Execute $geoWithin query
+    pub fn geo_within(&self, point: &Point, shape: &GeoWithinShape) -> MongoSpatialResult<bool> {
+        match shape {
+            GeoWithinShape::Box(bbox) => Ok(bbox.contains_point(point)),
+            GeoWithinShape::Polygon(polygon) => SpatialOperations::point_in_polygon(point, polygon),
+            GeoWithinShape::CenterSphere { center, radius_radians } => {
+                let distance = haversine_distance(center, point);
+                Ok(distance <= radius_radians * EARTH_RADIUS_METERS)
+            },
+            // ... other shapes
+        }
+    }
+}
+
+// Supported shapes for $geoWithin
+pub enum GeoWithinShape {
+    Box(BoundingBox),
+    Polygon(Polygon),
+    Center { center: Point, radius: f64 },
+    CenterSphere { center: Point, radius_radians: f64 },
+    Geometry(SpatialGeometry),
+}
+```
+
+### CQL Integration
+
+```rust
+// protocols/cql/spatial.rs
+use orbit_shared::spatial::{crs::utils::haversine_distance, Point, Polygon, SpatialOperations};
+
+pub struct CqlSpatialUdfs {
+    spatial_functions: SpatialFunctions,
+}
+
+impl CqlSpatialUdfs {
+    /// geo_distance(p1, p2) - Euclidean distance
+    pub fn geo_distance(&self, p1: &CqlPoint, p2: &CqlPoint) -> f64 {
+        let point1 = self.parse_cql_point(p1);
+        let point2 = self.parse_cql_point(p2);
+        point1.distance_2d(&point2)
+    }
+
+    /// geo_distance_sphere(p1, p2) - Haversine distance in meters
+    pub fn geo_distance_sphere(&self, p1: &CqlPoint, p2: &CqlPoint) -> f64 {
+        let point1 = self.parse_cql_point(p1);
+        let point2 = self.parse_cql_point(p2);
+        haversine_distance(&point1, &point2)
+    }
+
+    /// geo_within(point, polygon_wkt) - Point-in-polygon test
+    pub fn geo_within(&self, point: &CqlPoint, polygon_wkt: &str) -> CqlSpatialResult<bool> {
+        let p = self.parse_cql_point(point);
+        let polygon = self.parse_polygon_wkt(polygon_wkt)?;
+        SpatialOperations::point_in_polygon(&p, &polygon)
+    }
+
+    /// geo_bbox(point, minX, minY, maxX, maxY) - Bounding box test
+    pub fn geo_bbox(&self, point: &CqlPoint, min_x: f64, min_y: f64, max_x: f64, max_y: f64) -> bool {
+        point.longitude >= min_x && point.longitude <= max_x &&
+        point.latitude >= min_y && point.latitude <= max_y
+    }
+}
+```
+
+**CQL Usage Examples:**
+
+```sql
+-- Find locations within 10km of San Francisco
+SELECT * FROM locations
+WHERE geo_distance_sphere(location, geo_point(-122.4194, 37.7749)) < 10000;
+
+-- Find locations within a polygon
+SELECT * FROM locations
+WHERE geo_within(location, 'POLYGON((0 0, 4 0, 4 4, 0 4, 0 0))');
+
+-- Find locations within a bounding box
+SELECT * FROM locations
+WHERE geo_bbox(location, -123.0, 37.0, -122.0, 38.0);
+```
+
 ## Performance Characteristics
 
 ### Distance Calculations
@@ -412,13 +514,19 @@ cargo test -p orbit-server postgres_wire::spatial
 
 # Redis spatial tests
 cargo test -p orbit-server resp::spatial
+
+# MongoDB spatial tests
+cargo test -p orbit-server mongodb::spatial
+
+# CQL spatial tests
+cargo test -p orbit-server cql::spatial
 ```
 
 ## Future Enhancements
 
 ### Planned Features
-- [ ] MongoDB $geoNear integration
-- [ ] CQL geospatial UDFs
+- [x] MongoDB $geoNear, $geoWithin, $near integration
+- [x] CQL geospatial UDFs (geo_distance, geo_within, geo_bbox, etc.)
 - [ ] ST_Buffer, ST_Intersection, ST_Union implementation
 - [ ] Voronoi diagram generation
 - [ ] Delaunay triangulation
