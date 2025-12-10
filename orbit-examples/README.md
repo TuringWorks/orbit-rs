@@ -713,23 +713,23 @@ Complete end-to-end industry examples using multiple protocols - **17 industries
 - **Customer 360 View** (Interactions, Preferences)
 - **[View Car Dealership Examples](car_dealership/)**
 
-├── Entertainment (Studio)
-│   ├── **4 Protocols**: SQL, Mongo, Redis, Cypher
-│   ├── **Production Management** and Budgeting
-│   ├── **Content Catalog** and Streaming Sessions
-│   ├── **[View Entertainment Examples](entertainment/)**
-│
-├── Data Center & Orbital Ops
-│   ├── **5 Protocols**: SQL, Mongo, CQL, Redis, Cypher
-│   ├── **Terrestrial & Orbital** Asset Management
-│   ├── **Live Telemetry** and Network Topology
-│   ├── **[View Data Center Examples](data_center/)**
-│
-├── Field Service Management
-│   ├── **2 Protocols**: SQL, Cypher
-│   ├── **Work Order Scheduling** and Invoicing
-│   ├── **Technician Skill Graph** (Matching skills & location)
-│   ├── **[View Field Service Examples](field_service/)**
+### Entertainment (Studio)
+- **4 Protocols**: SQL, Mongo, Redis, Cypher
+- **Production Management** and Budgeting
+- **Content Catalog** and Streaming Sessions
+- **[View Entertainment Examples](entertainment/)**
+
+### Data Center & Orbital Ops
+- **5 Protocols**: SQL, Mongo, CQL, Redis, Cypher
+- **Terrestrial & Orbital** Asset Management
+- **Live Telemetry** and Network Topology
+- **[View Data Center Examples](data_center/)**
+
+### Field Service Management
+- **2 Protocols**: SQL, Cypher
+- **Work Order Scheduling** and Invoicing
+- **Technician Skill Graph** (Matching skills & location)
+- **[View Field Service Examples](field_service/)**
 
 ---
 
