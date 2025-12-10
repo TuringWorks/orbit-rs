@@ -244,8 +244,8 @@ This document specifies the MongoDB wire protocol feature set and tracks OrbitRS
 | OP_INSERT (legacy) | 🔶 | Deprecated |
 | OP_UPDATE (legacy) | 🔶 | Deprecated |
 | OP_DELETE (legacy) | 🔶 | Deprecated |
-| OP_COMPRESSED | ❌ | Not implemented |
-| Checksums | ❌ | Not implemented |
+| OP_COMPRESSED | ✅ | MongoDB 3.6+ (Zlib supported) |
+| Checksums | ✅ | CRC-32C parsing (validation pending) |
 
 ### Authentication
 

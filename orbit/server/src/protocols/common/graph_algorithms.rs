@@ -594,6 +594,485 @@ pub fn graph_distance(graph: &Graph, source: &str, target: &str) -> Option<usize
     }
 }
 
+// ============================================================================
+// PageRank and Centrality Algorithms
+// ============================================================================
+
+/// PageRank result
+#[derive(Debug, Clone)]
+pub struct PageRankResult {
+    /// PageRank scores for each node
+    pub scores: HashMap<String, f64>,
+    /// Number of iterations performed
+    pub iterations: usize,
+    /// Whether the algorithm converged
+    pub converged: bool,
+}
+
+/// Calculate PageRank scores using power iteration
+pub fn pagerank(
+    graph: &Graph,
+    damping: f64,
+    max_iterations: usize,
+    tolerance: f64,
+) -> PageRankResult {
+    let nodes: Vec<&String> = graph.nodes.keys().collect();
+    let n = nodes.len();
+
+    if n == 0 {
+        return PageRankResult {
+            scores: HashMap::new(),
+            iterations: 0,
+            converged: true,
+        };
+    }
+
+    // Build index mapping
+    let node_to_idx: HashMap<&String, usize> =
+        nodes.iter().enumerate().map(|(i, n)| (*n, i)).collect();
+
+    // Build outgoing edge counts
+    let mut outgoing_count = vec![0usize; n];
+    let mut incoming_edges: Vec<Vec<usize>> = vec![Vec::new(); n];
+
+    for (from_id, neighbors) in &graph.adjacency {
+        if let Some(&from_idx) = node_to_idx.get(from_id) {
+            for (to_id, _, _) in neighbors {
+                if let Some(&to_idx) = node_to_idx.get(to_id) {
+                    outgoing_count[from_idx] += 1;
+                    incoming_edges[to_idx].push(from_idx);
+                }
+            }
+        }
+    }
+
+    // Initialize scores
+    let initial_score = 1.0 / n as f64;
+    let mut scores = vec![initial_score; n];
+    let mut new_scores = vec![0.0f64; n];
+    let teleport = (1.0 - damping) / n as f64;
+
+    let mut converged = false;
+    let mut iterations = 0;
+
+    for iter in 0..max_iterations {
+        iterations = iter + 1;
+
+        for i in 0..n {
+            let mut sum = 0.0f64;
+            for &j in &incoming_edges[i] {
+                if outgoing_count[j] > 0 {
+                    sum += scores[j] / outgoing_count[j] as f64;
+                }
+            }
+            new_scores[i] = teleport + damping * sum;
+        }
+
+        // Check convergence
+        let delta: f64 = scores
+            .iter()
+            .zip(new_scores.iter())
+            .map(|(a, b)| (a - b).abs())
+            .sum();
+
+        std::mem::swap(&mut scores, &mut new_scores);
+
+        if delta < tolerance {
+            converged = true;
+            break;
+        }
+    }
+
+    // Convert back to HashMap
+    let result_scores: HashMap<String, f64> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, id)| ((*id).clone(), scores[i]))
+        .collect();
+
+    PageRankResult {
+        scores: result_scores,
+        iterations,
+        converged,
+    }
+}
+
+/// Degree centrality result
+#[derive(Debug, Clone)]
+pub struct DegreeCentralityResult {
+    pub in_degree: HashMap<String, usize>,
+    pub out_degree: HashMap<String, usize>,
+    pub total_degree: HashMap<String, usize>,
+}
+
+/// Calculate degree centrality for all nodes
+pub fn degree_centrality(graph: &Graph) -> DegreeCentralityResult {
+    let mut in_degree: HashMap<String, usize> = HashMap::new();
+    let mut out_degree: HashMap<String, usize> = HashMap::new();
+
+    // Initialize all nodes with zero degree
+    for node_id in graph.nodes.keys() {
+        in_degree.insert(node_id.clone(), 0);
+        out_degree.insert(node_id.clone(), 0);
+    }
+
+    // Count outgoing edges
+    for (from_id, neighbors) in &graph.adjacency {
+        out_degree.insert(from_id.clone(), neighbors.len());
+    }
+
+    // Count incoming edges
+    for (to_id, neighbors) in &graph.reverse_adjacency {
+        in_degree.insert(to_id.clone(), neighbors.len());
+    }
+
+    // Calculate total degree
+    let total_degree: HashMap<String, usize> = graph
+        .nodes
+        .keys()
+        .map(|id| {
+            let in_d = in_degree.get(id).copied().unwrap_or(0);
+            let out_d = out_degree.get(id).copied().unwrap_or(0);
+            (id.clone(), in_d + out_d)
+        })
+        .collect();
+
+    DegreeCentralityResult {
+        in_degree,
+        out_degree,
+        total_degree,
+    }
+}
+
+// ============================================================================
+// Connected Components
+// ============================================================================
+
+/// Connected components result
+#[derive(Debug, Clone)]
+pub struct ConnectedComponentsResult {
+    /// Component ID for each node
+    pub component_ids: HashMap<String, usize>,
+    /// Number of components found
+    pub num_components: usize,
+    /// Nodes in each component
+    pub components: Vec<Vec<String>>,
+}
+
+/// Find connected components (treats graph as undirected)
+pub fn connected_components(graph: &Graph) -> ConnectedComponentsResult {
+    let mut component_ids: HashMap<String, usize> = HashMap::new();
+    let mut components: Vec<Vec<String>> = Vec::new();
+    let mut component_id = 0;
+
+    for node_id in graph.nodes.keys() {
+        if component_ids.contains_key(node_id) {
+            continue;
+        }
+
+        // BFS to find all nodes in this component
+        let mut component = Vec::new();
+        let mut queue = VecDeque::new();
+        queue.push_back(node_id.clone());
+        component_ids.insert(node_id.clone(), component_id);
+
+        while let Some(current) = queue.pop_front() {
+            component.push(current.clone());
+
+            // Get all neighbors (both directions for undirected)
+            for (neighbor, _, _) in graph.get_all_neighbors(&current) {
+                if !component_ids.contains_key(&neighbor) {
+                    component_ids.insert(neighbor.clone(), component_id);
+                    queue.push_back(neighbor);
+                }
+            }
+        }
+
+        components.push(component);
+        component_id += 1;
+    }
+
+    ConnectedComponentsResult {
+        component_ids,
+        num_components: component_id,
+        components,
+    }
+}
+
+/// Find strongly connected components using Tarjan's algorithm
+pub fn strongly_connected_components(graph: &Graph) -> ConnectedComponentsResult {
+    let nodes: Vec<&String> = graph.nodes.keys().collect();
+    let n = nodes.len();
+    let node_to_idx: HashMap<&String, usize> =
+        nodes.iter().enumerate().map(|(i, n)| (*n, i)).collect();
+
+    let mut index_counter = 0usize;
+    let mut stack: Vec<usize> = Vec::new();
+    let mut on_stack = vec![false; n];
+    let mut indices: Vec<Option<usize>> = vec![None; n];
+    let mut low_links = vec![0usize; n];
+    let mut component_ids = vec![None::<usize>; n];
+    let mut components: Vec<Vec<String>> = Vec::new();
+
+    fn strongconnect(
+        v: usize,
+        graph: &Graph,
+        nodes: &[&String],
+        node_to_idx: &HashMap<&String, usize>,
+        index_counter: &mut usize,
+        stack: &mut Vec<usize>,
+        on_stack: &mut Vec<bool>,
+        indices: &mut Vec<Option<usize>>,
+        low_links: &mut Vec<usize>,
+        component_ids: &mut Vec<Option<usize>>,
+        components: &mut Vec<Vec<String>>,
+    ) {
+        indices[v] = Some(*index_counter);
+        low_links[v] = *index_counter;
+        *index_counter += 1;
+        stack.push(v);
+        on_stack[v] = true;
+
+        // Get successors
+        if let Some(neighbors) = graph.adjacency.get(nodes[v]) {
+            for (neighbor_id, _, _) in neighbors {
+                if let Some(&w) = node_to_idx.get(neighbor_id) {
+                    if indices[w].is_none() {
+                        strongconnect(
+                            w,
+                            graph,
+                            nodes,
+                            node_to_idx,
+                            index_counter,
+                            stack,
+                            on_stack,
+                            indices,
+                            low_links,
+                            component_ids,
+                            components,
+                        );
+                        low_links[v] = low_links[v].min(low_links[w]);
+                    } else if on_stack[w] {
+                        low_links[v] = low_links[v].min(indices[w].unwrap());
+                    }
+                }
+            }
+        }
+
+        // Root of SCC
+        if Some(low_links[v]) == indices[v] {
+            let component_id = components.len();
+            let mut component = Vec::new();
+
+            while let Some(w) = stack.pop() {
+                on_stack[w] = false;
+                component_ids[w] = Some(component_id);
+                component.push(nodes[w].clone());
+                if w == v {
+                    break;
+                }
+            }
+
+            components.push(component);
+        }
+    }
+
+    for i in 0..n {
+        if indices[i].is_none() {
+            strongconnect(
+                i,
+                graph,
+                &nodes,
+                &node_to_idx,
+                &mut index_counter,
+                &mut stack,
+                &mut on_stack,
+                &mut indices,
+                &mut low_links,
+                &mut component_ids,
+                &mut components,
+            );
+        }
+    }
+
+    let component_id_map: HashMap<String, usize> = nodes
+        .iter()
+        .enumerate()
+        .filter_map(|(i, id)| component_ids[i].map(|c| ((*id).clone(), c)))
+        .collect();
+
+    ConnectedComponentsResult {
+        component_ids: component_id_map,
+        num_components: components.len(),
+        components,
+    }
+}
+
+// ============================================================================
+// Similarity Algorithms
+// ============================================================================
+
+/// Calculate Jaccard similarity between two nodes based on their neighbors
+pub fn jaccard_similarity(graph: &Graph, node1: &str, node2: &str) -> f64 {
+    let neighbors1: HashSet<String> = graph
+        .get_all_neighbors(node1)
+        .into_iter()
+        .map(|(n, _, _)| n)
+        .collect();
+
+    let neighbors2: HashSet<String> = graph
+        .get_all_neighbors(node2)
+        .into_iter()
+        .map(|(n, _, _)| n)
+        .collect();
+
+    let intersection = neighbors1.intersection(&neighbors2).count();
+    let union = neighbors1.union(&neighbors2).count();
+
+    if union == 0 {
+        0.0
+    } else {
+        intersection as f64 / union as f64
+    }
+}
+
+/// Calculate Adamic-Adar score for link prediction
+pub fn adamic_adar(graph: &Graph, node1: &str, node2: &str) -> f64 {
+    let common = common_neighbors(graph, node1, node2);
+
+    common
+        .iter()
+        .map(|neighbor| {
+            let degree = graph.get_all_neighbors(neighbor).len();
+            if degree > 1 {
+                1.0 / (degree as f64).ln()
+            } else {
+                0.0
+            }
+        })
+        .sum()
+}
+
+/// Calculate preferential attachment score
+pub fn preferential_attachment(graph: &Graph, node1: &str, node2: &str) -> usize {
+    let degree1 = graph.get_all_neighbors(node1).len();
+    let degree2 = graph.get_all_neighbors(node2).len();
+    degree1 * degree2
+}
+
+// ============================================================================
+// Triangle and Clustering
+// ============================================================================
+
+/// Count triangles involving a specific node
+pub fn triangle_count_node(graph: &Graph, node_id: &str) -> usize {
+    let neighbors: Vec<String> = graph
+        .get_all_neighbors(node_id)
+        .into_iter()
+        .map(|(n, _, _)| n)
+        .collect();
+
+    let mut count = 0;
+
+    for i in 0..neighbors.len() {
+        for j in (i + 1)..neighbors.len() {
+            // Check if neighbors[i] and neighbors[j] are connected
+            let neighbors_of_i: HashSet<String> = graph
+                .get_all_neighbors(&neighbors[i])
+                .into_iter()
+                .map(|(n, _, _)| n)
+                .collect();
+
+            if neighbors_of_i.contains(&neighbors[j]) {
+                count += 1;
+            }
+        }
+    }
+
+    count
+}
+
+/// Count total triangles in the graph
+pub fn triangle_count_total(graph: &Graph) -> usize {
+    let mut total = 0;
+
+    for node_id in graph.nodes.keys() {
+        total += triangle_count_node(graph, node_id);
+    }
+
+    // Each triangle is counted 3 times (once for each vertex)
+    total / 3
+}
+
+/// Calculate local clustering coefficient for a node
+pub fn clustering_coefficient(graph: &Graph, node_id: &str) -> f64 {
+    let neighbors: Vec<String> = graph
+        .get_all_neighbors(node_id)
+        .into_iter()
+        .map(|(n, _, _)| n)
+        .collect();
+
+    let k = neighbors.len();
+    if k < 2 {
+        return 0.0;
+    }
+
+    let triangles = triangle_count_node(graph, node_id);
+    let possible_triangles = k * (k - 1) / 2;
+
+    triangles as f64 / possible_triangles as f64
+}
+
+// ============================================================================
+// Graph Statistics
+// ============================================================================
+
+/// Graph statistics result
+#[derive(Debug, Clone)]
+pub struct GraphStats {
+    pub node_count: usize,
+    pub edge_count: usize,
+    pub density: f64,
+    pub avg_degree: f64,
+    pub max_in_degree: usize,
+    pub max_out_degree: usize,
+}
+
+/// Calculate graph statistics
+pub fn graph_stats(graph: &Graph) -> GraphStats {
+    let node_count = graph.nodes.len();
+    let edge_count: usize = graph.adjacency.values().map(|v| v.len()).sum();
+
+    let density = if node_count > 1 {
+        edge_count as f64 / (node_count * (node_count - 1)) as f64
+    } else {
+        0.0
+    };
+
+    let avg_degree = if node_count > 0 {
+        (2.0 * edge_count as f64) / node_count as f64
+    } else {
+        0.0
+    };
+
+    let max_out_degree = graph.adjacency.values().map(|v| v.len()).max().unwrap_or(0);
+    let max_in_degree = graph
+        .reverse_adjacency
+        .values()
+        .map(|v| v.len())
+        .max()
+        .unwrap_or(0);
+
+    GraphStats {
+        node_count,
+        edge_count,
+        density,
+        avg_degree,
+        max_in_degree,
+        max_out_degree,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

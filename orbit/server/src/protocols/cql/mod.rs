@@ -40,12 +40,14 @@
 
 pub mod adapter;
 pub mod fts;
+pub mod graph;
 pub mod parser;
 pub mod protocol;
 pub mod types;
 
 pub use adapter::CqlAdapter;
 pub use fts::{AnalyzerMode, CqlFts, SasiIndexConfig};
+pub use graph::{CqlGraphEngine, GraphDirection, GraphQuery, GraphQueryResult};
 pub use parser::{ComparisonOperator, CqlParser, CqlStatement};
 pub use protocol::{ConsistencyLevel, CqlFrame, CqlOpcode};
 pub use types::{CqlType, CqlValue};

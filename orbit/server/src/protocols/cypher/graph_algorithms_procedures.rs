@@ -2,10 +2,12 @@
 //!
 //! This module provides Cypher stored procedures for graph algorithms,
 //! leveraging GPU acceleration when available through orbit-compute.
+//! Core algorithms delegate to the shared graph_algorithms module for consistency.
 
 // &mut Vec parameter allows in-place modification for performance in graph traversal
 #![allow(clippy::ptr_arg)]
 
+use crate::protocols::common::graph_algorithms as graph_algo;
 use crate::protocols::cypher::graph_engine::QueryResult;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use orbit_shared::graph::{Direction, GraphNode, GraphRelationship, GraphStorage};
@@ -465,100 +467,34 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
     }
 
     /// CPU-based shortest path implementation (fallback)
+    /// Uses shared graph_algorithms module for core algorithm
     async fn execute_shortest_path_cpu(
         &self,
         from_id: &str,
         to_id: &str,
         weighted: bool,
     ) -> ProtocolResult<QueryResult> {
-        // Get all nodes and relationships
-        let nodes = self.get_all_nodes().await?;
-        let relationships = self.get_all_relationships().await?;
+        // Build shared graph from storage
+        let graph = self.build_shared_graph().await?;
 
-        // Build node index
-        let node_index: HashMap<&str, usize> = nodes
-            .iter()
-            .enumerate()
-            .map(|(i, n)| (n.id.as_str(), i))
-            .collect();
-        let n = nodes.len();
-
-        let source = node_index.get(from_id).copied();
-        let target = node_index.get(to_id).copied();
-
-        if source.is_none() || target.is_none() {
+        // Validate nodes exist
+        if !graph.nodes.contains_key(from_id) || !graph.nodes.contains_key(to_id) {
             return Err(ProtocolError::CypherError(
                 "Source or target node not found".to_string(),
             ));
         }
 
-        let source = source.unwrap();
-        let target = target.unwrap();
+        // Use shared algorithm (Dijkstra for weighted, BFS for unweighted)
+        let result = if weighted {
+            graph_algo::dijkstra(&graph, from_id, to_id)
+        } else {
+            graph_algo::bfs_shortest_path(&graph, from_id, to_id)
+        };
 
-        // Build adjacency list
-        let mut adj: Vec<Vec<(usize, f32)>> = vec![Vec::new(); n];
-        for rel in &relationships {
-            if let (Some(&from_idx), Some(&to_idx)) = (
-                node_index.get(rel.start_node.to_string().as_str()),
-                node_index.get(rel.end_node.to_string().as_str()),
-            ) {
-                let weight = if weighted {
-                    rel.properties
-                        .get("weight")
-                        .and_then(|v| v.as_f64())
-                        .map(|f| f as f32)
-                        .unwrap_or(1.0)
-                } else {
-                    1.0
-                };
-                adj[from_idx].push((to_idx, weight));
-                // Add reverse edge for undirected graphs (comment out for directed)
-                adj[to_idx].push((from_idx, weight));
-            }
-        }
-
-        // Dijkstra's algorithm
-        let mut dist = vec![f32::INFINITY; n];
-        let mut prev: Vec<Option<usize>> = vec![None; n];
-        let mut visited = vec![false; n];
-
-        dist[source] = 0.0;
-
-        for _ in 0..n {
-            // Find minimum distance node
-            let mut min_dist = f32::INFINITY;
-            let mut min_idx = None;
-            for (i, &d) in dist.iter().enumerate() {
-                if !visited[i] && d < min_dist {
-                    min_dist = d;
-                    min_idx = Some(i);
-                }
-            }
-
-            let u = match min_idx {
-                Some(idx) => idx,
-                None => break,
-            };
-
-            if u == target {
-                break;
-            }
-
-            visited[u] = true;
-
-            for &(v, weight) in &adj[u] {
-                let alt = dist[u] + weight;
-                if alt < dist[v] {
-                    dist[v] = alt;
-                    prev[v] = Some(u);
-                }
-            }
-        }
-
-        // Reconstruct path
+        // Format results
         let columns = vec!["path".to_string(), "length".to_string(), "cost".to_string()];
 
-        if dist[target].is_infinite() {
+        if !result.found {
             return Ok(QueryResult {
                 nodes: Vec::new(),
                 relationships: Vec::new(),
@@ -571,18 +507,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             });
         }
 
-        let mut path = Vec::new();
-        let mut current = Some(target);
-        while let Some(idx) = current {
-            path.push(nodes[idx].id.clone());
-            current = prev[idx];
-        }
-        path.reverse();
-
         let rows = vec![vec![
-            Some(serde_json::to_string(&path).unwrap_or_default()),
-            Some((path.len() - 1).to_string()),
-            Some(format!("{:.2}", dist[target])),
+            Some(serde_json::to_string(&result.path).unwrap_or_default()),
+            Some(result.length.to_string()),
+            Some(format!("{:.2}", result.cost)),
         ]];
 
         Ok(QueryResult {
@@ -681,74 +609,39 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
     }
 
     /// CPU-based BFS implementation (fallback)
+    /// Uses shared graph_algorithms module for core algorithm
     async fn execute_bfs_cpu(
         &self,
         start_id: &str,
         max_depth: usize,
     ) -> ProtocolResult<QueryResult> {
-        // Get all nodes and relationships
-        let nodes = self.get_all_nodes().await?;
-        let relationships = self.get_all_relationships().await?;
+        // Build shared graph from storage
+        let graph = self.build_shared_graph().await?;
 
-        // Build node index and adjacency
-        let node_index: HashMap<&str, usize> = nodes
-            .iter()
-            .enumerate()
-            .map(|(i, n)| (n.id.as_str(), i))
-            .collect();
-        let n = nodes.len();
-
-        let start = node_index.get(start_id).copied();
-        if start.is_none() {
+        if !graph.nodes.contains_key(start_id) {
             return Err(ProtocolError::CypherError(format!(
                 "Start node '{}' not found",
                 start_id
             )));
         }
-        let start = start.unwrap();
 
-        // Build adjacency list
-        let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
-        for rel in &relationships {
-            if let (Some(&from_idx), Some(&to_idx)) = (
-                node_index.get(rel.start_node.to_string().as_str()),
-                node_index.get(rel.end_node.to_string().as_str()),
-            ) {
-                adj[from_idx].push(to_idx);
-                adj[to_idx].push(from_idx);
-            }
-        }
+        // Use shared BFS traversal algorithm
+        let max_depth_opt = if max_depth == usize::MAX {
+            None
+        } else {
+            Some(max_depth)
+        };
+        let result = graph_algo::bfs_traversal(&graph, start_id, max_depth_opt);
 
-        // BFS
-        let mut visited = vec![false; n];
-        let mut depth = vec![0usize; n];
-        let mut queue = VecDeque::new();
-        let mut result_nodes = Vec::new();
-
-        visited[start] = true;
-        depth[start] = 0;
-        queue.push_back(start);
-
-        while let Some(u) = queue.pop_front() {
-            if depth[u] <= max_depth {
-                result_nodes.push((nodes[u].id.clone(), depth[u]));
-            }
-
-            if depth[u] < max_depth {
-                for &v in &adj[u] {
-                    if !visited[v] {
-                        visited[v] = true;
-                        depth[v] = depth[u] + 1;
-                        queue.push_back(v);
-                    }
-                }
-            }
-        }
-
+        // Format results with depth information
         let columns = vec!["node_id".to_string(), "depth".to_string()];
-        let rows: Vec<Vec<Option<String>>> = result_nodes
-            .into_iter()
-            .map(|(id, d)| vec![Some(id.to_string()), Some(d.to_string())])
+        let rows: Vec<Vec<Option<String>>> = result
+            .visited
+            .iter()
+            .map(|id| {
+                let depth = result.depths.get(id).copied().unwrap_or(0);
+                vec![Some(id.clone()), Some(depth.to_string())]
+            })
             .collect();
 
         Ok(QueryResult {
@@ -760,6 +653,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
     }
 
     /// Execute orbit.graph.dfs procedure
+    /// Uses shared graph_algorithms module for core algorithm
     /// CALL orbit.graph.dfs(start_node_id, {maxDepth: 10})
     async fn execute_dfs(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
         if args.is_empty() {
@@ -782,67 +676,33 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             .map(|n| n as usize)
             .unwrap_or(usize::MAX);
 
-        // Get all nodes and relationships
-        let nodes = self.get_all_nodes().await?;
-        let relationships = self.get_all_relationships().await?;
+        // Build shared graph from storage
+        let graph = self.build_shared_graph().await?;
 
-        // Build node index and adjacency
-        let node_index: HashMap<&str, usize> = nodes
-            .iter()
-            .enumerate()
-            .map(|(i, n)| (n.id.as_str(), i))
-            .collect();
-        let n = nodes.len();
-
-        let start = node_index.get(start_id.as_str()).copied();
-        if start.is_none() {
+        if !graph.nodes.contains_key(&start_id) {
             return Err(ProtocolError::CypherError(format!(
                 "Start node '{}' not found",
                 start_id
             )));
         }
-        let start = start.unwrap();
 
-        // Build adjacency list
-        let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
-        for rel in &relationships {
-            if let (Some(&from_idx), Some(&to_idx)) = (
-                node_index.get(rel.start_node.to_string().as_str()),
-                node_index.get(rel.end_node.to_string().as_str()),
-            ) {
-                adj[from_idx].push(to_idx);
-                adj[to_idx].push(from_idx);
-            }
-        }
+        // Use shared DFS traversal algorithm
+        let max_depth_opt = if max_depth == usize::MAX {
+            None
+        } else {
+            Some(max_depth)
+        };
+        let result = graph_algo::dfs_traversal(&graph, &start_id, max_depth_opt);
 
-        // DFS (iterative)
-        let mut visited = vec![false; n];
-        let mut result_nodes = Vec::new();
-        let mut stack = vec![(start, 0usize)];
-
-        while let Some((u, depth)) = stack.pop() {
-            if visited[u] {
-                continue;
-            }
-            visited[u] = true;
-
-            if depth <= max_depth {
-                result_nodes.push((nodes[u].id.clone(), depth));
-            }
-
-            if depth < max_depth {
-                for &v in &adj[u] {
-                    if !visited[v] {
-                        stack.push((v, depth + 1));
-                    }
-                }
-            }
-        }
-
+        // Format results with depth information
         let columns = vec!["node_id".to_string(), "depth".to_string()];
-        let rows: Vec<Vec<Option<String>>> = result_nodes
-            .into_iter()
-            .map(|(id, d)| vec![Some(id.to_string()), Some(d.to_string())])
+        let rows: Vec<Vec<Option<String>>> = result
+            .visited
+            .iter()
+            .map(|id| {
+                let depth = result.depths.get(id).copied().unwrap_or(0);
+                vec![Some(id.clone()), Some(depth.to_string())]
+            })
             .collect();
 
         Ok(QueryResult {
@@ -2535,6 +2395,42 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         }
 
         Ok(all_rels)
+    }
+
+    /// Build a shared graph_algo::Graph from storage data
+    /// This allows reusing the shared graph algorithms module
+    async fn build_shared_graph(&self) -> ProtocolResult<graph_algo::Graph> {
+        let nodes = self.get_all_nodes().await?;
+        let relationships = self.get_all_relationships().await?;
+
+        let mut graph = graph_algo::Graph::new();
+
+        // Add all nodes
+        for node in &nodes {
+            let properties: HashMap<String, serde_json::Value> = node
+                .properties
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            graph.add_node(node.id.to_string(), properties);
+        }
+
+        // Add all edges
+        for rel in &relationships {
+            let weight = rel
+                .properties
+                .get("weight")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(1.0);
+            graph.add_edge(
+                rel.start_node.to_string(),
+                rel.end_node.to_string(),
+                weight,
+                Some(rel.rel_type.clone()),
+            );
+        }
+
+        Ok(graph)
     }
 
     fn extract_string_arg(&self, arg: &JsonValue, arg_name: &str) -> ProtocolResult<String> {
