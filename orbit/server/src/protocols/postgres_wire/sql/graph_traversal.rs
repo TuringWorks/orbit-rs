@@ -486,7 +486,7 @@ mod tests {
             direction: TraverseDirection::Outbound,
             min_steps: 1,
             max_steps: 2,
-            edge_collection: "edges".to_string(),
+            edge_collection: "KNOWS".to_string(),
             target_alias: None,
         };
 
