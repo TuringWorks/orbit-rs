@@ -247,3 +247,6 @@ tests/orbit-compatibility/data/
 /devdata/
 # Protocol reference PDFs (large files)
 specifications/protocols/docs/*.pdf
+/devdata
+/devdata/cql
+/devdata/cql/rocksdb
