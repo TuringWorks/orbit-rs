@@ -2,8 +2,8 @@
 
 **Target**: ArangoDB AQL (ArangoDB Query Language) 3.10+
 **Reference**: https://www.arangodb.com/docs/stable/aql/
-**Last Updated**: 2025-12-09
-**Current Estimated Coverage**: ~50%
+**Last Updated**: 2025-12-10
+**Current Estimated Coverage**: ~65%
 
 ---
 
@@ -328,27 +328,35 @@ ArangoDB documents have special system attributes starting with `_`.
 | TO_LIST(val) | ✅ | Alias for TO_ARRAY |
 | TO_NUMBER(val) | ✅ | Cast to number |
 | TO_STRING(val) | ✅ | Cast to string |
-| TYPENAME(val) | ❌ | Get type name |
+| TYPENAME(val) | ✅ | Get type name |
 
 ### Geo Functions
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| DISTANCE(lat1, lon1, lat2, lon2) | ❌ | Haversine distance |
-| GEO_AREA(geo) | ❌ | Area of polygon |
-| GEO_CONTAINS(geo1, geo2) | ❌ | Check containment |
-| GEO_DISTANCE(geo1, geo2) | ❌ | Distance between objects |
-| GEO_EQUALS(geo1, geo2) | ❌ | Check equality |
-| GEO_INTERSECTS(geo1, geo2) | ❌ | Check intersection |
-| GEO_POINT(lon, lat) | ❌ | Create point |
-| GEO_POLYGON(points) | ❌ | Create polygon |
-| IS_IN_POLYGON(poly, lat, lon) | ❌ | Point in polygon |
+| DISTANCE(lat1, lon1, lat2, lon2) | ✅ | Haversine distance in meters |
+| GEO_AREA(geo) | ✅ | Area of polygon (sq meters) |
+| GEO_CONTAINS(geo1, geo2) | ✅ | Check if polygon contains point |
+| GEO_DISTANCE(geo1, geo2) | ✅ | Distance between GeoJSON objects |
+| GEO_EQUALS(geo1, geo2) | ✅ | Check equality |
+| GEO_INTERSECTS(geo1, geo2) | ✅ | Check intersection |
+| GEO_LINESTRING(points) | ✅ | Create GeoJSON LineString |
+| GEO_MULTIPOINT(points) | ✅ | Create GeoJSON MultiPoint |
+| GEO_POINT(lon, lat) | ✅ | Create GeoJSON Point |
+| GEO_POLYGON(points) | ✅ | Create GeoJSON Polygon |
+| IS_IN_POLYGON(poly, lat, lon) | ✅ | Point in polygon check |
 
 ### Fulltext Functions
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| FULLTEXT(coll, attr, query) | ❌ | Fulltext search (See ArangoSearch) |
+| ANALYZER(expr, analyzer) | ✅ | Set analyzer for expression |
+| BM25(doc) | ✅ | Get BM25 relevance score |
+| BOOST(expr, factor) | ✅ | Boost relevance of expression |
+| FULLTEXT(coll, attr, query) | 🔶 | Fulltext search (stub - returns empty) |
+| PHRASE(tokens, text, analyzer) | ✅ | Build phrase for search |
+| TFIDF(doc) | ✅ | Get TFIDF relevance score |
+| TOKENS(input, analyzer) | ✅ | Tokenize text |
 
 ### Miscellaneous Functions
 
@@ -356,7 +364,7 @@ ArangoDB documents have special system attributes starting with `_`.
 |----------|--------|-------|
 | APPLY(func, args) | ✅ | Dynamically apply function |
 | ASSERT(cond, msg) | ✅ | Throw error if false |
-| CALL(func, args) | ❌ | Call user-defined function |
+| CALL(func, args) | 🔶 | Call user-defined function (stub) |
 | COLLECTIONS() | ✅ | List collections |
 | CURRENT_DATABASE() | ✅ | Get database name |
 | CURRENT_USER() | ✅ | Get current user |
@@ -367,7 +375,7 @@ ArangoDB documents have special system attributes starting with `_`.
 | NOT_NULL(args...) | ✅ | First non-null arg |
 | PASSTHRU(val) | ✅ | No-op |
 | SLEEP(seconds) | ✅ | Sleep execution |
-| V8(script) | ❌ | Execute V8 JavaScript |
+| V8(script) | 🔶 | Execute V8 JavaScript (stub) |
 | VERSION() | ✅ | Server version |
 | WARN(msg) | ✅ | Emit warning |
 
@@ -396,18 +404,24 @@ Format: `FOR v, e, p IN [min..max] OUTBOUND|INBOUND|ANY start_vertex GRAPH graph
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| SHORTEST_PATH | ❌ | Find shortest path between vertices |
-| K_SHORTEST_PATHS | ❌ | Find top K shortest paths |
-| K_PATHS | ❌ | Find all paths |
-| ALL_SHORTEST_PATHS | ❌ | Find all shortest paths |
+| SHORTEST_PATH | 🔶 | Find shortest path (stub - returns empty path) |
+| K_SHORTEST_PATHS | 🔶 | Find top K shortest paths (stub) |
+| K_PATHS | 🔶 | Find all paths (stub) |
+| ALL_SHORTEST_PATHS | 🔶 | Find all shortest paths (stub) |
 
 ### Graph Functions
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| GRAPH_VERTICES | ❌ | Get all vertices |
-| GRAPH_EDGES | ❌ | Get all edges |
-| GRAPH_NEIGHBORS | ❌ | Get neighbors |
+| GRAPH_COMMON_NEIGHBORS | 🔶 | Get common neighbors (stub) |
+| GRAPH_COMMON_PROPERTIES | 🔶 | Get common properties (stub) |
+| GRAPH_DISTANCE_TO | 🔶 | Get distance between vertices (stub) |
+| GRAPH_EDGES | 🔶 | Get all edges (stub) |
+| GRAPH_NEIGHBORS | 🔶 | Get neighbors (stub) |
+| GRAPH_PATHS | 🔶 | Get all paths (stub) |
+| GRAPH_SHORTEST_PATH | 🔶 | Named graph shortest path (stub) |
+| GRAPH_VERTICES | 🔶 | Get all vertices (stub) |
+| PREGEL_RESULT | 🔶 | Get Pregel algorithm result (stub) |
 
 ---
 

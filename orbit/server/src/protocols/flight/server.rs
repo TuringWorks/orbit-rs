@@ -251,7 +251,7 @@ impl FlightSqlServer {
                     .transaction
                     .as_ref()
                     .and_then(|tx| tx.savepoints.last())
-                    .map(|s| s.clone());
+                    .cloned();
 
                 if let Some(name) = name {
                     if action_type == 1 {

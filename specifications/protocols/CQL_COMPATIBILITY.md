@@ -2,8 +2,8 @@
 
 **Target**: Apache Cassandra 4.x/5.x CQL Protocol
 **Reference**: https://cassandra.apache.org/doc/latest/cassandra/cql/
-**Last Updated**: 2025-12-08
-**Current Estimated Coverage**: ~35%
+**Last Updated**: 2025-12-09
+**Current Estimated Coverage**: ~38%
 
 ---
 
@@ -34,7 +34,7 @@ This document specifies the Cassandra Query Language (CQL) feature set and track
 |---------|--------|-------|
 | CREATE KEYSPACE | 🔶 | Basic creation |
 | CREATE TABLE | ✅ | Full support with partition/clustering keys |
-| CREATE INDEX | ✅ | Secondary indexes |
+| CREATE INDEX | ✅ | Secondary indexes (incl. SASI/SAI) |
 | CREATE MATERIALIZED VIEW | ❌ | Not implemented |
 | CREATE TYPE | ❌ | User-defined types |
 | CREATE FUNCTION | ❌ | User-defined functions |
@@ -77,6 +77,7 @@ This document specifies the Cassandra Query Language (CQL) feature set and track
 | TIMESTAMP | ✅ | Write timestamp |
 | IF EXISTS/IF NOT EXISTS | ✅ | Conditional operations |
 | Lightweight Transactions | ❌ | Not implemented |
+| SASI Index | ✅ | Full-text search (CONTAINS, LIKE) |
 
 ---
 
@@ -281,12 +282,11 @@ This document specifies the Cassandra Query Language (CQL) feature set and track
 2. **User-Defined Types**: Not supported
 3. **User-Defined Functions**: Not supported
 4. **Lightweight Transactions**: Not implemented
-5. **Secondary Index Types**: Limited support
-6. **Compression**: Not supported
-7. **SSL/TLS**: Not supported
-8. **Event Registration**: Not implemented
-9. **Token Awareness**: Not implemented
-10. **Advanced Batch Operations**: Limited support
+5. **Compression**: Not supported
+6. **SSL/TLS**: Not supported
+7. **Event Registration**: Not implemented
+8. **Token Awareness**: Not implemented
+9. **Advanced Batch Operations**: Limited support
 
 ---
 

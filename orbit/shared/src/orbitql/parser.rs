@@ -4,13 +4,16 @@
 //! into an Abstract Syntax Tree (AST) for OrbitQL queries.
 
 use crate::orbitql::ast::{
-    AggregateFunction, BinaryOperator, CallStatement, Constraint, CreateDefinition,
-    CreateObjectType, CreateStatement, DataType, DeleteStatement, DropStatement, EdgeDirection,
-    Expression, FetchClause, FieldConstraint, FieldDefinition, FromClause, FunctionLanguage,
-    FunctionVolatility, GraphPath, GraphStep, InsertStatement, InsertValues, JoinClause, JoinType,
-    LiveStatement, OrderByClause, Parameter, ParameterMode, RelateStatement, SelectField,
-    SelectStatement, SortDirection, Statement, TransactionStatement, TraverseStatement,
-    UnaryOperator, UpdateStatement, WhenClause, WithClause,
+    AggregateFunction, AlterFieldAction, AlterIndexAction, AlterStatement, AlterTableAction,
+    BinaryOperator, CallStatement, Constraint, CreateDefinition, CreateObjectType, CreateStatement,
+    DataType, DefineStatement, DeleteStatement, DropStatement, EdgeDirection, Expression,
+    FetchClause, FieldConstraint, FieldDefinition, FromClause, FunctionLanguage, FunctionParameter,
+    FunctionVolatility, GraphPath, GraphStep, IndexField, InsertStatement, InsertValues,
+    JoinClause, JoinType, LiveStatement, MergeAction, MergeStatement, OrderByClause, Parameter,
+    ParameterMode, PermissionLevel, Permissions, RelateStatement, RemoveStatement,
+    SavepointStatement, SelectField, SelectStatement, SortDirection, Statement,
+    TransactionStatement, TraverseStatement, TruncateStatement, UnaryOperator, UpdateAssignment,
+    UpdateStatement, UpsertStatement, VectorDistance, WhenClause, WithClause,
 };
 use crate::orbitql::lexer::{LexError, Token, TokenType};
 use crate::orbitql::QueryValue;
@@ -111,6 +114,15 @@ impl Parser {
             TokenType::Live => Ok(Statement::Live(self.parse_live()?)),
             TokenType::Traverse => Ok(Statement::Traverse(self.parse_traverse()?)),
             TokenType::Call => Ok(Statement::Call(self.parse_call()?)),
+            TokenType::Define => Ok(Statement::Define(Box::new(self.parse_define()?))),
+            TokenType::Remove => Ok(Statement::Remove(self.parse_remove()?)),
+            TokenType::Upsert => Ok(Statement::Upsert(self.parse_upsert()?)),
+            TokenType::Merge => Ok(Statement::Merge(self.parse_merge()?)),
+            TokenType::Alter => Ok(Statement::Alter(self.parse_alter()?)),
+            TokenType::Truncate => Ok(Statement::Truncate(self.parse_truncate()?)),
+            TokenType::Savepoint | TokenType::Release => {
+                Ok(Statement::Savepoint(self.parse_savepoint()?))
+            }
             _ => Err(ParseError::UnexpectedToken {
                 expected: vec![
                     TokenType::With,
@@ -127,6 +139,13 @@ impl Parser {
                     TokenType::Live,
                     TokenType::Traverse,
                     TokenType::Call,
+                    TokenType::Define,
+                    TokenType::Remove,
+                    TokenType::Upsert,
+                    TokenType::Merge,
+                    TokenType::Alter,
+                    TokenType::Truncate,
+                    TokenType::Savepoint,
                 ],
                 found: token.clone(),
             }),
@@ -1891,6 +1910,1172 @@ impl Parser {
         Ok(duration)
     }
 
+    /// Parse DEFINE statement (SurrealDB-style schema definition)
+    /// Supports: DEFINE NAMESPACE, DATABASE, TABLE, FIELD, INDEX, EVENT, FUNCTION, ANALYZER, USER, SCOPE, PARAM
+    fn parse_define(&mut self) -> Result<DefineStatement, ParseError> {
+        self.expect(TokenType::Define)?;
+
+        let token = self.peek()?;
+        match token.token_type {
+            TokenType::Namespace => self.parse_define_namespace(),
+            TokenType::Database => self.parse_define_database(),
+            TokenType::Table => self.parse_define_table(),
+            TokenType::Field => self.parse_define_field(),
+            TokenType::Index => self.parse_define_index(),
+            TokenType::Event => self.parse_define_event(),
+            TokenType::Function => self.parse_define_function(),
+            TokenType::Analyzer => self.parse_define_analyzer(),
+            TokenType::User => self.parse_define_user(),
+            TokenType::Scope => self.parse_define_scope(),
+            TokenType::Param => self.parse_define_param(),
+            _ => Err(ParseError::UnexpectedToken {
+                expected: vec![
+                    TokenType::Namespace,
+                    TokenType::Database,
+                    TokenType::Table,
+                    TokenType::Field,
+                    TokenType::Index,
+                    TokenType::Event,
+                    TokenType::Function,
+                    TokenType::Analyzer,
+                    TokenType::User,
+                    TokenType::Scope,
+                    TokenType::Param,
+                ],
+                found: token.clone(),
+            }),
+        }
+    }
+
+    /// Parse DEFINE NAMESPACE name
+    fn parse_define_namespace(&mut self) -> Result<DefineStatement, ParseError> {
+        self.expect(TokenType::Namespace)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+        Ok(DefineStatement::Namespace { name })
+    }
+
+    /// Parse DEFINE DATABASE name
+    fn parse_define_database(&mut self) -> Result<DefineStatement, ParseError> {
+        self.expect(TokenType::Database)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+        Ok(DefineStatement::Database { name })
+    }
+
+    /// Parse DEFINE TABLE name [SCHEMAFULL|SCHEMALESS] [DROP] [AS SELECT ...] [PERMISSIONS ...]
+    fn parse_define_table(&mut self) -> Result<DefineStatement, ParseError> {
+        self.expect(TokenType::Table)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Parse optional SCHEMAFULL or SCHEMALESS
+        let schemafull = if self.matches(&[TokenType::Schemafull]) {
+            self.advance();
+            true
+        } else if self.matches(&[TokenType::Schemaless]) {
+            self.advance();
+            false
+        } else {
+            false
+        };
+
+        // Parse optional DROP
+        let drop = if self.matches(&[TokenType::Drop]) {
+            self.advance();
+            true
+        } else {
+            false
+        };
+
+        // Parse optional AS SELECT
+        let as_select = if self.matches(&[TokenType::As]) {
+            self.advance();
+            self.expect(TokenType::Select)?;
+            // Rewind one token to let parse_select handle it
+            self.current -= 1;
+            Some(Box::new(self.parse_select()?))
+        } else {
+            None
+        };
+
+        // Parse optional PERMISSIONS
+        let permissions = self.parse_optional_permissions()?;
+
+        Ok(DefineStatement::Table {
+            name,
+            schemafull,
+            drop,
+            as_select,
+            permissions,
+        })
+    }
+
+    /// Parse DEFINE FIELD name ON [TABLE] table [TYPE type] [DEFAULT expr] [ASSERT expr] [PERMISSIONS ...]
+    fn parse_define_field(&mut self) -> Result<DefineStatement, ParseError> {
+        self.expect(TokenType::Field)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        self.expect(TokenType::On)?;
+        // Optional TABLE keyword
+        if self.matches(&[TokenType::Table]) {
+            self.advance();
+        }
+        let table = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Parse optional TYPE
+        let data_type = if self.check_identifier_value("TYPE") {
+            self.advance();
+            Some(self.parse_data_type()?)
+        } else {
+            None
+        };
+
+        // Parse optional DEFAULT
+        let default = if self.matches(&[TokenType::Default]) {
+            self.advance();
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
+        // Parse optional ASSERT
+        let assert = if self.check_identifier_value("ASSERT") {
+            self.advance();
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
+        // Parse optional PERMISSIONS
+        let permissions = self.parse_optional_permissions()?;
+
+        Ok(DefineStatement::Field {
+            name,
+            table,
+            data_type,
+            default,
+            assert,
+            permissions,
+        })
+    }
+
+    /// Parse DEFINE INDEX name ON [TABLE] table FIELDS|COLUMNS field1, field2 [UNIQUE] [SEARCH ANALYZER name]
+    fn parse_define_index(&mut self) -> Result<DefineStatement, ParseError> {
+        self.expect(TokenType::Index)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        self.expect(TokenType::On)?;
+        // Optional TABLE keyword
+        if self.matches(&[TokenType::Table]) {
+            self.advance();
+        }
+        let table = self.expect_identifier_or_keyword()?.value.clone();
+
+        // FIELDS or COLUMNS keyword
+        if self.check_identifier_value("FIELDS") || self.check_identifier_value("COLUMNS") {
+            self.advance();
+        }
+
+        // Parse field list
+        let mut fields = Vec::new();
+        loop {
+            let field_name = self.expect_identifier_or_keyword()?.value.clone();
+            let direction = if self.check_identifier_value("ASC") {
+                self.advance();
+                Some(SortDirection::Asc)
+            } else if self.check_identifier_value("DESC") {
+                self.advance();
+                Some(SortDirection::Desc)
+            } else {
+                None
+            };
+            fields.push(IndexField {
+                name: field_name,
+                direction,
+            });
+
+            if !self.matches(&[TokenType::Comma]) {
+                break;
+            }
+            self.advance();
+        }
+
+        // Parse optional UNIQUE
+        let unique = if self.matches(&[TokenType::Unique]) {
+            self.advance();
+            true
+        } else {
+            false
+        };
+
+        // Parse optional SEARCH ANALYZER
+        let search_analyzer = if self.check_identifier_value("SEARCH") {
+            self.advance();
+            if self.matches(&[TokenType::Analyzer]) {
+                self.advance();
+                Some(self.expect_identifier_or_keyword()?.value.clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Parse optional VECTOR distance DIMENSION n
+        let (vector_distance, vector_dimension) = if self.check_identifier_value("VECTOR") {
+            self.advance();
+            let distance = self.parse_vector_distance()?;
+            let dimension = if self.check_identifier_value("DIMENSION") {
+                self.advance();
+                let dim_expr = self.parse_expression()?;
+                if let Expression::Literal(QueryValue::Integer(n)) = dim_expr {
+                    Some(n as u32)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            (Some(distance), dimension)
+        } else {
+            (None, None)
+        };
+
+        Ok(DefineStatement::Index {
+            name,
+            table,
+            fields,
+            unique,
+            search_analyzer,
+            vector_distance,
+            vector_dimension,
+        })
+    }
+
+    /// Parse vector distance type (COSINE, EUCLIDEAN, etc.)
+    fn parse_vector_distance(&mut self) -> Result<VectorDistance, ParseError> {
+        let token = self.advance();
+        match token.value.to_uppercase().as_str() {
+            "COSINE" => Ok(VectorDistance::Cosine),
+            "EUCLIDEAN" => Ok(VectorDistance::Euclidean),
+            "MANHATTAN" => Ok(VectorDistance::Manhattan),
+            "HAMMING" => Ok(VectorDistance::Hamming),
+            "JACCARD" => Ok(VectorDistance::Jaccard),
+            _ => Err(ParseError::InvalidExpression {
+                message: format!(
+                    "Unknown vector distance type: {}. Expected COSINE, EUCLIDEAN, MANHATTAN, HAMMING, or JACCARD",
+                    token.value
+                ),
+                token: token.clone(),
+            }),
+        }
+    }
+
+    /// Parse DEFINE EVENT name ON [TABLE] table WHEN expr THEN statement(s)
+    fn parse_define_event(&mut self) -> Result<DefineStatement, ParseError> {
+        self.expect(TokenType::Event)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        self.expect(TokenType::On)?;
+        // Optional TABLE keyword
+        if self.matches(&[TokenType::Table]) {
+            self.advance();
+        }
+        let table = self.expect_identifier_or_keyword()?.value.clone();
+
+        // WHEN clause
+        self.expect(TokenType::When)?;
+        let when = self.parse_expression()?;
+
+        // THEN clause
+        self.expect(TokenType::Then)?;
+
+        // Parse statement(s) - can be a single statement or { statement; statement; }
+        let then = if self.matches(&[TokenType::LeftBrace]) {
+            self.advance();
+            let mut statements = Vec::new();
+            while !self.matches(&[TokenType::RightBrace]) && !self.is_at_end() {
+                statements.push(self.parse_statement()?);
+                // Optional semicolon
+                if self.matches(&[TokenType::Semicolon]) {
+                    self.advance();
+                }
+            }
+            self.expect(TokenType::RightBrace)?;
+            statements
+        } else {
+            vec![self.parse_statement()?]
+        };
+
+        Ok(DefineStatement::Event {
+            name,
+            table,
+            when,
+            then,
+        })
+    }
+
+    /// Parse DEFINE FUNCTION name(params) { body }
+    fn parse_define_function(&mut self) -> Result<DefineStatement, ParseError> {
+        self.expect(TokenType::Function)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Parse parameter list
+        self.expect(TokenType::LeftParen)?;
+        let mut parameters = Vec::new();
+        if !self.matches(&[TokenType::RightParen]) {
+            loop {
+                let param_name = if self.matches(&[TokenType::Parameter]) {
+                    // $param style
+                    let token = self.advance();
+                    token.value.clone()
+                } else {
+                    self.expect_identifier_or_keyword()?.value.clone()
+                };
+
+                // Optional type annotation
+                let data_type = if self.matches(&[TokenType::Colon]) {
+                    self.advance();
+                    Some(self.parse_data_type()?)
+                } else {
+                    None
+                };
+
+                // Optional default value
+                let default = if self.matches(&[TokenType::Equal]) {
+                    self.advance();
+                    Some(self.parse_expression()?)
+                } else {
+                    None
+                };
+
+                parameters.push(FunctionParameter {
+                    name: param_name,
+                    data_type,
+                    default,
+                });
+
+                if !self.matches(&[TokenType::Comma]) {
+                    break;
+                }
+                self.advance();
+            }
+        }
+        self.expect(TokenType::RightParen)?;
+
+        // Parse body
+        self.expect(TokenType::LeftBrace)?;
+        let mut body = Vec::new();
+        while !self.matches(&[TokenType::RightBrace]) && !self.is_at_end() {
+            body.push(self.parse_statement()?);
+            // Optional semicolon
+            if self.matches(&[TokenType::Semicolon]) {
+                self.advance();
+            }
+        }
+        self.expect(TokenType::RightBrace)?;
+
+        Ok(DefineStatement::Function {
+            name,
+            parameters,
+            body,
+        })
+    }
+
+    /// Parse DEFINE ANALYZER name TOKENIZERS a, b FILTERS c, d
+    fn parse_define_analyzer(&mut self) -> Result<DefineStatement, ParseError> {
+        self.expect(TokenType::Analyzer)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Parse TOKENIZERS
+        let tokenizers = if self.check_identifier_value("TOKENIZERS") {
+            self.advance();
+            self.parse_identifier_list()?
+        } else {
+            Vec::new()
+        };
+
+        // Parse FILTERS
+        let filters = if self.check_identifier_value("FILTERS") {
+            self.advance();
+            self.parse_identifier_list()?
+        } else {
+            Vec::new()
+        };
+
+        Ok(DefineStatement::Analyzer {
+            name,
+            tokenizers,
+            filters,
+        })
+    }
+
+    /// Parse DEFINE USER name ON namespace|database PASSWORD "password" ROLES role1, role2
+    fn parse_define_user(&mut self) -> Result<DefineStatement, ParseError> {
+        self.expect(TokenType::User)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        self.expect(TokenType::On)?;
+        let on = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Parse optional PASSWORD
+        let password = if self.check_identifier_value("PASSWORD") {
+            self.advance();
+            let token = self.advance();
+            Some(token.value.clone())
+        } else {
+            None
+        };
+
+        // Parse optional ROLES
+        let roles = if self.check_identifier_value("ROLES") {
+            self.advance();
+            self.parse_identifier_list()?
+        } else {
+            Vec::new()
+        };
+
+        Ok(DefineStatement::User {
+            name,
+            on,
+            password,
+            roles,
+        })
+    }
+
+    /// Parse DEFINE SCOPE name [SESSION duration] [SIGNIN statement] [SIGNUP statement]
+    fn parse_define_scope(&mut self) -> Result<DefineStatement, ParseError> {
+        self.expect(TokenType::Scope)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Parse optional SESSION
+        let session = if self.check_identifier_value("SESSION") {
+            self.advance();
+            let duration_str = self.advance().value.clone();
+            Self::parse_duration_literal(&duration_str).ok()
+        } else {
+            None
+        };
+
+        // Parse optional SIGNIN
+        let signin = if self.check_identifier_value("SIGNIN") {
+            self.advance();
+            Some(Box::new(self.parse_statement()?))
+        } else {
+            None
+        };
+
+        // Parse optional SIGNUP
+        let signup = if self.check_identifier_value("SIGNUP") {
+            self.advance();
+            Some(Box::new(self.parse_statement()?))
+        } else {
+            None
+        };
+
+        Ok(DefineStatement::Scope {
+            name,
+            session,
+            signin,
+            signup,
+        })
+    }
+
+    /// Parse DEFINE PARAM $name VALUE expr
+    fn parse_define_param(&mut self) -> Result<DefineStatement, ParseError> {
+        self.expect(TokenType::Param)?;
+
+        // Parse parameter name (may or may not have $ prefix)
+        let name = if self.matches(&[TokenType::Parameter]) {
+            let token = self.advance();
+            token.value.clone()
+        } else {
+            self.expect_identifier_or_keyword()?.value.clone()
+        };
+
+        // VALUE keyword
+        if self.check_identifier_value("VALUE") {
+            self.advance();
+        }
+
+        let value = self.parse_expression()?;
+
+        Ok(DefineStatement::Param { name, value })
+    }
+
+    /// Parse optional PERMISSIONS clause
+    fn parse_optional_permissions(&mut self) -> Result<Option<Permissions>, ParseError> {
+        if !self.check_identifier_value("PERMISSIONS") {
+            return Ok(None);
+        }
+        self.advance();
+
+        // Handle FULL or NONE shortcuts
+        if self.check_identifier_value("FULL") {
+            self.advance();
+            return Ok(Some(Permissions {
+                select: Some(PermissionLevel::Full),
+                create: Some(PermissionLevel::Full),
+                update: Some(PermissionLevel::Full),
+                delete: Some(PermissionLevel::Full),
+            }));
+        }
+        if self.check_identifier_value("NONE") {
+            self.advance();
+            return Ok(Some(Permissions {
+                select: Some(PermissionLevel::None),
+                create: Some(PermissionLevel::None),
+                update: Some(PermissionLevel::None),
+                delete: Some(PermissionLevel::None),
+            }));
+        }
+
+        // Parse individual permissions: FOR select, create, update, delete WHERE expr
+        let mut permissions = Permissions {
+            select: None,
+            create: None,
+            update: None,
+            delete: None,
+        };
+
+        while self.check_identifier_value("FOR") {
+            self.advance();
+            let perm_type = self.expect_identifier_or_keyword()?.value.to_uppercase();
+
+            // Parse WHERE clause for this permission
+            let level = if self.matches(&[TokenType::Where]) {
+                self.advance();
+                let _expr = self.parse_expression()?;
+                // For now, treat any WHERE as a conditional (expression-based) permission
+                Some(PermissionLevel::Full)
+            } else if self.check_identifier_value("FULL") {
+                self.advance();
+                Some(PermissionLevel::Full)
+            } else if self.check_identifier_value("NONE") {
+                self.advance();
+                Some(PermissionLevel::None)
+            } else {
+                Some(PermissionLevel::Full)
+            };
+
+            match perm_type.as_str() {
+                "SELECT" => permissions.select = level,
+                "CREATE" => permissions.create = level,
+                "UPDATE" => permissions.update = level,
+                "DELETE" => permissions.delete = level,
+                _ => {}
+            }
+        }
+
+        Ok(Some(permissions))
+    }
+
+    /// Parse a comma-separated list of identifiers
+    fn parse_identifier_list(&mut self) -> Result<Vec<String>, ParseError> {
+        let mut identifiers = Vec::new();
+        loop {
+            identifiers.push(self.expect_identifier_or_keyword()?.value.clone());
+            if !self.matches(&[TokenType::Comma]) {
+                break;
+            }
+            self.advance();
+        }
+        Ok(identifiers)
+    }
+
+    /// Parse REMOVE statement (SurrealDB-style schema removal)
+    fn parse_remove(&mut self) -> Result<RemoveStatement, ParseError> {
+        self.expect(TokenType::Remove)?;
+
+        let token = self.peek()?;
+        match token.token_type {
+            TokenType::Namespace => {
+                self.advance();
+                let name = self.expect_identifier_or_keyword()?.value.clone();
+                Ok(RemoveStatement::Namespace { name })
+            }
+            TokenType::Database => {
+                self.advance();
+                let name = self.expect_identifier_or_keyword()?.value.clone();
+                Ok(RemoveStatement::Database { name })
+            }
+            TokenType::Table => {
+                self.advance();
+                let name = self.expect_identifier_or_keyword()?.value.clone();
+                Ok(RemoveStatement::Table { name })
+            }
+            TokenType::Field => {
+                self.advance();
+                let name = self.expect_identifier_or_keyword()?.value.clone();
+                self.expect(TokenType::On)?;
+                if self.matches(&[TokenType::Table]) {
+                    self.advance();
+                }
+                let table = self.expect_identifier_or_keyword()?.value.clone();
+                Ok(RemoveStatement::Field { name, table })
+            }
+            TokenType::Index => {
+                self.advance();
+                let name = self.expect_identifier_or_keyword()?.value.clone();
+                self.expect(TokenType::On)?;
+                if self.matches(&[TokenType::Table]) {
+                    self.advance();
+                }
+                let table = self.expect_identifier_or_keyword()?.value.clone();
+                Ok(RemoveStatement::Index { name, table })
+            }
+            TokenType::Event => {
+                self.advance();
+                let name = self.expect_identifier_or_keyword()?.value.clone();
+                self.expect(TokenType::On)?;
+                if self.matches(&[TokenType::Table]) {
+                    self.advance();
+                }
+                let table = self.expect_identifier_or_keyword()?.value.clone();
+                Ok(RemoveStatement::Event { name, table })
+            }
+            TokenType::Function => {
+                self.advance();
+                let name = self.expect_identifier_or_keyword()?.value.clone();
+                Ok(RemoveStatement::Function { name })
+            }
+            TokenType::Analyzer => {
+                self.advance();
+                let name = self.expect_identifier_or_keyword()?.value.clone();
+                Ok(RemoveStatement::Analyzer { name })
+            }
+            TokenType::User => {
+                self.advance();
+                let name = self.expect_identifier_or_keyword()?.value.clone();
+                self.expect(TokenType::On)?;
+                let on = self.expect_identifier_or_keyword()?.value.clone();
+                Ok(RemoveStatement::User { name, on })
+            }
+            TokenType::Scope => {
+                self.advance();
+                let name = self.expect_identifier_or_keyword()?.value.clone();
+                Ok(RemoveStatement::Scope { name })
+            }
+            TokenType::Param => {
+                self.advance();
+                let name = if self.matches(&[TokenType::Parameter]) {
+                    self.advance().value.clone()
+                } else {
+                    self.expect_identifier_or_keyword()?.value.clone()
+                };
+                Ok(RemoveStatement::Param { name })
+            }
+            _ => Err(ParseError::UnexpectedToken {
+                expected: vec![
+                    TokenType::Namespace,
+                    TokenType::Database,
+                    TokenType::Table,
+                    TokenType::Field,
+                    TokenType::Index,
+                    TokenType::Event,
+                    TokenType::Function,
+                    TokenType::Analyzer,
+                    TokenType::User,
+                    TokenType::Scope,
+                    TokenType::Param,
+                ],
+                found: token.clone(),
+            }),
+        }
+    }
+
+    /// Parse UPSERT statement
+    /// UPSERT INTO table (columns) VALUES (...) [WHERE ...]
+    fn parse_upsert(&mut self) -> Result<UpsertStatement, ParseError> {
+        self.expect(TokenType::Upsert)?;
+
+        // Optional INTO keyword
+        if self.matches(&[TokenType::Into]) {
+            self.advance();
+        }
+
+        let table = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Parse the insert data
+        let data = self.parse_insert_values()?;
+
+        // Optional WHERE clause
+        let where_clause = if self.matches(&[TokenType::Where]) {
+            self.advance();
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
+        Ok(UpsertStatement {
+            table,
+            data,
+            where_clause,
+        })
+    }
+
+    /// Parse insert values (columns and values)
+    fn parse_insert_values(&mut self) -> Result<InsertValues, ParseError> {
+        // Parse column list if present
+        let columns = if self.matches(&[TokenType::LeftParen]) {
+            self.advance();
+            let mut cols = Vec::new();
+            loop {
+                cols.push(self.expect_identifier_or_keyword()?.value.clone());
+                if !self.matches(&[TokenType::Comma]) {
+                    break;
+                }
+                self.advance();
+            }
+            self.expect(TokenType::RightParen)?;
+            Some(cols)
+        } else {
+            None
+        };
+
+        // VALUES keyword
+        self.expect(TokenType::Values)?;
+
+        // Parse value rows
+        let mut rows = Vec::new();
+        loop {
+            self.expect(TokenType::LeftParen)?;
+            let mut row = Vec::new();
+            loop {
+                row.push(self.parse_expression()?);
+                if !self.matches(&[TokenType::Comma]) {
+                    break;
+                }
+                self.advance();
+            }
+            self.expect(TokenType::RightParen)?;
+            rows.push(row);
+
+            if !self.matches(&[TokenType::Comma]) {
+                break;
+            }
+            self.advance();
+        }
+
+        // Note: InsertValues::Values doesn't track column names separately
+        // The columns are only used for semantic validation later
+        let _ = columns; // Suppress unused warning
+        Ok(InsertValues::Values(rows))
+    }
+
+    /// Parse MERGE statement
+    /// MERGE INTO target USING source ON condition WHEN MATCHED THEN ... WHEN NOT MATCHED THEN ...
+    fn parse_merge(&mut self) -> Result<MergeStatement, ParseError> {
+        self.expect(TokenType::Merge)?;
+        self.expect(TokenType::Into)?;
+
+        let into = self.expect_identifier_or_keyword()?.value.clone();
+
+        self.expect(TokenType::Using)?;
+        let using = self.parse_simple_table_ref()?;
+
+        self.expect(TokenType::On)?;
+        let on = self.parse_expression()?;
+
+        // Parse WHEN MATCHED clause
+        let when_matched = if self.matches(&[TokenType::When]) {
+            self.advance();
+            if self.matches(&[TokenType::Matched]) {
+                self.advance();
+                self.expect(TokenType::Then)?;
+                Some(self.parse_merge_action()?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Parse WHEN NOT MATCHED clause
+        let when_not_matched = if self.matches(&[TokenType::When]) {
+            self.advance();
+            if self.matches(&[TokenType::Not]) {
+                self.advance();
+                self.expect(TokenType::Matched)?;
+                self.expect(TokenType::Then)?;
+                Some(self.parse_merge_action()?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Ok(MergeStatement {
+            into,
+            using,
+            on,
+            when_matched,
+            when_not_matched,
+        })
+    }
+
+    /// Parse a simple FROM clause (table with optional alias) for MERGE
+    fn parse_simple_table_ref(&mut self) -> Result<FromClause, ParseError> {
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Optional alias
+        let alias = if self.matches(&[TokenType::As]) {
+            self.advance();
+            Some(self.expect_identifier_or_keyword()?.value.clone())
+        } else if self.matches(&[TokenType::Identifier]) && !self.is_keyword_ahead() {
+            Some(self.expect_identifier_or_keyword()?.value.clone())
+        } else {
+            None
+        };
+
+        Ok(FromClause::Table { name, alias })
+    }
+
+    /// Check if current position is at a keyword
+    fn is_keyword_ahead(&self) -> bool {
+        if let Ok(token) = self.peek() {
+            matches!(
+                token.token_type,
+                TokenType::On
+                    | TokenType::When
+                    | TokenType::Where
+                    | TokenType::Join
+                    | TokenType::Left
+                    | TokenType::Right
+                    | TokenType::Inner
+                    | TokenType::Full
+                    | TokenType::Cross
+            )
+        } else {
+            false
+        }
+    }
+
+    /// Parse MERGE action (UPDATE SET, DELETE, or INSERT)
+    fn parse_merge_action(&mut self) -> Result<MergeAction, ParseError> {
+        if self.matches(&[TokenType::Update]) {
+            self.advance();
+            self.expect(TokenType::Set)?;
+            let assignments = self.parse_update_assignments()?;
+            Ok(MergeAction::Update(assignments))
+        } else if self.matches(&[TokenType::Delete]) {
+            self.advance();
+            Ok(MergeAction::Delete)
+        } else if self.matches(&[TokenType::Insert]) {
+            self.advance();
+            // Parse INSERT (col1, col2) VALUES (val1, val2)
+            let mut values = HashMap::new();
+            if self.matches(&[TokenType::LeftParen]) {
+                self.advance();
+                let mut columns = Vec::new();
+                loop {
+                    columns.push(self.expect_identifier_or_keyword()?.value.clone());
+                    if !self.matches(&[TokenType::Comma]) {
+                        break;
+                    }
+                    self.advance();
+                }
+                self.expect(TokenType::RightParen)?;
+                self.expect(TokenType::Values)?;
+                self.expect(TokenType::LeftParen)?;
+                let mut idx = 0;
+                loop {
+                    let expr = self.parse_expression()?;
+                    if idx < columns.len() {
+                        values.insert(columns[idx].clone(), expr);
+                    }
+                    idx += 1;
+                    if !self.matches(&[TokenType::Comma]) {
+                        break;
+                    }
+                    self.advance();
+                }
+                self.expect(TokenType::RightParen)?;
+            }
+            Ok(MergeAction::Insert(values))
+        } else {
+            Err(ParseError::UnexpectedToken {
+                expected: vec![TokenType::Update, TokenType::Delete, TokenType::Insert],
+                found: self.peek()?.clone(),
+            })
+        }
+    }
+
+    /// Parse update assignments (col = expr, col2 = expr2, ...)
+    /// Supports both simple names (col) and qualified names (table.col)
+    fn parse_update_assignments(&mut self) -> Result<Vec<UpdateAssignment>, ParseError> {
+        let mut assignments = Vec::new();
+        loop {
+            // Parse field name - may be qualified (table.column)
+            let mut field = self.expect_identifier_or_keyword()?.value.clone();
+            while self.matches(&[TokenType::Dot]) {
+                self.advance();
+                let next_part = self.expect_identifier_or_keyword()?.value.clone();
+                field = format!("{}.{}", field, next_part);
+            }
+
+            self.expect(TokenType::Equal)?;
+            let value = self.parse_expression()?;
+            assignments.push(UpdateAssignment {
+                field,
+                value,
+                operator: None,
+            });
+
+            if !self.matches(&[TokenType::Comma]) {
+                break;
+            }
+            self.advance();
+        }
+        Ok(assignments)
+    }
+
+    /// Parse ALTER statement
+    /// ALTER TABLE name ADD/DROP/RENAME/ALTER ...
+    /// ALTER FIELD name ON table SET/DROP ...
+    /// ALTER INDEX name ON table RENAME/REBUILD
+    fn parse_alter(&mut self) -> Result<AlterStatement, ParseError> {
+        self.expect(TokenType::Alter)?;
+
+        let token = self.peek()?;
+        match token.token_type {
+            TokenType::Table => self.parse_alter_table(),
+            TokenType::Field => self.parse_alter_field(),
+            TokenType::Index => self.parse_alter_index(),
+            _ => Err(ParseError::UnexpectedToken {
+                expected: vec![TokenType::Table, TokenType::Field, TokenType::Index],
+                found: token.clone(),
+            }),
+        }
+    }
+
+    /// Parse ALTER TABLE statement
+    fn parse_alter_table(&mut self) -> Result<AlterStatement, ParseError> {
+        self.expect(TokenType::Table)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        let action = if self.matches(&[TokenType::Add]) {
+            self.advance();
+            // ADD COLUMN or ADD CONSTRAINT
+            if self.matches(&[TokenType::Column]) {
+                self.advance();
+            }
+            if self.matches(&[TokenType::Constraint]) {
+                self.advance();
+                let constraint = self.parse_table_constraint()?;
+                AlterTableAction::AddConstraint(constraint)
+            } else {
+                // ADD COLUMN
+                let field = self.parse_field_definition()?;
+                AlterTableAction::AddColumn(field)
+            }
+        } else if self.matches(&[TokenType::Drop]) {
+            self.advance();
+            if self.matches(&[TokenType::Column]) {
+                self.advance();
+                let col_name = self.expect_identifier_or_keyword()?.value.clone();
+                AlterTableAction::DropColumn(col_name)
+            } else if self.matches(&[TokenType::Constraint]) {
+                self.advance();
+                let constraint_name = self.expect_identifier_or_keyword()?.value.clone();
+                AlterTableAction::DropConstraint(constraint_name)
+            } else {
+                let col_name = self.expect_identifier_or_keyword()?.value.clone();
+                AlterTableAction::DropColumn(col_name)
+            }
+        } else if self.matches(&[TokenType::Rename]) {
+            self.advance();
+            if self.matches(&[TokenType::Column]) {
+                self.advance();
+                let old = self.expect_identifier_or_keyword()?.value.clone();
+                self.expect(TokenType::To)?;
+                let new = self.expect_identifier_or_keyword()?.value.clone();
+                AlterTableAction::RenameColumn { old, new }
+            } else if self.matches(&[TokenType::To]) {
+                self.advance();
+                let new_name = self.expect_identifier_or_keyword()?.value.clone();
+                AlterTableAction::Rename(new_name)
+            } else {
+                let old = self.expect_identifier_or_keyword()?.value.clone();
+                self.expect(TokenType::To)?;
+                let new = self.expect_identifier_or_keyword()?.value.clone();
+                AlterTableAction::RenameColumn { old, new }
+            }
+        } else if self.matches(&[TokenType::Alter]) {
+            self.advance();
+            if self.matches(&[TokenType::Column]) {
+                self.advance();
+            }
+            let field = self.parse_field_definition()?;
+            AlterTableAction::AlterColumn(field)
+        } else {
+            return Err(ParseError::UnexpectedToken {
+                expected: vec![
+                    TokenType::Add,
+                    TokenType::Drop,
+                    TokenType::Rename,
+                    TokenType::Alter,
+                ],
+                found: self.peek()?.clone(),
+            });
+        };
+
+        Ok(AlterStatement::Table { name, action })
+    }
+
+    /// Parse ALTER FIELD statement
+    fn parse_alter_field(&mut self) -> Result<AlterStatement, ParseError> {
+        self.expect(TokenType::Field)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        self.expect(TokenType::On)?;
+        if self.matches(&[TokenType::Table]) {
+            self.advance();
+        }
+        let table = self.expect_identifier_or_keyword()?.value.clone();
+
+        let action = if self.matches(&[TokenType::Set]) {
+            self.advance();
+            if self.check_identifier_value("TYPE") {
+                self.advance();
+                let data_type = self.parse_data_type()?;
+                AlterFieldAction::SetType(data_type)
+            } else if self.matches(&[TokenType::Default]) {
+                self.advance();
+                let expr = self.parse_expression()?;
+                AlterFieldAction::SetDefault(expr)
+            } else if self.check_identifier_value("NOT") {
+                self.advance();
+                self.expect(TokenType::Null)?;
+                AlterFieldAction::SetNotNull
+            } else {
+                return Err(ParseError::InvalidExpression {
+                    message: "Expected TYPE, DEFAULT, or NOT NULL after SET".to_string(),
+                    token: self.peek()?.clone(),
+                });
+            }
+        } else if self.matches(&[TokenType::Drop]) {
+            self.advance();
+            if self.matches(&[TokenType::Default]) {
+                self.advance();
+                AlterFieldAction::DropDefault
+            } else if self.check_identifier_value("NOT") {
+                self.advance();
+                self.expect(TokenType::Null)?;
+                AlterFieldAction::DropNotNull
+            } else {
+                AlterFieldAction::DropDefault
+            }
+        } else {
+            return Err(ParseError::UnexpectedToken {
+                expected: vec![TokenType::Set, TokenType::Drop],
+                found: self.peek()?.clone(),
+            });
+        };
+
+        Ok(AlterStatement::Field {
+            name,
+            table,
+            action,
+        })
+    }
+
+    /// Parse ALTER INDEX statement
+    fn parse_alter_index(&mut self) -> Result<AlterStatement, ParseError> {
+        self.expect(TokenType::Index)?;
+        let name = self.expect_identifier_or_keyword()?.value.clone();
+
+        self.expect(TokenType::On)?;
+        if self.matches(&[TokenType::Table]) {
+            self.advance();
+        }
+        let table = self.expect_identifier_or_keyword()?.value.clone();
+
+        let action = if self.matches(&[TokenType::Rename]) {
+            self.advance();
+            self.expect(TokenType::To)?;
+            let new_name = self.expect_identifier_or_keyword()?.value.clone();
+            AlterIndexAction::Rename(new_name)
+        } else if self.matches(&[TokenType::Rebuild]) {
+            self.advance();
+            AlterIndexAction::Rebuild
+        } else {
+            return Err(ParseError::UnexpectedToken {
+                expected: vec![TokenType::Rename, TokenType::Rebuild],
+                found: self.peek()?.clone(),
+            });
+        };
+
+        Ok(AlterStatement::Index {
+            name,
+            table,
+            action,
+        })
+    }
+
+    /// Parse TRUNCATE statement
+    /// TRUNCATE [TABLE] name [CASCADE]
+    fn parse_truncate(&mut self) -> Result<TruncateStatement, ParseError> {
+        self.expect(TokenType::Truncate)?;
+
+        // Optional TABLE keyword
+        if self.matches(&[TokenType::Table]) {
+            self.advance();
+        }
+
+        let table = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Optional CASCADE
+        let cascade = if self.matches(&[TokenType::Cascade]) {
+            self.advance();
+            true
+        } else {
+            false
+        };
+
+        Ok(TruncateStatement { table, cascade })
+    }
+
+    /// Parse SAVEPOINT statement
+    /// SAVEPOINT name | RELEASE SAVEPOINT name | ROLLBACK TO SAVEPOINT name
+    fn parse_savepoint(&mut self) -> Result<SavepointStatement, ParseError> {
+        let token = self.peek()?;
+
+        match token.token_type {
+            TokenType::Savepoint => {
+                self.advance();
+                let name = self.expect_identifier_or_keyword()?.value.clone();
+                Ok(SavepointStatement::Create { name })
+            }
+            TokenType::Release => {
+                self.advance();
+                // Optional SAVEPOINT keyword
+                if self.matches(&[TokenType::Savepoint]) {
+                    self.advance();
+                }
+                let name = self.expect_identifier_or_keyword()?.value.clone();
+                Ok(SavepointStatement::Release { name })
+            }
+            TokenType::Rollback => {
+                self.advance();
+                self.expect(TokenType::To)?;
+                // Optional SAVEPOINT keyword
+                if self.matches(&[TokenType::Savepoint]) {
+                    self.advance();
+                }
+                let name = self.expect_identifier_or_keyword()?.value.clone();
+                Ok(SavepointStatement::Rollback { name })
+            }
+            _ => Err(ParseError::UnexpectedToken {
+                expected: vec![
+                    TokenType::Savepoint,
+                    TokenType::Release,
+                    TokenType::Rollback,
+                ],
+                found: token.clone(),
+            }),
+        }
+    }
+
     // Helper methods
 
     /// Check if current token matches any of the given types
@@ -2890,6 +4075,689 @@ mod tests {
             }
         } else {
             panic!("Expected CREATE statement");
+        }
+    }
+
+    // =====================================================================
+    // DEFINE Statement Tests (SurrealDB-style schema definition)
+    // =====================================================================
+
+    #[test]
+    fn test_parse_define_namespace() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("DEFINE NAMESPACE myapp").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse DEFINE NAMESPACE: {:?}",
+            result.err()
+        );
+
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Namespace { name } = *def {
+                assert_eq!(name, "myapp");
+            } else {
+                panic!("Expected DEFINE NAMESPACE statement");
+            }
+        } else {
+            panic!("Expected DEFINE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_define_database() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("DEFINE DATABASE production").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse DEFINE DATABASE: {:?}",
+            result.err()
+        );
+
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Database { name } = *def {
+                assert_eq!(name, "production");
+            } else {
+                panic!("Expected DEFINE DATABASE statement");
+            }
+        } else {
+            panic!("Expected DEFINE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_define_table_simple() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("DEFINE TABLE users").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse DEFINE TABLE: {:?}",
+            result.err()
+        );
+
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Table {
+                name,
+                schemafull,
+                drop,
+                ..
+            } = *def
+            {
+                assert_eq!(name, "users");
+                assert!(!schemafull);
+                assert!(!drop);
+            } else {
+                panic!("Expected DEFINE TABLE statement");
+            }
+        } else {
+            panic!("Expected DEFINE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_define_table_schemafull() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("DEFINE TABLE users SCHEMAFULL").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse DEFINE TABLE SCHEMAFULL: {:?}",
+            result.err()
+        );
+
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Table {
+                name, schemafull, ..
+            } = *def
+            {
+                assert_eq!(name, "users");
+                assert!(schemafull);
+            } else {
+                panic!("Expected DEFINE TABLE statement");
+            }
+        } else {
+            panic!("Expected DEFINE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_define_field() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("DEFINE FIELD email ON TABLE users").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse DEFINE FIELD: {:?}",
+            result.err()
+        );
+
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Field { name, table, .. } = *def {
+                assert_eq!(name, "email");
+                assert_eq!(table, "users");
+            } else {
+                panic!("Expected DEFINE FIELD statement");
+            }
+        } else {
+            panic!("Expected DEFINE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_define_index() {
+        let lexer = Lexer::new();
+        let tokens = lexer
+            .tokenize("DEFINE INDEX idx_email ON TABLE users FIELDS email UNIQUE")
+            .unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse DEFINE INDEX: {:?}",
+            result.err()
+        );
+
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Index {
+                name,
+                table,
+                fields,
+                unique,
+                ..
+            } = *def
+            {
+                assert_eq!(name, "idx_email");
+                assert_eq!(table, "users");
+                assert_eq!(fields.len(), 1);
+                assert_eq!(fields[0].name, "email");
+                assert!(unique);
+            } else {
+                panic!("Expected DEFINE INDEX statement");
+            }
+        } else {
+            panic!("Expected DEFINE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_define_analyzer() {
+        let lexer = Lexer::new();
+        let tokens = lexer
+            .tokenize(
+                "DEFINE ANALYZER my_analyzer TOKENIZERS class, camel FILTERS lowercase, ascii",
+            )
+            .unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse DEFINE ANALYZER: {:?}",
+            result.err()
+        );
+
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Analyzer {
+                name,
+                tokenizers,
+                filters,
+            } = *def
+            {
+                assert_eq!(name, "my_analyzer");
+                assert_eq!(tokenizers, vec!["class", "camel"]);
+                assert_eq!(filters, vec!["lowercase", "ascii"]);
+            } else {
+                panic!("Expected DEFINE ANALYZER statement");
+            }
+        } else {
+            panic!("Expected DEFINE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_define_user() {
+        let lexer = Lexer::new();
+        let tokens = lexer
+            .tokenize("DEFINE USER admin ON DATABASE PASSWORD 'secret' ROLES owner, admin")
+            .unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse DEFINE USER: {:?}",
+            result.err()
+        );
+
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::User {
+                name,
+                on,
+                password,
+                roles,
+            } = *def
+            {
+                assert_eq!(name, "admin");
+                assert_eq!(on, "DATABASE");
+                assert!(password.is_some());
+                assert_eq!(roles, vec!["owner", "admin"]);
+            } else {
+                panic!("Expected DEFINE USER statement");
+            }
+        } else {
+            panic!("Expected DEFINE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_define_scope() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("DEFINE SCOPE user_auth").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse DEFINE SCOPE: {:?}",
+            result.err()
+        );
+
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Scope { name, .. } = *def {
+                assert_eq!(name, "user_auth");
+            } else {
+                panic!("Expected DEFINE SCOPE statement");
+            }
+        } else {
+            panic!("Expected DEFINE statement");
+        }
+    }
+
+    // =====================================================================
+    // REMOVE Statement Tests (SurrealDB-style schema removal)
+    // =====================================================================
+
+    #[test]
+    fn test_parse_remove_namespace() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("REMOVE NAMESPACE myapp").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse REMOVE NAMESPACE: {:?}",
+            result.err()
+        );
+
+        if let Statement::Remove(RemoveStatement::Namespace { name }) = result.unwrap() {
+            assert_eq!(name, "myapp");
+        } else {
+            panic!("Expected REMOVE NAMESPACE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_remove_database() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("REMOVE DATABASE production").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse REMOVE DATABASE: {:?}",
+            result.err()
+        );
+
+        if let Statement::Remove(RemoveStatement::Database { name }) = result.unwrap() {
+            assert_eq!(name, "production");
+        } else {
+            panic!("Expected REMOVE DATABASE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_remove_table() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("REMOVE TABLE users").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse REMOVE TABLE: {:?}",
+            result.err()
+        );
+
+        if let Statement::Remove(RemoveStatement::Table { name }) = result.unwrap() {
+            assert_eq!(name, "users");
+        } else {
+            panic!("Expected REMOVE TABLE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_remove_field() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("REMOVE FIELD email ON TABLE users").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse REMOVE FIELD: {:?}",
+            result.err()
+        );
+
+        if let Statement::Remove(RemoveStatement::Field { name, table }) = result.unwrap() {
+            assert_eq!(name, "email");
+            assert_eq!(table, "users");
+        } else {
+            panic!("Expected REMOVE FIELD statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_remove_index() {
+        let lexer = Lexer::new();
+        let tokens = lexer
+            .tokenize("REMOVE INDEX idx_email ON TABLE users")
+            .unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse REMOVE INDEX: {:?}",
+            result.err()
+        );
+
+        if let Statement::Remove(RemoveStatement::Index { name, table }) = result.unwrap() {
+            assert_eq!(name, "idx_email");
+            assert_eq!(table, "users");
+        } else {
+            panic!("Expected REMOVE INDEX statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_remove_function() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("REMOVE FUNCTION calculate_tax").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse REMOVE FUNCTION: {:?}",
+            result.err()
+        );
+
+        if let Statement::Remove(RemoveStatement::Function { name }) = result.unwrap() {
+            assert_eq!(name, "calculate_tax");
+        } else {
+            panic!("Expected REMOVE FUNCTION statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_remove_analyzer() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("REMOVE ANALYZER my_analyzer").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse REMOVE ANALYZER: {:?}",
+            result.err()
+        );
+
+        if let Statement::Remove(RemoveStatement::Analyzer { name }) = result.unwrap() {
+            assert_eq!(name, "my_analyzer");
+        } else {
+            panic!("Expected REMOVE ANALYZER statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_remove_user() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("REMOVE USER admin ON DATABASE").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse REMOVE USER: {:?}",
+            result.err()
+        );
+
+        if let Statement::Remove(RemoveStatement::User { name, on }) = result.unwrap() {
+            assert_eq!(name, "admin");
+            assert_eq!(on, "DATABASE");
+        } else {
+            panic!("Expected REMOVE USER statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_remove_scope() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("REMOVE SCOPE user_auth").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse REMOVE SCOPE: {:?}",
+            result.err()
+        );
+
+        if let Statement::Remove(RemoveStatement::Scope { name }) = result.unwrap() {
+            assert_eq!(name, "user_auth");
+        } else {
+            panic!("Expected REMOVE SCOPE statement");
+        }
+    }
+
+    // ==================== UPSERT Statement Tests ====================
+
+    #[test]
+    fn test_parse_upsert_simple() {
+        let lexer = Lexer::new();
+        let tokens = lexer
+            .tokenize("UPSERT INTO users (id, name) VALUES (1, 'Alice')")
+            .unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(result.is_ok(), "Failed to parse UPSERT: {:?}", result.err());
+
+        if let Statement::Upsert(upsert) = result.unwrap() {
+            assert_eq!(upsert.table, "users");
+            // Verify data is populated
+            match &upsert.data {
+                InsertValues::Values(rows) => {
+                    assert!(!rows.is_empty());
+                }
+                _ => panic!("Expected InsertValues::Values"),
+            }
+        } else {
+            panic!("Expected UPSERT statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_upsert_without_into() {
+        let lexer = Lexer::new();
+        let tokens = lexer
+            .tokenize("UPSERT users (email) VALUES ('test@example.com')")
+            .unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse UPSERT without INTO: {:?}",
+            result.err()
+        );
+
+        if let Statement::Upsert(upsert) = result.unwrap() {
+            assert_eq!(upsert.table, "users");
+        } else {
+            panic!("Expected UPSERT statement");
+        }
+    }
+
+    // ==================== TRUNCATE Statement Tests ====================
+
+    #[test]
+    fn test_parse_truncate_simple() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("TRUNCATE users").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse TRUNCATE: {:?}",
+            result.err()
+        );
+
+        if let Statement::Truncate(truncate) = result.unwrap() {
+            assert_eq!(truncate.table, "users");
+            assert!(!truncate.cascade);
+        } else {
+            panic!("Expected TRUNCATE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_truncate_table_cascade() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("TRUNCATE TABLE orders CASCADE").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse TRUNCATE TABLE CASCADE: {:?}",
+            result.err()
+        );
+
+        if let Statement::Truncate(truncate) = result.unwrap() {
+            assert_eq!(truncate.table, "orders");
+            assert!(truncate.cascade);
+        } else {
+            panic!("Expected TRUNCATE statement");
+        }
+    }
+
+    // ==================== SAVEPOINT Statement Tests ====================
+
+    #[test]
+    fn test_parse_savepoint() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("SAVEPOINT my_savepoint").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse SAVEPOINT: {:?}",
+            result.err()
+        );
+
+        if let Statement::Savepoint(SavepointStatement::Create { name }) = result.unwrap() {
+            assert_eq!(name, "my_savepoint");
+        } else {
+            panic!("Expected SAVEPOINT Create statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_release_savepoint() {
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("RELEASE SAVEPOINT my_savepoint").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse RELEASE SAVEPOINT: {:?}",
+            result.err()
+        );
+
+        if let Statement::Savepoint(SavepointStatement::Release { name }) = result.unwrap() {
+            assert_eq!(name, "my_savepoint");
+        } else {
+            panic!("Expected SAVEPOINT Release statement");
+        }
+    }
+
+    // ==================== ALTER Statement Tests ====================
+
+    #[test]
+    fn test_parse_alter_table_add_column() {
+        let lexer = Lexer::new();
+        let tokens = lexer
+            .tokenize("ALTER TABLE users ADD COLUMN age INT")
+            .unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse ALTER TABLE ADD COLUMN: {:?}",
+            result.err()
+        );
+
+        if let Statement::Alter(AlterStatement::Table { name, action }) = result.unwrap() {
+            assert_eq!(name, "users");
+            if let AlterTableAction::AddColumn(field) = action {
+                assert_eq!(field.name, "age");
+            } else {
+                panic!("Expected AddColumn action");
+            }
+        } else {
+            panic!("Expected ALTER TABLE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_alter_table_drop_column() {
+        let lexer = Lexer::new();
+        let tokens = lexer
+            .tokenize("ALTER TABLE users DROP COLUMN email")
+            .unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse ALTER TABLE DROP COLUMN: {:?}",
+            result.err()
+        );
+
+        if let Statement::Alter(AlterStatement::Table { name, action }) = result.unwrap() {
+            assert_eq!(name, "users");
+            if let AlterTableAction::DropColumn(col_name) = action {
+                assert_eq!(col_name, "email");
+            } else {
+                panic!("Expected DropColumn action");
+            }
+        } else {
+            panic!("Expected ALTER TABLE statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_alter_table_rename() {
+        let lexer = Lexer::new();
+        let tokens = lexer
+            .tokenize("ALTER TABLE users RENAME TO customers")
+            .unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(
+            result.is_ok(),
+            "Failed to parse ALTER TABLE RENAME TO: {:?}",
+            result.err()
+        );
+
+        if let Statement::Alter(AlterStatement::Table { name, action }) = result.unwrap() {
+            assert_eq!(name, "users");
+            if let AlterTableAction::Rename(new_name) = action {
+                assert_eq!(new_name, "customers");
+            } else {
+                panic!("Expected Rename action");
+            }
+        } else {
+            panic!("Expected ALTER TABLE statement");
+        }
+    }
+
+    // ==================== MERGE Statement Tests ====================
+
+    #[test]
+    fn test_parse_merge_simple() {
+        let lexer = Lexer::new();
+        let tokens = lexer
+            .tokenize(
+                "MERGE INTO target USING source AS s ON target.id = s.id \
+                 WHEN MATCHED THEN UPDATE SET target.name = s.name \
+                 WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.id, s.name)",
+            )
+            .unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(result.is_ok(), "Failed to parse MERGE: {:?}", result.err());
+
+        if let Statement::Merge(merge) = result.unwrap() {
+            // Verify target table (into is just a String in current AST)
+            assert_eq!(merge.into, "target");
+            // Verify source table with alias
+            if let FromClause::Table { name, alias } = &merge.using {
+                assert_eq!(name, "source");
+                assert_eq!(alias.as_deref(), Some("s"));
+            } else {
+                panic!("Expected Table source");
+            }
+            // Verify WHEN MATCHED clause
+            assert!(merge.when_matched.is_some());
+            // Verify WHEN NOT MATCHED clause
+            assert!(merge.when_not_matched.is_some());
+        } else {
+            panic!("Expected MERGE statement");
         }
     }
 }

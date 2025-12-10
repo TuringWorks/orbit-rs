@@ -1,0 +1,62 @@
+# FinTech Logic: HFT Order Book & Idempotency
+# Purpose: Low-latency matching engine structures and exactly-once processing helpers.
+
+# ==========================================
+# 1. Order Book (Limit Order)
+# ==========================================
+# We use Redis Sorted Sets to maintain the Order Book for AAPL.
+# Score = Price.
+# For BIDS: Higher score (price) is better.
+# For ASKS: Lower score (price) is better.
+
+# To handle Price-Time priority, we can encode timestamp into the score decimal
+# or use Lexicographical ordering if prices are equal. 
+# Simplified here: Score = Price.
+
+# Buy Orders (Bids) - Highest Price First
+# ZADD orderbook:AAPL:bids <price> <order_id>
+ZADD orderbook:AAPL:bids 150.05 "ord_101"
+ZADD orderbook:AAPL:bids 150.00 "ord_102"
+ZADD orderbook:AAPL:bids 149.95 "ord_103"
+
+# Sell Orders (Asks) - Lowest Price First
+# ZADD orderbook:AAPL:asks <price> <order_id>
+ZADD orderbook:AAPL:asks 150.10 "ord_201"
+ZADD orderbook:AAPL:asks 150.15 "ord_202"
+
+# Matching Logic (Pseudo-code for LUA script):
+# 1. Incoming BUY at 150.12
+# 2. Check Lowest ASK (ZRANGE orderbook:AAPL:asks 0 0 WITHSCORES) -> 150.10
+# 3. 150.12 >= 150.10 -> MATCH!
+# 4. Remove ord_201.
+# 5. Remaining Qty checks next ASK...
+
+# ==========================================
+# 2. Real-Time Ticker Updates (Pub/Sub)
+# ==========================================
+# Push match events to connected UI clients via WebSockets
+PUBLISH ticker:AAPL "{\"price\": 150.10, \"size\": 100, \"ts\": 167888...}"
+
+# ==========================================
+# 3. Idempotency Keys (API Safety)
+# ==========================================
+# prevent double-charging if a payment request times out but succeeds on server.
+# Key: idempotency:<request_id>
+# Val: Response Payload
+
+# Client sends ReqID: req_555
+SETNX idempotency:req_555 "PROCESSING"
+# If Returns 1 -> Good, proceed.
+# If Returns 0 -> Check status.
+
+# ... Process Payment ...
+
+SET idempotency:req_555 "{\"status\": \"SUCCESS\", \"tx_id\": \"tx_999\"}"
+EXPIRE idempotency:req_555 86400 # Keep 24h
+
+# ==========================================
+# 4. OHLC (Candlestick) Data
+# ==========================================
+# TimeSeries module (or Redis Streams)
+# XADD ticker:AAPL:raw * price 150.10 volume 100
+XADD ticker:AAPL:raw * price 150.10 volume 100

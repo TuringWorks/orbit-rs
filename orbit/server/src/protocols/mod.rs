@@ -49,3 +49,4 @@ pub use orbitwire::OrbitWireServer;
 
 // Re-export commonly used types
 pub use error::{ProtocolError, ProtocolResult};
+pub mod tls;

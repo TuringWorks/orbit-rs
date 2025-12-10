@@ -547,6 +547,63 @@ migrate_data_before_eviction = true # Move data before node leaves
 blacklist_duration_secs = 300      # Evicted nodes blocked for 5 minutes
 
 # ================================
+# FULL-TEXT SEARCH CONFIGURATION
+# ================================
+# Configure the full-text search engine for protocol FTS operations.
+# Two engines are available:
+# - "shared": SIMD-accelerated in-memory engine (fastest, recommended for most workloads)
+# - "tantivy": Disk-backed Tantivy engine (best for large indexes, durability)
+
+[fts]
+# FTS engine type: "shared" (SIMD/in-memory) or "tantivy" (disk-backed)
+# - shared: Custom SIMD-accelerated engine with AVX2/NEON tokenization, GPU BM25 scoring
+# - tantivy: Lucene-like disk-backed engine with battle-tested implementation
+engine = "shared"
+
+# Directory for FTS index storage
+index_dir = "./data/fts"
+
+# Maximum memory for indexing (bytes)
+max_memory = 104857600  # 100MB
+
+# Number of indexing threads
+num_threads = 4
+
+# Default language for text analysis
+default_language = "english"
+
+# Enable query caching
+enable_cache = true
+
+# Cache size (number of queries)
+cache_size = 1000
+
+# BM25 parameters
+[fts.bm25]
+# k1: Term frequency saturation parameter (typically 1.2-2.0)
+k1 = 1.2
+# b: Document length normalization (0.0-1.0, higher = more normalization)
+b = 0.75
+
+# SharedFtsEngine-specific settings (only used when engine = "shared")
+[fts.shared]
+# Enable SIMD acceleration for tokenization (AVX2/AVX-512/NEON)
+enable_simd = true
+# Enable GPU acceleration for BM25 scoring (requires GPU compute feature)
+enable_gpu = false
+# Enable disk persistence for in-memory indexes
+enable_persistence = true
+# Auto-flush interval in seconds (0 = manual flush only)
+auto_flush_secs = 300
+
+# TantivyFtsEngine-specific settings (only used when engine = "tantivy")
+[fts.tantivy]
+# Commit interval for batched writes (seconds)
+commit_interval_secs = 5
+# Enable merge policy optimization
+enable_merge_optimization = true
+
+# ================================
 # EXAMPLE USAGE INSTRUCTIONS
 # ================================
 

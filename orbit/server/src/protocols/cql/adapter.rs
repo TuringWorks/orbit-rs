@@ -21,13 +21,14 @@ use crate::protocols::common::storage::memory::MemoryTableStorage;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::types::{SqlType, SqlValue};
 use crate::protocols::postgres_wire::QueryEngine;
+use crate::protocols::tls::OrbitTlsAcceptor;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tokio::sync::RwLock;
-use tracing::{info, warn};
+use tracing::{debug, error, info, warn};
 
 /// CQL adapter
 pub struct CqlAdapter {
@@ -240,25 +241,48 @@ impl CqlAdapter {
 
     /// Start the CQL server
     pub async fn start(&self) -> ProtocolResult<()> {
-        let listener = TcpListener::bind(self.config.listen_addr)
+        self.start_with_tls(None).await
+    }
+
+    /// Start the CQL server with optional TLS
+    pub async fn start_with_tls(
+        &self,
+        tls_acceptor: Option<OrbitTlsAcceptor>,
+    ) -> ProtocolResult<()> {
+        let listener = TcpListener::bind(&self.config.listen_addr)
             .await
             .map_err(|e| ProtocolError::IoError(e.to_string()))?;
 
-        println!("[CQL] Server listening on {}", self.config.listen_addr);
+        info!("[CQL] Server listening on {}", self.config.listen_addr);
 
         loop {
             match listener.accept().await {
                 Ok((socket, addr)) => {
-                    println!("[CQL] New connection from {}", addr);
+                    debug!("[CQL] New connection from {}", addr);
                     let adapter = self.clone_for_connection();
+                    let tls_acceptor = tls_acceptor.clone();
+
                     tokio::spawn(async move {
-                        if let Err(e) = adapter.handle_connection(socket).await {
-                            eprintln!("[CQL] Connection error from {}: {:?}", addr, e);
+                        if let Some(acceptor) = tls_acceptor {
+                            match acceptor.accept(socket).await {
+                                Ok(tls_stream) => {
+                                    if let Err(e) = adapter.handle_connection(tls_stream).await {
+                                        error!("[CQL] Connection error from {}: {:?}", addr, e);
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("[CQL] TLS handshake failed: {}", e);
+                                }
+                            }
+                        } else {
+                            if let Err(e) = adapter.handle_connection(socket).await {
+                                error!("[CQL] Connection error from {}: {:?}", addr, e);
+                            }
                         }
                     });
                 }
                 Err(e) => {
-                    eprintln!("[CQL] Accept error: {}", e);
+                    error!("[CQL] Accept error: {}", e);
                 }
             }
         }
@@ -277,7 +301,10 @@ impl CqlAdapter {
     }
 
     /// Handle a client connection
-    async fn handle_connection(&self, mut socket: TcpStream) -> ProtocolResult<()> {
+    async fn handle_connection<S>(&self, mut socket: S) -> ProtocolResult<()>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    {
         let mut buffer = BytesMut::with_capacity(4096);
 
         loop {

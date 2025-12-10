@@ -64,7 +64,7 @@ impl TextIndex {
                     let tf = 1.0 / term_count.max(1.0); // Normalized TF
                     self.inverted_index
                         .entry(term)
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push((doc_id.to_string(), tf));
                 }
             }
@@ -120,10 +120,10 @@ impl TextIndex {
 
         for term in query.split_whitespace() {
             let term = term.to_lowercase();
-            if term.starts_with('+') {
-                must_terms.push(term[1..].to_string());
-            } else if term.starts_with('-') {
-                must_not_terms.push(term[1..].to_string());
+            if let Some(stripped) = term.strip_prefix('+') {
+                must_terms.push(stripped.to_string());
+            } else if let Some(stripped) = term.strip_prefix('-') {
+                must_not_terms.push(stripped.to_string());
             } else if term.starts_with('"') && term.ends_with('"') {
                 // Phrase query - treat as must for now
                 must_terms.push(term.trim_matches('"').to_string());
@@ -389,10 +389,10 @@ impl MysqlFts {
         let mut clauses: Vec<(Occur, Box<dyn Query>)> = Vec::new();
 
         for term in query.split_whitespace() {
-            let (occur, word) = if term.starts_with('+') {
-                (Occur::Must, &term[1..])
-            } else if term.starts_with('-') {
-                (Occur::MustNot, &term[1..])
+            let (occur, word) = if let Some(stripped) = term.strip_prefix('+') {
+                (Occur::Must, stripped)
+            } else if let Some(stripped) = term.strip_prefix('-') {
+                (Occur::MustNot, stripped)
             } else {
                 (Occur::Should, term)
             };

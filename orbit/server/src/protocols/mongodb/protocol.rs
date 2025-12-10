@@ -11,7 +11,19 @@ pub const OP_QUERY: i32 = 2004;
 pub const OP_GET_MORE: i32 = 2005;
 pub const OP_DELETE: i32 = 2006;
 pub const OP_KILL_CURSORS: i32 = 2007;
+pub const OP_COMPRESSED: i32 = 2012;
 pub const OP_MSG: i32 = 2013;
+
+// Compressor IDs
+pub const COMPRESSOR_NOOP: u8 = 0;
+pub const COMPRESSOR_SNAPPY: u8 = 1;
+pub const COMPRESSOR_ZLIB: u8 = 2;
+pub const COMPRESSOR_ZSTD: u8 = 3;
+
+// OP_MSG Flags
+pub const MSG_CHECKSUM_PRESENT: u32 = 1 << 0;
+pub const MSG_MORE_TO_COME: u32 = 1 << 1;
+pub const MSG_EXHAUST_ALLOWED: u32 = 1 << 16;
 
 // OP_MSG Section Kinds
 pub const KIND_BODY: u8 = 0;
@@ -178,9 +190,20 @@ impl Decoder for MongoCodec {
                 let flag_bits = body_cursor.get_u32_le();
 
                 let mut sections = Vec::new();
-                let checksum: Option<u32> = None;
 
-                while body_cursor.position() < body_cursor.get_ref().len() as u64 {
+                // Check if checksum is present (bit 0)
+                let checksum_present = (flag_bits & MSG_CHECKSUM_PRESENT) != 0;
+
+                // Calculate where the sections end
+                // If checksum present, last 4 bytes are checksum
+                let total_len = body_cursor.get_ref().len() as u64;
+                let sections_end = if checksum_present {
+                    total_len - 4
+                } else {
+                    total_len
+                };
+
+                while body_cursor.position() < sections_end {
                     let kind = body_cursor.get_u8();
                     match kind {
                         KIND_BODY => {
@@ -240,20 +263,20 @@ impl Decoder for MongoCodec {
                             });
                         }
                         _ => {
-                            // Assume checksum if it's the last 4 bytes?
-                            // Or just break if unknown kind
-                            if body_cursor.get_ref().len() as u64 - body_cursor.position() == 4 {
-                                // Rewind 1 byte (kind) and read checksum?
-                                // Actually checksum is a section with kind? No, it's optional at the end.
-                                // But the spec says sections are Type (1 byte) + Payload.
-                                // If we encountered a byte that is not 0 or 1, and we are at the end...
-                                // Let's just ignore for now.
-                                break;
-                            }
-                            break;
+                            return Err(OrbitError::network(format!(
+                                "Unknown OP_MSG section kind: {}",
+                                kind
+                            )));
                         }
                     }
                 }
+
+                let checksum = if checksum_present {
+                    body_cursor.set_position(total_len - 4);
+                    Some(body_cursor.get_u32_le())
+                } else {
+                    None
+                };
 
                 Ok(Some(MongoMessage::Msg {
                     header,
@@ -261,6 +284,88 @@ impl Decoder for MongoCodec {
                     sections,
                     checksum,
                 }))
+            }
+            OP_COMPRESSED => {
+                let mut body_cursor = Cursor::new(body_slice);
+                let original_opcode = body_cursor.get_i32_le();
+                let uncompressed_size = body_cursor.get_i32_le();
+                let compressor_id = body_cursor.get_u8();
+
+                // Read remaining bytes as compressed data
+                let pos = body_cursor.position();
+                let compressed_data = &body_cursor.get_ref()[pos as usize..];
+
+                let decompressed_data = match compressor_id {
+                    COMPRESSOR_NOOP => compressed_data.to_vec(),
+                    COMPRESSOR_ZLIB => {
+                        use std::io::Read;
+                        let mut decoder = flate2::read::ZlibDecoder::new(compressed_data);
+                        let mut buf = Vec::with_capacity(uncompressed_size as usize);
+                        decoder.read_to_end(&mut buf).map_err(|e| {
+                            OrbitError::network(format!("Zlib decompression failed: {}", e))
+                        })?;
+                        buf
+                    }
+                    COMPRESSOR_SNAPPY => {
+                        // Snappy not yet supported
+                        return Err(OrbitError::network("Snappy compression not supported"));
+                    }
+                    COMPRESSOR_ZSTD => {
+                        // Zstd not yet supported
+                        return Err(OrbitError::network("Zstd compression not supported"));
+                    }
+                    _ => {
+                        return Err(OrbitError::network(format!(
+                            "Unknown compressor ID: {}",
+                            compressor_id
+                        )))
+                    }
+                };
+
+                if decompressed_data.len() != uncompressed_size as usize {
+                    return Err(OrbitError::network(format!(
+                        "Decompressed size mismatch. Expected {}, got {}",
+                        uncompressed_size,
+                        decompressed_data.len()
+                    )));
+                }
+
+                // Rekindle decoding for the inner message
+                // We construct a synthetic buffer with the original header fields but inner body
+                // Actually, our Decoder expects the FULL message including header (16 bytes).
+                // But we don't have the original header bytes easily available to reconstruct exactly as they were (since length changes).
+                // However, our logic separates Header parsing from Body parsing.
+                // We can reuse the body parsing logic if we extract it to a helper method.
+                // For now, let's just recursively call a helper that processes the body given an opcode.
+
+                // Refactoring note: The current structure matches on op_code inside the decode function.
+                // We should ideally split this. But for this specific case, we can verify that
+                // the inner message structure for specific opcodes works with our parser.
+                // Example: OP_QUERY expects body_slice to start with flags.
+                // OP_MSG expects body_slice to start with flag_bits.
+                // decompressed_data IS that body slice.
+
+                // So we can just recursivelly call a body parser.
+                // But we can't easily change the structure of `decode` without a big diff.
+                // Instead, let's restart the loop? No, decode parses one item.
+
+                // Let's create a synthetic BytesMut with a FAKE header around the decompressed body
+                // matching `original_opcode` and correct length.
+                // Then call `decode` on it.
+
+                let mut inner_src = BytesMut::with_capacity(16 + decompressed_data.len());
+                // New Length
+                inner_src.put_i32_le((16 + decompressed_data.len()) as i32);
+                // Original Request ID (from wrapper? or is it in compressed? Spec says wrapper usually used)
+                inner_src.put_i32_le(header.request_id);
+                inner_src.put_i32_le(header.response_to);
+                inner_src.put_i32_le(original_opcode);
+                inner_src.extend_from_slice(&decompressed_data);
+
+                // Recurse
+                // Note: This relies on `self` not having state that breaks on recursion, which is true (stateless decoder).
+                let mut inner_decoder = MongoCodec::new(); // Stateless
+                inner_decoder.decode(&mut inner_src)
             }
             _ => Ok(Some(MongoMessage::Unknown {
                 header,
@@ -579,7 +684,7 @@ mod tests {
 
     #[test]
     fn test_mongo_codec_default() {
-        let _codec = MongoCodec::default();
+        let _codec = MongoCodec;
     }
 
     #[test]

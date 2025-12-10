@@ -2,8 +2,8 @@
 
 **Target**: Neo4j Bolt Protocol v5.x / Cypher Query Language
 **Reference**: https://neo4j.com/docs/bolt/current/
-**Last Updated**: 2025-12-08
-**Current Estimated Coverage**: ~45%
+**Last Updated**: 2025-12-09
+**Current Estimated Coverage**: ~48%
 
 ---
 
@@ -80,7 +80,7 @@ This document specifies OrbitRS's compatibility with the Neo4j Bolt protocol and
 | MATCH | 🔶 | Basic pattern matching |
 | OPTIONAL MATCH | 🔶 | Optional patterns |
 | WHERE | ✅ | Filtering |
-| WITH | 🔶 | Chaining queries |
+| WITH | 🔶 | Chaining queries (implicit grouping) |
 | UNWIND | 🔶 | List expansion |
 | CALL | ❌ | Procedure calls |
 | CALL {} | ❌ | Subqueries |
@@ -102,7 +102,7 @@ This document specifies OrbitRS's compatibility with the Neo4j Bolt protocol and
 
 | Clause | Status | Notes |
 |--------|--------|-------|
-| RETURN | ✅ | Return results |
+| RETURN | ✅ | Return results (implicit grouping) |
 | ORDER BY | ✅ | Sort results |
 | SKIP | ✅ | Skip results |
 | LIMIT | ✅ | Limit results |

@@ -44,6 +44,7 @@ pub mod execution;
 pub mod execution_strategy;
 pub mod executor;
 pub mod expression_evaluator;
+pub mod graph_traversal;
 pub mod index_advisor;
 pub mod json;
 pub mod lexer;

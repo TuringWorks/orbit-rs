@@ -1738,7 +1738,7 @@ impl ExpressionEvaluator {
     }
 
     fn evaluate_string_agg(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
-        if args.len() < 1 || args.len() > 2 {
+        if args.is_empty() || args.len() > 2 {
             return Err(ProtocolError::PostgresError(
                 "STRING_AGG requires one or two arguments".to_string(),
             ));
@@ -2655,7 +2655,6 @@ impl ExpressionEvaluator {
         }
     }
 
-
     fn evaluate_pi(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         if !args.is_empty() {
             return Err(ProtocolError::PostgresError(
@@ -2739,7 +2738,7 @@ impl ExpressionEvaluator {
 
         match Self::to_f64_static(&args[0])? {
             Some(f) => {
-                if f < -1.0 || f > 1.0 {
+                if !(-1.0..=1.0).contains(&f) {
                     Err(ProtocolError::PostgresError(
                         "ASIN argument must be between -1 and 1".to_string(),
                     ))
@@ -2760,7 +2759,7 @@ impl ExpressionEvaluator {
 
         match Self::to_f64_static(&args[0])? {
             Some(f) => {
-                if f < -1.0 || f > 1.0 {
+                if !(-1.0..=1.0).contains(&f) {
                     Err(ProtocolError::PostgresError(
                         "ACOS argument must be between -1 and 1".to_string(),
                     ))
@@ -4527,7 +4526,7 @@ impl ExpressionEvaluator {
 
         match Self::get_int_arg(&args[0])? {
             Some(n) => {
-                if n < 0 || n > 0x10FFFF {
+                if !(0..=0x10FFFF).contains(&n) {
                     Err(ProtocolError::PostgresError(
                         "CHR argument out of valid Unicode range".to_string(),
                     ))
@@ -7793,12 +7792,12 @@ impl ExpressionEvaluator {
         // - or between words creates OR
 
         let mut result_parts: Vec<String> = Vec::new();
-        let mut chars = query.chars().peekable();
+        let chars = query.chars().peekable();
         let mut current_word = String::new();
         let mut in_quotes = false;
         let mut negate_next = false;
 
-        while let Some(c) = chars.next() {
+        for c in chars {
             match c {
                 '"' => {
                     if in_quotes {
@@ -8330,10 +8329,7 @@ impl ExpressionEvaluator {
         for (pos, word) in text.split_whitespace().enumerate() {
             let lexeme = self.stem_word(word, config);
             if !lexeme.is_empty() {
-                tokens
-                    .entry(lexeme)
-                    .or_insert_with(Vec::new)
-                    .push((pos + 1) as u32);
+                tokens.entry(lexeme).or_default().push((pos + 1) as u32);
             }
         }
 
@@ -8547,10 +8543,7 @@ impl ExpressionEvaluator {
             if let Some(colon_pos) = part.find(':') {
                 let lexeme = part[..colon_pos].to_string();
                 let positions = part[colon_pos + 1..].to_string();
-                lexemes
-                    .entry(lexeme)
-                    .or_insert_with(Vec::new)
-                    .push(positions);
+                lexemes.entry(lexeme).or_default().push(positions);
             }
         }
 

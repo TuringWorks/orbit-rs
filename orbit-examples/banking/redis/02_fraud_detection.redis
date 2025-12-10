@@ -1,0 +1,59 @@
+# Banking Use Case: Real-Time Fraud Detection & Feature Engineering
+# Purpose: High-performance checking of transactions against blacklist filters, velocity counters, 
+# and real-time risk scoring using Redis data structures.
+
+# 1. Blacklist Check (Bloom Filter)
+# Quickly check if a device ID or IP is on a blacklist without storing millions of full strings.
+# BF.INSERT blacklist:devices ITEMS "dev_bad_123" "dev_stolen_999" "ip_botnet_55"
+# (Assuming RedisBloom is enabled, or simulating with Sets for standard Redis)
+
+# Standard Redis Set implementation for blacklist (if Bloom not available)
+SADD blacklist:devices "dev_bad_123" "dev_stolen_999" "192.168.1.55"
+
+# Application checks before authorizing transaction:
+SISMEMBER blacklist:devices "192.168.1.55"
+# Returns 1 (True) -> Block transaction immediately
+
+# 2. Velocity Checks (HyperLogLog)
+# Count distinct unique recipients a user has sent money to in the last hour.
+# If a user suddenly pays 50 new people, it's suspicious (Account Takeover).
+
+# PFADD velocity:destinations:user_1001:<hour> <recipient_account_id>
+PFADD velocity:destinations:user_1001:2024120918acc_555
+PFADD velocity:destinations:user_1001:2024120918acc_666
+PFADD velocity:destinations:user_1001:2024120918acc_777
+
+# Get count
+PFCOUNT velocity:destinations:user_1001:2024120918
+# Result: 3 (Normal). If > 20, trigger 2FA.
+
+# 3. High-Value Transaction Window (Sorted Set)
+# Maintain a rolling window of recent large transactions for monitoring.
+# Score = Timestamp, Value = TransactionID:Amount
+
+ZADD fraud:watch:high_value 1733796000 "tx_991:9500.00"
+ZADD fraud:watch:high_value 1733796005 "tx_992:120.00"
+ZADD fraud:watch:high_value 1733796010 "tx_993:50000.00"
+
+# Get transactions in the last N seconds (using timestamp range)
+ZRANGEBYSCORE fraud:watch:high_value 1733796000 +inf
+
+# 4. Failed Login Attempts (Rate Limiting)
+# Key: login:attempts:<ip_address>
+# Block IP if > 5 failures in 1 minute.
+
+INCR login:attempts:192.168.1.100
+EXPIRE login:attempts:192.168.1.100 60
+
+# Logic:
+# val = GET login:attempts:192.168.1.100
+# IF val > 5 THEN BLOCK_IP
+
+# 5. Geo-Velocity (GeoSpatial)
+# Check if two transactions happen physically too far apart in too short a time ("Impossible Travel").
+# GEOADD locations:cards <lon> <lat> <card_id>
+
+GEOADD locations:cards:active -0.1278 51.5074 "card_888" # London
+# Transaction attempted 5 mins later in New York (-74.006, 40.7128)
+GEODIST locations:cards:active "card_888" "card_888_new_pos_temp_key" km
+# If distance > 5000km and time_diff < 5 hours -> DECLINE

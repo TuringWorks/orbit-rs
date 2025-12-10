@@ -7,10 +7,13 @@
 //! - GRAPH.DELETE - Delete a graph
 //! - GRAPH.LIST - List all graphs
 //! - GRAPH.CONFIG GET/SET - Configure graph settings
+//!
+//! Graph algorithms delegate to the shared graph_algorithms module for consistency.
 
 #![allow(dead_code)]
 
 use super::traits::{BaseCommandHandler, CommandHandler};
+use crate::protocols::common::graph_algorithms as graph_algo;
 use crate::protocols::error::ProtocolResult;
 use crate::protocols::resp::RespValue;
 use async_trait::async_trait;
@@ -221,6 +224,39 @@ impl Graph {
             self.rel_type_index.len() as i64,
         );
         stats
+    }
+
+    /// Convert to shared graph_algo::Graph format for algorithm execution
+    /// This enables using shared graph algorithms like PageRank, shortest path, etc.
+    fn to_shared_graph(&self) -> graph_algo::Graph {
+        let mut shared = graph_algo::Graph::new();
+
+        // Add all nodes
+        for (id, node) in &self.nodes {
+            let properties: HashMap<String, serde_json::Value> = node
+                .properties
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            shared.add_node(id.to_string(), properties);
+        }
+
+        // Add all relationships as edges
+        for rel in self.relationships.values() {
+            let weight = rel
+                .properties
+                .get("weight")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(1.0);
+            shared.add_edge(
+                rel.src_id.to_string(),
+                rel.dest_id.to_string(),
+                weight,
+                Some(rel.rel_type.clone()),
+            );
+        }
+
+        shared
     }
 }
 

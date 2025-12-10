@@ -730,47 +730,9 @@ impl PostgresSpatialFunctions {
         Err(SpatialError::OperationError("GeoJSON parsing not fully implemented".to_string()))
     }
     
+    /// Convert geometry to WKT string using shared implementation.
     fn geometry_to_wkt(&self, geometry: &SpatialGeometry) -> Result<String, SpatialError> {
-        match geometry {
-            SpatialGeometry::Point(point) => {
-                if point.z.is_some() && point.m.is_some() {
-                    Ok(format!("POINT ZM ({} {} {} {})", point.x, point.y, point.z.unwrap(), point.m.unwrap()))
-                } else if point.z.is_some() {
-                    Ok(format!("POINT Z ({} {} {})", point.x, point.y, point.z.unwrap()))
-                } else if point.m.is_some() {
-                    Ok(format!("POINT M ({} {} {})", point.x, point.y, point.m.unwrap()))
-                } else {
-                    Ok(format!("POINT ({} {})", point.x, point.y))
-                }
-            },
-            SpatialGeometry::LineString(ls) => {
-                let coords: String = ls.points.iter()
-                    .map(|p| format!("{} {}", p.x, p.y))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                Ok(format!("LINESTRING ({})", coords))
-            },
-            SpatialGeometry::Polygon(poly) => {
-                let exterior_coords: String = poly.exterior_ring.points.iter()
-                    .map(|p| format!("{} {}", p.x, p.y))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let mut wkt = format!("POLYGON (({}))", exterior_coords);
-                
-                // Add interior rings (holes) if any
-                if !poly.interior_rings.is_empty() {
-                    for interior_ring in &poly.interior_rings {
-                        let interior_coords: String = interior_ring.points.iter()
-                            .map(|p| format!("{} {}", p.x, p.y))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        wkt.push_str(&format!(", ({})", interior_coords));
-                    }
-                }
-                Ok(wkt)
-            },
-            _ => Err(SpatialError::OperationError("WKT output not implemented for this geometry type".to_string()))
-        }
+        self.spatial_functions.st_astext(geometry)
     }
     
     fn geometry_to_geojson(&self, geometry: &SpatialGeometry) -> Result<String, SpatialError> {

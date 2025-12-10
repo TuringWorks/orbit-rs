@@ -1,5 +1,6 @@
 //! Main Orbit server implementation for hosting actors and managing the cluster
 
+use crate::config::TlsConfig;
 use crate::mesh::{AddressableDirectory, ClusterManager, ClusterStats, DirectoryStats};
 use crate::persistence::config::PersistenceProviderConfig;
 use crate::persistence::PersistenceProviderRegistry;
@@ -17,7 +18,7 @@ use orbit_shared::{NodeCapabilities, NodeId, NodeInfo, NodeStatus, OrbitError, O
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::time::{interval, Duration};
-use tonic::transport::Server;
+use tonic::transport::{Certificate, Identity, Server, ServerTlsConfig};
 use tonic_reflection::server::Builder as ReflectionBuilder;
 
 /// Configuration for protocol servers
@@ -86,6 +87,7 @@ pub struct OrbitServerConfig {
     pub tags: HashMap<String, String>,
     pub persistence: PersistenceProviderConfig,
     pub protocols: ProtocolConfig,
+    pub tls_config: Option<TlsConfig>,
 }
 
 impl Default for OrbitServerConfig {
@@ -100,6 +102,7 @@ impl Default for OrbitServerConfig {
             tags: HashMap::new(),
             persistence: PersistenceProviderConfig::default_memory(),
             protocols: ProtocolConfig::default(),
+            tls_config: None,
         }
     }
 }
@@ -200,6 +203,12 @@ impl OrbitServerBuilder {
     /// Enable or disable MongoDB protocol server
     pub fn with_mongodb_enabled(mut self, enabled: bool) -> Self {
         self.config.protocols.mongodb_enabled = enabled;
+        self
+    }
+
+    /// Set TLS configuration
+    pub fn with_tls_config(mut self, tls_config: Option<TlsConfig>) -> Self {
+        self.config.tls_config = tls_config;
         self
     }
 
@@ -372,7 +381,47 @@ impl OrbitServer {
                 OrbitError::configuration(format!("Failed to build reflection service: {}", e))
             })?;
 
-        let grpc_server = Server::builder()
+        let mut server_builder = Server::builder();
+
+        // Configure TLS if enabled
+        if let Some(ref tls) = self.config.tls_config {
+            if tls.enabled {
+                let cert = tokio::fs::read_to_string(&tls.cert_file)
+                    .await
+                    .map_err(|e| {
+                        OrbitError::configuration(format!("Failed to read cert file: {}", e))
+                    })?;
+                let key = tokio::fs::read_to_string(&tls.key_file)
+                    .await
+                    .map_err(|e| {
+                        OrbitError::configuration(format!("Failed to read key file: {}", e))
+                    })?;
+
+                let identity = Identity::from_pem(cert, key);
+                let mut tls_config = ServerTlsConfig::new().identity(identity);
+
+                if tls.require_client_cert {
+                    if let Some(ref ca_path) = tls.ca_cert_file {
+                        let ca_cert = tokio::fs::read_to_string(ca_path).await.map_err(|e| {
+                            OrbitError::configuration(format!("Failed to read CA cert file: {}", e))
+                        })?;
+                        let client_ca_root = Certificate::from_pem(ca_cert);
+                        tls_config = tls_config.client_ca_root(client_ca_root);
+                    }
+                }
+
+                server_builder = server_builder.tls_config(tls_config).map_err(|e| {
+                    OrbitError::configuration(format!("Failed to configure TLS: {}", e))
+                })?;
+
+                tracing::info!(
+                    "gRPC server TLS enabled (mTLS: {})",
+                    tls.require_client_cert
+                );
+            }
+        }
+
+        let grpc_server = server_builder
             .add_service(connection_service_server::ConnectionServiceServer::new(
                 self.connection_service.clone(),
             ))

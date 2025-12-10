@@ -68,6 +68,9 @@ pub struct ServerConfig {
 
     /// Configuration directory
     pub config_dir: PathBuf,
+
+    /// TLS configuration (Global default)
+    pub tls: Option<TlsConfig>,
 }
 
 /// Environment type
@@ -2016,6 +2019,7 @@ impl Default for ServerConfig {
             environment: Environment::Development,
             data_dir: PathBuf::from("./data"),
             config_dir: PathBuf::from("./config"),
+            tls: None,
         }
     }
 }

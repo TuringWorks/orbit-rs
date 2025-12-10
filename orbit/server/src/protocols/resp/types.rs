@@ -564,6 +564,7 @@ impl From<HashMap<String, RespValue>> for RespValue {
 }
 
 #[cfg(test)]
+#[allow(clippy::approx_constant)]
 mod tests {
     use super::*;
     use bytes::Bytes;

@@ -4,7 +4,7 @@ use bytes::{BufMut, BytesMut};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
+
 use tracing::{debug, error, info};
 
 use super::messages::{
@@ -88,8 +88,11 @@ impl PostgresWireProtocol {
         }
     }
 
-    /// Handle a client connection
-    pub async fn handle_connection(&mut self, mut stream: TcpStream) -> ProtocolResult<()> {
+    /// Handle a generic connection stream (TCP or TLS)
+    pub async fn handle_connection<S>(&mut self, mut stream: S) -> ProtocolResult<()>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+    {
         info!("New PostgreSQL client connection");
 
         let mut read_buf = BytesMut::with_capacity(8192);
@@ -116,12 +119,15 @@ impl PostgresWireProtocol {
     }
 
     /// Read and process data from the client
-    async fn read_and_process_data(
+    async fn read_and_process_data<S>(
         &mut self,
-        stream: &mut TcpStream,
+        stream: &mut S,
         read_buf: &mut BytesMut,
         write_buf: &mut BytesMut,
-    ) -> ProtocolResult<ConnectionLoopResult> {
+    ) -> ProtocolResult<ConnectionLoopResult>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+    {
         let n = stream.read_buf(read_buf).await?;
 
         if n == 0 {
@@ -133,12 +139,15 @@ impl PostgresWireProtocol {
     }
 
     /// Process all pending messages in the read buffer
-    async fn process_pending_messages(
+    async fn process_pending_messages<S>(
         &mut self,
-        stream: &mut TcpStream,
+        stream: &mut S,
         read_buf: &mut BytesMut,
         write_buf: &mut BytesMut,
-    ) -> ProtocolResult<ConnectionLoopResult> {
+    ) -> ProtocolResult<ConnectionLoopResult>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+    {
         while let Some(msg) = FrontendMessage::parse(read_buf)? {
             debug!("Received message: {:?}", msg);
 
@@ -178,11 +187,14 @@ impl PostgresWireProtocol {
     }
 
     /// Flush the write buffer to the stream
-    async fn flush_write_buffer(
+    async fn flush_write_buffer<S>(
         &mut self,
-        stream: &mut TcpStream,
+        stream: &mut S,
         write_buf: &mut BytesMut,
-    ) -> ProtocolResult<()> {
+    ) -> ProtocolResult<()>
+    where
+        S: tokio::io::AsyncWrite + Unpin,
+    {
         if !write_buf.is_empty() {
             stream.write_all(write_buf).await?;
             write_buf.clear();
@@ -522,7 +534,7 @@ impl PostgresWireProtocol {
                 for (i, col) in columns.iter().enumerate() {
                     let mut oid = type_oids::TEXT;
                     let mut size: i16 = -1;
-                    if let Some(first_row) = rows.get(0) {
+                    if let Some(first_row) = rows.first() {
                         if let Some(Some(val)) = first_row.get(i) {
                             if val.chars().all(|c| c.is_ascii_digit()) {
                                 oid = type_oids::INT4;

@@ -29,7 +29,7 @@ pub enum Statement {
     Match(MatchStatement),
 
     // Schema Definition (SurrealDB-style DEFINE)
-    Define(DefineStatement),
+    Define(Box<DefineStatement>),
     Remove(RemoveStatement),
 
     // Traditional DDL
@@ -1003,6 +1003,7 @@ pub enum GraphRAGStatement {
 
 /// DEFINE statement (SurrealDB-style schema definition)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum DefineStatement {
     Namespace {
         name: String,

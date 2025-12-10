@@ -8,11 +8,9 @@
 //!   orbit-lb --postgres 5432:15432,15433,15434 --redis 6379:16379,16380,16381
 
 use clap::Parser;
+use orbit_server::tcp_proxy::{run_proxy, ProxyConfig};
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -64,29 +62,6 @@ struct Args {
     verbose: bool,
 }
 
-struct ProxyConfig {
-    name: String,
-    listen_port: u16,
-    backends: Vec<SocketAddr>,
-    counter: AtomicUsize,
-}
-
-impl ProxyConfig {
-    fn new(name: &str, listen_port: u16, backends: Vec<SocketAddr>) -> Self {
-        Self {
-            name: name.to_string(),
-            listen_port,
-            backends,
-            counter: AtomicUsize::new(0),
-        }
-    }
-
-    fn next_backend(&self) -> SocketAddr {
-        let idx = self.counter.fetch_add(1, Ordering::Relaxed) % self.backends.len();
-        self.backends[idx]
-    }
-}
-
 fn parse_proxy_spec(spec: &str, backend_host: &str) -> Result<(u16, Vec<SocketAddr>), String> {
     let parts: Vec<&str> = spec.split(':').collect();
     if parts.len() != 2 {
@@ -112,103 +87,6 @@ fn parse_proxy_spec(spec: &str, backend_host: &str) -> Result<(u16, Vec<SocketAd
         .collect();
 
     Ok((listen_port, backends?))
-}
-
-async fn proxy_connection(
-    mut client: TcpStream,
-    backend_addr: SocketAddr,
-    name: String,
-    verbose: bool,
-) {
-    let client_addr = client.peer_addr().ok();
-
-    let mut backend = match TcpStream::connect(backend_addr).await {
-        Ok(s) => s,
-        Err(e) => {
-            if verbose {
-                eprintln!("[{}] Failed to connect to {}: {}", name, backend_addr, e);
-            }
-            return;
-        }
-    };
-
-    if verbose {
-        println!(
-            "[{}] {} -> {}",
-            name,
-            client_addr.map(|a| a.to_string()).unwrap_or_default(),
-            backend_addr
-        );
-    }
-
-    let (mut client_read, mut client_write) = client.split();
-    let (mut backend_read, mut backend_write) = backend.split();
-
-    let client_to_backend = async {
-        let mut buf = [0u8; 8192];
-        loop {
-            match client_read.read(&mut buf).await {
-                Ok(0) => break,
-                Ok(n) => {
-                    if backend_write.write_all(&buf[..n]).await.is_err() {
-                        break;
-                    }
-                }
-                Err(_) => break,
-            }
-        }
-    };
-
-    let backend_to_client = async {
-        let mut buf = [0u8; 8192];
-        loop {
-            match backend_read.read(&mut buf).await {
-                Ok(0) => break,
-                Ok(n) => {
-                    if client_write.write_all(&buf[..n]).await.is_err() {
-                        break;
-                    }
-                }
-                Err(_) => break,
-            }
-        }
-    };
-
-    tokio::select! {
-        _ = client_to_backend => {}
-        _ = backend_to_client => {}
-    }
-}
-
-async fn run_proxy(config: Arc<ProxyConfig>, bind: String, verbose: bool) {
-    let addr = format!("{}:{}", bind, config.listen_port);
-    let listener = match TcpListener::bind(&addr).await {
-        Ok(l) => l,
-        Err(e) => {
-            eprintln!("[{}] Failed to bind to {}: {}", config.name, addr, e);
-            return;
-        }
-    };
-
-    println!(
-        "[{}] Listening on {} -> {:?}",
-        config.name, addr, config.backends
-    );
-
-    loop {
-        match listener.accept().await {
-            Ok((client, _)) => {
-                let backend = config.next_backend();
-                let name = config.name.clone();
-                tokio::spawn(proxy_connection(client, backend, name, verbose));
-            }
-            Err(e) => {
-                if verbose {
-                    eprintln!("[{}] Accept error: {}", config.name, e);
-                }
-            }
-        }
-    }
 }
 
 #[tokio::main]
@@ -274,7 +152,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let bind = args.bind.clone();
         let verbose = args.verbose;
         handles.push(tokio::spawn(async move {
-            run_proxy(proxy, bind, verbose).await;
+            run_proxy(proxy, &bind, verbose).await.unwrap();
         }));
     }
 

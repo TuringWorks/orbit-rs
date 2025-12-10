@@ -105,6 +105,28 @@ WHERE patient_mrn = 'MRN-888'
 ORDER BY result_date DESC;
 ```
 
+### 5. Drug Interactions Graph (Cypher)
+**File**: `cypher/02_drug_interactions_graph.cypher`
+
+Knowledge graph for checking prescriptions against known drug-drug interactions and patient allergies with traversal queries for clinical decision support (CDS).
+
+### 6. Clinical Notes & FHIR (MongoDB)
+**File**: `mongodb/02_fhir_clinical_notes.js`
+
+Storing unstructured clinical data using HL7 FHIR standard resource formats with nested `DocumentReference` and `CarePlan` documents.
+
+### 7. IoMT Vital Signs (Redis)
+**File**: `redis/02_iomt_vitals.redis`
+
+Real-time ingestion of high-velocity data from medical devices with Streams for raw data, TimeSeries for historical trending, and sliding window alerts.
+
+## Workflows
+
+### 02_telehealth_visit
+**File**: `workflows/02_telehealth_visit.md`
+
+End-to-end flow of a Telehealth consultation, integrating real-time video context, EHR lookup, and new prescriptions.
+
 ## Multi-Protocol Integration Pattern
 
 A typical healthcare deployment uses multiple protocols simultaneously:

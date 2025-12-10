@@ -4,6 +4,8 @@
 
 #![cfg(feature = "protocol-arangodb")]
 
+use crate::config::TlsConfig;
+use crate::protocols::tls::OrbitTlsAcceptor;
 use axum::{
     extract::{Json, State},
     http::StatusCode,
@@ -11,6 +13,8 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use hyper::server::conn::http1;
+use hyper_util::rt::TokioIo;
 use orbit_protocols::arangodb::ArangoHttpProtocol;
 use serde_json::Value;
 use std::error::Error;
@@ -28,6 +32,7 @@ struct ServerState {
 pub struct ArangoServer {
     bind_address: String,
     protocol: Arc<ArangoHttpProtocol>,
+    tls_acceptor: Option<OrbitTlsAcceptor>,
 }
 
 impl ArangoServer {
@@ -36,7 +41,15 @@ impl ArangoServer {
         Self {
             bind_address,
             protocol: Arc::new(ArangoHttpProtocol::new()),
+            tls_acceptor: None,
         }
+    }
+
+    pub fn with_tls_config(mut self, tls_config: Option<TlsConfig>) -> Self {
+        if let Some(config) = tls_config {
+            self.tls_acceptor = Some(OrbitTlsAcceptor::new(config));
+        }
+        self
     }
 
     /// Start the server
@@ -53,8 +66,37 @@ impl ArangoServer {
         let listener = TcpListener::bind(&self.bind_address).await?;
         info!("🥑 ArangoDB server listening on {}", self.bind_address);
 
-        axum::serve(listener, app).await?;
-        Ok(())
+        loop {
+            let (socket, remote_addr) = listener.accept().await?;
+            info!("New ArangoDB connection from {}", remote_addr);
+
+            let tls_acceptor = self.tls_acceptor.clone();
+            let app = app.clone();
+
+            tokio::spawn(async move {
+                if let Some(acceptor) = tls_acceptor {
+                    match acceptor.accept(socket).await {
+                        Ok(tls_stream) => {
+                            let io = TokioIo::new(tls_stream);
+                            if let Err(err) = http1::Builder::new().serve_connection(io, app).await
+                            {
+                                // debug!("Error serving TLS connection: {}", err);
+                            }
+                        }
+                        Err(e) => {
+                            error!("ArangoDB TLS handshake failed: {}", e);
+                        }
+                    }
+                } else {
+                    let io = TokioIo::new(socket);
+                    if let Err(err) = http1::Builder::new().serve_connection(io, app).await {
+                        // debug!("Error serving connection: {}", err);
+                    }
+                }
+            });
+        }
+        // unreachable
+        // Ok(())
     }
 }
 

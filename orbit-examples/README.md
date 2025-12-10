@@ -102,33 +102,23 @@ orbit-examples/
 │   ├── README.md
 │   └── workflows/01_precision_farming.md
 │
-│   ├── README.md
-│   ├── sql/01_schema_ehr.sql          # Electronic Health Records
-│   └── workflows/01_patient_admission.md
 │
-├── logistics/                         # Supply Chain & Logistics
+├── entertainment/                     # Studio & Production
 │   ├── README.md
-│   └── workflows/01_order_fulfillment.md
+│   ├── sql/                           # Production budgets
+│   ├── mongodb/                       # Content catalog
+│   ├── redis/                         # Streaming sessions
+│   ├── cypher/                        # Knowledge graph
+│   └── workflows/01_content_ingestion.md
 │
-├── energy/                            # Energy & Utilities
+├── data_center/                       # Data Center & Orbital Ops
 │   ├── README.md
-│   └── workflows/01_grid_management.md
-│
-├── media/                             # Media & Entertainment
-│   ├── README.md
-│   └── workflows/01_content_recommendation.md
-│
-├── education/                         # Education & EdTech
-│   ├── README.md
-│   └── workflows/01_personalized_learning.md
-│
-├── real-estate/                       # Real Estate & PropTech
-│   ├── README.md
-│   └── workflows/01_property_listing.md
-│
-├── agriculture/                       # Agriculture & AgTech
-│   ├── README.md
-│   └── workflows/01_precision_farming.md
+│   ├── sql/                           # Asset management
+│   ├── cql/                           # Telemetry (Cassandra)
+│   ├── redis/                         # Real-time alerts
+│   ├── cypher/                        # Network topology
+│   ├── mongodb/                       # Hardware inventory
+│   └── workflows/01_predictive_maintenance.md
 │
 ├── defense/                           # Defense & Aerospace
 │   ├── README.md
@@ -150,6 +140,30 @@ orbit-examples/
 │   ├── cypher/                        # Fraud detection graphs
 │   ├── cql/                           # Premium history
 │   └── workflows/                     # End-to-end workflows
+│
+├── healthcare/                        # Healthcare & Life Sciences
+│   ├── README.md
+│   ├── sql/                           # EHR Core (Patients, Encounters)
+│   ├── redis/                         # IoMT Vitals (Streams)
+│   ├── mongodb/                       # FHIR Clinical Notes
+│   ├── cypher/                        # Drug Interaction Graph
+│   └── workflows/02_telehealth_visit.md
+│
+├── adtech/                            # Advertising Technology
+│   ├── README.md
+│   ├── sql/                           # Campaigns, Inventory (Buy/Sell side)
+│   ├── redis/                         # RTB, Frequency Capping
+│   ├── mongodb/                       # DMP User Profiles
+│   ├── cypher/                        # Identity Graph
+│   └── workflows/01_rtb_auction.md
+│
+├── fintech/                           # Financial Technology
+│   ├── README.md
+│   ├── sql/                           # Crypto Ledger, Wallets
+│   ├── redis/                         # HFT Order Book
+│   ├── mongodb/                       # Payment Intents
+│   ├── cypher/                        # P2P Fraud Rings
+│   └── workflows/01_payment_processing.md
 │
 ├── telco/                             # Telecommunications
 │   ├── README.md
@@ -246,7 +260,7 @@ orbit-examples/
 │   └── workflows/01_fdc_interdiction.md
 ```
 
-**Total**: 25 industry examples, 100+ files, 24 comprehensive workflows
+**Total**: 27 industry examples, 120+ files, 26 comprehensive workflows
 
 
 ## 🎯 Examples by Protocol
@@ -601,23 +615,28 @@ Complete end-to-end industry examples using multiple protocols - **17 industries
 - GDPR compliance and emergency response
 - **[View Government Examples](government/)**
 
+### Healthcare & Life Sciences
+- **EHR Core** & Patient Management (SQL)
+- **FHIR** Clinical Documents (MongoDB)
+- **IoMT** Vital Signs Monitoring (Redis)
+- **Drug Interaction Graphs** (Cypher)
+- **[View Healthcare Examples](healthcare/)**
+
 ### Insurance
 - **9 insurance types**: Auto, Home, Life, Health, Property, Travel, Disability, Umbrella, Industrial
 - Fraud detection with graph analytics
 - **[View Insurance Examples](insurance/)**
 
-### Telecommunications
-- Network infrastructure and billing
-- Real-time monitoring and subscriber management
-- **[View Telco Examples](telco/)**
+- Campaign & Inventory Management (SQL)
+- **[View AdTech Examples](adtech/)**
 
-### Retail & E-Commerce
-- Inventory and order processing
-- **ML recommendations** (Neo4j) and sales analytics
-- **[View Retail Examples](retail/)**
+### FinTech
+- **Payment Processing** & Webhooks (MongoDB)
+- **HFT Order Books** (Redis)
+- **Crypto Wallets** & Double-Entry Ledgers (SQL)
+- **[View FinTech Examples](fintech/)**
 
 ### Hospitality (Coffeehouses & Restaurants)
-- POS and mobile ordering
 - Loyalty programs and kitchen operations
 - **[View Hospitality Examples](hospitality/)**
 
@@ -693,6 +712,18 @@ Complete end-to-end industry examples using multiple protocols - **17 industries
 - **Vehicle Inventory** and Sales Transactions
 - **Customer 360 View** (Interactions, Preferences)
 - **[View Car Dealership Examples](car_dealership/)**
+
+### Entertainment (Studio)
+- **4 Protocols**: SQL, Mongo, Redis, Cypher
+- **Production Management** and Budgeting
+- **Content Catalog** and Streaming Sessions
+- **[View Entertainment Examples](entertainment/)**
+
+### Data Center & Orbital Ops
+- **5 Protocols**: SQL, Mongo, CQL, Redis, Cypher
+- **Terrestrial & Orbital** Asset Management
+- **Live Telemetry** and Network Topology
+- **[View Data Center Examples](data_center/)**
 
 ### Field Service Management
 - **2 Protocols**: SQL, Cypher

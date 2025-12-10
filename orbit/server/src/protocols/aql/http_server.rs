@@ -62,6 +62,7 @@ pub struct AqlHttpServer {
     storage: Arc<dyn AqlStorageProvider>,
     query_engine: Arc<AqlQueryEngine>,
     cursors: Arc<RwLock<HashMap<String, AqlCursor>>>,
+    tls_acceptor: Option<crate::protocols::tls::OrbitTlsAcceptor>,
 }
 
 impl AqlHttpServer {
@@ -73,7 +74,16 @@ impl AqlHttpServer {
             storage,
             query_engine,
             cursors: Arc::new(RwLock::new(HashMap::new())),
+            tls_acceptor: None,
         }
+    }
+
+    pub fn with_tls_acceptor(
+        mut self,
+        tls_acceptor: Option<crate::protocols::tls::OrbitTlsAcceptor>,
+    ) -> Self {
+        self.tls_acceptor = tls_acceptor;
+        self
     }
 
     /// Start the HTTP server
@@ -100,21 +110,44 @@ impl AqlHttpServer {
                     let storage = storage.clone();
                     let query_engine = query_engine.clone();
                     let cursors = cursors.clone();
+                    let tls_acceptor = self.tls_acceptor.clone();
 
                     tokio::spawn(async move {
-                        let io = TokioIo::new(stream);
-                        let service = service_fn(move |req| {
-                            handle_request(
-                                req,
-                                storage.clone(),
-                                query_engine.clone(),
-                                cursors.clone(),
-                            )
-                        });
-
-                        if let Err(err) = http1::Builder::new().serve_connection(io, service).await
-                        {
-                            error!("Error serving connection: {}", err);
+                        if let Some(acceptor) = tls_acceptor {
+                            match acceptor.accept(stream).await {
+                                Ok(tls_stream) => {
+                                    let io = TokioIo::new(tls_stream);
+                                    let service = service_fn(move |req| {
+                                        handle_request(
+                                            req,
+                                            storage.clone(),
+                                            query_engine.clone(),
+                                            cursors.clone(),
+                                        )
+                                    });
+                                    if let Err(err) =
+                                        http1::Builder::new().serve_connection(io, service).await
+                                    {
+                                        error!("Error serving AQL TLS connection: {}", err);
+                                    }
+                                }
+                                Err(e) => error!("AQL TLS handshake failed: {}", e),
+                            }
+                        } else {
+                            let io = TokioIo::new(stream);
+                            let service = service_fn(move |req| {
+                                handle_request(
+                                    req,
+                                    storage.clone(),
+                                    query_engine.clone(),
+                                    cursors.clone(),
+                                )
+                            });
+                            if let Err(err) =
+                                http1::Builder::new().serve_connection(io, service).await
+                            {
+                                error!("Error serving AQL HTTP connection: {}", err);
+                            }
                         }
                     });
                 }

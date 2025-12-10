@@ -288,6 +288,7 @@ pub const CLIENT_TRANSACTIONS: u32 = 0x00002000;
 pub const CLIENT_SECURE_CONNECTION: u32 = 0x00008000;
 pub const CLIENT_PLUGIN_AUTH: u32 = 0x00080000;
 pub const CLIENT_PLUGIN_AUTH_LENENC_DATA: u32 = 0x00200000;
+pub const CLIENT_DEPRECATE_EOF: u32 = 0x01000000;
 
 /// Combined server capabilities for MySQL 8.0 compatibility
 pub const SERVER_CAPABILITIES: u32 = CLIENT_LONG_PASSWORD
@@ -298,10 +299,11 @@ pub const SERVER_CAPABILITIES: u32 = CLIENT_LONG_PASSWORD
     | CLIENT_TRANSACTIONS
     | CLIENT_SECURE_CONNECTION
     | CLIENT_PLUGIN_AUTH
-    | CLIENT_PLUGIN_AUTH_LENENC_DATA;
+    | CLIENT_PLUGIN_AUTH_LENENC_DATA
+    | CLIENT_DEPRECATE_EOF;
 
 /// Build initial handshake packet
-pub fn build_handshake(connection_id: u32, server_version: &str) -> Bytes {
+pub fn build_handshake(connection_id: u32, server_version: &str, auth_plugin: &str) -> Bytes {
     let mut buf = BytesMut::new();
 
     // Protocol version
@@ -345,7 +347,7 @@ pub fn build_handshake(connection_id: u32, server_version: &str) -> Bytes {
     );
 
     // Auth plugin name
-    write_null_string(&mut buf, "mysql_native_password");
+    write_null_string(&mut buf, auth_plugin);
 
     buf.freeze()
 }

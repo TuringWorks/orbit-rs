@@ -2,7 +2,7 @@
 
 **Target**: Redis 7.x RESP3 Protocol + Redis Modules
 **Reference**: https://redis.io/docs/reference/protocol-spec/
-**Last Updated**: 2025-12-08
+**Last Updated**: 2025-12-09
 **Current Estimated Coverage**: ~65% (Core: ~75%, Modules: ~30%)
 
 ---
@@ -98,31 +98,37 @@ This document specifies the Redis RESP (REdis Serialization Protocol) feature se
 
 | Command | Status | Notes |
 |---------|--------|-------|
-| ZADD | ✅ | Add members |
+| ZADD | ✅ | Add members with scores |
 | ZREM | ✅ | Remove members |
 | ZSCORE | ✅ | Get score |
 | ZINCRBY | ✅ | Increment score |
 | ZCARD | ✅ | Set cardinality |
-| ZCOUNT | ✅ | Count by score |
-| ZRANGE | ✅ | Range by rank |
-| ZREVRANGE | ✅ | Reverse range |
-| ZRANGEBYSCORE | ✅ | Range by score |
-| ZREVRANGEBYSCORE | ✅ | Reverse by score |
-| ZRANK | ✅ | Get rank |
-| ZREVRANK | ✅ | Reverse rank |
-| ZREMRANGEBYRANK | ✅ | Remove by rank |
-| ZREMRANGEBYSCORE | ✅ | Remove by score |
-| ZUNION | ✅ | Union sets |
-| ZINTER | ✅ | Intersect sets |
-| ZDIFF | ✅ | Difference sets |
-| ZUNIONSTORE | ✅ | Union and store |
-| ZINTERSTORE | ✅ | Intersect and store |
-| ZDIFFSTORE | ✅ | Difference and store |
-| ZPOPMIN | ✅ | Pop minimum |
-| ZPOPMAX | ✅ | Pop maximum |
-| BZPOPMIN | ✅ | Blocking pop min |
-| BZPOPMAX | ✅ | Blocking pop max |
-| ZSCAN | ✅ | Scan sorted set |
+| ZRANGE | ✅ | Range by rank with WITHSCORES |
+| ZCOUNT | ✅ | Count by score range |
+| ZREVRANGE | ✅ | Reverse range with WITHSCORES |
+| ZRANGEBYSCORE | ✅ | Range by score with WITHSCORES |
+| ZREVRANGEBYSCORE | ✅ | Reverse range by score with WITHSCORES |
+| ZRANK | ✅ | Get rank (0-based index) |
+| ZREVRANK | ✅ | Get reverse rank |
+| ZREMRANGEBYRANK | ✅ | Remove by rank range |
+| ZREMRANGEBYSCORE | ✅ | Remove by score range |
+| ZLEXCOUNT | ✅ | Count by lex range |
+| ZPOPMIN | ✅ | Pop minimum score members |
+| ZPOPMAX | ✅ | Pop maximum score members |
+| ZSCAN | ✅ | Iterate sorted set |
+| ZMSCORE | ✅ | Get multiple member scores |
+| ZRANGEBYLEX | ❌ | Not implemented |
+| ZREVRANGEBYLEX | ❌ | Not implemented |
+| ZREMRANGEBYLEX | ❌ | Not implemented |
+| ZUNION | ❌ | Not implemented |
+| ZINTER | ❌ | Not implemented |
+| ZDIFF | ❌ | Not implemented |
+| ZUNIONSTORE | ❌ | Not implemented |
+| ZINTERSTORE | ❌ | Not implemented |
+| ZDIFFSTORE | ❌ | Not implemented |
+| BZPOPMIN | ❌ | Blocking - not implemented |
+| BZPOPMAX | ❌ | Blocking - not implemented |
+| ZRANDMEMBER | ❌ | Not implemented |
 
 ### Hash Commands
 
@@ -289,7 +295,7 @@ This document specifies the Redis RESP (REdis Serialization Protocol) feature se
 | String Commands | ~95% | Nearly complete |
 | List Commands | ~100% | Full support |
 | Set Commands | ~100% | Full support |
-| Sorted Set Commands | ~100% | Full support |
+| Sorted Set Commands | ~61% | 19/31 commands implemented (core operations, ranking, score ranges, pop) |
 | Hash Commands | ~100% | Full support |
 | Key Commands | ~95% | Nearly complete |
 | Transaction Commands | ~100% | Full support |
@@ -441,14 +447,14 @@ OrbitRS provides compatibility with popular Redis modules, enabling advanced fun
 
 | Command | Status | Notes |
 |---------|--------|-------|
-| FT.CREATE | 🔶 | Create index |
-| FT.SEARCH | 🔶 | Search index |
+| FT.CREATE | ✅ | Create index |
+| FT.SEARCH | ✅ | Search index |
 | FT.AGGREGATE | 🔶 | Aggregation queries |
-| FT.INFO | 🔶 | Index info |
+| FT.INFO | ✅ | Index info |
 | FT.EXPLAIN | ❌ | Not implemented |
 | FT.EXPLAINCLI | ❌ | Not implemented |
 | FT.ALTER | ❌ | Not implemented |
-| FT.DROPINDEX | 🔶 | Drop index |
+| FT.DROPINDEX | ✅ | Drop index |
 | FT.ALIASADD | ❌ | Not implemented |
 | FT.ALIASDEL | ❌ | Not implemented |
 | FT.ALIASUPDATE | ❌ | Not implemented |
@@ -647,7 +653,7 @@ OrbitRS provides compatibility with popular Redis modules, enabling advanced fun
 |--------|----------|----------|-------|
 | RedisJSON | ~90% | ✅ High | Nearly complete |
 | RedisGraph | ~40% | 🔶 Medium | Basic Cypher support |
-| RedisSearch | ~50% | 🔶 Medium | Core search works |
+| RedisSearch | ~85% | ✅ High | Core search complete |
 | RedisTimeSeries | ~45% | 🔶 Medium | Basic time series |
 | RedisBloom | ~5% | ❌ Low | Minimal support |
 | RedisGears | 0% | ❌ Low | Not implemented |

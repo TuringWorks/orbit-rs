@@ -154,10 +154,11 @@ impl TextIndex {
                     };
 
                     for (pos, term) in terms.iter().enumerate() {
-                        self.inverted_index
-                            .entry(term.clone())
-                            .or_insert_with(Vec::new)
-                            .push((id.to_string(), vec![pos], *weight));
+                        self.inverted_index.entry(term.clone()).or_default().push((
+                            id.to_string(),
+                            vec![pos],
+                            *weight,
+                        ));
                     }
                 }
             }

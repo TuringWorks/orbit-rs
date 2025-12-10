@@ -45,7 +45,7 @@ rust_decimal = { version = "1.36", features = ["serde"] }
 ordered-float = { version = "4.2", features = ["serde"] }
 comfy-table = "7.1"
 owo-colors = "4.1"
-tonic.workspace = true
+tonic = { workspace = true, features = ["tls-ring"] }
 tonic-reflection = "0.14"
 futures.workspace = true
 dashmap.workspace = true
@@ -96,6 +96,9 @@ lz4_flex = "0.11"
 boa_engine = { version = "0.19", optional = true }
 # rquickjs - QuickJS bindings for MongoDB/Redis (performance-critical)
 rquickjs = { version = "0.6", features = ["array-buffer", "classes", "futures"], optional = true }
+tokio-rustls = "0.26.4"
+rustls-pemfile = "2.2.0"
+rustls = { version = "0.23.35", features = ["ring"] }
 
 [features]
 # Default features - all production-ready features enabled

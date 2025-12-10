@@ -25,10 +25,11 @@ use crate::protocols::postgres_wire::sql::{
         IsolationLevel, JoinCondition, JoinType, MergeAction, MergeInsertValues, MergeStatement,
         ParameterMode, Privilege, ReleaseSavepointStatement, RevokeStatement, RollbackStatement,
         SavepointStatement, SelectItem, SelectStatement, SetStatement, ShowStatement, ShowVariable,
-        Statement, TableConstraint, TableName, TriggerEvent, TriggerForEach, TriggerTiming,
-        TruncateStatement, TypeDefinition, UpdateStatement, UseStatement,
+        Statement, TableConstraint, TableName, TraverseClause, TriggerEvent, TriggerForEach,
+        TriggerTiming, TruncateStatement, TypeDefinition, UpdateStatement, UseStatement,
     },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator, SequenceAccessor},
+    graph_traversal::{self, OrbitQLGraphBuilder},
     parser::SqlParser,
     types::{SqlType, SqlValue},
 };
@@ -1579,6 +1580,11 @@ impl SqlExecutor {
         let mut columns = Vec::new();
         let mut rows = Vec::new();
 
+        // Check if this is a TRAVERSE query
+        if let Some(ref traverse_clause) = stmt.traverse {
+            return self.execute_traverse_query(&stmt, traverse_clause).await;
+        }
+
         // Determine result columns from SELECT list
         self.build_result_columns(&stmt.select_list, &stmt.from_clause, &mut columns)
             .await?;
@@ -1609,6 +1615,132 @@ impl SqlExecutor {
             row_count: rows.len(),
             rows,
         })
+    }
+
+    /// Execute a TRAVERSE query using shared graph algorithms
+    async fn execute_traverse_query(
+        &self,
+        stmt: &SelectStatement,
+        traverse_clause: &TraverseClause,
+    ) -> ProtocolResult<ExecutionResult> {
+        // Get the source table (nodes) from FROM clause
+        let (node_table, start_nodes) = if let Some(ref from_clause) = stmt.from_clause {
+            self.extract_traverse_source(from_clause, &stmt.where_clause)
+                .await?
+        } else {
+            return Err(ProtocolError::PostgresError(
+                "TRAVERSE requires a FROM clause specifying the start nodes".to_string(),
+            ));
+        };
+
+        // Get the edge collection data
+        let edge_table = &traverse_clause.edge_collection;
+        let edge_data = {
+            let table_data = self.table_data.read().await;
+            table_data.get(edge_table).cloned().unwrap_or_default()
+        };
+
+        // Get node data
+        let node_data = {
+            let table_data = self.table_data.read().await;
+            table_data.get(&node_table).cloned().unwrap_or_default()
+        };
+
+        // Build the graph using the shared graph algorithms
+        let builder = OrbitQLGraphBuilder::new(&node_table, edge_table);
+        let graph = builder.build_graph(&node_data, &edge_data)?;
+
+        // Execute the traversal
+        let traversal_result =
+            graph_traversal::execute_traverse(&graph, &start_nodes, traverse_clause)?;
+
+        // Build result columns
+        let mut columns = Vec::new();
+        if let Some(first_node) = traversal_result.nodes.first() {
+            for key in first_node.keys() {
+                columns.push(key.clone());
+            }
+        }
+        // Add depth column
+        columns.push("_depth".to_string());
+
+        // Build result rows
+        let mut rows = Vec::new();
+        for node in &traversal_result.nodes {
+            let mut row = Vec::new();
+            for col in &columns {
+                if col == "_depth" {
+                    // Find depth for this node
+                    if let Some(id) = node.get("_key").or(node.get("id")) {
+                        let id_str = id.to_postgres_string();
+                        let depth = traversal_result.depths.get(&id_str).unwrap_or(&0);
+                        row.push(Some(depth.to_string()));
+                    } else {
+                        row.push(Some("0".to_string()));
+                    }
+                } else if let Some(value) = node.get(col) {
+                    row.push(Some(value.to_postgres_string()));
+                } else {
+                    row.push(None);
+                }
+            }
+            rows.push(row);
+        }
+
+        Ok(ExecutionResult::Select {
+            columns,
+            row_count: rows.len(),
+            rows,
+        })
+    }
+
+    /// Extract the source table and start node IDs for TRAVERSE
+    async fn extract_traverse_source(
+        &self,
+        from_clause: &FromClause,
+        where_clause: &Option<Expression>,
+    ) -> ProtocolResult<(String, Vec<String>)> {
+        match from_clause {
+            FromClause::Table { name, .. } => {
+                let table_name = name.full_name();
+
+                // Get all rows from the source table
+                let table_data = self.table_data.read().await;
+                let rows = table_data.get(&table_name).cloned().unwrap_or_default();
+
+                // Filter by WHERE clause if present and extract node IDs
+                let mut start_nodes = Vec::new();
+                for row in &rows {
+                    let matches = if let Some(ref where_expr) = where_clause {
+                        let context = EvaluationContext {
+                            current_row: row.clone(),
+                            table_data: HashMap::new(),
+                            variables: HashMap::new(),
+                            current_table: Some(table_name.clone()),
+                            window_frame: None,
+                        };
+                        match self.evaluate_where_condition(where_expr, &context).await {
+                            Ok(SqlValue::Boolean(b)) => b,
+                            _ => false,
+                        }
+                    } else {
+                        true
+                    };
+
+                    if matches {
+                        // Try to get node ID from _key or id column
+                        if let Some(id) = row.get("_key").or(row.get("id")) {
+                            start_nodes.push(id.to_postgres_string());
+                        }
+                    }
+                }
+
+                Ok((table_name, start_nodes))
+            }
+            _ => Err(ProtocolError::PostgresError(
+                "TRAVERSE source must be a table reference".to_string(),
+            )),
+        }
     }
 
     /// Compute values for STORED generated columns
@@ -2133,8 +2265,8 @@ impl SqlExecutor {
             }
             SqlValue::Composite(fields) => {
                 let values: Vec<String> = fields
-                    .iter()
-                    .map(|(_, v)| self.sql_value_to_string(v))
+                    .values()
+                    .map(|v| self.sql_value_to_string(v))
                     .collect();
                 format!("({})", values.join(","))
             }
@@ -2859,7 +2991,7 @@ impl SqlExecutor {
                 let row_pair = (old_row.clone(), new_row.clone().unwrap_or_default());
                 let rows = self.evaluate_returning_clause_with_old_new(
                     returning_items,
-                    &vec![row_pair],
+                    &[row_pair],
                     &table_schema,
                 )?;
                 result_rows.extend(rows);

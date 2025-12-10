@@ -9,12 +9,14 @@ use crate::protocols::common::storage::memory::MemoryTableStorage;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::types::{SqlType, SqlValue};
 use crate::protocols::postgres_wire::SqlEngine;
+use crate::protocols::tls::OrbitTlsAcceptor;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tokio::sync::RwLock;
+use tracing::{debug, error, info};
 
 /// Prepared statement information
 #[derive(Debug, Clone)]
@@ -51,6 +53,7 @@ pub struct MySqlAdapter {
     prepared_statements: Arc<RwLock<HashMap<u32, PreparedStatement>>>,
     next_statement_id: Arc<RwLock<u32>>,
     metrics: Arc<RwLock<MySqlMetrics>>,
+    client_capabilities: Arc<RwLock<u32>>,
 }
 
 impl MySqlAdapter {
@@ -68,6 +71,7 @@ impl MySqlAdapter {
             prepared_statements: Arc::new(RwLock::new(HashMap::new())),
             next_statement_id: Arc::new(RwLock::new(1)),
             metrics: Arc::new(RwLock::new(MySqlMetrics::default())),
+            client_capabilities: Arc::new(RwLock::new(0)),
         })
     }
 
@@ -80,25 +84,48 @@ impl MySqlAdapter {
 
     /// Start the MySQL server
     pub async fn start(&self) -> ProtocolResult<()> {
-        let listener = TcpListener::bind(self.config.listen_addr)
+        self.start_with_tls(None).await
+    }
+
+    /// Start the MySQL server with optional TLS
+    pub async fn start_with_tls(
+        &self,
+        tls_acceptor: Option<OrbitTlsAcceptor>,
+    ) -> ProtocolResult<()> {
+        let listener = TcpListener::bind(&self.config.listen_addr)
             .await
             .map_err(|e| ProtocolError::IoError(e.to_string()))?;
 
-        println!("[MySQL] Server listening on {}", self.config.listen_addr);
+        info!("[MySQL] Server listening on {}", self.config.listen_addr);
 
         loop {
             match listener.accept().await {
                 Ok((socket, addr)) => {
-                    println!("[MySQL] New connection from: {}", addr);
+                    debug!("[MySQL] New connection from: {}", addr);
                     let adapter = self.clone_for_connection();
+                    let tls_acceptor = tls_acceptor.clone();
+
                     tokio::spawn(async move {
-                        if let Err(e) = adapter.handle_connection(socket).await {
-                            eprintln!("[MySQL] Connection error: {}", e);
+                        if let Some(acceptor) = tls_acceptor {
+                            match acceptor.accept(socket).await {
+                                Ok(tls_stream) => {
+                                    if let Err(e) = adapter.handle_connection(tls_stream).await {
+                                        error!("[MySQL] Connection error: {}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("[MySQL] TLS handshake failed: {}", e);
+                                }
+                            }
+                        } else {
+                            if let Err(e) = adapter.handle_connection(socket).await {
+                                error!("[MySQL] Connection error: {}", e);
+                            }
                         }
                     });
                 }
                 Err(e) => {
-                    eprintln!("[MySQL] Accept error: {}", e);
+                    error!("[MySQL] Accept error: {}", e);
                 }
             }
         }
@@ -115,11 +142,15 @@ impl MySqlAdapter {
             prepared_statements: Arc::clone(&self.prepared_statements),
             next_statement_id: Arc::clone(&self.next_statement_id),
             metrics: Arc::clone(&self.metrics),
+            client_capabilities: Arc::new(RwLock::new(0)), // New connection starts with 0 capabilities
         }
     }
 
     /// Handle a client connection
-    async fn handle_connection(&self, mut socket: TcpStream) -> ProtocolResult<()> {
+    async fn handle_connection<S>(&self, mut socket: S) -> ProtocolResult<()>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    {
         // Update metrics for new connection
         {
             let mut metrics = self.metrics.write().await;
@@ -145,7 +176,10 @@ impl MySqlAdapter {
         };
 
         // Send handshake
-        let handshake = build_handshake(connection_id, &self.config.server_version);
+        // TODO: Support caching_sha2_password when authentication is enabled
+        let auth_plugin = "mysql_native_password";
+
+        let handshake = build_handshake(connection_id, &self.config.server_version, auth_plugin);
         let packet = MySqlPacket::new(0, handshake);
         socket
             .write_all(&packet.encode())
@@ -176,8 +210,14 @@ impl MySqlAdapter {
             if auth.state() != &AuthState::Authenticated {
                 match HandshakeResponse::parse(packet.payload.clone()) {
                     Ok(response) => {
-                        match auth.process_handshake(response) {
+                        match auth.process_handshake(response.clone()) {
                             Ok(true) => {
+                                // Store client capabilities
+                                {
+                                    let mut caps = self.client_capabilities.write().await;
+                                    *caps = response.capability_flags;
+                                }
+
                                 // Send OK packet
                                 let ok = MySqlPacketBuilder::ok(0, 0);
                                 let response_packet = MySqlPacket::new(sequence_id, ok);
@@ -250,7 +290,10 @@ impl MySqlAdapter {
     }
 
     /// Read a MySQL packet from the socket
-    async fn read_packet(&self, socket: &mut TcpStream) -> ProtocolResult<MySqlPacket> {
+    async fn read_packet<S>(&self, socket: &mut S) -> ProtocolResult<MySqlPacket>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    {
         // Read header (4 bytes)
         let mut header = [0u8; 4];
         socket.read_exact(&mut header).await.map_err(|e| {
@@ -668,7 +711,209 @@ impl MySqlAdapter {
             return Some(self.build_table_maintenance_result("repair"));
         }
 
+        // ============ NDB Cluster / Federated Commands (stubs) ============
+
+        // Handle CREATE/ALTER/DROP TABLESPACE
+        if query_upper.starts_with("CREATE TABLESPACE")
+            || query_upper.starts_with("ALTER TABLESPACE")
+            || query_upper.starts_with("DROP TABLESPACE")
+        {
+            println!("[MySQL] Handling TABLESPACE command (stub)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // Handle CREATE/ALTER/DROP LOGFILE GROUP
+        if query_upper.starts_with("CREATE LOGFILE GROUP")
+            || query_upper.starts_with("ALTER LOGFILE GROUP")
+            || query_upper.starts_with("DROP LOGFILE GROUP")
+        {
+            println!("[MySQL] Handling LOGFILE GROUP command (stub)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // Handle CREATE/ALTER/DROP SERVER
+        if query_upper.starts_with("CREATE SERVER")
+            || query_upper.starts_with("ALTER SERVER")
+            || query_upper.starts_with("DROP SERVER")
+        {
+            println!("[MySQL] Handling SERVER command (stub)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // ============ Event Scheduler Commands (stubs) ============
+
+        // Handle CREATE/ALTER/DROP EVENT
+        if query_upper.starts_with("CREATE EVENT")
+            || query_upper.starts_with("ALTER EVENT")
+            || query_upper.starts_with("DROP EVENT")
+        {
+            println!("[MySQL] Handling EVENT command (stub)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // Handle SHOW EVENTS
+        if query_upper.starts_with("SHOW EVENTS") {
+            println!("[MySQL] Handling SHOW EVENTS");
+            return Some(self.build_show_events_result());
+        }
+
+        // ============ Stored Procedure / Function Commands (stubs) ============
+
+        // Handle CREATE USER / DROP USER / RENAME USER / GRANT / REVOKE
+        if query_upper.starts_with("CREATE USER")
+            || query_upper.starts_with("DROP USER")
+            || query_upper.starts_with("RENAME USER")
+            || query_upper.starts_with("GRANT")
+            || query_upper.starts_with("REVOKE")
+            || query_upper.starts_with("ALTER USER")
+            || query_upper.starts_with("SET PASSWORD")
+        {
+            println!("[MySQL] Handling USER/PRIVILEGES command (stub)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // Handle CALL
+        if query_upper.starts_with("CALL ") {
+            println!("[MySQL] Handling CALL command (stub)");
+            // Ideally we should return a result set if the procedure returns one
+            // But for compatibility with void procedures, OK is safer
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // ============ Trigger Commands (stubs) ============
+
+        // Handle CREATE/DROP TRIGGER
+        if query_upper.starts_with("CREATE TRIGGER") || query_upper.starts_with("DROP TRIGGER") {
+            println!("[MySQL] Handling TRIGGER command (stub)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // Handle SHOW TRIGGERS
+        if query_upper.starts_with("SHOW TRIGGERS") {
+            println!("[MySQL] Handling SHOW TRIGGERS");
+            return Some(self.build_show_triggers_result());
+        }
+
+        // ============ SHOW Commands (stubs) ============
+
+        // Handle SHOW CREATE PROCEDURE/FUNCTION/TRIGGER/EVENT/VIEW
+        if query_upper.starts_with("SHOW CREATE PROCEDURE")
+            || query_upper.starts_with("SHOW CREATE FUNCTION")
+            || query_upper.starts_with("SHOW CREATE TRIGGER")
+            || query_upper.starts_with("SHOW CREATE EVENT")
+            || query_upper.starts_with("SHOW CREATE VIEW")
+        {
+            println!("[MySQL] Handling SHOW CREATE ... command (stub)");
+            // Return empty result set or error depending on what's safer.
+            // Empty result set is safer for now.
+            return Some(self.build_empty_show_create_result());
+        }
+
+        // Handle SHOW BINARY LOGS / MASTER STATUS / REPLICATION
+        if query_upper.starts_with("SHOW BINARY LOGS")
+            || query_upper.starts_with("SHOW BINLOG EVENTS")
+            || query_upper.starts_with("SHOW RELAYLOG EVENTS")
+            || query_upper.starts_with("SHOW MASTER STATUS")
+            || query_upper.starts_with("SHOW SLAVE STATUS")
+            || query_upper.starts_with("SHOW REPLICA STATUS")
+        {
+            println!("[MySQL] Handling SHOW BINARY/REPLICA command (stub)");
+            return Some(self.build_empty_show_result());
+        }
+
+        // Handle SHOW OPEN TABLES / PROFILES
+        if query_upper.starts_with("SHOW OPEN TABLES")
+            || query_upper.starts_with("SHOW PROFILES")
+            || query_upper.starts_with("SHOW PROFILE")
+        {
+            println!("[MySQL] Handling SHOW OPEN TABLES/PROFILES command (stub)");
+            return Some(self.build_empty_show_result());
+        }
+
+        // Handle SHOW PROCEDURE/FUNCTION STATUS
+        if query_upper.starts_with("SHOW PROCEDURE STATUS")
+            || query_upper.starts_with("SHOW FUNCTION STATUS")
+        {
+            println!("[MySQL] Handling SHOW PROCEDURE/FUNCTION STATUS command (stub)");
+            return Some(self.build_empty_show_result());
+        }
+
+        // ============ Admin / Utility Commands (stubs) ============
+
+        // Handle FLUSH / RESET
+        if query_upper.starts_with("FLUSH ") || query_upper.starts_with("RESET ") {
+            println!("[MySQL] Handling FLUSH/RESET command (stub)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // Handle KILL / SHUTDOWN
+        if query_upper.starts_with("KILL ") || query_upper.starts_with("SHUTDOWN") {
+            println!("[MySQL] Handling KILL/SHUTDOWN command (stub)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // Handle CHECKSUM / REPAIR / ANALYZE / OPTIMIZE TABLE (generic handler)
+        if query_upper.starts_with("CHECKSUM TABLE")
+            || query_upper.starts_with("REPAIR TABLE")
+            || query_upper.starts_with("ANALYZE TABLE")
+            || query_upper.starts_with("OPTIMIZE TABLE")
+            || query_upper.starts_with("CHECK TABLE")
+        {
+            println!("[MySQL] Handling TABLE maintenance command (stub)");
+            return Some(self.build_table_maintenance_result("status"));
+        }
+
+        // Handle HELP / DO / HANDLER / CACHE INDEX
+        if query_upper.starts_with("HELP ")
+            || query_upper.starts_with("DO ")
+            || query_upper.starts_with("HANDLER ")
+            || query_upper.starts_with("CACHE INDEX ")
+            || query_upper.starts_with("LOAD INDEX INTO CACHE")
+        {
+            println!("[MySQL] Handling UTILITY command (stub)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
+        // ============ Replication Commands (stubs) ============
+        if query_upper.starts_with("CHANGE MASTER TO")
+            || query_upper.starts_with("CHANGE REPLICATION SOURCE TO")
+            || query_upper.starts_with("START SLAVE")
+            || query_upper.starts_with("START REPLICA")
+            || query_upper.starts_with("STOP SLAVE")
+            || query_upper.starts_with("STOP REPLICA")
+            || query_upper.starts_with("RESET SLAVE")
+            || query_upper.starts_with("RESET REPLICA")
+            || query_upper.starts_with("PURGE BINARY LOGS")
+        {
+            println!("[MySQL] Handling REPLICATION command (stub)");
+            return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
+        }
+
         None // Not a MySQL-specific query, let SQL engine handle it
+    }
+
+    /// Build generic empty result set for SHOW commands
+    fn build_empty_show_result(&self) -> ProtocolResult<Vec<Bytes>> {
+        self.build_result_set(
+            crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select {
+                columns: vec!["Status".to_string()],
+                rows: vec![],
+                row_count: 0,
+                transaction_id: None,
+            },
+        )
+    }
+
+    /// Build empty result set for SHOW CREATE ... commands
+    fn build_empty_show_create_result(&self) -> ProtocolResult<Vec<Bytes>> {
+        self.build_result_set(
+            crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select {
+                columns: vec!["Table".to_string(), "Create Table".to_string()],
+                rows: vec![],
+                row_count: 0,
+                transaction_id: None,
+            },
+        )
     }
 
     /// Handle SELECT @@variable queries
@@ -2083,6 +2328,74 @@ impl MySqlAdapter {
         Ok(vec![MySqlPacketBuilder::ok(0, 0)])
     }
 
+    /// Build result for SHOW TRIGGERS command
+    fn build_show_triggers_result(&self) -> ProtocolResult<Vec<Bytes>> {
+        use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
+
+        // Columns: Trigger, Event, Table, Statement, Timing, Created, sql_mode, Definer, character_set_client, collation_connection, Database Collation
+        let columns = vec![
+            "Trigger".to_string(),
+            "Event".to_string(),
+            "Table".to_string(),
+            "Statement".to_string(),
+            "Timing".to_string(),
+            "Created".to_string(),
+            "sql_mode".to_string(),
+            "Definer".to_string(),
+            "character_set_client".to_string(),
+            "collation_connection".to_string(),
+            "Database Collation".to_string(),
+        ];
+
+        // Empty result set for now
+        let rows: Vec<Vec<Option<String>>> = Vec::new();
+
+        let result = UnifiedExecutionResult::Select {
+            columns,
+            rows,
+            row_count: 0,
+            transaction_id: None,
+        };
+
+        self.build_result_set(result)
+    }
+
+    /// Build result for SHOW EVENTS command
+    fn build_show_events_result(&self) -> ProtocolResult<Vec<Bytes>> {
+        use crate::protocols::postgres_wire::sql::UnifiedExecutionResult;
+
+        // Columns: Db, Name, Definer, Time zone, Type, Execute at, Interval value, Interval field, Starts, Ends, Status, Originator, character_set_client, collation_connection, Database Collation
+        let columns = vec![
+            "Db".to_string(),
+            "Name".to_string(),
+            "Definer".to_string(),
+            "Time zone".to_string(),
+            "Type".to_string(),
+            "Execute at".to_string(),
+            "Interval value".to_string(),
+            "Interval field".to_string(),
+            "Starts".to_string(),
+            "Ends".to_string(),
+            "Status".to_string(),
+            "Originator".to_string(),
+            "character_set_client".to_string(),
+            "collation_connection".to_string(),
+            "Database Collation".to_string(),
+        ];
+
+        // Empty result set for now
+        let rows: Vec<Vec<Option<String>>> = Vec::new();
+
+        let result = UnifiedExecutionResult::Select {
+            columns,
+            rows,
+            row_count: 0,
+            transaction_id: None,
+        };
+
+        self.build_result_set(result)
+    }
+
     /// Build result set from SQL execution result
     fn build_result_set(
         &self,
@@ -2138,16 +2451,33 @@ impl MySqlAdapter {
                     packets.push(col_def);
                 }
 
-                // EOF packet after columns
-                packets.push(MySqlPacketBuilder::eof());
+                // EOF packet after columns (or OK if deprecated)
+                let deprecate_eof = {
+                    // Use try_read since we're in a sync context
+                    if let Ok(caps) = self.client_capabilities.try_read() {
+                        (*caps & super::protocol::CLIENT_DEPRECATE_EOF) != 0
+                    } else {
+                        false // Default to not deprecated if we can't get the lock
+                    }
+                };
+
+                if deprecate_eof {
+                    packets.push(MySqlPacketBuilder::ok(0, 0));
+                } else {
+                    packets.push(MySqlPacketBuilder::eof());
+                }
 
                 // Row data packets
                 for row in rows {
                     packets.push(MySqlPacketBuilder::text_row(&row));
                 }
 
-                // EOF packet after rows
-                packets.push(MySqlPacketBuilder::eof());
+                // EOF packet after rows (or OK if deprecated)
+                if deprecate_eof {
+                    packets.push(MySqlPacketBuilder::ok(0, 0));
+                } else {
+                    packets.push(MySqlPacketBuilder::eof());
+                }
 
                 Ok(packets)
             }

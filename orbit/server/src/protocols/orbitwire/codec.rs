@@ -180,7 +180,7 @@ impl Decoder for OrbitWireCodec {
             }
 
             // Check magic bytes
-            if &src[..4] != MAGIC_BYTES {
+            if src[..4] != MAGIC_BYTES {
                 return Err(CodecError::InvalidMagic);
             }
 
