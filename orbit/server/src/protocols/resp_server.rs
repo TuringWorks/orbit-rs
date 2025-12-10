@@ -9,7 +9,6 @@ use tracing::{debug, error, info};
 use super::resp::{types::RespValue, CommandHandler, RespCodec};
 use crate::protocols::error::ProtocolResult;
 
-
 use crate::protocols::tls::OrbitTlsAcceptor;
 
 /// RESP protocol server
@@ -46,7 +45,10 @@ impl RespServer {
     /// Enable TLS with the provided configuration
     pub fn with_tls_config(mut self, tls_config: Option<crate::config::TlsConfig>) -> Self {
         if tls_config.is_some() {
-            self.tls_acceptor = Some(crate::protocols::tls::OrbitTlsAcceptor::new(&tls_config).expect("Invalid TLS configuration"));
+            self.tls_acceptor = Some(
+                crate::protocols::tls::OrbitTlsAcceptor::new(&tls_config)
+                    .expect("Invalid TLS configuration"),
+            );
         }
         self
     }
@@ -65,13 +67,15 @@ impl RespServer {
                     debug!("New RESP connection from {}", addr);
                     let handler = Arc::clone(&self.command_handler);
                     let tls_acceptor = self.tls_acceptor.clone();
-                    
+
                     tokio::spawn(async move {
                         // Handle TLS handshake if configured
                         if let Some(acceptor) = tls_acceptor {
                             match acceptor.accept(socket).await {
                                 Ok(tls_stream) => {
-                                    if let Err(e) = Self::handle_connection(tls_stream, handler).await {
+                                    if let Err(e) =
+                                        Self::handle_connection(tls_stream, handler).await
+                                    {
                                         error!("Connection error: {}", e);
                                     }
                                 }
@@ -93,10 +97,7 @@ impl RespServer {
         }
     }
 
-    async fn handle_connection<S>(
-        socket: S,
-        handler: Arc<CommandHandler>,
-    ) -> ProtocolResult<()>
+    async fn handle_connection<S>(socket: S, handler: Arc<CommandHandler>) -> ProtocolResult<()>
     where
         S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
     {

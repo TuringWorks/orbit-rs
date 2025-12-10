@@ -30,7 +30,10 @@ impl AqlServer {
 
     pub fn with_tls_config(mut self, tls_config: Option<crate::config::TlsConfig>) -> Self {
         if tls_config.is_some() {
-            self.tls_acceptor = Some(crate::protocols::tls::OrbitTlsAcceptor::new(&tls_config).expect("Invalid TLS configuration"));
+            self.tls_acceptor = Some(
+                crate::protocols::tls::OrbitTlsAcceptor::new(&tls_config)
+                    .expect("Invalid TLS configuration"),
+            );
         }
         self
     }

@@ -1,5 +1,6 @@
 //! Main Orbit server implementation for hosting actors and managing the cluster
 
+use crate::config::TlsConfig;
 use crate::mesh::{AddressableDirectory, ClusterManager, ClusterStats, DirectoryStats};
 use crate::persistence::config::PersistenceProviderConfig;
 use crate::persistence::PersistenceProviderRegistry;
@@ -19,7 +20,6 @@ use std::sync::Arc;
 use tokio::time::{interval, Duration};
 use tonic::transport::{Certificate, Identity, Server, ServerTlsConfig};
 use tonic_reflection::server::Builder as ReflectionBuilder;
-use crate::config::TlsConfig;
 
 /// Configuration for protocol servers
 #[derive(Debug, Clone)]
@@ -388,29 +388,36 @@ impl OrbitServer {
             if tls.enabled {
                 let cert = tokio::fs::read_to_string(&tls.cert_file)
                     .await
-                    .map_err(|e| OrbitError::configuration(format!("Failed to read cert file: {}", e)))?;
+                    .map_err(|e| {
+                        OrbitError::configuration(format!("Failed to read cert file: {}", e))
+                    })?;
                 let key = tokio::fs::read_to_string(&tls.key_file)
                     .await
-                    .map_err(|e| OrbitError::configuration(format!("Failed to read key file: {}", e)))?;
-                
+                    .map_err(|e| {
+                        OrbitError::configuration(format!("Failed to read key file: {}", e))
+                    })?;
+
                 let identity = Identity::from_pem(cert, key);
                 let mut tls_config = ServerTlsConfig::new().identity(identity);
-                
+
                 if tls.require_client_cert {
                     if let Some(ref ca_path) = tls.ca_cert_file {
-                        let ca_cert = tokio::fs::read_to_string(ca_path)
-                            .await
-                            .map_err(|e| OrbitError::configuration(format!("Failed to read CA cert file: {}", e)))?;
+                        let ca_cert = tokio::fs::read_to_string(ca_path).await.map_err(|e| {
+                            OrbitError::configuration(format!("Failed to read CA cert file: {}", e))
+                        })?;
                         let client_ca_root = Certificate::from_pem(ca_cert);
                         tls_config = tls_config.client_ca_root(client_ca_root);
                     }
                 }
-                
-                server_builder = server_builder
-                    .tls_config(tls_config)
-                    .map_err(|e| OrbitError::configuration(format!("Failed to configure TLS: {}", e)))?;
-                
-                tracing::info!("gRPC server TLS enabled (mTLS: {})", tls.require_client_cert);
+
+                server_builder = server_builder.tls_config(tls_config).map_err(|e| {
+                    OrbitError::configuration(format!("Failed to configure TLS: {}", e))
+                })?;
+
+                tracing::info!(
+                    "gRPC server TLS enabled (mTLS: {})",
+                    tls.require_client_cert
+                );
             }
         }
 

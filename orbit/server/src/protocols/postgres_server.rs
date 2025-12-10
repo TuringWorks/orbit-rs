@@ -47,13 +47,12 @@ impl PostgresServer {
     /// Start the server
     pub async fn run(&self) -> ProtocolResult<()> {
         let listener = TcpListener::bind(&self.bind_addr).await?;
-        let tls_acceptor = OrbitTlsAcceptor::new(&self.tls_config).map_err(|e| {
-             ProtocolError::IoError(e.to_string())
-        })?;
+        let tls_acceptor = OrbitTlsAcceptor::new(&self.tls_config)
+            .map_err(|e| ProtocolError::IoError(e.to_string()))?;
 
         info!("PostgreSQL server listening on {}", self.bind_addr);
         if tls_acceptor.is_enabled() {
-             info!("PostgreSQL TLS enabled");
+            info!("PostgreSQL TLS enabled");
         }
 
         loop {
@@ -69,17 +68,17 @@ impl PostgresServer {
                         } else {
                             PostgresWireProtocol::new()
                         };
-                        
+
                         // Wrap stream with TLS if enabled
                         match tls_acceptor.accept(stream).await {
-                             Ok(stream) => {
-                                 if let Err(e) = protocol.handle_connection(stream).await {
-                                     error!("Connection error: {}", e);
-                                 }
-                             }
-                             Err(e) => {
-                                 error!("TLS handshake error: {}", e);
-                             }
+                            Ok(stream) => {
+                                if let Err(e) = protocol.handle_connection(stream).await {
+                                    error!("Connection error: {}", e);
+                                }
+                            }
+                            Err(e) => {
+                                error!("TLS handshake error: {}", e);
+                            }
                         }
                     });
                 }

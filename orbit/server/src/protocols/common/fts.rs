@@ -36,11 +36,11 @@
 //! engine = "shared"  # "shared" (SIMD/in-memory) or "tantivy" (disk-backed)
 //! ```
 
+use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use async_trait::async_trait;
 
 /// Result type for FTS operations
 pub type FtsResult<T> = Result<T, FtsError>;
@@ -110,7 +110,10 @@ impl std::str::FromStr for FtsEngineType {
         match s.to_lowercase().as_str() {
             "shared" | "simd" | "memory" | "in-memory" => Ok(FtsEngineType::Shared),
             "tantivy" | "disk" | "persistent" => Ok(FtsEngineType::Tantivy),
-            _ => Err(format!("Unknown FTS engine type: {}. Use 'shared' or 'tantivy'", s)),
+            _ => Err(format!(
+                "Unknown FTS engine type: {}. Use 'shared' or 'tantivy'",
+                s
+            )),
         }
     }
 }
@@ -1285,8 +1288,9 @@ impl UnifiedFtsEngine for SharedFtsEngine {
             return Ok(());
         }
 
-        let persistence_dir = self.config.persistence_dir.as_ref()
-            .ok_or_else(|| FtsError::PersistenceError("Persistence directory not configured".to_string()))?;
+        let persistence_dir = self.config.persistence_dir.as_ref().ok_or_else(|| {
+            FtsError::PersistenceError("Persistence directory not configured".to_string())
+        })?;
 
         // Create persistence directory if it doesn't exist
         std::fs::create_dir_all(persistence_dir)?;
@@ -1451,7 +1455,7 @@ impl UnifiedFtsEngine for TantivyFtsEngine {
 
         if let Some(&field) = handle.field_map.get("_doc_id") {
             let term = tantivy::Term::from_field_text(field, doc_id);
-            let mut writer = handle.writer.write().await;
+            let writer = handle.writer.write().await;
             writer.delete_term(term);
             return Ok(true);
         }
@@ -1491,7 +1495,8 @@ impl UnifiedFtsEngine for TantivyFtsEngine {
         let query_string = query_parts.join(" ");
 
         // Get searchable fields
-        let search_fields: Vec<tantivy::schema::Field> = if let Some(ref field_names) = query.fields {
+        let search_fields: Vec<tantivy::schema::Field> = if let Some(ref field_names) = query.fields
+        {
             field_names
                 .iter()
                 .filter_map(|name| handle.field_map.get(name).copied())
@@ -1505,8 +1510,7 @@ impl UnifiedFtsEngine for TantivyFtsEngine {
                 .collect()
         };
 
-        let query_parser =
-            tantivy::query::QueryParser::for_index(&handle.index, search_fields);
+        let query_parser = tantivy::query::QueryParser::for_index(&handle.index, search_fields);
         let tantivy_query = query_parser
             .parse_query(&query_string)
             .map_err(|e| FtsError::InvalidQuery(e.to_string()))?;
@@ -1532,6 +1536,8 @@ impl UnifiedFtsEngine for TantivyFtsEngine {
                 let field_name = field_entry.name().to_string();
 
                 for value in doc.get_all(field) {
+                    // Use the Value trait to access as_str
+                    use tantivy::schema::Value;
                     if let Some(text) = value.as_str() {
                         if field_name == "_doc_id" {
                             doc_id = text.to_string();
@@ -1730,9 +1736,7 @@ impl FtsEngineFactory {
                 };
                 Ok(Arc::new(SharedFtsEngine::new(shared_config)))
             }
-            FtsEngineType::Tantivy => {
-                Ok(Arc::new(TantivyFtsEngine::new(config)?))
-            }
+            FtsEngineType::Tantivy => Ok(Arc::new(TantivyFtsEngine::new(config)?)),
         }
     }
 }

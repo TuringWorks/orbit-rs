@@ -33,7 +33,10 @@ impl CypherServer {
 
     pub fn with_tls_config(mut self, tls_config: Option<crate::config::TlsConfig>) -> Self {
         if tls_config.is_some() {
-            self.tls_acceptor = Some(crate::protocols::tls::OrbitTlsAcceptor::new(&tls_config).expect("Invalid TLS configuration"));
+            self.tls_acceptor = Some(
+                crate::protocols::tls::OrbitTlsAcceptor::new(&tls_config)
+                    .expect("Invalid TLS configuration"),
+            );
         }
         self
     }
@@ -61,7 +64,7 @@ impl CypherServer {
                     // Spawn a task to handle the connection
                     tokio::spawn(async move {
                         let mut handler = BoltProtocolHandler::new(storage);
-                        
+
                         if let Some(acceptor) = tls_acceptor {
                             match acceptor.accept(stream).await {
                                 Ok(tls_stream) => {

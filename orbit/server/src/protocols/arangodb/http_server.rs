@@ -4,6 +4,8 @@
 
 #![cfg(feature = "protocol-arangodb")]
 
+use crate::config::TlsConfig;
+use crate::protocols::tls::OrbitTlsAcceptor;
 use axum::{
     extract::{Json, State},
     http::StatusCode,
@@ -11,16 +13,14 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use hyper::server::conn::http1;
+use hyper_util::rt::TokioIo;
 use orbit_protocols::arangodb::ArangoHttpProtocol;
 use serde_json::Value;
 use std::error::Error;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::{error, info};
-use hyper::server::conn::http1;
-use hyper_util::rt::TokioIo;
-use crate::config::TlsConfig;
-use crate::protocols::tls::OrbitTlsAcceptor;
 
 /// ArangoDB Server State
 #[derive(Clone)]
@@ -69,7 +69,7 @@ impl ArangoServer {
         loop {
             let (socket, remote_addr) = listener.accept().await?;
             info!("New ArangoDB connection from {}", remote_addr);
-            
+
             let tls_acceptor = self.tls_acceptor.clone();
             let app = app.clone();
 
@@ -78,9 +78,7 @@ impl ArangoServer {
                     match acceptor.accept(socket).await {
                         Ok(tls_stream) => {
                             let io = TokioIo::new(tls_stream);
-                            if let Err(err) = http1::Builder::new()
-                                .serve_connection(io, app)
-                                .await
+                            if let Err(err) = http1::Builder::new().serve_connection(io, app).await
                             {
                                 // debug!("Error serving TLS connection: {}", err);
                             }
@@ -91,10 +89,7 @@ impl ArangoServer {
                     }
                 } else {
                     let io = TokioIo::new(socket);
-                    if let Err(err) = http1::Builder::new()
-                        .serve_connection(io, app)
-                        .await
-                    {
+                    if let Err(err) = http1::Builder::new().serve_connection(io, app).await {
                         // debug!("Error serving connection: {}", err);
                     }
                 }

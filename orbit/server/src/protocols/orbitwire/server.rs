@@ -61,13 +61,12 @@ impl OrbitWireServer {
             .await
             .map_err(|e| ServerError::BindError(e.to_string()))?;
 
-        let tls_acceptor = OrbitTlsAcceptor::new(&self.tls_config).map_err(|e| {
-             ServerError::IoError(e)
-        })?;
+        let tls_acceptor =
+            OrbitTlsAcceptor::new(&self.tls_config).map_err(|e| ServerError::IoError(e))?;
 
         info!("OrbitWire server listening on {}", addr);
         if tls_acceptor.is_enabled() {
-             info!("OrbitWire TLS enabled");
+            info!("OrbitWire TLS enabled");
         }
 
         loop {
@@ -79,18 +78,19 @@ impl OrbitWireServer {
                     let tls_acceptor = tls_acceptor.clone();
 
                     tokio::spawn(async move {
-                         // Wrap stream with TLS if enabled
+                        // Wrap stream with TLS if enabled
                         match tls_acceptor.accept(stream).await {
-                             Ok(stream) => {
-                                 if let Err(e) =
-                                    handle_connection(stream, peer_addr, session_manager, config).await
+                            Ok(stream) => {
+                                if let Err(e) =
+                                    handle_connection(stream, peer_addr, session_manager, config)
+                                        .await
                                 {
                                     error!("Connection error from {}: {}", peer_addr, e);
                                 }
-                             }
-                             Err(e) => {
-                                 error!("TLS handshake error: {}", e);
-                             }
+                            }
+                            Err(e) => {
+                                error!("TLS handshake error: {}", e);
+                            }
                         }
                     });
                 }
@@ -108,8 +108,9 @@ async fn handle_connection<S>(
     peer_addr: SocketAddr,
     session_manager: Arc<OrbitWireSessionManager>,
     config: OrbitWireConfig,
-) -> Result<(), ServerError> 
-where S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+) -> Result<(), ServerError>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     // Set up codec
     let codec = OrbitWireCodec::server()

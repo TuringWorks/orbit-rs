@@ -9,14 +9,14 @@ use crate::protocols::common::storage::memory::MemoryTableStorage;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::types::{SqlType, SqlValue};
 use crate::protocols::postgres_wire::SqlEngine;
+use crate::protocols::tls::OrbitTlsAcceptor;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-use crate::protocols::tls::OrbitTlsAcceptor;
-use tracing::{error, info, debug};
 use tokio::sync::RwLock;
+use tracing::{debug, error, info};
 
 /// Prepared statement information
 #[derive(Debug, Clone)]
@@ -88,7 +88,10 @@ impl MySqlAdapter {
     }
 
     /// Start the MySQL server with optional TLS
-    pub async fn start_with_tls(&self, tls_acceptor: Option<OrbitTlsAcceptor>) -> ProtocolResult<()> {
+    pub async fn start_with_tls(
+        &self,
+        tls_acceptor: Option<OrbitTlsAcceptor>,
+    ) -> ProtocolResult<()> {
         let listener = TcpListener::bind(&self.config.listen_addr)
             .await
             .map_err(|e| ProtocolError::IoError(e.to_string()))?;
@@ -101,7 +104,7 @@ impl MySqlAdapter {
                     debug!("[MySQL] New connection from: {}", addr);
                     let adapter = self.clone_for_connection();
                     let tls_acceptor = tls_acceptor.clone();
-                    
+
                     tokio::spawn(async move {
                         if let Some(acceptor) = tls_acceptor {
                             match acceptor.accept(socket).await {
@@ -144,7 +147,7 @@ impl MySqlAdapter {
     }
 
     /// Handle a client connection
-    async fn handle_connection<S>(&self, mut socket: S) -> ProtocolResult<()> 
+    async fn handle_connection<S>(&self, mut socket: S) -> ProtocolResult<()>
     where
         S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
     {
@@ -287,7 +290,7 @@ impl MySqlAdapter {
     }
 
     /// Read a MySQL packet from the socket
-    async fn read_packet<S>(&self, socket: &mut S) -> ProtocolResult<MySqlPacket> 
+    async fn read_packet<S>(&self, socket: &mut S) -> ProtocolResult<MySqlPacket>
     where
         S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
     {

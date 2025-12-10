@@ -1,17 +1,19 @@
+use orbit_server::config::TlsConfig;
+use orbit_server::protocols::PostgresServer;
+use orbit_server::tcp_proxy::{run_proxy, ProxyConfig};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tokio_rustls::rustls::{ClientConfig, RootCertStore, pki_types::CertificateDer};
+use tokio_rustls::rustls::{pki_types::CertificateDer, ClientConfig, RootCertStore};
 use tokio_rustls::TlsConnector;
-use orbit_server::protocols::PostgresServer;
-use orbit_server::config::TlsConfig;
-use orbit_server::tcp_proxy::{run_proxy, ProxyConfig};
 
 #[tokio::test]
 async fn test_lb_tls_passthrough() {
     // Install crypto provider
-    tokio_rustls::rustls::crypto::ring::default_provider().install_default().ok();
+    tokio_rustls::rustls::crypto::ring::default_provider()
+        .install_default()
+        .ok();
 
     // 1. Setup paths
     let certs_dir = PathBuf::from("/Users/ravindraboddipalli/.gemini/certs");
@@ -31,8 +33,8 @@ async fn test_lb_tls_passthrough() {
         require_client_cert: true,
     };
 
-    let server = PostgresServer::new(format!("127.0.0.1:{}", server_port))
-        .with_tls_config(Some(tls_config));
+    let server =
+        PostgresServer::new(format!("127.0.0.1:{}", server_port)).with_tls_config(Some(tls_config));
 
     // Spawn Backend Server
     tokio::spawn(async move {
@@ -49,7 +51,7 @@ async fn test_lb_tls_passthrough() {
 
     // Spawn Proxy
     tokio::spawn(async move {
-        run_proxy(proxy_config, "127.0.0.1", true).await.unwrap(); 
+        run_proxy(proxy_config, "127.0.0.1", true).await.unwrap();
     });
 
     // Wait for proxy to be up
@@ -68,7 +70,7 @@ async fn test_lb_tls_passthrough() {
     // Load Client Cert/Key
     let client_cert_bytes = std::fs::read(&client_cert_path).expect("Failed to read client cert");
     let client_key_bytes = std::fs::read(&client_key_path).expect("Failed to read client key");
-    
+
     let client_certs: Vec<CertificateDer> = rustls_pemfile::certs(&mut &client_cert_bytes[..])
         .collect::<Result<_, _>>()
         .unwrap();
@@ -80,18 +82,20 @@ async fn test_lb_tls_passthrough() {
         .with_root_certificates(root_cert_store)
         .with_client_auth_cert(client_certs, client_key)
         .unwrap();
-    
+
     let connector = TlsConnector::from(Arc::new(client_config));
 
     // Connect to PROXY PORT
-    let stream = TcpStream::connect(format!("127.0.0.1:{}", proxy_port)).await.expect("Failed to connect to proxy");
-    
+    let stream = TcpStream::connect(format!("127.0.0.1:{}", proxy_port))
+        .await
+        .expect("Failed to connect to proxy");
+
     // Perform TLS Handshake (domain must match cert SAN)
     let domain = "localhost".to_string().try_into().unwrap();
     match connector.connect(domain, stream).await {
         Ok(_) => {
             println!("TLS Handshake via Proxy Successful!");
-        },
+        }
         Err(e) => {
             panic!("TLS Handshake Failed via Proxy: {}", e);
         }

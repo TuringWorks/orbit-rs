@@ -34,7 +34,11 @@ impl ProxyConfig {
 }
 
 /// Run the proxy server
-pub async fn run_proxy(config: Arc<ProxyConfig>, bind_addr: &str, verbose: bool) -> std::io::Result<()> {
+pub async fn run_proxy(
+    config: Arc<ProxyConfig>,
+    bind_addr: &str,
+    verbose: bool,
+) -> std::io::Result<()> {
     let addr = format!("{}:{}", bind_addr, config.listen_port);
     let listener = TcpListener::bind(&addr).await?;
 
@@ -49,7 +53,7 @@ pub async fn run_proxy(config: Arc<ProxyConfig>, bind_addr: &str, verbose: bool)
         let (client, _) = listener.accept().await?;
         let backend_addr = config.next_backend();
         let name = config.name.clone();
-        
+
         tokio::spawn(async move {
             proxy_connection(client, backend_addr, name, verbose).await;
         });

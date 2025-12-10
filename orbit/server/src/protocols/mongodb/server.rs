@@ -4,16 +4,16 @@
 
 use super::protocol::{MongoCodec, MongoHeader, MongoMessage, MsgSection, OP_MSG, OP_REPLY};
 use super::storage::DocumentStore;
+use crate::config::TlsConfig;
+use crate::protocols::tls::OrbitTlsAcceptor;
 use bson::{doc, oid::ObjectId, Bson, Document};
 use futures::{SinkExt, StreamExt};
 use orbit_shared::OrbitResult;
 use std::sync::Arc;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 use tokio_util::codec::Framed;
 use tracing::{debug, error, info, warn};
-use tokio::io::{AsyncRead, AsyncWrite};
-use crate::config::TlsConfig;
-use crate::protocols::tls::OrbitTlsAcceptor;
 
 pub struct MongoDbServer {
     address: String,
@@ -31,12 +31,17 @@ impl MongoDbServer {
     }
 
     pub fn with_store(address: String, store: Arc<DocumentStore>) -> Self {
-        Self { address, store, tls_acceptor: None }
+        Self {
+            address,
+            store,
+            tls_acceptor: None,
+        }
     }
 
     pub fn with_tls_config(mut self, tls_config: Option<TlsConfig>) -> Self {
         if tls_config.is_some() {
-            self.tls_acceptor = Some(OrbitTlsAcceptor::new(&tls_config).expect("Invalid TLS configuration"));
+            self.tls_acceptor =
+                Some(OrbitTlsAcceptor::new(&tls_config).expect("Invalid TLS configuration"));
         }
         self
     }
@@ -51,7 +56,7 @@ impl MongoDbServer {
                     debug!("New MongoDB connection from {}", addr);
                     let store = self.store.clone();
                     let tls_acceptor = self.tls_acceptor.clone();
-                    
+
                     tokio::spawn(async move {
                         if let Some(acceptor) = tls_acceptor {
                             match acceptor.accept(socket).await {
@@ -79,7 +84,7 @@ impl MongoDbServer {
     }
 }
 
-async fn handle_connection<S>(socket: S, store: Arc<DocumentStore>) -> OrbitResult<()> 
+async fn handle_connection<S>(socket: S, store: Arc<DocumentStore>) -> OrbitResult<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {

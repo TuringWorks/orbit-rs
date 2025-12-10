@@ -22,19 +22,26 @@ impl MySqlServer {
         storage: Arc<dyn TableStorage>,
     ) -> ProtocolResult<Self> {
         let adapter = MySqlAdapter::new_with_storage(config, storage).await?;
-        Ok(Self { adapter, tls_acceptor: None })
+        Ok(Self {
+            adapter,
+            tls_acceptor: None,
+        })
     }
 
     /// Create a new MySQL server (creates its own isolated storage)
     pub async fn new(config: MySqlConfig) -> ProtocolResult<Self> {
         let adapter = MySqlAdapter::new(config).await?;
-        Ok(Self { adapter, tls_acceptor: None })
+        Ok(Self {
+            adapter,
+            tls_acceptor: None,
+        })
     }
 
     /// Enable TLS with the provided configuration
     pub fn with_tls_config(mut self, tls_config: Option<TlsConfig>) -> Self {
         if tls_config.is_some() {
-            self.tls_acceptor = Some(OrbitTlsAcceptor::new(&tls_config).expect("Invalid TLS configuration"));
+            self.tls_acceptor =
+                Some(OrbitTlsAcceptor::new(&tls_config).expect("Invalid TLS configuration"));
         }
         self
     }

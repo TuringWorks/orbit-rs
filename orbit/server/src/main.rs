@@ -806,8 +806,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Start MongoDB server (port 27017)
     let mongodb_bind_addr = format!("{}:27017", args.bind);
-    let mongodb_server = MongoDbServer::new(mongodb_bind_addr)
-        .with_tls_config(toml_config.server.tls.clone());
+    let mongodb_server =
+        MongoDbServer::new(mongodb_bind_addr).with_tls_config(toml_config.server.tls.clone());
     let mongodb_handle = tokio::spawn(async move {
         mongodb_server
             .run()
@@ -1318,8 +1318,8 @@ async fn start_postgresql_server(
     };
 
     // Create PostgreSQL server with query engine
-    let postgres_server = PostgresServer::new_with_query_engine(bind_addr, query_engine)
-        .with_tls_config(tls_config);
+    let postgres_server =
+        PostgresServer::new_with_query_engine(bind_addr, query_engine).with_tls_config(tls_config);
 
     let handle = tokio::spawn(async move {
         postgres_server

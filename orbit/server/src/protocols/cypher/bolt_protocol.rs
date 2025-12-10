@@ -32,7 +32,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::io::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tracing::{debug, error, info, warn};
 
 /// Trait for streams compatible with Bolt protocol (TCP, TLS)
@@ -1838,7 +1838,11 @@ impl BoltProtocolHandler {
     }
 
     /// Send RECORD message with values
-    async fn send_record(&self, values: Vec<Value>, stream: &mut impl BoltStream) -> ProtocolResult<()> {
+    async fn send_record(
+        &self,
+        values: Vec<Value>,
+        stream: &mut impl BoltStream,
+    ) -> ProtocolResult<()> {
         let mut buf = BytesMut::new();
 
         // RECORD structure marker: 0xB1 followed by signature 0x71
@@ -1949,7 +1953,11 @@ impl BoltProtocolHandler {
     }
 
     /// Send a chunk to the client
-    async fn send_chunk(&self, data: &BytesMut, stream: &mut impl BoltStream) -> ProtocolResult<()> {
+    async fn send_chunk(
+        &self,
+        data: &BytesMut,
+        stream: &mut impl BoltStream,
+    ) -> ProtocolResult<()> {
         let size = data.len() as u16;
         let mut chunk = BytesMut::with_capacity(2 + data.len() + 2);
         chunk.put_u16(size);
