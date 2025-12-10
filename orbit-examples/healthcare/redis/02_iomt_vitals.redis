@@ -1,0 +1,39 @@
+# Healthcare Use Case: IoMT (Internet of Medical Things)
+# Purpose: Ingest high-velocity streams from wearable devices (Heart Rate, O2 Saturation).
+# Detect anomalies in real-time.
+
+# ==========================================
+# 1. Ingest Stream (XADD)
+# ==========================================
+# Device 'dev-001' sends 1 packet per second
+# Stream Key: vitals:pat-123
+XADD vitals:pat-123 MAXLEN ~ 10000 * hr 85 o2 98 battery 45 ts 1678886400
+
+# ==========================================
+# 2. Latest State Cache (SET)
+# ==========================================
+# For the dashboard "Current Status" view (no history needed)
+HSET latest:pat-123 hr 85 o2 98 status "NORMAL" last_seen 1678886400
+
+# ==========================================
+# 3. TimeSeries for Trending (RedisTimeSeries)
+# ==========================================
+# Store efficiently for graphs (24h history)
+# TS.ADD key timestamp value [LABELS label value ...]
+TS.ADD ts:hr:pat-123 * 85 LABELS patient pat-123 type hr
+TS.ADD ts:o2:pat-123 * 98 LABELS patient pat-123 type o2
+
+# ==========================================
+# 4. Alerting Logic (Sliding Window)
+# ==========================================
+# If HR > 120 for 3 consecutive readings, trigger alert.
+# We can use a List to keep last N readings.
+
+LPUSH buffer:hr:pat-123 125
+LTRIM buffer:hr:pat-123 0 4 # Keep last 5
+
+# Check logical condition (pseudocode implemented in Application or Lua)
+# IF all(lrange buffer:hr:pat-123 0 2) > 120 THEN PUBLISH alert
+
+# Alert Channel
+PUBLISH alerts:nurses_station "{\"patient\": \"pat-123\", \"msg\": \"High Heart Rate\", \"val\": 125}"

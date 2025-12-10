@@ -141,6 +141,14 @@ orbit-examples/
 │   ├── cql/                           # Premium history
 │   └── workflows/                     # End-to-end workflows
 │
+├── healthcare/                        # Healthcare & Life Sciences
+│   ├── README.md
+│   ├── sql/                           # EHR Core (Patients, Encounters)
+│   ├── redis/                         # IoMT Vitals (Streams)
+│   ├── mongodb/                       # FHIR Clinical Notes
+│   ├── cypher/                        # Drug Interaction Graph
+│   └── workflows/02_telehealth_visit.md
+│
 ├── adtech/                            # Advertising Technology
 │   ├── README.md
 │   ├── sql/                           # Campaigns, Inventory (Buy/Sell side)
@@ -606,6 +614,13 @@ Complete end-to-end industry examples using multiple protocols - **17 industries
 - **ML fraud detection** and service optimization
 - GDPR compliance and emergency response
 - **[View Government Examples](government/)**
+
+### Healthcare & Life Sciences
+- **EHR Core** & Patient Management (SQL)
+- **FHIR** Clinical Documents (MongoDB)
+- **IoMT** Vital Signs Monitoring (Redis)
+- **Drug Interaction Graphs** (Cypher)
+- **[View Healthcare Examples](healthcare/)**
 
 ### Insurance
 - **9 insurance types**: Auto, Home, Life, Health, Property, Travel, Disability, Umbrella, Industrial
