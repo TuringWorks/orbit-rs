@@ -11,7 +11,6 @@ pub const OP_QUERY: i32 = 2004;
 pub const OP_GET_MORE: i32 = 2005;
 pub const OP_DELETE: i32 = 2006;
 pub const OP_KILL_CURSORS: i32 = 2007;
-pub const OP_KILL_CURSORS: i32 = 2007;
 pub const OP_COMPRESSED: i32 = 2012;
 pub const OP_MSG: i32 = 2013;
 
@@ -22,7 +21,7 @@ pub const COMPRESSOR_ZLIB: u8 = 2;
 pub const COMPRESSOR_ZSTD: u8 = 3;
 
 // OP_MSG Flags
-pub const MSG_ checksum_PRESENT: u32 = 1 << 0;
+pub const MSG_CHECKSUM_PRESENT: u32 = 1 << 0;
 pub const MSG_MORE_TO_COME: u32 = 1 << 1;
 pub const MSG_EXHAUST_ALLOWED: u32 = 1 << 16;
 
@@ -193,7 +192,7 @@ impl Decoder for MongoCodec {
                 let mut sections = Vec::new();
                 
                 // Check if checksum is present (bit 0)
-                let checksum_present = (flag_bits & MSG_ checksum_PRESENT) != 0;
+                let checksum_present = (flag_bits & MSG_CHECKSUM_PRESENT) != 0;
                 
                 // Calculate where the sections end
                 // If checksum present, last 4 bytes are checksum

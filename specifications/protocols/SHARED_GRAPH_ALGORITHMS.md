@@ -25,12 +25,12 @@ The shared graph algorithms module provides protocol-agnostic graph algorithm im
 ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
 │     AQL     │  │   Cypher    │  │    Redis    │  │  OrbitQL    │  │     CQL     │  │   MongoDB   │
 │  Protocol   │  │  Protocol   │  │  Protocol   │  │  Protocol   │  │  Protocol   │  │  Protocol   │
-│     ✅      │  │     ✅      │  │     ✅      │  │     ✅      │  │     ✅      │  │     ✅      │
+│             │  │             │  │             │  │             │  │             │  │             │
 └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘
        │                │                │                │                │                │
        └────────────────┴────────────────┴────────────────┴────────────────┴────────────────┘
                                                    │
-                                    ┌──────────────▼──────────────┐
+                                    ┌──────────────▼─────────────-─┐
                                     │    Shared Graph Algorithms   │
                                     │  protocols/common/graph_algo │
                                     │                              │

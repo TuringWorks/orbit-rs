@@ -597,17 +597,6 @@ Complete end-to-end industry examples using multiple protocols - **17 industries
 - **[View Insurance Examples](insurance/)**
 
 ### Telecommunications
-- Network infrastructure and billing
-- Real-time monitoring and subscriber management
-- **[View Telco Examples](telco/)**
-
-### Retail & E-Commerce
-- Inventory and order processing
-- **ML recommendations** (Neo4j) and sales analytics
-- **[View Retail Examples](retail/)**
-
-### Hospitality (Coffeehouses & Restaurants)
-- POS and mobile ordering
 - Loyalty programs and kitchen operations
 - **[View Hospitality Examples](hospitality/)**
 
