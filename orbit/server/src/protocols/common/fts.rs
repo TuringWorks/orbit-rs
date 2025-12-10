@@ -515,7 +515,11 @@ impl InvertedIndex {
     }
 
     /// Add a document to the index
-    pub fn add_document(&mut self, doc: FtsDocument, tokens_by_field: HashMap<String, Vec<String>>) {
+    pub fn add_document(
+        &mut self,
+        doc: FtsDocument,
+        tokens_by_field: HashMap<String, Vec<String>>,
+    ) {
         // Calculate document length
         let doc_len: u32 = tokens_by_field.values().map(|t| t.len() as u32).sum();
         self.doc_lengths.insert(doc.id.clone(), doc_len);
@@ -656,12 +660,7 @@ impl Bm25Scorer {
     }
 
     /// Calculate BM25 score for a document
-    pub fn score(
-        &self,
-        query_terms: &[String],
-        doc_id: &str,
-        index: &InvertedIndex,
-    ) -> f32 {
+    pub fn score(&self, query_terms: &[String], doc_id: &str, index: &InvertedIndex) -> f32 {
         let doc_len = *index.doc_lengths.get(doc_id).unwrap_or(&1) as f32;
         let avg_doc_len = index.avg_doc_len.max(1.0);
         let num_docs = index.num_docs as f32;
@@ -680,7 +679,8 @@ impl Bm25Scorer {
 
                     // BM25 term score
                     let numerator = tf * (self.k1 + 1.0);
-                    let denominator = tf + self.k1 * (1.0 - self.b + self.b * (doc_len / avg_doc_len));
+                    let denominator =
+                        tf + self.k1 * (1.0 - self.b + self.b * (doc_len / avg_doc_len));
 
                     score += idf * (numerator / denominator);
                 }
@@ -807,7 +807,11 @@ impl SharedFtsEngine {
     }
 
     /// Search an index
-    pub async fn search(&self, index_name: &str, query: FtsQuery) -> FtsResult<Vec<FtsSearchResult>> {
+    pub async fn search(
+        &self,
+        index_name: &str,
+        query: FtsQuery,
+    ) -> FtsResult<Vec<FtsSearchResult>> {
         let indexes = self.indexes.read().await;
         let index = indexes
             .get(index_name)
@@ -1052,13 +1056,11 @@ pub fn parse_redis_query(query: &str) -> FtsQuery {
 /// Parse CQL CONTAINS/LIKE query
 pub fn parse_cql_query(query: &str, query_type: CqlQueryType) -> FtsQuery {
     match query_type {
-        CqlQueryType::Contains => {
-            FtsQuery {
-                query_type: FtsQueryType::Natural,
-                must_terms: vec![query.to_string()],
-                ..Default::default()
-            }
-        }
+        CqlQueryType::Contains => FtsQuery {
+            query_type: FtsQueryType::Natural,
+            must_terms: vec![query.to_string()],
+            ..Default::default()
+        },
         CqlQueryType::Like => {
             // LIKE patterns: %suffix, prefix%, %contains%
             let has_prefix_wildcard = query.starts_with('%');
@@ -1159,10 +1161,9 @@ pub fn parse_mongodb_text_query(query: &str) -> FtsQuery {
 /// Default English stop words
 fn default_stop_words() -> HashSet<String> {
     [
-        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
-        "has", "he", "in", "is", "it", "its", "of", "on", "that", "the",
-        "to", "was", "were", "will", "with", "the", "this", "but", "they",
-        "have", "had", "what", "when", "where", "who", "which", "why", "how",
+        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "he", "in", "is",
+        "it", "its", "of", "on", "that", "the", "to", "was", "were", "will", "with", "the", "this",
+        "but", "they", "have", "had", "what", "when", "where", "who", "which", "why", "how",
     ]
     .iter()
     .map(|s| s.to_string())
@@ -1233,16 +1234,22 @@ mod tests {
         // Add test documents
         let doc1 = FtsDocument {
             id: "1".to_string(),
-            fields: [("content".to_string(), "rust programming language".to_string())]
-                .into_iter()
-                .collect(),
+            fields: [(
+                "content".to_string(),
+                "rust programming language".to_string(),
+            )]
+            .into_iter()
+            .collect(),
             metadata: None,
         };
         let doc2 = FtsDocument {
             id: "2".to_string(),
-            fields: [("content".to_string(), "python programming language".to_string())]
-                .into_iter()
-                .collect(),
+            fields: [(
+                "content".to_string(),
+                "python programming language".to_string(),
+            )]
+            .into_iter()
+            .collect(),
             metadata: None,
         };
 
@@ -1252,8 +1259,14 @@ mod tests {
         let tokens1 = processor.tokenize("rust programming language");
         let tokens2 = processor.tokenize("python programming language");
 
-        index.add_document(doc1, [("content".to_string(), tokens1)].into_iter().collect());
-        index.add_document(doc2, [("content".to_string(), tokens2)].into_iter().collect());
+        index.add_document(
+            doc1,
+            [("content".to_string(), tokens1)].into_iter().collect(),
+        );
+        index.add_document(
+            doc2,
+            [("content".to_string(), tokens2)].into_iter().collect(),
+        );
 
         // Search for "rust"
         let score1 = scorer.score(&["rust".to_string()], "1", &index);

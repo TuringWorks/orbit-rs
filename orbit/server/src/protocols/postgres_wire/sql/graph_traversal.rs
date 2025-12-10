@@ -122,7 +122,8 @@ impl OrbitQLGraphBuilder {
             let to_id = self.extract_string_value(edge_row, &self.to_column)?;
 
             let weight = if let Some(ref weight_col) = self.weight_column {
-                self.extract_float_value(edge_row, weight_col).unwrap_or(1.0)
+                self.extract_float_value(edge_row, weight_col)
+                    .unwrap_or(1.0)
             } else {
                 1.0
             };
@@ -308,11 +309,7 @@ fn filter_traversal_by_direction(
 }
 
 /// Reconstruct the path from start to target using parent pointers
-fn reconstruct_path(
-    parents: &HashMap<String, String>,
-    start: &str,
-    target: &str,
-) -> Vec<String> {
+fn reconstruct_path(parents: &HashMap<String, String>, start: &str, target: &str) -> Vec<String> {
     let mut path = Vec::new();
     let mut current = target.to_string();
 

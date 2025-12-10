@@ -162,12 +162,36 @@ impl SpatialFunctions {
     fn st_equals(geom1: &SpatialGeometry, geom2: &SpatialGeometry) -> Result<bool>;
     fn st_dwithin(geom1: &SpatialGeometry, geom2: &SpatialGeometry, dist: f64) -> Result<bool>;
 
+    // Output Formats (used by all protocol adapters)
+    fn st_astext(geometry: &SpatialGeometry) -> Result<String>;  // WKT output
+    fn st_geohash(geometry: &SpatialGeometry, precision: Option<u8>) -> Result<String>;
+    fn st_pointfromgeohash(geohash: &str, srid: Option<i32>) -> Result<SpatialGeometry>;
+
+    // Static utility functions
+    fn encode_geohash(longitude: f64, latitude: f64, precision: u8) -> String;
+    fn decode_geohash(geohash: &str) -> Result<(f64, f64)>;
+
     // Coordinate Transformation
     fn st_transform(geometry: &SpatialGeometry, target_srid: i32) -> Result<SpatialGeometry>;
     fn st_srid(geometry: &SpatialGeometry) -> Option<i32>;
     fn st_setsrid(geometry: &mut SpatialGeometry, srid: i32);
 }
 ```
+
+### Code Consolidation
+
+Protocol adapters delegate to shared functions to avoid code duplication:
+
+| Function | Previously In | Now Delegates To |
+|----------|---------------|------------------|
+| `geometry_to_wkt()` | Redis, PostgreSQL adapters (duplicate) | `SpatialFunctions::st_astext()` |
+| `encode_geohash()` | Redis adapter | `SpatialFunctions::encode_geohash()` |
+
+This consolidation:
+- Eliminates ~144 lines of duplicate code across adapters
+- Provides single source of truth for WKT and geohash operations
+- Ensures consistent implementation across all protocols
+- Future bug fixes and enhancements apply automatically to all protocols
 
 ## Coordinate Reference Systems
 

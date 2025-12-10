@@ -190,10 +190,10 @@ impl Decoder for MongoCodec {
                 let flag_bits = body_cursor.get_u32_le();
 
                 let mut sections = Vec::new();
-                
+
                 // Check if checksum is present (bit 0)
                 let checksum_present = (flag_bits & MSG_CHECKSUM_PRESENT) != 0;
-                
+
                 // Calculate where the sections end
                 // If checksum present, last 4 bytes are checksum
                 let total_len = body_cursor.get_ref().len() as u64;
@@ -263,11 +263,14 @@ impl Decoder for MongoCodec {
                             });
                         }
                         _ => {
-                            return Err(OrbitError::network(format!("Unknown OP_MSG section kind: {}", kind)));
+                            return Err(OrbitError::network(format!(
+                                "Unknown OP_MSG section kind: {}",
+                                kind
+                            )));
                         }
                     }
                 }
-                
+
                 let checksum = if checksum_present {
                     body_cursor.set_position(total_len - 4);
                     Some(body_cursor.get_u32_le())
@@ -287,36 +290,46 @@ impl Decoder for MongoCodec {
                 let original_opcode = body_cursor.get_i32_le();
                 let uncompressed_size = body_cursor.get_i32_le();
                 let compressor_id = body_cursor.get_u8();
-                
+
                 // Read remaining bytes as compressed data
                 let pos = body_cursor.position();
                 let compressed_data = &body_cursor.get_ref()[pos as usize..];
-                
+
                 let decompressed_data = match compressor_id {
                     COMPRESSOR_NOOP => compressed_data.to_vec(),
                     COMPRESSOR_ZLIB => {
                         use std::io::Read;
                         let mut decoder = flate2::read::ZlibDecoder::new(compressed_data);
                         let mut buf = Vec::with_capacity(uncompressed_size as usize);
-                        decoder.read_to_end(&mut buf)
-                            .map_err(|e| OrbitError::network(format!("Zlib decompression failed: {}", e)))?;
+                        decoder.read_to_end(&mut buf).map_err(|e| {
+                            OrbitError::network(format!("Zlib decompression failed: {}", e))
+                        })?;
                         buf
                     }
                     COMPRESSOR_SNAPPY => {
-                         // Snappy not yet supported
-                         return Err(OrbitError::network("Snappy compression not supported"));
+                        // Snappy not yet supported
+                        return Err(OrbitError::network("Snappy compression not supported"));
                     }
-                     COMPRESSOR_ZSTD => {
-                         // Zstd not yet supported
-                         return Err(OrbitError::network("Zstd compression not supported"));
+                    COMPRESSOR_ZSTD => {
+                        // Zstd not yet supported
+                        return Err(OrbitError::network("Zstd compression not supported"));
                     }
-                    _ => return Err(OrbitError::network(format!("Unknown compressor ID: {}", compressor_id))),
+                    _ => {
+                        return Err(OrbitError::network(format!(
+                            "Unknown compressor ID: {}",
+                            compressor_id
+                        )))
+                    }
                 };
-                
+
                 if decompressed_data.len() != uncompressed_size as usize {
-                     return Err(OrbitError::network(format!("Decompressed size mismatch. Expected {}, got {}", uncompressed_size, decompressed_data.len())));
+                    return Err(OrbitError::network(format!(
+                        "Decompressed size mismatch. Expected {}, got {}",
+                        uncompressed_size,
+                        decompressed_data.len()
+                    )));
                 }
-                
+
                 // Rekindle decoding for the inner message
                 // We construct a synthetic buffer with the original header fields but inner body
                 // Actually, our Decoder expects the FULL message including header (16 bytes).
@@ -324,22 +337,22 @@ impl Decoder for MongoCodec {
                 // However, our logic separates Header parsing from Body parsing.
                 // We can reuse the body parsing logic if we extract it to a helper method.
                 // For now, let's just recursively call a helper that processes the body given an opcode.
-                
+
                 // Refactoring note: The current structure matches on op_code inside the decode function.
                 // We should ideally split this. But for this specific case, we can verify that
                 // the inner message structure for specific opcodes works with our parser.
                 // Example: OP_QUERY expects body_slice to start with flags.
                 // OP_MSG expects body_slice to start with flag_bits.
                 // decompressed_data IS that body slice.
-                
+
                 // So we can just recursivelly call a body parser.
                 // But we can't easily change the structure of `decode` without a big diff.
                 // Instead, let's restart the loop? No, decode parses one item.
-                
+
                 // Let's create a synthetic BytesMut with a FAKE header around the decompressed body
                 // matching `original_opcode` and correct length.
                 // Then call `decode` on it.
-                
+
                 let mut inner_src = BytesMut::with_capacity(16 + decompressed_data.len());
                 // New Length
                 inner_src.put_i32_le((16 + decompressed_data.len()) as i32);
@@ -348,7 +361,7 @@ impl Decoder for MongoCodec {
                 inner_src.put_i32_le(header.response_to);
                 inner_src.put_i32_le(original_opcode);
                 inner_src.extend_from_slice(&decompressed_data);
-                
+
                 // Recurse
                 // Note: This relies on `self` not having state that breaks on recursion, which is true (stateless decoder).
                 let mut inner_decoder = MongoCodec::new(); // Stateless

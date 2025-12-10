@@ -149,6 +149,14 @@ orbit-examples/
 │   ├── cypher/                        # Identity Graph
 │   └── workflows/01_rtb_auction.md
 │
+├── fintech/                           # Financial Technology
+│   ├── README.md
+│   ├── sql/                           # Crypto Ledger, Wallets
+│   ├── redis/                         # HFT Order Book
+│   ├── mongodb/                       # Payment Intents
+│   ├── cypher/                        # P2P Fraud Rings
+│   └── workflows/01_payment_processing.md
+│
 ├── telco/                             # Telecommunications
 │   ├── README.md
 │   ├── sql/                           # Network, billing schemas
@@ -604,7 +612,16 @@ Complete end-to-end industry examples using multiple protocols - **17 industries
 - Fraud detection with graph analytics
 - **[View Insurance Examples](insurance/)**
 
-### Telecommunications
+- Campaign & Inventory Management (SQL)
+- **[View AdTech Examples](adtech/)**
+
+### FinTech
+- **Payment Processing** & Webhooks (MongoDB)
+- **HFT Order Books** (Redis)
+- **Crypto Wallets** & Double-Entry Ledgers (SQL)
+- **[View FinTech Examples](fintech/)**
+
+### Hospitality (Coffeehouses & Restaurants)
 - Loyalty programs and kitchen operations
 - **[View Hospitality Examples](hospitality/)**
 

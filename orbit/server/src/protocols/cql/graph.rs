@@ -176,8 +176,7 @@ impl CqlGraphEngine {
                 .and_then(|col| extract_float(edge, col))
                 .unwrap_or(1.0);
 
-            self.graph
-                .add_edge(from, to, weight, Some(label.clone()));
+            self.graph.add_edge(from, to, weight, Some(label.clone()));
             self.edge_labels.insert(format!("e{}", idx), label);
         }
 
@@ -219,9 +218,7 @@ impl CqlGraphEngine {
 
             GraphQuery::ConnectedComponents => self.execute_connected_components(),
 
-            GraphQuery::StronglyConnectedComponents => {
-                self.execute_strongly_connected_components()
-            }
+            GraphQuery::StronglyConnectedComponents => self.execute_strongly_connected_components(),
         }
     }
 
@@ -260,11 +257,7 @@ impl CqlGraphEngine {
                 if let Some(node) = self.graph.nodes.get(node_id) {
                     let vertex = GraphVertex {
                         id: node_id.clone(),
-                        label: self
-                            .vertex_labels
-                            .get(node_id)
-                            .cloned()
-                            .unwrap_or_default(),
+                        label: self.vertex_labels.get(node_id).cloned().unwrap_or_default(),
                         properties: node
                             .properties
                             .iter()
@@ -307,11 +300,7 @@ impl CqlGraphEngine {
                 if let Some(node) = self.graph.nodes.get(node_id) {
                     let vertex = GraphVertex {
                         id: node_id.clone(),
-                        label: self
-                            .vertex_labels
-                            .get(node_id)
-                            .cloned()
-                            .unwrap_or_default(),
+                        label: self.vertex_labels.get(node_id).cloned().unwrap_or_default(),
                         properties: node
                             .properties
                             .iter()
@@ -327,16 +316,11 @@ impl CqlGraphEngine {
     }
 
     /// Execute all shortest paths query
-    fn execute_all_shortest_paths(
-        &self,
-        from: &str,
-        to: &str,
-    ) -> ProtocolResult<GraphQueryResult> {
+    fn execute_all_shortest_paths(&self, from: &str, to: &str) -> ProtocolResult<GraphQueryResult> {
         let mut result = GraphQueryResult::default();
 
         let all_paths = graph_algo::all_shortest_paths(&self.graph, from, to);
-        let mut seen_vertices: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
+        let mut seen_vertices: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         for path in all_paths.paths {
             let graph_path = GraphPath {
@@ -353,11 +337,7 @@ impl CqlGraphEngine {
                     if let Some(node) = self.graph.nodes.get(node_id) {
                         let vertex = GraphVertex {
                             id: node_id.clone(),
-                            label: self
-                                .vertex_labels
-                                .get(node_id)
-                                .cloned()
-                                .unwrap_or_default(),
+                            label: self.vertex_labels.get(node_id).cloned().unwrap_or_default(),
                             properties: node
                                 .properties
                                 .iter()
@@ -397,11 +377,7 @@ impl CqlGraphEngine {
 
                 let vertex = GraphVertex {
                     id: node_id.clone(),
-                    label: self
-                        .vertex_labels
-                        .get(node_id)
-                        .cloned()
-                        .unwrap_or_default(),
+                    label: self.vertex_labels.get(node_id).cloned().unwrap_or_default(),
                     properties,
                 };
                 result.vertices.push(vertex);
@@ -477,11 +453,7 @@ impl CqlGraphEngine {
 
                 let vertex = GraphVertex {
                     id: node_id.clone(),
-                    label: self
-                        .vertex_labels
-                        .get(node_id)
-                        .cloned()
-                        .unwrap_or_default(),
+                    label: self.vertex_labels.get(node_id).cloned().unwrap_or_default(),
                     properties,
                 };
                 result.vertices.push(vertex);
@@ -513,11 +485,7 @@ impl CqlGraphEngine {
 
                 let vertex = GraphVertex {
                     id: node_id.clone(),
-                    label: self
-                        .vertex_labels
-                        .get(node_id)
-                        .cloned()
-                        .unwrap_or_default(),
+                    label: self.vertex_labels.get(node_id).cloned().unwrap_or_default(),
                     properties,
                 };
                 result.vertices.push(vertex);

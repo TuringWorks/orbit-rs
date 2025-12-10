@@ -907,119 +907,16 @@ impl RedisSpatialCommands {
         Ok(RedisValue::Array(vec![]))
     }
 
-    // Helper functions
+    // Helper functions - delegate to shared spatial module
 
+    /// Encode coordinates to geohash using shared implementation.
     fn encode_geohash(&self, longitude: f64, latitude: f64, precision: u8) -> String {
-        // Simplified geohash encoding
-        let base32_chars = "0123456789bcdefghjkmnpqrstuvwxyz";
-        let mut lat_range = (-90.0, 90.0);
-        let mut lon_range = (-180.0, 180.0);
-        let mut geohash = String::new();
-        let mut is_even = true;
-        let mut bit = 0;
-        let mut ch = 0;
-
-        while geohash.len() < precision as usize {
-            if is_even {
-                // Longitude
-                let mid = (lon_range.0 + lon_range.1) / 2.0;
-                if longitude >= mid {
-                    ch |= 1 << (4 - bit);
-                    lon_range.0 = mid;
-                } else {
-                    lon_range.1 = mid;
-                }
-            } else {
-                // Latitude
-                let mid = (lat_range.0 + lat_range.1) / 2.0;
-                if latitude >= mid {
-                    ch |= 1 << (4 - bit);
-                    lat_range.0 = mid;
-                } else {
-                    lat_range.1 = mid;
-                }
-            }
-
-            is_even = !is_even;
-            bit += 1;
-
-            if bit == 5 {
-                geohash.push(base32_chars.chars().nth(ch).unwrap());
-                bit = 0;
-                ch = 0;
-            }
-        }
-
-        geohash
+        SpatialFunctions::encode_geohash(longitude, latitude, precision)
     }
 
-    /// Convert geometry to WKT string.
+    /// Convert geometry to WKT string using shared implementation.
     fn geometry_to_wkt(&self, geometry: &SpatialGeometry) -> Result<String, SpatialError> {
-        match geometry {
-            SpatialGeometry::Point(point) => {
-                if point.z.is_some() && point.m.is_some() {
-                    Ok(format!(
-                        "POINT ZM ({} {} {} {})",
-                        point.x,
-                        point.y,
-                        point.z.unwrap(),
-                        point.m.unwrap()
-                    ))
-                } else if point.z.is_some() {
-                    Ok(format!(
-                        "POINT Z ({} {} {})",
-                        point.x,
-                        point.y,
-                        point.z.unwrap()
-                    ))
-                } else if point.m.is_some() {
-                    Ok(format!(
-                        "POINT M ({} {} {})",
-                        point.x,
-                        point.y,
-                        point.m.unwrap()
-                    ))
-                } else {
-                    Ok(format!("POINT ({} {})", point.x, point.y))
-                }
-            }
-            SpatialGeometry::LineString(ls) => {
-                let coords: String = ls
-                    .points
-                    .iter()
-                    .map(|p| format!("{} {}", p.x, p.y))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                Ok(format!("LINESTRING ({})", coords))
-            }
-            SpatialGeometry::Polygon(poly) => {
-                let exterior_coords: String = poly
-                    .exterior_ring
-                    .points
-                    .iter()
-                    .map(|p| format!("{} {}", p.x, p.y))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let mut wkt = format!("POLYGON (({}))", exterior_coords);
-
-                // Add interior rings (holes) if any
-                if !poly.interior_rings.is_empty() {
-                    for interior_ring in &poly.interior_rings {
-                        let interior_coords: String = interior_ring
-                            .points
-                            .iter()
-                            .map(|p| format!("{} {}", p.x, p.y))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        wkt.push_str(&format!(", ({})", interior_coords));
-                    }
-                }
-                Ok(wkt)
-            }
-            _ => Err(SpatialError::OperationError(
-                "WKT output not implemented for this geometry type".to_string(),
-            )),
-        }
+        self.spatial_functions.st_astext(geometry)
     }
 }
 

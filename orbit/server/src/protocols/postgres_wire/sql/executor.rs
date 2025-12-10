@@ -1582,9 +1582,7 @@ impl SqlExecutor {
 
         // Check if this is a TRAVERSE query
         if let Some(ref traverse_clause) = stmt.traverse {
-            return self
-                .execute_traverse_query(&stmt, traverse_clause)
-                .await;
+            return self.execute_traverse_query(&stmt, traverse_clause).await;
         }
 
         // Determine result columns from SELECT list

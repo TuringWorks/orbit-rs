@@ -309,7 +309,12 @@ impl CqlSpatialUdfs {
     }
 
     /// Test spherical proximity with points (internal)
-    pub fn geo_near_sphere_points(&self, point: &Point, center: &Point, radius_meters: f64) -> bool {
+    pub fn geo_near_sphere_points(
+        &self,
+        point: &Point,
+        center: &Point,
+        radius_meters: f64,
+    ) -> bool {
         haversine_distance(point, center) <= radius_meters
     }
 
@@ -731,11 +736,8 @@ mod tests {
         let sp = spatial_point(-122.4194, 37.7749);
         assert_eq!(sp.x, -122.4194);
 
-        let spatial_poly = spatial_polygon(
-            vec![(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)],
-            vec![],
-        )
-        .unwrap();
+        let spatial_poly =
+            spatial_polygon(vec![(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)], vec![]).unwrap();
         assert!((spatial_poly.area() - 16.0).abs() < 0.001);
     }
 }

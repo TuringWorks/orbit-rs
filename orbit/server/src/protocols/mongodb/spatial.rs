@@ -251,11 +251,9 @@ impl MongoSpatialEngine {
         }
 
         // Parse exterior ring
-        let exterior_ring = self.parse_linear_ring(
-            coords[0]
-                .as_array()
-                .ok_or_else(|| MongoSpatialError::InvalidGeoJson("Invalid ring format".to_string()))?,
-        )?;
+        let exterior_ring = self.parse_linear_ring(coords[0].as_array().ok_or_else(|| {
+            MongoSpatialError::InvalidGeoJson("Invalid ring format".to_string())
+        })?)?;
 
         // Parse interior rings (holes)
         let mut interior_rings = Vec::new();
@@ -276,12 +274,12 @@ impl MongoSpatialEngine {
         for coord in coords {
             if let Some(pair) = coord.as_array() {
                 if pair.len() >= 2 {
-                    let lon = pair[0]
-                        .as_f64()
-                        .ok_or_else(|| MongoSpatialError::InvalidCoordinates("Invalid lon".to_string()))?;
-                    let lat = pair[1]
-                        .as_f64()
-                        .ok_or_else(|| MongoSpatialError::InvalidCoordinates("Invalid lat".to_string()))?;
+                    let lon = pair[0].as_f64().ok_or_else(|| {
+                        MongoSpatialError::InvalidCoordinates("Invalid lon".to_string())
+                    })?;
+                    let lat = pair[1].as_f64().ok_or_else(|| {
+                        MongoSpatialError::InvalidCoordinates("Invalid lat".to_string())
+                    })?;
                     points.push(Point::new(lon, lat, Some(WGS84_SRID)));
                 }
             }
@@ -351,7 +349,11 @@ impl MongoSpatialEngine {
         }
 
         // Sort by distance
-        results.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            a.distance
+                .partial_cmp(&b.distance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Apply limit
         if let Some(limit) = config.limit {
@@ -372,10 +374,8 @@ impl MongoSpatialEngine {
         match shape {
             GeoWithinShape::Box(bbox) => Ok(bbox.contains_point(point)),
 
-            GeoWithinShape::Polygon(polygon) => {
-                SpatialOperations::point_in_polygon(point, polygon)
-                    .map_err(|e| MongoSpatialError::SpatialError(e.to_string()))
-            }
+            GeoWithinShape::Polygon(polygon) => SpatialOperations::point_in_polygon(point, polygon)
+                .map_err(|e| MongoSpatialError::SpatialError(e.to_string())),
 
             GeoWithinShape::Center { center, radius } => {
                 let distance = center.distance_2d(point);
@@ -515,9 +515,9 @@ impl MongoSpatialEngine {
         if let Some(center_def) = value.get("$center").and_then(|v| v.as_array()) {
             if center_def.len() >= 2 {
                 let center = self.parse_geojson_point(&center_def[0])?;
-                let radius = center_def[1]
-                    .as_f64()
-                    .ok_or_else(|| MongoSpatialError::InvalidCoordinates("Invalid radius".to_string()))?;
+                let radius = center_def[1].as_f64().ok_or_else(|| {
+                    MongoSpatialError::InvalidCoordinates("Invalid radius".to_string())
+                })?;
                 return Ok(GeoWithinShape::Center { center, radius });
             }
         }
@@ -569,8 +569,8 @@ impl MongoSpatialEngine {
             }
         }
 
-        let ring = LinearRing::new(points)
-            .map_err(|e| MongoSpatialError::SpatialError(e.to_string()))?;
+        let ring =
+            LinearRing::new(points).map_err(|e| MongoSpatialError::SpatialError(e.to_string()))?;
 
         Polygon::new(ring, vec![], Some(WGS84_SRID))
             .map_err(|e| MongoSpatialError::SpatialError(e.to_string()))
@@ -578,10 +578,9 @@ impl MongoSpatialEngine {
 
     /// Parse GeoJSON geometry
     fn parse_geojson_geometry(&self, value: &JsonValue) -> MongoSpatialResult<SpatialGeometry> {
-        let geo_type = value
-            .get("type")
-            .and_then(|t| t.as_str())
-            .ok_or_else(|| MongoSpatialError::InvalidGeoJson("Missing geometry type".to_string()))?;
+        let geo_type = value.get("type").and_then(|t| t.as_str()).ok_or_else(|| {
+            MongoSpatialError::InvalidGeoJson("Missing geometry type".to_string())
+        })?;
 
         match geo_type {
             "Point" => {
@@ -704,42 +703,33 @@ mod tests {
         let engine = MongoSpatialEngine::new();
 
         let documents = vec![
-            (
-                "doc1".to_string(),
-                {
-                    let mut map = HashMap::new();
-                    map.insert(
-                        "location".to_string(),
-                        json!({"type": "Point", "coordinates": [0.0, 0.0]}),
-                    );
-                    map.insert("name".to_string(), json!("Origin"));
-                    map
-                },
-            ),
-            (
-                "doc2".to_string(),
-                {
-                    let mut map = HashMap::new();
-                    map.insert(
-                        "location".to_string(),
-                        json!({"type": "Point", "coordinates": [1.0, 1.0]}),
-                    );
-                    map.insert("name".to_string(), json!("Near"));
-                    map
-                },
-            ),
-            (
-                "doc3".to_string(),
-                {
-                    let mut map = HashMap::new();
-                    map.insert(
-                        "location".to_string(),
-                        json!({"type": "Point", "coordinates": [10.0, 10.0]}),
-                    );
-                    map.insert("name".to_string(), json!("Far"));
-                    map
-                },
-            ),
+            ("doc1".to_string(), {
+                let mut map = HashMap::new();
+                map.insert(
+                    "location".to_string(),
+                    json!({"type": "Point", "coordinates": [0.0, 0.0]}),
+                );
+                map.insert("name".to_string(), json!("Origin"));
+                map
+            }),
+            ("doc2".to_string(), {
+                let mut map = HashMap::new();
+                map.insert(
+                    "location".to_string(),
+                    json!({"type": "Point", "coordinates": [1.0, 1.0]}),
+                );
+                map.insert("name".to_string(), json!("Near"));
+                map
+            }),
+            ("doc3".to_string(), {
+                let mut map = HashMap::new();
+                map.insert(
+                    "location".to_string(),
+                    json!({"type": "Point", "coordinates": [10.0, 10.0]}),
+                );
+                map.insert("name".to_string(), json!("Far"));
+                map
+            }),
         ];
 
         let config = GeoNearConfig {
@@ -794,22 +784,16 @@ mod tests {
         let engine = MongoSpatialEngine::new();
 
         let documents = vec![
-            (
-                "a".to_string(),
-                {
-                    let mut map = HashMap::new();
-                    map.insert("loc".to_string(), json!([3.0, 4.0]));
-                    map
-                },
-            ),
-            (
-                "b".to_string(),
-                {
-                    let mut map = HashMap::new();
-                    map.insert("loc".to_string(), json!([0.0, 1.0]));
-                    map
-                },
-            ),
+            ("a".to_string(), {
+                let mut map = HashMap::new();
+                map.insert("loc".to_string(), json!([3.0, 4.0]));
+                map
+            }),
+            ("b".to_string(), {
+                let mut map = HashMap::new();
+                map.insert("loc".to_string(), json!([0.0, 1.0]));
+                map
+            }),
         ];
 
         let config = NearConfig {
