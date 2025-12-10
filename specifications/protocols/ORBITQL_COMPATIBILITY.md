@@ -2,8 +2,8 @@
 
 **Target**: OrbitQL Native Query Language (SurrealDB-inspired)
 **Reference**: https://surrealdb.com/docs/surrealql
-**Last Updated**: 2025-12-08
-**Current Estimated Coverage**: ~60%
+**Last Updated**: 2025-12-09
+**Current Estimated Coverage**: ~65%
 
 ---
 
@@ -38,7 +38,7 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | DEFINE FIELD | ✅ | Field definitions with types and constraints |
 | DEFINE INDEX | ✅ | B-Tree, vector, full-text indexes |
 | DEFINE EVENT | ❌ | Not implemented |
-| DEFINE FUNCTION | 🔶 | Parsing only, no execution |
+| DEFINE FUNCTION | ✅ | Full parsing with parameters, return types, languages |
 | DEFINE TOKEN | ❌ | Not implemented |
 | DEFINE USER | 🔶 | Basic user management |
 | DEFINE SCOPE | ❌ | Not implemented |
@@ -63,7 +63,7 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | REMOVE FIELD | ✅ | Full support |
 | REMOVE INDEX | ✅ | Full support |
 | REMOVE EVENT | ❌ | Not implemented |
-| REMOVE FUNCTION | 🔶 | Basic support |
+| REMOVE FUNCTION | ✅ | Full support |
 | REMOVE USER | ✅ | Full support |
 | REMOVE SCOPE | ❌ | Not implemented |
 | REMOVE ANALYZER | ❌ | Not implemented |
@@ -73,6 +73,10 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | Statement | Status | Notes |
 |-----------|--------|-------|
 | CREATE VIEW | ✅ | Materialized views |
+| CREATE FUNCTION | ✅ | PostgreSQL-style with parameters, return types, language (SQL/OrbitQL/JavaScript/Python), volatility (IMMUTABLE/STABLE/VOLATILE) |
+| CREATE PROCEDURE | ✅ | Parameter modes (IN/OUT/INOUT/VARIADIC), dollar-quoted bodies |
+| DROP FUNCTION | ✅ | Full support |
+| DROP PROCEDURE | ✅ | Full support |
 | TRUNCATE | ✅ | Full support |
 
 ### Query Statements (CRUD Operations)
@@ -85,6 +89,7 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | UPDATE | ✅ | Full update with WHERE |
 | UPSERT | ✅ | Update or insert |
 | DELETE | ✅ | Full delete with WHERE |
+| CALL | ✅ | Procedure invocation with arguments |
 | RELATE | 🔶 | Graph edge creation (basic) |
 | LIVE SELECT | ❌ | Real-time query subscriptions |
 | KILL | ❌ | Cancel LIVE SELECT |
@@ -520,8 +525,8 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 
 | Category | Coverage | Notes |
 |----------|----------|-------|
-| DDL Commands | ~70% | Core schema operations |
-| DML Commands | ~90% | Full CRUD |
+| DDL Commands | ~75% | Core schema operations, Functions/Procedures |
+| DML Commands | ~90% | Full CRUD, CALL |
 | Query Features | ~80% | Advanced SQL |
 | Data Types | ~85% | Comprehensive types |
 | Functions | ~70% | Core functions |

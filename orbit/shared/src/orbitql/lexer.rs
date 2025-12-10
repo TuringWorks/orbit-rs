@@ -99,6 +99,7 @@ pub enum TokenType {
     Schemaless,
 
     // Additional SQL keywords
+    Alter,
     Truncate,
     Union,
     Intersect,
@@ -114,11 +115,17 @@ pub enum TokenType {
     Unique,
     Check,
     Savepoint,
+    Release,
     Return,
     Returning,
     Upsert,
     Merge,
     Kill,
+    Add,
+    Column,
+    Rename,
+    To,
+    Matched,
 
     // Control flow keywords
     For,
@@ -415,6 +422,14 @@ impl Token {
                 | Stable
                 | Volatile
                 | Replace
+                // ALTER statement keywords
+                | Alter
+                | Release
+                | Add
+                | Column
+                | Rename
+                | To
+                | Matched
         )
     }
 
@@ -638,6 +653,7 @@ impl Lexer {
         keywords.insert("SCHEMALESS".to_string(), TokenType::Schemaless);
 
         // Additional SQL keywords
+        keywords.insert("ALTER".to_string(), TokenType::Alter);
         keywords.insert("TRUNCATE".to_string(), TokenType::Truncate);
         keywords.insert("UNION".to_string(), TokenType::Union);
         keywords.insert("INTERSECT".to_string(), TokenType::Intersect);
@@ -653,11 +669,17 @@ impl Lexer {
         keywords.insert("UNIQUE".to_string(), TokenType::Unique);
         keywords.insert("CHECK".to_string(), TokenType::Check);
         keywords.insert("SAVEPOINT".to_string(), TokenType::Savepoint);
+        keywords.insert("RELEASE".to_string(), TokenType::Release);
         keywords.insert("RETURN".to_string(), TokenType::Return);
         keywords.insert("RETURNING".to_string(), TokenType::Returning);
         keywords.insert("UPSERT".to_string(), TokenType::Upsert);
         keywords.insert("MERGE".to_string(), TokenType::Merge);
         keywords.insert("KILL".to_string(), TokenType::Kill);
+        keywords.insert("ADD".to_string(), TokenType::Add);
+        keywords.insert("COLUMN".to_string(), TokenType::Column);
+        keywords.insert("RENAME".to_string(), TokenType::Rename);
+        keywords.insert("TO".to_string(), TokenType::To);
+        keywords.insert("MATCHED".to_string(), TokenType::Matched);
 
         // Control flow keywords
         keywords.insert("FOR".to_string(), TokenType::For);

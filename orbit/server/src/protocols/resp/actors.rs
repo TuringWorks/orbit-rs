@@ -1575,6 +1575,277 @@ impl SortedSetActor {
         }
         None
     }
+
+    /// ZREVRANK - Get the rank of a member in reverse order (highest score = rank 0)
+    pub fn zrevrank(&self, member: &str) -> Option<usize> {
+        if let Some(member_score) = self.member_scores.get(member) {
+            let member_ordered_score = ordered_float::OrderedFloat(*member_score);
+            let mut rank = 0;
+
+            // Count all members with higher scores
+            for (score, members_set) in self.score_members.iter().rev() {
+                if *score > member_ordered_score {
+                    rank += members_set.len();
+                } else if *score == member_ordered_score {
+                    // Count members with same score that come after this member lexicographically
+                    let mut same_score_members: Vec<_> = members_set.iter().collect();
+                    same_score_members.sort();
+                    same_score_members.reverse();
+
+                    for same_member in same_score_members {
+                        if same_member == member {
+                            return Some(rank);
+                        }
+                        rank += 1;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+        None
+    }
+
+    /// ZREVRANGE - Get range of members in reverse order (highest to lowest score)
+    pub fn zrevrange(
+        &self,
+        start: i64,
+        stop: i64,
+        with_scores: bool,
+    ) -> Vec<(String, Option<f64>)> {
+        let members: Vec<_> = self
+            .score_members
+            .iter()
+            .rev() // Reverse order
+            .flat_map(|(score, members_set)| {
+                let score_val = score.0;
+                let mut sorted_members: Vec<_> = members_set.iter().cloned().collect();
+                sorted_members.sort();
+                sorted_members.reverse(); // Reverse lexicographic order within same score
+                sorted_members
+                    .into_iter()
+                    .map(move |member| (member, score_val))
+            })
+            .collect();
+
+        let len = members.len() as i64;
+        if len == 0 {
+            return Vec::new();
+        }
+
+        // Convert negative indices
+        let start_idx = if start < 0 {
+            (len + start).max(0)
+        } else {
+            start.min(len)
+        } as usize;
+
+        let stop_idx = if stop < 0 {
+            (len + stop + 1).max(0)
+        } else {
+            (stop + 1).min(len)
+        } as usize;
+
+        if start_idx >= members.len() || start_idx >= stop_idx {
+            return Vec::new();
+        }
+
+        members[start_idx..stop_idx]
+            .iter()
+            .map(|(member, score)| {
+                if with_scores {
+                    (member.clone(), Some(*score))
+                } else {
+                    (member.clone(), None)
+                }
+            })
+            .collect()
+    }
+
+    /// ZREVRANGEBYSCORE - Get range of members by score in reverse order
+    pub fn zrevrangebyscore(
+        &self,
+        max_score: f64,
+        min_score: f64,
+        with_scores: bool,
+    ) -> Vec<(String, Option<f64>)> {
+        let min_ordered = ordered_float::OrderedFloat(min_score);
+        let max_ordered = ordered_float::OrderedFloat(max_score);
+
+        let mut result = Vec::new();
+
+        for (score, members_set) in self.score_members.range(min_ordered..=max_ordered).rev() {
+            let score_val = score.0;
+            let mut sorted_members: Vec<_> = members_set.iter().cloned().collect();
+            sorted_members.sort();
+            sorted_members.reverse();
+
+            for member in sorted_members {
+                if with_scores {
+                    result.push((member, Some(score_val)));
+                } else {
+                    result.push((member, None));
+                }
+            }
+        }
+
+        result
+    }
+
+    /// ZREMRANGEBYRANK - Remove members by rank range
+    pub fn zremrangebyrank(&mut self, start: i64, stop: i64) -> usize {
+        // First get all members in order
+        let members: Vec<String> = self
+            .score_members
+            .iter()
+            .flat_map(|(_, members_set)| {
+                let mut sorted_members: Vec<_> = members_set.iter().cloned().collect();
+                sorted_members.sort();
+                sorted_members
+            })
+            .collect();
+
+        let len = members.len() as i64;
+        if len == 0 {
+            return 0;
+        }
+
+        // Convert negative indices
+        let start_idx = if start < 0 {
+            (len + start).max(0)
+        } else {
+            start.min(len)
+        } as usize;
+
+        let stop_idx = if stop < 0 {
+            (len + stop + 1).max(0)
+        } else {
+            (stop + 1).min(len)
+        } as usize;
+
+        if start_idx >= members.len() || start_idx >= stop_idx {
+            return 0;
+        }
+
+        // Get members to remove
+        let members_to_remove: Vec<String> = members[start_idx..stop_idx].to_vec();
+
+        // Remove them
+        self.zrem(members_to_remove)
+    }
+
+    /// ZREMRANGEBYSCORE - Remove members by score range
+    pub fn zremrangebyscore(&mut self, min_score: f64, max_score: f64) -> usize {
+        let min_ordered = ordered_float::OrderedFloat(min_score);
+        let max_ordered = ordered_float::OrderedFloat(max_score);
+
+        // Collect members to remove
+        let members_to_remove: Vec<String> = self
+            .score_members
+            .range(min_ordered..=max_ordered)
+            .flat_map(|(_, members_set)| members_set.iter().cloned())
+            .collect();
+
+        // Remove them
+        self.zrem(members_to_remove)
+    }
+
+    /// ZPOPMIN - Remove and return members with lowest scores
+    pub fn zpopmin(&mut self, count: usize) -> Vec<(String, f64)> {
+        let mut result = Vec::new();
+
+        for _ in 0..count {
+            if let Some((&score, _)) = self.score_members.first_key_value() {
+                // Get a member from the lowest score set
+                if let Some(members_set) = self.score_members.get(&score) {
+                    let mut sorted_members: Vec<_> = members_set.iter().cloned().collect();
+                    sorted_members.sort();
+
+                    if let Some(member) = sorted_members.first().cloned() {
+                        let score_val = score.0;
+                        self.zrem(vec![member.clone()]);
+                        result.push((member, score_val));
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        result
+    }
+
+    /// ZPOPMAX - Remove and return members with highest scores
+    pub fn zpopmax(&mut self, count: usize) -> Vec<(String, f64)> {
+        let mut result = Vec::new();
+
+        for _ in 0..count {
+            if let Some((&score, _)) = self.score_members.last_key_value() {
+                // Get a member from the highest score set
+                if let Some(members_set) = self.score_members.get(&score) {
+                    let mut sorted_members: Vec<_> = members_set.iter().cloned().collect();
+                    sorted_members.sort();
+                    sorted_members.reverse();
+
+                    if let Some(member) = sorted_members.first().cloned() {
+                        let score_val = score.0;
+                        self.zrem(vec![member.clone()]);
+                        result.push((member, score_val));
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        result
+    }
+
+    /// ZLEXCOUNT - Count members in a lexicographical range (all same score assumed)
+    pub fn zlexcount(&self, min: &str, max: &str) -> usize {
+        let mut count = 0;
+
+        for (_, members_set) in &self.score_members {
+            for member in members_set {
+                if member.as_str() >= min && member.as_str() <= max {
+                    count += 1;
+                }
+            }
+        }
+
+        count
+    }
+
+    /// ZSCAN - Iterate over sorted set members
+    pub fn zscan(&self, cursor: usize, count: usize) -> (usize, Vec<(String, f64)>) {
+        let all_members: Vec<(String, f64)> = self
+            .score_members
+            .iter()
+            .flat_map(|(score, members_set)| {
+                let score_val = score.0;
+                let mut sorted_members: Vec<_> = members_set.iter().cloned().collect();
+                sorted_members.sort();
+                sorted_members
+                    .into_iter()
+                    .map(move |member| (member, score_val))
+            })
+            .collect();
+
+        if cursor >= all_members.len() {
+            return (0, Vec::new());
+        }
+
+        let end = (cursor + count).min(all_members.len());
+        let result = all_members[cursor..end].to_vec();
+        let next_cursor = if end >= all_members.len() { 0 } else { end };
+
+        (next_cursor, result)
+    }
+
+    /// ZMSCORE - Get scores of multiple members
+    pub fn zmscore(&self, members: &[String]) -> Vec<Option<f64>> {
+        members.iter().map(|member| self.zscore(member)).collect()
+    }
 }
 
 impl Default for SortedSetActor {

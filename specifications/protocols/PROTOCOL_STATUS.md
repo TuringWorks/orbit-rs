@@ -24,6 +24,10 @@ This document provides the authoritative status of protocol implementations in O
 | **REST/HTTP** | 40% | Active Development | - | Authentication |
 
 ### Recent Improvements (2025-12-09)
+- **OrbitQL**: Added `CREATE FUNCTION` with parameters, return types, language (SQL/OrbitQL/JavaScript/Python), volatility (IMMUTABLE/STABLE/VOLATILE) ✅
+- **OrbitQL**: Added `CREATE PROCEDURE` with parameter modes (IN/OUT/INOUT/VARIADIC) ✅
+- **OrbitQL**: Added `CALL` statement for procedure invocation ✅
+- **OrbitQL**: PostgreSQL-style dollar-quoted function bodies (`$ ... $`) ✅
 - **OrbitQL**: Added `ARRAY_AGG` and `STRING_AGG` functions with multi-argument support via AST refactoring ✅
 - **Full-Text Search (Cross-Protocol)**:
   - PostgreSQL FTS functions: to_tsvector, to_tsquery, plainto_tsquery, phraseto_tsquery, websearch_to_tsquery ✅
@@ -79,6 +83,9 @@ OrbitQL is Orbit-RS's native unified multi-model query language, inspired by Sur
 | **Schema (SurrealDB-style)** | DEFINE TABLE/FIELD/INDEX/FUNCTION/EVENT | ✅ Complete |
 | **Schema** | REMOVE TABLE/FIELD/INDEX/FUNCTION/EVENT | ✅ Complete |
 | **Schema** | DEFINE USER/SCOPE/TOKEN/NAMESPACE/DATABASE | ✅ Complete |
+| **Functions/Procedures** | CREATE FUNCTION (SQL/OrbitQL/JavaScript/Python) | ✅ Complete |
+| **Functions/Procedures** | CREATE PROCEDURE (IN/OUT/INOUT/VARIADIC) | ✅ Complete |
+| **Functions/Procedures** | CALL statement | ✅ Complete |
 | **Graph** | TRAVERSE, RELATE, MATCH | ✅ Complete |
 | **Transactions** | BEGIN, COMMIT, ROLLBACK, SAVEPOINT | ✅ Complete |
 | **Control Flow** | IF/ELSE, FOR, LET, RETURN | ✅ Complete |
@@ -172,18 +179,18 @@ OrbitQL supports two wire protocols for client-server communication:
 
 | Category | Implemented | Total | Coverage | Status |
 |----------|-------------|-------|----------|--------|
-| Strings | 15 | 30 | 50% | Partial |
-| Hashes | 10 | 15 | 67% | Good |
-| Lists | 12 | 22 | 55% | Partial |
-| Sets | 8 | 15 | 53% | Partial |
-| Sorted Sets | 10 | 35 | 29% | **Gap** |
-| Keys | 15 | 30 | 50% | Partial |
+| Strings | 19 | 30 | 63% | Good |
+| Hashes | 15 | 15 | 100% | ✅ Complete |
+| Lists | 16 | 22 | 73% | Good |
+| Sets | 15 | 15 | 100% | ✅ Complete |
+| Sorted Sets | 19 | 31 | 61% | Good |
+| Keys | 20 | 30 | 67% | Good |
 | Transactions | 5 | 5 | **100%** | ✅ Complete |
 | Scripting | 0 | 10 | 0% | **Gap** |
-| Pub/Sub | 3 | 8 | 38% | Partial |
+| Pub/Sub | 6 | 8 | 75% | Good |
 | Streams | 0 | 20 | 0% | **Gap** |
 | Cluster | 2 | 25 | 8% | **Gap** |
-| Server | 5 | 30 | 17% | Partial |
+| Server | 15 | 30 | 50% | Partial |
 
 ### ✅ Transaction Support (Completed 2025-12-07)
 - `MULTI` - Start transaction ✅
@@ -213,10 +220,10 @@ OrbitQL supports two wire protocols for client-server communication:
 
 | Feature | Commands | Impact | Priority |
 |---------|----------|--------|----------|
-| Sorted Sets | 24 missing | Leaderboards broken | High |
+| Sorted Sets | 12 missing (ZUNIONSTORE, ZINTERSTORE, BZPOP*, LEX commands) | Set operations, blocking | Medium |
 | Lua Scripting | `EVAL`, `EVALSHA`, `SCRIPT *` | No server-side logic | High |
 | Streams | `XADD`, `XREAD`, `XRANGE` | Event streaming | Medium |
-| Blocking Lists | `BLPOP`, `BRPOP` | Queue patterns | Medium |
+| HyperLogLog | `PFADD`, `PFCOUNT`, `PFMERGE` | Cardinality estimation | Low |
 
 ---
 
@@ -659,6 +666,8 @@ OrbitQL supports two wire protocols for client-server communication:
 
 | Date | Changes |
 |------|---------|
+| 2025-12-09 | **Redis**: Implemented 13 new sorted set commands (ZCOUNT, ZRANK, ZREVRANK, ZREVRANGE, ZRANGEBYSCORE, ZREVRANGEBYSCORE, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZPOPMIN, ZPOPMAX, ZLEXCOUNT, ZSCAN, ZMSCORE) |
+| 2025-12-09 | **OrbitQL**: Added CREATE FUNCTION, CREATE PROCEDURE, CALL statement parsing with PostgreSQL-style dollar-quoted bodies |
 | 2025-12-09 | **PostgreSQL**: Implemented advanced string (regex/sha), date/time (make_*/age), and statistical (covar/corr/regr) functions |
 | 2025-12-08 | **OrbitQL Major Update**: Added SurrealDB-style DEFINE/REMOVE, Control flow (IF/FOR/LET/THROW), Vector KNN, MATCH, SAVEPOINT support |
 | 2025-12-08 | - PostgreSQL: Advanced functions (STDDEV/VARIANCE/Window functions) - OrbitQL: Aggregate functions (ARRAY_AGG, STRING_AGG) with AST refactor |
@@ -668,4 +677,4 @@ OrbitQL supports two wire protocols for client-server communication:
 
 ---
 
-*Document generated: December 8, 2025*
+*Document generated: December 9, 2025*

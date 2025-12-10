@@ -314,6 +314,563 @@ impl SortedSetCommands {
         debug!("ZREM {} {:?} -> {} removed", key, members, removed);
         Ok(RespValue::Integer(removed))
     }
+
+    /// ZCOUNT key min max - Count members with scores in range
+    async fn cmd_zcount(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("ZCOUNT", args, 3)?;
+
+        let key = self.get_string_arg(args, 0, "ZCOUNT")?;
+        let min = self.get_float_arg(args, 1, "ZCOUNT")?;
+        let max = self.get_float_arg(args, 2, "ZCOUNT")?;
+
+        let result = self
+            .base
+            .local_registry
+            .execute_sorted_set(
+                &key,
+                "zcount",
+                &[
+                    serde_json::to_value(min).unwrap(),
+                    serde_json::to_value(max).unwrap(),
+                ],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let count: i64 = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .unwrap_or(0);
+
+        debug!("ZCOUNT {} {} {} -> {}", key, min, max, count);
+        Ok(RespValue::Integer(count))
+    }
+
+    /// ZRANK key member - Get rank of member
+    async fn cmd_zrank(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("ZRANK", args, 2)?;
+
+        let key = self.get_string_arg(args, 0, "ZRANK")?;
+        let member = self.get_string_arg(args, 1, "ZRANK")?;
+
+        let result = self
+            .base
+            .local_registry
+            .execute_sorted_set(
+                &key,
+                "zrank",
+                &[serde_json::to_value(member.clone()).unwrap()],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let rank: Option<i64> = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .ok()
+            .flatten();
+
+        match rank {
+            Some(r) => {
+                debug!("ZRANK {} {} -> {}", key, member, r);
+                Ok(RespValue::Integer(r))
+            }
+            None => {
+                debug!("ZRANK {} {} -> null", key, member);
+                Ok(RespValue::null())
+            }
+        }
+    }
+
+    /// ZREVRANK key member - Get reverse rank of member
+    async fn cmd_zrevrank(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("ZREVRANK", args, 2)?;
+
+        let key = self.get_string_arg(args, 0, "ZREVRANK")?;
+        let member = self.get_string_arg(args, 1, "ZREVRANK")?;
+
+        let result = self
+            .base
+            .local_registry
+            .execute_sorted_set(
+                &key,
+                "zrevrank",
+                &[serde_json::to_value(member.clone()).unwrap()],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let rank: Option<i64> = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .ok()
+            .flatten();
+
+        match rank {
+            Some(r) => {
+                debug!("ZREVRANK {} {} -> {}", key, member, r);
+                Ok(RespValue::Integer(r))
+            }
+            None => {
+                debug!("ZREVRANK {} {} -> null", key, member);
+                Ok(RespValue::null())
+            }
+        }
+    }
+
+    /// ZREVRANGE key start stop [WITHSCORES] - Get range in reverse order
+    async fn cmd_zrevrange(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 3 || args.len() > 4 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'zrevrange' command".to_string(),
+            ));
+        }
+
+        let key = self.get_string_arg(args, 0, "ZREVRANGE")?;
+        let start = self.get_int_arg(args, 1, "ZREVRANGE")?;
+        let stop = self.get_int_arg(args, 2, "ZREVRANGE")?;
+        let with_scores = args.len() == 4
+            && args[3]
+                .as_string()
+                .map(|s| s.to_uppercase() == "WITHSCORES")
+                .unwrap_or(false);
+
+        let result = self
+            .base
+            .local_registry
+            .execute_sorted_set(
+                &key,
+                "zrevrange",
+                &[
+                    serde_json::to_value(start).unwrap(),
+                    serde_json::to_value(stop).unwrap(),
+                    serde_json::to_value(with_scores).unwrap(),
+                ],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let members_with_scores: Vec<(String, Option<f64>)> = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .unwrap_or_default();
+
+        let mut result_values: Vec<RespValue> = Vec::new();
+        for (member, score_opt) in members_with_scores {
+            result_values.push(RespValue::BulkString(Bytes::from(member.into_bytes())));
+            if with_scores {
+                if let Some(score) = score_opt {
+                    result_values.push(RespValue::BulkString(Bytes::from(
+                        score.to_string().into_bytes(),
+                    )));
+                }
+            }
+        }
+
+        debug!(
+            "ZREVRANGE {} {} {} -> {} members",
+            key,
+            start,
+            stop,
+            result_values.len()
+        );
+        Ok(RespValue::Array(result_values))
+    }
+
+    /// ZRANGEBYSCORE key min max [WITHSCORES] [LIMIT offset count] - Get range by score
+    async fn cmd_zrangebyscore(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 3 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'zrangebyscore' command".to_string(),
+            ));
+        }
+
+        let key = self.get_string_arg(args, 0, "ZRANGEBYSCORE")?;
+        let min = self.get_float_arg(args, 1, "ZRANGEBYSCORE")?;
+        let max = self.get_float_arg(args, 2, "ZRANGEBYSCORE")?;
+
+        let mut with_scores = false;
+        for i in 3..args.len() {
+            if let Some(s) = args[i].as_string() {
+                if s.to_uppercase() == "WITHSCORES" {
+                    with_scores = true;
+                }
+            }
+        }
+
+        let result = self
+            .base
+            .local_registry
+            .execute_sorted_set(
+                &key,
+                "zrangebyscore",
+                &[
+                    serde_json::to_value(min).unwrap(),
+                    serde_json::to_value(max).unwrap(),
+                    serde_json::to_value(with_scores).unwrap(),
+                ],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let members_with_scores: Vec<(String, Option<f64>)> = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .unwrap_or_default();
+
+        let mut result_values: Vec<RespValue> = Vec::new();
+        for (member, score_opt) in members_with_scores {
+            result_values.push(RespValue::BulkString(Bytes::from(member.into_bytes())));
+            if with_scores {
+                if let Some(score) = score_opt {
+                    result_values.push(RespValue::BulkString(Bytes::from(
+                        score.to_string().into_bytes(),
+                    )));
+                }
+            }
+        }
+
+        debug!(
+            "ZRANGEBYSCORE {} {} {} -> {} members",
+            key,
+            min,
+            max,
+            result_values.len()
+        );
+        Ok(RespValue::Array(result_values))
+    }
+
+    /// ZREVRANGEBYSCORE key max min [WITHSCORES] [LIMIT offset count] - Get range by score in reverse
+    async fn cmd_zrevrangebyscore(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 3 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'zrevrangebyscore' command".to_string(),
+            ));
+        }
+
+        let key = self.get_string_arg(args, 0, "ZREVRANGEBYSCORE")?;
+        let max = self.get_float_arg(args, 1, "ZREVRANGEBYSCORE")?;
+        let min = self.get_float_arg(args, 2, "ZREVRANGEBYSCORE")?;
+
+        let mut with_scores = false;
+        for i in 3..args.len() {
+            if let Some(s) = args[i].as_string() {
+                if s.to_uppercase() == "WITHSCORES" {
+                    with_scores = true;
+                }
+            }
+        }
+
+        let result = self
+            .base
+            .local_registry
+            .execute_sorted_set(
+                &key,
+                "zrevrangebyscore",
+                &[
+                    serde_json::to_value(max).unwrap(),
+                    serde_json::to_value(min).unwrap(),
+                    serde_json::to_value(with_scores).unwrap(),
+                ],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let members_with_scores: Vec<(String, Option<f64>)> = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .unwrap_or_default();
+
+        let mut result_values: Vec<RespValue> = Vec::new();
+        for (member, score_opt) in members_with_scores {
+            result_values.push(RespValue::BulkString(Bytes::from(member.into_bytes())));
+            if with_scores {
+                if let Some(score) = score_opt {
+                    result_values.push(RespValue::BulkString(Bytes::from(
+                        score.to_string().into_bytes(),
+                    )));
+                }
+            }
+        }
+
+        debug!(
+            "ZREVRANGEBYSCORE {} {} {} -> {} members",
+            key,
+            max,
+            min,
+            result_values.len()
+        );
+        Ok(RespValue::Array(result_values))
+    }
+
+    /// ZREMRANGEBYRANK key start stop - Remove members by rank range
+    async fn cmd_zremrangebyrank(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("ZREMRANGEBYRANK", args, 3)?;
+
+        let key = self.get_string_arg(args, 0, "ZREMRANGEBYRANK")?;
+        let start = self.get_int_arg(args, 1, "ZREMRANGEBYRANK")?;
+        let stop = self.get_int_arg(args, 2, "ZREMRANGEBYRANK")?;
+
+        let result = self
+            .base
+            .local_registry
+            .execute_sorted_set(
+                &key,
+                "zremrangebyrank",
+                &[
+                    serde_json::to_value(start).unwrap(),
+                    serde_json::to_value(stop).unwrap(),
+                ],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let removed: i64 = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .unwrap_or(0);
+
+        debug!(
+            "ZREMRANGEBYRANK {} {} {} -> {} removed",
+            key, start, stop, removed
+        );
+        Ok(RespValue::Integer(removed))
+    }
+
+    /// ZREMRANGEBYSCORE key min max - Remove members by score range
+    async fn cmd_zremrangebyscore(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("ZREMRANGEBYSCORE", args, 3)?;
+
+        let key = self.get_string_arg(args, 0, "ZREMRANGEBYSCORE")?;
+        let min = self.get_float_arg(args, 1, "ZREMRANGEBYSCORE")?;
+        let max = self.get_float_arg(args, 2, "ZREMRANGEBYSCORE")?;
+
+        let result = self
+            .base
+            .local_registry
+            .execute_sorted_set(
+                &key,
+                "zremrangebyscore",
+                &[
+                    serde_json::to_value(min).unwrap(),
+                    serde_json::to_value(max).unwrap(),
+                ],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let removed: i64 = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .unwrap_or(0);
+
+        debug!(
+            "ZREMRANGEBYSCORE {} {} {} -> {} removed",
+            key, min, max, removed
+        );
+        Ok(RespValue::Integer(removed))
+    }
+
+    /// ZPOPMIN key [count] - Remove and return members with lowest scores
+    async fn cmd_zpopmin(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.is_empty() || args.len() > 2 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'zpopmin' command".to_string(),
+            ));
+        }
+
+        let key = self.get_string_arg(args, 0, "ZPOPMIN")?;
+        let count: usize = if args.len() == 2 {
+            self.get_int_arg(args, 1, "ZPOPMIN")? as usize
+        } else {
+            1
+        };
+
+        let result = self
+            .base
+            .local_registry
+            .execute_sorted_set(&key, "zpopmin", &[serde_json::to_value(count).unwrap()])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let members_with_scores: Vec<(String, f64)> = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .unwrap_or_default();
+
+        let mut result_values: Vec<RespValue> = Vec::new();
+        for (member, score) in members_with_scores {
+            result_values.push(RespValue::BulkString(Bytes::from(member.into_bytes())));
+            result_values.push(RespValue::BulkString(Bytes::from(
+                score.to_string().into_bytes(),
+            )));
+        }
+
+        debug!(
+            "ZPOPMIN {} {} -> {} elements",
+            key,
+            count,
+            result_values.len() / 2
+        );
+        Ok(RespValue::Array(result_values))
+    }
+
+    /// ZPOPMAX key [count] - Remove and return members with highest scores
+    async fn cmd_zpopmax(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.is_empty() || args.len() > 2 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'zpopmax' command".to_string(),
+            ));
+        }
+
+        let key = self.get_string_arg(args, 0, "ZPOPMAX")?;
+        let count: usize = if args.len() == 2 {
+            self.get_int_arg(args, 1, "ZPOPMAX")? as usize
+        } else {
+            1
+        };
+
+        let result = self
+            .base
+            .local_registry
+            .execute_sorted_set(&key, "zpopmax", &[serde_json::to_value(count).unwrap()])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let members_with_scores: Vec<(String, f64)> = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .unwrap_or_default();
+
+        let mut result_values: Vec<RespValue> = Vec::new();
+        for (member, score) in members_with_scores {
+            result_values.push(RespValue::BulkString(Bytes::from(member.into_bytes())));
+            result_values.push(RespValue::BulkString(Bytes::from(
+                score.to_string().into_bytes(),
+            )));
+        }
+
+        debug!(
+            "ZPOPMAX {} {} -> {} elements",
+            key,
+            count,
+            result_values.len() / 2
+        );
+        Ok(RespValue::Array(result_values))
+    }
+
+    /// ZLEXCOUNT key min max - Count members in lexicographical range
+    async fn cmd_zlexcount(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("ZLEXCOUNT", args, 3)?;
+
+        let key = self.get_string_arg(args, 0, "ZLEXCOUNT")?;
+        let min = self.get_string_arg(args, 1, "ZLEXCOUNT")?;
+        let max = self.get_string_arg(args, 2, "ZLEXCOUNT")?;
+
+        let result = self
+            .base
+            .local_registry
+            .execute_sorted_set(
+                &key,
+                "zlexcount",
+                &[
+                    serde_json::to_value(min.clone()).unwrap(),
+                    serde_json::to_value(max.clone()).unwrap(),
+                ],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let count: i64 = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .unwrap_or(0);
+
+        debug!("ZLEXCOUNT {} {} {} -> {}", key, min, max, count);
+        Ok(RespValue::Integer(count))
+    }
+
+    /// ZSCAN key cursor [MATCH pattern] [COUNT count] - Iterate sorted set
+    async fn cmd_zscan(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 2 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'zscan' command".to_string(),
+            ));
+        }
+
+        let key = self.get_string_arg(args, 0, "ZSCAN")?;
+        let cursor: usize = self.get_int_arg(args, 1, "ZSCAN")? as usize;
+        let count: usize = 10; // Default count
+
+        let result = self
+            .base
+            .local_registry
+            .execute_sorted_set(
+                &key,
+                "zscan",
+                &[
+                    serde_json::to_value(cursor).unwrap(),
+                    serde_json::to_value(count).unwrap(),
+                ],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let (next_cursor, members): (usize, Vec<(String, f64)>) = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .unwrap_or((0, Vec::new()));
+
+        let mut member_array: Vec<RespValue> = Vec::new();
+        for (member, score) in members {
+            member_array.push(RespValue::BulkString(Bytes::from(member.into_bytes())));
+            member_array.push(RespValue::BulkString(Bytes::from(
+                score.to_string().into_bytes(),
+            )));
+        }
+
+        debug!(
+            "ZSCAN {} {} -> cursor {}, {} elements",
+            key,
+            cursor,
+            next_cursor,
+            member_array.len() / 2
+        );
+        Ok(RespValue::Array(vec![
+            RespValue::BulkString(Bytes::from(next_cursor.to_string().into_bytes())),
+            RespValue::Array(member_array),
+        ]))
+    }
+
+    /// ZMSCORE key member [member ...] - Get scores of multiple members
+    async fn cmd_zmscore(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 2 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'zmscore' command".to_string(),
+            ));
+        }
+
+        let key = self.get_string_arg(args, 0, "ZMSCORE")?;
+        let mut members = Vec::new();
+        for i in 1..args.len() {
+            members.push(self.get_string_arg(args, i, "ZMSCORE")?);
+        }
+
+        let result = self
+            .base
+            .local_registry
+            .execute_sorted_set(&key, "zmscore", &[serde_json::to_value(&members).unwrap()])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let scores: Vec<Option<f64>> = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .unwrap_or_default();
+
+        let result_values: Vec<RespValue> = scores
+            .into_iter()
+            .map(|score_opt| match score_opt {
+                Some(score) => RespValue::BulkString(Bytes::from(score.to_string().into_bytes())),
+                None => RespValue::null(),
+            })
+            .collect();
+
+        debug!(
+            "ZMSCORE {} {:?} -> {} scores",
+            key,
+            members,
+            result_values.len()
+        );
+        Ok(RespValue::Array(result_values))
+    }
 }
 
 #[async_trait]
@@ -326,6 +883,19 @@ impl CommandHandler for SortedSetCommands {
             "ZRANGE" => self.cmd_zrange(args).await,
             "ZINCRBY" => self.cmd_zincrby(args).await,
             "ZREM" => self.cmd_zrem(args).await,
+            "ZCOUNT" => self.cmd_zcount(args).await,
+            "ZRANK" => self.cmd_zrank(args).await,
+            "ZREVRANK" => self.cmd_zrevrank(args).await,
+            "ZREVRANGE" => self.cmd_zrevrange(args).await,
+            "ZRANGEBYSCORE" => self.cmd_zrangebyscore(args).await,
+            "ZREVRANGEBYSCORE" => self.cmd_zrevrangebyscore(args).await,
+            "ZREMRANGEBYRANK" => self.cmd_zremrangebyrank(args).await,
+            "ZREMRANGEBYSCORE" => self.cmd_zremrangebyscore(args).await,
+            "ZPOPMIN" => self.cmd_zpopmin(args).await,
+            "ZPOPMAX" => self.cmd_zpopmax(args).await,
+            "ZLEXCOUNT" => self.cmd_zlexcount(args).await,
+            "ZSCAN" => self.cmd_zscan(args).await,
+            "ZMSCORE" => self.cmd_zmscore(args).await,
             _ => Err(ProtocolError::RespError(format!(
                 "ERR sorted set command '{}' not yet implemented",
                 command_name
@@ -341,9 +911,19 @@ impl CommandHandler for SortedSetCommands {
             "ZSCORE",
             "ZINCRBY",
             "ZRANGE",
+            "ZREVRANGE",
             "ZRANGEBYSCORE",
+            "ZREVRANGEBYSCORE",
             "ZCOUNT",
             "ZRANK",
+            "ZREVRANK",
+            "ZREMRANGEBYRANK",
+            "ZREMRANGEBYSCORE",
+            "ZPOPMIN",
+            "ZPOPMAX",
+            "ZLEXCOUNT",
+            "ZSCAN",
+            "ZMSCORE",
         ]
     }
 }
