@@ -745,6 +745,7 @@ impl Default for Bm25Scorer {
 
 /// Main shared FTS engine
 pub struct SharedFtsEngine {
+    #[allow(dead_code)]
     config: SharedFtsConfig,
     processor: TextProcessor,
     scorer: Bm25Scorer,

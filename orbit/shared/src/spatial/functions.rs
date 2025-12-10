@@ -520,7 +520,7 @@ impl SpatialFunctions {
             }
         };
 
-        let precision = precision.unwrap_or(12).min(12).max(1);
+        let precision = precision.unwrap_or(12).clamp(1, 12);
         Ok(Self::encode_geohash(longitude, latitude, precision))
     }
 

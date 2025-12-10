@@ -36,8 +36,10 @@ impl Default for GraphTraversalResult {
 /// Graph builder for constructing a graph from table data
 pub struct OrbitQLGraphBuilder {
     /// Node table name
+    #[allow(dead_code)]
     node_table: String,
     /// Edge table name (edge collection)
+    #[allow(dead_code)]
     edge_table: String,
     /// Column containing the from node ID in edge table
     from_column: String,
@@ -255,7 +257,7 @@ fn execute_bounded_traversal(
 /// Filter traversal results based on direction
 fn filter_traversal_by_direction(
     graph: &Graph,
-    traversal: &TraversalResult,
+    _traversal: &TraversalResult,
     start: &str,
     direction: &TraverseDirection,
     edge_filter: Option<&str>,

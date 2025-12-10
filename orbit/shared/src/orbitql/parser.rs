@@ -114,7 +114,7 @@ impl Parser {
             TokenType::Live => Ok(Statement::Live(self.parse_live()?)),
             TokenType::Traverse => Ok(Statement::Traverse(self.parse_traverse()?)),
             TokenType::Call => Ok(Statement::Call(self.parse_call()?)),
-            TokenType::Define => Ok(Statement::Define(self.parse_define()?)),
+            TokenType::Define => Ok(Statement::Define(Box::new(self.parse_define()?))),
             TokenType::Remove => Ok(Statement::Remove(self.parse_remove()?)),
             TokenType::Upsert => Ok(Statement::Upsert(self.parse_upsert()?)),
             TokenType::Merge => Ok(Statement::Merge(self.parse_merge()?)),
@@ -2320,11 +2320,7 @@ impl Parser {
         let password = if self.check_identifier_value("PASSWORD") {
             self.advance();
             let token = self.advance();
-            if token.token_type == TokenType::String {
-                Some(token.value.clone())
-            } else {
-                Some(token.value.clone())
-            }
+            Some(token.value.clone())
         } else {
             None
         };
@@ -4098,10 +4094,14 @@ mod tests {
             result.err()
         );
 
-        if let Statement::Define(DefineStatement::Namespace { name }) = result.unwrap() {
-            assert_eq!(name, "myapp");
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Namespace { name } = *def {
+                assert_eq!(name, "myapp");
+            } else {
+                panic!("Expected DEFINE NAMESPACE statement");
+            }
         } else {
-            panic!("Expected DEFINE NAMESPACE statement");
+            panic!("Expected DEFINE statement");
         }
     }
 
@@ -4117,10 +4117,14 @@ mod tests {
             result.err()
         );
 
-        if let Statement::Define(DefineStatement::Database { name }) = result.unwrap() {
-            assert_eq!(name, "production");
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Database { name } = *def {
+                assert_eq!(name, "production");
+            } else {
+                panic!("Expected DEFINE DATABASE statement");
+            }
         } else {
-            panic!("Expected DEFINE DATABASE statement");
+            panic!("Expected DEFINE statement");
         }
     }
 
@@ -4136,18 +4140,22 @@ mod tests {
             result.err()
         );
 
-        if let Statement::Define(DefineStatement::Table {
-            name,
-            schemafull,
-            drop,
-            ..
-        }) = result.unwrap()
-        {
-            assert_eq!(name, "users");
-            assert!(!schemafull);
-            assert!(!drop);
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Table {
+                name,
+                schemafull,
+                drop,
+                ..
+            } = *def
+            {
+                assert_eq!(name, "users");
+                assert!(!schemafull);
+                assert!(!drop);
+            } else {
+                panic!("Expected DEFINE TABLE statement");
+            }
         } else {
-            panic!("Expected DEFINE TABLE statement");
+            panic!("Expected DEFINE statement");
         }
     }
 
@@ -4163,14 +4171,18 @@ mod tests {
             result.err()
         );
 
-        if let Statement::Define(DefineStatement::Table {
-            name, schemafull, ..
-        }) = result.unwrap()
-        {
-            assert_eq!(name, "users");
-            assert!(schemafull);
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Table {
+                name, schemafull, ..
+            } = *def
+            {
+                assert_eq!(name, "users");
+                assert!(schemafull);
+            } else {
+                panic!("Expected DEFINE TABLE statement");
+            }
         } else {
-            panic!("Expected DEFINE TABLE statement");
+            panic!("Expected DEFINE statement");
         }
     }
 
@@ -4186,11 +4198,15 @@ mod tests {
             result.err()
         );
 
-        if let Statement::Define(DefineStatement::Field { name, table, .. }) = result.unwrap() {
-            assert_eq!(name, "email");
-            assert_eq!(table, "users");
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Field { name, table, .. } = *def {
+                assert_eq!(name, "email");
+                assert_eq!(table, "users");
+            } else {
+                panic!("Expected DEFINE FIELD statement");
+            }
         } else {
-            panic!("Expected DEFINE FIELD statement");
+            panic!("Expected DEFINE statement");
         }
     }
 
@@ -4208,21 +4224,25 @@ mod tests {
             result.err()
         );
 
-        if let Statement::Define(DefineStatement::Index {
-            name,
-            table,
-            fields,
-            unique,
-            ..
-        }) = result.unwrap()
-        {
-            assert_eq!(name, "idx_email");
-            assert_eq!(table, "users");
-            assert_eq!(fields.len(), 1);
-            assert_eq!(fields[0].name, "email");
-            assert!(unique);
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Index {
+                name,
+                table,
+                fields,
+                unique,
+                ..
+            } = *def
+            {
+                assert_eq!(name, "idx_email");
+                assert_eq!(table, "users");
+                assert_eq!(fields.len(), 1);
+                assert_eq!(fields[0].name, "email");
+                assert!(unique);
+            } else {
+                panic!("Expected DEFINE INDEX statement");
+            }
         } else {
-            panic!("Expected DEFINE INDEX statement");
+            panic!("Expected DEFINE statement");
         }
     }
 
@@ -4242,17 +4262,21 @@ mod tests {
             result.err()
         );
 
-        if let Statement::Define(DefineStatement::Analyzer {
-            name,
-            tokenizers,
-            filters,
-        }) = result.unwrap()
-        {
-            assert_eq!(name, "my_analyzer");
-            assert_eq!(tokenizers, vec!["class", "camel"]);
-            assert_eq!(filters, vec!["lowercase", "ascii"]);
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Analyzer {
+                name,
+                tokenizers,
+                filters,
+            } = *def
+            {
+                assert_eq!(name, "my_analyzer");
+                assert_eq!(tokenizers, vec!["class", "camel"]);
+                assert_eq!(filters, vec!["lowercase", "ascii"]);
+            } else {
+                panic!("Expected DEFINE ANALYZER statement");
+            }
         } else {
-            panic!("Expected DEFINE ANALYZER statement");
+            panic!("Expected DEFINE statement");
         }
     }
 
@@ -4270,19 +4294,23 @@ mod tests {
             result.err()
         );
 
-        if let Statement::Define(DefineStatement::User {
-            name,
-            on,
-            password,
-            roles,
-        }) = result.unwrap()
-        {
-            assert_eq!(name, "admin");
-            assert_eq!(on, "DATABASE");
-            assert!(password.is_some());
-            assert_eq!(roles, vec!["owner", "admin"]);
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::User {
+                name,
+                on,
+                password,
+                roles,
+            } = *def
+            {
+                assert_eq!(name, "admin");
+                assert_eq!(on, "DATABASE");
+                assert!(password.is_some());
+                assert_eq!(roles, vec!["owner", "admin"]);
+            } else {
+                panic!("Expected DEFINE USER statement");
+            }
         } else {
-            panic!("Expected DEFINE USER statement");
+            panic!("Expected DEFINE statement");
         }
     }
 
@@ -4298,10 +4326,14 @@ mod tests {
             result.err()
         );
 
-        if let Statement::Define(DefineStatement::Scope { name, .. }) = result.unwrap() {
-            assert_eq!(name, "user_auth");
+        if let Statement::Define(def) = result.unwrap() {
+            if let DefineStatement::Scope { name, .. } = *def {
+                assert_eq!(name, "user_auth");
+            } else {
+                panic!("Expected DEFINE SCOPE statement");
+            }
         } else {
-            panic!("Expected DEFINE SCOPE statement");
+            panic!("Expected DEFINE statement");
         }
     }
 
