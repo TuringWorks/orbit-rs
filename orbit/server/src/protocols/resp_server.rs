@@ -2,17 +2,21 @@
 
 use futures::{SinkExt, StreamExt};
 use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tokio_util::codec::Framed;
 use tracing::{debug, error, info};
 
 use super::resp::{types::RespValue, CommandHandler, RespCodec};
 use crate::protocols::error::ProtocolResult;
 
+
+use crate::protocols::tls::OrbitTlsAcceptor;
+
 /// RESP protocol server
 pub struct RespServer {
     bind_addr: String,
     command_handler: Arc<CommandHandler>,
+    tls_acceptor: Option<OrbitTlsAcceptor>,
 }
 
 impl RespServer {
@@ -35,7 +39,16 @@ impl RespServer {
                 orbit_client,
                 persistent_storage,
             )),
+            tls_acceptor: None,
         }
+    }
+
+    /// Enable TLS with the provided configuration
+    pub fn with_tls_config(mut self, tls_config: Option<crate::config::TlsConfig>) -> Self {
+        if tls_config.is_some() {
+            self.tls_acceptor = Some(crate::protocols::tls::OrbitTlsAcceptor::new(&tls_config).expect("Invalid TLS configuration"));
+        }
+        self
     }
 
     /// Start the server
@@ -51,9 +64,25 @@ impl RespServer {
                 Ok((socket, addr)) => {
                     debug!("New RESP connection from {}", addr);
                     let handler = Arc::clone(&self.command_handler);
+                    let tls_acceptor = self.tls_acceptor.clone();
+                    
                     tokio::spawn(async move {
-                        if let Err(e) = Self::handle_connection(socket, handler).await {
-                            error!("Connection error: {}", e);
+                        // Handle TLS handshake if configured
+                        if let Some(acceptor) = tls_acceptor {
+                            match acceptor.accept(socket).await {
+                                Ok(tls_stream) => {
+                                    if let Err(e) = Self::handle_connection(tls_stream, handler).await {
+                                        error!("Connection error: {}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("TLS handshake failed: {}", e);
+                                }
+                            }
+                        } else {
+                            if let Err(e) = Self::handle_connection(socket, handler).await {
+                                error!("Connection error: {}", e);
+                            }
                         }
                     });
                 }
@@ -64,10 +93,13 @@ impl RespServer {
         }
     }
 
-    async fn handle_connection(
-        socket: TcpStream,
+    async fn handle_connection<S>(
+        socket: S,
         handler: Arc<CommandHandler>,
-    ) -> ProtocolResult<()> {
+    ) -> ProtocolResult<()>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    {
         let mut framed = Framed::new(socket, RespCodec::new());
 
         while let Some(result) = framed.next().await {
@@ -81,11 +113,14 @@ impl RespServer {
     }
 
     /// Process a single message result, returns false if connection should be closed
-    async fn process_message_result(
-        framed: &mut Framed<TcpStream, RespCodec>,
+    async fn process_message_result<S>(
+        framed: &mut Framed<S, RespCodec>,
         handler: &Arc<CommandHandler>,
         result: Result<RespValue, crate::protocols::error::ProtocolError>,
-    ) -> ProtocolResult<bool> {
+    ) -> ProtocolResult<bool>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    {
         match result {
             Ok(command) => {
                 debug!("Received command: {}", command);
@@ -111,10 +146,13 @@ impl RespServer {
     }
 
     /// Send response and handle send errors
-    async fn send_response(
-        framed: &mut Framed<TcpStream, RespCodec>,
+    async fn send_response<S>(
+        framed: &mut Framed<S, RespCodec>,
         response: RespValue,
-    ) -> ProtocolResult<bool> {
+    ) -> ProtocolResult<bool>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    {
         if let Err(e) = framed.send(response).await {
             error!("Send error: {}", e);
             Ok(false) // Close connection on send error

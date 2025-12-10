@@ -12,6 +12,7 @@ use tracing::info;
 pub struct AqlServer {
     bind_addr: String,
     storage: Arc<dyn AqlStorageProvider>,
+    tls_acceptor: Option<crate::protocols::tls::OrbitTlsAcceptor>,
 }
 
 impl AqlServer {
@@ -23,13 +24,22 @@ impl AqlServer {
         Self {
             bind_addr: bind_addr.into(),
             storage,
+            tls_acceptor: None,
         }
+    }
+
+    pub fn with_tls_config(mut self, tls_config: Option<crate::config::TlsConfig>) -> Self {
+        if tls_config.is_some() {
+            self.tls_acceptor = Some(crate::protocols::tls::OrbitTlsAcceptor::new(&tls_config).expect("Invalid TLS configuration"));
+        }
+        self
     }
 
     /// Start the server
     pub async fn run(&self) -> ProtocolResult<()> {
         info!("Starting AQL/ArangoDB HTTP server on {}", self.bind_addr);
-        let http_server = AqlHttpServer::new(&self.bind_addr, self.storage.clone());
+        let http_server = AqlHttpServer::new(&self.bind_addr, self.storage.clone())
+            .with_tls_acceptor(self.tls_acceptor.clone());
         http_server.run().await
     }
 }

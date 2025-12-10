@@ -8,13 +8,17 @@ use bson::{doc, oid::ObjectId, Bson, Document};
 use futures::{SinkExt, StreamExt};
 use orbit_shared::OrbitResult;
 use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tokio_util::codec::Framed;
 use tracing::{debug, error, info, warn};
+use tokio::io::{AsyncRead, AsyncWrite};
+use crate::config::TlsConfig;
+use crate::protocols::tls::OrbitTlsAcceptor;
 
 pub struct MongoDbServer {
     address: String,
     store: Arc<DocumentStore>,
+    tls_acceptor: Option<OrbitTlsAcceptor>,
 }
 
 impl MongoDbServer {
@@ -22,11 +26,19 @@ impl MongoDbServer {
         Self {
             address,
             store: Arc::new(DocumentStore::new()),
+            tls_acceptor: None,
         }
     }
 
     pub fn with_store(address: String, store: Arc<DocumentStore>) -> Self {
-        Self { address, store }
+        Self { address, store, tls_acceptor: None }
+    }
+
+    pub fn with_tls_config(mut self, tls_config: Option<TlsConfig>) -> Self {
+        if tls_config.is_some() {
+            self.tls_acceptor = Some(OrbitTlsAcceptor::new(&tls_config).expect("Invalid TLS configuration"));
+        }
+        self
     }
 
     pub async fn run(&self) -> OrbitResult<()> {
@@ -38,9 +50,24 @@ impl MongoDbServer {
                 Ok((socket, addr)) => {
                     debug!("New MongoDB connection from {}", addr);
                     let store = self.store.clone();
+                    let tls_acceptor = self.tls_acceptor.clone();
+                    
                     tokio::spawn(async move {
-                        if let Err(e) = handle_connection(socket, store).await {
-                            error!("MongoDB connection error: {}", e);
+                        if let Some(acceptor) = tls_acceptor {
+                            match acceptor.accept(socket).await {
+                                Ok(tls_stream) => {
+                                    if let Err(e) = handle_connection(tls_stream, store).await {
+                                        error!("MongoDB connection error: {}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("MongoDB TLS handshake failed: {}", e);
+                                }
+                            }
+                        } else {
+                            if let Err(e) = handle_connection(socket, store).await {
+                                error!("MongoDB connection error: {}", e);
+                            }
                         }
                     });
                 }
@@ -52,7 +79,10 @@ impl MongoDbServer {
     }
 }
 
-async fn handle_connection(socket: TcpStream, store: Arc<DocumentStore>) -> OrbitResult<()> {
+async fn handle_connection<S>(socket: S, store: Arc<DocumentStore>) -> OrbitResult<()> 
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
     info!("MongoDB: Starting connection handler");
 
     let mut framed = Framed::new(socket, MongoCodec::new());

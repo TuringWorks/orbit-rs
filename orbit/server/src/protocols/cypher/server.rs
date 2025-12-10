@@ -9,10 +9,13 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::{error, info};
 
+use crate::protocols::tls::OrbitTlsAcceptor;
+
 /// Cypher/Bolt protocol server
 pub struct CypherServer {
     bind_addr: String,
     storage: Arc<dyn CypherStorageProvider>,
+    tls_acceptor: Option<OrbitTlsAcceptor>,
 }
 
 impl CypherServer {
@@ -24,7 +27,15 @@ impl CypherServer {
         Self {
             bind_addr: bind_addr.into(),
             storage,
+            tls_acceptor: None,
         }
+    }
+
+    pub fn with_tls_config(mut self, tls_config: Option<crate::config::TlsConfig>) -> Self {
+        if tls_config.is_some() {
+            self.tls_acceptor = Some(crate::protocols::tls::OrbitTlsAcceptor::new(&tls_config).expect("Invalid TLS configuration"));
+        }
+        self
     }
 
     /// Start the server
@@ -45,12 +56,27 @@ impl CypherServer {
                     info!("New Cypher/Bolt connection from {}", addr);
 
                     let storage = self.storage.clone();
+                    let tls_acceptor = self.tls_acceptor.clone();
 
                     // Spawn a task to handle the connection
                     tokio::spawn(async move {
                         let mut handler = BoltProtocolHandler::new(storage);
-                        if let Err(e) = handler.handle_connection(stream).await {
-                            error!("Error handling Bolt connection: {}", e);
+                        
+                        if let Some(acceptor) = tls_acceptor {
+                            match acceptor.accept(stream).await {
+                                Ok(tls_stream) => {
+                                    if let Err(e) = handler.handle_connection(tls_stream).await {
+                                        error!("Error handling Bolt TLS connection: {}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Cypher TLS handshake failed: {}", e);
+                                }
+                            }
+                        } else {
+                            if let Err(e) = handler.handle_connection(stream).await {
+                                error!("Error handling Bolt connection: {}", e);
+                            }
                         }
                     });
                 }

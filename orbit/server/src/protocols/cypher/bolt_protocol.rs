@@ -32,9 +32,12 @@ use bytes::{BufMut, Bytes, BytesMut};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
+use tokio::io::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt};
 use tracing::{debug, error, info, warn};
+
+/// Trait for streams compatible with Bolt protocol (TCP, TLS)
+pub trait BoltStream: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T: AsyncRead + AsyncWrite + Unpin + Send> BoltStream for T {}
 
 /// PackStream decoder for parsing Bolt protocol messages
 #[derive(Debug, Default)]
@@ -582,7 +585,7 @@ impl BoltProtocolHandler {
     /// Handle Bolt handshake
     pub async fn handle_handshake(
         &mut self,
-        stream: &mut TcpStream,
+        stream: &mut impl BoltStream,
     ) -> ProtocolResult<BoltVersion> {
         let mut handshake_buf = [0u8; 20];
         stream.read_exact(&mut handshake_buf).await.map_err(|e| {
@@ -642,7 +645,7 @@ impl BoltProtocolHandler {
     }
 
     /// Handle a client connection
-    pub async fn handle_connection(&mut self, mut stream: TcpStream) -> ProtocolResult<()> {
+    pub async fn handle_connection(&mut self, mut stream: impl BoltStream) -> ProtocolResult<()> {
         info!("New Bolt client connection");
 
         // Perform handshake
@@ -696,7 +699,7 @@ impl BoltProtocolHandler {
     /// Read a chunk from the stream
     async fn read_chunk(
         &self,
-        stream: &mut TcpStream,
+        stream: &mut impl BoltStream,
         buf: &mut BytesMut,
     ) -> ProtocolResult<usize> {
         // Read chunk size (2 bytes)
@@ -730,7 +733,7 @@ impl BoltProtocolHandler {
     async fn process_message(
         &mut self,
         message_bytes: &Bytes,
-        stream: &mut TcpStream,
+        stream: &mut impl BoltStream,
     ) -> ProtocolResult<bool> {
         if message_bytes.is_empty() {
             return Ok(true);
@@ -854,7 +857,7 @@ impl BoltProtocolHandler {
     async fn handle_hello(
         &mut self,
         hello: HashMap<String, Value>,
-        stream: &mut TcpStream,
+        stream: &mut impl BoltStream,
     ) -> ProtocolResult<()> {
         info!("Received HELLO message with {} fields", hello.len());
 
@@ -1000,7 +1003,7 @@ impl BoltProtocolHandler {
         query: String,
         parameters: HashMap<String, Value>,
         _extra: HashMap<String, Value>,
-        stream: &mut TcpStream,
+        stream: &mut impl BoltStream,
     ) -> ProtocolResult<()> {
         info!("Received RUN message: {}", query);
 
@@ -1562,7 +1565,7 @@ impl BoltProtocolHandler {
         &mut self,
         n: Option<i64>,
         _qid: Option<i64>,
-        stream: &mut TcpStream,
+        stream: &mut impl BoltStream,
     ) -> ProtocolResult<()> {
         info!(
             "Received PULL message, pending results: {}",
@@ -1614,7 +1617,7 @@ impl BoltProtocolHandler {
         &mut self,
         _n: Option<i64>,
         _qid: Option<i64>,
-        stream: &mut TcpStream,
+        stream: &mut impl BoltStream,
     ) -> ProtocolResult<()> {
         info!("Received DISCARD message");
         self.current_query = None;
@@ -1651,7 +1654,7 @@ impl BoltProtocolHandler {
     async fn handle_begin(
         &mut self,
         extra: HashMap<String, Value>,
-        stream: &mut TcpStream,
+        stream: &mut impl BoltStream,
     ) -> ProtocolResult<()> {
         info!("Received BEGIN message");
 
@@ -1699,7 +1702,7 @@ impl BoltProtocolHandler {
     }
 
     /// Handle COMMIT message - commit the current transaction
-    async fn handle_commit(&mut self, stream: &mut TcpStream) -> ProtocolResult<()> {
+    async fn handle_commit(&mut self, stream: &mut impl BoltStream) -> ProtocolResult<()> {
         info!("Received COMMIT message");
 
         if !self.auth_state.authenticated {
@@ -1741,7 +1744,8 @@ impl BoltProtocolHandler {
     }
 
     /// Handle ROLLBACK message - rollback the current transaction
-    async fn handle_rollback(&mut self, stream: &mut TcpStream) -> ProtocolResult<()> {
+    /// Handle ROLLBACK message - rollback the current transaction
+    async fn handle_rollback(&mut self, stream: &mut impl BoltStream) -> ProtocolResult<()> {
         info!("Received ROLLBACK message");
 
         if !self.auth_state.authenticated {
@@ -1774,7 +1778,8 @@ impl BoltProtocolHandler {
     }
 
     /// Handle RESET message - reset connection state
-    async fn handle_reset(&mut self, stream: &mut TcpStream) -> ProtocolResult<()> {
+    /// Handle RESET message - reset connection state
+    async fn handle_reset(&mut self, stream: &mut impl BoltStream) -> ProtocolResult<()> {
         info!("Received RESET message");
 
         // Reset all connection state
@@ -1800,7 +1805,7 @@ impl BoltProtocolHandler {
     async fn send_success(
         &self,
         metadata: HashMap<String, Value>,
-        stream: &mut TcpStream,
+        stream: &mut impl BoltStream,
     ) -> ProtocolResult<()> {
         let mut buf = BytesMut::new();
         buf.put_u8(0xB1); // Structure (size 1)
@@ -1815,7 +1820,7 @@ impl BoltProtocolHandler {
     /// Send FAILURE message
     async fn send_failure(
         &self,
-        stream: &mut TcpStream,
+        stream: &mut impl BoltStream,
         _code: &str,
         _message: &str,
     ) -> ProtocolResult<()> {
@@ -1826,14 +1831,14 @@ impl BoltProtocolHandler {
     }
 
     /// Send IGNORED message
-    async fn send_ignored(&self, stream: &mut TcpStream) -> ProtocolResult<()> {
+    async fn send_ignored(&self, stream: &mut impl BoltStream) -> ProtocolResult<()> {
         let mut buf = BytesMut::new();
         buf.put_u8(0x7E); // IGNORED marker
         self.send_chunk(&buf, stream).await
     }
 
     /// Send RECORD message with values
-    async fn send_record(&self, values: Vec<Value>, stream: &mut TcpStream) -> ProtocolResult<()> {
+    async fn send_record(&self, values: Vec<Value>, stream: &mut impl BoltStream) -> ProtocolResult<()> {
         let mut buf = BytesMut::new();
 
         // RECORD structure marker: 0xB1 followed by signature 0x71
@@ -1944,7 +1949,7 @@ impl BoltProtocolHandler {
     }
 
     /// Send a chunk to the client
-    async fn send_chunk(&self, data: &BytesMut, stream: &mut TcpStream) -> ProtocolResult<()> {
+    async fn send_chunk(&self, data: &BytesMut, stream: &mut impl BoltStream) -> ProtocolResult<()> {
         let size = data.len() as u16;
         let mut chunk = BytesMut::with_capacity(2 + data.len() + 2);
         chunk.put_u16(size);

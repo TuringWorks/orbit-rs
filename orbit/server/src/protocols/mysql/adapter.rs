@@ -13,7 +13,9 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
+use crate::protocols::tls::OrbitTlsAcceptor;
+use tracing::{error, info, debug};
 use tokio::sync::RwLock;
 
 /// Prepared statement information
@@ -82,25 +84,45 @@ impl MySqlAdapter {
 
     /// Start the MySQL server
     pub async fn start(&self) -> ProtocolResult<()> {
-        let listener = TcpListener::bind(self.config.listen_addr)
+        self.start_with_tls(None).await
+    }
+
+    /// Start the MySQL server with optional TLS
+    pub async fn start_with_tls(&self, tls_acceptor: Option<OrbitTlsAcceptor>) -> ProtocolResult<()> {
+        let listener = TcpListener::bind(&self.config.listen_addr)
             .await
             .map_err(|e| ProtocolError::IoError(e.to_string()))?;
 
-        println!("[MySQL] Server listening on {}", self.config.listen_addr);
+        info!("[MySQL] Server listening on {}", self.config.listen_addr);
 
         loop {
             match listener.accept().await {
                 Ok((socket, addr)) => {
-                    println!("[MySQL] New connection from: {}", addr);
+                    debug!("[MySQL] New connection from: {}", addr);
                     let adapter = self.clone_for_connection();
+                    let tls_acceptor = tls_acceptor.clone();
+                    
                     tokio::spawn(async move {
-                        if let Err(e) = adapter.handle_connection(socket).await {
-                            eprintln!("[MySQL] Connection error: {}", e);
+                        if let Some(acceptor) = tls_acceptor {
+                            match acceptor.accept(socket).await {
+                                Ok(tls_stream) => {
+                                    if let Err(e) = adapter.handle_connection(tls_stream).await {
+                                        error!("[MySQL] Connection error: {}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("[MySQL] TLS handshake failed: {}", e);
+                                }
+                            }
+                        } else {
+                            if let Err(e) = adapter.handle_connection(socket).await {
+                                error!("[MySQL] Connection error: {}", e);
+                            }
                         }
                     });
                 }
                 Err(e) => {
-                    eprintln!("[MySQL] Accept error: {}", e);
+                    error!("[MySQL] Accept error: {}", e);
                 }
             }
         }
@@ -122,7 +144,10 @@ impl MySqlAdapter {
     }
 
     /// Handle a client connection
-    async fn handle_connection(&self, mut socket: TcpStream) -> ProtocolResult<()> {
+    async fn handle_connection<S>(&self, mut socket: S) -> ProtocolResult<()> 
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    {
         // Update metrics for new connection
         {
             let mut metrics = self.metrics.write().await;
@@ -262,7 +287,10 @@ impl MySqlAdapter {
     }
 
     /// Read a MySQL packet from the socket
-    async fn read_packet(&self, socket: &mut TcpStream) -> ProtocolResult<MySqlPacket> {
+    async fn read_packet<S>(&self, socket: &mut S) -> ProtocolResult<MySqlPacket> 
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    {
         // Read header (4 bytes)
         let mut header = [0u8; 4];
         socket.read_exact(&mut header).await.map_err(|e| {

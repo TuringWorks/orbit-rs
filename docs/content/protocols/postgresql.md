@@ -70,6 +70,15 @@ enabled = true
 port = 5432
 host = "0.0.0.0"
 max_connections = 100
+
+# TLS / ZTNA Configuration
+[server.tls]
+enabled = true
+cert_file = "certs/server.crt"
+key_file = "certs/server.key"
+require_client_cert = true # Enforce mTLS
+ca_cert_file = "certs/ca.crt"
+
 ```
 
 ## Limitations

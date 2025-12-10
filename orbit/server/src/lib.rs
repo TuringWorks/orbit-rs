@@ -12,6 +12,7 @@ pub mod persistence;
 pub mod protocols;
 pub mod server;
 pub mod services;
+pub mod tcp_proxy;
 #[cfg(test)]
 mod test_pooling_integration;
 pub mod unified_storage;

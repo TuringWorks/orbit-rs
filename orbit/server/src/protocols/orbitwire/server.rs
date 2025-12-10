@@ -14,15 +14,19 @@ use futures::stream::StreamExt;
 use futures::SinkExt;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use tokio_util::codec::Framed;
 use tracing::{debug, error, info, instrument};
+
+use crate::config::TlsConfig;
+use crate::protocols::tls::OrbitTlsAcceptor;
 
 /// OrbitWire Server
 pub struct OrbitWireServer {
     config: OrbitWireConfig,
     session_manager: Arc<OrbitWireSessionManager>,
+    tls_config: Option<TlsConfig>,
 }
 
 impl OrbitWireServer {
@@ -31,7 +35,14 @@ impl OrbitWireServer {
         Self {
             config,
             session_manager: Arc::new(OrbitWireSessionManager::default()),
+            tls_config: None,
         }
+    }
+
+    /// Set TLS configuration
+    pub fn with_tls_config(mut self, tls_config: Option<TlsConfig>) -> Self {
+        self.tls_config = tls_config;
+        self
     }
 
     /// Get the session manager
@@ -50,7 +61,14 @@ impl OrbitWireServer {
             .await
             .map_err(|e| ServerError::BindError(e.to_string()))?;
 
+        let tls_acceptor = OrbitTlsAcceptor::new(&self.tls_config).map_err(|e| {
+             ServerError::IoError(e)
+        })?;
+
         info!("OrbitWire server listening on {}", addr);
+        if tls_acceptor.is_enabled() {
+             info!("OrbitWire TLS enabled");
+        }
 
         loop {
             match listener.accept().await {
@@ -58,12 +76,21 @@ impl OrbitWireServer {
                     info!("New connection from {}", peer_addr);
                     let session_manager = self.session_manager.clone();
                     let config = self.config.clone();
+                    let tls_acceptor = tls_acceptor.clone();
 
                     tokio::spawn(async move {
-                        if let Err(e) =
-                            handle_connection(stream, peer_addr, session_manager, config).await
-                        {
-                            error!("Connection error from {}: {}", peer_addr, e);
+                         // Wrap stream with TLS if enabled
+                        match tls_acceptor.accept(stream).await {
+                             Ok(stream) => {
+                                 if let Err(e) =
+                                    handle_connection(stream, peer_addr, session_manager, config).await
+                                {
+                                    error!("Connection error from {}: {}", peer_addr, e);
+                                }
+                             }
+                             Err(e) => {
+                                 error!("TLS handshake error: {}", e);
+                             }
                         }
                     });
                 }
@@ -76,12 +103,14 @@ impl OrbitWireServer {
 }
 
 /// Handle a single client connection
-async fn handle_connection(
-    stream: TcpStream,
+async fn handle_connection<S>(
+    stream: S,
     peer_addr: SocketAddr,
     session_manager: Arc<OrbitWireSessionManager>,
     config: OrbitWireConfig,
-) -> Result<(), ServerError> {
+) -> Result<(), ServerError> 
+where S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
     // Set up codec
     let codec = OrbitWireCodec::server()
         .with_max_frame_size(config.max_frame_size)

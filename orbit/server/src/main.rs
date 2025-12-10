@@ -336,6 +336,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_postgres_enabled(false)
         .with_redis_enabled(false)
         .with_mongodb_enabled(false)
+        .with_tls_config(toml_config.server.tls.clone())
         .build()
         .await?;
 
@@ -581,6 +582,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             postgres_storage.clone(),
             rocksdb_storage.clone(),
             unified_postgres,
+            toml_config.server.tls.clone(),
         )
         .await?;
         protocol_handles.push(postgres_handle);
@@ -618,6 +620,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             redis_storage.clone(),
             redis_client_config,
             unified_redis,
+            toml_config.server.tls.clone(),
         )
         .await?;
         protocol_handles.push(redis_handle);
@@ -649,12 +652,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             StorageMode::Isolated { .. } => None,
         };
 
-        let mysql_server = if let Some(unified) = unified_mysql {
+        let mut mysql_server = if let Some(unified) = unified_mysql {
             info!("[MySQL] Using unified storage for cross-protocol data sharing");
             MySqlServer::new_with_storage(mysql_config, unified).await?
         } else {
             MySqlServer::new_with_storage(mysql_config, mysql_storage).await?
         };
+        mysql_server = mysql_server.with_tls_config(toml_config.server.tls.clone());
 
         let mysql_handle = tokio::spawn(async move {
             mysql_server
@@ -686,12 +690,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             StorageMode::Isolated { .. } => None,
         };
 
-        let cql_server = if let Some(unified) = unified_cql {
+        let mut cql_server = if let Some(unified) = unified_cql {
             info!("[CQL] Using unified storage for cross-protocol data sharing");
             CqlServer::new_with_storage(cql_config, unified).await?
         } else {
             CqlServer::new_with_storage(cql_config, cql_storage).await?
         };
+        cql_server = cql_server.with_tls_config(toml_config.server.tls.clone());
 
         let cql_handle = tokio::spawn(async move {
             cql_server
@@ -728,7 +733,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         storage
     };
 
-    let cypher_server = CypherServer::new_with_storage(cypher_bind_addr, cypher_storage);
+    let cypher_server = CypherServer::new_with_storage(cypher_bind_addr, cypher_storage)
+        .with_tls_config(toml_config.server.tls.clone());
     let cypher_handle = tokio::spawn(async move {
         cypher_server
             .run()
@@ -760,7 +766,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         storage
     };
 
-    let aql_server = AqlServer::new_with_storage(aql_bind_addr, aql_storage);
+    let aql_server = AqlServer::new_with_storage(aql_bind_addr, aql_storage)
+        .with_tls_config(toml_config.server.tls.clone());
     let aql_handle = tokio::spawn(async move {
         aql_server
             .run()
@@ -799,7 +806,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Start MongoDB server (port 27017)
     let mongodb_bind_addr = format!("{}:27017", args.bind);
-    let mongodb_server = MongoDbServer::new(mongodb_bind_addr);
+    let mongodb_server = MongoDbServer::new(mongodb_bind_addr)
+        .with_tls_config(toml_config.server.tls.clone());
     let mongodb_handle = tokio::spawn(async move {
         mongodb_server
             .run()
@@ -1295,6 +1303,7 @@ async fn start_postgresql_server(
     _storage: Arc<TieredTableStorage>,
     rocksdb: Arc<RocksDbTableStorage>,
     unified_storage: Option<Arc<UnifiedTableStorage>>,
+    tls_config: Option<orbit_server::config::TlsConfig>,
 ) -> Result<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>, Box<dyn Error>> {
     use orbit_server::protocols::postgres_wire::persistent_storage::PersistentTableStorage;
 
@@ -1309,7 +1318,8 @@ async fn start_postgresql_server(
     };
 
     // Create PostgreSQL server with query engine
-    let postgres_server = PostgresServer::new_with_query_engine(bind_addr, query_engine);
+    let postgres_server = PostgresServer::new_with_query_engine(bind_addr, query_engine)
+        .with_tls_config(tls_config);
 
     let handle = tokio::spawn(async move {
         postgres_server
@@ -1393,6 +1403,7 @@ async fn start_redis_server(
     unified_provider: Option<
         Arc<orbit_server::protocols::common::storage::unified::UnifiedRedisDataProvider>,
     >,
+    tls_config: Option<orbit_server::config::TlsConfig>,
 ) -> Result<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>, Box<dyn Error>> {
     let bind_addr = format!("{}:{}", args.bind, args.redis_port);
 
@@ -1441,7 +1452,8 @@ async fn start_redis_server(
     // The orbit_client is reserved for future use in CommandHandler but not currently used
     let orbit_client = orbit_client::OrbitClient::new_offline(client_config).await?;
 
-    let redis_server = RespServer::new_with_persistence(bind_addr, orbit_client, redis_provider);
+    let redis_server = RespServer::new_with_persistence(bind_addr, orbit_client, redis_provider)
+        .with_tls_config(tls_config);
 
     let handle = tokio::spawn(async move {
         redis_server

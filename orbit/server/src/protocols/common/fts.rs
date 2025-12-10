@@ -9,12 +9,13 @@
 //! - **BM25 Ranking**: Standard relevance scoring with GPU acceleration support
 //! - **Protocol Adapters**: Translation layers for protocol-specific query syntax
 //! - **Index Management**: Create, update, and delete FTS indexes
+//! - **Dual Engine Support**: Choose between SharedFtsEngine (SIMD/in-memory) or TantivyFtsEngine (disk-backed)
 //!
 //! ## Performance
 //!
 //! - SIMD (AVX2/AVX-512/NEON) for text processing operations
 //! - GPU acceleration for large-scale BM25 scoring and batch operations
-//! - In-memory inverted index with optional persistence via Tantivy
+//! - In-memory inverted index OR disk-backed Tantivy index (configurable)
 //!
 //! ## Protocol Integration
 //!
@@ -26,10 +27,20 @@
 //! | Redis | FT.SEARCH | RedisSearch |
 //! | MongoDB | $text | Text Index |
 //! | OrbitQL | SEARCH() | FTS Index |
+//!
+//! ## Engine Selection
+//!
+//! Configure in `orbit-server.toml`:
+//! ```toml
+//! [fts]
+//! engine = "shared"  # "shared" (SIMD/in-memory) or "tantivy" (disk-backed)
+//! ```
 
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use async_trait::async_trait;
 
 /// Result type for FTS operations
 pub type FtsResult<T> = Result<T, FtsError>;
@@ -43,6 +54,10 @@ pub enum FtsError {
     InvalidQuery(String),
     /// Tokenization error
     TokenizationError(String),
+    /// IO error
+    IoError(String),
+    /// Persistence error
+    PersistenceError(String),
     /// Internal error
     InternalError(String),
 }
@@ -53,12 +68,134 @@ impl std::fmt::Display for FtsError {
             FtsError::IndexNotFound(name) => write!(f, "Index not found: {}", name),
             FtsError::InvalidQuery(msg) => write!(f, "Invalid query: {}", msg),
             FtsError::TokenizationError(msg) => write!(f, "Tokenization error: {}", msg),
+            FtsError::IoError(msg) => write!(f, "IO error: {}", msg),
+            FtsError::PersistenceError(msg) => write!(f, "Persistence error: {}", msg),
             FtsError::InternalError(msg) => write!(f, "Internal error: {}", msg),
         }
     }
 }
 
 impl std::error::Error for FtsError {}
+
+impl From<std::io::Error> for FtsError {
+    fn from(err: std::io::Error) -> Self {
+        FtsError::IoError(err.to_string())
+    }
+}
+
+// ============================================================================
+// FTS Engine Type Selection
+// ============================================================================
+
+/// The type of FTS engine to use
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FtsEngineType {
+    /// SharedFtsEngine: Custom SIMD-accelerated in-memory engine
+    /// - Fastest tokenization (AVX2/NEON)
+    /// - GPU-accelerated BM25 scoring
+    /// - Best for: High-throughput, low-latency workloads
+    #[default]
+    Shared,
+    /// TantivyFtsEngine: Disk-backed Tantivy-based engine
+    /// - Persistent indexes on disk
+    /// - Battle-tested Lucene-like implementation
+    /// - Best for: Large indexes, durability requirements
+    Tantivy,
+}
+
+impl std::str::FromStr for FtsEngineType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "shared" | "simd" | "memory" | "in-memory" => Ok(FtsEngineType::Shared),
+            "tantivy" | "disk" | "persistent" => Ok(FtsEngineType::Tantivy),
+            _ => Err(format!("Unknown FTS engine type: {}. Use 'shared' or 'tantivy'", s)),
+        }
+    }
+}
+
+impl std::fmt::Display for FtsEngineType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FtsEngineType::Shared => write!(f, "shared"),
+            FtsEngineType::Tantivy => write!(f, "tantivy"),
+        }
+    }
+}
+
+// ============================================================================
+// Unified FTS Engine Trait
+// ============================================================================
+
+/// Unified search result returned by all FTS engines
+#[derive(Debug, Clone)]
+pub struct UnifiedSearchResult {
+    /// Document ID
+    pub doc_id: String,
+    /// BM25 relevance score
+    pub score: f32,
+    /// Matched field values
+    pub fields: HashMap<String, String>,
+    /// Highlighted snippets (if supported)
+    pub highlights: Vec<String>,
+}
+
+/// Unified FTS engine trait that both SharedFtsEngine and TantivyFtsEngine implement
+#[async_trait]
+pub trait UnifiedFtsEngine: Send + Sync {
+    /// Get the engine type
+    fn engine_type(&self) -> FtsEngineType;
+
+    /// Create a new index
+    async fn create_index(&self, name: &str, fields: &[String]) -> FtsResult<()>;
+
+    /// Drop an index
+    async fn drop_index(&self, name: &str) -> FtsResult<bool>;
+
+    /// Index a document
+    async fn index_document(
+        &self,
+        index_name: &str,
+        doc_id: &str,
+        fields: HashMap<String, String>,
+    ) -> FtsResult<()>;
+
+    /// Remove a document from an index
+    async fn remove_document(&self, index_name: &str, doc_id: &str) -> FtsResult<bool>;
+
+    /// Search an index with a unified query
+    async fn search(
+        &self,
+        index_name: &str,
+        query: &FtsQuery,
+    ) -> FtsResult<Vec<UnifiedSearchResult>>;
+
+    /// Commit pending changes (for engines that support it)
+    async fn commit(&self, index_name: &str) -> FtsResult<()>;
+
+    /// Get index statistics
+    async fn get_stats(&self, index_name: &str) -> FtsResult<UnifiedIndexStats>;
+
+    /// List all indexes
+    async fn list_indexes(&self) -> Vec<String>;
+
+    /// Flush indexes to disk (if supported)
+    async fn flush(&self) -> FtsResult<()>;
+}
+
+/// Unified index statistics
+#[derive(Debug, Clone)]
+pub struct UnifiedIndexStats {
+    /// Number of documents in the index
+    pub num_docs: u64,
+    /// Number of unique terms
+    pub num_terms: u64,
+    /// Average document length
+    pub avg_doc_len: f32,
+    /// Index size in bytes (0 for in-memory only)
+    pub size_bytes: u64,
+}
 
 // ============================================================================
 // Core Data Structures
@@ -85,6 +222,12 @@ pub struct SharedFtsConfig {
     pub enable_simd: bool,
     /// Enable GPU acceleration for scoring
     pub enable_gpu: bool,
+    /// Enable disk persistence for indexes
+    pub enable_persistence: bool,
+    /// Directory for persisted indexes (if persistence is enabled)
+    pub persistence_dir: Option<PathBuf>,
+    /// Auto-flush interval in seconds (0 = manual flush only)
+    pub auto_flush_secs: u64,
 }
 
 impl Default for SharedFtsConfig {
@@ -99,6 +242,54 @@ impl Default for SharedFtsConfig {
             bm25_b: 0.75,
             enable_simd: true,
             enable_gpu: false,
+            enable_persistence: false,
+            persistence_dir: None,
+            auto_flush_secs: 0,
+        }
+    }
+}
+
+/// Unified FTS configuration that applies to all engines
+#[derive(Debug, Clone)]
+pub struct UnifiedFtsConfig {
+    /// Which FTS engine to use
+    pub engine_type: FtsEngineType,
+    /// Directory for FTS index storage
+    pub index_dir: PathBuf,
+    /// Maximum memory for indexing (bytes)
+    pub max_memory: usize,
+    /// Number of indexing threads
+    pub num_threads: usize,
+    /// Default language for text analysis
+    pub default_language: String,
+    /// Enable query caching
+    pub enable_cache: bool,
+    /// Cache size (number of queries)
+    pub cache_size: usize,
+    /// Enable SIMD acceleration (SharedFtsEngine only)
+    pub enable_simd: bool,
+    /// Enable GPU acceleration (SharedFtsEngine only)
+    pub enable_gpu: bool,
+    /// BM25 k1 parameter
+    pub bm25_k1: f32,
+    /// BM25 b parameter
+    pub bm25_b: f32,
+}
+
+impl Default for UnifiedFtsConfig {
+    fn default() -> Self {
+        Self {
+            engine_type: FtsEngineType::Shared,
+            index_dir: PathBuf::from("./data/fts"),
+            max_memory: 100_000_000, // 100MB
+            num_threads: 4,
+            default_language: "english".to_string(),
+            enable_cache: true,
+            cache_size: 1000,
+            enable_simd: true,
+            enable_gpu: false,
+            bm25_k1: 1.2,
+            bm25_b: 0.75,
         }
     }
 }
@@ -922,6 +1113,627 @@ impl SharedFtsEngine {
 impl Default for SharedFtsEngine {
     fn default() -> Self {
         Self::new(SharedFtsConfig::default())
+    }
+}
+
+#[async_trait]
+impl UnifiedFtsEngine for SharedFtsEngine {
+    fn engine_type(&self) -> FtsEngineType {
+        FtsEngineType::Shared
+    }
+
+    async fn create_index(&self, name: &str, _fields: &[String]) -> FtsResult<()> {
+        let mut indexes = self.indexes.write().await;
+        indexes.insert(name.to_string(), InvertedIndex::new());
+        Ok(())
+    }
+
+    async fn drop_index(&self, name: &str) -> FtsResult<bool> {
+        let mut indexes = self.indexes.write().await;
+        Ok(indexes.remove(name).is_some())
+    }
+
+    async fn index_document(
+        &self,
+        index_name: &str,
+        doc_id: &str,
+        fields: HashMap<String, String>,
+    ) -> FtsResult<()> {
+        let doc = FtsDocument {
+            id: doc_id.to_string(),
+            fields,
+            metadata: None,
+        };
+        // Use the existing method
+        let mut indexes = self.indexes.write().await;
+        let index = indexes
+            .get_mut(index_name)
+            .ok_or_else(|| FtsError::IndexNotFound(index_name.to_string()))?;
+
+        let mut tokens_by_field = HashMap::new();
+        for (field, text) in &doc.fields {
+            let tokens = self.processor.tokenize(text);
+            tokens_by_field.insert(field.clone(), tokens);
+        }
+
+        index.add_document(doc, tokens_by_field);
+        Ok(())
+    }
+
+    async fn remove_document(&self, index_name: &str, doc_id: &str) -> FtsResult<bool> {
+        let mut indexes = self.indexes.write().await;
+        let index = indexes
+            .get_mut(index_name)
+            .ok_or_else(|| FtsError::IndexNotFound(index_name.to_string()))?;
+
+        Ok(index.remove_document(doc_id))
+    }
+
+    async fn search(
+        &self,
+        index_name: &str,
+        query: &FtsQuery,
+    ) -> FtsResult<Vec<UnifiedSearchResult>> {
+        let indexes = self.indexes.read().await;
+        let index = indexes
+            .get(index_name)
+            .ok_or_else(|| FtsError::IndexNotFound(index_name.to_string()))?;
+
+        // Tokenize query terms
+        let mut all_query_terms: Vec<String> = Vec::new();
+        for term in &query.must_terms {
+            all_query_terms.extend(self.processor.tokenize(term));
+        }
+        for term in &query.should_terms {
+            all_query_terms.extend(self.processor.tokenize(term));
+        }
+
+        if all_query_terms.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Find candidate documents
+        let mut candidate_docs: HashSet<String> = HashSet::new();
+        for term in &all_query_terms {
+            if let Some(postings) = index.get_postings(term) {
+                for posting in postings {
+                    if let Some(ref fields) = query.fields {
+                        if !fields.contains(&posting.field) {
+                            continue;
+                        }
+                    }
+                    candidate_docs.insert(posting.doc_id.clone());
+                }
+            }
+        }
+
+        // Handle must_not terms
+        let must_not_tokens: Vec<String> = query
+            .must_not_terms
+            .iter()
+            .flat_map(|t| self.processor.tokenize(t))
+            .collect();
+
+        for term in &must_not_tokens {
+            if let Some(postings) = index.get_postings(term) {
+                for posting in postings {
+                    candidate_docs.remove(&posting.doc_id);
+                }
+            }
+        }
+
+        // Score candidates
+        let doc_ids: Vec<String> = candidate_docs.into_iter().collect();
+        let mut scored_docs = self.scorer.score_batch(&all_query_terms, &doc_ids, index);
+
+        // Filter by minimum score
+        if let Some(min_score) = query.min_score {
+            scored_docs.retain(|(_, score)| *score >= min_score);
+        }
+
+        // Sort by score descending
+        scored_docs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Apply offset and limit
+        let results: Vec<UnifiedSearchResult> = scored_docs
+            .into_iter()
+            .skip(query.offset)
+            .take(query.limit)
+            .filter_map(|(doc_id, score)| {
+                index.get_document(&doc_id).map(|doc| UnifiedSearchResult {
+                    doc_id: doc_id.clone(),
+                    score,
+                    fields: doc.fields.clone(),
+                    highlights: Vec::new(),
+                })
+            })
+            .collect();
+
+        Ok(results)
+    }
+
+    async fn commit(&self, _index_name: &str) -> FtsResult<()> {
+        // SharedFtsEngine is in-memory, commit is a no-op
+        // If persistence is enabled, this would flush to disk
+        if self.config.enable_persistence {
+            self.flush().await?;
+        }
+        Ok(())
+    }
+
+    async fn get_stats(&self, index_name: &str) -> FtsResult<UnifiedIndexStats> {
+        let indexes = self.indexes.read().await;
+        let index = indexes
+            .get(index_name)
+            .ok_or_else(|| FtsError::IndexNotFound(index_name.to_string()))?;
+
+        let stats = index.stats();
+        Ok(UnifiedIndexStats {
+            num_docs: stats.num_docs,
+            num_terms: stats.num_terms,
+            avg_doc_len: stats.avg_doc_len,
+            size_bytes: 0, // In-memory, no disk size
+        })
+    }
+
+    async fn list_indexes(&self) -> Vec<String> {
+        self.indexes.read().await.keys().cloned().collect()
+    }
+
+    async fn flush(&self) -> FtsResult<()> {
+        if !self.config.enable_persistence {
+            return Ok(());
+        }
+
+        let persistence_dir = self.config.persistence_dir.as_ref()
+            .ok_or_else(|| FtsError::PersistenceError("Persistence directory not configured".to_string()))?;
+
+        // Create persistence directory if it doesn't exist
+        std::fs::create_dir_all(persistence_dir)?;
+
+        let indexes = self.indexes.read().await;
+        for (name, index) in indexes.iter() {
+            let index_file = persistence_dir.join(format!("{}.fts.json", name));
+            let data = serde_json::to_string(&SerializableIndex::from(index))
+                .map_err(|e| FtsError::PersistenceError(e.to_string()))?;
+            std::fs::write(&index_file, data)?;
+        }
+
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Tantivy FTS Engine Wrapper
+// ============================================================================
+
+/// Tantivy-based FTS engine that wraps the legacy FTS module
+pub struct TantivyFtsEngine {
+    config: UnifiedFtsConfig,
+    indexes: Arc<RwLock<HashMap<String, TantivyIndexHandle>>>,
+}
+
+/// Handle to a Tantivy index
+struct TantivyIndexHandle {
+    index: tantivy::Index,
+    reader: tantivy::IndexReader,
+    writer: Arc<RwLock<tantivy::IndexWriter>>,
+    schema: tantivy::schema::Schema,
+    field_map: HashMap<String, tantivy::schema::Field>,
+}
+
+impl TantivyFtsEngine {
+    /// Create a new Tantivy FTS engine
+    pub fn new(config: UnifiedFtsConfig) -> FtsResult<Self> {
+        std::fs::create_dir_all(&config.index_dir)?;
+        Ok(Self {
+            config,
+            indexes: Arc::new(RwLock::new(HashMap::new())),
+        })
+    }
+}
+
+#[async_trait]
+impl UnifiedFtsEngine for TantivyFtsEngine {
+    fn engine_type(&self) -> FtsEngineType {
+        FtsEngineType::Tantivy
+    }
+
+    async fn create_index(&self, name: &str, fields: &[String]) -> FtsResult<()> {
+        use tantivy::schema::*;
+
+        let index_path = self.config.index_dir.join(name);
+        std::fs::create_dir_all(&index_path)?;
+
+        // Build schema with requested fields
+        let mut schema_builder = Schema::builder();
+        let mut field_map = HashMap::new();
+
+        // Add doc_id field
+        let doc_id_field = schema_builder.add_text_field("_doc_id", STRING | STORED);
+        field_map.insert("_doc_id".to_string(), doc_id_field);
+
+        // Add text fields
+        let text_options = TextOptions::default()
+            .set_indexing_options(
+                TextFieldIndexing::default()
+                    .set_tokenizer("default")
+                    .set_index_option(IndexRecordOption::WithFreqsAndPositions),
+            )
+            .set_stored();
+
+        for field_name in fields {
+            let field = schema_builder.add_text_field(field_name, text_options.clone());
+            field_map.insert(field_name.clone(), field);
+        }
+
+        let schema = schema_builder.build();
+
+        // Create Tantivy index
+        let index = tantivy::Index::create_in_dir(&index_path, schema.clone())
+            .map_err(|e| FtsError::InternalError(e.to_string()))?;
+
+        // Create writer
+        let writer = index
+            .writer(self.config.max_memory)
+            .map_err(|e| FtsError::InternalError(e.to_string()))?;
+
+        // Create reader
+        let reader = index
+            .reader_builder()
+            .reload_policy(tantivy::ReloadPolicy::OnCommitWithDelay)
+            .try_into()
+            .map_err(|e: tantivy::TantivyError| FtsError::InternalError(e.to_string()))?;
+
+        let handle = TantivyIndexHandle {
+            index,
+            reader,
+            writer: Arc::new(RwLock::new(writer)),
+            schema,
+            field_map,
+        };
+
+        self.indexes.write().await.insert(name.to_string(), handle);
+        Ok(())
+    }
+
+    async fn drop_index(&self, name: &str) -> FtsResult<bool> {
+        let removed = self.indexes.write().await.remove(name).is_some();
+
+        if removed {
+            let index_path = self.config.index_dir.join(name);
+            if index_path.exists() {
+                std::fs::remove_dir_all(&index_path)?;
+            }
+        }
+
+        Ok(removed)
+    }
+
+    async fn index_document(
+        &self,
+        index_name: &str,
+        doc_id: &str,
+        fields: HashMap<String, String>,
+    ) -> FtsResult<()> {
+        let indexes = self.indexes.read().await;
+        let handle = indexes
+            .get(index_name)
+            .ok_or_else(|| FtsError::IndexNotFound(index_name.to_string()))?;
+
+        let mut doc = tantivy::TantivyDocument::new();
+
+        // Add doc_id
+        if let Some(&field) = handle.field_map.get("_doc_id") {
+            doc.add_text(field, doc_id);
+        }
+
+        // Add other fields
+        for (field_name, value) in fields {
+            if let Some(&field) = handle.field_map.get(&field_name) {
+                doc.add_text(field, &value);
+            }
+        }
+
+        let writer = handle.writer.write().await;
+        writer
+            .add_document(doc)
+            .map_err(|e| FtsError::InternalError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn remove_document(&self, index_name: &str, doc_id: &str) -> FtsResult<bool> {
+        let indexes = self.indexes.read().await;
+        let handle = indexes
+            .get(index_name)
+            .ok_or_else(|| FtsError::IndexNotFound(index_name.to_string()))?;
+
+        if let Some(&field) = handle.field_map.get("_doc_id") {
+            let term = tantivy::Term::from_field_text(field, doc_id);
+            let mut writer = handle.writer.write().await;
+            writer.delete_term(term);
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
+    async fn search(
+        &self,
+        index_name: &str,
+        query: &FtsQuery,
+    ) -> FtsResult<Vec<UnifiedSearchResult>> {
+        let indexes = self.indexes.read().await;
+        let handle = indexes
+            .get(index_name)
+            .ok_or_else(|| FtsError::IndexNotFound(index_name.to_string()))?;
+
+        let searcher = handle.reader.searcher();
+
+        // Build query string from FtsQuery
+        let mut query_parts: Vec<String> = Vec::new();
+
+        for term in &query.must_terms {
+            query_parts.push(format!("+{}", term));
+        }
+        for term in &query.should_terms {
+            query_parts.push(term.clone());
+        }
+        for term in &query.must_not_terms {
+            query_parts.push(format!("-{}", term));
+        }
+
+        if query_parts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let query_string = query_parts.join(" ");
+
+        // Get searchable fields
+        let search_fields: Vec<tantivy::schema::Field> = if let Some(ref field_names) = query.fields {
+            field_names
+                .iter()
+                .filter_map(|name| handle.field_map.get(name).copied())
+                .collect()
+        } else {
+            handle
+                .field_map
+                .iter()
+                .filter(|(name, _)| *name != "_doc_id")
+                .map(|(_, &field)| field)
+                .collect()
+        };
+
+        let query_parser =
+            tantivy::query::QueryParser::for_index(&handle.index, search_fields);
+        let tantivy_query = query_parser
+            .parse_query(&query_string)
+            .map_err(|e| FtsError::InvalidQuery(e.to_string()))?;
+
+        let top_docs = searcher
+            .search(
+                &tantivy_query,
+                &tantivy::collector::TopDocs::with_limit(query.limit).and_offset(query.offset),
+            )
+            .map_err(|e| FtsError::InternalError(e.to_string()))?;
+
+        let mut results = Vec::new();
+        for (score, doc_address) in top_docs {
+            let doc: tantivy::TantivyDocument = searcher
+                .doc(doc_address)
+                .map_err(|e| FtsError::InternalError(e.to_string()))?;
+
+            let mut fields_map = HashMap::new();
+            let mut doc_id = String::new();
+
+            for (field, _) in handle.schema.fields() {
+                let field_entry = handle.schema.get_field_entry(field);
+                let field_name = field_entry.name().to_string();
+
+                for value in doc.get_all(field) {
+                    if let Some(text) = value.as_str() {
+                        if field_name == "_doc_id" {
+                            doc_id = text.to_string();
+                        } else {
+                            fields_map.insert(field_name.clone(), text.to_string());
+                        }
+                    }
+                }
+            }
+
+            if let Some(min_score) = query.min_score {
+                if score < min_score {
+                    continue;
+                }
+            }
+
+            results.push(UnifiedSearchResult {
+                doc_id,
+                score,
+                fields: fields_map,
+                highlights: Vec::new(),
+            });
+        }
+
+        Ok(results)
+    }
+
+    async fn commit(&self, index_name: &str) -> FtsResult<()> {
+        let indexes = self.indexes.read().await;
+        let handle = indexes
+            .get(index_name)
+            .ok_or_else(|| FtsError::IndexNotFound(index_name.to_string()))?;
+
+        let mut writer = handle.writer.write().await;
+        writer
+            .commit()
+            .map_err(|e| FtsError::InternalError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn get_stats(&self, index_name: &str) -> FtsResult<UnifiedIndexStats> {
+        let indexes = self.indexes.read().await;
+        let handle = indexes
+            .get(index_name)
+            .ok_or_else(|| FtsError::IndexNotFound(index_name.to_string()))?;
+
+        let searcher = handle.reader.searcher();
+        let num_docs = searcher.num_docs();
+
+        // Calculate index size
+        let index_path = self.config.index_dir.join(index_name);
+        let size_bytes = calculate_dir_size(&index_path).unwrap_or(0);
+
+        Ok(UnifiedIndexStats {
+            num_docs,
+            num_terms: 0, // Tantivy doesn't expose this easily
+            avg_doc_len: 0.0,
+            size_bytes,
+        })
+    }
+
+    async fn list_indexes(&self) -> Vec<String> {
+        self.indexes.read().await.keys().cloned().collect()
+    }
+
+    async fn flush(&self) -> FtsResult<()> {
+        let indexes = self.indexes.read().await;
+        for (name, handle) in indexes.iter() {
+            let mut writer = handle.writer.write().await;
+            writer.commit().map_err(|e| {
+                FtsError::PersistenceError(format!("Failed to commit index {}: {}", name, e))
+            })?;
+        }
+        Ok(())
+    }
+}
+
+/// Calculate directory size recursively
+fn calculate_dir_size(path: &PathBuf) -> FtsResult<u64> {
+    let mut size = 0u64;
+
+    if path.is_dir() {
+        for entry in std::fs::read_dir(path)? {
+            let entry = entry?;
+            let metadata = entry.metadata()?;
+            if metadata.is_dir() {
+                size += calculate_dir_size(&entry.path())?;
+            } else {
+                size += metadata.len();
+            }
+        }
+    }
+
+    Ok(size)
+}
+
+// ============================================================================
+// Serialization for SharedFtsEngine persistence
+// ============================================================================
+
+/// Serializable version of InvertedIndex for JSON persistence
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SerializableIndex {
+    postings: HashMap<String, Vec<SerializablePosting>>,
+    doc_lengths: HashMap<String, u32>,
+    num_docs: u64,
+    avg_doc_len: f32,
+    documents: HashMap<String, SerializableDocument>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SerializablePosting {
+    doc_id: String,
+    term_freq: u32,
+    field: String,
+    positions: Vec<u32>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SerializableDocument {
+    id: String,
+    fields: HashMap<String, String>,
+}
+
+impl From<&InvertedIndex> for SerializableIndex {
+    fn from(index: &InvertedIndex) -> Self {
+        let postings: HashMap<String, Vec<SerializablePosting>> = index
+            .postings
+            .iter()
+            .map(|(term, posts)| {
+                (
+                    term.clone(),
+                    posts
+                        .iter()
+                        .map(|p| SerializablePosting {
+                            doc_id: p.doc_id.clone(),
+                            term_freq: p.term_freq,
+                            field: p.field.clone(),
+                            positions: p.positions.clone(),
+                        })
+                        .collect(),
+                )
+            })
+            .collect();
+
+        let documents: HashMap<String, SerializableDocument> = index
+            .documents
+            .iter()
+            .map(|(id, doc)| {
+                (
+                    id.clone(),
+                    SerializableDocument {
+                        id: doc.id.clone(),
+                        fields: doc.fields.clone(),
+                    },
+                )
+            })
+            .collect();
+
+        SerializableIndex {
+            postings,
+            doc_lengths: index.doc_lengths.clone(),
+            num_docs: index.num_docs,
+            avg_doc_len: index.avg_doc_len,
+            documents,
+        }
+    }
+}
+
+// ============================================================================
+// FTS Engine Factory
+// ============================================================================
+
+/// Factory for creating FTS engines based on configuration
+pub struct FtsEngineFactory;
+
+impl FtsEngineFactory {
+    /// Create an FTS engine based on configuration
+    pub fn create(config: UnifiedFtsConfig) -> FtsResult<Arc<dyn UnifiedFtsEngine>> {
+        match config.engine_type {
+            FtsEngineType::Shared => {
+                let shared_config = SharedFtsConfig {
+                    default_language: config.default_language.clone(),
+                    enable_stemming: true,
+                    min_term_length: 2,
+                    max_term_length: 100,
+                    stop_words: default_stop_words(),
+                    bm25_k1: config.bm25_k1,
+                    bm25_b: config.bm25_b,
+                    enable_simd: config.enable_simd,
+                    enable_gpu: config.enable_gpu,
+                    enable_persistence: true,
+                    persistence_dir: Some(config.index_dir.clone()),
+                    auto_flush_secs: 0,
+                };
+                Ok(Arc::new(SharedFtsEngine::new(shared_config)))
+            }
+            FtsEngineType::Tantivy => {
+                Ok(Arc::new(TantivyFtsEngine::new(config)?))
+            }
+        }
     }
 }
 
