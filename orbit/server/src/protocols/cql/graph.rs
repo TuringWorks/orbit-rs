@@ -59,7 +59,7 @@ pub enum GraphDirection {
 }
 
 /// Result of a graph query
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GraphQueryResult {
     /// Result vertices
     pub vertices: Vec<GraphVertex>,
@@ -71,18 +71,6 @@ pub struct GraphQueryResult {
     pub scores: HashMap<String, f64>,
     /// Component assignments (for component analysis)
     pub components: HashMap<String, usize>,
-}
-
-impl Default for GraphQueryResult {
-    fn default() -> Self {
-        Self {
-            vertices: Vec::new(),
-            edges: Vec::new(),
-            paths: Vec::new(),
-            scores: HashMap::new(),
-            components: HashMap::new(),
-        }
-    }
 }
 
 /// A vertex in the graph result

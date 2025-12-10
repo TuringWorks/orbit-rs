@@ -547,10 +547,8 @@ pub mod constructors {
             .collect();
 
         // Ensure ring is closed
-        if exterior_points.len() >= 3 {
-            if exterior_points.first() != exterior_points.last() {
-                exterior_points.push(exterior_points[0].clone());
-            }
+        if exterior_points.len() >= 3 && exterior_points.first() != exterior_points.last() {
+            exterior_points.push(exterior_points[0].clone());
         }
 
         let exterior_ring = LinearRing::new(exterior_points)
@@ -564,10 +562,8 @@ pub mod constructors {
                 .map(|(lon, lat)| Point::new(*lon, *lat, Some(WGS84_SRID)))
                 .collect();
 
-            if interior_points.len() >= 3 {
-                if interior_points.first() != interior_points.last() {
-                    interior_points.push(interior_points[0].clone());
-                }
+            if interior_points.len() >= 3 && interior_points.first() != interior_points.last() {
+                interior_points.push(interior_points[0].clone());
             }
 
             interior_rings.push(

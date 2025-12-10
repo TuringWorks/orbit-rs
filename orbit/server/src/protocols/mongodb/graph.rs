@@ -130,7 +130,7 @@ impl MongoGraphEngine {
 
         for node_id in &traversal.visited {
             // Skip the start node itself (MongoDB behavior)
-            if node_id == &start_key && config.max_depth.map_or(false, |_| true) {
+            if node_id == &start_key && config.max_depth.is_some_and(|_| true) {
                 // Only skip if we have maxDepth set and it's the actual start
                 // Actually, in MongoDB $graphLookup, the starting value matches are included
             }

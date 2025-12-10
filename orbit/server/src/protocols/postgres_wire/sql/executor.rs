@@ -2265,8 +2265,8 @@ impl SqlExecutor {
             }
             SqlValue::Composite(fields) => {
                 let values: Vec<String> = fields
-                    .iter()
-                    .map(|(_, v)| self.sql_value_to_string(v))
+                    .values()
+                    .map(|v| self.sql_value_to_string(v))
                     .collect();
                 format!("({})", values.join(","))
             }
@@ -2991,7 +2991,7 @@ impl SqlExecutor {
                 let row_pair = (old_row.clone(), new_row.clone().unwrap_or_default());
                 let rows = self.evaluate_returning_clause_with_old_new(
                     returning_items,
-                    &vec![row_pair],
+                    &[row_pair],
                     &table_schema,
                 )?;
                 result_rows.extend(rows);

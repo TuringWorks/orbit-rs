@@ -581,7 +581,7 @@ pub fn parse_vacuum(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     // Parse table list
     let mut tables = Vec::new();
-    if !parser.current_token.is_none() && !parser.matches(&[Token::Semicolon]) {
+    if parser.current_token.is_some() && !parser.matches(&[Token::Semicolon]) {
         loop {
             let name = utilities::parse_table_name(parser)?;
             let mut columns = Vec::new();
@@ -661,7 +661,7 @@ pub fn parse_analyze(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     // Parse table list
     let mut tables = Vec::new();
-    if !parser.current_token.is_none() && !parser.matches(&[Token::Semicolon]) {
+    if parser.current_token.is_some() && !parser.matches(&[Token::Semicolon]) {
         loop {
             let name = utilities::parse_table_name(parser)?;
             let mut columns = Vec::new();
@@ -766,7 +766,7 @@ pub fn parse_reindex(parser: &mut SqlParser) -> ParseResult<Statement> {
     };
 
     // Parse optional name
-    let name = if !parser.current_token.is_none() && !parser.matches(&[Token::Semicolon]) {
+    let name = if parser.current_token.is_some() && !parser.matches(&[Token::Semicolon]) {
         Some(utilities::parse_table_name(parser)?)
     } else {
         None
@@ -793,7 +793,7 @@ pub fn parse_cluster(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     // Parse optional table name
     let (table_name, index_name) =
-        if !parser.current_token.is_none() && !parser.matches(&[Token::Semicolon]) {
+        if parser.current_token.is_some() && !parser.matches(&[Token::Semicolon]) {
             let name = utilities::parse_table_name(parser)?;
 
             let idx = if parser.matches(&[Token::Using]) {

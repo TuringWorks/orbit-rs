@@ -148,11 +148,8 @@ impl MySqlAdapter {
         };
 
         // Send handshake
-        let auth_plugin = if self.config.authentication_enabled {
-            "mysql_native_password" // Default to native for now, could be caching_sha2_password
-        } else {
-            "mysql_native_password"
-        };
+        // TODO: Support caching_sha2_password when authentication is enabled
+        let auth_plugin = "mysql_native_password";
 
         let handshake = build_handshake(connection_id, &self.config.server_version, auth_plugin);
         let packet = MySqlPacket::new(0, handshake);

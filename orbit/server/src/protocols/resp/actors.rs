@@ -1805,7 +1805,7 @@ impl SortedSetActor {
     pub fn zlexcount(&self, min: &str, max: &str) -> usize {
         let mut count = 0;
 
-        for (_, members_set) in &self.score_members {
+        for members_set in self.score_members.values() {
             for member in members_set {
                 if member.as_str() >= min && member.as_str() <= max {
                     count += 1;

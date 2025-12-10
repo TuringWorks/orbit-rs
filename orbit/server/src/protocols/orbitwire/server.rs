@@ -311,7 +311,7 @@ impl ConnectionHandler {
         let payload = frame.payload;
 
         // Parse begin options
-        let isolation = if payload.len() >= 1 {
+        let isolation = if !payload.is_empty() {
             match payload[0] {
                 1 => IsolationLevel::ReadUncommitted,
                 2 => IsolationLevel::ReadCommitted,
@@ -329,7 +329,7 @@ impl ConnectionHandler {
         let mut session = self.session.write().await;
         let tx_id = session
             .begin_transaction(isolation, read_only)
-            .map_err(|e| HandlerError::SessionError(e))?;
+            .map_err(HandlerError::SessionError)?;
 
         let ack = BeginOkMessage::new(tx_id);
         Ok(vec![ack.to_frame(stream_id)])
@@ -341,7 +341,7 @@ impl ConnectionHandler {
         let mut session = self.session.write().await;
         let tx_id = session
             .commit_transaction()
-            .map_err(|e| HandlerError::SessionError(e))?;
+            .map_err(HandlerError::SessionError)?;
 
         let ack = Frame::with_flags(
             FrameFlags::new().with_end_stream(),
@@ -358,7 +358,7 @@ impl ConnectionHandler {
         let mut session = self.session.write().await;
         let tx_id = session
             .rollback_transaction()
-            .map_err(|e| HandlerError::SessionError(e))?;
+            .map_err(HandlerError::SessionError)?;
 
         let ack = Frame::with_flags(
             FrameFlags::new().with_end_stream(),
@@ -378,7 +378,7 @@ impl ConnectionHandler {
         let mut session = self.session.write().await;
         let sp_id = session
             .create_savepoint(name)
-            .map_err(|e| HandlerError::SessionError(e))?;
+            .map_err(HandlerError::SessionError)?;
 
         let ack = Frame::new(
             stream_id,
@@ -397,7 +397,7 @@ impl ConnectionHandler {
         let mut session = self.session.write().await;
         let sp_id = session
             .release_savepoint(name)
-            .map_err(|e| HandlerError::SessionError(e))?;
+            .map_err(HandlerError::SessionError)?;
 
         let ack = Frame::new(
             stream_id,
@@ -416,7 +416,7 @@ impl ConnectionHandler {
         let mut session = self.session.write().await;
         let sp_id = session
             .rollback_to_savepoint(name)
-            .map_err(|e| HandlerError::SessionError(e))?;
+            .map_err(HandlerError::SessionError)?;
 
         let ack = Frame::new(
             stream_id,

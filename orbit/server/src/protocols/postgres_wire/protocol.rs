@@ -522,7 +522,7 @@ impl PostgresWireProtocol {
                 for (i, col) in columns.iter().enumerate() {
                     let mut oid = type_oids::TEXT;
                     let mut size: i16 = -1;
-                    if let Some(first_row) = rows.get(0) {
+                    if let Some(first_row) = rows.first() {
                         if let Some(Some(val)) = first_row.get(i) {
                             if val.chars().all(|c| c.is_ascii_digit()) {
                                 oid = type_oids::INT4;

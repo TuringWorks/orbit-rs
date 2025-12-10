@@ -15,17 +15,12 @@ pub struct FlightDataEncoder {
 }
 
 /// Compression types for Flight data
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompressionType {
+    #[default]
     None,
     Lz4Frame,
     Zstd,
-}
-
-impl Default for CompressionType {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl FlightDataEncoder {

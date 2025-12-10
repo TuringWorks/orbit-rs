@@ -727,6 +727,7 @@ fn ensure_remaining(data: &Bytes, n: usize) -> Result<(), ValueDecodeError> {
 }
 
 #[cfg(test)]
+#[allow(clippy::approx_constant)]
 mod tests {
     use super::*;
 

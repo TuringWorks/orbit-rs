@@ -10,7 +10,7 @@ use crate::protocols::postgres_wire::sql::types::SqlValue;
 use std::collections::HashMap;
 
 /// Result of a graph traversal operation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GraphTraversalResult {
     /// Visited nodes with their data
     pub nodes: Vec<HashMap<String, SqlValue>>,
@@ -20,17 +20,6 @@ pub struct GraphTraversalResult {
     pub depths: HashMap<String, usize>,
     /// Path taken (for path queries)
     pub paths: Vec<Vec<String>>,
-}
-
-impl Default for GraphTraversalResult {
-    fn default() -> Self {
-        Self {
-            nodes: Vec::new(),
-            edges: Vec::new(),
-            depths: HashMap::new(),
-            paths: Vec::new(),
-        }
-    }
 }
 
 /// Graph builder for constructing a graph from table data

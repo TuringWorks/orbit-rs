@@ -511,6 +511,7 @@ fn find_crlf(buf: &BytesMut, start: usize) -> Option<usize> {
 }
 
 #[cfg(test)]
+#[allow(clippy::approx_constant)]
 mod tests {
     use super::*;
 

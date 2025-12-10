@@ -563,10 +563,8 @@ impl MongoSpatialEngine {
         }
 
         // Ensure ring is closed
-        if points.len() >= 3 {
-            if points.first() != points.last() {
-                points.push(points[0].clone());
-            }
+        if points.len() >= 3 && points.first() != points.last() {
+            points.push(points[0].clone());
         }
 
         let ring =

@@ -474,12 +474,13 @@ pub fn k_shortest_paths(
 
             // Remove edges used by paths in result that share the same root path
             for path_result in &result.paths {
-                if path_result.path.len() > i && path_result.path[..=i] == last_path.path[..=i] {
-                    if i + 1 < path_result.path.len() {
-                        let next_node = &path_result.path[i + 1];
-                        if let Some(neighbors) = modified_graph.adjacency.get_mut(spur_node) {
-                            neighbors.retain(|(n, _, _)| n != next_node);
-                        }
+                if path_result.path.len() > i
+                    && path_result.path[..=i] == last_path.path[..=i]
+                    && i + 1 < path_result.path.len()
+                {
+                    let next_node = &path_result.path[i + 1];
+                    if let Some(neighbors) = modified_graph.adjacency.get_mut(spur_node) {
+                        neighbors.retain(|(n, _, _)| n != next_node);
                     }
                 }
             }

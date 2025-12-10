@@ -902,12 +902,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             // Create tabular rows
             let row: Vec<Option<String>> = columns
                 .iter()
-                .map(|col| {
-                    result_node
-                        .properties
-                        .get(col)
-                        .map(|v| format_json_value(v))
-                })
+                .map(|col| result_node.properties.get(col).map(format_json_value))
                 .collect();
 
             info!(
@@ -982,12 +977,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             // Create a row for tabular output
             let row: Vec<Option<String>> = columns
                 .iter()
-                .map(|col| {
-                    group_result
-                        .properties
-                        .get(col)
-                        .map(|v| format_json_value(v))
-                })
+                .map(|col| group_result.properties.get(col).map(format_json_value))
                 .collect();
             rows.push(row);
 

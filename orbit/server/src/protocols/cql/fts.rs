@@ -123,7 +123,7 @@ impl SasiIndex {
         for token in &tokens {
             self.inverted_index
                 .entry(token.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(partition_key.to_string());
         }
 
@@ -132,7 +132,7 @@ impl SasiIndex {
             let prefix = &normalized_value[..prefix_len];
             self.prefix_index
                 .entry(prefix.to_string())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(partition_key.to_string());
         }
 
@@ -142,7 +142,7 @@ impl SasiIndex {
             let suffix = &normalized_value[start..];
             self.suffix_index
                 .entry(suffix.to_string())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(partition_key.to_string());
         }
     }

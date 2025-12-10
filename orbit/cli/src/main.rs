@@ -655,7 +655,7 @@ impl ReplState {
             .map_err(|e| anyhow::anyhow!("Failed to get Redis connection: {}", e))?;
 
         // Parse command into parts
-        let parts: Vec<&str> = command.trim().split_whitespace().collect();
+        let parts: Vec<&str> = command.split_whitespace().collect();
         if parts.is_empty() {
             return Err(anyhow::anyhow!("Empty command"));
         }
@@ -1852,7 +1852,7 @@ async fn handle_meta_command(
     history_file: &PathBuf,
 ) -> Result<bool> {
     let parts: Vec<&str> = command.split_whitespace().collect();
-    let cmd = parts.first().map(|s| *s).unwrap_or("");
+    let cmd = parts.first().copied().unwrap_or("");
 
     match cmd {
         "\\q" | "\\quit" | "\\exit" => {

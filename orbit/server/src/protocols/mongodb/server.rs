@@ -1649,20 +1649,12 @@ async fn handle_command(
         // Sessions are not persisted, so this is a no-op
         doc! { "ok": 1.0 }
     }
-    // refreshSessions - refresh sessions to prevent timeout
-    else if command.contains_key("refreshSessions") {
-        doc! { "ok": 1.0 }
-    }
-    // killSessions - terminate sessions
-    else if command.contains_key("killSessions") {
-        doc! { "ok": 1.0 }
-    }
-    // killAllSessions - terminate all sessions
-    else if command.contains_key("killAllSessions") {
-        doc! { "ok": 1.0 }
-    }
-    // killAllSessionsByPattern - terminate sessions matching pattern
-    else if command.contains_key("killAllSessionsByPattern") {
+    // Session management commands - refreshSessions, killSessions, killAllSessions, killAllSessionsByPattern
+    else if command.contains_key("refreshSessions")
+        || command.contains_key("killSessions")
+        || command.contains_key("killAllSessions")
+        || command.contains_key("killAllSessionsByPattern")
+    {
         doc! { "ok": 1.0 }
     }
     // currentOp - get current operations

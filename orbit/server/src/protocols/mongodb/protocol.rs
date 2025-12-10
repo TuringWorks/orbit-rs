@@ -684,7 +684,7 @@ mod tests {
 
     #[test]
     fn test_mongo_codec_default() {
-        let _codec = MongoCodec::default();
+        let _codec = MongoCodec;
     }
 
     #[test]

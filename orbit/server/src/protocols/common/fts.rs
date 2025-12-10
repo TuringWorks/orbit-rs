@@ -438,9 +438,7 @@ impl TextProcessor {
         // Simple suffix stripping rules
         if result.ends_with("ing") && result.len() > 5 {
             result.truncate(result.len() - 3);
-        } else if result.ends_with("ed") && result.len() > 4 {
-            result.truncate(result.len() - 2);
-        } else if result.ends_with("ly") && result.len() > 4 {
+        } else if (result.ends_with("ed") || result.ends_with("ly")) && result.len() > 4 {
             result.truncate(result.len() - 2);
         } else if result.ends_with("ies") && result.len() > 4 {
             result.truncate(result.len() - 3);
@@ -949,10 +947,10 @@ pub fn parse_mysql_query(query: &str, mode: MysqlSearchMode) -> FtsQuery {
             };
 
             for term in query.split_whitespace() {
-                if term.starts_with('+') {
-                    fts_query.must_terms.push(term[1..].to_string());
-                } else if term.starts_with('-') {
-                    fts_query.must_not_terms.push(term[1..].to_string());
+                if let Some(stripped) = term.strip_prefix('+') {
+                    fts_query.must_terms.push(stripped.to_string());
+                } else if let Some(stripped) = term.strip_prefix('-') {
+                    fts_query.must_not_terms.push(stripped.to_string());
                 } else if term.starts_with('"') && term.ends_with('"') {
                     let phrase: Vec<String> = term
                         .trim_matches('"')
@@ -997,8 +995,8 @@ pub fn parse_postgres_tsquery(query: &str) -> FtsQuery {
     // Simple tsquery parser: word & word | !word
     for part in query.split_whitespace() {
         let part = part.trim_matches(|c| c == '&' || c == '|' || c == '(' || c == ')');
-        if part.starts_with('!') {
-            fts_query.must_not_terms.push(part[1..].to_string());
+        if let Some(stripped) = part.strip_prefix('!') {
+            fts_query.must_not_terms.push(stripped.to_string());
         } else if part.contains(':') {
             // Has prefix like "fat:*"
             let term = part.split(':').next().unwrap_or(part);
@@ -1022,16 +1020,16 @@ pub fn parse_redis_query(query: &str) -> FtsQuery {
     let mut current_field: Option<String> = None;
 
     for part in query.split_whitespace() {
-        if part.starts_with('@') {
+        if let Some(stripped) = part.strip_prefix('@') {
             // Field specifier: @field:value
-            if let Some((field, value)) = part[1..].split_once(':') {
+            if let Some((field, value)) = stripped.split_once(':') {
                 current_field = Some(field.to_string());
                 if !value.is_empty() {
                     fts_query.should_terms.push(value.to_string());
                 }
             }
-        } else if part.starts_with('-') {
-            fts_query.must_not_terms.push(part[1..].to_string());
+        } else if let Some(stripped) = part.strip_prefix('-') {
+            fts_query.must_not_terms.push(stripped.to_string());
         } else if part.starts_with('"') && part.ends_with('"') {
             let phrase: Vec<String> = part
                 .trim_matches('"')
