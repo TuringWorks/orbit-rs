@@ -478,7 +478,7 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Text Result Set | ✅ | Full support |
-| Binary Result Set | 🔶 | Basic support |
+| Binary Result Set | ✅ | Full support |
 | Column Metadata | ✅ | Full metadata |
 | EOF Packet | ✅ | Support CLIENT_DEPRECATE_EOF |
 | OK Packet | ✅ | Full support |
