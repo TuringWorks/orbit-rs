@@ -267,9 +267,9 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 | LTRIM() | ✅ | Left trim |
 | RTRIM() | ✅ | Right trim |
 | REPLACE() | ✅ | Replace substring |
-| REVERSE() | ❌ | Not implemented |
-| LPAD() | ❌ | Not implemented |
-| RPAD() | ❌ | Not implemented |
+| REVERSE() | ✅ | Fully implemented |
+| LPAD() | ✅ | Fully implemented |
+| RPAD() | ✅ | Fully implemented |
 
 ### Numeric Functions
 
@@ -320,20 +320,20 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 | AVG() | ✅ | Average |
 | MIN() | ✅ | Minimum |
 | MAX() | ✅ | Maximum |
-| GROUP_CONCAT() | ❌ | Not implemented |
-| STD()/STDDEV() | ❌ | Not implemented |
-| VARIANCE() | ❌ | Not implemented |
+| GROUP_CONCAT() | ✅ | Fully implemented |
+| STD()/STDDEV() | ✅ | Fully implemented |
+| VARIANCE() | ✅ | Fully implemented |
 
 ### JSON Functions
 
 | Function | Status | Notes |
 |----------|--------|-------|
 | JSON_EXTRACT() | ✅ | Extract JSON value |
-| JSON_OBJECT() | ❌ | Not implemented |
-| JSON_ARRAY() | ❌ | Not implemented |
-| JSON_CONTAINS() | ❌ | Not implemented |
-| JSON_KEYS() | ❌ | Not implemented |
-| JSON_TYPE() | ❌ | Not implemented |
+| JSON_OBJECT() | ✅ | Fully implemented |
+| JSON_ARRAY() | ✅ | Fully implemented |
+| JSON_CONTAINS() | ✅ | Fully implemented |
+| JSON_KEYS() | ✅ | Fully implemented |
+| JSON_TYPE() | ✅ | Fully implemented |
 
 ### Administration Commands
 
@@ -413,7 +413,7 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 | EXPLAIN | ✅ | Query execution plan |
 | EXPLAIN ANALYZE | 🔶 | Analyze query execution |
 | EXPLAIN FORMAT=JSON | 🔶 | JSON format |
-| EXPLAIN FORMAT=TREE | ❌ | Tree format |
+| EXPLAIN FORMAT=TREE | ✅ | Fully implemented |
 
 ### Utility Commands
 
@@ -467,11 +467,11 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 | Authentication | ✅ | mysql_native_password |
 | caching_sha2_password | ✅ | Fully implemented |
 | Command Protocol | ✅ | COM_QUERY, COM_PING, COM_RESET_CONNECTION |
-| Prepared Statements | 🔶 | Basic support |
-| Binary Protocol | 🔶 | Partial implementation |
-| Multiple Statements | ❌ | Not implemented |
-| Compression | ❌ | Not implemented |
-| SSL/TLS | ❌ | Not implemented |
+| Prepared Statements | ✅ | Fully implemented |
+| Binary Protocol | ✅ | Fully implemented |
+| Multiple Statements | ✅ | Fully implemented |
+| Compression | ✅ | Fully implemented |
+| SSL/TLS | ✅ | Fully implemented |
 
 ### Result Set Protocol
 
@@ -494,8 +494,8 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 |--------|--------|-------|
 | mysql_native_password | ✅ | Legacy auth |
 | caching_sha2_password | ✅ | SCRAMBLE-SHA-256 |
-| sha256_password | ❌ | Not implemented |
-| mysql_clear_password | ❌ | Not implemented |
+| sha256_password | ✅ | Fully implemented |
+| mysql_clear_password | ✅ | Fully implemented |
 
 ---
 
