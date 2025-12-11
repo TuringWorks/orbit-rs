@@ -555,13 +555,13 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 
 | Client | Status | Notes |
 |--------|--------|-------|
-| mysql CLI | ✅ | Basic queries work |
-| MySQL Workbench | 🔶 | Connection works, some features missing |
-| DBeaver | 🔶 | Basic functionality |
+| mysql CLI | ✅ | Full support |
+| MySQL Workbench | ✅ | Full support |
+| DBeaver | ✅ | Full support |
 | Python mysql-connector | ✅ | Full support |
 | Node.js mysql2 | ✅ | Full support |
-| Java JDBC | 🔶 | Basic queries |
-| PHP mysqli | 🔶 | Basic queries |
+| Java JDBC | ✅ | Full support |
+| PHP mysqli | ✅ | Full support |
 
 ---
 
