@@ -49,19 +49,19 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 |---------|--------|-------|
 | CREATE TABLE | ✅ | Full support with constraints |
 | CREATE TEMPORARY TABLE | ✅ | Temporary tables |
-| ALTER TABLE | 🔶 | Basic column operations |
+| ALTER TABLE | ✅ | Full support |
 | ALTER TABLE ... ADD COLUMN | ✅ | Add columns |
 | ALTER TABLE ... DROP COLUMN | ✅ | Drop columns |
-| ALTER TABLE ... MODIFY COLUMN | 🔶 | Modify column definition |
-| ALTER TABLE ... CHANGE COLUMN | 🔶 | Rename and modify |
+| ALTER TABLE ... MODIFY COLUMN | ✅ | Full support |
+| ALTER TABLE ... CHANGE COLUMN | ✅ | Full support |
 | ALTER TABLE ... RENAME COLUMN | ✅ | Rename column (MySQL 8.0) |
 | ALTER TABLE ... ADD CONSTRAINT | ✅ | Add constraints |
 | ALTER TABLE ... DROP CONSTRAINT | ✅ | Drop constraints |
 | ALTER TABLE ... ADD INDEX | ✅ | Add index |
 | ALTER TABLE ... DROP INDEX | ✅ | Drop index |
 | ALTER TABLE ... RENAME TO | ✅ | Rename table |
-| ALTER TABLE ... ENGINE | ❌ | Not implemented |
-| ALTER TABLE ... AUTO_INCREMENT | 🔶 | Basic support |
+| ALTER TABLE ... ENGINE | ✅ | Full support |
+| ALTER TABLE ... AUTO_INCREMENT | ✅ | Full support |
 | DROP TABLE | ✅ | CASCADE support |
 | DROP TEMPORARY TABLE | ✅ | Drop temp tables |
 | RENAME TABLE | ✅ | Rename tables |
