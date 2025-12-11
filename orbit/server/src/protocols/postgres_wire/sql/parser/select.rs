@@ -187,9 +187,7 @@ impl SelectParser {
 
     // Helper methods for parsing
     fn matches_at(&self, tokens: &[Token], pos: usize, expected: &Token) -> bool {
-        tokens.get(pos).map_or(false, |token| {
-            std::mem::discriminant(token) == std::mem::discriminant(expected)
-        })
+        tokens.get(pos).map_or(false, |token| token == expected)
     }
 
     fn expect_token(
@@ -217,7 +215,6 @@ impl SelectParser {
         pos: &mut usize,
     ) -> ProtocolResult<WithClause> {
         self.expect_token(tokens, pos, &Token::With)?;
-
         let recursive =
             if self.matches_at(tokens, *pos, &Token::Identifier("RECURSIVE".to_string())) {
                 *pos += 1;
@@ -245,11 +242,9 @@ impl SelectParser {
         tokens: &[Token],
         pos: &mut usize,
     ) -> ProtocolResult<CommonTableExpression> {
-        let name = if let Token::Identifier(n) = tokens.get(*pos).ok_or_else(|| {
-            crate::protocols::error::ProtocolError::ParseError("Expected CTE name".to_string())
-        })? {
+        let name = if let Some(n) = tokens.get(*pos).and_then(crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name) {
             *pos += 1;
-            n.clone()
+            n
         } else {
             return Err(crate::protocols::error::ProtocolError::ParseError(
                 "Expected CTE name".to_string(),
@@ -395,9 +390,9 @@ impl SelectParser {
             *pos += 1;
         }
 
-        if let Some(Token::Identifier(alias_name)) = tokens.get(*pos) {
+        if let Some(alias_name) = tokens.get(*pos).and_then(crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name) {
             *pos += 1;
-            Ok(Some(alias_name.clone()))
+            Ok(Some(alias_name))
         } else {
             Ok(None)
         }

@@ -562,8 +562,7 @@ impl ExpressionParser {
                             // So we are safe.
                         }
 
-                        if let Some(Token::Identifier(col_name)) = tokens.get(*pos) {
-                            let col = col_name.clone();
+                        if let Some(col) = tokens.get(*pos).and_then(crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name) {
                             *pos += 1;
                             Ok(Expression::Column(
                                 crate::protocols::postgres_wire::sql::ast::ColumnRef {
@@ -782,15 +781,7 @@ impl ExpressionParser {
                      unreachable!()
                  }
             }
-            Token::Select => {
-                // Scalar Subquery without Parens? (Not standard, but maybe parser gets confused)
-                // Or maybe test case has `SELECT (SELECT ...)`?
-                // If we encounter `SELECT` here, parse as subquery
-                use crate::protocols::postgres_wire::sql::parser::select::SelectParser;
-                let mut select_parser = SelectParser::new();
-                let subquery = select_parser.parse_select(tokens, pos)?;
-                Ok(Expression::Subquery(Box::new(subquery)))
-            }
+            // Token::Select removed - subqueries must be in parentheses
 
             // Handle keywords that can be used as identifiers (like 'time', 'date', etc.)
             token => {
@@ -805,8 +796,7 @@ impl ExpressionParser {
                         // Check for Dot (qualified name)
                         if *pos < tokens.len() && matches!(tokens[*pos], Token::Dot) {
                             *pos += 1; // consume Dot
-                            if let Some(Token::Identifier(col_name)) = tokens.get(*pos) {
-                                let col = col_name.clone();
+                            if let Some(col) = tokens.get(*pos).and_then(crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name) {
                                 *pos += 1;
                                 Ok(Expression::Column(
                                     crate::protocols::postgres_wire::sql::ast::ColumnRef {
@@ -1568,9 +1558,7 @@ impl ExpressionParser {
 
     // Helper methods
     fn matches_at(&self, tokens: &[Token], pos: usize, expected: &Token) -> bool {
-        tokens.get(pos).map_or(false, |token| {
-            std::mem::discriminant(token) == std::mem::discriminant(expected)
-        })
+        tokens.get(pos).map_or(false, |token| token == expected)
     }
 
     fn expect_token(

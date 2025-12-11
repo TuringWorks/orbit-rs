@@ -128,6 +128,7 @@ pub fn token_to_identifier_name(token: &Token) -> Option<String> {
         Token::Extension => Some("extension".to_string()),
         Token::Schema => Some("schema".to_string()),
         Token::Database => Some("database".to_string()),
+        Token::Level => Some("level".to_string()),
         _ => None,
     }
 }
@@ -864,6 +865,25 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
         Some(Token::Null) => {
             parser.advance()?;
             Ok(Expression::Literal(SqlValue::Null))
+        }
+        Some(Token::CurrentTimestamp) => {
+            parser.advance()?;
+            // Check for optional precision
+            let precision = if parser.matches(&[Token::LeftParen]) {
+                parser.advance()?;
+                let p = if let Some(Token::NumericLiteral(s)) = &parser.current_token {
+                    let val = s.parse::<u32>().ok();
+                    parser.advance()?;
+                    val
+                } else {
+                    None
+                };
+                parser.expect(Token::RightParen)?;
+                p
+            } else {
+                None
+            };
+            Ok(Expression::CurrentTimestamp(precision))
         }
         Some(Token::LeftParen) => {
             parser.advance()?;
