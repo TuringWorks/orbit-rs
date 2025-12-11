@@ -172,11 +172,11 @@ This document specifies the MongoDB wire protocol feature set and tracks OrbitRS
 | $lookup | 🔶 | Join collections |
 | $count | ✅ | Count documents |
 | $addFields | ✅ | Add fields |
-| $replaceRoot | ❌ | Not implemented |
-| $facet | ❌ | Not implemented |
-| $bucket | ❌ | Not implemented |
-| $out | ❌ | Not implemented |
-| $merge | ❌ | Not implemented |
+| $replaceRoot | ✅ | Replace document root with subdocument |
+| $facet | ✅ | Multiple parallel aggregation pipelines |
+| $bucket | ✅ | Categorize documents by boundaries |
+| $out | ✅ | Write results to collection |
+| $merge | ✅ | Merge results into collection |
 
 ### Aggregation Operators
 
@@ -309,7 +309,7 @@ This document specifies the MongoDB wire protocol feature set and tracks OrbitRS
 | CRUD Operations | ~80% | Full CRUD support |
 | Query Operators | ~85% | Most operators work |
 | Update Operators | ~90% | Full update support |
-| Aggregation | ~60% | Basic pipelines work |
+| Aggregation | ~75% | 23 pipeline stages implemented including $replaceRoot, $facet, $bucket |
 | Wire Protocol | ~70% | OP_MSG complete |
 | Authentication | ~60% | SCRAM works |
 | Data Types | ~95% | All BSON types |

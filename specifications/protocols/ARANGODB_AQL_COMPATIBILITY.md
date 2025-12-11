@@ -165,8 +165,8 @@ ArangoDB documents have special system attributes starting with `_`.
 | CONTAINS(text, search) | ✅ | Check if search is in text |
 | FIND_FIRST(text, search) | ✅ | Index of first occurrence |
 | FIND_LAST(text, search) | ✅ | Index of last occurrence |
-| JSON_PARSE(str) | ❌ | Parse JSON string |
-| JSON_STRINGIFY(val) | ❌ | Serialize to JSON string |
+| JSON_PARSE(str) | ✅ | Parse JSON string into AQL value |
+| JSON_STRINGIFY(val) | ✅ | Serialize AQL value to JSON string |
 | LEFT(str, n) | ✅ | Left n characters |
 | LENGTH(str) | ✅ | Byte length (alias for implementation) |
 | LIKE(text, pattern) | ✅ | Pattern matching |
