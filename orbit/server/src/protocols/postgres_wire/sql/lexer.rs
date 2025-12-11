@@ -63,6 +63,10 @@ pub enum Token {
     Overlaps,
     Period,
 
+    // Vacuum options
+    Page,
+    Skipping,
+
     // Extended DDL keywords
     Type,
     Domain,
@@ -892,6 +896,9 @@ impl Lexer {
             ("HNSW", Token::Hnsw),
             ("LISTS", Token::Lists),
             ("EF_CONSTRUCTION", Token::EfConstruction),
+            // Vacuum options
+            ("PAGE", Token::Page),
+            ("SKIPPING", Token::Skipping),
             // Boolean literals
             ("TRUE", Token::BooleanLiteral(true)),
             ("FALSE", Token::BooleanLiteral(false)),

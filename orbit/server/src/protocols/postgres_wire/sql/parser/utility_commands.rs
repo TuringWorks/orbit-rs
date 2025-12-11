@@ -512,10 +512,10 @@ pub fn parse_vacuum(parser: &mut SqlParser) -> ParseResult<Statement> {
     let mut freeze = false;
     let mut verbose = false;
     let mut analyze = false;
-    let disable_page_skipping = false;
+    let mut disable_page_skipping = false;
     let mut skip_locked = false;
     let mut index_cleanup: Option<bool> = None;
-    let truncate: Option<bool> = None;
+    let mut truncate: Option<bool> = None;
     let mut parallel: Option<i32> = None;
 
     // Parse options in parentheses or as keywords
@@ -541,6 +541,18 @@ pub fn parse_vacuum(parser: &mut SqlParser) -> ParseResult<Statement> {
             } else if parser.matches(&[Token::IndexCleanup]) {
                 parser.advance()?;
                 index_cleanup = Some(true);
+            } else if parser.matches(&[Token::Disable]) {
+                parser.advance()?;
+                parser.expect(Token::Page)?;
+                parser.expect(Token::Skipping)?;
+                disable_page_skipping = true;
+            } else if parser.matches(&[Token::Truncate]) {
+                parser.advance()?;
+                truncate = Some(true);
+            } else if parser.matches(&[Token::No]) {
+                parser.advance()?;
+                parser.expect(Token::Truncate)?;
+                truncate = Some(false);
             } else if parser.matches(&[Token::Parallel]) {
                 parser.advance()?;
                 if let Some(Token::NumericLiteral(n)) = &parser.current_token {
@@ -573,6 +585,18 @@ pub fn parse_vacuum(parser: &mut SqlParser) -> ParseResult<Statement> {
             } else if parser.matches(&[Token::Analyze]) {
                 parser.advance()?;
                 analyze = true;
+            } else if parser.matches(&[Token::Disable]) {
+                parser.advance()?;
+                parser.expect(Token::Page)?;
+                parser.expect(Token::Skipping)?;
+                disable_page_skipping = true;
+            } else if parser.matches(&[Token::Truncate]) {
+                parser.advance()?;
+                truncate = Some(true);
+            } else if parser.matches(&[Token::No]) {
+                parser.advance()?;
+                parser.expect(Token::Truncate)?;
+                truncate = Some(false);
             } else {
                 break;
             }
