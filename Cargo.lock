@@ -6169,6 +6169,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "snap",
  "tantivy",
  "tantivy-jieba",
  "tempfile",

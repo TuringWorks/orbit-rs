@@ -828,6 +828,196 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                     });
                 }
             }
+            Some(Token::Add) => {
+                parser.advance()?;
+                if parser.matches(&[Token::Column]) {
+                    parser.advance()?;
+                    let column = parse_column_definition(parser)?;
+                    AlterTableAction::AddColumn(column)
+                } else if parser.matches(&[Token::Constraint]) {
+                     // Constraint parsing not fully wired in AlterTableAction yet, skipping or TODO
+                     return Err(ParseError {
+                        message: "ADD CONSTRAINT not fully supported yet".to_string(),
+                        position: parser.position,
+                        expected: vec!["COLUMN".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                } else {
+                     return Err(ParseError {
+                        message: "Expected COLUMN after ADD".to_string(),
+                        position: parser.position,
+                        expected: vec!["COLUMN".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                }
+            }
+            Some(Token::Drop) => {
+                parser.advance()?;
+                if parser.matches(&[Token::Column]) {
+                    parser.advance()?;
+                    // Check for IF EXISTS
+                    let if_exists = if parser.matches(&[Token::If]) {
+                        parser.advance()?;
+                        parser.expect(Token::Exists)?;
+                        true
+                    } else {
+                        false
+                    };
+                    if let Some(Token::Identifier(col_name)) = &parser.current_token {
+                        let name = col_name.clone();
+                        parser.advance()?;
+                        let cascade = if parser.matches(&[Token::Cascade]) {
+                             parser.advance()?;
+                             true
+                        } else {
+                             false
+                        };
+                        AlterTableAction::DropColumn { name, if_exists, cascade }
+                    } else {
+                        return Err(ParseError {
+                            message: "Expected column name".to_string(),
+                            position: parser.position,
+                            expected: vec!["column name".to_string()],
+                            found: parser.current_token.clone(),
+                        });
+                    }
+                } else {
+                     return Err(ParseError {
+                        message: "Expected COLUMN after DROP".to_string(),
+                        position: parser.position,
+                        expected: vec!["COLUMN".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                }
+            }
+            Some(Token::Alter) => {
+                parser.advance()?;
+                if parser.matches(&[Token::Column]) {
+                    parser.advance()?;
+                     if let Some(Token::Identifier(col_name)) = &parser.current_token {
+                        let name = col_name.clone();
+                        parser.advance()?;
+                        
+                        // Check for TYPE (Alter Column Type)
+                        // MATCH TYPE or Identifier "TYPE" (case insensitive)
+                        let is_type = if parser.matches(&[Token::Type]) {
+                            true
+                        } else if let Some(Token::Identifier(id)) = &parser.current_token {
+                            id.eq_ignore_ascii_case("TYPE")
+                        } else {
+                            false
+                        };
+
+                        if is_type {
+                            parser.advance()?;
+                            let new_type = utilities::parse_data_type(parser)?;
+                             // Check for USING
+                            let _using = if parser.matches(&[Token::Using]) {
+                                parser.advance()?;
+                                Some(utilities::parse_expression(parser)?)
+                            } else {
+                                None
+                            };
+                            AlterTableAction::AlterColumn {
+                                name,
+                                action: crate::protocols::postgres_wire::sql::ast::AlterColumnAction::SetType(new_type),
+                            }
+                        } else if parser.matches(&[Token::Set]) {
+                            parser.advance()?;
+                            if parser.matches(&[Token::Not]) {
+                                parser.advance()?;
+                                if parser.matches(&[Token::Null]) {
+                                    parser.advance()?;
+                                    AlterTableAction::AlterColumn {
+                                        name,
+                                        action: crate::protocols::postgres_wire::sql::ast::AlterColumnAction::SetNotNull,
+                                    }
+                                } else {
+                                     return Err(ParseError {
+                                        message: "Expected NULL after SET NOT".to_string(),
+                                        position: parser.position,
+                                        expected: vec!["NULL".to_string()],
+                                        found: parser.current_token.clone(),
+                                    });
+                                }
+                            } else if parser.matches(&[Token::Default]) {
+                                parser.advance()?;
+                                let default_expr = utilities::parse_expression(parser)?;
+                                AlterTableAction::AlterColumn {
+                                    name,
+                                    action: crate::protocols::postgres_wire::sql::ast::AlterColumnAction::SetDefault(default_expr),
+                                }
+                            } else {
+                                 // Handle generic SET DATA TYPE if needed, but handled above by TYPE check usually
+                                 return Err(ParseError {
+                                    message: "Expected NOT NULL or DEFAULT after SET".to_string(),
+                                    position: parser.position,
+                                    expected: vec!["NOT NULL".to_string(), "DEFAULT".to_string()],
+                                    found: parser.current_token.clone(),
+                                });
+                            }
+                        } else if parser.matches(&[Token::Drop]) {
+                            parser.advance()?;
+                            if parser.matches(&[Token::Not]) {
+                                parser.advance()?;
+                                if parser.matches(&[Token::Null]) {
+                                    parser.advance()?;
+                                    AlterTableAction::AlterColumn {
+                                        name,
+                                        action: crate::protocols::postgres_wire::sql::ast::AlterColumnAction::DropNotNull,
+                                    }
+                                } else {
+                                     return Err(ParseError {
+                                        message: "Expected NULL after DROP NOT".to_string(),
+                                        position: parser.position,
+                                        expected: vec!["NULL".to_string()],
+                                        found: parser.current_token.clone(),
+                                    });
+                                }
+                            } else if parser.matches(&[Token::Default]) {
+                                parser.advance()?;
+                                AlterTableAction::AlterColumn {
+                                    name,
+                                    action: crate::protocols::postgres_wire::sql::ast::AlterColumnAction::DropDefault,
+                                }
+                            } else {
+                                 return Err(ParseError {
+                                    message: "Expected NOT NULL or DEFAULT after DROP".to_string(),
+                                    position: parser.position,
+                                    expected: vec!["NOT NULL".to_string(), "DEFAULT".to_string()],
+                                    found: parser.current_token.clone(),
+                                });
+                            }
+                        } else {
+                             // Assuming SET DEFAULT / DROP DEFAULT etc? For now just handle Type as per test failure implies? 
+                             // Test was modify column... which usually is ALTER COLUMN type?
+                             // Standard SQL is ALTER COLUMN ... SET DATA TYPE ... or just type.
+                             // Postgres allows ALTER COLUMN ... TYPE ... 
+                             // Code above handles TYPE.
+                             return Err(ParseError {
+                                message: "Expected TYPE, SET, or DROP after ALTER COLUMN".to_string(),
+                                position: parser.position,
+                                expected: vec!["TYPE".to_string(), "SET".to_string(), "DROP".to_string()],
+                                found: parser.current_token.clone(),
+                            });
+                        }
+                    } else {
+                        return Err(ParseError {
+                            message: "Expected column name".to_string(),
+                            position: parser.position,
+                            expected: vec!["column name".to_string()],
+                            found: parser.current_token.clone(),
+                        });
+                    }
+                } else {
+                     return Err(ParseError {
+                        message: "Expected COLUMN after ALTER".to_string(),
+                        position: parser.position,
+                        expected: vec!["COLUMN".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                }
+            }
             _ => break,
         };
 
@@ -1820,6 +2010,7 @@ fn parse_index_column(parser: &mut SqlParser) -> ParseResult<IndexColumn> {
 }
 
 /// Parse alter column action
+#[allow(dead_code)]
 fn parse_alter_column_action(parser: &mut SqlParser) -> ParseResult<AlterColumnAction> {
     match &parser.current_token {
         Some(Token::Set) => {

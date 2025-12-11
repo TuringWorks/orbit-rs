@@ -375,6 +375,8 @@ impl UnifiedTableStorage {
                 map.insert("data".to_string(), UniversalValue::Bytes(data.clone()));
                 UniversalValue::Map(map)
             }
+            // Handle any other new variants as string/debug representation
+            _ => UniversalValue::String(format!("{:?}", value)),
         }
     }
 

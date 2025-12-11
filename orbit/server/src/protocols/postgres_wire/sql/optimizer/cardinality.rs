@@ -166,6 +166,11 @@ impl CardinalityEstimator {
         table_stats: Option<&TableStatistics>,
     ) -> f64 {
         match operator {
+            BinaryOperator::JsonPathExists
+            | BinaryOperator::JsonPathMatch
+            | BinaryOperator::SimilarTo
+            | BinaryOperator::NotSimilarTo
+            | BinaryOperator::NotLike => 1.0,
             // Logical operators combine child selectivities
             BinaryOperator::And => {
                 let left_sel = self.estimate_selectivity(left, table_stats);

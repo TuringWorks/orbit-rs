@@ -1186,109 +1186,109 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-    // #[test]
-    // fn test_subquery_in_select() {
-    //        let sql = "SELECT name, (SELECT COUNT(*) FROM orders WHERE orders.user_id = users.id) as order_count FROM users";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(
-    //            result.is_ok(),
-    //            "Failed to parse subquery in SELECT: {:?}",
-    //            result
-    //        );
-    //    }
+    #[test]
+    fn test_subquery_in_select() {
+        let sql = "SELECT name, (SELECT COUNT(*) FROM orders WHERE orders.user_id = users.id) as order_count FROM users";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse subquery in SELECT: {:?}",
+            result
+        );
+    }
 
     // TODO: Fix this test - currently failing, will revisit later
 
-    // #[test]
-    // fn test_subquery_in_where() {
-    //        let sql = "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE total > 100)";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(
-    //            result.is_ok(),
-    //            "Failed to parse subquery in WHERE: {:?}",
-    //            result
-    //        );
-    //    }
+    #[test]
+    fn test_subquery_in_where() {
+        let sql = "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE total > 100)";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse subquery in WHERE: {:?}",
+            result
+        );
+    }
 
     // TODO: Fix this test - currently failing, will revisit later
 
-    // #[test]
-    // fn test_exists_subquery() {
-    //        let sql = "SELECT * FROM users WHERE EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(
-    //            result.is_ok(),
-    //            "Failed to parse EXISTS subquery: {:?}",
-    //            result
-    //        );
-    //    }
+    #[test]
+    fn test_exists_subquery() {
+        let sql = "SELECT * FROM users WHERE EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse EXISTS subquery: {:?}",
+            result
+        );
+    }
 
     // TODO: Fix this test - currently failing, will revisit later
 
-    // #[test]
-    // fn test_not_exists_subquery() {
-    //        let sql = "SELECT * FROM users WHERE NOT EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(
-    //            result.is_ok(),
-    //            "Failed to parse NOT EXISTS subquery: {:?}",
-    //            result
-    //        );
-    //    }
+    #[test]
+    fn test_not_exists_subquery() {
+        let sql = "SELECT * FROM users WHERE NOT EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse NOT EXISTS subquery: {:?}",
+            result
+        );
+    }
 
     // TODO: Fix this test - currently failing, will revisit later
 
-    // #[test]
-    // fn test_cte_basic() {
-    //        let sql = "WITH active_users AS (SELECT * FROM users WHERE status = 'active') SELECT * FROM active_users";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(result.is_ok(), "Failed to parse basic CTE: {:?}", result);
-    //    }
+    #[test]
+    fn test_cte_basic() {
+        let sql = "WITH active_users AS (SELECT * FROM users WHERE status = 'active') SELECT * FROM active_users";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(result.is_ok(), "Failed to parse basic CTE: {:?}", result);
+    }
 
     // TODO: Fix this test - currently failing, will revisit later
 
-    // #[test]
-    // fn test_cte_multiple() {
-    //        let sql = "WITH
-    //            active_users AS (SELECT * FROM users WHERE status = 'active'),
-    //            recent_orders AS (SELECT * FROM orders WHERE created_at > '2023-01-01')
-    //        SELECT u.name, COUNT(o.id)
-    //        FROM active_users u
-    //        LEFT JOIN recent_orders o ON u.id = o.user_id
-    //        GROUP BY u.name";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(
-    //            result.is_ok(),
-    //            "Failed to parse multiple CTEs: {:?}",
-    //            result
-    //        );
-    //    }
+    #[test]
+    fn test_cte_multiple() {
+        let sql = "WITH 
+            active_users AS (SELECT * FROM users WHERE status = 'active'),
+            recent_orders AS (SELECT * FROM orders WHERE created_at > '2023-01-01')
+        SELECT u.name, COUNT(o.id) 
+        FROM active_users u 
+        LEFT JOIN recent_orders o ON u.id = o.user_id 
+        GROUP BY u.name";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse multiple CTEs: {:?}",
+            result
+        );
+    }
 
     // TODO: Fix this test - currently failing, will revisit later
 
-    // #[test]
-    // fn test_cte_recursive() {
-    //        let sql = "WITH RECURSIVE employee_hierarchy AS (
-    //            SELECT id, name, manager_id, 1 as level FROM employees WHERE manager_id IS NULL
-    //            UNION ALL
-    //            SELECT e.id, e.name, e.manager_id, eh.level + 1
-    //            FROM employees e
-    //            JOIN employee_hierarchy eh ON e.manager_id = eh.id
-    //        ) SELECT * FROM employee_hierarchy";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(
-    //            result.is_ok(),
-    //            "Failed to parse recursive CTE: {:?}",
-    //            result
-    //        );
-    //    }
+    #[test]
+    fn test_cte_recursive() {
+        let sql = "WITH RECURSIVE employee_hierarchy AS (
+            SELECT id, name, manager_id, 1 as level FROM employees WHERE manager_id IS NULL
+            UNION ALL
+            SELECT e.id, e.name, e.manager_id, eh.level + 1
+            FROM employees e
+            JOIN employee_hierarchy eh ON e.manager_id = eh.id
+        ) SELECT * FROM employee_hierarchy";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse recursive CTE: {:?}",
+            result
+        );
+    }
 
     #[test]
     fn test_union_all() {
@@ -1446,32 +1446,32 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-    // #[test]
-    // fn test_create_vector_index_ivfflat() {
-    //        let sql = "CREATE INDEX ON documents USING ivfflat (embedding) WITH (lists = 1000)";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(
-    //            result.is_ok(),
-    //            "Failed to parse IVFFlat index creation: {:?}",
-    //            result
-    //        );
-    //    }
+    #[test]
+    fn test_create_vector_index_ivfflat() {
+        let sql = "CREATE INDEX ON documents USING ivfflat (embedding) WITH (lists = 1000)";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse IVFFlat index creation: {:?}",
+            result
+        );
+    }
 
     // TODO: Fix this test - currently failing, will revisit later
 
-    // #[test]
-    // fn test_create_vector_index_hnsw() {
-    //        let sql =
-    //            "CREATE INDEX ON documents USING hnsw (embedding) WITH (m = 16, ef_construction = 64)";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(
-    //            result.is_ok(),
-    //            "Failed to parse HNSW index creation: {:?}",
-    //            result
-    //        );
-    //    }
+    #[test]
+    fn test_create_vector_index_hnsw() {
+        let sql =
+            "CREATE INDEX ON documents USING hnsw (embedding) WITH (m = 16, ef_construction = 64)";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse HNSW index creation: {:?}",
+            result
+        );
+    }
 
     #[test]
     fn test_vector_insert_with_literal() {
@@ -1576,21 +1576,101 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-    // #[test]
-    // fn test_vector_subquery_with_similarity() {
-    //        let sql = "SELECT title FROM documents WHERE id IN (
-    //            SELECT id FROM documents
-    //            ORDER BY embedding <-> (SELECT embedding FROM documents WHERE title = 'reference')
-    //            LIMIT 5
-    //        )";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(
-    //            result.is_ok(),
-    //            "Failed to parse vector subquery with similarity: {:?}",
-    //            result
-    //        );
-    //    }
+    #[test]
+    fn test_vector_subquery_with_similarity() {
+        let sql = "SELECT title FROM documents WHERE id IN (
+            SELECT id FROM documents
+            ORDER BY embedding <-> (SELECT embedding FROM documents WHERE title = 'reference')
+            LIMIT 5
+        )";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse vector subquery with similarity: {:?}",
+            result
+        );
+    }
+
+    // ===============================
+    // PARSER TESTS - WINDOW FUNCTIONS
+    // ===============================
+
+    #[test]
+    fn test_window_function_basic() {
+        let sql = "SELECT name, salary, RANK() OVER (ORDER BY salary DESC) as rank FROM employees";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse basic window function: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_window_function_partition() {
+        let sql = "SELECT name, dept, salary, AVG(salary) OVER (PARTITION BY dept) as avg_dept_salary FROM employees";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse window function with PARTITION BY: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_window_function_frame() {
+        let sql = "SELECT name, salary, SUM(salary) OVER (ORDER BY salary ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as running_total FROM employees";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse window function with frame clause: {:?}",
+            result
+        );
+    }
+
+    // ===============================
+    // PARSER TESTS - MYSQL COMPATIBILITY
+    // ===============================
+
+    #[test]
+    fn test_mysql_json_objects() {
+        let sql = "SELECT JSON_OBJECT('id', id, 'name', name) as json_data FROM users";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse JSON_OBJECT: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_mysql_json_array() {
+        let sql = "SELECT JSON_ARRAY(1, 'abc', NULL, TRUE) as json_list";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse JSON_ARRAY: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_mysql_group_concat() {
+        let sql = "SELECT group_id, GROUP_CONCAT(name ORDER BY name SEPARATOR ', ') as names FROM users GROUP BY group_id";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse GROUP_CONCAT: {:?}",
+            result
+        );
+    }
 
     // ===============================
     // PARSER TESTS - ERROR HANDLING AND EDGE CASES

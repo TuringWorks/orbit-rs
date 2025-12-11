@@ -11,6 +11,69 @@ All notable changes to the Orbit-RS project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2025-12-11
+
+### Added
+
+- **CQL Compression Support** (2025-12-11): Active wire protocol compression for CQL Native Protocol v4
+  - Snappy compression support via `snap` crate
+  - LZ4 compression support via `lz4_flex` crate
+  - `CompressionAlgorithm` enum (None, Snappy, Lz4)
+  - `compress_data()` and `decompress_data()` functions
+  - `create_compressed_response()` helper
+  - `decode_with_compression()` for frame decoding
+  - FLAG_COMPRESSION (0x01) handling in protocol frames
+
+- **CQL Scalar Functions** (2025-12-11): 10 new CQL scalar functions for compatibility
+  - `token(partition_key)` - Partition key hash using DefaultHasher
+  - `minTimeuuid(timestamp)` - Minimum timeuuid for timestamp
+  - `maxTimeuuid(timestamp)` - Maximum timeuuid for timestamp
+  - `dateOf(timeuuid)` - Extract date from timeuuid
+  - `unixTimestampOf(timeuuid)` - Extract Unix timestamp from timeuuid
+  - `toJson(value)` - Convert value to JSON string
+  - `fromJson(string)` - Parse JSON string to value
+  - `toDate(value)` - Convert to CQL date type
+  - `toTimestamp(value)` - Convert to timestamp
+  - `toUnixTimestamp(value)` - Convert to Unix timestamp
+
+- **CQL Trigger Execution** (2025-12-11): Database triggers with JavaScript runtime integration
+  - `TriggerDefinition` struct with name, table, class, and enabled flag
+  - `TriggerEvent` enum (Insert, Update, Delete)
+  - Trigger registry: `HashMap<String, Vec<TriggerDefinition>>`
+  - CREATE TRIGGER and DROP TRIGGER handling
+  - `execute_triggers()` method for trigger invocation
+  - QuickJS runtime integration via `js-quickjs` feature
+  - SqlValue → JsValue conversion for row data access
+  - Security sandbox with timeouts, memory limits, blocked globals
+  - JavaScript context with row, event, and table variables
+
+### Changed
+
+- **CQL Compatibility Documentation** (2025-12-11): Updated coverage and feature status
+  - Coverage increased from 38% to 72%
+  - CREATE/DROP TRIGGER: 🔶 → ✅
+  - Wire protocol compression: 🔶 → ✅
+  - Added "Trigger Execution (JavaScript Runtime)" section with feature table
+  - Updated roadmap with compression and trigger implementation
+  - Updated known limitations and version history
+
+### Fixed
+
+- **Build Warnings and Compilation Errors** (2025-12-11): Zero-warning build achieved
+  - Fixed unused imports in `aql/query_engine.rs` (FtsDocument, error, instrument, join_all)
+  - Fixed unused imports in `postgres_wire/sql/parser/select.rs` (TraverseClause, TraverseDirection)
+  - Removed unreachable patterns in `aql/query_engine.rs` (duplicate UUID and hash functions)
+  - Fixed unused variables: `pos`, `d1_val`, `d2_val`, `unit` (prefixed with underscore)
+  - Fixed unused mut in `postgres_wire/protocol.rs` (scram variable)
+  - Added `#[allow(dead_code)]` to unused methods: `compare_values`, `execute_triggers`, `parse_alter_column_action`
+  - Fixed syntax error in `cql/protocol.rs` (extra closing brace)
+  - Fixed SchemaChange pattern match (3 fields → 4 fields)
+  - Fixed break statements to return `Ok(())` in async loops
+  - Fixed type mismatch in `unwrap_or()` calls (String vs &str)
+  - Added missing 4th parameter to SchemaChange event creation
+
+---
+
 ## [Unreleased] - 2025-12-10
 
 ### Added

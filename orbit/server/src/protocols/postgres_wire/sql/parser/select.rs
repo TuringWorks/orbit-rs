@@ -9,7 +9,7 @@ use crate::protocols::error::ProtocolResult;
 use crate::protocols::postgres_wire::sql::ast::{
     CommonTableExpression, DistinctClause, Expression, FromClause, JoinCondition, JoinType,
     LimitClause, NullsOrder, OrderByItem, SelectItem, SelectStatement, SortDirection, TableAlias,
-    TableName, WithClause,
+    TableName, WithClause, SetOperation, SetOperator,
 };
 use crate::protocols::postgres_wire::sql::lexer::Token;
 use crate::protocols::postgres_wire::sql::parser::expressions::ExpressionParser;
@@ -33,7 +33,8 @@ impl SelectParser {
         pos: &mut usize,
     ) -> ProtocolResult<SelectStatement> {
         // Parse WITH clause if present
-        let with = if self.matches_at(tokens, *pos, &Token::With) {
+        // Parse WITH clause if present
+        let with = if *pos < tokens.len() && matches!(tokens[*pos], Token::With) {
             Some(self.parse_with_clause(tokens, pos)?)
         } else {
             None
@@ -169,7 +170,18 @@ impl SelectParser {
             offset,
             for_clause: None, // TODO: Parse FOR UPDATE/SHARE
             traverse: None,
-            set_operation: None,
+            set_operation: {
+                if *pos < tokens.len() {
+                    let token = &tokens[*pos];
+                    if matches!(token, Token::Union | Token::Intersect | Token::Except) {
+                         Some(self.parse_set_operation(tokens, pos)?)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            },
         })
     }
 
@@ -199,7 +211,7 @@ impl SelectParser {
         }
     }
 
-    fn parse_with_clause(
+    pub fn parse_with_clause(
         &mut self,
         tokens: &[Token],
         pos: &mut usize,
@@ -816,6 +828,76 @@ impl SelectParser {
         }
 
         Ok(items)
+    }
+
+    fn parse_set_operation(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<SetOperation> {
+        // Determine the operator
+        let operator = if *pos < tokens.len() {
+            match &tokens[*pos] {
+                Token::Union => {
+                    *pos += 1;
+                    if self.matches_at(tokens, *pos, &Token::All) {
+                        *pos += 1;
+                        SetOperator::UnionAll
+                    } else if self.matches_at(tokens, *pos, &Token::Distinct) {
+                        *pos += 1;
+                        SetOperator::Union
+                    } else {
+                        SetOperator::Union
+                    }
+                }
+                Token::Intersect => {
+                    *pos += 1;
+                    if self.matches_at(tokens, *pos, &Token::All) {
+                        *pos += 1;
+                        SetOperator::IntersectAll
+                    } else if self.matches_at(tokens, *pos, &Token::Distinct) {
+                        *pos += 1;
+                        SetOperator::Intersect
+                    } else {
+                        SetOperator::Intersect
+                    }
+                }
+                Token::Except => {
+                    *pos += 1;
+                    if self.matches_at(tokens, *pos, &Token::All) {
+                        *pos += 1;
+                        SetOperator::ExceptAll
+                    } else if self.matches_at(tokens, *pos, &Token::Distinct) {
+                        *pos += 1;
+                        SetOperator::Except
+                    } else {
+                        SetOperator::Except
+                    }
+                }
+                _ => return Err(crate::protocols::error::ProtocolError::ParseError(
+                     "Expected UNION, INTERSECT, or EXCEPT".to_string()
+                ).into())
+            }
+        } else {
+             return Err(crate::protocols::error::ProtocolError::ParseError(
+                 "Unexpected end of input".to_string()
+            ).into())
+        };
+
+        // Parse right side
+        // Right side must be a SELECT statement
+        // Note: We need to consume SELECT keyword if parse_select expects it.
+        // Based on logic, parse_select DOES expect SELECT (checked in next step).
+        // But if parse_select handles WITH, it might check WITH first.
+        // Recursive union typically: ... UNION ALL SELECT ...
+        // So SELECT is present.
+        
+        let right = self.parse_select(tokens, pos)?;
+        
+        Ok(SetOperation {
+            operator,
+            right: Box::new(right),
+        })
     }
 }
 

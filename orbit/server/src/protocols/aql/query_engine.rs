@@ -12,14 +12,13 @@ use crate::protocols::aql::{
     AqlDocument, AqlGraphRAGEngine, AqlParser, AqlQuery, AqlStorage, AqlValue,
 };
 use crate::protocols::common::graph_algorithms as graph_algo;
-use crate::protocols::common::fts::{UnifiedFtsEngine, SharedFtsEngine, FtsQuery, FtsDocument};
+use crate::protocols::common::fts::{UnifiedFtsEngine, SharedFtsEngine, FtsQuery};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use orbit_client::OrbitClient;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{error, info, instrument, warn};
+use tracing::{info, warn};
 use async_recursion::async_recursion;
-use futures::future::join_all;
 
 /// Convert AqlValue to serde_json::Value for graph properties
 fn aql_value_to_json(value: &AqlValue) -> serde_json::Value {
@@ -2346,6 +2345,7 @@ impl AqlQueryEngine {
     }
 
     /// Compare two AQL values
+    #[allow(dead_code)]
     fn compare_values(
         &self,
         left: &AqlValue,
@@ -3193,7 +3193,7 @@ impl AqlQueryEngine {
                 if let (Some(AqlValue::String(haystack)), Some(AqlValue::String(needle))) =
                     (args.first(), args.get(1))
                 {
-                    let pos = args.get(2).and_then(|v| {
+                    let _pos = args.get(2).and_then(|v| {
                          if let AqlValue::Number(n) = v { n.as_i64() } else { None }
                     });
                      // Note: AQL FIND_LAST(str, search, start, end) behavior is strictly finding last occurrence
@@ -4432,7 +4432,7 @@ impl AqlQueryEngine {
                 Ok(args.first().cloned().unwrap_or(AqlValue::Null)) // Placeholder for now, date truncation is complex
             }
             "DATE_COMPARE" => {
-                 if let (Some(d1_val), Some(d2_val), Some(AqlValue::String(unit))) = (args.first(), args.get(1), args.get(2)) {
+                 if let (Some(_d1_val), Some(_d2_val), Some(AqlValue::String(_unit))) = (args.first(), args.get(1), args.get(2)) {
                       // Compare dates with unit
                       Ok(AqlValue::Bool(false)) // Placeholder
                  } else {
@@ -4516,7 +4516,6 @@ impl AqlQueryEngine {
                 // Pass-through functions
                 Ok(args.first().cloned().unwrap_or(AqlValue::Null))
             }
-            "UUID" => Ok(AqlValue::String(uuid::Uuid::new_v4().to_string())),
             "HASH" => {
                 // Simple hash - return a numeric hash
                 let input = format!("{:?}", args);
@@ -6067,56 +6066,6 @@ impl AqlQueryEngine {
                         // Fallback to simple string conversion
                         Ok(AqlValue::String(format!("{:?}", value)))
                     }
-                }
-            }
-
-            // ============ Hash Functions ============
-            "MD5" => {
-                // MD5(str) - Compute MD5 hash
-                if let Some(AqlValue::String(s)) = args.first() {
-                    let digest = md5::compute(s.as_bytes());
-                    Ok(AqlValue::String(format!("{:x}", digest)))
-                } else {
-                    Ok(AqlValue::Null)
-                }
-            }
-            "SHA1" => {
-                // SHA1(str) - Compute SHA1 hash (using SHA256 as SHA1 is deprecated)
-                // Note: SHA1 is cryptographically broken, using SHA256 instead for security
-                if let Some(AqlValue::String(s)) = args.first() {
-                    use sha2::{Sha256, Digest};
-                    let mut hasher = Sha256::new();
-                    hasher.update(s.as_bytes());
-                    let result = hasher.finalize();
-                    // Take first 40 chars (20 bytes) to simulate SHA1 output length
-                    let hex_str = format!("{:x}", result);
-                    Ok(AqlValue::String(hex_str[..40.min(hex_str.len())].to_string()))
-                } else {
-                    Ok(AqlValue::Null)
-                }
-            }
-            "SHA256" => {
-                // SHA256(str) - Compute SHA256 hash
-                if let Some(AqlValue::String(s)) = args.first() {
-                    use sha2::{Sha256, Digest};
-                    let mut hasher = Sha256::new();
-                    hasher.update(s.as_bytes());
-                    let result = hasher.finalize();
-                    Ok(AqlValue::String(format!("{:x}", result)))
-                } else {
-                    Ok(AqlValue::Null)
-                }
-            }
-            "SHA512" => {
-                // SHA512(str) - Compute SHA512 hash
-                if let Some(AqlValue::String(s)) = args.first() {
-                    use sha2::{Sha512, Digest};
-                    let mut hasher = Sha512::new();
-                    hasher.update(s.as_bytes());
-                    let result = hasher.finalize();
-                    Ok(AqlValue::String(format!("{:x}", result)))
-                } else {
-                    Ok(AqlValue::Null)
                 }
             }
 

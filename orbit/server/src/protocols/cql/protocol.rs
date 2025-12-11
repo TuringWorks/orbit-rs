@@ -12,6 +12,20 @@ pub const PROTOCOL_VERSION: u8 = 4;
 /// CQL frame header size (9 bytes)
 pub const FRAME_HEADER_SIZE: usize = 9;
 
+/// Frame flags
+pub const FLAG_COMPRESSION: u8 = 0x01;
+pub const FLAG_TRACING: u8 = 0x02;
+pub const FLAG_CUSTOM_PAYLOAD: u8 = 0x04;
+pub const FLAG_WARNING: u8 = 0x08;
+
+/// Compression algorithm
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompressionAlgorithm {
+    None,
+    Snappy,
+    Lz4,
+}
+
 /// CQL frame
 #[derive(Debug, Clone)]
 pub struct CqlFrame {
@@ -802,6 +816,23 @@ pub fn build_system_schema_aggregates_response(stream: i16) -> CqlFrame {
     CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
 }
 
+/// Helper to write a string in [short] format (u16 length + bytes)
+pub fn write_string(buf: &mut BytesMut, s: &str) {
+    buf.put_u16(s.len() as u16);
+    buf.put(s.as_bytes());
+}
+
+/// Helper to write a string list in [short] format (u16 count + strings)
+pub fn write_string_list(buf: &mut BytesMut, list: &[String]) {
+    buf.put_u16(list.len() as u16);
+    for s in list {
+        write_string(buf, s);
+    }
+}
+
+
+
+
 /// Build a RESULT response with system_schema.views data (empty)
 pub fn build_system_schema_views_response(stream: i16) -> CqlFrame {
     let mut body = BytesMut::new();
@@ -1066,10 +1097,7 @@ pub fn build_error_from_protocol_error(
 }
 
 /// Write a CQL string (2-byte length + UTF-8 bytes)
-fn write_string(buf: &mut BytesMut, s: &str) {
-    buf.put_u16(s.len() as u16);
-    buf.put(s.as_bytes());
-}
+
 
 /// Read a CQL string
 pub fn read_string(buf: &mut Bytes) -> ProtocolResult<String> {
@@ -1113,7 +1141,189 @@ pub fn read_string_list(buf: &mut Bytes) -> ProtocolResult<Vec<String>> {
     Ok(list)
 }
 
+/// Compress data using the specified algorithm
+pub fn compress_data(data: &[u8], algorithm: CompressionAlgorithm) -> ProtocolResult<Vec<u8>> {
+    match algorithm {
+        CompressionAlgorithm::None => Ok(data.to_vec()),
+        CompressionAlgorithm::Snappy => {
+            let mut encoder = snap::raw::Encoder::new();
+            encoder.compress_vec(data).map_err(|e| {
+                ProtocolError::CqlError(format!("Snappy compression failed: {}", e))
+            })
+        }
+        CompressionAlgorithm::Lz4 => {
+            // LZ4 block compression
+            Ok(lz4_flex::compress_prepend_size(data))
+        }
+    }
+}
+
+/// Decompress data using the specified algorithm
+pub fn decompress_data(data: &[u8], algorithm: CompressionAlgorithm) -> ProtocolResult<Vec<u8>> {
+    match algorithm {
+        CompressionAlgorithm::None => Ok(data.to_vec()),
+        CompressionAlgorithm::Snappy => {
+            let mut decoder = snap::raw::Decoder::new();
+            decoder.decompress_vec(data).map_err(|e| {
+                ProtocolError::CqlError(format!("Snappy decompression failed: {}", e))
+            })
+        }
+        CompressionAlgorithm::Lz4 => {
+            // LZ4 block decompression
+            lz4_flex::decompress_size_prepended(data).map_err(|e| {
+                ProtocolError::CqlError(format!("LZ4 decompression failed: {}", e))
+            })
+        }
+    }
+}
+
+/// Create a compressed response frame
+pub fn create_compressed_response(
+    stream: i16,
+    opcode: CqlOpcode,
+    body: Bytes,
+    compression: CompressionAlgorithm,
+) -> ProtocolResult<CqlFrame> {
+    if compression == CompressionAlgorithm::None {
+        return Ok(CqlFrame::response(stream, opcode, body));
+    }
+
+    let compressed_body = compress_data(&body, compression)?;
+    let mut frame = CqlFrame::response(stream, opcode, Bytes::from(compressed_body));
+    frame.flags |= FLAG_COMPRESSION;
+    Ok(frame)
+}
+
+/// Decode a potentially compressed frame
+pub fn decode_with_compression(
+    mut buf: Bytes,
+    compression: CompressionAlgorithm,
+) -> ProtocolResult<CqlFrame> {
+    if buf.len() < FRAME_HEADER_SIZE {
+        return Err(ProtocolError::IncompleteFrame);
+    }
+
+    let version = buf.get_u8();
+    let flags = buf.get_u8();
+    let stream = buf.get_i16();
+    let opcode_byte = buf.get_u8();
+    let length = buf.get_u32() as usize;
+
+    if buf.len() < length {
+        return Err(ProtocolError::IncompleteFrame);
+    }
+
+    let opcode = CqlOpcode::from_u8(opcode_byte)?;
+    let mut body_bytes = buf.copy_to_bytes(length);
+
+    // Decompress if compression flag is set
+    if flags & FLAG_COMPRESSION != 0 && compression != CompressionAlgorithm::None {
+        let decompressed = decompress_data(&body_bytes, compression)?;
+        body_bytes = Bytes::from(decompressed);
+    }
+
+    Ok(CqlFrame {
+        version,
+        flags,
+        stream,
+        opcode,
+        body: body_bytes,
+    })
+}
+
+use crate::protocols::cql::types::CqlEvent;
+
+/// Register message
+#[derive(Debug, Clone)]
+pub struct RegisterMessage {
+    pub event_types: Vec<String>,
+}
+
+impl RegisterMessage {
+    pub fn decode(mut buf: Bytes) -> ProtocolResult<Self> {
+        if buf.remaining() < 2 {
+            return Err(ProtocolError::IncompleteFrame);
+        }
+        let count = buf.get_u16();
+        let mut event_types = Vec::with_capacity(count as usize);
+
+        for _ in 0..count {
+            if buf.remaining() < 2 {
+                return Err(ProtocolError::IncompleteFrame);
+            }
+            let len = buf.get_u16() as usize;
+            if buf.remaining() < len {
+                return Err(ProtocolError::IncompleteFrame);
+            }
+            let s = buf.copy_to_bytes(len);
+            let s_str = String::from_utf8(s.to_vec())
+                .map_err(|e| ProtocolError::ConversionError(e.to_string()))?;
+            event_types.push(s_str);
+        }
+
+        Ok(Self { event_types })
+    }
+}
+
+/// Build an EVENT response
+pub fn build_event_response(stream: i16, event: CqlEvent) -> ProtocolResult<CqlFrame> {
+    let mut body = BytesMut::new();
+
+    match event {
+        CqlEvent::TopologyChange(change_type, addr) => {
+            write_string(&mut body, "TOPOLOGY_CHANGE");
+            write_string(&mut body, change_type.as_str());
+            // Inet encoding: [1 byte len][4 or 16 bytes]
+            // + [4 bytes port]
+            match addr.ip() {
+                std::net::IpAddr::V4(ipv4) => {
+                    body.put_u8(4);
+                    body.put(&ipv4.octets()[..]);
+                }
+                std::net::IpAddr::V6(ipv6) => {
+                    body.put_u8(16);
+                    body.put(&ipv6.octets()[..]);
+                }
+            }
+            body.put_i32(addr.port() as i32);
+        }
+        CqlEvent::StatusChange(change_type, addr) => {
+            write_string(&mut body, "STATUS_CHANGE");
+            write_string(&mut body, change_type.as_str());
+            match addr.ip() {
+                std::net::IpAddr::V4(ipv4) => {
+                    body.put_u8(4);
+                    body.put(&ipv4.octets()[..]);
+                }
+                std::net::IpAddr::V6(ipv6) => {
+                    body.put_u8(16);
+                    body.put(&ipv6.octets()[..]);
+                }
+            }
+            body.put_i32(addr.port() as i32);
+        }
+        CqlEvent::SchemaChange(change_type, keyspace, name, target_type) => {
+            write_string(&mut body, "SCHEMA_CHANGE");
+            write_string(&mut body, change_type.as_str());
+            write_string(&mut body, &target_type);
+            write_string(&mut body, &keyspace);
+            
+            // KEYSPACE target only needs keyspace
+            // TABLE, TYPE, etc need name as well
+            if target_type != "KEYSPACE" {
+                write_string(&mut body, &name);
+            }
+        }
+    }
+
+    Ok(CqlFrame::response(stream, CqlOpcode::Event, body.freeze()))
+}
+
+
+
+
 #[cfg(test)]
+
 mod tests {
     use super::*;
 

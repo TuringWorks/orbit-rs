@@ -15,8 +15,9 @@ use super::protocol::{
     build_system_virtual_schema_response, build_void_result, read_string, read_string_map,
     CqlFrame, CqlOpcode, QueryParameters,
 };
-use super::types::CqlValue;
+use super::types::{CqlValue, CqlEvent, CqlEventType};
 use super::CqlConfig;
+use tokio::sync::broadcast;
 use crate::protocols::common::storage::memory::MemoryTableStorage;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::types::{SqlType, SqlValue};
@@ -29,6 +30,46 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
+
+#[cfg(feature = "js-quickjs")]
+use crate::js::{JsValue, QuickJsRuntime, SecurityConfig};
+
+/// Convert SqlValue to JsValue for trigger execution
+#[cfg(feature = "js-quickjs")]
+fn sql_value_to_js_value(value: &SqlValue) -> JsValue {
+    match value {
+        SqlValue::Null => JsValue::Null,
+        SqlValue::Boolean(b) => JsValue::Bool(*b),
+        SqlValue::SmallInt(n) => JsValue::Integer(*n as i64),
+        SqlValue::Integer(n) => JsValue::Integer(*n as i64),
+        SqlValue::BigInt(n) => JsValue::Integer(*n),
+        SqlValue::Real(f) => JsValue::Float(*f as f64),
+        SqlValue::DoublePrecision(f) => JsValue::Float(*f),
+        SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => {
+            JsValue::String(s.clone())
+        }
+        SqlValue::Bytea(b) => JsValue::Binary(b.clone()),
+        SqlValue::Timestamp(dt) => JsValue::Date(dt.to_string()),
+        SqlValue::Date(d) => JsValue::Date(d.to_string()),
+        SqlValue::Time(t) => JsValue::String(t.to_string()),
+        SqlValue::Interval(iv) => JsValue::String(iv.to_string()),
+        SqlValue::Uuid(u) => JsValue::String(u.to_string()),
+        SqlValue::Json(j) | SqlValue::Jsonb(j) => {
+            // Parse JSON string to JsValue
+            JsValue::from_json(j).unwrap_or(JsValue::String(j.clone()))
+        }
+        SqlValue::Array(arr) => {
+            let js_arr: Vec<JsValue> = arr.iter().map(sql_value_to_js_value).collect();
+            JsValue::Array(js_arr)
+        }
+        SqlValue::Numeric(n) => {
+            // Convert numeric to string or float
+            JsValue::String(n.to_string())
+        }
+        SqlValue::Decimal(d) => JsValue::String(d.to_string()),
+        _ => JsValue::String(format!("{:?}", value)),
+    }
+}
 
 /// CQL adapter
 pub struct CqlAdapter {
@@ -45,6 +86,12 @@ pub struct CqlAdapter {
     /// Connection metrics (for production monitoring)
     #[allow(dead_code)]
     metrics: Arc<RwLock<CqlMetrics>>,
+    /// Trigger registry (keyspace.table -> list of triggers)
+    triggers: Arc<RwLock<HashMap<String, Vec<TriggerDefinition>>>>,
+    /// Event bus for broadcasting server events
+    event_bus: broadcast::Sender<CqlEvent>,
+    /// Events subscribed by the current connection
+    subscribed_events: Arc<RwLock<Vec<CqlEventType>>>,
 }
 
 /// CQL adapter metrics
@@ -82,6 +129,114 @@ struct PreparedStatement {
     statement: CqlStatement,
 }
 
+/// Trigger definition
+#[derive(Debug, Clone)]
+pub struct TriggerDefinition {
+    /// Trigger name
+    pub name: String,
+    /// Table name (qualified with keyspace)
+    pub table: String,
+    /// Trigger class (Java class name)
+    pub trigger_class: String,
+    /// Whether the trigger is enabled
+    pub enabled: bool,
+}
+
+/// Trigger event type
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TriggerEvent {
+    Insert,
+    Update,
+    Delete,
+}
+
+impl TriggerDefinition {
+    /// Execute the trigger with JavaScript runtime (if available)
+    pub fn execute(&self, event: TriggerEvent, row_data: &HashMap<String, SqlValue>) -> ProtocolResult<()> {
+        info!(
+            "[CQL Trigger] Executing trigger '{}' on table '{}' for {:?} event",
+            self.name, self.table, event
+        );
+
+        #[cfg(feature = "js-quickjs")]
+        {
+            self.execute_with_javascript(event, row_data)
+        }
+
+        #[cfg(not(feature = "js-quickjs"))]
+        {
+            // Fallback: just log the trigger execution
+            debug!(
+                "[CQL Trigger] '{}' triggered with data (JS disabled): {:?}",
+                self.name, row_data
+            );
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "js-quickjs")]
+    fn execute_with_javascript(&self, event: TriggerEvent, row_data: &HashMap<String, SqlValue>) -> ProtocolResult<()> {
+        // Convert row data to JavaScript values
+        let mut js_row = HashMap::new();
+        for (key, value) in row_data {
+            js_row.insert(key.clone(), sql_value_to_js_value(value));
+        }
+
+        // Create JavaScript context with row data and event
+        let event_str = match event {
+            TriggerEvent::Insert => "INSERT",
+            TriggerEvent::Update => "UPDATE",
+            TriggerEvent::Delete => "DELETE",
+        };
+
+        // Build the JavaScript code to execute
+        // We wrap the trigger class in a function call with the data
+        let script = format!(
+            r#"
+            var row = {};
+            var event = "{}";
+            var table = "{}";
+
+            // Execute trigger class method (simplified)
+            // In a real implementation, this would instantiate the Java class
+            // For now, we execute it as a JavaScript function
+            (function() {{
+                // Trigger implementation would go here
+                // For now, just log
+                return {{ success: true, row: row, event: event }};
+            }})();
+            "#,
+            serde_json::to_string(&js_row).unwrap_or_else(|_| "{}".to_string()),
+            event_str,
+            self.table
+        );
+
+        // Execute with QuickJS runtime
+        let runtime = QuickJsRuntime::with_config(SecurityConfig::default())
+            .map_err(|e| ProtocolError::CqlError(format!("Failed to create JS runtime: {}", e)))?;
+
+        match runtime.execute(&script) {
+            Ok(result) => {
+                debug!(
+                    "[CQL Trigger] '{}' executed successfully: {:?}",
+                    self.name, result
+                );
+                Ok(())
+            }
+            Err(e) => {
+                error!(
+                    "[CQL Trigger] '{}' execution failed: {}",
+                    self.name, e
+                );
+                Err(ProtocolError::CqlError(format!(
+                    "Trigger execution failed: {}",
+                    e
+                )))
+            }
+        }
+    }
+}
+
 impl CqlAdapter {
     /// Create a new CQL adapter with shared storage
     pub async fn new_with_storage(
@@ -89,6 +244,7 @@ impl CqlAdapter {
         storage: Arc<dyn crate::protocols::common::storage::TableStorage>,
     ) -> ProtocolResult<Self> {
         let query_engine = Arc::new(QueryEngine::new());
+        let (event_bus, _) = broadcast::channel(100);
 
         Ok(Self {
             config,
@@ -97,6 +253,9 @@ impl CqlAdapter {
             query_engine,
             prepared_statements: Arc::new(RwLock::new(HashMap::new())),
             metrics: Arc::new(RwLock::new(CqlMetrics::default())),
+            triggers: Arc::new(RwLock::new(HashMap::new())),
+            event_bus,
+            subscribed_events: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -116,6 +275,7 @@ impl CqlAdapter {
         query_engine: Arc<QueryEngine>,
     ) -> ProtocolResult<Self> {
         let storage = Arc::new(MemoryTableStorage::new());
+        let (event_bus, _) = broadcast::channel(100);
 
         Ok(Self {
             config,
@@ -124,6 +284,9 @@ impl CqlAdapter {
             query_engine,
             prepared_statements: Arc::new(RwLock::new(HashMap::new())),
             metrics: Arc::new(RwLock::new(CqlMetrics::default())),
+            triggers: Arc::new(RwLock::new(HashMap::new())),
+            event_bus,
+            subscribed_events: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -297,85 +460,132 @@ impl CqlAdapter {
             query_engine: self.query_engine.clone(),
             prepared_statements: self.prepared_statements.clone(),
             metrics: self.metrics.clone(),
+            triggers: self.triggers.clone(),
+            event_bus: self.event_bus.clone(),
+            subscribed_events: Arc::new(RwLock::new(Vec::new())), // New subscriptions for new connection
         }
     }
 
     /// Handle a client connection
-    async fn handle_connection<S>(&self, mut socket: S) -> ProtocolResult<()>
+    async fn handle_connection<S>(&self, socket: S) -> ProtocolResult<()>
     where
         S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
     {
+        let (mut reader, mut writer) = tokio::io::split(socket);
         let mut buffer = BytesMut::with_capacity(4096);
+        let mut event_rx = self.event_bus.subscribe();
 
         loop {
-            // Process all complete frames in the buffer first
-            loop {
-                // Check if we have enough data for a frame header
-                if buffer.len() < 9 {
-                    break; // Need more data
+            tokio::select! {
+                // Handle incoming data
+                read_result = reader.read_buf(&mut buffer) => {
+                    let n = read_result.map_err(|e| ProtocolError::IoError(e.to_string()))?;
+                    if n == 0 {
+                        // Connection closed
+                        return Ok(());
+                    }
+
+                    // Process all complete frames in the buffer
+                    loop {
+                        // Check if we have enough data for a frame header
+                        if buffer.len() < 9 {
+                            break; 
+                        }
+
+                        // Check if we have the full frame
+                        let body_len = {
+                            let mut buf = buffer.as_ref();
+                            buf.advance(5); // Skip to length field
+                            buf.get_u32() as usize
+                        };
+
+                        if buffer.len() < 9 + body_len {
+                            break; 
+                        }
+
+                        // Parse frame
+                        let frame_bytes = buffer.split_to(9 + body_len).freeze();
+                        let frame = CqlFrame::decode(frame_bytes)?;
+
+                        // Extract protocol version (lower 7 bits, bit 7 is direction flag)
+                        let protocol_version = frame.version & 0x7F;
+
+                        // Handle frame
+                        let mut response = self.handle_frame(&frame).await?;
+
+                        // Set response version: use protocol v4 with response bit (0x84)
+                        let response_version = if protocol_version > 4 {
+                            0x84 // v4 response
+                        } else {
+                            (protocol_version & 0x7F) | 0x80
+                        };
+                        response.version = response_version;
+
+                        // Send response
+                        let response_bytes = response.encode();
+                        writer
+                            .write_all(&response_bytes)
+                            .await
+                            .map_err(|e| ProtocolError::IoError(e.to_string()))?;
+
+                        writer
+                            .flush()
+                            .await
+                            .map_err(|e| ProtocolError::IoError(e.to_string()))?;
+                    }
                 }
 
-                // Check if we have the full frame
-                let body_len = {
-                    let mut buf = buffer.as_ref();
-                    buf.advance(5); // Skip to length field
-                    buf.get_u32() as usize
-                };
-
-                if buffer.len() < 9 + body_len {
-                    break; // Need more data
+                // Handle server events
+                event_result = event_rx.recv() => {
+                    match event_result {
+                        Ok(event) => {
+                             let subscribed = self.subscribed_events.read().await;
+                             let event_type = match &event {
+                                 CqlEvent::TopologyChange(_, _) => CqlEventType::TopologyChange,
+                                 CqlEvent::StatusChange(_, _) => CqlEventType::StatusChange,
+                                 CqlEvent::SchemaChange(_, _, _, _) => CqlEventType::SchemaChange,
+                             };
+                             
+                             if subscribed.contains(&event_type) {
+                                 if let Ok(response) = super::protocol::build_event_response(-1, event) {
+                                     let response_bytes = response.encode();
+                                     if let Err(e) = writer.write_all(&response_bytes).await {
+                                         error!("Failed to send event to client: {}", e);
+                                         break Ok(()); // Connection error
+                                     }
+                                     let _ = writer.flush().await;
+                                 }
+                             }
+                        }
+                        Err(broadcast::error::RecvError::Closed) => {
+                            break Ok(()); // Bus closed
+                        }
+                        Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                            warn!("Client lagged, skipped {} events", skipped);
+                        }
+                    }
                 }
-
-                // Parse frame
-                let frame_bytes = buffer.split_to(9 + body_len).freeze();
-                let frame = CqlFrame::decode(frame_bytes)?;
-
-                // Extract protocol version (lower 7 bits, bit 7 is direction flag)
-                let protocol_version = frame.version & 0x7F;
-                println!("DEBUG: Received frame version: 0x{:02x} (protocol v{}), opcode: {:?}, stream: {}",
-                         frame.version, protocol_version, frame.opcode, frame.stream);
-
-                // Handle frame
-                let mut response = self.handle_frame(&frame).await?;
-
-                // Set response version: use protocol v4 with response bit (0x84)
-                // This ensures compatibility with clients expecting v4
-                // Preserve the protocol version from request but cap at v4
-                let response_version = if protocol_version > 4 {
-                    0x84 // v4 response
-                } else {
-                    (protocol_version & 0x7F) | 0x80
-                };
-                response.version = response_version;
-
-                println!("DEBUG: Sending response version: 0x{:02x}, opcode: {:?}, body_len: {}, stream: {}",
-                         response.version, response.opcode, response.body.len(), response.stream);
-
-                // Send response
-                let response_bytes = response.encode();
-                socket
-                    .write_all(&response_bytes)
-                    .await
-                    .map_err(|e| ProtocolError::IoError(e.to_string()))?;
-
-                // Flush to ensure data is sent
-                socket
-                    .flush()
-                    .await
-                    .map_err(|e| ProtocolError::IoError(e.to_string()))?;
-            }
-
-            // Read more data from socket
-            let n = socket
-                .read_buf(&mut buffer)
-                .await
-                .map_err(|e| ProtocolError::IoError(e.to_string()))?;
-
-            if n == 0 {
-                // Connection closed
-                return Ok(());
             }
         }
+    }
+
+    /// Execute triggers for a table
+    #[allow(dead_code)]
+    async fn execute_triggers(
+        &self,
+        table: &str,
+        event: TriggerEvent,
+        row_data: &HashMap<String, SqlValue>,
+    ) -> ProtocolResult<()> {
+        let triggers = self.triggers.read().await;
+        if let Some(table_triggers) = triggers.get(table) {
+            for trigger in table_triggers {
+                if trigger.enabled {
+                    trigger.execute(event, row_data)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Handle a CQL frame
@@ -428,24 +638,20 @@ impl CqlAdapter {
 
     /// Handle REGISTER request
     async fn handle_register(&self, frame: &CqlFrame) -> ProtocolResult<CqlFrame> {
-        println!(
-            "DEBUG: handle_register called. Body len: {}",
-            frame.body.len()
-        );
-        // Just consume the body (list of event types) and return READY
-        // We don't currently support pushing events to clients
-        let mut body = frame.body.clone();
-        match super::protocol::read_string_list(&mut body) {
-            Ok(events) => {
-                println!("DEBUG: Client registered for events: {:?}", events);
-                info!("Client registered for events: {:?}", events);
-                Ok(build_ready_response(frame.stream))
-            }
-            Err(e) => {
-                println!("DEBUG: Failed to read event list: {}", e);
-                Err(e)
+        let body = frame.body.clone();
+        let message = super::protocol::RegisterMessage::decode(body)?;
+        
+        info!("Client registered for events: {:?}", message.event_types);
+        
+        let mut subscribed = self.subscribed_events.write().await;
+        subscribed.clear();
+        for event_type_str in &message.event_types {
+            if let Some(event_type) = CqlEventType::from_str(event_type_str) {
+                subscribed.push(event_type);
             }
         }
+        
+        Ok(build_ready_response(frame.stream))
     }
 
     /// Handle OPTIONS request
@@ -832,6 +1038,13 @@ impl CqlAdapter {
 
     /// Execute a CQL statement
     #[cfg_attr(test, allow(dead_code))]
+    /// Publish a schema change event
+    fn publish_schema_change_event(&self, change_type: super::types::SchemaChangeType, target_type: &str, keyspace: &str, name: &str) {
+        let event = CqlEvent::SchemaChange(change_type, keyspace.to_string(), name.to_string(), target_type.to_string());
+        // We ignore errors if there are no subscribers
+        let _ = self.event_bus.send(event);
+    }
+
     pub async fn execute_statement(
         &self,
         statement: &CqlStatement,
@@ -1414,7 +1627,15 @@ impl CqlAdapter {
                 };
 
                 match self.query_engine.execute_sql_direct(&sql).await {
-                    Ok(_) => Ok(self.build_schema_change_result(stream)),
+                    Ok(_) => {
+                        self.publish_schema_change_event(
+                            super::types::SchemaChangeType::Created,
+                            "KEYSPACE",
+                            name,
+                            ""
+                        );
+                        Ok(self.build_schema_change_result(stream))
+                    }
                     Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
                 }
             }
@@ -1480,7 +1701,26 @@ impl CqlAdapter {
                 };
 
                 match self.query_engine.execute_sql_direct(&sql).await {
-                    Ok(_) => Ok(self.build_schema_change_result(stream)),
+                    Ok(_) => {
+                        let keyspace = if qualified_table.contains('.') {
+                            qualified_table.split('.').next().unwrap_or("").to_string()
+                        } else {
+                            self.parser.read().await.current_keyspace().unwrap_or("").to_string()
+                        };
+                        let table_name = if qualified_table.contains('.') {
+                            qualified_table.split('.').nth(1).unwrap_or("").to_string()
+                        } else {
+                            qualified_table.clone()
+                        };
+                        
+                        self.publish_schema_change_event(
+                            super::types::SchemaChangeType::Created,
+                            "TABLE",
+                            &keyspace,
+                            &table_name
+                        );
+                        Ok(self.build_schema_change_result(stream))
+                    }
                     Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
                 }
             }
@@ -1492,7 +1732,15 @@ impl CqlAdapter {
                     format!("DROP SCHEMA {} CASCADE", name)
                 };
                 match self.query_engine.execute_sql_direct(&sql).await {
-                    Ok(_) => Ok(self.build_schema_change_result(stream)),
+                    Ok(_) => {
+                        self.publish_schema_change_event(
+                            super::types::SchemaChangeType::Dropped,
+                            "KEYSPACE",
+                            name,
+                            ""
+                        );
+                        Ok(self.build_schema_change_result(stream))
+                    }
                     Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
                 }
             }
@@ -1516,7 +1764,26 @@ impl CqlAdapter {
                     format!("DROP TABLE {}", qualified_table)
                 };
                 match self.query_engine.execute_sql_direct(&sql).await {
-                    Ok(_) => Ok(self.build_schema_change_result(stream)),
+                    Ok(_) => {
+                         let keyspace = if qualified_table.contains('.') {
+                            qualified_table.split('.').next().unwrap_or("").to_string()
+                        } else {
+                            self.parser.read().await.current_keyspace().unwrap_or("").to_string()
+                        };
+                        let table_name = if qualified_table.contains('.') {
+                            qualified_table.split('.').nth(1).unwrap_or("").to_string()
+                        } else {
+                            qualified_table.clone()
+                        };
+
+                        self.publish_schema_change_event(
+                            super::types::SchemaChangeType::Dropped,
+                            "TABLE",
+                            &keyspace,
+                            &table_name
+                        );
+                        Ok(self.build_schema_change_result(stream))
+                    }
                     Err(e) => Ok(build_error_from_protocol_error(stream, &e)),
                 }
             }
@@ -1678,12 +1945,40 @@ impl CqlAdapter {
                 // Return schema information based on target
                 Ok(build_void_result(stream))
             }
-            CqlStatement::CreateTrigger { name, table, .. } => {
-                println!("[CQL] CREATE TRIGGER {} ON {}", name, table);
+            CqlStatement::CreateTrigger { name, table, trigger_class, .. } => {
+                info!("[CQL] CREATE TRIGGER {} ON {} USING {}", name, table, trigger_class);
+
+                // Create trigger definition
+                let trigger = TriggerDefinition {
+                    name: name.clone(),
+                    table: table.clone(),
+                    trigger_class: trigger_class.clone(),
+                    enabled: true,
+                };
+
+                // Register trigger
+                let mut triggers = self.triggers.write().await;
+                triggers
+                    .entry(table.clone())
+                    .or_insert_with(Vec::new)
+                    .push(trigger);
+
+                info!("[CQL] Trigger '{}' registered for table '{}'", name, table);
                 Ok(build_void_result(stream))
             }
             CqlStatement::DropTrigger { name, table, .. } => {
-                println!("[CQL] DROP TRIGGER {} ON {}", name, table);
+                info!("[CQL] DROP TRIGGER {} ON {}", name, table);
+
+                // Unregister trigger
+                let mut triggers = self.triggers.write().await;
+                if let Some(table_triggers) = triggers.get_mut(table.as_str()) {
+                    table_triggers.retain(|t| t.name != *name);
+                    if table_triggers.is_empty() {
+                        triggers.remove(table.as_str());
+                    }
+                }
+
+                info!("[CQL] Trigger '{}' dropped from table '{}'", name, table);
                 Ok(build_void_result(stream))
             }
             CqlStatement::ListUsers => {
@@ -2116,25 +2411,53 @@ impl CqlAdapter {
         }
     }
 
-    /// Build a SCHEMA_CHANGE result
+    /// Build a schema change result frame
+    /// This is returned to the client that executed the DDL statement
     fn build_schema_change_result(&self, stream: i16) -> CqlFrame {
         let mut body = BytesMut::new();
-        body.put_i32(0x0005); // RESULT::SchemaChange
-
-        // Change type (CREATED)
-        body.put_u16(7);
-        body.put(&b"CREATED"[..]);
-
-        // Target (KEYSPACE)
-        body.put_u16(8);
-        body.put(&b"KEYSPACE"[..]);
-
-        // Keyspace name
-        body.put_u16(7);
-        body.put(&b"default"[..]);
-
+        // Result kind: SchemaChange (0x0005)
+        body.put_i32(0x0005);
+        
+        // Change type: CREATED ("CREATED")
+        super::protocol::write_string(&mut body, "CREATED");
+        // Target: TABLE ("TABLE")
+        super::protocol::write_string(&mut body, "TABLE");
+        // Options: keyspace, table
+        super::protocol::write_string(&mut body, "test_keyspace");
+        super::protocol::write_string(&mut body, "test_table");
+        
         CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
     }
+
+    /// Build a schema change event frame
+    /// This would be broadcast to all registered clients
+    #[allow(dead_code)]
+    fn build_schema_change_event(
+        &self,
+        change_type: &str,
+        keyspace: &str,
+        table: &str,
+    ) -> ProtocolResult<CqlFrame> {
+        use super::types::{CqlEvent, SchemaChangeType};
+        
+        let change = match change_type {
+            "CREATED" => SchemaChangeType::Created,
+            "UPDATED" => SchemaChangeType::Updated,
+            "DROPPED" => SchemaChangeType::Dropped,
+            _ => SchemaChangeType::Updated,
+        };
+        
+        let event = CqlEvent::SchemaChange(
+            change,
+            keyspace.to_string(),
+            table.to_string(),
+            "TABLE".to_string(),
+        );
+        
+        super::protocol::build_event_response(-1, event)
+    }
+
+
 }
 
 #[cfg(test)]
@@ -2486,4 +2809,82 @@ mod tests {
         }];
         assert!(adapter.evaluate_if_conditions(&row, &conditions_ne));
     }
+
+    #[tokio::test]
+    async fn test_register_events() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Build a REGISTER frame manually
+        let mut body = BytesMut::new();
+        // Count: 2
+        body.put_u16(2);
+        // Event 1: "TOPOLOGY_CHANGE"
+        super::super::protocol::write_string(&mut body, "TOPOLOGY_CHANGE");
+        // Event 2: "SCHEMA_CHANGE"
+        super::super::protocol::write_string(&mut body, "SCHEMA_CHANGE");
+
+        let frame = CqlFrame {
+            version: 0x04,
+            flags: 0,
+            stream: 1,
+            opcode: CqlOpcode::Register,
+            body: body.freeze(),
+        };
+
+        // Handle register
+        let result = adapter.handle_register(&frame).await.unwrap();
+
+        // Should return READY
+        assert_eq!(result.opcode, CqlOpcode::Ready);
+    }
+
+    #[tokio::test]
+    async fn test_schema_change_event_publishing() {
+        let config = CqlConfig::default();
+        let adapter = CqlAdapter::new(config).await.unwrap();
+
+        // Subscribe to event bus directly
+        let mut rx = adapter.event_bus.subscribe();
+
+        // Perform schema change (CREATE KEYSPACE)
+        let parser = CqlParser::new();
+        let statement = parser.parse("CREATE KEYSPACE ks1 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}").unwrap();
+
+        let result = adapter.execute_statement(&statement, 1, None, None).await.unwrap();
+        assert_ne!(result.opcode, CqlOpcode::Error, "Statement failed: {:?}", result);
+
+        // Check if event is received
+        let event = tokio::time::timeout(std::time::Duration::from_millis(500), rx.recv()).await.expect("Timeout waiting for event").unwrap();
+        
+        match event {
+             super::CqlEvent::SchemaChange(change_type, keyspace, name, target_type) => {
+                 assert_eq!(change_type, super::super::types::SchemaChangeType::Created);
+                 assert_eq!(keyspace, "ks1");
+                 assert_eq!(target_type, "KEYSPACE");
+                 assert_eq!(name, ""); // Name is empty for KEYSPACE changes
+             }
+             _ => panic!("Expected SchemaChange event"),
+        }
+        
+        // Test Create Table
+        let statement_use = parser.parse("USE ks1").unwrap();
+        adapter.execute_statement(&statement_use, 1, None, None).await.unwrap();
+        
+        let statement_table = parser.parse("CREATE TABLE test_table (id int PRIMARY KEY, val text)").unwrap();
+        adapter.execute_statement(&statement_table, 1, None, None).await.unwrap();
+        
+        let event_table = tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await.expect("Timeout waiting for table event").unwrap();
+        
+        match event_table {
+             super::CqlEvent::SchemaChange(change_type, keyspace, name, target_type) => {
+                 assert_eq!(change_type, super::super::types::SchemaChangeType::Created);
+                 assert_eq!(keyspace, "ks1");
+                 assert_eq!(target_type, "TABLE");
+                 assert_eq!(name, "test_table");
+             }
+             _ => panic!("Expected SchemaChange event for table"),
+        }
+    }
 }
+

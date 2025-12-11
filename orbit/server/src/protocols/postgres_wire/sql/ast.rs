@@ -356,6 +356,7 @@ pub enum AlterTableAction {
     AddColumn(ColumnDefinition),
     DropColumn {
         name: String,
+        if_exists: bool,
         cascade: bool,
     },
     AlterColumn {
@@ -1274,6 +1275,8 @@ pub enum BinaryOperator {
     NotMatch,
     SimilarTo,
     NotSimilarTo,
+    NotLike,
+
     RegexMatch,                   // ~ operator
     RegexMatchCaseInsensitive,    // ~* operator
     RegexNotMatch,                // !~ operator

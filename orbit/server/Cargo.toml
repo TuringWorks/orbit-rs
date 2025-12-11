@@ -88,8 +88,9 @@ http-body-util = "0.1"
 tantivy = { version = "0.22", optional = true }
 tantivy-jieba = { version = "0.11", optional = true }  # Chinese tokenization
 
-# LZ4 compression for OrbitWire
-lz4_flex = "0.11"
+# Compression for CQL wire protocol
+lz4_flex = "0.11"     # LZ4 compression
+snap = "1.1"          # Snappy compression
 
 # JavaScript Engines
 # Boa - Pure Rust JS engine for PostgreSQL PL/JavaScript (security-first)

@@ -388,7 +388,48 @@ impl ExpressionEvaluator {
                 operator,
                 right,
             } => self.evaluate_vector_similarity(left, operator, right, context),
+
+            // Handle missing time/date expression variants by delegating to their respective functions
+            Expression::CurrentDate => self.evaluate_current_date(&[]),
+            Expression::CurrentTime(precision) => {
+                 let args = if let Some(p) = precision {
+                     vec![SqlValue::Integer(*p as i32)]
+                 } else {
+                     vec![]
+                 };
+                 self.evaluate_current_time(&args)
+            }
+            Expression::CurrentTimestamp(precision) => {
+                 let args = if let Some(p) = precision {
+                     vec![SqlValue::Integer(*p as i32)]
+                 } else {
+                     vec![]
+                 };
+                 self.evaluate_current_timestamp(&args)
+            }
+            Expression::LocalTime(precision) => {
+                 let args = if let Some(p) = precision {
+                     vec![SqlValue::Integer(*p as i32)]
+                 } else {
+                     vec![]
+                 };
+                 self.evaluate_localtime(&args)
+            }
+            Expression::LocalTimestamp(precision) => {
+                 let args = if let Some(p) = precision {
+                     vec![SqlValue::Integer(*p as i32)]
+                 } else {
+                     vec![]
+                 };
+                 self.evaluate_localtimestamp(&args)
+            }
+
         }
+    }
+
+    fn evaluate_localtime(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        // For now, treat same as current_time (UTC) or implement offset logic if needed
+        self.evaluate_current_time(args)
     }
 
     fn evaluate_column(

@@ -46,6 +46,22 @@ fn parse_expression_with_parser(parser: &mut SqlParser) -> ParseResult<Expressio
 
 /// Parse SELECT statement
 pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
+    // Parse WITH clause using SelectParser logic
+    let with = if parser.matches(&[Token::With]) {
+        let mut select_parser = super::select::SelectParser::new();
+        let with_clause = select_parser.parse_with_clause(&parser.tokens, &mut parser.position).map_err(|e| ParseError {
+            message: e.to_string(),
+            position: parser.position,
+            expected: vec!["WITH clause".to_string()],
+            found: parser.current_token.clone(),
+        })?;
+        // Update current_token as SelectParser advances position
+        parser.current_token = parser.tokens.get(parser.position).cloned();
+        Some(with_clause)
+    } else {
+        None
+    };
+
     parser.expect(Token::Select)?;
 
     // Parse DISTINCT clause
@@ -250,7 +266,7 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     // Create SELECT statement with ORDER BY, LIMIT, TRAVERSE, and set operation
     Ok(Statement::Select(Box::new(SelectStatement {
-        with: None,
+        with,
         select_list,
         distinct,
         from_clause,

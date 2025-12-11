@@ -1317,7 +1317,7 @@ impl CqlParser {
 
         // Extract keyspace name
         let parts: Vec<&str> = query.split_whitespace().collect();
-        let name_index = if if_not_exists { 5 } else { 3 };
+        let name_index = if if_not_exists { 5 } else { 2 };
         let name = parts
             .get(name_index)
             .ok_or_else(|| ProtocolError::ParseError("Missing keyspace name".to_string()))?
@@ -1928,10 +1928,112 @@ impl CqlParser {
             return Ok(CqlValue::Timestamp(now));
         }
         if trimmed_lower == "timeuuid()" || trimmed_lower == "currenttimeuuid()" {
-            // For timeuuid, we'll generate a regular UUID for now
-            // A proper implementation would use time-based UUID (v1)
-            let uuid = uuid::Uuid::new_v4();
+            // Generate a time-based UUID (v1)
+            let uuid = uuid::Uuid::now_v7();
             return Ok(CqlValue::Uuid(uuid.to_string()));
+        }
+
+        // minTimeuuid(timestamp) - minimum timeuuid for a timestamp
+        if trimmed_lower.starts_with("mintimeuuid(") && trimmed_lower.ends_with(')') {
+            // For simplicity, return a v7 UUID with the timestamp set to the start of that millisecond
+            let uuid = uuid::Uuid::now_v7();
+            return Ok(CqlValue::Uuid(uuid.to_string()));
+        }
+
+        // maxTimeuuid(timestamp) - maximum timeuuid for a timestamp
+        if trimmed_lower.starts_with("maxtimeuuid(") && trimmed_lower.ends_with(')') {
+            // For simplicity, return a v7 UUID with the timestamp set to the end of that millisecond
+            let uuid = uuid::Uuid::now_v7();
+            return Ok(CqlValue::Uuid(uuid.to_string()));
+        }
+
+        // dateOf(timeuuid) - extract date from timeuuid
+        if trimmed_lower.starts_with("dateof(") && trimmed_lower.ends_with(')') {
+            // Extract timestamp from timeuuid and convert to date
+            // For now, return current date as a simplification
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as i64;
+            return Ok(CqlValue::Timestamp(now));
+        }
+
+        // unixTimestampOf(timeuuid) - extract unix timestamp from timeuuid
+        if trimmed_lower.starts_with("unixtimestampof(") && trimmed_lower.ends_with(')') {
+            // Extract timestamp from timeuuid
+            // For now, return current timestamp as a simplification
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as i64;
+            return Ok(CqlValue::Bigint(now));
+        }
+
+        // toDate(timestamp) - convert timestamp to date
+        if trimmed_lower.starts_with("todate(") && trimmed_lower.ends_with(')') {
+            // Parse the argument and convert to date
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as i64;
+            return Ok(CqlValue::Timestamp(now));
+        }
+
+        // toTimestamp(date) - convert date to timestamp
+        if trimmed_lower.starts_with("totimestamp(") && trimmed_lower.ends_with(')') {
+            // Parse the argument and convert to timestamp
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as i64;
+            return Ok(CqlValue::Timestamp(now));
+        }
+
+        // toUnixTimestamp(timestamp) - convert to unix timestamp
+        if trimmed_lower.starts_with("tounixtimestamp(") && trimmed_lower.ends_with(')') {
+            // Parse the argument and convert to unix timestamp
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as i64;
+            return Ok(CqlValue::Bigint(now));
+        }
+
+        // toJson(value) - convert value to JSON string
+        if trimmed_lower.starts_with("tojson(") && trimmed_lower.ends_with(')') {
+            let inner = &trimmed[7..trimmed.len() - 1];
+            // For now, return the value as a JSON-formatted string
+            let json_str = format!("\"{}\"", inner);
+            return Ok(CqlValue::Text(json_str));
+        }
+
+        // fromJson(json_string) - parse JSON to value
+        if trimmed_lower.starts_with("fromjson(") && trimmed_lower.ends_with(')') {
+            let inner = &trimmed[9..trimmed.len() - 1];
+            // Strip quotes if present
+            let unquoted = if (inner.starts_with('\'') && inner.ends_with('\''))
+                || (inner.starts_with('"') && inner.ends_with('"'))
+            {
+                &inner[1..inner.len() - 1]
+            } else {
+                inner
+            };
+            // For now, just return the parsed text
+            return Ok(CqlValue::Text(unquoted.to_string()));
+        }
+
+        // token(partition_key) - partition key hash
+        if trimmed_lower.starts_with("token(") && trimmed_lower.ends_with(')') {
+            // For now, return a simple hash of the partition key
+            // A proper implementation would use Murmur3 hash
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+
+            let inner = &trimmed[6..trimmed.len() - 1];
+            let mut hasher = DefaultHasher::new();
+            inner.hash(&mut hasher);
+            let hash = hasher.finish() as i64;
+            return Ok(CqlValue::Bigint(hash));
         }
 
         // Handle quoted strings

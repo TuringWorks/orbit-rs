@@ -10,7 +10,7 @@ use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::{
     ast::{
         AccessMode, AlterDomainStatement, AlterPolicyStatement, AlterRoleStatement,
-        AlterSequenceStatement, AlterTableStatement, AlterTypeStatement, AssignmentTarget,
+        AlterSequenceStatement, AlterTableAction, AlterTableStatement, AlterTypeStatement, AssignmentTarget,
         BeginStatement, ColumnConstraint, CommitStatement, CopyDirection, CopySource,
         CopyStatement, CopyTarget, CreateDatabaseStatement, CreateDomainStatement,
         CreateExtensionStatement, CreateFunctionStatement, CreateIndexStatement,
@@ -1475,7 +1475,63 @@ impl SqlExecutor {
         let table_name = stmt.name.full_name();
         let actions: Vec<String> = stmt.actions.iter().map(|a| format!("{a:?}")).collect();
 
-        // TODO: Implement table alteration logic
+        // Acquire locks
+        let mut tables = self.tables.write().await;
+        let mut table_data = self.table_data.write().await;
+
+        let table_schema = tables
+            .get_mut(&table_name)
+            .ok_or_else(|| ProtocolError::table_not_found(&table_name))?;
+
+        for action in stmt.actions {
+            match action {
+                AlterTableAction::AddColumn(column_def) => {
+                    // Check if column already exists
+                    if table_schema.columns.iter().any(|c| c.name == column_def.name) {
+                        return Err(ProtocolError::PostgresError(format!(
+                            "Column \"{}\" of relation \"{}\" already exists",
+                            column_def.name, table_name
+                        )));
+                    }
+                    
+                    // Convert AST ColumnDefinition to schema ColumnSchema
+                    let new_col = ColumnSchema {
+                        name: column_def.name.clone(),
+                        data_type: column_def.data_type,
+                        nullable: !column_def.constraints.iter().any(|c| matches!(c, crate::protocols::postgres_wire::sql::ast::ColumnConstraint::NotNull)),
+                        default: None, // Simplified: ignoring default for now
+                        constraints: column_def.constraints.iter().map(|c| format!("{:?}", c)).collect(),
+                        generated: None,
+                    };
+                    
+                    table_schema.columns.push(new_col);
+                    // No need to update rows as missing keys are treated as NULL
+                }
+                AlterTableAction::DropColumn { name, if_exists, cascade: _ } => {
+                    // Check if column exists
+                    if let Some(idx) = table_schema.columns.iter().position(|c| c.name == name) {
+                        // Remove from schema
+                        table_schema.columns.remove(idx);
+                        
+                        // Remove from data
+                        if let Some(rows) = table_data.get_mut(&table_name) {
+                            for row in rows {
+                                row.remove(&name);
+                            }
+                        }
+                    } else if !if_exists {
+                        return Err(ProtocolError::PostgresError(format!(
+                            "Column \"{}\" of relation \"{}\" does not exist",
+                            name, table_name
+                        )));
+                    }
+                }
+                _ => {
+                     // Other actions ignored for now
+                     tracing::warn!("Unsupported ALTER TABLE action: {:?}", action);
+                }
+            }
+        }
 
         Ok(ExecutionResult::AlterTable {
             table_name,
@@ -2290,6 +2346,7 @@ impl SqlExecutor {
             SqlValue::PgSnapshot(s) => s.clone(),
 
             SqlValue::Custom { type_name, data } => format!("{}:{}", type_name, hex::encode(data)),
+            _ => format!("{:?}", value),
         }
     }
 
@@ -3283,6 +3340,21 @@ impl SqlExecutor {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ProtocolResult<()>> + Send + 'a>> {
         Box::pin(async move {
             match expr {
+                Expression::CurrentDate
+                | Expression::CurrentTime(_)
+                | Expression::CurrentTimestamp(_)
+                | Expression::LocalTime(_)
+                | Expression::LocalTimestamp(_) => {
+                    // Constant folding for current time functions will happen in evaluator
+                    // Here we just need to satisfy the match
+                    let context = EvaluationContext::empty();
+
+                    self.evaluate_where_condition(expr, &context).await?;
+                }
+                Expression::Any(arg) | Expression::All(arg) | Expression::Some(arg) => {
+                    self.validate_expression_columns(arg, from_clause).await?;
+                }
+
                 Expression::Column(col_ref) => {
                     // Skip validation for qualified column references (e.g., o.amount, t.name)
                     // since proper validation would require tracking table aliases
@@ -4547,6 +4619,7 @@ impl SqlExecutor {
                 format!("{}range", Self::sql_type_to_pg_type(element_type))
             }
             SqlType::Domain { domain_name, .. } => domain_name.clone(),
+            _ => "unknown".to_string(),
         }
     }
 

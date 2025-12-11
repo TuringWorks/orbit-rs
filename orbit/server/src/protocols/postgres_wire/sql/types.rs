@@ -724,7 +724,7 @@ impl SqlValue {
                 (SqlValue::Char(s), SqlType::Text) => Ok(SqlValue::Text(s.clone())),
                 (SqlValue::Varchar(s), SqlType::Text) => Ok(SqlValue::Text(s.clone())),
                 (SqlValue::Json(v), SqlType::Jsonb) => Ok(SqlValue::Jsonb(v.clone())),
-                (SqlValue::Json(v), SqlType::Jsonb) => Ok(SqlValue::Jsonb(v.clone())),
+
                 (SqlValue::Jsonb(v), SqlType::Json) => Ok(SqlValue::Json(v.clone())),
                 (SqlValue::Text(t), SqlType::JsonPath) => Ok(SqlValue::JsonPath(t.clone())),
                 (SqlValue::Varchar(t), SqlType::JsonPath) => Ok(SqlValue::JsonPath(t.clone())),

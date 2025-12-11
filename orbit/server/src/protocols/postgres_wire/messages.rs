@@ -103,6 +103,9 @@ pub enum FrontendMessage {
     },
     /// SASL Response
     SASLResponse { data: Bytes },
+    CopyData { data: Bytes },
+    CopyDone,
+    CopyFail { message: String },
     /// SSL request
     SSLRequest,
     /// Function call (older protocol, but part of standard)
@@ -294,7 +297,7 @@ impl FrontendMessage {
             b'c' => Self::parse_copy_done(&mut cursor)?,
             b'f' => Self::parse_copy_fail(&mut cursor)?,
             b'F' => Self::parse_function_call(&mut cursor)?,
-            b'p' => Self::parse_sasl_or_password(&mut cursor, msg_data.len())?,
+            b'p' => Self::parse_sasl_or_password(&mut cursor)?,
             _ => {
                 return Err(ProtocolError::PostgresError(format!(
                     "Unknown message type: {}",
@@ -448,10 +451,11 @@ impl FrontendMessage {
              if arg_len == -1 {
                  args.push(None);
              } else {
-                 let mut arg_data = vec![0u8; arg_len as usize];
-                 if cursor.copy_to_slice(&mut arg_data).is_err() {
-                     return Err(ProtocolError::PostgresError("Unexpected EOF in FunctionCall args".to_string()));
-                 }
+                  let mut arg_data = vec![0u8; arg_len as usize];
+                  if cursor.remaining() < arg_len as usize {
+                      return Err(ProtocolError::PostgresError("Unexpected EOF in FunctionCall args".to_string()));
+                  }
+                  cursor.copy_to_slice(&mut arg_data);
                  args.push(Some(Bytes::from(arg_data)));
              }
         }
@@ -503,6 +507,28 @@ impl FrontendMessage {
         Ok(FrontendMessage::SASLResponse {
             data: Bytes::from(data),
         })
+    }
+
+
+    fn parse_copy_data(cursor: &mut Cursor<&[u8]>) -> ProtocolResult<Self> {
+        let len = cursor.get_ref().len() as u64 - cursor.position();
+        let mut data = vec![0u8; len as usize];
+        if cursor.remaining() < len as usize {
+            return Err(ProtocolError::PostgresError("Unexpected EOF in CopyData".to_string()));
+        }
+        cursor.copy_to_slice(&mut data);
+        Ok(FrontendMessage::CopyData {
+            data: Bytes::from(data),
+        })
+    }
+
+    fn parse_copy_done(_cursor: &mut Cursor<&[u8]>) -> ProtocolResult<Self> {
+        Ok(FrontendMessage::CopyDone)
+    }
+
+    fn parse_copy_fail(cursor: &mut Cursor<&[u8]>) -> ProtocolResult<Self> {
+        let message = read_cstring(cursor)?;
+        Ok(FrontendMessage::CopyFail { message })
     }
 }
 
@@ -688,6 +714,87 @@ impl BackendMessage {
                     write_cstring(buf, option);
                 }
 
+                let len = buf.len() - pos;
+                buf[pos..pos + 4].copy_from_slice(&(len as i32).to_be_bytes());
+            }
+            BackendMessage::NotificationResponse {
+                process_id,
+                channel,
+                payload,
+            } => {
+                buf.put_u8(b'A');
+                let pos = buf.len();
+                buf.put_i32(0);
+                buf.put_i32(*process_id);
+                write_cstring(buf, channel);
+                write_cstring(buf, payload);
+                let len = buf.len() - pos;
+                buf[pos..pos + 4].copy_from_slice(&(len as i32).to_be_bytes());
+            }
+            BackendMessage::PortalSuspended => {
+                buf.put_u8(b's');
+                buf.put_i32(4);
+            }
+            BackendMessage::FunctionCallResponse { val } => {
+                buf.put_u8(b'V');
+                let pos = buf.len();
+                buf.put_i32(0);
+                if let Some(data) = val {
+                    buf.put_i32(data.len() as i32);
+                    buf.put_slice(data);
+                } else {
+                    buf.put_i32(-1);
+                }
+                let len = buf.len() - pos;
+                buf[pos..pos + 4].copy_from_slice(&(len as i32).to_be_bytes());
+            }
+            BackendMessage::CopyInResponse {
+                format,
+                column_formats,
+            } => {
+                buf.put_u8(b'G');
+                let pos = buf.len();
+                buf.put_i32(0);
+                buf.put_i8(*format);
+                buf.put_i16(column_formats.len() as i16);
+                for fmt in column_formats {
+                    buf.put_i16(*fmt);
+                }
+                let len = buf.len() - pos;
+                buf[pos..pos + 4].copy_from_slice(&(len as i32).to_be_bytes());
+            }
+            BackendMessage::CopyOutResponse {
+                format,
+                column_formats,
+            } => {
+                buf.put_u8(b'H');
+                let pos = buf.len();
+                buf.put_i32(0);
+                buf.put_i8(*format);
+                buf.put_i16(column_formats.len() as i16);
+                for fmt in column_formats {
+                    buf.put_i16(*fmt);
+                }
+                let len = buf.len() - pos;
+                buf[pos..pos + 4].copy_from_slice(&(len as i32).to_be_bytes());
+            }
+            BackendMessage::CopyData { data } => {
+                buf.put_u8(b'd');
+                let pos = buf.len();
+                buf.put_i32(0);
+                buf.put_slice(data);
+                let len = buf.len() - pos;
+                buf[pos..pos + 4].copy_from_slice(&(len as i32).to_be_bytes());
+            }
+            BackendMessage::CopyDone => {
+                buf.put_u8(b'c');
+                buf.put_i32(4);
+            }
+            BackendMessage::CopyFail { message } => {
+                buf.put_u8(b'f');
+                let pos = buf.len();
+                buf.put_i32(0);
+                write_cstring(buf, message);
                 let len = buf.len() - pos;
                 buf[pos..pos + 4].copy_from_slice(&(len as i32).to_be_bytes());
             }

@@ -293,6 +293,12 @@ impl PostgresWireProtocol {
             FrontendMessage::SASLResponse { data } => {
                 self.handle_sasl_response(data, buf).await?;
             }
+            FrontendMessage::FunctionCall { .. } => {
+                // Function call support is minimal/stubbed
+            }
+            FrontendMessage::CopyData { .. } | FrontendMessage::CopyDone | FrontendMessage::CopyFail { .. } => {
+                // Copy protocol not fully supported by server yet
+            }
         }
 
         Ok(true)
@@ -499,7 +505,7 @@ impl PostgresWireProtocol {
         data: bytes::Bytes,
         buf: &mut BytesMut,
     ) -> ProtocolResult<()> {
-        if let Some(mut scram) = self.scram_auth.take() {
+        if let Some(scram) = self.scram_auth.take() {
             let client_final = String::from_utf8_lossy(&data).to_string();
             match scram.process_client_final(&client_final) {
                 Ok(server_final) => {

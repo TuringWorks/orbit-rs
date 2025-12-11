@@ -74,6 +74,92 @@ pub enum SimilarityFunction {
     DotProduct,
 }
 
+/// CQL Event Types (for REGISTER)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CqlEventType {
+    TopologyChange,
+    StatusChange,
+    SchemaChange,
+}
+
+impl CqlEventType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CqlEventType::TopologyChange => "TOPOLOGY_CHANGE",
+            CqlEventType::StatusChange => "STATUS_CHANGE",
+            CqlEventType::SchemaChange => "SCHEMA_CHANGE",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_uppercase().as_str() {
+            "TOPOLOGY_CHANGE" => Some(CqlEventType::TopologyChange),
+            "STATUS_CHANGE" => Some(CqlEventType::StatusChange),
+            "SCHEMA_CHANGE" => Some(CqlEventType::SchemaChange),
+            _ => None,
+        }
+    }
+}
+
+/// Schema Change Type
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SchemaChangeType {
+    Created,
+    Updated,
+    Dropped,
+}
+
+impl SchemaChangeType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SchemaChangeType::Created => "CREATED",
+            SchemaChangeType::Updated => "UPDATED",
+            SchemaChangeType::Dropped => "DROPPED",
+        }
+    }
+}
+
+/// Topology Change Type
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TopologyChangeType {
+    NewNode,
+    RemovedNode,
+}
+
+impl TopologyChangeType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TopologyChangeType::NewNode => "NEW_NODE",
+            TopologyChangeType::RemovedNode => "REMOVED_NODE",
+        }
+    }
+}
+
+/// Status Change Type
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StatusChangeType {
+    Up,
+    Down,
+}
+
+impl StatusChangeType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            StatusChangeType::Up => "UP",
+            StatusChangeType::Down => "DOWN",
+        }
+    }
+}
+
+/// CQL Event
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CqlEvent {
+    TopologyChange(TopologyChangeType, std::net::SocketAddr),
+    StatusChange(StatusChangeType, std::net::SocketAddr),
+    SchemaChange(SchemaChangeType, String, String, String), // change_type, keyspace, name, target_type
+}
+
+
 impl CqlType {
     /// Convert CQL type to Orbit SqlType
     pub fn to_sql_type(&self) -> ProtocolResult<SqlType> {

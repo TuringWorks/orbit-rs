@@ -659,6 +659,7 @@ mod tests {
                 distinct: false,
                 order_by: None,
                 filter: None,
+                within_group: None,
             })),
             alias: None,
         }];

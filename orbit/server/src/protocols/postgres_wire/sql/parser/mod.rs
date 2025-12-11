@@ -99,6 +99,7 @@ impl SqlParser {
             Some(Token::Create) => self.parse_create_statement(),
             Some(Token::Alter) => self.parse_alter_statement(),
             Some(Token::Drop) => self.parse_drop_statement(),
+            Some(Token::With) => self.parse_select_statement(), // WITH is usually part of SELECT/INSERT/etc but can start stmt
 
             // DML Statements
             Some(Token::Select) => self.parse_select_statement(),

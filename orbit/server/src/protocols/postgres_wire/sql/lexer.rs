@@ -150,6 +150,12 @@ pub enum Token {
     Disable,
     // Force
     // Force is already defined for DROP DATABASE
+    Window,
+    Explain,
+    Costs,
+    Buffers,
+    Timing,
+    Method,
 
     // Keywords - DML
     Select,
@@ -358,6 +364,10 @@ pub enum Token {
 
     // Window Functions
     Over,
+    /// FINAL (for partitions)
+    Final,
+    /// FINALIZE (for partitions)
+    Finalize,
     Partition,
     RowNumber,
     Rank,
@@ -758,6 +768,19 @@ impl Lexer {
             // Enable/Disable
             ("ENABLE", Token::Enable),
             ("DISABLE", Token::Disable),
+            ("FORCE", Token::Force),
+            ("WINDOW", Token::Window),
+            ("EXPLAIN", Token::Explain),
+            ("ANALYZE", Token::Analyze),
+            ("VERBOSE", Token::Verbose),
+            ("COSTS", Token::Costs),
+            ("BUFFERS", Token::Buffers),
+            ("TIMING", Token::Timing),
+            ("FORMAT", Token::Format),
+            ("ACCESS", Token::Access),
+            ("METHOD", Token::Method),
+            ("PARALLEL", Token::Parallel),
+            ("ONLY", Token::Only),
             // DML Keywords
             ("SELECT", Token::Select),
             ("INSERT", Token::Insert),
@@ -1359,6 +1382,7 @@ impl Lexer {
                             }
                         }
 
+
                         '(' => {
                             self.advance();
                             return Token::LeftParen;
@@ -1391,12 +1415,10 @@ impl Lexer {
                             self.advance();
                             return Token::Semicolon;
                         }
-
                         ':' => {
                             self.advance();
                             return Token::Colon;
                         }
-
                         '=' => {
                             self.advance();
                             return Token::Equal;
@@ -1496,45 +1518,9 @@ impl Lexer {
                             return Token::BitwiseNot;
                         }
 
-                        '(' => {
-                            self.advance();
-                            return Token::LeftParen;
-                        }
-                        ')' => {
-                            self.advance();
-                            return Token::RightParen;
-                        }
-                        '[' => {
-                            self.advance();
-                            return Token::LeftBracket;
-                        }
-                        ']' => {
-                            self.advance();
-                            return Token::RightBracket;
-                        }
-                        '{' => {
-                            self.advance();
-                            return Token::LeftBrace;
-                        }
-                        '}' => {
-                            self.advance();
-                            return Token::RightBrace;
-                        }
-                        ',' => {
-                            self.advance();
-                            return Token::Comma;
-                        }
-                        ';' => {
-                            self.advance();
-                            return Token::Semicolon;
-                        }
-
-                        ':' => {
-                            self.advance();
-                            return Token::Colon;
-                        }
 
                         '#' => {
+
                             self.advance();
                             return match self.current_char {
                                 Some('>') => {
