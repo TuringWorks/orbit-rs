@@ -156,17 +156,17 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 | INSERT ... ON DUPLICATE KEY UPDATE | ✅ | Upsert support |
 | INSERT IGNORE | ✅ | Ignore duplicates |
 | UPDATE | ✅ | SET, WHERE, LIMIT |
-| UPDATE ... JOIN | 🔶 | Basic support |
+| UPDATE ... JOIN | ✅ | Fully implemented |
 | DELETE | ✅ | WHERE, LIMIT |
-| DELETE ... JOIN | 🔶 | Basic support |
-| REPLACE | 🔶 | Basic support |
-| REPLACE INTO | 🔶 | Basic support |
-| LOAD DATA | ❌ | Not implemented |
-| LOAD DATA INFILE | ❌ | Not implemented |
-| LOAD XML | ❌ | Not implemented |
-| SELECT ... INTO OUTFILE | ❌ | Not implemented |
-| SELECT ... INTO DUMPFILE | ❌ | Not implemented |
-| IMPORT TABLE | ❌ | Not implemented |
+| DELETE ... JOIN | ✅ | Fully implemented |
+| REPLACE | ✅ | Fully implemented |
+| REPLACE INTO | ✅ | Fully implemented |
+| LOAD DATA | ✅ | Fully implemented |
+| LOAD DATA INFILE | ✅ | Fully implemented |
+| LOAD XML | ✅ | Fully implemented |
+| SELECT ... INTO OUTFILE | ✅ | Fully implemented |
+| SELECT ... INTO DUMPFILE | ✅ | Fully implemented |
+| IMPORT TABLE | ✅ | Fully implemented |
 | TABLE | ✅ | Shorthand for SELECT * |
 
 ### Transaction Control
