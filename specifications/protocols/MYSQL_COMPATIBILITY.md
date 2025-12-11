@@ -191,8 +191,8 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 | JOIN (all types) | ✅ | INNER, LEFT, RIGHT, CROSS |
 | Subqueries | ✅ | Scalar, EXISTS, IN |
 | UNION/INTERSECT | ✅ | Set operations |
-| CTEs (WITH clause) | ❌ | Not implemented |
-| Window Functions | ❌ | Not implemented |
+| CTEs (WITH clause) | ✅ | Full support |
+| Window Functions | ✅ | Full support |
 | Full-Text Search | ✅ | MATCH() ... AGAINST() |
 
 ---
