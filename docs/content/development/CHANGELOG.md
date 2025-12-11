@@ -11,6 +11,125 @@ All notable changes to the Orbit-RS project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2025-12-10
+
+### Added
+
+- **mTLS Support and Security Enhancements** (2025-12-09): Mutual TLS authentication for secure cluster communication
+  - Certificate-based authentication between nodes
+  - Configurable TLS settings for all protocols
+  - Enhanced security for production deployments
+
+- **JavaScript Runtime Support** (2025-12-09): Multi-engine JavaScript support for stored procedures and scripting
+  - **Boa Engine** (`js-boa` feature): Pure Rust implementation for PostgreSQL PL/JavaScript
+    - Security-first design with sandboxing
+    - Memory limits, execution timeouts, API restrictions
+    - PlJavaScript for stored procedures
+  - **rquickjs/QuickJS** (`js-quickjs` feature): Near-V8 performance for MongoDB/Redis
+    - MongoDB `$where` and `$function` operator support
+    - Redis `EVAL`/`EVALSHA` command execution
+    - Script caching with SHA hashing
+  - **Security Features**:
+    - `ExecutionLimits`: timeout, memory, stack depth, operations
+    - `SecurityConfig`: blocked globals, eval restrictions
+    - `ExecutionGuard`: runtime resource tracking
+    - `ScriptValidator`: pre-execution security checks
+  - **Feature Flags**: `js-boa`, `js-quickjs`, `js-postgres`, `js-mongodb`, `js-redis`, `javascript`
+
+- **PostgreSQL 18 Advanced Features** (2025-12-09): Comprehensive PostgreSQL 18 compatibility enhancements
+  - **OLD/NEW Table References in RETURNING**:
+    - `OLD` and `NEW` tokens in lexer
+    - `OLD.*` and `NEW.*` qualified wildcard support
+    - `evaluate_returning_expr_with_old_new()` method
+    - Support in UPDATE and DELETE statements
+    - 5 unit tests for OLD/NEW parsing
+  - **VIRTUAL Generated Columns**:
+    - Compute values on-the-fly during SELECT queries
+    - `compute_virtual_columns()` method
+    - `compute_single_generated_column()` helper for STORED/VIRTUAL
+    - Optimized: only computes when table schema has virtual columns
+  - **MERGE Statement Execution**:
+    - Complete MERGE execution (~374 lines)
+    - `resolve_merge_source` helper for table/VALUES/subquery sources
+    - WHEN MATCHED (UPDATE/DELETE/DO NOTHING)
+    - WHEN NOT MATCHED (INSERT with VALUES/DEFAULT)
+    - Full RETURNING clause with OLD/NEW references
+  - **WITHOUT OVERLAPS Temporal Constraints**:
+    - `OVERLAPS` and `PERIOD` tokens in lexer
+    - `without_overlaps` field in PrimaryKey and Unique constraints
+    - `period_column` and `references_period` in ForeignKey
+    - `check_temporal_overlaps()` for constraint validation
+    - 6 new temporal constraint execution tests
+  - **Protocol Version 3.2 Negotiation**:
+    - Variable-length cancellation keys (4-256 bytes)
+    - `NegotiateProtocolVersion` message (0x76 / 'v')
+    - Protocol option negotiation
+
+- **Range Type Operators** (2025-12-09): Full range operator support for PostgreSQL compatibility
+  - 8 range operators implemented:
+    - `@>` (RangeContains) - range contains element/range
+    - `<@` (RangeContainedBy) - element/range contained by
+    - `&&` (RangeOverlaps) - ranges overlap
+    - `-|-` (RangeAdjacent) - ranges are adjacent
+    - `<<` (RangeStrictlyLeft) - range strictly left of
+    - `>>` (RangeStrictlyRight) - range strictly right of
+    - `&<` (RangeNotExtendRight) - does not extend right
+    - `&>` (RangeNotExtendLeft) - does not extend left
+  - Full evaluation with Option<SqlValue> for bounds
+  - Unbounded range support
+  - Proper inclusivity handling
+
+- **Additional Mathematical Functions** (2025-12-09): Extended math function library
+  - `COT(x)` - cotangent with division-by-zero protection
+  - `SINH(x)`, `COSH(x)`, `TANH(x)` - hyperbolic functions
+  - `ASINH(x)`, `ACOSH(x)`, `ATANH(x)` - inverse hyperbolic functions
+  - Domain validation for ACOSH (x >= 1) and ATANH (-1 < x < 1)
+
+- **Configurable Full-Text Search** (2025-12-09): Feature-flagged FTS support
+  - FTS can be enabled/disabled via configuration
+  - Performance optimization for deployments not requiring FTS
+  - Reduced binary size when FTS is disabled
+
+- **Protocol Compatibility Documentation** (2025-12-09): Comprehensive protocol specifications
+  - `MYSQL_COMPATIBILITY.md` (~40% coverage)
+  - `CQL_COMPATIBILITY.md` (~35% coverage)
+  - `MONGODB_COMPATIBILITY.md` (~30% coverage)
+  - `REDIS_COMPATIBILITY.md` (~75% coverage) with modules documentation
+  - `ORBITQL_COMPATIBILITY.md` (~60% coverage)
+  - pgvector extension documentation (~95% coverage)
+  - TimescaleDB extension documentation (~60% coverage)
+
+- **Industry Examples and Whitepapers** (2025-12-09): Expanded example coverage
+  - Healthcare clinical queries OrbitQL examples
+  - Logistics supply chain queries OrbitQL examples
+  - Media content queries OrbitQL examples
+  - Protocol comparison whitepaper
+  - Data center industry examples (SQL, CQL, Cypher, Redis)
+  - Predictive maintenance and orbital data offload workflows
+
+### Changed
+
+- **Documentation Updates** (2025-12-10): Comprehensive documentation refresh
+  - Updated GPU acceleration guide
+  - Updated GraphRAG guide
+  - Updated MCP guide
+  - Updated AI/ML guide
+  - Updated protocol overview
+  - Updated RFC index
+  - Updated server guide
+
+### Fixed
+
+- **DDL Parser Compilation** (2025-12-09): Resolved all 30 DDL parser compilation errors
+  - Fixed token definitions (Location, Reset, Equals→Equal, etc.)
+  - Fixed enum variants (AlterGroupAction, AggregateOption, etc.)
+  - Fixed 12 struct field mismatches in DDL statements
+  - Fixed CollationOptions enum usage
+  - Fixed TableName struct access patterns
+  - Fixed MERGE DefaultValues handling
+
+---
+
 ## [Unreleased] - 2025-12-08
 
 ### Added
