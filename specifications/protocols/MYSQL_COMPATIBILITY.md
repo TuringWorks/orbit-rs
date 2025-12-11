@@ -36,10 +36,10 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 
 | Command | Status | Notes |
 |---------|--------|-------|
-| CREATE DATABASE | 🔶 | Basic creation |
-| CREATE SCHEMA | 🔶 | Alias for CREATE DATABASE |
-| ALTER DATABASE | ❌ | Not implemented |
-| ALTER SCHEMA | ❌ | Not implemented |
+| CREATE DATABASE | ✅ | Full support |
+| CREATE SCHEMA | ✅ | Full support |
+| ALTER DATABASE | ✅ | Full support |
+| ALTER SCHEMA | ✅ | Full support |
 | DROP DATABASE | ✅ | With IF EXISTS |
 | DROP SCHEMA | ✅ | Alias for DROP DATABASE |
 
