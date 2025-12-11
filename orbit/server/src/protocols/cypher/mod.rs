@@ -50,6 +50,8 @@ pub use server::CypherServer;
 pub use storage::{CypherGraphStorage, CypherStorageProvider};
 pub use types::{GraphNode, GraphRelationship};
 
+mod bolt_protocol_tests;
+
 // Bolt Protocol v4.4 Implementation Status (see bolt_protocol.rs):
 // - [x] Bolt v4/v5 handshake
 // - [x] HELLO, LOGON messages

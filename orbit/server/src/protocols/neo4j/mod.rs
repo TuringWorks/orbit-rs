@@ -9,6 +9,25 @@ pub mod bolt_server;
 #[cfg(feature = "protocol-neo4j")]
 pub use bolt_server::BoltServer;
 
+#[cfg(feature = "protocol-neo4j")]
+pub mod bolt_messages;
+#[cfg(feature = "protocol-neo4j")]
+pub mod bolt_types;
+#[cfg(feature = "protocol-neo4j")]
+pub mod bolt_writer;
+#[cfg(feature = "protocol-neo4j")]
+pub mod spatial_types;
+#[cfg(feature = "protocol-neo4j")]
+pub mod spatial_functions;
+#[cfg(feature = "protocol-neo4j")]
+pub mod graph_functions;
+#[cfg(feature = "protocol-neo4j")]
+pub mod schema;
+#[cfg(feature = "protocol-neo4j")]
+pub mod database_admin;
+#[cfg(feature = "protocol-neo4j")]
+pub mod security;
+
 pub mod cypher_spatial;
 
 pub use cypher_spatial::{

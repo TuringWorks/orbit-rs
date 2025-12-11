@@ -42,7 +42,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> BoltStream for T {}
 /// PackStream decoder for parsing Bolt protocol messages
 #[derive(Debug, Default)]
 pub struct PackStreamDecoder {
-    position: usize,
+    pub(crate) position: usize,
 }
 
 impl PackStreamDecoder {
@@ -697,7 +697,7 @@ impl BoltProtocolHandler {
     }
 
     /// Read a chunk from the stream
-    async fn read_chunk(
+    pub(crate) async fn read_chunk(
         &self,
         stream: &mut impl BoltStream,
         buf: &mut BytesMut,
@@ -730,7 +730,7 @@ impl BoltProtocolHandler {
     }
 
     /// Process a Bolt message
-    async fn process_message(
+    pub(crate) async fn process_message(
         &mut self,
         message_bytes: &Bytes,
         stream: &mut impl BoltStream,
@@ -809,6 +809,15 @@ impl BoltProtocolHandler {
                 warn!("Received ROUTE message (ignoring)");
                 self.send_success(HashMap::new(), stream).await?;
             }
+            0x6A => {
+                // LOGON message
+                let logon = self.decode_hello(message_bytes)?;
+                self.handle_logon(logon, stream).await?;
+            }
+            0x6B => {
+                // LOGOFF message
+                self.handle_logoff(stream).await?;
+            }
             _ => {
                 warn!("Unknown message signature: 0x{:02X}", signature);
                 self.send_ignored(stream).await?;
@@ -877,9 +886,11 @@ impl BoltProtocolHandler {
             .and_then(|v| v.as_str())
             .unwrap_or("unknown");
 
+        let routing = hello.get("routing").cloned();
+
         info!(
-            "Client authentication: scheme={:?}, principal={:?}, user_agent={}",
-            scheme, principal, user_agent
+            "Client authentication: scheme={:?}, principal={:?}, user_agent={}, routing={:?}",
+            scheme, principal, user_agent, routing
         );
 
         // Validate authentication (for now, accept all - can be enhanced with auth backend)
@@ -923,6 +934,65 @@ impl BoltProtocolHandler {
             Value::String(format!("bolt-{}", uuid::Uuid::new_v4())),
         );
 
+        self.send_success(response, stream).await?;
+        Ok(())
+    }
+
+    /// Handle LOGON message with authentication
+    async fn handle_logon(
+        &mut self,
+        logon: HashMap<String, Value>,
+        stream: &mut impl BoltStream,
+    ) -> ProtocolResult<()> {
+        info!("Received LOGON message with {} fields", logon.len());
+
+        // Extract authentication information
+        let scheme = logon
+            .get("scheme")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let principal = logon
+            .get("principal")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        info!(
+            "Client logon: scheme={:?}, principal={:?}",
+            scheme, principal
+        );
+
+        // For now, we just accept the logon
+        self.auth_state = AuthState {
+            authenticated: true,
+            principal,
+            scheme,
+        };
+
+        // Send SUCCESS response
+        let response = HashMap::new();
+        self.send_success(response, stream).await?;
+        Ok(())
+    }
+
+
+    self.send_success(response, stream).await?;
+        Ok(())
+    }
+
+    /// Handle LOGOFF message
+    async fn handle_logoff(&mut self, stream: &mut impl BoltStream) -> ProtocolResult<()> {
+        info!("Received LOGOFF message");
+
+        // Reset authentication state
+        self.auth_state = AuthState {
+            authenticated: false,
+            principal: None,
+            scheme: None,
+        };
+
+        // Send SUCCESS response
+        let response = HashMap::new();
         self.send_success(response, stream).await?;
         Ok(())
     }
