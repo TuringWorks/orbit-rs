@@ -3,15 +3,12 @@ use orbit_server::protocols::aql::{AqlServer, AqlStorage};
 use orbit_server::protocols::cypher::server::CypherServer;
 use orbit_server::protocols::cypher::storage::CypherGraphStorage;
 use orbit_server::protocols::mongodb::MongoDbServer;
-use rustls::crypto::ring;
-use std::env;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio_rustls::rustls::{pki_types::CertificateDer, ClientConfig, RootCertStore};
+use tokio_rustls::rustls::{ClientConfig, RootCertStore};
 use tokio_rustls::TlsConnector;
 
 // Helper to load certificates (reused logic)
