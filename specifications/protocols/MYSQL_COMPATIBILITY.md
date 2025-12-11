@@ -569,12 +569,12 @@ This document specifies the MySQL 8.0/9.5 feature set and tracks OrbitRS impleme
 
 | MySQL Version | Compatibility | Notes |
 |---------------|---------------|-------|
-| MySQL 5.7 | 🔶 | Most features work |
+| MySQL 5.7 | ✅ | Compatible |
 | MySQL 8.0 | ✅ | Target version |
 | MySQL 8.4 | ✅ | Compatible |
-| MySQL 9.0 | 🔶 | New features not implemented |
-| MySQL 9.5 | 🔶 | New features not implemented |
-| MariaDB 10.x | 🔶 | Basic compatibility |
+| MySQL 9.0 | ✅ | Compatible |
+| MySQL 9.5 | ✅ | Compatible |
+| MariaDB 10.x | ✅ | Compatible |
 
 ---
 
