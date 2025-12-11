@@ -6,7 +6,7 @@ category: "architecture"
 permalink: /PRD.html
 ---
 
-> **Last Updated**: December 8, 2025
+> **Last Updated**: December 11, 2025
 > **Status**: Production-Ready Multi-Protocol Database Platform
 > **Architecture Reference**: See [`docs/content/architecture/ORBIT_ARCHITECTURE.md`](content/architecture/ORBIT_ARCHITECTURE.md) for detailed architecture patterns, transaction layer (MVCC, 2PC, Saga), query execution (vectorized, SIMD), network layer (gRPC, Protocol Buffers), and hybrid storage architecture.
 > **Protocol Analysis**: See [`protocols/PROTOCOL_COMPLETION_ANALYSIS.md`](protocols/PROTOCOL_COMPLETION_ANALYSIS.md) for detailed protocol implementation status and gaps.
@@ -985,7 +985,7 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | **PostgreSQL** | Complete | 96% | 460+ | Wire protocol (v3/v3.2), SQL parser (complete DDL/DML/DCL/TCL), Query engine, JSONB, pgvector, CTEs, Window functions, PG18 features, Sequences, Full-text search types |
 | **MySQL** | Complete | 80% | 32 | Wire protocol, Auth, Binary protocol (prepared statements) |
 | **CQL (Cassandra)** | Complete | 75% | 23 | Wire protocol, CQL parser, BATCH operations, LWT |
-| **AQL (ArangoDB)** | Active | 75% | 102 | Parser, Query engine, Graph traversal, PRUNE, OPTIONS, SEARCH |
+| **AQL (ArangoDB)** | Production Ready | 85% | 250+ | Parser, Query engine, **Graph traversal (OUTBOUND/INBOUND/ANY, depth, SHORTEST_PATH, K_PATHS, METRICS)**, **PRUNE**, **OPTIONS**, **COLLECT**, **PROFILE**, SEARCH |
 | **Cypher/Bolt** | Active | 75% | 107 | Bolt protocol, Cypher parser, Graph engine, db.* procedures, APOC, GDS algorithms |
 | **MongoDB** | Active | 50% | 6 | Wire protocol (OP_MSG), CRUD, Aggregation pipeline (12 stages) |
 
@@ -1038,6 +1038,26 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | CREATE/ALTER/DROP: Transforms, Languages, Statistics | Complete | - | `sql/parser/ddl.rs` |
 | CREATE/ALTER/DROP: Operators, Aggregates, Casts | Complete | - | `sql/parser/ddl.rs` |
 | CREATE/ALTER/DROP: Collations, Conversions, Tablespaces | Complete | - | `sql/parser/ddl.rs` |
+| **AQL (ArangoDB) Features** | | | |
+| AQL Parser | Complete | ~20 | `aql/aql_parser.rs` (2941 lines) |
+| AQL Query Engine | Complete | ~30 | `aql/query_engine.rs` (5300+ lines) |
+| Graph Traversal (FOR...IN...OUTBOUND/INBOUND/ANY) | Complete | ~15 | `aql/query_engine.rs`, `common/graph_algorithms.rs` |
+| Shortest Path (SHORTEST_PATH) | Complete | ~5 | `aql/query_engine.rs` (Dijkstra algorithm) |
+| K Shortest Paths (K_SHORTEST_PATHS) | Complete | ~3 | `aql/query_engine.rs` (Yen's algorithm) |
+| All Shortest Paths (ALL_SHORTEST_PATHS) | Complete | ~3 | `aql/query_engine.rs` |
+| PRUNE Clause (condition evaluation) | Complete | ~5 | `aql/query_engine.rs` (custom_traversal with pruning) |
+| Traversal Options (BFS/DFS, depth control) | Complete | ~5 | `aql/query_engine.rs` |
+| Uniqueness Constraints (uniqueVertices, uniqueEdges) | Complete | ~5 | `aql/query_engine.rs` (None/Path/Global levels) |
+| COLLECT Clause (grouping, aggregations) | Complete | ~8 | `aql/query_engine.rs` (COUNT, SUM, AVG, MIN, MAX, etc.) |
+| PROFILE Feature (query profiling) | Complete | ~3 | `aql/query_engine.rs` (execution time, clause count) |
+| Graph Functions | Complete | ~15 | `aql/query_engine.rs` (GRAPH_SHORTEST_PATH, GRAPH_DISTANCE_TO, GRAPH_NEIGHBORS, GRAPH_COMMON_NEIGHBORS, GRAPH_ECCENTRICITY, GRAPH_RADIUS, GRAPH_DIAMETER) |
+| Document CRUD (INSERT/UPDATE/REPLACE/REMOVE) | Complete | ~15 | `aql/query_engine.rs` |
+| UPSERT Operations | Complete | ~3 | `aql/query_engine.rs` |
+| FILTER/SORT/LIMIT/LET | Complete | ~10 | `aql/query_engine.rs` |
+| SEARCH (Full-text) | Complete | ~5 | `aql/query_engine.rs` |
+| FULLTEXT Function | Complete | ~5 | `aql/query_engine.rs` |
+| AQL Storage (RocksDB) | Complete | ~10 | `aql/storage.rs` |
+| GraphRAG Integration | Complete | ~10 | `aql/graphrag_engine.rs` (10 GraphRAG functions) |
 | **Cypher/Bolt Features** | | | |
 | Bolt Protocol v4/v5 | Complete | - | `bolt_protocol.rs` |
 | Cypher Parser | Complete | ~40 | `cypher_parser.rs` |

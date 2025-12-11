@@ -96,8 +96,20 @@ pub enum FrontendMessage {
     Terminate,
     /// Password message
     Password { password: String },
+    /// SASL Initial Response
+    SASLInitialResponse {
+        mechanism: String,
+        data: Option<Bytes>,
+    },
+    /// SASL Response
+    SASLResponse { data: Bytes },
     /// SSL request
     SSLRequest,
+    /// Function call (older protocol, but part of standard)
+    FunctionCall {
+        oid: i32,
+        args: Vec<Option<Bytes>>,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -158,6 +170,34 @@ pub enum BackendMessage {
     ReadyForQuery { status: TransactionStatus },
     /// Row description
     RowDescription { fields: Vec<FieldDescription> },
+    /// Notification response
+    NotificationResponse {
+        process_id: i32,
+        channel: String,
+        payload: String,
+    },
+    /// Portal suspended
+    PortalSuspended,
+    /// Function call response
+    FunctionCallResponse {
+        val: Option<Bytes>,
+    },
+    /// Copy In/Out/Data/Done/Fail messages
+    CopyInResponse {
+        format: i8, // 0=text, 1=binary
+        column_formats: Vec<i16>,
+    },
+    CopyOutResponse {
+        format: i8,
+        column_formats: Vec<i16>,
+    },
+    CopyData {
+        data: Bytes,
+    },
+    CopyDone,
+    CopyFail {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -173,6 +213,7 @@ pub enum AuthenticationResponse {
     SASL { mechanisms: Vec<String> },
     SASLContinue { data: Bytes },
     SASLFinal { data: Bytes },
+    Certificate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -249,7 +290,11 @@ impl FrontendMessage {
             b'H' => FrontendMessage::Flush,
             b'S' => FrontendMessage::Sync,
             b'X' => FrontendMessage::Terminate,
-            b'p' => Self::parse_password(&mut cursor)?,
+            b'd' => Self::parse_copy_data(&mut cursor)?,
+            b'c' => Self::parse_copy_done(&mut cursor)?,
+            b'f' => Self::parse_copy_fail(&mut cursor)?,
+            b'F' => Self::parse_function_call(&mut cursor)?,
+            b'p' => Self::parse_sasl_or_password(&mut cursor, msg_data.len())?,
             _ => {
                 return Err(ProtocolError::PostgresError(format!(
                     "Unknown message type: {}",
@@ -392,9 +437,72 @@ impl FrontendMessage {
         Ok(FrontendMessage::Close { target, name })
     }
 
-    fn parse_password(cursor: &mut Cursor<&[u8]>) -> ProtocolResult<Self> {
-        let password = read_cstring(cursor)?;
-        Ok(FrontendMessage::Password { password })
+    /// Parse function call
+    fn parse_function_call(cursor: &mut Cursor<&[u8]>) -> ProtocolResult<Self> {
+        let oid = cursor.get_i32();
+        let num_args = cursor.get_i16();
+        
+        let mut args = Vec::with_capacity(num_args as usize);
+        for _ in 0..num_args {
+             let arg_len = cursor.get_i32();
+             if arg_len == -1 {
+                 args.push(None);
+             } else {
+                 let mut arg_data = vec![0u8; arg_len as usize];
+                 if cursor.copy_to_slice(&mut arg_data).is_err() {
+                     return Err(ProtocolError::PostgresError("Unexpected EOF in FunctionCall args".to_string()));
+                 }
+                 args.push(Some(Bytes::from(arg_data)));
+             }
+        }
+        
+        Ok(FrontendMessage::FunctionCall { oid, args })
+    }
+
+    /// Parse password or SASL response
+    fn parse_sasl_or_password(cursor: &mut Cursor<&[u8]>) -> ProtocolResult<Self> {
+        let start_pos = cursor.position();
+        let len = cursor.get_ref().len(); // Get the total length of the message data
+
+        // Check if it starts with a null-terminated string
+        if let Ok(s) = read_cstring(cursor) {
+            let after_string_pos = cursor.position();
+
+            // Case 1: PasswordMessage (String consumes entire message)
+            if after_string_pos == len as u64 {
+                return Ok(FrontendMessage::Password { password: s });
+            }
+
+            // Case 2: SASLInitialResponse (String + Int32 + Data)
+            if (len as u64 - after_string_pos) >= 4 {
+                let data_len = cursor.get_i32();
+                if data_len == -1 {
+                    return Ok(FrontendMessage::SASLInitialResponse {
+                        mechanism: s,
+                        data: None,
+                    });
+                }
+                if data_len >= 0 {
+                    let remaining = len as u64 - cursor.position();
+                    if remaining == data_len as u64 {
+                        let mut data = vec![0u8; data_len as usize];
+                        cursor.copy_to_slice(&mut data);
+                        return Ok(FrontendMessage::SASLInitialResponse {
+                            mechanism: s,
+                            data: Some(Bytes::from(data)),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Case 3: SASLResponse (Raw bytes) - or fallback
+        cursor.set_position(start_pos);
+        let mut data = vec![0u8; len];
+        cursor.copy_to_slice(&mut data);
+        Ok(FrontendMessage::SASLResponse {
+            data: Bytes::from(data),
+        })
     }
 }
 
@@ -413,6 +521,21 @@ impl BackendMessage {
                     AuthenticationResponse::MD5Password { salt } => {
                         buf.put_i32(5);
                         buf.put_slice(salt);
+                    }
+                    AuthenticationResponse::SASL { mechanisms } => {
+                        buf.put_i32(10);
+                        for mech in mechanisms {
+                            write_cstring(buf, mech);
+                        }
+                        buf.put_u8(0); // Terminator for list of mechanisms
+                    }
+                    AuthenticationResponse::SASLContinue { data } => {
+                        buf.put_i32(11);
+                        buf.put_slice(data);
+                    }
+                    AuthenticationResponse::SASLFinal { data } => {
+                        buf.put_i32(12);
+                        buf.put_slice(data);
                     }
                     _ => buf.put_i32(0), // TODO: Implement other auth types
                 }
@@ -455,6 +578,16 @@ impl BackendMessage {
                 let len = buf.len() - pos;
                 buf[pos..pos + 4].copy_from_slice(&(len as i32).to_be_bytes());
             }
+            BackendMessage::CommandComplete { tag } => {
+                buf.put_u8(b'C');
+                let tag_bytes = tag.as_bytes();
+                buf.put_i32(4 + tag_bytes.len() as i32 + 1);
+                write_cstring(buf, tag);
+            }
+            BackendMessage::EmptyQueryResponse => {
+                buf.put_u8(b'I');
+                buf.put_i32(4); // Length
+            }
             BackendMessage::DataRow { values } => {
                 buf.put_u8(b'D');
                 let pos = buf.len();
@@ -473,20 +606,6 @@ impl BackendMessage {
 
                 let len = buf.len() - pos;
                 buf[pos..pos + 4].copy_from_slice(&(len as i32).to_be_bytes());
-            }
-            BackendMessage::CommandComplete { tag } => {
-                buf.put_u8(b'C');
-                let pos = buf.len();
-                buf.put_i32(0); // Placeholder
-
-                write_cstring(buf, tag);
-
-                let len = buf.len() - pos;
-                buf[pos..pos + 4].copy_from_slice(&(len as i32).to_be_bytes());
-            }
-            BackendMessage::EmptyQueryResponse => {
-                buf.put_u8(b'I');
-                buf.put_i32(4); // Length
             }
             BackendMessage::ErrorResponse { fields }
             | BackendMessage::NoticeResponse { fields } => {
@@ -616,6 +735,13 @@ pub mod type_oids {
     pub const TIMESTAMP: i32 = 1114;
     pub const TIMESTAMPTZ: i32 = 1184;
     pub const UUID: i32 = 2950;
+    pub const JSONPATH: i32 = 4072;
+    pub const INT4MULTIRANGE: i32 = 4451;
+    pub const NUMMULTIRANGE: i32 = 4532;
+    pub const TSMULTIRANGE: i32 = 4533;
+    pub const TSTZMULTIRANGE: i32 = 4534;
+    pub const DATEMULTIRANGE: i32 = 4535;
+    pub const INT8MULTIRANGE: i32 = 4536;
 
     // pgvector extension types
     // Note: In real pgvector, these OIDs are assigned dynamically

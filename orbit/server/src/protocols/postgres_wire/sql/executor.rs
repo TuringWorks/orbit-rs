@@ -3114,7 +3114,7 @@ impl SqlExecutor {
 
                 Ok(rows)
             }
-            FromClause::Subquery { query, alias: _ } => {
+            FromClause::Subquery { query, alias: _, .. } => {
                 // Source is a subquery - execute it
                 let result = self.execute_select(*query.clone()).await?;
                 match result {

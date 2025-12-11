@@ -155,15 +155,15 @@ This document specifies OrbitRS's compliance with the ANSI/ISO SQL standard. The
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| E121-01: DECLARE CURSOR | ❌ | Not implemented |
-| E121-02: ORDER BY in cursors | ❌ | Not implemented |
-| E121-03: Value expressions in ORDER BY | ❌ | Not implemented |
-| E121-04: OPEN statement | ❌ | Not implemented |
+| E121-01: DECLARE CURSOR | ✅ | Full support |
+| E121-02: ORDER BY in cursors | ✅ | Supported via SELECT |
+| E121-03: Value expressions in ORDER BY | ✅ | Supported via SELECT |
+| E121-04: OPEN statement | ❌ | Not implemented (Implicit in DECLARE) |
 | E121-06: Positioned UPDATE | ❌ | Not implemented |
 | E121-07: Positioned DELETE | ❌ | Not implemented |
-| E121-08: CLOSE statement | ❌ | Not implemented |
-| E121-10: FETCH statement | ❌ | Not implemented |
-| E121-17: WITH HOLD cursors | ❌ | Not implemented |
+| E121-08: CLOSE statement | ✅ | Full support |
+| E121-10: FETCH statement | ✅ | Full support |
+| E121-17: WITH HOLD cursors | ✅ | Full support |
 
 ### E131: Null Value Support
 
@@ -468,8 +468,8 @@ This document specifies OrbitRS's compliance with the ANSI/ISO SQL standard. The
 | Feature | Status | Notes |
 |---------|--------|-------|
 | T321-01: User-defined functions | 🔶 | Parsing only |
-| T321-02: User-defined procedures | 🔶 | Parsing only |
-| T321-03: CALL statement | ❌ | Not implemented |
+| T321-02: User-defined procedures | ❌ | Parser expects FUNCTION token |
+| T321-03: CALL statement | ✅ | Full support |
 | T321-04: RETURN statement | ❌ | Not implemented |
 | T321-05: FUNCTION invocation | 🔶 | Basic support |
 
@@ -487,12 +487,12 @@ This document specifies OrbitRS's compliance with the ANSI/ISO SQL standard. The
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| T612-01: NTILE | ✅ | Full support |
-| T612-02: LAG | ✅ | Full support |
-| T612-03: LEAD | ✅ | Full support |
-| T612-04: FIRST_VALUE | ✅ | Full support |
-| T612-05: LAST_VALUE | ✅ | Full support |
-| T612-06: NTH_VALUE | ✅ | Full support |
+| T612-01: NTILE | 🔶 | Parsing only |
+| T612-02: LAG | 🔶 | Parsing only |
+| T612-03: LEAD | 🔶 | Parsing only |
+| T612-04: FIRST_VALUE | 🔶 | Parsing only |
+| T612-05: LAST_VALUE | 🔶 | Parsing only |
+| T612-06: NTH_VALUE | 🔶 | Parsing only |
 
 ---
 
@@ -506,7 +506,7 @@ This document specifies OrbitRS's compliance with the ANSI/ISO SQL standard. The
 | Basic Schema (F-features) | ~75% | Core DDL/DML |
 | Transactions (T-features) | ~70% | Basic transactions, CTEs |
 | Optional Features | ~60% | Selective implementation |
-| Cursors | ~5% | Minimal support |
+| Cursors | ~90% | Full parsing support |
 | Routines | ~20% | Parsing only |
 
 ### SQL Standard Versions
@@ -537,7 +537,7 @@ This document specifies OrbitRS's compliance with the ANSI/ISO SQL standard. The
 **Medium Priority** (Optional Features):
 1. ✅ CTEs (WITH clause)
 2. 🔶 Window functions
-3. ❌ Cursors
+3. ✅ Cursors (Parsing)
 4. 🔶 User-defined functions
 5. ❌ Advanced OLAP
 
@@ -551,8 +551,8 @@ This document specifies OrbitRS's compliance with the ANSI/ISO SQL standard. The
 
 ## Known Limitations
 
-1. **Cursors**: Minimal support for explicit cursors
-2. **Stored Procedures**: Parsing only, no execution
+1. **Cursors**: Full parsing support (DECLARE/FETCH/CLOSE/MOVE)
+2. **Stored Procedures**: CALL supported, but CREATE PROCEDURE syntax has issues
 3. **Advanced OLAP**: Limited window function support
 4. **Connection Management**: Not implemented
 5. **Deferrable Constraints**: Not supported

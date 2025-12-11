@@ -199,30 +199,79 @@ impl ExpressionParser {
                     negated,
                 };
             } else {
-                let operator = match &tokens[*pos] {
-                    Token::LessThan => BinaryOperator::LessThan,
-                    Token::LessThanOrEqual => BinaryOperator::LessThanOrEqual,
-                    Token::GreaterThan => BinaryOperator::GreaterThan,
-                    Token::GreaterThanOrEqual => BinaryOperator::GreaterThanOrEqual,
-                    Token::Like => BinaryOperator::Like,
-                    Token::ILike => BinaryOperator::ILike,
-                    Token::VectorDistance => BinaryOperator::VectorDistance,
-                    Token::VectorInnerProduct => BinaryOperator::VectorInnerProduct,
-                    Token::VectorCosineDistance => BinaryOperator::VectorCosineDistance,
-                    // Range operators (PostgreSQL range types)
-                    Token::RangeContains => BinaryOperator::RangeContains,
-                    Token::RangeContainedBy => BinaryOperator::RangeContainedBy,
-                    Token::RangeOverlaps => BinaryOperator::RangeOverlaps,
-                    Token::RangeAdjacent => BinaryOperator::RangeAdjacent,
-                    Token::RangeStrictlyLeft => BinaryOperator::RangeStrictlyLeft,
-                    Token::RangeStrictlyRight => BinaryOperator::RangeStrictlyRight,
-                    Token::RangeNotExtendRight => BinaryOperator::RangeNotExtendRight,
-                    Token::RangeNotExtendLeft => BinaryOperator::RangeNotExtendLeft,
-                    _ => break,
+                let operator = if matches!(&tokens[*pos], Token::Similar) {
+                    if *pos + 1 < tokens.len() && matches!(&tokens[*pos + 1], Token::To) {
+                        *pos += 1; // consume SIMILAR (caller consumes TO)
+                        BinaryOperator::SimilarTo
+                    } else {
+                        break;
+                    }
+                } else if matches!(&tokens[*pos], Token::Not) {
+                    if *pos + 2 < tokens.len()
+                        && matches!(&tokens[*pos + 1], Token::Similar)
+                        && matches!(&tokens[*pos + 2], Token::To)
+                    {
+                        *pos += 2; // consume NOT and SIMILAR (caller consumes TO)
+                        BinaryOperator::NotSimilarTo
+                    } else if *pos + 1 < tokens.len() && matches!(&tokens[*pos + 1], Token::Like) {
+                        *pos += 1; // consume NOT (caller consumes LIKE)
+                        BinaryOperator::NotLike
+                    } else if *pos + 1 < tokens.len() && matches!(&tokens[*pos + 1], Token::ILike) {
+                        *pos += 1; // consume NOT (caller consumes ILIKE)
+                        // Assuming NotILike matches NotLike for now or creating NotILike
+                        // Standard Postgres doesn't strictly have NOT ILIKE operator in AST always, 
+                        // but let's check what I have. I'll use NotLike + ILike semantics if possible or just parse as NotLike? 
+                        // Actually I don't have NotILike in my AST update earlier.
+                        // I will skip NOT ILIKE for now or map to NotLike if acceptable (it's not).
+                        // I will strictly handle SIMILAR TO for now.
+                        break; 
+                    } else {
+                        break;
+                    }
+                } else {
+                    match &tokens[*pos] {
+                        Token::LessThan => BinaryOperator::LessThan,
+                        Token::LessThanOrEqual => BinaryOperator::LessThanOrEqual,
+                        Token::GreaterThan => BinaryOperator::GreaterThan,
+                        Token::GreaterThanOrEqual => BinaryOperator::GreaterThanOrEqual,
+                        Token::Like => BinaryOperator::Like,
+                        Token::ILike => BinaryOperator::ILike,
+                        Token::VectorDistance => BinaryOperator::VectorDistance,
+                        Token::VectorInnerProduct => BinaryOperator::VectorInnerProduct,
+                        Token::VectorCosineDistance => BinaryOperator::VectorCosineDistance,
+                        // Range operators (PostgreSQL range types)
+                        Token::RangeContains => BinaryOperator::RangeContains,
+                        Token::RangeContainedBy => BinaryOperator::RangeContainedBy,
+                        Token::RangeOverlaps => BinaryOperator::RangeOverlaps,
+                        Token::RangeAdjacent => BinaryOperator::RangeAdjacent,
+                        Token::RangeStrictlyLeft => BinaryOperator::RangeStrictlyLeft,
+                        Token::RangeStrictlyRight => BinaryOperator::RangeStrictlyRight,
+                        Token::RangeNotExtendRight => BinaryOperator::RangeNotExtendRight,
+                        Token::RangeNotExtendLeft => BinaryOperator::RangeNotExtendLeft,
+                        _ => break,
+                    }
                 };
 
                 *pos += 1;
-                let right = self.parse_additive_expression(tokens, pos)?;
+                let right = if *pos < tokens.len()
+                    && matches!(&tokens[*pos], Token::Any | Token::Some | Token::All)
+                {
+                    match &tokens[*pos] {
+                        Token::Any | Token::Some => {
+                            *pos += 1;
+                            let sub = self.parse_primary_expression(tokens, pos)?;
+                            Expression::Any(Box::new(sub))
+                        }
+                        Token::All => {
+                            *pos += 1;
+                            let sub = self.parse_primary_expression(tokens, pos)?;
+                            Expression::All(Box::new(sub))
+                        }
+                        _ => unreachable!(),
+                    }
+                } else {
+                    self.parse_additive_expression(tokens, pos)?
+                };
                 left = Expression::Binary {
                     left: Box::new(left),
                     operator,
@@ -623,6 +672,32 @@ impl ExpressionParser {
                 }
             }
 
+            // Handle Date/Time functions
+            Token::CurrentDate => {
+                *pos += 1;
+                Ok(Expression::CurrentDate)
+            }
+            Token::CurrentTime => {
+                *pos += 1;
+                let precision = self.parse_precision(tokens, pos);
+                Ok(Expression::CurrentTime(precision))
+            }
+            Token::CurrentTimestamp => {
+                *pos += 1;
+                let precision = self.parse_precision(tokens, pos);
+                Ok(Expression::CurrentTimestamp(precision))
+            }
+            Token::LocalTime => {
+                *pos += 1;
+                let precision = self.parse_precision(tokens, pos);
+                Ok(Expression::LocalTime(precision))
+            }
+            Token::LocalTimestamp => {
+                *pos += 1;
+                let precision = self.parse_precision(tokens, pos);
+                Ok(Expression::LocalTimestamp(precision))
+            }
+
             // Handle CAST expressions
             Token::Cast => self.parse_cast_expression(tokens, pos),
 
@@ -770,6 +845,27 @@ impl ExpressionParser {
         }
     }
 
+    /// Parse optional precision for date/time functions
+    fn parse_precision(&self, tokens: &[Token], pos: &mut usize) -> Option<u32> {
+        if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
+            *pos += 1;
+            let precision = if let Some(Token::NumericLiteral(s)) = tokens.get(*pos) {
+                *pos += 1;
+                s.parse::<u32>().ok()
+            } else {
+                None
+            };
+            
+            if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                *pos += 1;
+            }
+            
+            precision
+        } else {
+            None
+        }
+    }
+
     /// Parse a function call with proper DISTINCT and FILTER support
     fn parse_function_call(
         &mut self,
@@ -830,7 +926,57 @@ impl ExpressionParser {
         }
         *pos += 1; // consume ')'
 
-        // Parse optional ORDER BY clause for aggregate functions
+        // Parse optional WITHIN GROUP clause
+        let within_group = if *pos < tokens.len() && matches!(tokens[*pos], Token::Within) {
+            *pos += 1; // consume WITHIN
+            if *pos >= tokens.len() || !matches!(tokens[*pos], Token::Group) {
+                return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Expected GROUP after WITHIN".to_string(),
+                )
+                .into());
+            }
+            *pos += 1; // consume GROUP
+            
+            if *pos >= tokens.len() || !matches!(tokens[*pos], Token::LeftParen) {
+                return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Expected '(' after WITHIN GROUP".to_string(),
+                )
+                .into());
+            }
+            *pos += 1; // consume '('
+            
+            if *pos >= tokens.len() || !matches!(tokens[*pos], Token::Order) {
+                return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Expected ORDER BY within WITHIN GROUP".to_string(),
+                )
+                .into());
+            }
+            *pos += 1; // consume ORDER
+            
+            if *pos >= tokens.len() || !matches!(tokens[*pos], Token::By) {
+                return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Expected BY after ORDER".to_string(),
+                )
+                .into());
+            }
+            *pos += 1; // consume BY
+            
+            let items = self.parse_order_by_list(tokens, pos)?;
+            
+            if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
+                return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Expected ')' after WITHIN GROUP specification".to_string(),
+                )
+                .into());
+            }
+            *pos += 1; // consume ')'
+            
+            Some(items)
+        } else {
+            None
+        };
+
+        // Parse optional ORDER BY clause for aggregate functions (Postgres extension for some aggregates)
         let order_by = if *pos < tokens.len() && matches!(tokens[*pos], Token::Order) {
             *pos += 1;
             if *pos < tokens.len() && matches!(tokens[*pos], Token::By) {
@@ -877,6 +1023,13 @@ impl ExpressionParser {
 
         // Check if this is followed by an OVER clause (window function)
         if *pos < tokens.len() && matches!(tokens[*pos], Token::Over) {
+            // Ordered-set aggregates cannot be window functions with OVER clause
+            if within_group.is_some() {
+                 return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "OVER clause not allowed with WITHIN GROUP".to_string(),
+                )
+                .into());
+            }
             self.parse_window_over_clause(tokens, pos, func_name, args, distinct, order_by, filter)
         } else {
             Ok(Expression::Function(Box::new(FunctionCall {
@@ -885,6 +1038,7 @@ impl ExpressionParser {
                 distinct,
                 order_by,
                 filter,
+                within_group,
             })))
         }
     }
@@ -1048,10 +1202,11 @@ impl ExpressionParser {
             distinct,
             order_by,
             filter,
+            within_group: None,
         };
 
         Ok(Expression::WindowFunction {
-            function: WindowFunctionType::Aggregate(Box::new(aggregate_func)),
+            function: WindowFunctionType::Aggregate(Box::new(Expression::Function(Box::new(aggregate_func)))),
             partition_by,
             order_by: window_order_by,
             frame,

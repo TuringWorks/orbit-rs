@@ -2190,62 +2190,90 @@ impl AqlTokenParser {
         Ok(left)
     }
 
+    /// Parse function call or property access suffix for an identifier
+    fn parse_identifier_suffix(&mut self, name: String) -> ProtocolResult<AqlExpression> {
+        // Check for function call
+        if matches!(self.current_token(), Some(AqlToken::LeftParen)) {
+            self.advance(); // consume (
+            let mut args = Vec::new();
+
+            // Parse arguments
+            if !matches!(self.current_token(), Some(AqlToken::RightParen)) {
+                args.push(self.parse_expression()?);
+
+                while matches!(self.current_token(), Some(AqlToken::Comma)) {
+                    self.advance(); // consume ,
+                    args.push(self.parse_expression()?);
+                }
+            }
+
+            // Expect closing paren
+            match self.current_token() {
+                Some(AqlToken::RightParen) => self.advance(),
+                _ => {
+                    return Err(ProtocolError::AqlError(
+                        "Expected ) after function arguments".to_string(),
+                    ))
+                }
+            };
+
+            Ok(AqlExpression::FunctionCall { name, args })
+        }
+        // Check for property access
+        else if matches!(self.current_token(), Some(AqlToken::Dot)) {
+            self.advance(); // consume .
+            let property = match self.current_token() {
+                Some(AqlToken::Identifier(prop)) => {
+                    let prop = prop.clone();
+                    self.advance();
+                    prop
+                }
+                _ => {
+                    return Err(ProtocolError::AqlError(
+                        "Expected property name after .".to_string(),
+                    ))
+                }
+            };
+            Ok(AqlExpression::PropertyAccess {
+                object: name,
+                property,
+            })
+        } else {
+            Ok(AqlExpression::Variable(name))
+        }
+    }
+
     /// Parse primary expression (literals, identifiers, function calls)
     fn parse_primary_expression(&mut self) -> ProtocolResult<AqlExpression> {
         match self.current_token() {
             Some(AqlToken::Identifier(name)) => {
                 let name = name.clone();
                 self.advance();
-
-                // Check for function call
-                if matches!(self.current_token(), Some(AqlToken::LeftParen)) {
-                    self.advance(); // consume (
-                    let mut args = Vec::new();
-
-                    // Parse arguments
-                    if !matches!(self.current_token(), Some(AqlToken::RightParen)) {
-                        args.push(self.parse_expression()?);
-
-                        while matches!(self.current_token(), Some(AqlToken::Comma)) {
-                            self.advance(); // consume ,
-                            args.push(self.parse_expression()?);
-                        }
-                    }
-
-                    // Expect closing paren
-                    match self.current_token() {
-                        Some(AqlToken::RightParen) => self.advance(),
-                        _ => {
-                            return Err(ProtocolError::AqlError(
-                                "Expected ) after function arguments".to_string(),
-                            ))
-                        }
-                    };
-
-                    Ok(AqlExpression::FunctionCall { name, args })
-                }
-                // Check for property access
-                else if matches!(self.current_token(), Some(AqlToken::Dot)) {
-                    self.advance(); // consume .
-                    let property = match self.current_token() {
-                        Some(AqlToken::Identifier(prop)) => {
-                            let prop = prop.clone();
-                            self.advance();
-                            prop
-                        }
-                        _ => {
-                            return Err(ProtocolError::AqlError(
-                                "Expected property name after .".to_string(),
-                            ))
-                        }
-                    };
-                    Ok(AqlExpression::PropertyAccess {
-                        object: name,
-                        property,
-                    })
-                } else {
-                    Ok(AqlExpression::Variable(name))
-                }
+                self.parse_identifier_suffix(name)
+            }
+            Some(AqlToken::Count)
+            | Some(AqlToken::Sum)
+            | Some(AqlToken::Avg)
+            | Some(AqlToken::MinFunc)
+            | Some(AqlToken::MaxFunc)
+            | Some(AqlToken::Stddev)
+            | Some(AqlToken::VarianceFunc)
+            | Some(AqlToken::StddevSample)
+            | Some(AqlToken::VarianceSample) => {
+                let name = match self.current_token() {
+                    Some(AqlToken::Count) => "COUNT".to_string(),
+                    Some(AqlToken::Sum) => "SUM".to_string(),
+                    Some(AqlToken::Avg) => "AVG".to_string(),
+                    Some(AqlToken::MinFunc) => "MIN".to_string(),
+                    Some(AqlToken::MaxFunc) => "MAX".to_string(),
+                    Some(AqlToken::Stddev) => "STDDEV".to_string(),
+                    Some(AqlToken::VarianceFunc) => "VARIANCE".to_string(),
+                    Some(AqlToken::StddevSample) => "STDDEV_SAMPLE".to_string(),
+                    Some(AqlToken::VarianceSample) => "VARIANCE_SAMPLE".to_string(),
+                    _ => unreachable!(),
+                };
+                self.advance();
+                self.parse_identifier_suffix(name)
             }
             Some(AqlToken::String(s)) => {
                 let s = s.clone();

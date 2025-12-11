@@ -14,8 +14,8 @@ OrbitRS provides multiple client tools for interacting with the database server.
 |-------------|---------------------|------------------|
 | orbit/cli | 7 protocols (PostgreSQL, MySQL, Redis, OrbitQL, CQL, Cypher, AQL) | Terminal/scripting |
 | orbit/desktop | 7 protocols | GUI management |
-| orbit-python-client | REST API | Python applications |
-| orbit-vscode-extension | LSP | IDE integration |
+| orbit-python-client | 7 protocols (SQL, OrbitQL, Cypher, etc.) | Python applications |
+| orbit-vscode-extension | 7 protocols (LSP) | IDE integration |
 
 ---
 
@@ -185,7 +185,38 @@ pub trait DatabaseConnection: Send + Sync {
 
 ---
 
-## 3. Parser/Lexer Architecture
+## 3. orbit-python-client & SDKs
+
+**Goal**: Full protocol parity with CLI and Desktop.
+
+### Protocol Support
+
+| Protocol | Status | Implementation |
+|----------|--------|----------------|
+| PostgreSQL | ✅ Supported | Native / REST |
+| MySQL | ✅ Supported | Native / REST |
+| Redis | ✅ Supported | Native / REST |
+| OrbitQL | ✅ Supported | REST / Native |
+| CQL | ✅ Supported | REST / Native |
+| Cypher | ✅ Supported | REST / Native |
+| AQL | ✅ Supported | REST / Native |
+
+### Architecture
+
+The SDKs provide a unified client interface that routes queries to the appropriate protocol handler.
+
+```python
+class OrbitClient:
+    def connect_postgres(self, ...): ...
+    def connect_redis(self, ...): ...
+    def execute_orbitql(self, query): ...
+    def execute_cypher(self, query): ...
+    def execute_aql(self, query): ...
+```
+
+---
+
+## 4. Parser/Lexer Architecture
 
 ### Complete Parser Inventory
 
@@ -202,7 +233,7 @@ OrbitRS implements **six independent parser/lexer systems**, one for each query 
 
 ---
 
-### 3.1 PostgreSQL SQL Parser
+### 4.1 PostgreSQL SQL Parser
 
 **Location**: `orbit/server/src/protocols/postgres_wire/sql/`
 
@@ -236,7 +267,7 @@ orbit/server/src/protocols/postgres_wire/sql/
 
 ---
 
-### 3.2 OrbitQL Parser
+### 4.2 OrbitQL Parser
 
 **Location**: `orbit/shared/src/orbitql/`
 
@@ -264,7 +295,7 @@ orbit/shared/src/orbitql/
 
 ---
 
-### 3.3 Cypher Parser (Neo4j)
+### 4.3 Cypher Parser (Neo4j)
 
 **Location**: `orbit/server/src/protocols/cypher/`
 
@@ -288,7 +319,7 @@ orbit/server/src/protocols/cypher/
 
 ---
 
-### 3.4 CQL Parser (Cassandra)
+### 4.4 CQL Parser (Cassandra)
 
 **Location**: `orbit/server/src/protocols/cql/`
 
@@ -313,7 +344,7 @@ orbit/server/src/protocols/cql/
 
 ---
 
-### 3.5 AQL Parser (ArangoDB)
+### 4.5 AQL Parser (ArangoDB)
 
 **Location**: `orbit/server/src/protocols/aql/`
 
@@ -339,7 +370,7 @@ orbit/server/src/protocols/aql/
 
 ---
 
-### 3.6 PL/pgSQL Parser (Stored Procedures)
+### 4.6 PL/pgSQL Parser (Stored Procedures)
 
 **Location**: `orbit/engine/src/procedures/`
 
@@ -375,7 +406,7 @@ orbit/engine/src/procedures/
 
 ---
 
-## 4. Protocol Exposure Summary
+## 5. Protocol Exposure Summary
 
 ### Server-Side Protocol Ports
 
@@ -395,13 +426,13 @@ orbit/engine/src/procedures/
 
 | Feature | CLI | Desktop | Python SDK |
 |---------|-----|---------|------------|
-| PostgreSQL queries | ✅ | ✅ | ✅ (via REST) |
-| MySQL queries | ✅ | ✅ | ❌ |
-| Redis commands | ✅ | ✅ | ❌ |
-| OrbitQL queries | ✅ | ✅ | ❌ |
-| CQL queries | ✅ | ✅ | ❌ |
-| Graph queries (Cypher) | ✅ | ✅ | ❌ |
-| AQL queries | ✅ | ✅ | ❌ |
+| PostgreSQL queries | ✅ | ✅ | ✅ |
+| MySQL queries | ✅ | ✅ | ✅ |
+| Redis commands | ✅ | ✅ | ✅ |
+| OrbitQL queries | ✅ | ✅ | ✅ |
+| CQL queries | ✅ | ✅ | ✅ |
+| Graph queries (Cypher) | ✅ | ✅ | ✅ |
+| AQL queries | ✅ | ✅ | ✅ |
 | Syntax highlighting | ✅ | ✅ | N/A |
 | Connection management | Basic | Full | Basic |
 | Query history | ✅ | ✅ | ❌ |
@@ -409,7 +440,7 @@ orbit/engine/src/procedures/
 
 ---
 
-## 5. Future Enhancements
+## 6. Future Enhancements
 
 ### Phase 1: Native Protocol Drivers (Low Priority)
 
@@ -454,37 +485,13 @@ fn detect_query_type(query: &str) -> QueryType {
 }
 ```
 
-### Phase 3: Python SDK Enhancement
+### Phase 3: Other SDKs
 
-**Goal**: Add protocol support beyond REST API
-
-```python
-# orbit-python-client enhancements
-class OrbitClient:
-    def connect_postgres(self, host, port, database, user, password):
-        """Direct PostgreSQL wire protocol"""
-        pass
-
-    def connect_redis(self, host, port):
-        """Direct Redis RESP protocol"""
-        pass
-
-    def execute_orbitql(self, query):
-        """OrbitQL via REST or dedicated port"""
-        pass
-
-    def execute_cypher(self, query):
-        """Cypher via Neo4j REST API"""
-        pass
-
-    def execute_aql(self, query):
-        """AQL via ArangoDB REST API"""
-        pass
-```
+**Goal**: Extend support to Go, Java, and Node.js with similar parity.
 
 ---
 
-## 6. Testing Requirements
+## 7. Testing Requirements
 
 ### CLI Protocol Tests
 
@@ -551,7 +558,7 @@ cargo test -p orbit-cli -- --test-threads=1
 
 ---
 
-## 7. Dependencies
+## 8. Dependencies
 
 ### orbit/cli Cargo.toml
 

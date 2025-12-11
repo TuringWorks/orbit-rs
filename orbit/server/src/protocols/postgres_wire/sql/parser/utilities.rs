@@ -23,6 +23,7 @@ pub fn token_to_identifier_name(token: &Token) -> Option<String> {
         Token::Interval => Some("interval".to_string()),
         Token::Decimal => Some("decimal".to_string()),
         Token::Numeric => Some("numeric".to_string()),
+        Token::Money => Some("money".to_string()),
         Token::Real => Some("real".to_string()),
         Token::Char => Some("char".to_string()),
         Token::Varchar => Some("varchar".to_string()),
@@ -78,6 +79,17 @@ pub fn token_to_identifier_name(token: &Token) -> Option<String> {
         // Type keywords
         Token::Enum => Some("enum".to_string()),
         Token::Composite => Some("composite".to_string()),
+        // SQL/JSON keywords
+        Token::JsonQuery => Some("json_query".to_string()),
+        Token::JsonValue => Some("json_value".to_string()),
+        Token::JsonExists => Some("json_exists".to_string()),
+        Token::JsonTable => Some("json_table".to_string()),
+        Token::JsonScalar => Some("json_scalar".to_string()),
+        Token::JsonSerialize => Some("json_serialize".to_string()),
+        Token::JsonArray => Some("json_array".to_string()),
+        Token::JsonObject => Some("json_object".to_string()),
+        Token::JsonArrayAgg => Some("json_arrayagg".to_string()),
+        Token::JsonObjectAgg => Some("json_objectagg".to_string()),
         _ => None,
     }
 }
@@ -214,6 +226,10 @@ pub fn parse_data_type(parser: &mut SqlParser) -> ParseResult<SqlType> {
             } else {
                 Ok(SqlType::Decimal { precision, scale })
             }
+        }
+        Some(Token::Money) => {
+            parser.advance()?;
+            Ok(SqlType::Money)
         }
         Some(Token::Char) => {
             parser.advance()?;
@@ -632,6 +648,12 @@ fn parse_comparison_expression(parser: &mut SqlParser) -> ParseResult<Expression
             Token::VectorDistance => BinaryOperator::VectorDistance,
             Token::VectorInnerProduct => BinaryOperator::VectorInnerProduct,
             Token::VectorCosineDistance => BinaryOperator::VectorCosineDistance,
+            // JSON operators
+            Token::Question => BinaryOperator::JsonExists,
+            Token::JsonbExistsAny => BinaryOperator::JsonExistsAny,
+            Token::JsonbExistsAll => BinaryOperator::JsonExistsAll,
+            Token::JsonPathExists => BinaryOperator::JsonPathExists,
+            Token::JsonPathMatch => BinaryOperator::JsonPathMatch,
             _ => break,
         };
 

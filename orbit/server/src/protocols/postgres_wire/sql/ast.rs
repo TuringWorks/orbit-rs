@@ -372,6 +372,27 @@ pub enum AlterTableAction {
         new_name: String,
     },
     RenameTable(String),
+    SetSchema(String),
+    Owner(String),
+    AttachPartition {
+        partition: TableName,
+    },
+    DetachPartition {
+        partition: TableName,
+        concurrently: bool,
+        finalize: bool,
+    },
+    SetLogged,
+    SetUnlogged,
+    EnableTrigger(String),
+    DisableTrigger(String),
+    EnableRowLevelSecurity,
+    DisableRowLevelSecurity,
+    ForceRowLevelSecurity,
+    NoForceRowLevelSecurity,
+    SetTablespace(String),
+    ClusterOn(String),
+    SetWithoutCluster,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -761,6 +782,7 @@ pub enum FromClause {
     Subquery {
         query: Box<SelectStatement>,
         alias: TableAlias,
+        lateral: bool,
     },
     Values {
         values: Vec<Vec<Expression>>,
@@ -769,6 +791,7 @@ pub enum FromClause {
     TableFunction {
         function: FunctionCall,
         alias: Option<TableAlias>,
+        lateral: bool,
     },
     JsonTable(JsonTable),
 }
@@ -1078,6 +1101,13 @@ pub enum Expression {
     Literal(SqlValue),
     Column(ColumnRef),
     Parameter(u32),
+    
+    // Date/Time functions
+    CurrentDate,
+    CurrentTime(Option<u32>),
+    CurrentTimestamp(Option<u32>),
+    LocalTime(Option<u32>),
+    LocalTimestamp(Option<u32>),
 
     // Operators
     Binary {
@@ -1110,6 +1140,9 @@ pub enum Expression {
         list: InList,
         negated: bool,
     },
+    Any(Box<Expression>),
+    All(Box<Expression>),
+    Some(Box<Expression>),
 
     // Range conditions
     Between {
@@ -1229,10 +1262,18 @@ pub enum BinaryOperator {
     JsonDelete,
     /// #- operator: delete path
     JsonDeletePath,
+    
+    // JSON path operators (PostgreSQL)
+    /// @? operator: does JSON path exist
+    JsonPathExists,
+    /// @@ operator: does JSON path match
+    JsonPathMatch,
 
     // Pattern matching
     Match,
     NotMatch,
+    SimilarTo,
+    NotSimilarTo,
     RegexMatch,                   // ~ operator
     RegexMatchCaseInsensitive,    // ~* operator
     RegexNotMatch,                // !~ operator
@@ -1330,6 +1371,7 @@ pub struct FunctionCall {
     pub distinct: bool,
     pub order_by: Option<Vec<OrderByItem>>,
     pub filter: Option<Box<Expression>>,
+    pub within_group: Option<Vec<OrderByItem>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

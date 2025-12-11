@@ -117,18 +117,18 @@ This document specifies the Redis RESP (REdis Serialization Protocol) feature se
 | ZPOPMAX | ✅ | Pop maximum score members |
 | ZSCAN | ✅ | Iterate sorted set |
 | ZMSCORE | ✅ | Get multiple member scores |
-| ZRANGEBYLEX | ❌ | Not implemented |
-| ZREVRANGEBYLEX | ❌ | Not implemented |
-| ZREMRANGEBYLEX | ❌ | Not implemented |
-| ZUNION | ❌ | Not implemented |
-| ZINTER | ❌ | Not implemented |
-| ZDIFF | ❌ | Not implemented |
-| ZUNIONSTORE | ❌ | Not implemented |
-| ZINTERSTORE | ❌ | Not implemented |
-| ZDIFFSTORE | ❌ | Not implemented |
+| ZRANGEBYLEX | ✅ | Lex range with LIMIT |
+| ZREVRANGEBYLEX | ✅ | Reverse lex range |
+| ZREMRANGEBYLEX | ✅ | Remove by lex range |
+| ZUNION | ✅ | Union of sorted sets with weights/aggregation |
+| ZINTER | ✅ | Intersection of sorted sets with weights/aggregation |
+| ZDIFF | ✅ | Difference between sorted sets |
+| ZUNIONSTORE | ✅ | Store union result |
+| ZINTERSTORE | ✅ | Store intersection result |
+| ZDIFFSTORE | ✅ | Store difference result |
 | BZPOPMIN | ❌ | Blocking - not implemented |
 | BZPOPMAX | ❌ | Blocking - not implemented |
-| ZRANDMEMBER | ❌ | Not implemented |
+| ZRANDMEMBER | ✅ | Random member(s) from sorted set |
 
 ### Hash Commands
 
@@ -295,7 +295,7 @@ This document specifies the Redis RESP (REdis Serialization Protocol) feature se
 | String Commands | ~95% | Nearly complete |
 | List Commands | ~100% | Full support |
 | Set Commands | ~100% | Full support |
-| Sorted Set Commands | ~61% | 19/31 commands implemented (core operations, ranking, score ranges, pop) |
+| Sorted Set Commands | ~94% | 29/31 commands implemented (all operations except blocking BZPOPMIN/BZPOPMAX) |
 | Hash Commands | ~100% | Full support |
 | Key Commands | ~95% | Nearly complete |
 | Transaction Commands | ~100% | Full support |

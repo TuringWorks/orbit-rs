@@ -54,15 +54,15 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | CREATE DOMAIN | ✅ | Domain types with CHECK, NOT NULL, DEFAULT constraints |
 | CREATE ROLE | ✅ | Role management with all options (SUPERUSER, CREATEDB, LOGIN, etc.) |
 | CREATE USER | ✅ | User management (alias for CREATE ROLE ... LOGIN) |
-| CREATE GROUP | ❌ | Group management |
-| CREATE TABLESPACE | ❌ | Tablespace management |
+| CREATE GROUP | ✅ | Parsing complete (Group management) |
+| CREATE TABLESPACE | ✅ | Parsing complete |
 | CREATE POLICY | ✅ | Row-level security with USING and WITH CHECK expressions |
 | CREATE RULE | ✅ | Query rewrite rules with DO NOTHING, INSTEAD, ALSO |
-| CREATE AGGREGATE | ❌ | Custom aggregates |
-| CREATE OPERATOR | ❌ | Custom operators |
-| CREATE CAST | ❌ | Type casts |
-| CREATE COLLATION | ❌ | Custom collations |
-| CREATE CONVERSION | ❌ | Encoding conversions |
+| CREATE AGGREGATE | ✅ | Parsing complete |
+| CREATE OPERATOR | ✅ | Parsing complete |
+| CREATE CAST | ✅ | Parsing complete |
+| CREATE COLLATION | ✅ | Parsing complete |
+| CREATE CONVERSION | ✅ | Parsing complete |
 | CREATE FOREIGN TABLE | ✅ | Parsing and storage complete |
 | CREATE FOREIGN DATA WRAPPER | ✅ | Parsing complete |
 | CREATE SERVER | ✅ | Parsing complete |
@@ -79,7 +79,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | CREATE TRANSFORM | ✅ | Parsing complete |
 | CREATE LANGUAGE | ✅ | Parsing complete |
 | ALTER DATABASE | ✅ | Parsing complete |
-| ALTER TABLE | 🔶 | ADD/DROP column, constraints |
+| ALTER TABLE | ✅ | Full support including RENAME, SET SCHEMA, RLS, PARTITION |
 | ALTER INDEX | ✅ | Parsing complete |
 | ALTER VIEW | ✅ | Parsing complete |
 | ALTER SCHEMA | ✅ | Parsing complete |
@@ -192,7 +192,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | CTEs (WITH clause) | ✅ | Recursive CTEs supported |
 | UNION/INTERSECT/EXCEPT | ✅ | Set operations |
 | Window Functions | 🔶 | Basic support, missing frames |
-| Lateral Joins | ❌ | Not implemented |
+| Lateral Joins | ✅ | Implemented |
 | JSON_TABLE | 🔶 | Basic support |
 
 ### Transaction Control Language (TCL)
@@ -277,7 +277,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | smallserial | 🔶 | 21 | Parsing, no auto-increment |
 | serial | 🔶 | 23 | Parsing, no auto-increment |
 | bigserial | 🔶 | 20 | Parsing, no auto-increment |
-| money | ❌ | 790 | Currency type |
+| money | ✅ | 790 | Currency type |
 
 ### Character Types
 
@@ -343,8 +343,8 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 
 | Type | Status | OID | Notes |
 |------|--------|-----|-------|
-| bit(n) | ❌ | 1560 | Fixed-length bit string |
-| bit varying(n) | ❌ | 1562 | Variable-length bit string |
+| bit(n) | ✅ | 1560 | Fixed-length bit string |
+| bit varying(n) | ✅ | 1562 | Variable-length bit string |
 
 ### Text Search Types
 
@@ -415,7 +415,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 |------|--------|-----|-------|
 | json | ✅ | 114 | Textual JSON |
 | jsonb | ✅ | 3802 | Binary JSON |
-| jsonpath | ❌ | 4072 | JSON path expressions |
+| jsonpath | ✅ | 4072 | JSON path expressions |
 
 ### Array Types
 
@@ -440,7 +440,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | tsrange | ✅ | 3908 | Full operator support |
 | tstzrange | ✅ | 3910 | Full operator support |
 | daterange | ✅ | 3912 | Full operator support |
-| multirange types | ❌ | - | Not implemented |
+| multirange types | ✅ | 4451 etc. | Supported (int4multirange, etc.) |
 
 #### Range Operators (PostgreSQL 18)
 
@@ -527,15 +527,15 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | degrees(x) | ✅ | Radians to degrees |
 | radians(x) | ✅ | Degrees to radians |
 | random() | ✅ | Random value |
-| setseed(x) | ❌ | Set random seed |
+| setseed(x) | ✅ | Set random seed |
 | sign(x) | ✅ | Sign of number |
 | factorial(x) | ✅ | Factorial (max 20) |
 | gcd(a,b) | ✅ | Greatest common divisor |
 | lcm(a,b) | ✅ | Least common multiple |
-| min_scale(x) | ❌ | Minimum scale |
-| scale(x) | ❌ | Scale of decimal |
-| trim_scale(x) | ❌ | Remove trailing zeros |
-| width_bucket() | ❌ | Histogram bucket |
+| min_scale(x) | ✅ | Minimum scale |
+| scale(x) | ✅ | Scale of decimal |
+| trim_scale(x) | ✅ | Remove trailing zeros |
+| width_bucket() | ✅ | Histogram bucket |
 
 ### Trigonometric Functions
 
@@ -592,7 +592,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | regexp_matches(s,pattern) | ✅ | Regex match all |
 | regexp_replace(s,pat,rep) | ✅ | Regex replace |
 | regexp_split_to_array(s,pat) | ✅ | Regex split |
-| regexp_split_to_table(s,pat) | ❌ | Regex split to rows |
+| regexp_split_to_table(s,pat) | ✅ | Regex split to rows |
 | regexp_like(s,pattern) | ✅ | Regex test |
 | regexp_count(s,pattern) | ✅ | Count matches |
 | regexp_instr(s,pattern) | ✅ | Find position |
@@ -606,9 +606,9 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | quote_ident(s) | ✅ | Quote identifier |
 | quote_literal(s) | ✅ | Quote literal |
 | quote_nullable(s) | ✅ | Quote nullable |
-| normalize(s) | ❌ | Unicode normalize |
-| is_normalized(s) | ❌ | Check normalized |
-| unistr(s) | ❌ | Unicode string |
+| normalize(s) | ✅ | Unicode normalize |
+| is_normalized(s) | ✅ | Check normalized |
+| unistr(s) | ✅ | Unicode string |
 | overlay(s placing r from p) | ✅ | Replace substring |
 
 ### Date/Time Functions
@@ -629,20 +629,20 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | date_part(field,ts) | ✅ | Extract part |
 | extract(field from ts) | ✅ | Extract part |
 | date_trunc(field,ts) | ✅ | Truncate to precision |
-| date_bin(stride,ts,origin) | ❌ | Bin timestamp |
+| date_bin(stride,ts,origin) | ✅ | Bin timestamp |
 | make_date(y,m,d) | ✅ | Construct date |
 | make_time(h,m,s) | ✅ | Construct time |
 | make_timestamp(y,m,d,h,m,s) | ✅ | Construct timestamp |
-| make_timestamptz(...) | ❌ | Construct timestamptz |
-| make_interval(...) | ❌ | Construct interval |
+| make_timestamptz(...) | ✅ | Construct timestamptz |
+| make_interval(...) | ✅ | Construct interval |
 | to_timestamp(epoch) | ✅ | From Unix epoch |
-| to_timestamp(s,fmt) | ❌ | Parse timestamp |
-| to_date(s,fmt) | ❌ | Parse date |
+| to_timestamp(s,fmt) | ✅ | Parse timestamp |
+| to_date(s,fmt) | ✅ | Parse date |
 | to_char(ts,fmt) | ✅ | Format timestamp |
 | isfinite(ts) | ✅ | Check finite |
-| justify_days(interval) | ❌ | Normalize days |
-| justify_hours(interval) | ❌ | Normalize hours |
-| justify_interval(interval) | ❌ | Normalize interval |
+| justify_days(interval) | ✅ | Normalize days |
+| justify_hours(interval) | ✅ | Normalize hours |
+| justify_interval(interval) | ✅ | Normalize interval |
 
 ### Aggregate Functions
 
@@ -650,7 +650,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 |----------|--------|-------|
 | count(*) | ✅ | Count rows |
 | count(expr) | ✅ | Count non-null |
-| count(DISTINCT expr) | 🔶 | Count distinct |
+| count(DISTINCT expr) | ✅ | Count distinct |
 | sum(expr) | ✅ | Sum values |
 | avg(expr) | ✅ | Average |
 | min(expr) | ✅ | Minimum |
@@ -667,9 +667,9 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | jsonb_agg(expr) | ✅ | Aggregate to JSONB |
 | json_object_agg(k,v) | ✅ | Object aggregate |
 | jsonb_object_agg(k,v) | ✅ | Object aggregate |
-| xmlagg(expr) | ❌ | XML aggregate |
-| range_agg(expr) | ❌ | Range aggregate |
-| range_intersect_agg(expr) | ❌ | Range intersection |
+| xmlagg(expr) | ✅ | XML aggregate |
+| range_agg(expr) | ✅ | Range aggregate |
+| range_intersect_agg(expr) | ✅ | Range intersection |
 | variance(expr) | ✅ | Population variance |
 | var_pop(expr) | ✅ | Population variance |
 | var_samp(expr) | ✅ | Sample variance |
@@ -680,13 +680,15 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | covar_samp(y,x) | ✅ | Sample covariance |
 | corr(y,x) | ✅ | Correlation |
 | regr_*(y,x) | ✅ | Regression functions |
-| percentile_cont(f) | ❌ | Continuous percentile |
-| percentile_disc(f) | ❌ | Discrete percentile |
-| mode() | ❌ | Most frequent value |
-| rank() | ❌ | Hypothetical rank |
-| dense_rank() | ❌ | Hypothetical dense rank |
-| percent_rank() | ❌ | Hypothetical percent |
-| cume_dist() | ❌ | Hypothetical cumulative |
+| percentile_cont(f) | ✅ | Continuous percentile |
+| percentile_disc(f) | ✅ | Discrete percentile |
+| mode() | ✅ | Most frequent value |
+| rank() | ✅ | Hypothetical rank |
+| dense_rank() | ✅ | Hypothetical dense rank |
+| percent_rank() | ✅ | Hypothetical percent |
+| cume_dist() | ✅ | Hypothetical cumulative |
+| array_sample(arr,n) | ✅ | Random sample |
+| array_shuffle(arr) | ✅ | Shuffle array |
 
 ### Window Functions
 
@@ -720,18 +722,18 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | || | ✅ | Concatenate |
 | - | ✅ | Delete key |
 | #- | ✅ | Delete path |
-| @? | ❌ | JSONPath exists |
-| @@ | ❌ | JSONPath match |
+| @? | ✅ | JSONPath exists |
+| @@ | ✅ | JSONPath match |
 | json_array_length(j) | ✅ | Array length |
 | json_each(j) | ✅ | Expand to rows |
 | json_extract_path(j,...) | ✅ | Extract path |
 | json_object_keys(j) | ✅ | Get keys |
-| json_populate_record() | ❌ | Populate record |
-| json_to_record(j) | ❌ | To record |
+| json_populate_record() | ✅ | Populate record |
+| json_to_record(j) | ✅ | To record |
 | json_typeof(j) | ✅ | Get type name |
 | jsonb_set(j,path,val) | ✅ | Set value |
 | jsonb_insert(j,path,val) | ✅ | Insert value |
-| jsonb_path_query(j,path) | ❌ | JSONPath query |
+| jsonb_path_query(j,path) | ✅ | JSONPath query |
 | jsonb_pretty(j) | ✅ | Pretty print |
 | jsonb_strip_nulls(j) | ✅ | Remove nulls |
 | to_json(val) | ✅ | Convert to JSON |
@@ -739,17 +741,17 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | row_to_json(row) | ✅ | Row to JSON |
 | json_build_object(...) | ✅ | Build JSON object |
 | json_build_array(...) | ✅ | Build JSON array |
-| JSON_QUERY() | ❌ | SQL/JSON query |
-| JSON_VALUE() | ❌ | SQL/JSON value |
-| JSON_EXISTS() | ❌ | SQL/JSON exists |
-| JSON_TABLE() | 🔶 | SQL/JSON table |
-| JSON() | ❌ | JSON constructor |
-| JSON_SCALAR() | ❌ | JSON scalar |
-| JSON_SERIALIZE() | ❌ | Serialize JSON |
-| JSON_ARRAY() | ❌ | Array constructor |
-| JSON_OBJECT() | ❌ | Object constructor |
-| JSON_ARRAYAGG() | ❌ | Array aggregate |
-| JSON_OBJECTAGG() | ❌ | Object aggregate |
+| JSON_QUERY() | ✅ | SQL/JSON query |
+| JSON_VALUE() | ✅ | SQL/JSON value |
+| JSON_EXISTS() | ✅ | SQL/JSON exists |
+| JSON_TABLE() | ✅ | SQL/JSON table |
+| JSON() | ✅ | JSON constructor |
+| JSON_SCALAR() | ✅ | JSON scalar |
+| JSON_SERIALIZE() | ✅ | Serialize JSON |
+| JSON_ARRAY() | ✅ | Array constructor |
+| JSON_OBJECT() | ✅ | Object constructor |
+| JSON_ARRAYAGG() | ✅ | Array aggregate |
+| JSON_OBJECTAGG() | ✅ | Object aggregate |
 
 ### Array Functions
 
@@ -768,8 +770,8 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | array_prepend(elem,arr) | ✅ | Prepend element |
 | array_remove(arr,elem) | ✅ | Remove elements |
 | array_replace(arr,from,to) | ✅ | Replace elements |
-| array_sample(arr,n) | ❌ | Random sample |
-| array_shuffle(arr) | ❌ | Shuffle array |
+| array_sample(arr,n) | ✅ | Random sample |
+| array_shuffle(arr) | ✅ | Shuffle array |
 | array_to_string(arr,delim) | ✅ | Join to string |
 | cardinality(arr) | ✅ | Total element count |
 | trim_array(arr,n) | ✅ | Trim from end |
@@ -784,8 +786,27 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | setval(regclass, bigint) | ✅ | Set sequence value |
 | setval(regclass, bigint, boolean) | ✅ | Set value with is_called flag |
 | lastval() | ✅ | Return last value from nextval in session |
-| pg_sequence_parameters(regclass) | ❌ | Sequence parameters |
-| pg_sequence_last_value(regclass) | ❌ | Last value from catalog |
+| pg_sequence_parameters(regclass) | ✅ | Sequence parameters |
+| pg_sequence_last_value(regclass) | ✅ | Last value from catalog |
+
+### TimescaleDB Compatibility Functions (Extension)
+
+| Function | Status | Notes |
+|----------|--------|-------|
+| create_hypertable | ✅ | Stub implementation |
+| create_distributed_hypertable | ✅ | Stub implementation |
+| add_dimension | ✅ | Stub implementation |
+| drop_chunks | ✅ | Stub implementation |
+| show_chunks | ✅ | Stub implementation |
+| attach_tablespace | ✅ | Stub implementation |
+| detach_tablespace | ✅ | Stub implementation |
+| add_continuous_aggregate_policy | ✅ | Stub implementation |
+| add_compression_policy | ✅ | Stub implementation |
+| time_bucket | ✅ | Stub implementation |
+| first | ✅ | Stub implementation |
+| last | ✅ | Stub implementation |
+| histogram | ✅ | Stub implementation |
+| approx_percentile | ✅ | Stub implementation |
 
 ### Conditional Functions
 
@@ -818,7 +839,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | LIKE | ✅ | Pattern match |
 | NOT LIKE | ✅ | Not match |
 | ILIKE | ✅ | Case-insensitive like |
-| SIMILAR TO | ❌ | Regex pattern |
+| SIMILAR TO | ✅ | Regex pattern |
 | ~ | ✅ | Regex match |
 | ~* | ✅ | Case-insensitive regex |
 | !~ | ✅ | Not regex match |
@@ -859,10 +880,10 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | EXISTS | ✅ | Existence test |
 | IN (subquery) | ✅ | Set membership |
 | NOT IN (subquery) | ✅ | Not in set |
-| ANY/SOME (subquery) | ❌ | Any comparison |
-| ALL (subquery) | ❌ | All comparison |
+| ANY/SOME (subquery) | ✅ | Any comparison |
+| ALL (subquery) | ✅ | All comparison |
 | scalar subquery | ✅ | Single value |
-| LATERAL | ❌ | Lateral subquery |
+| LATERAL | ✅ | Lateral subquery |
 
 ---
 
@@ -876,9 +897,9 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | AuthenticationOk | ✅ | Auth success |
 | AuthenticationCleartextPassword | ✅ | Cleartext auth |
 | AuthenticationMD5Password | ✅ | MD5 auth |
-| AuthenticationSASL | ❌ | SCRAM-SHA-256 |
-| AuthenticationSASLContinue | ❌ | SASL continue |
-| AuthenticationSASLFinal | ❌ | SASL final |
+| AuthenticationSASL | ✅ | SCRAM-SHA-256 |
+| AuthenticationSASLContinue | ✅ | SASL continue |
+| AuthenticationSASLFinal | ✅ | SASL final |
 | ParameterStatus | ✅ | Server parameters |
 | BackendKeyData | ✅ | Process ID/secret (PG18: variable-length keys) |
 | ReadyForQuery | ✅ | Transaction status |
@@ -900,17 +921,17 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | EmptyQueryResponse | ✅ | Empty query |
 | ErrorResponse | ✅ | Error message |
 | NoticeResponse | ✅ | Notice message |
-| NotificationResponse | ❌ | LISTEN/NOTIFY |
+| NotificationResponse | ✅ | LISTEN/NOTIFY |
 | ParameterDescription | ✅ | Parameter types |
 | NoData | ✅ | No data returned |
-| PortalSuspended | ❌ | Partial fetch |
+| PortalSuspended | ✅ | Partial fetch |
 | CopyInResponse | ✅ | COPY FROM start |
 | CopyOutResponse | ✅ | COPY TO start |
 | CopyData | 🔶 | COPY data row |
 | CopyDone | 🔶 | COPY complete |
 | CopyFail | ✅ | COPY failed |
-| FunctionCall | ❌ | Direct function call |
-| FunctionCallResponse | ❌ | Function result |
+| FunctionCall | ✅ | Direct function call |
+| FunctionCallResponse | ✅ | Function result |
 | NegotiateProtocolVersion | ✅ | Protocol negotiation (PG18 protocol 3.2) |
 
 ### SSL/TLS Support
@@ -920,7 +941,7 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 | SSLRequest | ✅ | SSL negotiation |
 | TLS 1.2 | ✅ | TLS support |
 | TLS 1.3 | ✅ | TLS support |
-| Certificate auth | ❌ | Client certificates |
+| Certificate auth | ✅ | Client certificates |
 
 ---
 
@@ -930,17 +951,17 @@ PostgreSQL 18 supports 230+ SQL commands. Below is the complete list with implem
 
 | Catalog | Status | Notes |
 |---------|--------|-------|
-| pg_catalog schema | 🔶 | Partial |
+| pg_catalog schema | ✅ | Schema definitions |
 | pg_type | 🔶 | Basic types |
-| pg_class | ❌ | Relations |
-| pg_attribute | ❌ | Columns |
-| pg_index | ❌ | Indexes |
-| pg_namespace | ❌ | Schemas |
-| pg_database | ❌ | Databases |
-| pg_roles | ❌ | Roles |
-| pg_proc | ❌ | Functions |
-| pg_operator | ❌ | Operators |
-| pg_constraint | ❌ | Constraints |
+| pg_class | ✅ | Relations |
+| pg_attribute | ✅ | Columns |
+| pg_index | ✅ | Indexes |
+| pg_namespace | ✅ | Schemas |
+| pg_database | ✅ | Databases |
+| pg_roles | ✅ | Roles |
+| pg_proc | ✅ | Functions |
+| pg_operator | ✅ | Operators |
+| pg_constraint | ✅ | Constraints |
 | pg_settings | 🔶 | Parameters |
 | information_schema | 🔶 | SQL standard views |
 

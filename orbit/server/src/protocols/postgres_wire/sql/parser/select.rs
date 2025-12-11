@@ -411,6 +411,13 @@ impl SelectParser {
         tokens: &[Token],
         pos: &mut usize,
     ) -> ProtocolResult<FromClause> {
+        let lateral = if self.matches_at(tokens, *pos, &Token::Lateral) {
+            *pos += 1;
+            true
+        } else {
+            false
+        };
+
         if self.matches_at(tokens, *pos, &Token::LeftParen) {
             *pos += 1;
 
@@ -425,6 +432,7 @@ impl SelectParser {
                         name: "".to_string(),
                         columns: None,
                     }),
+                    lateral,
                 })
             } else {
                 // Table function or nested table reference
@@ -436,6 +444,7 @@ impl SelectParser {
                     Ok(FromClause::TableFunction {
                         function: *func,
                         alias,
+                        lateral,
                     })
                 } else {
                     Err(crate::protocols::error::ProtocolError::ParseError(
@@ -451,7 +460,19 @@ impl SelectParser {
             if table_name.to_uppercase() == "JSON_TABLE"
                 && self.matches_at(tokens, *pos + 1, &Token::LeftParen)
             {
+                if lateral {
+                     return Err(crate::protocols::error::ProtocolError::ParseError(
+                        "LATERAL not yet supported for JSON_TABLE".to_string(),
+                    ).into());
+                }
                 return self.parse_json_table(tokens, pos);
+            }
+
+            if lateral {
+                return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "LATERAL can only be used with subqueries or function calls".to_string(),
+                )
+                .into());
             }
 
             let mut schema = None;

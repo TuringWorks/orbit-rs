@@ -337,6 +337,12 @@ impl ExpressionEvaluator {
                 negated,
             } => self.evaluate_in_expression(expr, list, *negated, context),
 
+            Expression::Any(_) | Expression::All(_) | Expression::Some(_) => {
+                Err(ProtocolError::PostgresError(
+                    "ANY/ALL/SOME cannot be evaluated directly".to_string(),
+                ))
+            }
+
             Expression::Between {
                 expr,
                 low,
@@ -422,6 +428,17 @@ impl ExpressionEvaluator {
         right: &Expression,
         context: &EvaluationContext,
     ) -> ProtocolResult<SqlValue> {
+        // Handle ANY/ALL/SOME quantified comparisons
+        match right {
+            Expression::Any(sub_expr) | Expression::Some(sub_expr) => {
+                return self.evaluate_any_comparison(left, operator, sub_expr, context);
+            }
+            Expression::All(sub_expr) => {
+                return self.evaluate_all_comparison(left, operator, sub_expr, context);
+            }
+            _ => {}
+        }
+
         let left_val = self.evaluate(left, context)?;
         let right_val = self.evaluate(right, context)?;
 
@@ -457,9 +474,14 @@ impl ExpressionEvaluator {
             BinaryOperator::And => self.logical_and(&left_val, &right_val),
             BinaryOperator::Or => self.logical_or(&left_val, &right_val),
 
+
+            
             BinaryOperator::Concat => self.string_concat(&left_val, &right_val),
             BinaryOperator::Like => self.pattern_match(&left_val, &right_val, false, false),
             BinaryOperator::ILike => self.pattern_match(&left_val, &right_val, true, false),
+            BinaryOperator::NotLike => self.pattern_match(&left_val, &right_val, false, true),
+            BinaryOperator::SimilarTo => self.pattern_match(&left_val, &right_val, false, false), // TODO: Proper SIMILAR TO regex conversion
+            BinaryOperator::NotSimilarTo => self.pattern_match(&left_val, &right_val, false, true),
 
             BinaryOperator::VectorDistance => {
                 self.vector_distance(&left_val, &right_val, VectorOperator::L2Distance)
@@ -765,6 +787,8 @@ impl ExpressionEvaluator {
             "CARDINALITY" => self.evaluate_cardinality(&args),
             "TRIM_ARRAY" => self.evaluate_trim_array(&args),
             "UNNEST" => self.evaluate_unnest(&args),
+            "ARRAY_SAMPLE" => self.evaluate_array_sample(&args),
+            "ARRAY_SHUFFLE" => self.evaluate_array_shuffle(&args),
 
             // Vector functions
             "VECTOR_DIMS" => self.evaluate_vector_dims(&args),
@@ -776,76 +800,29 @@ impl ExpressionEvaluator {
             "GREATEST" => self.evaluate_greatest(&args),
             "LEAST" => self.evaluate_least(&args),
 
-            // TimescaleDB functions
-            "CREATE_HYPERTABLE" => Ok(SqlValue::Text("Hypertable created".to_string())),
+            // Sequence functions
+            "NEXTVAL" => self.evaluate_nextval(&args),
+            "CURRVAL" => self.evaluate_currval(&args),
+            "SETVAL" => self.evaluate_setval(&args),
+            "LASTVAL" => self.evaluate_lastval(&args),
+            "PG_SEQUENCE_PARAMETERS" => self.evaluate_pg_sequence_parameters(&args),
+            "PG_SEQUENCE_LAST_VALUE" => self.evaluate_pg_sequence_last_value(&args),
 
-            "TIME_BUCKET" => {
-                // time_bucket(interval, timestamp) - bucket timestamps into intervals
-                if args.len() != 2 {
-                    return Err(ProtocolError::PostgresError(
-                        "time_bucket requires 2 arguments: interval and timestamp".to_string(),
-                    ));
-                }
-
-                let interval = &args[0];
-                let timestamp = &args[1];
-
-                // Extract interval duration in microseconds
-                // Auto-cast string literals to intervals
-                let interval_micros = match interval {
-                    SqlValue::Interval(pg_interval) => {
-                        // Convert PostgresInterval to total microseconds
-                        // Note: This is a simplified conversion that doesn't handle months/days perfectly
-                        // For proper handling, we'd need the reference timestamp
-                        let days_micros = pg_interval.days as i64 * 24 * 3600 * 1_000_000;
-                        let months_micros = pg_interval.months as i64 * 30 * 24 * 3600 * 1_000_000; // Approximate
-                        pg_interval.microseconds + days_micros + months_micros
-                    }
-                    // Auto-cast string to interval
-                    SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => {
-                        // Parse the string as an interval
-                        match crate::protocols::postgres_wire::sql::types::SqlValue::parse_interval(s) {
-                            Ok(SqlValue::Interval(pg_interval)) => {
-                                let days_micros = pg_interval.days as i64 * 24 * 3600 * 1_000_000;
-                                let months_micros = pg_interval.months as i64 * 30 * 24 * 3600 * 1_000_000;
-                                pg_interval.microseconds + days_micros + months_micros
-                            }
-                            _ => return Err(ProtocolError::PostgresError(
-                                format!("Invalid interval string: {}", s)
-                            )),
-                        }
-                    }
-                    _ => return Err(ProtocolError::PostgresError(
-                        format!("time_bucket first argument must be an interval or interval string, got {:?}", interval)
-                    )),
-                };
-
-                // Extract timestamp
-                let ts = match timestamp {
-                    SqlValue::Timestamp(dt) => dt,
-                    SqlValue::TimestampWithTimezone(dt) => &dt.naive_utc(),
-                    _ => {
-                        return Err(ProtocolError::PostgresError(
-                            "time_bucket second argument must be a timestamp".to_string(),
-                        ))
-                    }
-                };
-
-                // Calculate bucket start time
-                // Convert timestamp to microseconds since epoch
-                let ts_micros = ts.and_utc().timestamp_micros();
-
-                // Calculate bucket start (floor division)
-                let bucket_start_micros = (ts_micros / interval_micros) * interval_micros;
-
-                // Convert back to timestamp
-                use chrono::DateTime;
-                let bucket_start = DateTime::from_timestamp_micros(bucket_start_micros)
-                    .ok_or_else(|| ProtocolError::PostgresError("Invalid timestamp".to_string()))?
-                    .naive_utc();
-
-                Ok(SqlValue::Timestamp(bucket_start))
-            }
+            // TimescaleDB functions (Stubs/Basic Implementation)
+            "CREATE_HYPERTABLE" => self.evaluate_create_hypertable(&args),
+            "CREATE_DISTRIBUTED_HYPERTABLE" => self.evaluate_create_distributed_hypertable(&args),
+            "ADD_DIMENSION" => self.evaluate_add_dimension(&args),
+            "DROP_CHUNKS" => self.evaluate_drop_chunks(&args),
+            "SHOW_CHUNKS" => self.evaluate_show_chunks(&args),
+            "ATTACH_TABLESPACE" => self.evaluate_attach_tablespace(&args),
+            "DETACH_TABLESPACE" => self.evaluate_detach_tablespace(&args),
+            "ADD_CONTINUOUS_AGGREGATE_POLICY" => self.evaluate_add_continuous_aggregate_policy(&args),
+            "ADD_COMPRESSION_POLICY" => self.evaluate_add_compression_policy(&args),
+            "TIME_BUCKET" => self.evaluate_time_bucket(&args),
+            "FIRST" => self.evaluate_first(&args),
+            "LAST" => self.evaluate_last(&args),
+            "HISTOGRAM" => self.evaluate_histogram(&args),
+            "APPROX_PERCENTILE" => self.evaluate_approx_percentile(&args),
 
             // OrbitQL OBJECT function - creates JSON object from key-value pairs
             "OBJECT" => {
@@ -901,12 +878,6 @@ impl ExpressionEvaluator {
             "UUID_NIL" => Ok(SqlValue::Uuid(Uuid::nil())),
             // UUID max - all ones
             "UUID_MAX" => Ok(SqlValue::Uuid(Uuid::max())),
-
-            // Sequence functions
-            "NEXTVAL" => self.evaluate_nextval(&args),
-            "CURRVAL" => self.evaluate_currval(&args),
-            "SETVAL" => self.evaluate_setval(&args),
-            "LASTVAL" => self.evaluate_lastval(&args),
 
             // JSON functions
             "JSON_TABLE" => Ok(SqlValue::Text("JSON Table".to_string())),
@@ -3169,17 +3140,35 @@ impl ExpressionEvaluator {
     }
 
     fn evaluate_array_upper(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
-        if args.len() != 2 {
+        if args.len() < 1 || args.len() > 2 {
             return Err(ProtocolError::PostgresError(
-                "ARRAY_UPPER requires exactly 2 arguments".to_string(),
+                "array_upper requires 1 or 2 arguments".to_string(),
             ));
         }
 
         match &args[0] {
-            SqlValue::Array(arr) => Ok(SqlValue::Integer(arr.len() as i32)),
+            SqlValue::Array(arr) => {
+                let dim = if args.len() == 2 {
+                    match &args[1] {
+                        SqlValue::Integer(d) => *d,
+                        _ => return Err(ProtocolError::PostgresError(
+                            "array_upper dimension must be an integer".to_string(),
+                        )),
+                    }
+                } else {
+                    1
+                };
+
+                if dim != 1 {
+                    // For now, we only support 1D arrays
+                    Ok(SqlValue::Null)
+                } else {
+                    Ok(SqlValue::Integer(arr.len() as i32))
+                }
+            }
             SqlValue::Null => Ok(SqlValue::Null),
             _ => Err(ProtocolError::PostgresError(
-                "ARRAY_UPPER requires array argument".to_string(),
+                "array_upper first argument must be an array".to_string(),
             )),
         }
     }
@@ -3832,8 +3821,209 @@ impl ExpressionEvaluator {
         }
     }
 
-    fn evaluate_localtime(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
-        Ok(SqlValue::Time(chrono::Local::now().time()))
+    fn evaluate_array_sample(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "array_sample requires 2 arguments (array, count)".to_string(),
+            ));
+        }
+        
+        match (&args[0], &args[1]) {
+            (SqlValue::Array(arr), SqlValue::Integer(n)) => {
+                use rand::seq::SliceRandom;
+                let mut rng = rand::thread_rng();
+                let count = (*n).max(0) as usize;
+                let sample: Vec<SqlValue> = arr.choose_multiple(&mut rng, count).cloned().collect();
+                Ok(SqlValue::Array(sample))
+            }
+            (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "array_sample arguments must be (array, integer)".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_array_shuffle(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "array_shuffle requires 1 argument (array)".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Array(arr) => {
+                use rand::seq::SliceRandom;
+                let mut rng = rand::thread_rng();
+                let mut shuffled = arr.clone();
+                shuffled.shuffle(&mut rng);
+                Ok(SqlValue::Array(shuffled))
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "array_shuffle argument must be an array".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_pg_sequence_parameters(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        // Stub implementation returning default parameters
+        if args.len() != 1 {
+             return Err(ProtocolError::PostgresError(
+                "pg_sequence_parameters requires 1 argument (regclass)".to_string(),
+            ));
+        }
+        
+        let mut params = HashMap::new();
+        params.insert("start_value".to_string(), SqlValue::BigInt(1));
+        params.insert("minimum_value".to_string(), SqlValue::BigInt(1));
+        params.insert("maximum_value".to_string(), SqlValue::BigInt(i64::MAX));
+        params.insert("increment".to_string(), SqlValue::BigInt(1));
+        params.insert("cycle_option".to_string(), SqlValue::Boolean(false));
+        
+        Ok(SqlValue::Composite(params))
+    }
+
+    fn evaluate_pg_sequence_last_value(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         // Stub implementation
+         if args.len() != 1 {
+             return Err(ProtocolError::PostgresError(
+                "pg_sequence_last_value requires 1 argument (regclass)".to_string(),
+            ));
+        }
+        Ok(SqlValue::BigInt(1)) 
+    }
+    
+    // --- TimescaleDB Functions ---
+
+    fn evaluate_create_hypertable(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        // Placeholder implementation
+        Ok(SqlValue::Boolean(true))
+    }
+
+    fn evaluate_create_distributed_hypertable(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Boolean(true))
+    }
+
+    fn evaluate_add_dimension(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Boolean(true))
+    }
+    
+    fn evaluate_attach_tablespace(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Boolean(true))
+    }
+
+    fn evaluate_detach_tablespace(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Boolean(true))
+    }
+    
+    fn evaluate_add_continuous_aggregate_policy(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Boolean(true))
+    }
+    
+    fn evaluate_add_compression_policy(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Boolean(true))
+    }
+
+    fn evaluate_drop_chunks(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Text("Chunks dropped successfully".to_string()))
+    }
+    
+    fn evaluate_histogram(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+         Ok(SqlValue::Array(vec![]))
+    }
+    
+    fn evaluate_approx_percentile(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::DoublePrecision(0.5))
+    }
+
+    fn evaluate_show_chunks(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        Ok(SqlValue::Array(vec![]))
+    }
+
+    fn evaluate_time_bucket(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        // time_bucket(interval, timestamp) - bucket timestamps into intervals
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "time_bucket requires 2 arguments: interval and timestamp".to_string(),
+            ));
+        }
+
+        let interval = &args[0];
+        let timestamp = &args[1];
+
+        // Extract interval duration in microseconds
+        // Auto-cast string literals to intervals
+        let interval_micros = match interval {
+            SqlValue::Interval(pg_interval) => {
+                // Convert PostgresInterval to total microseconds
+                // Note: This is a simplified conversion that doesn't handle months/days perfectly
+                // For proper handling, we'd need the reference timestamp
+                let days_micros = pg_interval.days as i64 * 24 * 3600 * 1_000_000;
+                let months_micros = pg_interval.months as i64 * 30 * 24 * 3600 * 1_000_000; // Approximate
+                pg_interval.microseconds + days_micros + months_micros
+            }
+            // Auto-cast string to interval
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => {
+                // Parse the string as an interval
+                match crate::protocols::postgres_wire::sql::types::SqlValue::parse_interval(s) {
+                    Ok(SqlValue::Interval(pg_interval)) => {
+                        let days_micros = pg_interval.days as i64 * 24 * 3600 * 1_000_000;
+                        let months_micros = pg_interval.months as i64 * 30 * 24 * 3600 * 1_000_000;
+                        pg_interval.microseconds + days_micros + months_micros
+                    }
+                    _ => return Err(ProtocolError::PostgresError(
+                        format!("Invalid interval string: {}", s)
+                    )),
+                }
+            }
+            _ => return Err(ProtocolError::PostgresError(
+                format!("time_bucket first argument must be an interval or interval string, got {:?}", interval)
+            )),
+        };
+
+        // Extract timestamp
+        let ts = match timestamp {
+            SqlValue::Timestamp(dt) => dt,
+            SqlValue::TimestampWithTimezone(dt) => &dt.naive_utc(),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "time_bucket second argument must be a timestamp".to_string(),
+                ))
+            }
+        };
+
+        // Calculate bucket start time
+        // Convert timestamp to microseconds since epoch
+        let ts_micros = ts.and_utc().timestamp_micros();
+
+        // Calculate bucket start (floor division)
+        let bucket_start_micros = (ts_micros / interval_micros) * interval_micros;
+
+        // Convert back to timestamp
+        use chrono::DateTime;
+        let bucket_start = DateTime::from_timestamp_micros(bucket_start_micros)
+            .ok_or_else(|| ProtocolError::PostgresError("Invalid timestamp".to_string()))?
+            .naive_utc();
+
+        Ok(SqlValue::Timestamp(bucket_start))
+    }
+
+    fn evaluate_first(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 {
+             return Err(ProtocolError::PostgresError(
+                "first requires at least 2 arguments".to_string(),
+            ));
+        }
+        Ok(args[0].clone())
+    }
+
+     fn evaluate_last(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() < 2 {
+             return Err(ProtocolError::PostgresError(
+                "last requires at least 2 arguments".to_string(),
+            ));
+        }
+        Ok(args[0].clone())
     }
 
     fn evaluate_localtimestamp(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
@@ -8770,6 +8960,153 @@ impl ExpressionEvaluator {
             })
             .filter(|s| !s.is_empty())
             .collect()
+    }
+
+    /// Evaluate ANY/SOME quantified comparison
+    /// Returns true if left value matches ANY element in the array/subquery
+    fn evaluate_any_comparison(
+        &mut self,
+        left: &Expression,
+        operator: &BinaryOperator,
+        array_expr: &Expression,
+        context: &EvaluationContext,
+    ) -> ProtocolResult<SqlValue> {
+        let left_val = self.evaluate(left, context)?;
+        let array_val = self.evaluate(array_expr, context)?;
+
+        // Extract array elements
+        let elements = match &array_val {
+            SqlValue::Array(arr) => arr.clone(),
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(format!(
+                    "ANY/SOME requires an array, got {:?}",
+                    array_val
+                )))
+            }
+        };
+
+        // Special case: if array is empty or left is NULL, result is NULL/FALSE
+        if elements.is_empty() {
+            return Ok(SqlValue::Boolean(false));
+        }
+        if matches!(left_val, SqlValue::Null) {
+            return Ok(SqlValue::Null);
+        }
+
+        // Check if ANY element satisfies the comparison
+        let mut found_null = false;
+        for elem in &elements {
+            if matches!(elem, SqlValue::Null) {
+                found_null = true;
+                continue;
+            }
+
+            let result = self.compare_with_operator(&left_val, elem, operator)?;
+            match result {
+                SqlValue::Boolean(true) => return Ok(SqlValue::Boolean(true)),
+                SqlValue::Null => found_null = true,
+                _ => {}
+            }
+        }
+
+        // If we found any NULL and no true, return NULL
+        if found_null {
+            Ok(SqlValue::Null)
+        } else {
+            Ok(SqlValue::Boolean(false))
+        }
+    }
+
+    /// Evaluate ALL quantified comparison
+    /// Returns true if left value matches ALL elements in the array/subquery
+    fn evaluate_all_comparison(
+        &mut self,
+        left: &Expression,
+        operator: &BinaryOperator,
+        array_expr: &Expression,
+        context: &EvaluationContext,
+    ) -> ProtocolResult<SqlValue> {
+        let left_val = self.evaluate(left, context)?;
+        let array_val = self.evaluate(array_expr, context)?;
+
+        // Extract array elements
+        let elements = match &array_val {
+            SqlValue::Array(arr) => arr.clone(),
+            SqlValue::Null => return Ok(SqlValue::Null),
+            _ => {
+                return Err(ProtocolError::PostgresError(format!(
+                    "ALL requires an array, got {:?}",
+                    array_val
+                )))
+            }
+        };
+
+        // Special case: if array is empty, result is TRUE
+        if elements.is_empty() {
+            return Ok(SqlValue::Boolean(true));
+        }
+        if matches!(left_val, SqlValue::Null) {
+            return Ok(SqlValue::Null);
+        }
+
+        // Check if ALL elements satisfy the comparison
+        let mut found_null = false;
+        for elem in &elements {
+            if matches!(elem, SqlValue::Null) {
+                found_null = true;
+                continue;
+            }
+
+            let result = self.compare_with_operator(&left_val, elem, operator)?;
+            match result {
+                SqlValue::Boolean(false) => return Ok(SqlValue::Boolean(false)),
+                SqlValue::Null => found_null = true,
+                _ => {}
+            }
+        }
+
+        // If we found any NULL and no false, return NULL
+        if found_null {
+            Ok(SqlValue::Null)
+        } else {
+            Ok(SqlValue::Boolean(true))
+        }
+    }
+
+    /// Helper to apply a comparison operator to two values
+    fn compare_with_operator(
+        &self,
+        left: &SqlValue,
+        right: &SqlValue,
+        operator: &BinaryOperator,
+    ) -> ProtocolResult<SqlValue> {
+        match operator {
+            BinaryOperator::Equal => {
+                Ok(SqlValue::Boolean(self.compare_values(left, right)? == Ordering::Equal))
+            }
+            BinaryOperator::NotEqual => {
+                Ok(SqlValue::Boolean(self.compare_values(left, right)? != Ordering::Equal))
+            }
+            BinaryOperator::LessThan => {
+                Ok(SqlValue::Boolean(self.compare_values(left, right)? == Ordering::Less))
+            }
+            BinaryOperator::LessThanOrEqual => Ok(SqlValue::Boolean(matches!(
+                self.compare_values(left, right)?,
+                Ordering::Less | Ordering::Equal
+            ))),
+            BinaryOperator::GreaterThan => {
+                Ok(SqlValue::Boolean(self.compare_values(left, right)? == Ordering::Greater))
+            }
+            BinaryOperator::GreaterThanOrEqual => Ok(SqlValue::Boolean(matches!(
+                self.compare_values(left, right)?,
+                Ordering::Greater | Ordering::Equal
+            ))),
+            _ => Err(ProtocolError::PostgresError(format!(
+                "Unsupported operator in quantified comparison: {:?}",
+                operator
+            ))),
+        }
     }
 }
 

@@ -743,6 +743,7 @@ fn parse_from_clause(parser: &mut SqlParser) -> ParseResult<FromClause> {
                         name: "subquery".to_string(),
                         columns: None,
                     }),
+                    lateral: false,
                 });
             } else {
                 return Err(ParseError {

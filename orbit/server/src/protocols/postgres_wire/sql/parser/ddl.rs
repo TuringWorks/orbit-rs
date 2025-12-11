@@ -557,94 +557,274 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
     // Parse table name
     let name = utilities::parse_table_name(parser)?;
 
-    // Parse alter actions
     let mut actions = Vec::new();
-
     loop {
-        let action = match &parser.current_token {
-            Some(Token::Add) => {
+        let action = match parser.current_token {
+            Some(Token::Rename) => {
                 parser.advance()?;
-                if parser.matches(&[Token::Column]) {
+                if parser.matches(&[Token::To]) {
+                    // RENAME TO (Table rename)
                     parser.advance()?;
-                    let column = parse_column_definition(parser)?;
-                    AlterTableAction::AddColumn(column)
-                } else if parser.matches(&[Token::Constraint]) {
-                    let constraint = parse_table_constraint(parser)?;
-                    AlterTableAction::AddConstraint(constraint)
-                } else {
-                    return Err(ParseError {
-                        message: "Expected COLUMN or CONSTRAINT after ADD".to_string(),
-                        position: parser.position,
-                        expected: vec!["COLUMN".to_string(), "CONSTRAINT".to_string()],
-                        found: parser.current_token.clone(),
-                    });
-                }
-            }
-            Some(Token::Drop) => {
-                parser.advance()?;
-                if parser.matches(&[Token::Column]) {
-                    parser.advance()?;
-                    if let Some(Token::Identifier(col_name)) = &parser.current_token {
-                        let name = col_name.clone();
+                    if let Some(Token::Identifier(new_name)) = &parser.current_token {
+                        let name = new_name.clone();
                         parser.advance()?;
-                        let cascade = if parser.matches(&[Token::Cascade]) {
-                            parser.advance()?;
-                            true
-                        } else {
-                            false
-                        };
-                        AlterTableAction::DropColumn { name, cascade }
+                        AlterTableAction::RenameTable(name)
                     } else {
                         return Err(ParseError {
-                            message: "Expected column name after DROP COLUMN".to_string(),
+                            message: "Expected new table name after RENAME TO".to_string(),
+                            position: parser.position,
+                            expected: vec!["table name".to_string()],
+                            found: parser.current_token.clone(),
+                        });
+                    }
+                } else if parser.matches(&[Token::Column]) {
+                    // RENAME COLUMN
+                    parser.advance()?;
+                    if let Some(Token::Identifier(old_name)) = &parser.current_token {
+                        let old = old_name.clone();
+                        parser.advance()?;
+                        parser.expect(Token::To)?;
+                        if let Some(Token::Identifier(new_name)) = &parser.current_token {
+                            let new = new_name.clone();
+                            parser.advance()?;
+                            AlterTableAction::RenameColumn {
+                                old_name: old,
+                                new_name: new,
+                            }
+                        } else {
+                            return Err(ParseError {
+                                message: "Expected new column name".to_string(),
+                                position: parser.position,
+                                expected: vec!["column name".to_string()],
+                                found: parser.current_token.clone(),
+                            });
+                        }
+                    } else {
+                        return Err(ParseError {
+                            message: "Expected old column name".to_string(),
                             position: parser.position,
                             expected: vec!["column name".to_string()],
                             found: parser.current_token.clone(),
                         });
                     }
                 } else if parser.matches(&[Token::Constraint]) {
-                    parser.advance()?;
-                    if let Some(Token::Identifier(constraint_name)) = &parser.current_token {
-                        let name = constraint_name.clone();
-                        parser.advance()?;
-                        let cascade = if parser.matches(&[Token::Cascade]) {
-                            parser.advance()?;
-                            true
-                        } else {
-                            false
-                        };
-                        AlterTableAction::DropConstraint { name, cascade }
-                    } else {
-                        return Err(ParseError {
-                            message: "Expected constraint name after DROP CONSTRAINT".to_string(),
-                            position: parser.position,
-                            expected: vec!["constraint name".to_string()],
-                            found: parser.current_token.clone(),
-                        });
-                    }
-                } else {
-                    return Err(ParseError {
-                        message: "Expected COLUMN or CONSTRAINT after DROP".to_string(),
+                    // RENAME CONSTRAINT is not in AST yet, skipping or treating as todo
+                     return Err(ParseError {
+                        message: "RENAME CONSTRAINT not supported yet".to_string(),
                         position: parser.position,
-                        expected: vec!["COLUMN".to_string(), "CONSTRAINT".to_string()],
+                        expected: vec!["COLUMN".to_string(), "TO".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                } else {
+                     return Err(ParseError {
+                        message: "Expected COLUMN or TO after RENAME".to_string(),
+                        position: parser.position,
+                        expected: vec!["COLUMN".to_string(), "TO".to_string()],
                         found: parser.current_token.clone(),
                     });
                 }
             }
-            Some(Token::Alter) => {
+            Some(Token::Set) => {
                 parser.advance()?;
-                parser.expect(Token::Column)?;
-                if let Some(Token::Identifier(col_name)) = &parser.current_token {
-                    let name = col_name.clone();
+                if parser.matches(&[Token::Schema]) {
                     parser.advance()?;
-                    let action = parse_alter_column_action(parser)?;
-                    AlterTableAction::AlterColumn { name, action }
+                    if let Some(Token::Identifier(schema)) = &parser.current_token {
+                        let s = schema.clone();
+                        parser.advance()?;
+                        AlterTableAction::SetSchema(s)
+                    } else {
+                        return Err(ParseError {
+                             message: "Expected schema name".to_string(),
+                             position: parser.position,
+                             expected: vec!["schema name".to_string()],
+                             found: parser.current_token.clone(),
+                        });
+                    }
+                } else if parser.matches(&[Token::Logged]) {
+                    parser.advance()?;
+                    AlterTableAction::SetLogged
+                } else if parser.matches(&[Token::Unlogged]) {
+                    parser.advance()?;
+                    AlterTableAction::SetUnlogged
+                } else if parser.matches(&[Token::Tablespace]) {
+                    parser.advance()?;
+                    if let Some(Token::Identifier(ts)) = &parser.current_token {
+                        let t = ts.clone();
+                        parser.advance()?;
+                        AlterTableAction::SetTablespace(t)
+                    } else {
+                        return Err(ParseError {
+                             message: "Expected tablespace name".to_string(),
+                             position: parser.position,
+                             expected: vec!["tablespace name".to_string()],
+                             found: parser.current_token.clone(),
+                        });
+                    }
+                } else if parser.matches(&[Token::Without]) {
+                    parser.advance()?;
+                    parser.expect(Token::Cluster)?;
+                    AlterTableAction::SetWithoutCluster
+                } else {
+                     return Err(ParseError {
+                        message: "Expected SCHEMA, LOGGED, UNLOGGED, TABLESPACE, or WITHOUT CLUSTER after SET".to_string(),
+                        position: parser.position,
+                        expected: vec!["SCHEMA".to_string(), "LOGGED".to_string(), "UNLOGGED".to_string()],
+                        found: parser.current_token.clone(),
+                    });
+                }
+            }
+            Some(Token::Owner) => {
+                parser.advance()?;
+                parser.expect(Token::To)?;
+                if let Some(Token::Identifier(owner)) = &parser.current_token {
+                    let o = owner.clone();
+                    parser.advance()?;
+                    AlterTableAction::Owner(o)
                 } else {
                     return Err(ParseError {
-                        message: "Expected column name after ALTER COLUMN".to_string(),
-                        position: parser.position,
-                        expected: vec!["column name".to_string()],
-                        found: parser.current_token.clone(),
+                         message: "Expected owner name".to_string(),
+                         position: parser.position,
+                         expected: vec!["owner name".to_string()],
+                         found: parser.current_token.clone(),
+                    });
+                }
+            }
+            Some(Token::Attach) => {
+                parser.advance()?;
+                parser.expect(Token::Partition)?;
+                let partition = utilities::parse_table_name(parser)?;
+                // Parse optional FOR VALUES ... (omitted for brevity as AST doesn't support it fully yet, simplifying)
+                AlterTableAction::AttachPartition { partition }
+            }
+            Some(Token::Detach) => {
+                parser.advance()?;
+                parser.expect(Token::Partition)?;
+                let partition = utilities::parse_table_name(parser)?;
+                let concurrently = if parser.matches(&[Token::Concurrently]) {
+                    parser.advance()?;
+                    true
+                } else {
+                    false
+                };
+                let finalize = if parser.matches(&[Token::Finalize]) {
+                    parser.advance()?;
+                    true
+                } else {
+                    false
+                };
+                AlterTableAction::DetachPartition { partition, concurrently, finalize }
+            }
+            Some(Token::Enable) => {
+                parser.advance()?;
+                if parser.matches(&[Token::Trigger]) {
+                    parser.advance()?;
+                    if let Some(Token::Identifier(trig)) = &parser.current_token {
+                        let t = trig.clone();
+                        parser.advance()?;
+                        AlterTableAction::EnableTrigger(t)
+                    } else if parser.matches(&[Token::All]) {
+                        parser.advance()?;
+                        AlterTableAction::EnableTrigger("ALL".to_string())
+                    } else if parser.matches(&[Token::User]) {
+                        parser.advance()?;
+                        AlterTableAction::EnableTrigger("USER".to_string())
+                    } else {
+                        return Err(ParseError {
+                             message: "Expected trigger name, ALL, or USER".to_string(),
+                             position: parser.position,
+                             expected: vec!["trigger name".to_string()],
+                             found: parser.current_token.clone(),
+                        });
+                    }
+                } else if parser.matches(&[Token::Always, Token::Trigger]) {
+                     parser.advance()?;
+                     parser.advance()?;
+                     // For simplicity mapping to EnableTrigger with different value or logic, 
+                     // but adhering to AST. Let's assume just trigger name.
+                     return Err(ParseError {
+                             message: "ALWAYS TRIGGER not fully supported".to_string(),
+                             position: parser.position,
+                             expected: vec!["TRIGGER".to_string(), "ROW".to_string()],
+                             found: parser.current_token.clone(),
+                        });
+                } else if parser.matches(&[Token::Row, Token::Level, Token::Security]) {
+                    parser.advance()?;
+                    parser.advance()?;
+                    parser.advance()?;
+                    AlterTableAction::EnableRowLevelSecurity
+                } else {
+                    return Err(ParseError {
+                         message: "Expected TRIGGER or ROW LEVEL SECURITY".to_string(),
+                         position: parser.position,
+                         expected: vec!["TRIGGER".to_string(), "ROW".to_string()],
+                         found: parser.current_token.clone(),
+                    });
+                }
+            }
+            Some(Token::Disable) => {
+                parser.advance()?;
+                if parser.matches(&[Token::Trigger]) {
+                    parser.advance()?;
+                    if let Some(Token::Identifier(trig)) = &parser.current_token {
+                        let t = trig.clone();
+                        parser.advance()?;
+                        AlterTableAction::DisableTrigger(t)
+                    } else if parser.matches(&[Token::All]) {
+                        parser.advance()?;
+                        AlterTableAction::DisableTrigger("ALL".to_string())
+                    } else if parser.matches(&[Token::User]) {
+                        parser.advance()?;
+                        AlterTableAction::DisableTrigger("USER".to_string())
+                    } else {
+                        return Err(ParseError {
+                             message: "Expected trigger name, ALL, or USER".to_string(),
+                             position: parser.position,
+                             expected: vec!["trigger name".to_string()],
+                             found: parser.current_token.clone(),
+                        });
+                    }
+                } else if parser.matches(&[Token::Row, Token::Level, Token::Security]) {
+                    parser.advance()?;
+                    parser.advance()?;
+                    parser.advance()?;
+                    AlterTableAction::DisableRowLevelSecurity
+                } else {
+                     return Err(ParseError {
+                         message: "Expected TRIGGER or ROW LEVEL SECURITY".to_string(),
+                         position: parser.position,
+                         expected: vec!["TRIGGER".to_string(), "ROW".to_string()],
+                         found: parser.current_token.clone(),
+                    });
+                }
+            }
+            Some(Token::Force) => {
+                parser.advance()?;
+                parser.expect(Token::Row)?;
+                parser.expect(Token::Level)?;
+                parser.expect(Token::Security)?;
+                AlterTableAction::ForceRowLevelSecurity
+            }
+            Some(Token::No) => {
+                parser.advance()?;
+                parser.expect(Token::Force)?;
+                parser.expect(Token::Row)?;
+                parser.expect(Token::Level)?;
+                parser.expect(Token::Security)?;
+                AlterTableAction::NoForceRowLevelSecurity
+            }
+            Some(Token::Cluster) => {
+                parser.advance()?;
+                parser.expect(Token::On)?;
+                if let Some(Token::Identifier(idx)) = &parser.current_token {
+                    let i = idx.clone();
+                    parser.advance()?;
+                    AlterTableAction::ClusterOn(i)
+                } else {
+                    return Err(ParseError {
+                         message: "Expected index name".to_string(),
+                         position: parser.position,
+                         expected: vec!["index name".to_string()],
+                         found: parser.current_token.clone(),
                     });
                 }
             }

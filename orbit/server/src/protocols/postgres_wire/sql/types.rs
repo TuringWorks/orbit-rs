@@ -11,6 +11,7 @@ use std::collections::HashMap;
 pub enum SqlType {
     // Numeric types
     Boolean,
+    Name, // OID 19
     SmallInt,
     Integer,
     BigInt,
@@ -24,6 +25,7 @@ pub enum SqlType {
     },
     Real,
     DoublePrecision,
+    Money,
 
     // Character types
     Char(Option<u32>),
@@ -32,6 +34,8 @@ pub enum SqlType {
 
     // Binary types
     Bytea,
+    Bit(Option<u32>),
+    BitVarying(Option<u32>),
 
     // Date and time types
     Date,
@@ -46,6 +50,7 @@ pub enum SqlType {
     // JSON types
     Json,
     Jsonb,
+    JsonPath,
 
     // Array types
     Array {
@@ -60,6 +65,9 @@ pub enum SqlType {
 
     // Range types
     Range {
+        element_type: Box<SqlType>,
+    },
+    MultiRange {
         element_type: Box<SqlType>,
     },
 
@@ -116,6 +124,11 @@ pub enum SqlType {
     // PostgreSQL-specific types
     PgLsn,
     PgSnapshot,
+    Xid, // Transaction ID
+    AclItem, // Access Control List
+    PgNodeTree, // Internal node tree
+    Int2Vector,
+    OidVector,
 
     // Custom/User-defined types
     Custom {
@@ -135,6 +148,7 @@ pub enum SqlValue {
     #[default]
     Null,
     Boolean(bool),
+    Name(String),
     SmallInt(i16),
     Integer(i32),
     BigInt(i64),
@@ -145,6 +159,7 @@ pub enum SqlValue {
     Varchar(String),
     Text(String),
     Bytea(Vec<u8>),
+    BitString(String), // '101010'
     Date(chrono::NaiveDate),
     Time(chrono::NaiveTime),
     TimeWithTimezone(chrono::DateTime<chrono::Utc>),
@@ -153,9 +168,11 @@ pub enum SqlValue {
     Interval(PostgresInterval),
     Json(serde_json::Value),
     Jsonb(serde_json::Value),
+    JsonPath(String),
     Array(Vec<SqlValue>),
     Composite(HashMap<String, SqlValue>),
     Range(Box<SqlRange>),
+    MultiRange(Vec<SqlRange>),
     Inet(std::net::IpAddr),
     Cidr(IpNet),
     Macaddr([u8; 6]),
@@ -198,6 +215,11 @@ pub enum SqlValue {
     // PostgreSQL-specific types
     PgLsn(u64),         // Log sequence number
     PgSnapshot(String), // Transaction snapshot (simplified as string)
+    Xid(u32),
+    AclItem(String), // Simplification
+    PgNodeTree(String), // Simplification
+    Int2Vector(Vec<i16>),
+    OidVector(Vec<u32>),
 
     Custom {
         type_name: String,
@@ -299,6 +321,15 @@ impl SqlType {
                 },
             ) => e1.can_cast_to(e2),
 
+            (
+                SqlType::MultiRange {
+                    element_type: e1,
+                },
+                SqlType::MultiRange {
+                    element_type: e2,
+                },
+            ) => e1.can_cast_to(e2),
+
             // JSON conversions
             (SqlType::Json, SqlType::Jsonb) => true,
             (SqlType::Jsonb, SqlType::Json) => true,
@@ -316,10 +347,13 @@ impl SqlType {
             SqlType::BigInt => 20,
             SqlType::Real => 700,
             SqlType::DoublePrecision => 701,
+            SqlType::Money => 790,
             SqlType::Char(_) => 1042,
             SqlType::Varchar(_) => 1043,
             SqlType::Text => 25,
             SqlType::Bytea => 17,
+            SqlType::Bit(_) => 1560,
+            SqlType::BitVarying(_) => 1562,
             SqlType::Date => 1082,
             SqlType::Time {
                 with_timezone: false,
@@ -337,6 +371,7 @@ impl SqlType {
             SqlType::Numeric { .. } => 1700,
             SqlType::Json => 114,
             SqlType::Jsonb => 3802,
+            SqlType::JsonPath => 4072,
             SqlType::Uuid => 2950,
             SqlType::Inet => 869,
             SqlType::Cidr => 650,
@@ -362,6 +397,22 @@ impl SqlType {
             // PostgreSQL-specific types
             SqlType::PgLsn => 3220,
             SqlType::PgSnapshot => 5038,
+            SqlType::Name => 19,
+            SqlType::Xid => 28,
+            SqlType::AclItem => 1033,
+            SqlType::PgNodeTree => 194,
+            SqlType::Int2Vector => 22,
+            SqlType::OidVector => 30,
+
+            SqlType::MultiRange { element_type } => match **element_type {
+                SqlType::Integer => 4451, // int4multirange
+                SqlType::Numeric { .. } => 4532, // nummultirange
+                SqlType::Timestamp { with_timezone: false } => 4533, // tsmultirange
+                SqlType::Timestamp { with_timezone: true } => 4534, // tstzmultirange
+                SqlType::Date => 4535, // datemultirange
+                SqlType::BigInt => 4536, // int8multirange
+                _ => 0, // Unknown/Custom multirange
+            },
 
             _ => 0, // Unknown type
         }
@@ -376,6 +427,7 @@ impl SqlType {
             SqlType::BigInt => Some(8),
             SqlType::Real => Some(4),
             SqlType::DoublePrecision => Some(8),
+            SqlType::Money => Some(8),
             SqlType::Date => Some(4),
             SqlType::Time { .. } => Some(8),
             SqlType::Timestamp { .. } => Some(8),
@@ -398,6 +450,7 @@ impl SqlValue {
         match self {
             SqlValue::Null => SqlType::Text, // Default for null
             SqlValue::Boolean(_) => SqlType::Boolean,
+            SqlValue::Name(_) => SqlType::Name,
             SqlValue::SmallInt(_) => SqlType::SmallInt,
             SqlValue::Integer(_) => SqlType::Integer,
             SqlValue::BigInt(_) => SqlType::BigInt,
@@ -411,6 +464,7 @@ impl SqlValue {
             SqlValue::Varchar(_) => SqlType::Varchar(None),
             SqlValue::Text(_) => SqlType::Text,
             SqlValue::Bytea(_) => SqlType::Bytea,
+            SqlValue::BitString(_) => SqlType::Bit(None), // Default to BIT without length
             SqlValue::Date(_) => SqlType::Date,
             SqlValue::Time(_) => SqlType::Time {
                 with_timezone: false,
@@ -427,6 +481,7 @@ impl SqlValue {
             SqlValue::Interval(_) => SqlType::Interval,
             SqlValue::Json(_) => SqlType::Json,
             SqlValue::Jsonb(_) => SqlType::Jsonb,
+            SqlValue::JsonPath(_) => SqlType::JsonPath,
             SqlValue::Array(values) => {
                 let element_type = if values.is_empty() {
                     SqlType::Text
@@ -444,6 +499,19 @@ impl SqlValue {
             SqlValue::Range(_) => SqlType::Range {
                 element_type: Box::new(SqlType::Text),
             },
+            SqlValue::MultiRange(ranges) => {
+                 let element_type = if ranges.is_empty() {
+                      SqlType::Text
+                 } else {
+                      // Infer from first range's lower or upper if present
+                      ranges[0].lower.as_ref().map(|v| v.sql_type())
+                        .or_else(|| ranges[0].upper.as_ref().map(|v| v.sql_type()))
+                        .unwrap_or(SqlType::Text)
+                 };
+                 SqlType::MultiRange {
+                      element_type: Box::new(element_type),
+                 }
+            }
             SqlValue::Inet(_) => SqlType::Inet,
             SqlValue::Cidr(_) => SqlType::Cidr,
             SqlValue::Macaddr(_) => SqlType::Macaddr,
@@ -484,6 +552,11 @@ impl SqlValue {
             // PostgreSQL-specific types
             SqlValue::PgLsn(_) => SqlType::PgLsn,
             SqlValue::PgSnapshot(_) => SqlType::PgSnapshot,
+            SqlValue::Xid(_) => SqlType::Xid,
+            SqlValue::AclItem(_) => SqlType::AclItem,
+            SqlValue::PgNodeTree(_) => SqlType::PgNodeTree,
+            SqlValue::Int2Vector(_) => SqlType::Int2Vector,
+            SqlValue::OidVector(_) => SqlType::OidVector,
 
             SqlValue::Custom { type_name, .. } => SqlType::Custom {
                 type_name: type_name.clone(),
@@ -507,6 +580,7 @@ impl SqlValue {
                     "f".to_string()
                 }
             }
+            SqlValue::Name(s) => s.clone(),
             SqlValue::SmallInt(i) => i.to_string(),
             SqlValue::Integer(i) => i.to_string(),
             SqlValue::BigInt(i) => i.to_string(),
@@ -527,6 +601,7 @@ impl SqlValue {
                 interval.months, interval.days, interval.microseconds
             ),
             SqlValue::Json(v) | SqlValue::Jsonb(v) => v.to_string(),
+            SqlValue::JsonPath(s) => s.clone(),
             SqlValue::Array(values) => {
                 let elements: Vec<String> = values.iter().map(|v| v.to_postgres_string()).collect();
                 format!("{{{}}}", elements.join(","))
@@ -539,6 +614,18 @@ impl SqlValue {
             SqlValue::HalfVec(v) => {
                 let elements: Vec<String> = v.iter().map(|f| f.to_string()).collect();
                 format!("[{}]", elements.join(","))
+            }
+            SqlValue::MultiRange(ranges) => {
+                let elements: Vec<String> = ranges.iter().map(|r| {
+                     let lower = r.lower.as_ref().map(|v| v.to_postgres_string()).unwrap_or_default();
+                     let upper = r.upper.as_ref().map(|v| v.to_postgres_string()).unwrap_or_default();
+                     // Construct range string depending on bounds
+                     // Note: Simplification here, assuming standard range format [lower,upper)
+                     let start_bracket = if r.lower_inclusive { '[' } else { '(' };
+                     let end_bracket = if r.upper_inclusive { ']' } else { ')' };
+                     format!("{}{},{}{}", start_bracket, lower, upper, end_bracket)
+                }).collect();
+                format!("{{{}}}", elements.join(","))
             }
             SqlValue::Point(x, y) => format!("({x},{y})"),
 
@@ -559,6 +646,16 @@ impl SqlValue {
             // PostgreSQL-specific types
             SqlValue::PgLsn(lsn) => format!("{:X}/{:X}", lsn >> 32, lsn & 0xFFFFFFFF),
             SqlValue::PgSnapshot(s) => s.clone(),
+            SqlValue::Xid(x) => x.to_string(),
+            SqlValue::AclItem(s) | SqlValue::PgNodeTree(s) => s.clone(),
+            SqlValue::Int2Vector(v) => {
+                 let elements: Vec<String> = v.iter().map(|i| i.to_string()).collect();
+                 elements.join(" ")
+            }
+            SqlValue::OidVector(v) => {
+                 let elements: Vec<String> = v.iter().map(|i| i.to_string()).collect();
+                 elements.join(" ")
+            }
 
             _ => format!("{self:?}"), // Fallback for complex types
         }
@@ -627,7 +724,10 @@ impl SqlValue {
                 (SqlValue::Char(s), SqlType::Text) => Ok(SqlValue::Text(s.clone())),
                 (SqlValue::Varchar(s), SqlType::Text) => Ok(SqlValue::Text(s.clone())),
                 (SqlValue::Json(v), SqlType::Jsonb) => Ok(SqlValue::Jsonb(v.clone())),
+                (SqlValue::Json(v), SqlType::Jsonb) => Ok(SqlValue::Jsonb(v.clone())),
                 (SqlValue::Jsonb(v), SqlType::Json) => Ok(SqlValue::Json(v.clone())),
+                (SqlValue::Text(t), SqlType::JsonPath) => Ok(SqlValue::JsonPath(t.clone())),
+                (SqlValue::Varchar(t), SqlType::JsonPath) => Ok(SqlValue::JsonPath(t.clone())),
                 _ => Ok(self.clone()), // Same type or already handled
             }
         } else {
@@ -745,6 +845,7 @@ impl SqlValue {
             SqlType::Jsonb => serde_json::from_str(s)
                 .map(SqlValue::Jsonb)
                 .map_err(|e| e.to_string()),
+            SqlType::JsonPath => Ok(SqlValue::JsonPath(s.to_string())),
             SqlType::Vector { .. } => {
                 // Parse vector format: [1.0, 2.0, 3.0] or 1.0,2.0,3.0
                 let cleaned = s.trim_matches('[').trim_matches(']');
@@ -792,6 +893,7 @@ impl std::fmt::Display for SqlType {
             SqlType::Numeric { .. } => write!(f, "NUMERIC"),
             SqlType::Real => write!(f, "REAL"),
             SqlType::DoublePrecision => write!(f, "DOUBLE PRECISION"),
+            SqlType::Money => write!(f, "MONEY"),
             SqlType::Char(Some(n)) => write!(f, "CHAR({n})"),
             SqlType::Char(None) => write!(f, "CHAR"),
             SqlType::Varchar(Some(n)) => write!(f, "VARCHAR({n})"),

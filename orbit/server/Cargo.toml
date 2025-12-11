@@ -99,6 +99,7 @@ rquickjs = { version = "0.6", features = ["array-buffer", "classes", "futures"],
 tokio-rustls = "0.26.4"
 rustls-pemfile = "2.2.0"
 rustls = { version = "0.23.35", features = ["ring"] }
+async-recursion = "1.1.1"
 
 [features]
 # Default features - all production-ready features enabled

@@ -364,6 +364,12 @@ impl AqlStorage {
         false
     }
 
+    /// List all collection names
+    pub async fn list_collections(&self) -> ProtocolResult<Vec<String>> {
+        let collections = self.collections.read().await;
+        Ok(collections.keys().cloned().collect())
+    }
+
     /// Shutdown and close RocksDB database
     /// This explicitly releases the RocksDB lock
     pub async fn shutdown(&self) -> ProtocolResult<()> {

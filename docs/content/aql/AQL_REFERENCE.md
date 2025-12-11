@@ -351,7 +351,29 @@ FOR user IN users
     concat: CONCAT(user.firstName, " ", user.lastName),
     split: SPLIT(user.email, "@"),
     replace: SUBSTITUTE(user.phone, "-", ""),
-    regex: REGEX_MATCHES(user.email, "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")
+    regex: REGEX_MATCHES(user.email, "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"),
+    soundex: SOUNDEX(user.lastName),
+    uuid: UUID(),
+    find_last: FIND_LAST(user.name, "a")
+  }
+```
+
+### Type Functions
+
+```aql
+FOR val IN data
+  RETURN {
+    is_null: IS_NULL(val),
+    is_bool: IS_BOOL(val),
+    is_number: IS_NUMBER(val),
+    is_string: IS_STRING(val),
+    is_array: IS_ARRAY(val),
+    is_object: IS_OBJECT(val),
+    is_date: IS_DATETIME(val),
+    is_key: IS_KEY(val),
+    to_int: TO_INT(val),
+    to_string: TO_STRING(val),
+    typename: TYPENAME(val)
   }
 ```
 
@@ -370,7 +392,11 @@ FOR data IN dataset
     log: LOG(ABS(data.value)),
     sin: SIN(data.angle),
     cos: COS(data.angle),
-    random: RAND()
+    random: RAND(),
+    variance: VARIANCE_SAMPLE([1, 2, 3, 4, 5]),
+    stddev: STDDEV_SAMPLE([1, 2, 3, 4, 5]),
+    median: MEDIAN([1, 2, 3, 4, 5]),
+    percentile: PERCENTILE([1, 2, 3, 4, 5], 90)
   }
 ```
 
@@ -388,7 +414,11 @@ FOR event IN events
     unix: DATE_TIMESTAMP(event.timestamp),
     from_unix: DATE_ISO8601(event.unix_timestamp),
     diff: DATE_DIFF(event.end_time, event.start_time, "minutes"),
-    add: DATE_ADD(event.timestamp, 1, "day")
+    add: DATE_ADD(event.timestamp, 1, "day"),
+    quarter: DATE_QUARTER(event.timestamp),
+    leapyear: DATE_LEAPYEAR(DATE_YEAR(event.timestamp)),
+    days_in_month: DATE_DAYS_IN_MONTH(event.timestamp),
+    iso_week: DATE_ISOWEEK(event.timestamp)
   }
 ```
 
@@ -408,7 +438,44 @@ FOR user IN users
     contains: "javascript" IN user.skills,
     intersection: INTERSECTION(user.skills, ["javascript", "python", "rust"]),
     union: UNION(user.skills, ["go", "typescript"]),
-    flatten: FLATTEN([user.skills, user.certifications])
+    intersection: INTERSECTION(user.skills, ["javascript", "python", "rust"]),
+    union: UNION(user.skills, ["go", "typescript"]),
+    flatten: FLATTEN([user.skills, user.certifications]),
+    outersection: OUTERSECTION(user.skills, ["java", "c++"]),
+    jaccard: JACCARD(user.skills, ["python", "rust"]),
+    interleave: INTERLEAVE(user.skills, [1, 2, 3])
+  }
+```
+
+### Graph Functions
+
+```aql
+// Graph analysis functions
+RETURN {
+  neighbors: GRAPH_NEIGHBORS("social", "users/alice", {direction: "outbound"}),
+  distance: GRAPH_DISTANCE_TO("social", "users/alice", "users/bob", {weight: "cost"}),
+  shortest: GRAPH_SHORTEST_PATH("social", "users/alice", "users/charlie", {}),
+  paths: GRAPH_PATHS("social", "users/alice", {maxDepth: 3}),
+  common: GRAPH_COMMON_NEIGHBORS("social", "users/alice", "users/bob", {}),
+  eccentricity: GRAPH_ECCENTRICITY("social", "users/alice", {}),
+  radius: GRAPH_RADIUS("social", {}),
+  diameter: GRAPH_DIAMETER("social", {})
+}
+```
+
+### Object Functions
+
+```aql
+FOR doc IN docs
+  RETURN {
+    keys: KEYS(doc),
+    values: VALUES(doc),
+    merge: MERGE(doc, {updated: true}),
+    matches: MATCHES(doc, {status: "active", type: "user"}),
+    has: HAS(doc, "email"),
+    unset: UNSET(doc, ["internal_id", "version"]),
+    keep: KEEP(doc, ["name", "email"]),
+    zip: ZIP(["a", "b"], [1, 2])
   }
 ```
 

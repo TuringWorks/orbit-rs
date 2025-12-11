@@ -2,8 +2,8 @@
 
 **Target**: ArangoDB AQL (ArangoDB Query Language) 3.10+
 **Reference**: https://www.arangodb.com/docs/stable/aql/
-**Last Updated**: 2025-12-10
-**Current Estimated Coverage**: ~65%
+**Last Updated**: 2025-12-11
+**Current Estimated Coverage**: ~85%
 
 ---
 
@@ -184,6 +184,7 @@ ArangoDB documents have special system attributes starting with `_`.
 | SHA1(text) | ✅ | SHA1 hash |
 | SHA256(text) | ✅ | SHA256 hash |
 | SHA512(text) | ✅ | SHA512 hash |
+| SOUNDEX(str) | ✅ | Soundex phonetic encoding |
 | SPLIT(text, separator) | ✅ | Split string |
 | SUBSTITUTE(text, search, replace) | ✅ | Replace substring |
 | SUBSTRING(text, offset, length) | ✅ | Extract substring |
@@ -269,7 +270,8 @@ ArangoDB documents have special system attributes starting with `_`.
 | FIRST(arr) | ✅ | First element |
 | FLATTEN(arr, depth) | ✅ | Flatten nested arrays |
 | INTERSECTION(arr1, arr2) | ✅ | Intersection of arrays |
-| INTERLEAVE(arr1, arr2) | ❌ | Interleave arrays |
+| INTERLEAVE(arr1, arr2) | ✅ | Interleave arrays |
+| JACCARD(arr1, arr2) | ✅ | Jaccard similarity index |
 | LAST(arr) | ✅ | Last element |
 | LENGTH(arr) | ✅ | Count elements (alias) |
 | MINUS(arr1, arr2) | ✅ | Subtract arr2 from arr1 |
@@ -316,7 +318,9 @@ ArangoDB documents have special system attributes starting with `_`.
 | IS_ARRAY(val) | ✅ | Check if array |
 | IS_BOOL(val) | ✅ | Check if boolean |
 | IS_DATESTRING(val) | ✅ | Check if date string |
+| IS_DATETIME(val) | ✅ | Check if valid datetime |
 | IS_DOCUMENT(val) | ✅ | Check if document |
+| IS_ID(val) | ✅ | Check if valid document ID |
 | IS_KEY(val) | ✅ | Check if valid key |
 | IS_LIST(val) | ✅ | Alias for IS_ARRAY |
 | IS_NULL(val) | ✅ | Check if null |
@@ -326,6 +330,7 @@ ArangoDB documents have special system attributes starting with `_`.
 | TO_ARRAY(val) | ✅ | Cast to array |
 | TO_BOOL(val) | ✅ | Cast to boolean |
 | TO_LIST(val) | ✅ | Alias for TO_ARRAY |
+| TO_INT(val) | ✅ | Cast to integer |
 | TO_NUMBER(val) | ✅ | Cast to number |
 | TO_STRING(val) | ✅ | Cast to string |
 | TYPENAME(val) | ✅ | Get type name |
@@ -353,7 +358,7 @@ ArangoDB documents have special system attributes starting with `_`.
 | ANALYZER(expr, analyzer) | ✅ | Set analyzer for expression |
 | BM25(doc) | ✅ | Get BM25 relevance score |
 | BOOST(expr, factor) | ✅ | Boost relevance of expression |
-| FULLTEXT(coll, attr, query) | 🔶 | Fulltext search (stub - returns empty) |
+| FULLTEXT(coll, attr, query) | ✅ | Full-text search using shared index (legacy function) |
 | PHRASE(tokens, text, analyzer) | ✅ | Build phrase for search |
 | TFIDF(doc) | ✅ | Get TFIDF relevance score |
 | TOKENS(input, analyzer) | ✅ | Tokenize text |
@@ -404,7 +409,7 @@ Format: `FOR v, e, p IN [min..max] OUTBOUND|INBOUND|ANY start_vertex GRAPH graph
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| SHORTEST_PATH | 🔶 | Find shortest path (stub - returns empty path) |
+| SHORTEST_PATH | ✅ | Find shortest path with `GRAPH_SHORTEST_PATH` |
 | K_SHORTEST_PATHS | 🔶 | Find top K shortest paths (stub) |
 | K_PATHS | 🔶 | Find all paths (stub) |
 | ALL_SHORTEST_PATHS | 🔶 | Find all shortest paths (stub) |
@@ -413,13 +418,16 @@ Format: `FOR v, e, p IN [min..max] OUTBOUND|INBOUND|ANY start_vertex GRAPH graph
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| GRAPH_COMMON_NEIGHBORS | 🔶 | Get common neighbors (stub) |
+| GRAPH_COMMON_NEIGHBORS | ✅ | Get common neighbors |
 | GRAPH_COMMON_PROPERTIES | 🔶 | Get common properties (stub) |
-| GRAPH_DISTANCE_TO | 🔶 | Get distance between vertices (stub) |
+| GRAPH_DIAMETER | ✅ | Graph diameter (max eccentricity) |
+| GRAPH_DISTANCE_TO | ✅ | Get distance between vertices |
+| GRAPH_ECCENTRICITY | ✅ | Node eccentricity |
 | GRAPH_EDGES | 🔶 | Get all edges (stub) |
-| GRAPH_NEIGHBORS | 🔶 | Get neighbors (stub) |
-| GRAPH_PATHS | 🔶 | Get all paths (stub) |
-| GRAPH_SHORTEST_PATH | 🔶 | Named graph shortest path (stub) |
+| GRAPH_NEIGHBORS | ✅ | Get neighbors |
+| GRAPH_PATHS | ✅ | Get all paths |
+| GRAPH_RADIUS | ✅ | Graph radius (min eccentricity) |
+| GRAPH_SHORTEST_PATH | ✅ | Named graph shortest path |
 | GRAPH_VERTICES | 🔶 | Get all vertices (stub) |
 | PREGEL_RESULT | 🔶 | Get Pregel algorithm result (stub) |
 

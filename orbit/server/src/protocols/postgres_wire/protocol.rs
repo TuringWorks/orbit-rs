@@ -7,6 +7,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use tracing::{debug, error, info};
 
+use super::auth::{AuthManager, AuthMethod, ScramAuth, UserStore};
 use super::messages::{
     type_oids, AuthenticationResponse, BackendMessage, FieldDescription, FrontendMessage,
     TransactionStatus,
@@ -38,6 +39,8 @@ pub struct PostgresWireProtocol {
     secret_key: Vec<u8>,
     prepared_statements: HashMap<String, String>,
     portals: HashMap<String, (String, Vec<Option<bytes::Bytes>>)>,
+    auth_manager: AuthManager,
+    scram_auth: Option<ScramAuth>,
 }
 
 /// Result of processing data in the connection loop
@@ -59,6 +62,13 @@ enum MessageResult {
 impl PostgresWireProtocol {
     /// Create a new PostgreSQL protocol handler
     pub fn new() -> Self {
+        // Initialize user store with a default user
+        let user_store = UserStore::new();
+        // TODO: In a real app, we wouldn't add this user here or we'd load from config
+        // Default: Enable SCRAM-SHA-256
+        let auth_method = AuthMethod::ScramSha256;
+        let auth_manager = AuthManager::new(auth_method, user_store);
+
         Self {
             state: ConnectionState::Initial,
             username: None,
@@ -69,12 +79,18 @@ impl PostgresWireProtocol {
             secret_key: Self::random_secret_key(),
             prepared_statements: HashMap::new(),
             portals: HashMap::new(),
+            auth_manager,
+            scram_auth: None,
         }
     }
 
     /// Create a new PostgreSQL protocol handler with custom query engine
     pub fn new_with_query_engine(query_engine: Arc<QueryEngine>) -> Self {
         println!("DEBUG: PostgresWireProtocol initialized with custom QueryEngine");
+        let user_store = UserStore::new();
+        let auth_method = AuthMethod::ScramSha256;
+        let auth_manager = AuthManager::new(auth_method, user_store);
+
         Self {
             state: ConnectionState::Initial,
             username: None,
@@ -85,6 +101,8 @@ impl PostgresWireProtocol {
             secret_key: Self::random_secret_key(),
             prepared_statements: HashMap::new(),
             portals: HashMap::new(),
+            auth_manager,
+            scram_auth: None,
         }
     }
 
@@ -269,6 +287,12 @@ impl PostgresWireProtocol {
             FrontendMessage::SSLRequest => {
                 self.handle_ssl_request(buf).await?;
             }
+            FrontendMessage::SASLInitialResponse { mechanism, data } => {
+                self.handle_sasl_initial_response(&mechanism, data, buf).await?;
+            }
+            FrontendMessage::SASLResponse { data } => {
+                self.handle_sasl_response(data, buf).await?;
+            }
         }
 
         Ok(true)
@@ -327,10 +351,28 @@ impl PostgresWireProtocol {
         self.parameters = parameters;
         self.state = ConnectionState::Authenticating;
 
-        // For simplicity, use trust authentication (no password required)
-        // In production, should use MD5 or SCRAM-SHA-256
-        BackendMessage::Authentication(AuthenticationResponse::Ok).encode(buf);
+        // Auto-register user for SCRAM testing if needed
+        if matches!(self.auth_manager.auth_method(), AuthMethod::ScramSha256) {
+             if let Some(user) = &self.username {
+                 if self.auth_manager.user_store().get_user(user).await.is_none() {
+                     // Auto-create user with password same as username for testing
+                     self.auth_manager.user_store().add_user(user.clone(), user.clone(), &AuthMethod::ScramSha256).await;
+                 }
+             }
+        }
 
+        let response = self.auth_manager.get_initial_auth_response();
+        BackendMessage::Authentication(response.clone()).encode(buf);
+
+        if let AuthenticationResponse::Ok = response {
+             self.finish_authentication(buf);
+        }
+
+        Ok(())
+    }
+
+    /// Finish authentication and unblock connection
+    fn finish_authentication(&mut self, buf: &mut BytesMut) {
         // Send parameter status
         BackendMessage::ParameterStatus {
             name: "server_version".to_string(),
@@ -364,15 +406,118 @@ impl PostgresWireProtocol {
         .encode(buf);
 
         self.state = ConnectionState::Ready;
-
-        Ok(())
     }
 
     /// Handle password message
-    async fn handle_password(&mut self, _password: &str, buf: &mut BytesMut) -> ProtocolResult<()> {
-        // For trust authentication, this shouldn't be called
-        BackendMessage::Authentication(AuthenticationResponse::Ok).encode(buf);
-        self.state = ConnectionState::Authenticated;
+    async fn handle_password(&mut self, password: &str, buf: &mut BytesMut) -> ProtocolResult<()> {
+        let username = self.username.clone().unwrap_or_default();
+        // In a real implementation we would check the password properly
+        let valid = self
+            .auth_manager
+            .verify_password(&username, password, None)
+            .await?;
+
+        if valid {
+            BackendMessage::Authentication(AuthenticationResponse::Ok).encode(buf);
+            self.finish_authentication(buf);
+            Ok(())
+        } else {
+            self.send_error(buf, "Password authentication failed");
+            Ok(()) // Don't terminate, just error? Usually terminate on auth fail.
+        }
+    }
+
+    /// Handle SASL initial response
+    async fn handle_sasl_initial_response(
+        &mut self,
+        mechanism: &str,
+        data: Option<bytes::Bytes>,
+        buf: &mut BytesMut,
+    ) -> ProtocolResult<()> {
+        if mechanism != "SCRAM-SHA-256" {
+            self.send_error(buf, "Unsupported SASL mechanism");
+            return Ok(());
+        }
+
+        let username = self.username.clone().unwrap_or_default();
+        let user_store = self.auth_manager.user_store();
+        let user_creds = user_store.get_user(&username).await;
+
+        if let Some(creds) = user_creds {
+            if let (Some(stored_key), Some(server_key), Some(salt), Some(iterations)) = (
+                creds.scram_stored_key,
+                creds.scram_server_key,
+                creds.scram_salt,
+                creds.scram_iterations,
+            ) {
+                // Parse client-first-message to extract client nonce
+                let client_first = if let Some(d) = &data {
+                    String::from_utf8_lossy(d).to_string()
+                } else {
+                    "".to_string()
+                };
+
+                // Extract 'r=' part (nonce)
+                // Format: n,,n=user,r=nonce
+                let nonce = client_first
+                    .split(',')
+                    .find(|p| p.starts_with("r="))
+                    .map(|p| p.trim_start_matches("r=").to_string());
+
+                if let Some(client_nonce) = nonce {
+                    let mut scram = ScramAuth::new(
+                        username.clone(),
+                        client_nonce,
+                        salt,
+                        iterations,
+                        stored_key,
+                        server_key,
+                    );
+
+                    let server_first = scram.process_client_first(&client_first)?;
+                    self.scram_auth = Some(scram);
+
+                    BackendMessage::Authentication(AuthenticationResponse::SASLContinue {
+                        data: bytes::Bytes::from(server_first),
+                    })
+                    .encode(buf);
+                } else {
+                    self.send_error(buf, "Invalid SCRAM client-first-message: missing nonce");
+                }
+            } else {
+                 self.send_error(buf, "User not configured for SCRAM");
+            }
+        } else {
+            self.send_error(buf, "Authentication failed");
+        }
+        Ok(())
+    }
+
+    /// Handle SASL response
+    async fn handle_sasl_response(
+        &mut self,
+        data: bytes::Bytes,
+        buf: &mut BytesMut,
+    ) -> ProtocolResult<()> {
+        if let Some(mut scram) = self.scram_auth.take() {
+            let client_final = String::from_utf8_lossy(&data).to_string();
+            match scram.process_client_final(&client_final) {
+                Ok(server_final) => {
+                    BackendMessage::Authentication(AuthenticationResponse::SASLFinal {
+                        data: bytes::Bytes::from(server_final),
+                    })
+                    .encode(buf);
+
+                    BackendMessage::Authentication(AuthenticationResponse::Ok).encode(buf);
+                    self.finish_authentication(buf);
+                }
+                Err(e) => {
+                    self.send_error(buf, &format!("SCRAM authentication failed: {}", e));
+                }
+            }
+        } else {
+            self.send_error(buf, "Protocol error: SASL response without initial step");
+        }
         Ok(())
     }
 

@@ -53,17 +53,17 @@ Arrow Flight SQL provides a high-performance, columnar wire protocol for OrbitQL
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Client Application                        │
+│                    Client Application                       │
 ├─────────────────────────────────────────────────────────────┤
-│              Flight SQL Client (JDBC/ODBC/Native)            │
+│              Flight SQL Client (JDBC/ODBC/Native)           │
 ├─────────────────────────────────────────────────────────────┤
-│                    Arrow Flight Protocol                     │
+│                    Arrow Flight Protocol                    │
 ├─────────────────────────────────────────────────────────────┤
-│                         gRPC/HTTP2                           │
+│                         gRPC/HTTP2                          │
 ├─────────────────────────────────────────────────────────────┤
-│                        TLS (optional)                        │
+│                        TLS (optional)                       │
 ├─────────────────────────────────────────────────────────────┤
-│                         TCP/IP                               │
+│                         TCP/IP                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -75,9 +75,9 @@ Arrow Flight SQL provides a high-performance, columnar wire protocol for OrbitQL
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
-│                        Orbit-RS Server                              │
+│                        Orbit-RS Server                             │
 │  ┌──────────────────────────────────────────────────────────────┐  │
-│  │                   Flight SQL Service                          │  │
+│  │                   Flight SQL Service                         │  │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐   │  │
 │  │  │  Handshake  │  │   Query     │  │  Prepared Statement │   │  │
 │  │  │   Handler   │  │  Executor   │  │      Manager        │   │  │
@@ -87,18 +87,18 @@ Arrow Flight SQL provides a high-performance, columnar wire protocol for OrbitQL
 │  │  │   Manager   │  │  Provider   │  │                     │   │  │
 │  │  └─────────────┘  └─────────────┘  └─────────────────────┘   │  │
 │  └──────────────────────────────────────────────────────────────┘  │
-│                              │                                      │
-│                              ▼                                      │
+│                              │                                     │
+│                              ▼                                     │
 │  ┌──────────────────────────────────────────────────────────────┐  │
-│  │                     OrbitQL Engine                            │  │
+│  │                     OrbitQL Engine                           │  │
 │  │  ┌─────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐   │  │
 │  │  │  Lexer  │  │  Parser  │  │ Optimizer│  │   Executor   │   │  │
 │  │  └─────────┘  └──────────┘  └──────────┘  └──────────────┘   │  │
 │  └──────────────────────────────────────────────────────────────┘  │
-│                              │                                      │
-│                              ▼                                      │
+│                              │                                     │
+│                              ▼                                     │
 │  ┌──────────────────────────────────────────────────────────────┐  │
-│  │                    Storage Engine                             │  │
+│  │                    Storage Engine                            │  │
 │  └──────────────────────────────────────────────────────────────┘  │
 └────────────────────────────────────────────────────────────────────┘
 ```
@@ -239,14 +239,14 @@ message FlightData {
 ### Basic Authentication Flow
 
 ```
-Client                                    Server
-   │                                         │
-   │──── Handshake(username:password) ──────▶│
-   │                                         │
-   │◀─── HandshakeResponse(token) ───────────│
-   │                                         │
+Client                                             Server
+   │                                                  │
+   │──── Handshake(username:password) ────---------──▶│
+   │                                                  │
+   │◀─── HandshakeResponse(token) ────────────────────│
+   │                                                  │
    │──── GetFlightInfo(Authorization: Bearer token) ─▶│
-   │                                         │
+   │                                                  │
 ```
 
 ### Implementation
@@ -757,7 +757,7 @@ impl OrbitFlightSqlServer {
 Client                                           Server
    │                                                │
    │── DoAction(CreatePreparedStatement) ──────────▶│
-   │     { query: "SELECT * FROM users WHERE id = ?"}│
+   │    { query: "SELECT * FROM users WHERE id = ?"}│
    │                                                │
    │◀── Result(PreparedStatementHandle) ────────────│
    │     { handle, parameter_schema, result_schema }│

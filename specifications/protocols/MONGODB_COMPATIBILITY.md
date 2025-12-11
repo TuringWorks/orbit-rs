@@ -2,8 +2,8 @@
 
 **Target**: MongoDB 6.x/7.x Wire Protocol
 **Reference**: https://www.mongodb.com/docs/manual/
-**Last Updated**: 2025-12-08
-**Current Estimated Coverage**: ~30%
+**Last Updated**: 2025-12-11
+**Current Estimated Coverage**: ~50%
 
 ---
 

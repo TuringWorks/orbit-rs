@@ -193,6 +193,11 @@ pub enum Token {
     First,
     Last,
     Next,
+    Similar,
+    Lateral,
+    To,
+    Any,
+    Some,
 
     // Keywords - DCL/TCL
     Grant,
@@ -263,6 +268,10 @@ pub enum Token {
     Import,
     Remote,
     Characteristics,
+    Attach,
+    Detach,
+    Logged,
+    Unlogged,
     // Lock Modes
     Access,
     Exclusive,
@@ -278,7 +287,6 @@ pub enum Token {
     Committed,
     Repeatable,
     Serializable,
-    To,
     Option,
     For,
     Public,
@@ -332,14 +340,11 @@ pub enum Token {
     Between,
     Like,
     ILike,
-    Similar,
     Is,
     Not,
     And,
     Or,
     Exists,
-    Any,
-    Some,
     As,
     If,
     Replace,
@@ -375,6 +380,12 @@ pub enum Token {
     Exclude,
     Ties,
     Others,
+    // Date/Time functions (keywords)
+    CurrentDate,
+    CurrentTime,
+    CurrentTimestamp,
+    LocalTime,
+    LocalTimestamp,
 
     // Keywords - Data types
     Boolean,
@@ -388,6 +399,7 @@ pub enum Token {
     Char,
     Varchar,
     Text,
+    Money,
     Bytea,
     Date,
     Time,
@@ -402,6 +414,8 @@ pub enum Token {
     SparseVec,
     With,
     Without,
+    Within,
+    Normalize,
     Zone,
 
     // Keywords - Vector specific
@@ -430,10 +444,30 @@ pub enum Token {
     // Operators - Comparison
     Equal,
     NotEqual,
+
     LessThan,
     LessThanOrEqual,
     GreaterThan,
     GreaterThanOrEqual,
+
+    // JSONb operators
+    Question,       // ? - Key exists
+    JsonbExistsAny, // ?| - Any key exists
+    JsonbExistsAll, // ?& - All keys exist
+    JsonPathExists, // @? - JSON path exists
+    JsonPathMatch,  // @@ - JSON path match
+    
+    // SQL/JSON keywords
+    JsonQuery,
+    JsonValue,
+    JsonExists,
+    JsonTable,
+    JsonScalar,
+    JsonSerialize,
+    JsonArray,
+    JsonObject,
+    JsonArrayAgg,
+    JsonObjectAgg,
 
     // Operators - Vector
     VectorDistance,       // <->
@@ -604,6 +638,18 @@ impl Lexer {
             // Type keywords
             ("ENUM", Token::Enum),
             ("COMPOSITE", Token::Composite),
+            ("MONEY", Token::Money),
+            // SQL/JSON keywords
+            ("JSON_QUERY", Token::JsonQuery),
+            ("JSON_VALUE", Token::JsonValue),
+            ("JSON_EXISTS", Token::JsonExists),
+            ("JSON_TABLE", Token::JsonTable),
+            ("JSON_SCALAR", Token::JsonScalar),
+            ("JSON_SERIALIZE", Token::JsonSerialize),
+            ("JSON_ARRAY", Token::JsonArray),
+            ("JSON_OBJECT", Token::JsonObject),
+            ("JSON_ARRAYAGG", Token::JsonArrayAgg),
+            ("JSON_OBJECTAGG", Token::JsonObjectAgg),
             // Additional DDL keywords
             ("CAST", Token::Cast),
             ("LANGUAGE", Token::Language),
@@ -639,6 +685,11 @@ impl Lexer {
             ("SCROLL", Token::Scroll),
             ("HOLD", Token::Hold),
             ("PRIOR", Token::Prior),
+            ("CURRENT_DATE", Token::CurrentDate),
+            ("CURRENT_TIME", Token::CurrentTime),
+            ("CURRENT_TIMESTAMP", Token::CurrentTimestamp),
+            ("LOCALTIME", Token::LocalTime),
+            ("LOCALTIMESTAMP", Token::LocalTimestamp),
             ("ABSOLUTE", Token::Absolute),
             ("RELATIVE", Token::Relative),
             ("FORWARD", Token::Forward),
@@ -674,6 +725,10 @@ impl Lexer {
             ("IMPORT", Token::Import),
             ("REMOTE", Token::Remote),
             ("CHARACTERISTICS", Token::Characteristics),
+            ("ATTACH", Token::Attach),
+            ("DETACH", Token::Detach),
+            ("LOGGED", Token::Logged),
+            ("UNLOGGED", Token::Unlogged),
             // Lock modes
             ("ACCESS", Token::Access),
             ("EXCLUSIVE", Token::Exclusive),
@@ -759,7 +814,13 @@ impl Lexer {
             ("DESC", Token::Desc),
             ("NULLS", Token::Nulls),
             ("FIRST", Token::First),
-            ("NEXT", Token::Next),
+            ("LAST", Token::Last),
+            ("SIMILAR", Token::Similar),
+            ("LATERAL", Token::Lateral),
+            ("TO", Token::To),
+            ("ANY", Token::Any),
+            ("SOME", Token::Some),
+            ("ALL", Token::All),
             ("LAST", Token::Last),
             // Control Keywords
             ("GRANT", Token::Grant),
@@ -880,6 +941,8 @@ impl Lexer {
             ("UUID", Token::Uuid),
             ("WITH", Token::With),
             ("WITHOUT", Token::Without),
+            ("WITHIN", Token::Within),
+            ("NORMALIZE", Token::Normalize),
             ("ZONE", Token::Zone),
             // PostgreSQL 18 - Temporal constraints
             ("OVERLAPS", Token::Overlaps),
@@ -1281,6 +1344,59 @@ impl Lexer {
                             return Token::Power;
                         }
 
+                        '?' => {
+                            self.advance();
+                            match self.current_char {
+                                Some('|') => {
+                                    self.advance();
+                                    return Token::JsonbExistsAny;
+                                }
+                                Some('&') => {
+                                    self.advance();
+                                    return Token::JsonbExistsAll;
+                                }
+                                _ => return Token::Question,
+                            }
+                        }
+
+                        '(' => {
+                            self.advance();
+                            return Token::LeftParen;
+                        }
+                        ')' => {
+                            self.advance();
+                            return Token::RightParen;
+                        }
+                        '[' => {
+                            self.advance();
+                            return Token::LeftBracket;
+                        }
+                        ']' => {
+                            self.advance();
+                            return Token::RightBracket;
+                        }
+                        '{' => {
+                            self.advance();
+                            return Token::LeftBrace;
+                        }
+                        '}' => {
+                            self.advance();
+                            return Token::RightBrace;
+                        }
+                        ',' => {
+                            self.advance();
+                            return Token::Comma;
+                        }
+                        ';' => {
+                            self.advance();
+                            return Token::Semicolon;
+                        }
+
+                        ':' => {
+                            self.advance();
+                            return Token::Colon;
+                        }
+
                         '=' => {
                             self.advance();
                             return Token::Equal;
@@ -1440,6 +1556,16 @@ impl Lexer {
                                     // @> (contains)
                                     self.advance();
                                     Token::RangeContains
+                                }
+                                Some('?') => {
+                                    // @? (JSON path exists)
+                                    self.advance();
+                                    Token::JsonPathExists
+                                }
+                                Some('@') => {
+                                    // @@ (JSON path match)
+                                    self.advance();
+                                    Token::JsonPathMatch
                                 }
                                 _ => Token::Identifier("@".to_string()),
                             };
