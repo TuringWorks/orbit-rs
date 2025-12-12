@@ -29,12 +29,17 @@ nom = "7.1"
 postgres-protocol = "0.6"
 postgres-types = "0.2"
 regex = "1.11"
+lazy_static = "1.4"
+url = "2.5"
+geohash = "0.13"
 md5 = "0.8"
 sha2 = "0.10"
 hex = "0.4"
 # base64 already defined below
 hmac = "0.12"
-pbkdf2 = "0.12"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+argon2 = "0.5"
+bcrypt = "0.15"
 axum = { version = "0.8", features = ["ws", "macros"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }

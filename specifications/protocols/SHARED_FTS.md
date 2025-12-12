@@ -28,7 +28,7 @@ The shared FTS module provides protocol-agnostic full-text search capabilities t
 │             │  │             │  │    LIKE     │  │             │  │             │  │             │
 └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘
        │                │                │                │                │                │
-       │  parse_postgres_tsquery()       │  parse_cql_query()             │                │
+       │  parse_postgres_tsquery()       │  parse_cql_query()              │                │
        │                │                │                │                │                │
        └────────────────┴────────────────┴────────────────┴────────────────┴────────────────┘
                                                    │

@@ -38,12 +38,15 @@
 //! See the [README.md](./README.md) for comprehensive documentation.
 
 pub mod analyzer;
+pub mod array_string;
 pub mod ast;
 pub mod cte_execution;
+pub mod crypto;
 pub mod execution;
 pub mod execution_strategy;
 pub mod executor;
 pub mod expression_evaluator;
+pub mod geo;
 pub mod graph_traversal;
 pub mod index_advisor;
 pub mod json;
@@ -51,6 +54,7 @@ pub mod lexer;
 pub mod mvcc_executor;
 pub mod optimizer;
 pub mod parallel_executor;
+pub mod parse;
 pub mod parser;
 pub mod plan_cache;
 pub mod query_cache;
