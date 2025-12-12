@@ -364,7 +364,8 @@ mod tests {
 
     async fn create_test_handler() -> ScriptingCommands {
         let orbit_config = orbit_client::OrbitClientConfig::default();
-        let orbit_client = Arc::new(OrbitClient::new(orbit_config).await.unwrap());
+        // Use new_offline for tests to avoid network connection requirement
+        let orbit_client = Arc::new(OrbitClient::new_offline(orbit_config).await.unwrap());
         let local_registry = Arc::new(SimpleLocalRegistry::new());
         ScriptingCommands::new(orbit_client, local_registry)
     }

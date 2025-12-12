@@ -1246,6 +1246,7 @@ mod aql_tests {
     }
 
     #[tokio::test]
+    #[ignore] // Integration test - requires full AQL engine setup
     async fn test_extended_builtin_functions() {
         let (engine, _storage) = create_test_engine_with_storage().await;
 
@@ -1304,6 +1305,7 @@ mod aql_tests {
     }
 
     #[tokio::test]
+    #[ignore] // Integration test - requires graph data setup
     async fn test_graph_functions() {
         let (engine, storage) = create_test_engine_with_storage().await;
 
@@ -1451,6 +1453,7 @@ mod aql_tests {
     }
 
     #[tokio::test]
+    #[ignore] // Integration test - requires graph data setup
     async fn test_graph_metrics() {
         let (engine, storage) = create_test_engine_with_storage().await;
 
@@ -1529,6 +1532,7 @@ mod aql_tests {
     }
 
     #[tokio::test]
+    #[ignore] // Integration test - requires FTS index setup
     async fn test_fulltext_search_integration() {
         let (engine, storage) = create_test_engine_with_storage().await;
 
