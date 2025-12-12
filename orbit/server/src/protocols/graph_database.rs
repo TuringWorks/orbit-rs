@@ -263,7 +263,7 @@ impl GraphActor {
         // Note: GraphEngine requires a concrete type, so we need to handle this differently
         // For now, we'll use in-memory storage and sync to persistent storage separately
         let storage = Arc::new(InMemoryGraphStorage::new());
-        let engine = GraphEngine::new(storage);
+        let engine = GraphEngine::new(Some(storage));
 
         // TODO: Integrate persistent storage sync after query execution
         // This would require modifying GraphEngine to support persistent backends

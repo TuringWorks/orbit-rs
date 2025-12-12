@@ -63,7 +63,7 @@ impl CypherServer {
 
                     // Spawn a task to handle the connection
                     tokio::spawn(async move {
-                        let mut handler = BoltProtocolHandler::new(storage);
+                        let mut handler = BoltProtocolHandler::new(Some(storage));
 
                         if let Some(acceptor) = tls_acceptor {
                             match acceptor.accept(stream).await {

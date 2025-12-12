@@ -1860,6 +1860,48 @@ impl TokenParser {
                 variable_length = Some(VariableLengthSpec { min_hops, max_hops });
             }
 
+            let mut properties = HashMap::new();
+            // Parse properties
+            if let Some(Token::LeftBrace) = self.current_token() {
+                self.advance();
+                while let Some(Token::Identifier(key)) = self.current_token() {
+                    let key = key.clone();
+                    self.advance();
+                    self.expect_token(Token::Colon)?;
+
+                    let value = match self.current_token() {
+                        Some(Token::String(s)) => {
+                            let s = s.clone();
+                            self.advance();
+                            serde_json::Value::String(s)
+                        }
+                        Some(Token::Number(n)) => {
+                            let n = n.clone();
+                            self.advance();
+                            if let Ok(int_val) = n.parse::<i64>() {
+                                serde_json::Value::Number(serde_json::Number::from(int_val))
+                            } else {
+                                return Err(ProtocolError::CypherError(format!("Invalid number: {n}")));
+                            }
+                        }
+                        _ => {
+                            return Err(ProtocolError::CypherError(
+                                "Expected property value".to_string(),
+                            ))
+                        }
+                    };
+
+                    properties.insert(key, value);
+
+                    if let Some(Token::Comma) = self.current_token() {
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
+                self.expect_token(Token::RightBrace)?;
+            }
+
             // Expect `]`
             if let Some(Token::RightBracket) = self.current_token() {
                 self.advance();
@@ -1901,12 +1943,14 @@ impl TokenParser {
             direction = RelationshipDirection::Incoming;
         }
 
+        let properties = HashMap::new();
+
         Ok(RelationshipPattern {
             variable: rel_variable,
             rel_type,
             rel_types,
             direction,
-            properties: HashMap::new(),
+            properties,
             variable_length,
         })
     }
