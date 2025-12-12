@@ -2471,7 +2471,7 @@ mod tests {
 
     async fn create_test_engine() -> GraphEngine<InMemoryGraphStorage> {
         let storage = Arc::new(InMemoryGraphStorage::new());
-        GraphEngine::new(storage)
+        GraphEngine::new(Some(storage))
     }
 
     #[tokio::test]
