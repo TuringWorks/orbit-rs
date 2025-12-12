@@ -114,7 +114,8 @@ impl CypherFunctions {
             "sum" => Self::sum(args),
             "avg" => Self::avg(args),
             "count" => Self::count(args),
-            "stdev" | "stdevp" => Self::stdev(args),
+            "stdev" => Self::stdev(args),
+            "stdevp" => Self::stdevp(args),
             "percentilecont" => Self::percentile_cont(args),
             "percentiledisc" => Self::percentile_disc(args),
 
@@ -1420,11 +1421,31 @@ impl CypherFunctions {
 
         let values: Vec<f64> = args.iter().filter_map(|v| v.as_f64()).collect();
 
+        if values.is_empty() || values.len() == 1 {
+            return Ok(Value::Null);
+        }
+
+        let mean = values.iter().sum::<f64>() / values.len() as f64;
+        // Sample standard deviation: divide by (n-1)
+        let variance =
+            values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (values.len() - 1) as f64;
+
+        Ok(json!(variance.sqrt()))
+    }
+
+    fn stdevp(args: &[Value]) -> ProtocolResult<Value> {
+        if args.is_empty() {
+            return Ok(Value::Null);
+        }
+
+        let values: Vec<f64> = args.iter().filter_map(|v| v.as_f64()).collect();
+
         if values.is_empty() {
             return Ok(Value::Null);
         }
 
         let mean = values.iter().sum::<f64>() / values.len() as f64;
+        // Population standard deviation: divide by n
         let variance = values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / values.len() as f64;
 
         Ok(json!(variance.sqrt()))
