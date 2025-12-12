@@ -1074,68 +1074,6 @@ pub fn graph_stats(graph: &Graph) -> GraphStats {
     }
 }
 
-// ============================================================================
-// Graph Metrics (Eccentricity, Radius, Diameter)
-// ============================================================================
-
-/// Calculate the eccentricity of a node (maximum shortest path distance to any other reachable node)
-pub fn eccentricity(graph: &Graph, node_id: &str) -> Option<usize> {
-    if !graph.nodes.contains_key(node_id) {
-        return None;
-    }
-
-    let traversal = bfs_traversal(graph, node_id, None);
-    // Find max depth in traversal result
-    traversal.depths.values().max().copied()
-}
-
-/// Calculate the eccentricity of all nodes in the graph
-pub fn all_eccentricities(graph: &Graph) -> HashMap<String, usize> {
-    let mut results = HashMap::new();
-    for node_id in graph.nodes.keys() {
-        if let Some(ecc) = eccentricity(graph, node_id) {
-            results.insert(node_id.clone(), ecc);
-        }
-    }
-    results
-}
-
-/// Calculate the radius of the graph (minimum eccentricity)
-pub fn radius(graph: &Graph) -> Option<usize> {
-    let eccentricities = all_eccentricities(graph);
-    eccentricities.values().min().copied()
-}
-
-/// Calculate the diameter of the graph (maximum eccentricity)
-pub fn diameter(graph: &Graph) -> Option<usize> {
-    let eccentricities = all_eccentricities(graph);
-    eccentricities.values().max().copied()
-}
-
-/// Find the vertex closest to a given target vertex (or set of vertices) based on shortest path
-pub fn closest_vertex(graph: &Graph, source_id: &str, candidates: &[String]) -> Option<String> {
-    if candidates.is_empty() {
-        return None;
-    }
-    
-    // Using BFS from source to find distances to all candidate nodes
-    let traversal = bfs_traversal(graph, source_id, None);
-    
-    let mut min_dist = usize::MAX;
-    let mut best_candidate = None;
-    
-    for candidate in candidates {
-        if let Some(&dist) = traversal.depths.get(candidate) {
-            if dist < min_dist {
-                min_dist = dist;
-                best_candidate = Some(candidate.clone());
-            }
-        }
-    }
-    
-    best_candidate
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

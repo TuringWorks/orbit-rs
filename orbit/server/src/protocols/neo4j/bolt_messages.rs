@@ -330,8 +330,7 @@ impl BoltMessageHandler {
             }
 
             // Check if there are more results
-            let has_more = state.result_cursor
-                < results.rows.len().max(results.nodes.len());
+            let has_more = state.result_cursor < results.rows.len().max(results.nodes.len());
 
             let mut metadata = HashMap::new();
             metadata.insert("has_more".to_string(), Value::Bool(has_more));

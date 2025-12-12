@@ -34,7 +34,7 @@
 
 pub mod auth;
 #[cfg(feature = "fts")]
-pub mod fts;
+// pub mod fts;  // Temporarily disabled - needs API update
 pub mod graphrag_engine;
 pub mod jsonb;
 pub mod messages;

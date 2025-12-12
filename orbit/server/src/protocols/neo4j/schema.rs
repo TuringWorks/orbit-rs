@@ -513,24 +513,30 @@ mod tests {
     #[test]
     fn test_list_indexes_for_label() {
         let mut manager = SchemaManager::new();
-        
-        manager.create_index(Index::btree(
-            "person_name_idx".to_string(),
-            "Person".to_string(),
-            vec!["name".to_string()],
-        )).unwrap();
-        
-        manager.create_index(Index::btree(
-            "person_email_idx".to_string(),
-            "Person".to_string(),
-            vec!["email".to_string()],
-        )).unwrap();
-        
-        manager.create_index(Index::btree(
-            "company_name_idx".to_string(),
-            "Company".to_string(),
-            vec!["name".to_string()],
-        )).unwrap();
+
+        manager
+            .create_index(Index::btree(
+                "person_name_idx".to_string(),
+                "Person".to_string(),
+                vec!["name".to_string()],
+            ))
+            .unwrap();
+
+        manager
+            .create_index(Index::btree(
+                "person_email_idx".to_string(),
+                "Person".to_string(),
+                vec!["email".to_string()],
+            ))
+            .unwrap();
+
+        manager
+            .create_index(Index::btree(
+                "company_name_idx".to_string(),
+                "Company".to_string(),
+                vec!["name".to_string()],
+            ))
+            .unwrap();
 
         let person_indexes = manager.list_indexes_for_label("Person");
         assert_eq!(person_indexes.len(), 2);
@@ -539,7 +545,7 @@ mod tests {
     #[test]
     fn test_constraint_validation() {
         let mut manager = SchemaManager::new();
-        
+
         // Test empty properties
         let invalid = Constraint {
             name: "invalid".to_string(),

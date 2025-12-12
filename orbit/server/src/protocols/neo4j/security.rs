@@ -101,9 +101,15 @@ pub enum Privilege {
     /// Database access
     Access { database: String },
     /// Read data
-    Read { database: String, graph: Option<String> },
+    Read {
+        database: String,
+        graph: Option<String>,
+    },
     /// Write data
-    Write { database: String, graph: Option<String> },
+    Write {
+        database: String,
+        graph: Option<String>,
+    },
     /// Create/drop indexes
     Index { database: String },
     /// Create/drop constraints
@@ -113,7 +119,10 @@ pub enum Privilege {
     /// Delete tokens
     DeleteToken { database: String },
     /// Traverse graph
-    Traverse { database: String, graph: Option<String> },
+    Traverse {
+        database: String,
+        graph: Option<String>,
+    },
     /// Execute procedures
     Execute { procedure: String },
     /// Execute boosted procedures
@@ -159,7 +168,7 @@ impl SecurityManager {
 
         // Create built-in roles
         manager.create_builtin_roles();
-        
+
         // Create default admin user
         manager.create_default_admin();
 
@@ -401,7 +410,11 @@ impl SecurityManager {
     }
 
     /// Revoke a privilege from a role
-    pub fn revoke_privilege(&mut self, role_name: &str, privilege: &Privilege) -> ProtocolResult<()> {
+    pub fn revoke_privilege(
+        &mut self,
+        role_name: &str,
+        privilege: &Privilege,
+    ) -> ProtocolResult<()> {
         if self.builtin_roles.contains(role_name) {
             return Err(ProtocolError::CypherError(format!(
                 "Cannot modify built-in role '{}'",
@@ -459,21 +472,22 @@ mod tests {
     #[test]
     fn test_create_user() {
         let mut manager = SecurityManager::new();
-        assert!(manager.create_user("alice".to_string(), "hash123".to_string()).is_ok());
+        assert!(manager
+            .create_user("alice".to_string(), "hash123".to_string())
+            .is_ok());
         assert_eq!(manager.list_users().len(), 2); // neo4j + alice
     }
 
     #[test]
     fn test_alter_user() {
         let mut manager = SecurityManager::new();
-        manager.create_user("alice".to_string(), "hash123".to_string()).unwrap();
-        
-        assert!(manager.alter_user(
-            "alice",
-            Some("newhash".to_string()),
-            Some(true),
-            None
-        ).is_ok());
+        manager
+            .create_user("alice".to_string(), "hash123".to_string())
+            .unwrap();
+
+        assert!(manager
+            .alter_user("alice", Some("newhash".to_string()), Some(true), None)
+            .is_ok());
 
         let user = manager.get_user("alice").unwrap();
         assert_eq!(user.password_hash, "newhash");
@@ -489,8 +503,10 @@ mod tests {
     #[test]
     fn test_grant_revoke_role() {
         let mut manager = SecurityManager::new();
-        manager.create_user("alice".to_string(), "hash123".to_string()).unwrap();
-        
+        manager
+            .create_user("alice".to_string(), "hash123".to_string())
+            .unwrap();
+
         assert!(manager.grant_role("alice", "reader").is_ok());
         assert!(manager.get_user("alice").unwrap().has_role("reader"));
 
@@ -502,14 +518,19 @@ mod tests {
     fn test_grant_privilege() {
         let mut manager = SecurityManager::new();
         manager.create_role("custom_role".to_string()).unwrap();
-        
+
         let privilege = Privilege::Read {
             database: "testdb".to_string(),
             graph: None,
         };
 
-        assert!(manager.grant_privilege("custom_role", privilege.clone()).is_ok());
-        assert!(manager.get_role("custom_role").unwrap().has_privilege(&privilege));
+        assert!(manager
+            .grant_privilege("custom_role", privilege.clone())
+            .is_ok());
+        assert!(manager
+            .get_role("custom_role")
+            .unwrap()
+            .has_privilege(&privilege));
     }
 
     #[test]
@@ -530,7 +551,9 @@ mod tests {
     #[test]
     fn test_user_has_privilege() {
         let mut manager = SecurityManager::new();
-        manager.create_user("alice".to_string(), "hash123".to_string()).unwrap();
+        manager
+            .create_user("alice".to_string(), "hash123".to_string())
+            .unwrap();
         manager.grant_role("alice", "reader").is_ok();
 
         let privilege = Privilege::Read {

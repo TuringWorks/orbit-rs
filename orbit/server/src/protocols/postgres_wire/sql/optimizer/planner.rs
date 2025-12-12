@@ -316,7 +316,9 @@ impl ExecutionPlanner {
                     },
                 })
             }
-            FromClause::Subquery { query, alias: _, .. } => self.plan_select(*query),
+            FromClause::Subquery {
+                query, alias: _, ..
+            } => self.plan_select(*query),
             FromClause::Values { values, alias: _ } => Ok(ExecutionPlan::Values {
                 estimated_rows: values.len(),
                 values,

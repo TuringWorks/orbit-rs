@@ -64,7 +64,9 @@ pub enum FrontendMessage {
         parameters: HashMap<String, String>,
     },
     /// Simple query
-    Query { query: String },
+    Query {
+        query: String,
+    },
     /// Parse (prepared statement)
     Parse {
         statement_name: String,
@@ -80,14 +82,20 @@ pub enum FrontendMessage {
         result_formats: Vec<i16>,
     },
     /// Execute portal
-    Execute { portal: String, max_rows: i32 },
+    Execute {
+        portal: String,
+        max_rows: i32,
+    },
     /// Describe prepared statement or portal
     Describe {
         target: DescribeTarget,
         name: String,
     },
     /// Close prepared statement or portal
-    Close { target: CloseTarget, name: String },
+    Close {
+        target: CloseTarget,
+        name: String,
+    },
     /// Flush output
     Flush,
     /// Sync (end of extended query)
@@ -95,17 +103,25 @@ pub enum FrontendMessage {
     /// Terminate connection
     Terminate,
     /// Password message
-    Password { password: String },
+    Password {
+        password: String,
+    },
     /// SASL Initial Response
     SASLInitialResponse {
         mechanism: String,
         data: Option<Bytes>,
     },
     /// SASL Response
-    SASLResponse { data: Bytes },
-    CopyData { data: Bytes },
+    SASLResponse {
+        data: Bytes,
+    },
+    CopyData {
+        data: Bytes,
+    },
     CopyDone,
-    CopyFail { message: String },
+    CopyFail {
+        message: String,
+    },
     /// SSL request
     SSLRequest,
     /// Function call (older protocol, but part of standard)
@@ -144,13 +160,19 @@ pub enum BackendMessage {
     /// Close complete
     CloseComplete,
     /// Command completion
-    CommandComplete { tag: String },
+    CommandComplete {
+        tag: String,
+    },
     /// Data row
-    DataRow { values: Vec<Option<Bytes>> },
+    DataRow {
+        values: Vec<Option<Bytes>>,
+    },
     /// Empty query response
     EmptyQueryResponse,
     /// Error response
-    ErrorResponse { fields: HashMap<u8, String> },
+    ErrorResponse {
+        fields: HashMap<u8, String>,
+    },
     /// PostgreSQL 18 (protocol 3.2): Protocol version negotiation
     /// Sent when client requests unsupported protocol version or options
     NegotiateProtocolVersion {
@@ -162,17 +184,28 @@ pub enum BackendMessage {
     /// No data
     NoData,
     /// Notice response
-    NoticeResponse { fields: HashMap<u8, String> },
+    NoticeResponse {
+        fields: HashMap<u8, String>,
+    },
     /// Parameter description
-    ParameterDescription { param_types: Vec<i32> },
+    ParameterDescription {
+        param_types: Vec<i32>,
+    },
     /// Parameter status
-    ParameterStatus { name: String, value: String },
+    ParameterStatus {
+        name: String,
+        value: String,
+    },
     /// Parse complete
     ParseComplete,
     /// Ready for query
-    ReadyForQuery { status: TransactionStatus },
+    ReadyForQuery {
+        status: TransactionStatus,
+    },
     /// Row description
-    RowDescription { fields: Vec<FieldDescription> },
+    RowDescription {
+        fields: Vec<FieldDescription>,
+    },
     /// Notification response
     NotificationResponse {
         process_id: i32,
@@ -444,22 +477,24 @@ impl FrontendMessage {
     fn parse_function_call(cursor: &mut Cursor<&[u8]>) -> ProtocolResult<Self> {
         let oid = cursor.get_i32();
         let num_args = cursor.get_i16();
-        
+
         let mut args = Vec::with_capacity(num_args as usize);
         for _ in 0..num_args {
-             let arg_len = cursor.get_i32();
-             if arg_len == -1 {
-                 args.push(None);
-             } else {
-                  let mut arg_data = vec![0u8; arg_len as usize];
-                  if cursor.remaining() < arg_len as usize {
-                      return Err(ProtocolError::PostgresError("Unexpected EOF in FunctionCall args".to_string()));
-                  }
-                  cursor.copy_to_slice(&mut arg_data);
-                 args.push(Some(Bytes::from(arg_data)));
-             }
+            let arg_len = cursor.get_i32();
+            if arg_len == -1 {
+                args.push(None);
+            } else {
+                let mut arg_data = vec![0u8; arg_len as usize];
+                if cursor.remaining() < arg_len as usize {
+                    return Err(ProtocolError::PostgresError(
+                        "Unexpected EOF in FunctionCall args".to_string(),
+                    ));
+                }
+                cursor.copy_to_slice(&mut arg_data);
+                args.push(Some(Bytes::from(arg_data)));
+            }
         }
-        
+
         Ok(FrontendMessage::FunctionCall { oid, args })
     }
 
@@ -509,12 +544,13 @@ impl FrontendMessage {
         })
     }
 
-
     fn parse_copy_data(cursor: &mut Cursor<&[u8]>) -> ProtocolResult<Self> {
         let len = cursor.get_ref().len() as u64 - cursor.position();
         let mut data = vec![0u8; len as usize];
         if cursor.remaining() < len as usize {
-            return Err(ProtocolError::PostgresError("Unexpected EOF in CopyData".to_string()));
+            return Err(ProtocolError::PostgresError(
+                "Unexpected EOF in CopyData".to_string(),
+            ));
         }
         cursor.copy_to_slice(&mut data);
         Ok(FrontendMessage::CopyData {

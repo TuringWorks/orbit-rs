@@ -32,9 +32,9 @@ impl PackStreamValue {
             PackStreamValue::Null => Value::Null,
             PackStreamValue::Boolean(b) => Value::Bool(*b),
             PackStreamValue::Integer(i) => Value::Number((*i).into()),
-            PackStreamValue::Float(f) => {
-                serde_json::Number::from_f64(*f).map(Value::Number).unwrap_or(Value::Null)
-            }
+            PackStreamValue::Float(f) => serde_json::Number::from_f64(*f)
+                .map(Value::Number)
+                .unwrap_or(Value::Null),
             PackStreamValue::String(s) => Value::String(s.clone()),
             PackStreamValue::List(items) => {
                 Value::Array(items.iter().map(|v| v.to_json()).collect())
@@ -156,9 +156,7 @@ pub fn decode_node(value: &PackStreamValue) -> ProtocolResult<GraphNode> {
         };
 
         let properties = if let PackStreamValue::Map(map) = &fields[2] {
-            map.iter()
-                .map(|(k, v)| (k.clone(), v.to_json()))
-                .collect()
+            map.iter().map(|(k, v)| (k.clone(), v.to_json())).collect()
         } else {
             HashMap::new()
         };
@@ -263,9 +261,7 @@ pub fn decode_relationship(value: &PackStreamValue) -> ProtocolResult<GraphRelat
         };
 
         let properties = if let PackStreamValue::Map(map) = &fields[4] {
-            map.iter()
-                .map(|(k, v)| (k.clone(), v.to_json()))
-                .collect()
+            map.iter().map(|(k, v)| (k.clone(), v.to_json())).collect()
         } else {
             HashMap::new()
         };
@@ -322,7 +318,10 @@ pub fn decode_date(value: &PackStreamValue) -> ProtocolResult<NaiveDate> {
 /// - Field 0: Integer (nanoseconds since midnight)
 pub fn encode_local_time(time: &NaiveTime) -> PackStreamValue {
     let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
-    let nanos = time.signed_duration_since(midnight).num_nanoseconds().unwrap_or(0);
+    let nanos = time
+        .signed_duration_since(midnight)
+        .num_nanoseconds()
+        .unwrap_or(0);
 
     PackStreamValue::Structure {
         signature: 0x74,
@@ -398,14 +397,8 @@ mod tests {
     #[test]
     fn test_packstream_value_conversions() {
         // Test primitive types
-        assert_eq!(
-            PackStreamValue::Null.to_json(),
-            Value::Null
-        );
-        assert_eq!(
-            PackStreamValue::Boolean(true).to_json(),
-            Value::Bool(true)
-        );
+        assert_eq!(PackStreamValue::Null.to_json(), Value::Null);
+        assert_eq!(PackStreamValue::Boolean(true).to_json(), Value::Bool(true));
         assert_eq!(
             PackStreamValue::Integer(42).to_json(),
             Value::Number(42.into())

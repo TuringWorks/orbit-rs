@@ -1102,7 +1102,7 @@ pub enum Expression {
     Literal(SqlValue),
     Column(ColumnRef),
     Parameter(u32),
-    
+
     // Date/Time functions
     CurrentDate,
     CurrentTime(Option<u32>),
@@ -1263,7 +1263,7 @@ pub enum BinaryOperator {
     JsonDelete,
     /// #- operator: delete path
     JsonDeletePath,
-    
+
     // JSON path operators (PostgreSQL)
     /// @? operator: does JSON path exist
     JsonPathExists,

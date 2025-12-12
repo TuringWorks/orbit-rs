@@ -159,7 +159,6 @@ pub enum CqlEvent {
     SchemaChange(SchemaChangeType, String, String, String), // change_type, keyspace, name, target_type
 }
 
-
 impl CqlType {
     /// Convert CQL type to Orbit SqlType
     pub fn to_sql_type(&self) -> ProtocolResult<SqlType> {

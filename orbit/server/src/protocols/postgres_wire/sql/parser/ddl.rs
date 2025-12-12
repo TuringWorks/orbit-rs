@@ -609,14 +609,14 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                     }
                 } else if parser.matches(&[Token::Constraint]) {
                     // RENAME CONSTRAINT is not in AST yet, skipping or treating as todo
-                     return Err(ParseError {
+                    return Err(ParseError {
                         message: "RENAME CONSTRAINT not supported yet".to_string(),
                         position: parser.position,
                         expected: vec!["COLUMN".to_string(), "TO".to_string()],
                         found: parser.current_token.clone(),
                     });
                 } else {
-                     return Err(ParseError {
+                    return Err(ParseError {
                         message: "Expected COLUMN or TO after RENAME".to_string(),
                         position: parser.position,
                         expected: vec!["COLUMN".to_string(), "TO".to_string()],
@@ -634,10 +634,10 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                         AlterTableAction::SetSchema(s)
                     } else {
                         return Err(ParseError {
-                             message: "Expected schema name".to_string(),
-                             position: parser.position,
-                             expected: vec!["schema name".to_string()],
-                             found: parser.current_token.clone(),
+                            message: "Expected schema name".to_string(),
+                            position: parser.position,
+                            expected: vec!["schema name".to_string()],
+                            found: parser.current_token.clone(),
                         });
                     }
                 } else if parser.matches(&[Token::Logged]) {
@@ -654,10 +654,10 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                         AlterTableAction::SetTablespace(t)
                     } else {
                         return Err(ParseError {
-                             message: "Expected tablespace name".to_string(),
-                             position: parser.position,
-                             expected: vec!["tablespace name".to_string()],
-                             found: parser.current_token.clone(),
+                            message: "Expected tablespace name".to_string(),
+                            position: parser.position,
+                            expected: vec!["tablespace name".to_string()],
+                            found: parser.current_token.clone(),
                         });
                     }
                 } else if parser.matches(&[Token::Without]) {
@@ -665,7 +665,7 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                     parser.expect(Token::Cluster)?;
                     AlterTableAction::SetWithoutCluster
                 } else {
-                     return Err(ParseError {
+                    return Err(ParseError {
                         message: "Expected SCHEMA, LOGGED, UNLOGGED, TABLESPACE, or WITHOUT CLUSTER after SET".to_string(),
                         position: parser.position,
                         expected: vec!["SCHEMA".to_string(), "LOGGED".to_string(), "UNLOGGED".to_string()],
@@ -682,10 +682,10 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                     AlterTableAction::Owner(o)
                 } else {
                     return Err(ParseError {
-                         message: "Expected owner name".to_string(),
-                         position: parser.position,
-                         expected: vec!["owner name".to_string()],
-                         found: parser.current_token.clone(),
+                        message: "Expected owner name".to_string(),
+                        position: parser.position,
+                        expected: vec!["owner name".to_string()],
+                        found: parser.current_token.clone(),
                     });
                 }
             }
@@ -712,7 +712,11 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                 } else {
                     false
                 };
-                AlterTableAction::DetachPartition { partition, concurrently, finalize }
+                AlterTableAction::DetachPartition {
+                    partition,
+                    concurrently,
+                    finalize,
+                }
             }
             Some(Token::Enable) => {
                 parser.advance()?;
@@ -730,23 +734,23 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                         AlterTableAction::EnableTrigger("USER".to_string())
                     } else {
                         return Err(ParseError {
-                             message: "Expected trigger name, ALL, or USER".to_string(),
-                             position: parser.position,
-                             expected: vec!["trigger name".to_string()],
-                             found: parser.current_token.clone(),
+                            message: "Expected trigger name, ALL, or USER".to_string(),
+                            position: parser.position,
+                            expected: vec!["trigger name".to_string()],
+                            found: parser.current_token.clone(),
                         });
                     }
                 } else if parser.matches(&[Token::Always, Token::Trigger]) {
-                     parser.advance()?;
-                     parser.advance()?;
-                     // For simplicity mapping to EnableTrigger with different value or logic, 
-                     // but adhering to AST. Let's assume just trigger name.
-                     return Err(ParseError {
-                             message: "ALWAYS TRIGGER not fully supported".to_string(),
-                             position: parser.position,
-                             expected: vec!["TRIGGER".to_string(), "ROW".to_string()],
-                             found: parser.current_token.clone(),
-                        });
+                    parser.advance()?;
+                    parser.advance()?;
+                    // For simplicity mapping to EnableTrigger with different value or logic,
+                    // but adhering to AST. Let's assume just trigger name.
+                    return Err(ParseError {
+                        message: "ALWAYS TRIGGER not fully supported".to_string(),
+                        position: parser.position,
+                        expected: vec!["TRIGGER".to_string(), "ROW".to_string()],
+                        found: parser.current_token.clone(),
+                    });
                 } else if parser.matches(&[Token::Row, Token::Level, Token::Security]) {
                     parser.advance()?;
                     parser.advance()?;
@@ -754,10 +758,10 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                     AlterTableAction::EnableRowLevelSecurity
                 } else {
                     return Err(ParseError {
-                         message: "Expected TRIGGER or ROW LEVEL SECURITY".to_string(),
-                         position: parser.position,
-                         expected: vec!["TRIGGER".to_string(), "ROW".to_string()],
-                         found: parser.current_token.clone(),
+                        message: "Expected TRIGGER or ROW LEVEL SECURITY".to_string(),
+                        position: parser.position,
+                        expected: vec!["TRIGGER".to_string(), "ROW".to_string()],
+                        found: parser.current_token.clone(),
                     });
                 }
             }
@@ -777,10 +781,10 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                         AlterTableAction::DisableTrigger("USER".to_string())
                     } else {
                         return Err(ParseError {
-                             message: "Expected trigger name, ALL, or USER".to_string(),
-                             position: parser.position,
-                             expected: vec!["trigger name".to_string()],
-                             found: parser.current_token.clone(),
+                            message: "Expected trigger name, ALL, or USER".to_string(),
+                            position: parser.position,
+                            expected: vec!["trigger name".to_string()],
+                            found: parser.current_token.clone(),
                         });
                     }
                 } else if parser.matches(&[Token::Row, Token::Level, Token::Security]) {
@@ -789,11 +793,11 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                     parser.advance()?;
                     AlterTableAction::DisableRowLevelSecurity
                 } else {
-                     return Err(ParseError {
-                         message: "Expected TRIGGER or ROW LEVEL SECURITY".to_string(),
-                         position: parser.position,
-                         expected: vec!["TRIGGER".to_string(), "ROW".to_string()],
-                         found: parser.current_token.clone(),
+                    return Err(ParseError {
+                        message: "Expected TRIGGER or ROW LEVEL SECURITY".to_string(),
+                        position: parser.position,
+                        expected: vec!["TRIGGER".to_string(), "ROW".to_string()],
+                        found: parser.current_token.clone(),
                     });
                 }
             }
@@ -821,10 +825,10 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                     AlterTableAction::ClusterOn(i)
                 } else {
                     return Err(ParseError {
-                         message: "Expected index name".to_string(),
-                         position: parser.position,
-                         expected: vec!["index name".to_string()],
-                         found: parser.current_token.clone(),
+                        message: "Expected index name".to_string(),
+                        position: parser.position,
+                        expected: vec!["index name".to_string()],
+                        found: parser.current_token.clone(),
                     });
                 }
             }
@@ -835,15 +839,15 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                     let column = parse_column_definition(parser)?;
                     AlterTableAction::AddColumn(column)
                 } else if parser.matches(&[Token::Constraint]) {
-                     // Constraint parsing not fully wired in AlterTableAction yet, skipping or TODO
-                     return Err(ParseError {
+                    // Constraint parsing not fully wired in AlterTableAction yet, skipping or TODO
+                    return Err(ParseError {
                         message: "ADD CONSTRAINT not fully supported yet".to_string(),
                         position: parser.position,
                         expected: vec!["COLUMN".to_string()],
                         found: parser.current_token.clone(),
                     });
                 } else {
-                     return Err(ParseError {
+                    return Err(ParseError {
                         message: "Expected COLUMN after ADD".to_string(),
                         position: parser.position,
                         expected: vec!["COLUMN".to_string()],
@@ -867,12 +871,16 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                         let name = col_name.clone();
                         parser.advance()?;
                         let cascade = if parser.matches(&[Token::Cascade]) {
-                             parser.advance()?;
-                             true
+                            parser.advance()?;
+                            true
                         } else {
-                             false
+                            false
                         };
-                        AlterTableAction::DropColumn { name, if_exists, cascade }
+                        AlterTableAction::DropColumn {
+                            name,
+                            if_exists,
+                            cascade,
+                        }
                     } else {
                         return Err(ParseError {
                             message: "Expected column name".to_string(),
@@ -882,7 +890,7 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                         });
                     }
                 } else {
-                     return Err(ParseError {
+                    return Err(ParseError {
                         message: "Expected COLUMN after DROP".to_string(),
                         position: parser.position,
                         expected: vec!["COLUMN".to_string()],
@@ -894,10 +902,10 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                 parser.advance()?;
                 if parser.matches(&[Token::Column]) {
                     parser.advance()?;
-                     if let Some(Token::Identifier(col_name)) = &parser.current_token {
+                    if let Some(Token::Identifier(col_name)) = &parser.current_token {
                         let name = col_name.clone();
                         parser.advance()?;
-                        
+
                         // Check for TYPE (Alter Column Type)
                         // MATCH TYPE or Identifier "TYPE" (case insensitive)
                         let is_type = if parser.matches(&[Token::Type]) {
@@ -911,7 +919,7 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                         if is_type {
                             parser.advance()?;
                             let new_type = utilities::parse_data_type(parser)?;
-                             // Check for USING
+                            // Check for USING
                             let _using = if parser.matches(&[Token::Using]) {
                                 parser.advance()?;
                                 Some(utilities::parse_expression(parser)?)
@@ -933,7 +941,7 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                                         action: crate::protocols::postgres_wire::sql::ast::AlterColumnAction::SetNotNull,
                                     }
                                 } else {
-                                     return Err(ParseError {
+                                    return Err(ParseError {
                                         message: "Expected NULL after SET NOT".to_string(),
                                         position: parser.position,
                                         expected: vec!["NULL".to_string()],
@@ -948,8 +956,8 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                                     action: crate::protocols::postgres_wire::sql::ast::AlterColumnAction::SetDefault(default_expr),
                                 }
                             } else {
-                                 // Handle generic SET DATA TYPE if needed, but handled above by TYPE check usually
-                                 return Err(ParseError {
+                                // Handle generic SET DATA TYPE if needed, but handled above by TYPE check usually
+                                return Err(ParseError {
                                     message: "Expected NOT NULL or DEFAULT after SET".to_string(),
                                     position: parser.position,
                                     expected: vec!["NOT NULL".to_string(), "DEFAULT".to_string()],
@@ -967,7 +975,7 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                                         action: crate::protocols::postgres_wire::sql::ast::AlterColumnAction::DropNotNull,
                                     }
                                 } else {
-                                     return Err(ParseError {
+                                    return Err(ParseError {
                                         message: "Expected NULL after DROP NOT".to_string(),
                                         position: parser.position,
                                         expected: vec!["NULL".to_string()],
@@ -981,7 +989,7 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                                     action: crate::protocols::postgres_wire::sql::ast::AlterColumnAction::DropDefault,
                                 }
                             } else {
-                                 return Err(ParseError {
+                                return Err(ParseError {
                                     message: "Expected NOT NULL or DEFAULT after DROP".to_string(),
                                     position: parser.position,
                                     expected: vec!["NOT NULL".to_string(), "DEFAULT".to_string()],
@@ -989,15 +997,20 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                                 });
                             }
                         } else {
-                             // Assuming SET DEFAULT / DROP DEFAULT etc? For now just handle Type as per test failure implies? 
-                             // Test was modify column... which usually is ALTER COLUMN type?
-                             // Standard SQL is ALTER COLUMN ... SET DATA TYPE ... or just type.
-                             // Postgres allows ALTER COLUMN ... TYPE ... 
-                             // Code above handles TYPE.
-                             return Err(ParseError {
-                                message: "Expected TYPE, SET, or DROP after ALTER COLUMN".to_string(),
+                            // Assuming SET DEFAULT / DROP DEFAULT etc? For now just handle Type as per test failure implies?
+                            // Test was modify column... which usually is ALTER COLUMN type?
+                            // Standard SQL is ALTER COLUMN ... SET DATA TYPE ... or just type.
+                            // Postgres allows ALTER COLUMN ... TYPE ...
+                            // Code above handles TYPE.
+                            return Err(ParseError {
+                                message: "Expected TYPE, SET, or DROP after ALTER COLUMN"
+                                    .to_string(),
                                 position: parser.position,
-                                expected: vec!["TYPE".to_string(), "SET".to_string(), "DROP".to_string()],
+                                expected: vec![
+                                    "TYPE".to_string(),
+                                    "SET".to_string(),
+                                    "DROP".to_string(),
+                                ],
                                 found: parser.current_token.clone(),
                             });
                         }
@@ -1010,7 +1023,7 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                         });
                     }
                 } else {
-                     return Err(ParseError {
+                    return Err(ParseError {
                         message: "Expected COLUMN after ALTER".to_string(),
                         position: parser.position,
                         expected: vec!["COLUMN".to_string()],

@@ -561,8 +561,6 @@ impl BoltProtocolHandler {
         }
     }
 
-    
-
     /// Handle Bolt handshake
     pub async fn handle_handshake(
         &mut self,
@@ -757,33 +755,33 @@ impl BoltProtocolHandler {
                 let (query, params, extra) = self.decode_run(message_bytes)?;
                 self.handle_run(query, params, extra, stream).await?;
             }
-// DISABLED:             0x3F => {
-// DISABLED:                 // PULL message
-// DISABLED:                 let (n, qid) = self.decode_pull(message_bytes)?;
-// DISABLED:                 self.handle_pull(n, qid, stream).await?;
-// DISABLED:             }
-// DISABLED:             0x2F => {
-// DISABLED:                 // DISCARD message
-// DISABLED:                 let (n, qid) = self.decode_discard(message_bytes)?;
-// DISABLED:                 self.handle_discard(n, qid, stream).await?;
-// DISABLED:             }
-// DISABLED:             0x11 => {
-// DISABLED:                 // BEGIN message
-// DISABLED:                 let extra = self.decode_begin(message_bytes)?;
-// DISABLED:                 self.handle_begin(extra, stream).await?;
-// DISABLED:             }
-// DISABLED:             0x12 => {
-// DISABLED:                 // COMMIT message
-// DISABLED:                 self.handle_commit(stream).await?;
-// DISABLED:             }
-// DISABLED:             0x13 => {
-// DISABLED:                 // ROLLBACK message
-// DISABLED:                 self.handle_rollback(stream).await?;
-// DISABLED:             }
-// DISABLED:             0x0F => {
-// DISABLED:                 // RESET message
-// DISABLED:                 self.handle_reset(stream).await?;
-// DISABLED:             }
+            // DISABLED:             0x3F => {
+            // DISABLED:                 // PULL message
+            // DISABLED:                 let (n, qid) = self.decode_pull(message_bytes)?;
+            // DISABLED:                 self.handle_pull(n, qid, stream).await?;
+            // DISABLED:             }
+            // DISABLED:             0x2F => {
+            // DISABLED:                 // DISCARD message
+            // DISABLED:                 let (n, qid) = self.decode_discard(message_bytes)?;
+            // DISABLED:                 self.handle_discard(n, qid, stream).await?;
+            // DISABLED:             }
+            // DISABLED:             0x11 => {
+            // DISABLED:                 // BEGIN message
+            // DISABLED:                 let extra = self.decode_begin(message_bytes)?;
+            // DISABLED:                 self.handle_begin(extra, stream).await?;
+            // DISABLED:             }
+            // DISABLED:             0x12 => {
+            // DISABLED:                 // COMMIT message
+            // DISABLED:                 self.handle_commit(stream).await?;
+            // DISABLED:             }
+            // DISABLED:             0x13 => {
+            // DISABLED:                 // ROLLBACK message
+            // DISABLED:                 self.handle_rollback(stream).await?;
+            // DISABLED:             }
+            // DISABLED:             0x0F => {
+            // DISABLED:                 // RESET message
+            // DISABLED:                 self.handle_reset(stream).await?;
+            // DISABLED:             }
             0x66 => {
                 // ROUTE message
                 self.handle_route(stream).await?;
@@ -1218,23 +1216,44 @@ impl BoltProtocolHandler {
                     // Very basic pattern matching for (n)-[r]->(m)
                     if pattern.elements.len() == 3 {
                         if let (
-                            crate::protocols::cypher::cypher_parser::PatternElement::Node(start_node_pattern),
-                            crate::protocols::cypher::cypher_parser::PatternElement::Relationship(rel_pattern),
-                            crate::protocols::cypher::cypher_parser::PatternElement::Node(end_node_pattern),
-                        ) = (&pattern.elements[0], &pattern.elements[1], &pattern.elements[2])
-                        {
+                            crate::protocols::cypher::cypher_parser::PatternElement::Node(
+                                start_node_pattern,
+                            ),
+                            crate::protocols::cypher::cypher_parser::PatternElement::Relationship(
+                                rel_pattern,
+                            ),
+                            crate::protocols::cypher::cypher_parser::PatternElement::Node(
+                                end_node_pattern,
+                            ),
+                        ) = (
+                            &pattern.elements[0],
+                            &pattern.elements[1],
+                            &pattern.elements[2],
+                        ) {
                             let all_rels = storage.get_all_relationships().await?;
                             for rel in all_rels {
-                                let type_matches = rel_pattern.rel_type.as_ref().map_or(true, |t| &rel.rel_type == t);
-                                let props_match = rel_pattern.properties.iter().all(|(k, v)| rel.properties.get(k) == Some(v));
+                                let type_matches = rel_pattern
+                                    .rel_type
+                                    .as_ref()
+                                    .map_or(true, |t| &rel.rel_type == t);
+                                let props_match = rel_pattern
+                                    .properties
+                                    .iter()
+                                    .all(|(k, v)| rel.properties.get(k) == Some(v));
 
                                 if type_matches && props_match {
                                     if let (Some(start_node), Some(end_node)) = (
                                         storage.get_node(&rel.start_node).await?,
                                         storage.get_node(&rel.end_node).await?,
                                     ) {
-                                        let start_node_labels_match = start_node_pattern.labels.iter().all(|l| start_node.labels.contains(l));
-                                        let end_node_labels_match = end_node_pattern.labels.iter().all(|l| end_node.labels.contains(l));
+                                        let start_node_labels_match = start_node_pattern
+                                            .labels
+                                            .iter()
+                                            .all(|l| start_node.labels.contains(l));
+                                        let end_node_labels_match = end_node_pattern
+                                            .labels
+                                            .iter()
+                                            .all(|l| end_node.labels.contains(l));
 
                                         if start_node_labels_match && end_node_labels_match {
                                             let mut row = Vec::new();
@@ -1263,7 +1282,10 @@ impl BoltProtocolHandler {
                         }
                         results = new_results;
                     }
-                    columns = items.iter().map(|i| i.alias.clone().unwrap_or_else(|| i.expression.clone())).collect();
+                    columns = items
+                        .iter()
+                        .map(|i| i.alias.clone().unwrap_or_else(|| i.expression.clone()))
+                        .collect();
                 }
                 _ => {}
             }
@@ -1271,7 +1293,6 @@ impl BoltProtocolHandler {
 
         Ok((columns, results))
     }
-
 
     /// Send a PackStream message with chunking
     async fn send_message(
@@ -1281,16 +1302,16 @@ impl BoltProtocolHandler {
         stream: &mut impl BoltStream,
     ) -> ProtocolResult<()> {
         use bytes::BufMut;
-        
+
         let mut message_buf = BytesMut::new();
-        
+
         // Write structure header
         message_buf.put_u8(0xB1); // Tiny struct with 1 field
         message_buf.put_u8(signature);
-        
+
         // Encode metadata map
         self.encode_map(&metadata, &mut message_buf);
-        
+
         // Send in chunks (max 65535 bytes per chunk)
         let mut offset = 0;
         while offset < message_buf.len() {
@@ -1303,19 +1324,20 @@ impl BoltProtocolHandler {
             })?;
             offset += chunk_size;
         }
-        
+
         // Send end marker
-        stream.write_all(&[0x00, 0x00]).await.map_err(|e| {
-            ProtocolError::Other(format!("Failed to write end marker: {}", e))
-        })?;
-        
+        stream
+            .write_all(&[0x00, 0x00])
+            .await
+            .map_err(|e| ProtocolError::Other(format!("Failed to write end marker: {}", e)))?;
+
         Ok(())
     }
 
     /// Encode a map to PackStream format
     fn encode_map(&self, map: &HashMap<String, Value>, buf: &mut BytesMut) {
         use bytes::BufMut;
-        
+
         let len = map.len();
         if len < 16 {
             buf.put_u8(0xA0 | len as u8); // Tiny map
@@ -1329,7 +1351,7 @@ impl BoltProtocolHandler {
             buf.put_u8(0xDA);
             buf.put_u32(len as u32);
         }
-        
+
         for (key, value) in map {
             self.encode_string(key, buf);
             self.encode_value(value, buf);
@@ -1339,7 +1361,7 @@ impl BoltProtocolHandler {
     /// Encode a string to PackStream format
     fn encode_string(&self, s: &str, buf: &mut BytesMut) {
         use bytes::BufMut;
-        
+
         let len = s.len();
         if len < 16 {
             buf.put_u8(0x80 | len as u8); // Tiny string
@@ -1359,7 +1381,7 @@ impl BoltProtocolHandler {
     /// Encode a value to PackStream format
     fn encode_value(&self, value: &Value, buf: &mut BytesMut) {
         use bytes::BufMut;
-        
+
         match value {
             Value::Null => buf.put_u8(0xC0),
             Value::Bool(b) => buf.put_u8(if *b { 0xC3 } else { 0xC2 }),
@@ -1405,9 +1427,8 @@ impl BoltProtocolHandler {
                 }
             }
             Value::Object(obj) => {
-                let map: HashMap<String, Value> = obj.iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect();
+                let map: HashMap<String, Value> =
+                    obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                 self.encode_map(&map, buf);
             }
         }
@@ -1445,11 +1466,22 @@ impl BoltProtocolHandler {
         map.insert("id".to_string(), Value::String(node.id.to_string()));
         map.insert(
             "labels".to_string(),
-            Value::Array(node.labels.iter().map(|l| Value::String(l.clone())).collect()),
+            Value::Array(
+                node.labels
+                    .iter()
+                    .map(|l| Value::String(l.clone()))
+                    .collect(),
+            ),
         );
-        map.insert("properties".to_string(), Value::Object(
-            node.properties.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-        ));
+        map.insert(
+            "properties".to_string(),
+            Value::Object(
+                node.properties
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(),
+            ),
+        );
         Value::Object(map)
     }
 
@@ -1458,11 +1490,20 @@ impl BoltProtocolHandler {
         let mut map = serde_json::Map::new();
         map.insert("id".to_string(), Value::String(rel.id.to_string()));
         map.insert("type".to_string(), Value::String(rel.rel_type.clone()));
-        map.insert("start".to_string(), Value::String(rel.start_node.to_string()));
+        map.insert(
+            "start".to_string(),
+            Value::String(rel.start_node.to_string()),
+        );
         map.insert("end".to_string(), Value::String(rel.end_node.to_string()));
-        map.insert("properties".to_string(), Value::Object(
-            rel.properties.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-        ));
+        map.insert(
+            "properties".to_string(),
+            Value::Object(
+                rel.properties
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(),
+            ),
+        );
         Value::Object(map)
     }
 }

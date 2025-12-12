@@ -15,9 +15,8 @@ use super::protocol::{
     build_system_virtual_schema_response, build_void_result, read_string, read_string_map,
     CqlFrame, CqlOpcode, QueryParameters,
 };
-use super::types::{CqlValue, CqlEvent, CqlEventType};
+use super::types::{CqlEvent, CqlEventType, CqlValue};
 use super::CqlConfig;
-use tokio::sync::broadcast;
 use crate::protocols::common::storage::memory::MemoryTableStorage;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::types::{SqlType, SqlValue};
@@ -28,6 +27,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+use tokio::sync::broadcast;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
@@ -45,9 +45,7 @@ fn sql_value_to_js_value(value: &SqlValue) -> JsValue {
         SqlValue::BigInt(n) => JsValue::Integer(*n),
         SqlValue::Real(f) => JsValue::Float(*f as f64),
         SqlValue::DoublePrecision(f) => JsValue::Float(*f),
-        SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => {
-            JsValue::String(s.clone())
-        }
+        SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => JsValue::String(s.clone()),
         SqlValue::Bytea(b) => JsValue::Binary(b.clone()),
         SqlValue::Timestamp(dt) => JsValue::Date(dt.to_string()),
         SqlValue::Date(d) => JsValue::Date(d.to_string()),
@@ -152,7 +150,11 @@ pub enum TriggerEvent {
 
 impl TriggerDefinition {
     /// Execute the trigger with JavaScript runtime (if available)
-    pub fn execute(&self, event: TriggerEvent, row_data: &HashMap<String, SqlValue>) -> ProtocolResult<()> {
+    pub fn execute(
+        &self,
+        event: TriggerEvent,
+        row_data: &HashMap<String, SqlValue>,
+    ) -> ProtocolResult<()> {
         info!(
             "[CQL Trigger] Executing trigger '{}' on table '{}' for {:?} event",
             self.name, self.table, event
@@ -175,7 +177,11 @@ impl TriggerDefinition {
     }
 
     #[cfg(feature = "js-quickjs")]
-    fn execute_with_javascript(&self, event: TriggerEvent, row_data: &HashMap<String, SqlValue>) -> ProtocolResult<()> {
+    fn execute_with_javascript(
+        &self,
+        event: TriggerEvent,
+        row_data: &HashMap<String, SqlValue>,
+    ) -> ProtocolResult<()> {
         // Convert row data to JavaScript values
         let mut js_row = HashMap::new();
         for (key, value) in row_data {
@@ -224,10 +230,7 @@ impl TriggerDefinition {
                 Ok(())
             }
             Err(e) => {
-                error!(
-                    "[CQL Trigger] '{}' execution failed: {}",
-                    self.name, e
-                );
+                error!("[CQL Trigger] '{}' execution failed: {}", self.name, e);
                 Err(ProtocolError::CqlError(format!(
                     "Trigger execution failed: {}",
                     e
@@ -489,7 +492,7 @@ impl CqlAdapter {
                     loop {
                         // Check if we have enough data for a frame header
                         if buffer.len() < 9 {
-                            break; 
+                            break;
                         }
 
                         // Check if we have the full frame
@@ -500,7 +503,7 @@ impl CqlAdapter {
                         };
 
                         if buffer.len() < 9 + body_len {
-                            break; 
+                            break;
                         }
 
                         // Parse frame
@@ -545,7 +548,7 @@ impl CqlAdapter {
                                  CqlEvent::StatusChange(_, _) => CqlEventType::StatusChange,
                                  CqlEvent::SchemaChange(_, _, _, _) => CqlEventType::SchemaChange,
                              };
-                             
+
                              if subscribed.contains(&event_type) {
                                  if let Ok(response) = super::protocol::build_event_response(-1, event) {
                                      let response_bytes = response.encode();
@@ -640,9 +643,9 @@ impl CqlAdapter {
     async fn handle_register(&self, frame: &CqlFrame) -> ProtocolResult<CqlFrame> {
         let body = frame.body.clone();
         let message = super::protocol::RegisterMessage::decode(body)?;
-        
+
         info!("Client registered for events: {:?}", message.event_types);
-        
+
         let mut subscribed = self.subscribed_events.write().await;
         subscribed.clear();
         for event_type_str in &message.event_types {
@@ -650,7 +653,7 @@ impl CqlAdapter {
                 subscribed.push(event_type);
             }
         }
-        
+
         Ok(build_ready_response(frame.stream))
     }
 
@@ -1039,8 +1042,19 @@ impl CqlAdapter {
     /// Execute a CQL statement
     #[cfg_attr(test, allow(dead_code))]
     /// Publish a schema change event
-    fn publish_schema_change_event(&self, change_type: super::types::SchemaChangeType, target_type: &str, keyspace: &str, name: &str) {
-        let event = CqlEvent::SchemaChange(change_type, keyspace.to_string(), name.to_string(), target_type.to_string());
+    fn publish_schema_change_event(
+        &self,
+        change_type: super::types::SchemaChangeType,
+        target_type: &str,
+        keyspace: &str,
+        name: &str,
+    ) {
+        let event = CqlEvent::SchemaChange(
+            change_type,
+            keyspace.to_string(),
+            name.to_string(),
+            target_type.to_string(),
+        );
         // We ignore errors if there are no subscribers
         let _ = self.event_bus.send(event);
     }
@@ -1632,7 +1646,7 @@ impl CqlAdapter {
                             super::types::SchemaChangeType::Created,
                             "KEYSPACE",
                             name,
-                            ""
+                            "",
                         );
                         Ok(self.build_schema_change_result(stream))
                     }
@@ -1705,19 +1719,24 @@ impl CqlAdapter {
                         let keyspace = if qualified_table.contains('.') {
                             qualified_table.split('.').next().unwrap_or("").to_string()
                         } else {
-                            self.parser.read().await.current_keyspace().unwrap_or("").to_string()
+                            self.parser
+                                .read()
+                                .await
+                                .current_keyspace()
+                                .unwrap_or("")
+                                .to_string()
                         };
                         let table_name = if qualified_table.contains('.') {
                             qualified_table.split('.').nth(1).unwrap_or("").to_string()
                         } else {
                             qualified_table.clone()
                         };
-                        
+
                         self.publish_schema_change_event(
                             super::types::SchemaChangeType::Created,
                             "TABLE",
                             &keyspace,
-                            &table_name
+                            &table_name,
                         );
                         Ok(self.build_schema_change_result(stream))
                     }
@@ -1737,7 +1756,7 @@ impl CqlAdapter {
                             super::types::SchemaChangeType::Dropped,
                             "KEYSPACE",
                             name,
-                            ""
+                            "",
                         );
                         Ok(self.build_schema_change_result(stream))
                     }
@@ -1765,10 +1784,15 @@ impl CqlAdapter {
                 };
                 match self.query_engine.execute_sql_direct(&sql).await {
                     Ok(_) => {
-                         let keyspace = if qualified_table.contains('.') {
+                        let keyspace = if qualified_table.contains('.') {
                             qualified_table.split('.').next().unwrap_or("").to_string()
                         } else {
-                            self.parser.read().await.current_keyspace().unwrap_or("").to_string()
+                            self.parser
+                                .read()
+                                .await
+                                .current_keyspace()
+                                .unwrap_or("")
+                                .to_string()
                         };
                         let table_name = if qualified_table.contains('.') {
                             qualified_table.split('.').nth(1).unwrap_or("").to_string()
@@ -1780,7 +1804,7 @@ impl CqlAdapter {
                             super::types::SchemaChangeType::Dropped,
                             "TABLE",
                             &keyspace,
-                            &table_name
+                            &table_name,
                         );
                         Ok(self.build_schema_change_result(stream))
                     }
@@ -1945,8 +1969,16 @@ impl CqlAdapter {
                 // Return schema information based on target
                 Ok(build_void_result(stream))
             }
-            CqlStatement::CreateTrigger { name, table, trigger_class, .. } => {
-                info!("[CQL] CREATE TRIGGER {} ON {} USING {}", name, table, trigger_class);
+            CqlStatement::CreateTrigger {
+                name,
+                table,
+                trigger_class,
+                ..
+            } => {
+                info!(
+                    "[CQL] CREATE TRIGGER {} ON {} USING {}",
+                    name, table, trigger_class
+                );
 
                 // Create trigger definition
                 let trigger = TriggerDefinition {
@@ -2417,7 +2449,7 @@ impl CqlAdapter {
         let mut body = BytesMut::new();
         // Result kind: SchemaChange (0x0005)
         body.put_i32(0x0005);
-        
+
         // Change type: CREATED ("CREATED")
         super::protocol::write_string(&mut body, "CREATED");
         // Target: TABLE ("TABLE")
@@ -2425,7 +2457,7 @@ impl CqlAdapter {
         // Options: keyspace, table
         super::protocol::write_string(&mut body, "test_keyspace");
         super::protocol::write_string(&mut body, "test_table");
-        
+
         CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
     }
 
@@ -2439,25 +2471,23 @@ impl CqlAdapter {
         table: &str,
     ) -> ProtocolResult<CqlFrame> {
         use super::types::{CqlEvent, SchemaChangeType};
-        
+
         let change = match change_type {
             "CREATED" => SchemaChangeType::Created,
             "UPDATED" => SchemaChangeType::Updated,
             "DROPPED" => SchemaChangeType::Dropped,
             _ => SchemaChangeType::Updated,
         };
-        
+
         let event = CqlEvent::SchemaChange(
             change,
             keyspace.to_string(),
             table.to_string(),
             "TABLE".to_string(),
         );
-        
+
         super::protocol::build_event_response(-1, event)
     }
-
-
 }
 
 #[cfg(test)]
@@ -2851,40 +2881,61 @@ mod tests {
         let parser = CqlParser::new();
         let statement = parser.parse("CREATE KEYSPACE ks1 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}").unwrap();
 
-        let result = adapter.execute_statement(&statement, 1, None, None).await.unwrap();
-        assert_ne!(result.opcode, CqlOpcode::Error, "Statement failed: {:?}", result);
+        let result = adapter
+            .execute_statement(&statement, 1, None, None)
+            .await
+            .unwrap();
+        assert_ne!(
+            result.opcode,
+            CqlOpcode::Error,
+            "Statement failed: {:?}",
+            result
+        );
 
         // Check if event is received
-        let event = tokio::time::timeout(std::time::Duration::from_millis(500), rx.recv()).await.expect("Timeout waiting for event").unwrap();
-        
+        let event = tokio::time::timeout(std::time::Duration::from_millis(500), rx.recv())
+            .await
+            .expect("Timeout waiting for event")
+            .unwrap();
+
         match event {
-             super::CqlEvent::SchemaChange(change_type, keyspace, name, target_type) => {
-                 assert_eq!(change_type, super::super::types::SchemaChangeType::Created);
-                 assert_eq!(keyspace, "ks1");
-                 assert_eq!(target_type, "KEYSPACE");
-                 assert_eq!(name, ""); // Name is empty for KEYSPACE changes
-             }
-             _ => panic!("Expected SchemaChange event"),
+            super::CqlEvent::SchemaChange(change_type, keyspace, name, target_type) => {
+                assert_eq!(change_type, super::super::types::SchemaChangeType::Created);
+                assert_eq!(keyspace, "ks1");
+                assert_eq!(target_type, "KEYSPACE");
+                assert_eq!(name, ""); // Name is empty for KEYSPACE changes
+            }
+            _ => panic!("Expected SchemaChange event"),
         }
-        
+
         // Test Create Table
         let statement_use = parser.parse("USE ks1").unwrap();
-        adapter.execute_statement(&statement_use, 1, None, None).await.unwrap();
-        
-        let statement_table = parser.parse("CREATE TABLE test_table (id int PRIMARY KEY, val text)").unwrap();
-        adapter.execute_statement(&statement_table, 1, None, None).await.unwrap();
-        
-        let event_table = tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await.expect("Timeout waiting for table event").unwrap();
-        
+        adapter
+            .execute_statement(&statement_use, 1, None, None)
+            .await
+            .unwrap();
+
+        let statement_table = parser
+            .parse("CREATE TABLE test_table (id int PRIMARY KEY, val text)")
+            .unwrap();
+        adapter
+            .execute_statement(&statement_table, 1, None, None)
+            .await
+            .unwrap();
+
+        let event_table = tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv())
+            .await
+            .expect("Timeout waiting for table event")
+            .unwrap();
+
         match event_table {
-             super::CqlEvent::SchemaChange(change_type, keyspace, name, target_type) => {
-                 assert_eq!(change_type, super::super::types::SchemaChangeType::Created);
-                 assert_eq!(keyspace, "ks1");
-                 assert_eq!(target_type, "TABLE");
-                 assert_eq!(name, "test_table");
-             }
-             _ => panic!("Expected SchemaChange event for table"),
+            super::CqlEvent::SchemaChange(change_type, keyspace, name, target_type) => {
+                assert_eq!(change_type, super::super::types::SchemaChangeType::Created);
+                assert_eq!(keyspace, "ks1");
+                assert_eq!(target_type, "TABLE");
+                assert_eq!(name, "test_table");
+            }
+            _ => panic!("Expected SchemaChange event for table"),
         }
     }
 }
-

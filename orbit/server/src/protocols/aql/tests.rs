@@ -1254,31 +1254,52 @@ mod aql_tests {
         assert_eq!(res.data[0], AqlValue::Number(serde_json::Number::from(3)));
 
         // String Functions
-        let res = engine.execute_query("RETURN CHAR_LENGTH('abc')").await.unwrap();
+        let res = engine
+            .execute_query("RETURN CHAR_LENGTH('abc')")
+            .await
+            .unwrap();
         assert_eq!(res.data[0], AqlValue::Number(serde_json::Number::from(3)));
-        
-        let res = engine.execute_query("RETURN FIND_LAST('hello world', 'o')").await.unwrap();
+
+        let res = engine
+            .execute_query("RETURN FIND_LAST('hello world', 'o')")
+            .await
+            .unwrap();
         assert_eq!(res.data[0], AqlValue::Number(serde_json::Number::from(7)));
 
-        let res = engine.execute_query("RETURN SUBSTITUTE('apple', 'p', 'b', 1)").await.unwrap();
+        let res = engine
+            .execute_query("RETURN SUBSTITUTE('apple', 'p', 'b', 1)")
+            .await
+            .unwrap();
         assert_eq!(res.data[0], AqlValue::String("abple".to_string()));
 
         // Numeric Functions
-        let res = engine.execute_query("RETURN VARIANCE_SAMPLE([1, 2, 3])").await.unwrap();
-        assert_eq!(res.data[0], AqlValue::Number(serde_json::Number::from_f64(1.0).unwrap()));
+        let res = engine
+            .execute_query("RETURN VARIANCE_SAMPLE([1, 2, 3])")
+            .await
+            .unwrap();
+        assert_eq!(
+            res.data[0],
+            AqlValue::Number(serde_json::Number::from_f64(1.0).unwrap())
+        );
 
         // Array Functions
-        let res = engine.execute_query("RETURN INTERLEAVE([1, 2], [3, 4])").await.unwrap();
+        let res = engine
+            .execute_query("RETURN INTERLEAVE([1, 2], [3, 4])")
+            .await
+            .unwrap();
         if let AqlValue::Array(arr) = &res.data[0] {
-             assert_eq!(arr.len(), 4);
-             assert_eq!(arr[0], AqlValue::Number(serde_json::Number::from(1)));
-             assert_eq!(arr[1], AqlValue::Number(serde_json::Number::from(3)));
+            assert_eq!(arr.len(), 4);
+            assert_eq!(arr[0], AqlValue::Number(serde_json::Number::from(1)));
+            assert_eq!(arr[1], AqlValue::Number(serde_json::Number::from(3)));
         } else {
-             panic!("Expected array, got {:?}", res.data[0]);
+            panic!("Expected array, got {:?}", res.data[0]);
         }
-        
+
         // Date Functions
-        let res = engine.execute_query("RETURN DATE_LEAPYEAR(2024)").await.unwrap();
+        let res = engine
+            .execute_query("RETURN DATE_LEAPYEAR(2024)")
+            .await
+            .unwrap();
         assert_eq!(res.data[0], AqlValue::Bool(true));
     }
 
@@ -1309,21 +1330,23 @@ mod aql_tests {
         let users = vec!["alice", "bob", "charlie", "dave"];
         for u in &users {
             let mut data = HashMap::new();
-            data.insert("name".to_string(), AqlValue::String(u.to_string().to_uppercase()));
+            data.insert(
+                "name".to_string(),
+                AqlValue::String(u.to_string().to_uppercase()),
+            );
             let doc = create_test_document("users", u, data);
             storage.store_document(doc).await.unwrap();
         }
 
         // 3. Add edges (Alice -> Bob, Bob -> Charlie, Alice -> Dave)
-        let rels = vec![
-            ("alice", "bob"), 
-            ("bob", "charlie"),
-            ("alice", "dave")
-        ];
-        
+        let rels = vec![("alice", "bob"), ("bob", "charlie"), ("alice", "dave")];
+
         for (i, (from, to)) in rels.iter().enumerate() {
             let mut data = HashMap::new();
-            data.insert("_from".to_string(), AqlValue::String(format!("users/{}", from)));
+            data.insert(
+                "_from".to_string(),
+                AqlValue::String(format!("users/{}", from)),
+            );
             data.insert("_to".to_string(), AqlValue::String(format!("users/{}", to)));
             let doc = create_test_document("knows", &format!("e{}", i), data);
             storage.store_document(doc).await.unwrap();
@@ -1332,27 +1355,27 @@ mod aql_tests {
         // 4. Test GRAPH_NEIGHBORS
         let query = "RETURN GRAPH_NEIGHBORS('knows', 'users/alice', {direction: 'outbound'})";
         let result = engine.execute_query(query).await;
-        
+
         assert!(result.is_ok());
         let res = result.unwrap();
         // Expecting array of neighbors
         if let Some(AqlValue::Array(neighbors)) = res.data.first() {
-             // Should contain 'users/bob' and 'users/dave' (or their docs/ids)
-             // Implementation details vary, let's just check length for now
-             assert!(neighbors.len() >= 2);
+            // Should contain 'users/bob' and 'users/dave' (or their docs/ids)
+            // Implementation details vary, let's just check length for now
+            assert!(neighbors.len() >= 2);
         } else {
-             panic!("Expected array result from GRAPH_NEIGHBORS");
+            panic!("Expected array result from GRAPH_NEIGHBORS");
         }
-        
+
         // 5. Test GRAPH_SHORTEST_PATH
         // Alice -> Charlie
         let query_path = "RETURN GRAPH_SHORTEST_PATH('knows', 'users/alice', 'users/charlie', {direction: 'outbound'})";
         let result_path = engine.execute_query(query_path).await;
         assert!(result_path.is_ok());
         if let Some(AqlValue::Array(path)) = result_path.unwrap().data.first() {
-             // Path should be [alice, bob, charlie] (vertices) or [e1, e2] (edges)?
-             // Usually vertices. Length 3.
-             assert!(!path.is_empty());
+            // Path should be [alice, bob, charlie] (vertices) or [e1, e2] (edges)?
+            // Usually vertices. Length 3.
+            assert!(!path.is_empty());
         }
 
         // 6. Test GRAPH_DISTANCE_TO
@@ -1360,59 +1383,71 @@ mod aql_tests {
         let result_dist = engine.execute_query(query_dist).await;
         assert!(result_dist.is_ok());
         // Distance should be 2.0 (number) or length?
-         if let Some(AqlValue::Number(d)) = result_dist.unwrap().data.first() {
-             assert_eq!(d.as_f64().unwrap(), 2.0);
-         }
+        if let Some(AqlValue::Number(d)) = result_dist.unwrap().data.first() {
+            assert_eq!(d.as_f64().unwrap(), 2.0);
+        }
 
-         // 7. Test GRAPH_COMMON_NEIGHBORS
-         // Alice -> Bob, Alice -> Dave. 
-         // Let's add another edge: Dave -> Charlie.
-         // Then neighbors(Alice) = {Bob, Dave}. Neighbors(Charlie_in) = {Bob, Dave}.
-         // Common neighbors of Alice(out) and Charlie(in) would be {Bob, Dave}.
-         // But typical usage `GRAPH_COMMON_NEIGHBORS(graph, v1, v2)` usually implies ANY direction unless options.
-         // Our implementation uses `graph_algo::common_neighbors` which uses `get_all_neighbors` (ANY).
-         // Nodes: Alice, Bob, Charlie, Dave.
-         // Edges: Alice->Bob, Bob->Charlie, Alice->Dave.
-         // Neighbors(Alice): Bob, Dave.
-         // Neighbors(Bob): Alice, Charlie.
-         // Common: None?
-         
-         // Let's add Edge: Dave -> Bob.
-         // Alice->Dave, Dave->Bob. 
-         // Alice neighbors: Bob, Dave.
-         // Dave neighbors: Alice, Bob.
-         // Common: Bob.
-         let data_db = HashMap::from([
-             ("_from".to_string(), AqlValue::String("users/dave".to_string())),
-             ("_to".to_string(), AqlValue::String("users/bob".to_string()))
-         ]);
-         let doc_db = create_test_document("knows", "e_db", data_db);
-         storage.store_document(doc_db).await.unwrap();
+        // 7. Test GRAPH_COMMON_NEIGHBORS
+        // Alice -> Bob, Alice -> Dave.
+        // Let's add another edge: Dave -> Charlie.
+        // Then neighbors(Alice) = {Bob, Dave}. Neighbors(Charlie_in) = {Bob, Dave}.
+        // Common neighbors of Alice(out) and Charlie(in) would be {Bob, Dave}.
+        // But typical usage `GRAPH_COMMON_NEIGHBORS(graph, v1, v2)` usually implies ANY direction unless options.
+        // Our implementation uses `graph_algo::common_neighbors` which uses `get_all_neighbors` (ANY).
+        // Nodes: Alice, Bob, Charlie, Dave.
+        // Edges: Alice->Bob, Bob->Charlie, Alice->Dave.
+        // Neighbors(Alice): Bob, Dave.
+        // Neighbors(Bob): Alice, Charlie.
+        // Common: None?
 
-         let query_common = "RETURN GRAPH_COMMON_NEIGHBORS('knows', 'users/alice', 'users/dave')";
-         let result_common = engine.execute_query(query_common).await;
-         assert!(result_common.is_ok());
-         let res_common = result_common.unwrap();
-         if let Some(AqlValue::Array(common)) = res_common.data.first() {
-              // Should contain 'users/bob'
-              let has_bob = common.iter().any(|v| match v {
-                  AqlValue::String(s) => s.contains("bob"),
-                  AqlValue::Object(o) => o.get("_key").and_then(|k| if let AqlValue::String(s) = k { Some(s.contains("bob")) } else { None }).unwrap_or(false),
-                  _ => false
-              });
-              assert!(has_bob, "Expected common neighbor Bob, got {:?}", common);
-         }
+        // Let's add Edge: Dave -> Bob.
+        // Alice->Dave, Dave->Bob.
+        // Alice neighbors: Bob, Dave.
+        // Dave neighbors: Alice, Bob.
+        // Common: Bob.
+        let data_db = HashMap::from([
+            (
+                "_from".to_string(),
+                AqlValue::String("users/dave".to_string()),
+            ),
+            ("_to".to_string(), AqlValue::String("users/bob".to_string())),
+        ]);
+        let doc_db = create_test_document("knows", "e_db", data_db);
+        storage.store_document(doc_db).await.unwrap();
 
-         // 8. Test GRAPH_PATHS
-         // Alice -> Bob -> Charlie
-         let query_paths = "RETURN GRAPH_PATHS('knows', {startVertex: 'users/alice', maxDepth: 2})";
-         let result_paths = engine.execute_query(query_paths).await;
-         assert!(result_paths.is_ok());
-         // Expected: [[Alice], [Alice, Bob], [Alice, Dave], [Alice, Bob, Charlie], [Alice, Dave, Bob]] (DFS order varies)
-         if let Some(AqlValue::Array(paths)) = result_paths.unwrap().data.first() {
-             assert!(!paths.is_empty());
-             // Just verify we got some paths back
-         }
+        let query_common = "RETURN GRAPH_COMMON_NEIGHBORS('knows', 'users/alice', 'users/dave')";
+        let result_common = engine.execute_query(query_common).await;
+        assert!(result_common.is_ok());
+        let res_common = result_common.unwrap();
+        if let Some(AqlValue::Array(common)) = res_common.data.first() {
+            // Should contain 'users/bob'
+            let has_bob = common.iter().any(|v| match v {
+                AqlValue::String(s) => s.contains("bob"),
+                AqlValue::Object(o) => o
+                    .get("_key")
+                    .and_then(|k| {
+                        if let AqlValue::String(s) = k {
+                            Some(s.contains("bob"))
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(false),
+                _ => false,
+            });
+            assert!(has_bob, "Expected common neighbor Bob, got {:?}", common);
+        }
+
+        // 8. Test GRAPH_PATHS
+        // Alice -> Bob -> Charlie
+        let query_paths = "RETURN GRAPH_PATHS('knows', {startVertex: 'users/alice', maxDepth: 2})";
+        let result_paths = engine.execute_query(query_paths).await;
+        assert!(result_paths.is_ok());
+        // Expected: [[Alice], [Alice, Bob], [Alice, Dave], [Alice, Bob, Charlie], [Alice, Dave, Bob]] (DFS order varies)
+        if let Some(AqlValue::Array(paths)) = result_paths.unwrap().data.first() {
+            assert!(!paths.is_empty());
+            // Just verify we got some paths back
+        }
     }
 
     #[tokio::test]
@@ -1441,15 +1476,14 @@ mod aql_tests {
         // 2. Populate graph
         // Alice -> Bob, Alice -> Dave
         // Bob -> Charlie
-        let rels = vec![
-            ("alice", "bob"), 
-            ("bob", "charlie"),
-            ("alice", "dave")
-        ];
-        
+        let rels = vec![("alice", "bob"), ("bob", "charlie"), ("alice", "dave")];
+
         for (i, (from, to)) in rels.iter().enumerate() {
             let mut data = HashMap::new();
-            data.insert("_from".to_string(), AqlValue::String(format!("users/{}", from)));
+            data.insert(
+                "_from".to_string(),
+                AqlValue::String(format!("users/{}", from)),
+            );
             data.insert("_to".to_string(), AqlValue::String(format!("users/{}", to)));
             let doc = create_test_document("knows", &format!("e{}", i), data);
             storage.store_document(doc).await.unwrap();
@@ -1459,12 +1493,16 @@ mod aql_tests {
         // Alice reaches Bob/Dave (1), Charlie (2). Max dist = 2.
         let query_ecc = "RETURN GRAPH_ECCENTRICITY('knows', 'users/alice')";
         let result_ecc = engine.execute_query(query_ecc).await;
-        assert!(result_ecc.is_ok(), "ECCENTRICITY failed: {:?}", result_ecc.err());
+        assert!(
+            result_ecc.is_ok(),
+            "ECCENTRICITY failed: {:?}",
+            result_ecc.err()
+        );
         let val_ecc = result_ecc.unwrap().data[0].clone();
         if let AqlValue::Number(n) = val_ecc {
-             assert_eq!(n.as_f64().unwrap(), 2.0, "Alice eccentricity should be 2");
+            assert_eq!(n.as_f64().unwrap(), 2.0, "Alice eccentricity should be 2");
         } else {
-             panic!("Expected number for eccentricity, got {:?}", val_ecc);
+            panic!("Expected number for eccentricity, got {:?}", val_ecc);
         }
 
         // Test DIAMETER
@@ -1473,9 +1511,9 @@ mod aql_tests {
         let result_dia = engine.execute_query(query_dia).await;
         let val_dia = result_dia.unwrap().data[0].clone();
         if let AqlValue::Number(n) = val_dia {
-             assert_eq!(n.as_f64().unwrap(), 2.0, "Diameter should be 2");
+            assert_eq!(n.as_f64().unwrap(), 2.0, "Diameter should be 2");
         } else {
-             panic!("Expected number for diameter");
+            panic!("Expected number for diameter");
         }
 
         // Test RADIUS
@@ -1484,9 +1522,9 @@ mod aql_tests {
         let result_rad = engine.execute_query(query_rad).await;
         let val_rad = result_rad.unwrap().data[0].clone();
         if let AqlValue::Number(n) = val_rad {
-             assert_eq!(n.as_f64().unwrap(), 0.0, "Radius should be 0");
+            assert_eq!(n.as_f64().unwrap(), 0.0, "Radius should be 0");
         } else {
-             panic!("Expected number for radius");
+            panic!("Expected number for radius");
         }
     }
 
@@ -1510,10 +1548,10 @@ mod aql_tests {
             "INSERT {title: 'StarWars', description: 'Star Wars is a space opera'} INTO movies",
             "INSERT {title: 'Inception', description: 'Inception is a dream within a dream'} INTO movies",
         ];
-        
+
         for q in queries {
-             let res = engine.execute_query(q).await;
-             assert!(res.is_ok(), "Failed to insert: {:?}", res.err());
+            let res = engine.execute_query(q).await;
+            assert!(res.is_ok(), "Failed to insert: {:?}", res.err());
         }
 
         // Test FULLTEXT search
@@ -1521,32 +1559,32 @@ mod aql_tests {
         let query = "RETURN FULLTEXT('movies', 'description', 'sci-fi')";
         let result = engine.execute_query(query).await;
         assert!(result.is_ok(), "FULLTEXT query failed: {:?}", result.err());
-        
+
         let data = result.unwrap().data;
         assert_eq!(data.len(), 1); // One return value (the array of matches)
-        
+
         if let AqlValue::Array(matches) = &data[0] {
             assert_eq!(matches.len(), 1, "Expected 1 match for sci-fi");
             // Check content
             if let AqlValue::Object(doc) = &matches[0] {
                 if let Some(AqlValue::String(title)) = doc.get("title") {
-                     assert_eq!(title, "Matrix");
+                    assert_eq!(title, "Matrix");
                 } else {
-                     panic!("Document missing title");
+                    panic!("Document missing title");
                 }
             }
         } else {
             panic!("Expected array from FULLTEXT");
         }
-        
+
         // Find "dream" (should have 1 match "Inception")
         let query2 = "RETURN FULLTEXT('movies', 'description', 'dream')";
         let result2 = engine.execute_query(query2).await.unwrap();
         if let AqlValue::Array(matches) = &result2.data[0] {
             assert_eq!(matches.len(), 1, "Expected 1 match for dream");
-             if let AqlValue::Object(doc) = &matches[0] {
+            if let AqlValue::Object(doc) = &matches[0] {
                 if let Some(AqlValue::String(title)) = doc.get("title") {
-                     assert_eq!(title, "Inception");
+                    assert_eq!(title, "Inception");
                 }
             }
         }

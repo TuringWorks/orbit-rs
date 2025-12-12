@@ -830,9 +830,6 @@ pub fn write_string_list(buf: &mut BytesMut, list: &[String]) {
     }
 }
 
-
-
-
 /// Build a RESULT response with system_schema.views data (empty)
 pub fn build_system_schema_views_response(stream: i16) -> CqlFrame {
     let mut body = BytesMut::new();
@@ -1098,7 +1095,6 @@ pub fn build_error_from_protocol_error(
 
 /// Write a CQL string (2-byte length + UTF-8 bytes)
 
-
 /// Read a CQL string
 pub fn read_string(buf: &mut Bytes) -> ProtocolResult<String> {
     if buf.remaining() < 2 {
@@ -1147,9 +1143,9 @@ pub fn compress_data(data: &[u8], algorithm: CompressionAlgorithm) -> ProtocolRe
         CompressionAlgorithm::None => Ok(data.to_vec()),
         CompressionAlgorithm::Snappy => {
             let mut encoder = snap::raw::Encoder::new();
-            encoder.compress_vec(data).map_err(|e| {
-                ProtocolError::CqlError(format!("Snappy compression failed: {}", e))
-            })
+            encoder
+                .compress_vec(data)
+                .map_err(|e| ProtocolError::CqlError(format!("Snappy compression failed: {}", e)))
         }
         CompressionAlgorithm::Lz4 => {
             // LZ4 block compression
@@ -1164,15 +1160,14 @@ pub fn decompress_data(data: &[u8], algorithm: CompressionAlgorithm) -> Protocol
         CompressionAlgorithm::None => Ok(data.to_vec()),
         CompressionAlgorithm::Snappy => {
             let mut decoder = snap::raw::Decoder::new();
-            decoder.decompress_vec(data).map_err(|e| {
-                ProtocolError::CqlError(format!("Snappy decompression failed: {}", e))
-            })
+            decoder
+                .decompress_vec(data)
+                .map_err(|e| ProtocolError::CqlError(format!("Snappy decompression failed: {}", e)))
         }
         CompressionAlgorithm::Lz4 => {
             // LZ4 block decompression
-            lz4_flex::decompress_size_prepended(data).map_err(|e| {
-                ProtocolError::CqlError(format!("LZ4 decompression failed: {}", e))
-            })
+            lz4_flex::decompress_size_prepended(data)
+                .map_err(|e| ProtocolError::CqlError(format!("LZ4 decompression failed: {}", e)))
         }
     }
 }
@@ -1307,7 +1302,7 @@ pub fn build_event_response(stream: i16, event: CqlEvent) -> ProtocolResult<CqlF
             write_string(&mut body, change_type.as_str());
             write_string(&mut body, &target_type);
             write_string(&mut body, &keyspace);
-            
+
             // KEYSPACE target only needs keyspace
             // TABLE, TYPE, etc need name as well
             if target_type != "KEYSPACE" {
@@ -1318,9 +1313,6 @@ pub fn build_event_response(stream: i16, event: CqlEvent) -> ProtocolResult<CqlF
 
     Ok(CqlFrame::response(stream, CqlOpcode::Event, body.freeze()))
 }
-
-
-
 
 #[cfg(test)]
 

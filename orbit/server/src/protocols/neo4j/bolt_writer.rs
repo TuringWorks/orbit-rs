@@ -31,13 +31,13 @@ impl BoltWriter {
         let mut offset = 0;
         while offset < data.len() {
             let chunk_size = (data.len() - offset).min(MAX_CHUNK_SIZE);
-            
+
             // Write chunk size (2 bytes, big-endian)
             stream.write_u16(chunk_size as u16).await?;
-            
+
             // Write chunk data
             stream.write_all(&data[offset..offset + chunk_size]).await?;
-            
+
             offset += chunk_size;
         }
 
@@ -147,7 +147,7 @@ impl PackStreamEncoder {
         map: &HashMap<String, Value>,
     ) -> ProtocolResult<()> {
         let len = map.len();
-        
+
         // Encode map size
         if len <= 15 {
             buf.extend_from_slice(&[(0xA0 | len as u8)]); // Tiny map
@@ -177,7 +177,7 @@ impl PackStreamEncoder {
     /// Encode a list to PackStream format
     pub fn encode_list(&mut self, buf: &mut BytesMut, list: &[Value]) -> ProtocolResult<()> {
         let len = list.len();
-        
+
         // Encode list size
         if len <= 15 {
             buf.extend_from_slice(&[(0x90 | len as u8)]); // Tiny list
@@ -252,7 +252,8 @@ impl PackStreamEncoder {
                 self.encode_list(buf, arr)?;
             }
             Value::Object(obj) => {
-                let map: HashMap<String, Value> = obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                let map: HashMap<String, Value> =
+                    obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                 self.encode_map(buf, &map)?;
             }
         }
@@ -313,9 +314,9 @@ mod tests {
     fn test_encode_string() {
         let mut encoder = PackStreamEncoder::new();
         let mut buf = BytesMut::new();
-        
+
         encoder.encode_string(&mut buf, "hello").unwrap();
-        
+
         // Should be: 0x85 (tiny string, len=5) + "hello"
         assert_eq!(buf[0], 0x85);
         assert_eq!(&buf[1..], b"hello");
@@ -325,9 +326,9 @@ mod tests {
     fn test_encode_integer() {
         let mut encoder = PackStreamEncoder::new();
         let mut buf = BytesMut::new();
-        
+
         encoder.encode_integer(&mut buf, 42).unwrap();
-        
+
         // Should be: 0x2A (tiny int 42)
         assert_eq!(buf[0], 42);
     }
@@ -336,12 +337,12 @@ mod tests {
     fn test_encode_map() {
         let mut encoder = PackStreamEncoder::new();
         let mut buf = BytesMut::new();
-        
+
         let mut map = HashMap::new();
         map.insert("key".to_string(), Value::String("value".to_string()));
-        
+
         encoder.encode_map(&mut buf, &map).unwrap();
-        
+
         // Should start with 0xA1 (tiny map, len=1)
         assert_eq!(buf[0], 0xA1);
     }

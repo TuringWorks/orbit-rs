@@ -38,7 +38,7 @@ pub mod adapter;
 pub mod auth;
 pub mod batch_insert;
 #[cfg(feature = "fts")]
-pub mod fts;
+// pub mod fts;  // Temporarily disabled - needs API update
 pub mod packet;
 pub mod prepared_cache;
 pub mod protocol;

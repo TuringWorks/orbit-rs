@@ -49,12 +49,14 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
     // Parse WITH clause using SelectParser logic
     let with = if parser.matches(&[Token::With]) {
         let mut select_parser = super::select::SelectParser::new();
-        let with_clause = select_parser.parse_with_clause(&parser.tokens, &mut parser.position).map_err(|e| ParseError {
-            message: e.to_string(),
-            position: parser.position,
-            expected: vec!["WITH clause".to_string()],
-            found: parser.current_token.clone(),
-        })?;
+        let with_clause = select_parser
+            .parse_with_clause(&parser.tokens, &mut parser.position)
+            .map_err(|e| ParseError {
+                message: e.to_string(),
+                position: parser.position,
+                expected: vec!["WITH clause".to_string()],
+                found: parser.current_token.clone(),
+            })?;
         // Update current_token as SelectParser advances position
         parser.current_token = parser.tokens.get(parser.position).cloned();
         Some(with_clause)

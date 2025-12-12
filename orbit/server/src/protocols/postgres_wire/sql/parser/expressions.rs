@@ -218,13 +218,13 @@ impl ExpressionParser {
                         BinaryOperator::NotLike
                     } else if *pos + 1 < tokens.len() && matches!(&tokens[*pos + 1], Token::ILike) {
                         *pos += 1; // consume NOT (caller consumes ILIKE)
-                        // Assuming NotILike matches NotLike for now or creating NotILike
-                        // Standard Postgres doesn't strictly have NOT ILIKE operator in AST always, 
-                        // but let's check what I have. I'll use NotLike + ILike semantics if possible or just parse as NotLike? 
-                        // Actually I don't have NotILike in my AST update earlier.
-                        // I will skip NOT ILIKE for now or map to NotLike if acceptable (it's not).
-                        // I will strictly handle SIMILAR TO for now.
-                        break; 
+                                   // Assuming NotILike matches NotLike for now or creating NotILike
+                                   // Standard Postgres doesn't strictly have NOT ILIKE operator in AST always,
+                                   // but let's check what I have. I'll use NotLike + ILike semantics if possible or just parse as NotLike?
+                                   // Actually I don't have NotILike in my AST update earlier.
+                                   // I will skip NOT ILIKE for now or map to NotLike if acceptable (it's not).
+                                   // I will strictly handle SIMILAR TO for now.
+                        break;
                     } else {
                         break;
                     }
@@ -381,23 +381,23 @@ impl ExpressionParser {
                 *pos += 1;
                 // Parse subquery
                 if *pos >= tokens.len() || !matches!(tokens[*pos], Token::LeftParen) {
-                     return Err(crate::protocols::error::ProtocolError::ParseError(
+                    return Err(crate::protocols::error::ProtocolError::ParseError(
                         "Expected '(' after EXISTS".to_string(),
                     ));
                 }
                 *pos += 1;
-                
+
                 use crate::protocols::postgres_wire::sql::parser::select::SelectParser;
                 let mut select_parser = SelectParser::new();
                 let subquery = select_parser.parse_select(tokens, pos)?;
-                
+
                 if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
                     return Err(crate::protocols::error::ProtocolError::ParseError(
                         "Expected ')' after EXISTS subquery".to_string(),
                     ));
                 }
                 *pos += 1;
-                
+
                 Ok(Expression::Exists(Box::new(subquery)))
             }
             _ => self.parse_postfix_expression(tokens, pos),
@@ -737,13 +737,13 @@ impl ExpressionParser {
 
             Token::LeftParen => {
                 *pos += 1; // consume '('
-                
+
                 // Check if this is a subquery (SELECT ...)
                 if *pos < tokens.len() && matches!(tokens[*pos], Token::Select) {
                     use crate::protocols::postgres_wire::sql::parser::select::SelectParser;
                     let mut select_parser = SelectParser::new();
                     let subquery = select_parser.parse_select(tokens, pos)?;
-                    
+
                     if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
                         return Err(crate::protocols::error::ProtocolError::ParseError(
                             "Expected ')' after subquery".to_string(),
@@ -753,33 +753,40 @@ impl ExpressionParser {
                     Ok(Expression::Subquery(Box::new(subquery)))
                 } else {
                     let expr = self.parse_expression(tokens, pos)?;
-    
+
                     if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
                         return Err(crate::protocols::error::ProtocolError::ParseError(
                             "Expected ')' after expression".to_string(),
                         ));
                     }
                     *pos += 1; // consume ')'
-    
+
                     Ok(expr)
                 }
             }
             // MySQL/Postgres JSON functions
             Token::JsonObject => {
-                 let func_name = "json_object".to_string();
-                 self.parse_function_call(tokens, pos, func_name)
+                let func_name = "json_object".to_string();
+                self.parse_function_call(tokens, pos, func_name)
             }
             Token::JsonArray => {
-                 let func_name = "json_array".to_string();
-                 self.parse_function_call(tokens, pos, func_name)
+                let func_name = "json_array".to_string();
+                self.parse_function_call(tokens, pos, func_name)
             }
-            Token::JsonQuery | Token::JsonValue | Token::JsonExists | Token::JsonTable | Token::JsonScalar | Token::JsonSerialize | Token::JsonArrayAgg | Token::JsonObjectAgg => {
-                 // Map token to function name
-                 if let Some(name) = self.token_to_identifier_name(&tokens[*pos]) {
-                     self.parse_function_call(tokens, pos, name)
-                 } else {
-                     unreachable!()
-                 }
+            Token::JsonQuery
+            | Token::JsonValue
+            | Token::JsonExists
+            | Token::JsonTable
+            | Token::JsonScalar
+            | Token::JsonSerialize
+            | Token::JsonArrayAgg
+            | Token::JsonObjectAgg => {
+                // Map token to function name
+                if let Some(name) = self.token_to_identifier_name(&tokens[*pos]) {
+                    self.parse_function_call(tokens, pos, name)
+                } else {
+                    unreachable!()
+                }
             }
             // Token::Select removed - subqueries must be in parentheses
 
@@ -942,11 +949,11 @@ impl ExpressionParser {
             } else {
                 None
             };
-            
+
             if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
                 *pos += 1;
             }
-            
+
             precision
         } else {
             None
@@ -1001,7 +1008,7 @@ impl ExpressionParser {
                 if *pos < tokens.len() && matches!(tokens[*pos], Token::Order) {
                     break; // Handled after loop
                 }
-                
+
                 // Check for SEPARATOR (MySQL GROUP_CONCAT)
                 if *pos < tokens.len() {
                     if let Token::Identifier(id) = &tokens[*pos] {
@@ -1012,37 +1019,37 @@ impl ExpressionParser {
                 }
 
                 if *pos < tokens.len() && matches!(tokens[*pos], Token::Comma) {
-                     // Lookahead for ORDER or SEPARATOR after comma (invalid but sometimes users type it?)
-                     // Actually comma MUST separate args.
-                     *pos += 1; // consume ','
+                    // Lookahead for ORDER or SEPARATOR after comma (invalid but sometimes users type it?)
+                    // Actually comma MUST separate args.
+                    *pos += 1; // consume ','
                 } else if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
                     break; // End of args
                 } else {
-                     // Check again for ORDER/SEPARATOR as they might follow an arg without comma in some dialects? 
-                     // No, usually comma separated. But MySQL GROUP_CONCAT(expr ORDER BY...) - no comma before ORDER BY.
-                     // So if we are here, we check break conditions again.
-                     if *pos < tokens.len() && matches!(tokens[*pos], Token::Order) {
-                         break; 
-                     }
-                     if *pos < tokens.len() {
+                    // Check again for ORDER/SEPARATOR as they might follow an arg without comma in some dialects?
+                    // No, usually comma separated. But MySQL GROUP_CONCAT(expr ORDER BY...) - no comma before ORDER BY.
+                    // So if we are here, we check break conditions again.
+                    if *pos < tokens.len() && matches!(tokens[*pos], Token::Order) {
+                        break;
+                    }
+                    if *pos < tokens.len() {
                         if let Token::Identifier(id) = &tokens[*pos] {
                             if id.eq_ignore_ascii_case("SEPARATOR") {
                                 break;
                             }
                         }
-                     }
-                     // If still not matched, expecting comma or end
-                     if !matches!(tokens[*pos], Token::RightParen) {
-                         // Assume missing comma or special syntax, break to let outer parsing handle it?
-                         // But we are in a loop collecting "args".
-                         // If we break, "args" contains parsed expressions.
-                         // Outer code expects RightParen.
-                         break;
-                     }
+                    }
+                    // If still not matched, expecting comma or end
+                    if !matches!(tokens[*pos], Token::RightParen) {
+                        // Assume missing comma or special syntax, break to let outer parsing handle it?
+                        // But we are in a loop collecting "args".
+                        // If we break, "args" contains parsed expressions.
+                        // Outer code expects RightParen.
+                        break;
+                    }
                 }
             }
         }
-        
+
         // Parse ORDER BY within function if present
         let mut agg_order_by = None;
         if *pos < tokens.len() && matches!(tokens[*pos], Token::Order) {
@@ -1051,31 +1058,32 @@ impl ExpressionParser {
                 *pos += 1; // consume BY
                 agg_order_by = Some(self.parse_order_by_list(tokens, pos)?);
             } else {
-                 return Err(crate::protocols::error::ProtocolError::ParseError(
+                return Err(crate::protocols::error::ProtocolError::ParseError(
                     "Expected BY after ORDER in function call".to_string(),
                 )
                 .into());
             }
         }
-        
+
         // Parse SEPARATOR (MySQL) - consume but ignore for now (or store if AST supported)
         if *pos < tokens.len() {
             if let Token::Identifier(id) = &tokens[*pos] {
                 if id.eq_ignore_ascii_case("SEPARATOR") {
                     *pos += 1;
-                     // Expect string literal
-                     if *pos < tokens.len() {
-                         match &tokens[*pos] {
-                             Token::StringLiteral(_) | Token::DollarQuotedString(_) => {
-                                 *pos += 1;
-                             }
-                             _ => {
-                                  return Err(crate::protocols::error::ProtocolError::ParseError(
+                    // Expect string literal
+                    if *pos < tokens.len() {
+                        match &tokens[*pos] {
+                            Token::StringLiteral(_) | Token::DollarQuotedString(_) => {
+                                *pos += 1;
+                            }
+                            _ => {
+                                return Err(crate::protocols::error::ProtocolError::ParseError(
                                     "Expected string literal after SEPARATOR".to_string(),
-                                ).into());
-                             }
-                         }
-                     }
+                                )
+                                .into());
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1098,7 +1106,7 @@ impl ExpressionParser {
                 .into());
             }
             *pos += 1; // consume GROUP
-            
+
             if *pos >= tokens.len() || !matches!(tokens[*pos], Token::LeftParen) {
                 return Err(crate::protocols::error::ProtocolError::ParseError(
                     "Expected '(' after WITHIN GROUP".to_string(),
@@ -1106,7 +1114,7 @@ impl ExpressionParser {
                 .into());
             }
             *pos += 1; // consume '('
-            
+
             if *pos >= tokens.len() || !matches!(tokens[*pos], Token::Order) {
                 return Err(crate::protocols::error::ProtocolError::ParseError(
                     "Expected ORDER BY within WITHIN GROUP".to_string(),
@@ -1114,7 +1122,7 @@ impl ExpressionParser {
                 .into());
             }
             *pos += 1; // consume ORDER
-            
+
             if *pos >= tokens.len() || !matches!(tokens[*pos], Token::By) {
                 return Err(crate::protocols::error::ProtocolError::ParseError(
                     "Expected BY after ORDER".to_string(),
@@ -1122,9 +1130,9 @@ impl ExpressionParser {
                 .into());
             }
             *pos += 1; // consume BY
-            
+
             let items = self.parse_order_by_list(tokens, pos)?;
-            
+
             if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
                 return Err(crate::protocols::error::ProtocolError::ParseError(
                     "Expected ')' after WITHIN GROUP specification".to_string(),
@@ -1132,7 +1140,7 @@ impl ExpressionParser {
                 .into());
             }
             *pos += 1; // consume ')'
-            
+
             Some(items)
         } else {
             None
@@ -1187,12 +1195,20 @@ impl ExpressionParser {
         if *pos < tokens.len() && matches!(tokens[*pos], Token::Over) {
             // Ordered-set aggregates cannot be window functions with OVER clause
             if within_group.is_some() {
-                 return Err(crate::protocols::error::ProtocolError::ParseError(
+                return Err(crate::protocols::error::ProtocolError::ParseError(
                     "OVER clause not allowed with WITHIN GROUP".to_string(),
                 )
                 .into());
             }
-            self.parse_window_over_clause(tokens, pos, func_name, args, distinct, order_by.or(agg_order_by), filter)
+            self.parse_window_over_clause(
+                tokens,
+                pos,
+                func_name,
+                args,
+                distinct,
+                order_by.or(agg_order_by),
+                filter,
+            )
         } else {
             Ok(Expression::Function(Box::new(FunctionCall {
                 name: FunctionName::Simple(func_name),

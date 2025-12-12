@@ -152,14 +152,12 @@ pub fn within_bbox(point: &Point, lower_left: &Point, upper_right: &Point) -> Pr
         (Point::Point2D(p), Point::Point2D(ll), Point::Point2D(ur)) => {
             Ok(p.x >= ll.x && p.x <= ur.x && p.y >= ll.y && p.y <= ur.y)
         }
-        (Point::Point3D(p), Point::Point3D(ll), Point::Point3D(ur)) => {
-            Ok(p.x >= ll.x
-                && p.x <= ur.x
-                && p.y >= ll.y
-                && p.y <= ur.y
-                && p.z >= ll.z
-                && p.z <= ur.z)
-        }
+        (Point::Point3D(p), Point::Point3D(ll), Point::Point3D(ur)) => Ok(p.x >= ll.x
+            && p.x <= ur.x
+            && p.y >= ll.y
+            && p.y <= ur.y
+            && p.z >= ll.z
+            && p.z <= ur.z),
         _ => Err(ProtocolError::CypherError(
             "Bounding box points must have same dimensionality".to_string(),
         )),

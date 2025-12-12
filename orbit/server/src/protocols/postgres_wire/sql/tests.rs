@@ -1641,11 +1641,7 @@ mod tests {
         let sql = "SELECT JSON_OBJECT('id', id, 'name', name) as json_data FROM users";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
-        assert!(
-            result.is_ok(),
-            "Failed to parse JSON_OBJECT: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "Failed to parse JSON_OBJECT: {:?}", result);
     }
 
     #[test]
@@ -1653,11 +1649,7 @@ mod tests {
         let sql = "SELECT JSON_ARRAY(1, 'abc', NULL, TRUE) as json_list";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
-        assert!(
-            result.is_ok(),
-            "Failed to parse JSON_ARRAY: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "Failed to parse JSON_ARRAY: {:?}", result);
     }
 
     #[test]
@@ -1665,11 +1657,7 @@ mod tests {
         let sql = "SELECT group_id, GROUP_CONCAT(name ORDER BY name SEPARATOR ', ') as names FROM users GROUP BY group_id";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
-        assert!(
-            result.is_ok(),
-            "Failed to parse GROUP_CONCAT: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "Failed to parse GROUP_CONCAT: {:?}", result);
     }
 
     // ===============================

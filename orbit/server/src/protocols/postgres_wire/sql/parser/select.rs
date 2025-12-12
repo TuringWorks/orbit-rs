@@ -8,8 +8,8 @@
 use crate::protocols::error::ProtocolResult;
 use crate::protocols::postgres_wire::sql::ast::{
     CommonTableExpression, DistinctClause, Expression, FromClause, JoinCondition, JoinType,
-    LimitClause, NullsOrder, OrderByItem, SelectItem, SelectStatement, SortDirection, TableAlias,
-    TableName, WithClause, SetOperation, SetOperator,
+    LimitClause, NullsOrder, OrderByItem, SelectItem, SelectStatement, SetOperation, SetOperator,
+    SortDirection, TableAlias, TableName, WithClause,
 };
 use crate::protocols::postgres_wire::sql::lexer::Token;
 use crate::protocols::postgres_wire::sql::parser::expressions::ExpressionParser;
@@ -174,7 +174,7 @@ impl SelectParser {
                 if *pos < tokens.len() {
                     let token = &tokens[*pos];
                     if matches!(token, Token::Union | Token::Intersect | Token::Except) {
-                         Some(self.parse_set_operation(tokens, pos)?)
+                        Some(self.parse_set_operation(tokens, pos)?)
                     } else {
                         None
                     }
@@ -242,7 +242,9 @@ impl SelectParser {
         tokens: &[Token],
         pos: &mut usize,
     ) -> ProtocolResult<CommonTableExpression> {
-        let name = if let Some(n) = tokens.get(*pos).and_then(crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name) {
+        let name = if let Some(n) = tokens.get(*pos).and_then(
+            crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name,
+        ) {
             *pos += 1;
             n
         } else {
@@ -390,7 +392,9 @@ impl SelectParser {
             *pos += 1;
         }
 
-        if let Some(alias_name) = tokens.get(*pos).and_then(crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name) {
+        if let Some(alias_name) = tokens.get(*pos).and_then(
+            crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name,
+        ) {
             *pos += 1;
             Ok(Some(alias_name))
         } else {
@@ -468,9 +472,10 @@ impl SelectParser {
                 && self.matches_at(tokens, *pos + 1, &Token::LeftParen)
             {
                 if lateral {
-                     return Err(crate::protocols::error::ProtocolError::ParseError(
+                    return Err(crate::protocols::error::ProtocolError::ParseError(
                         "LATERAL not yet supported for JSON_TABLE".to_string(),
-                    ).into());
+                    )
+                    .into());
                 }
                 return self.parse_json_table(tokens, pos);
             }
@@ -869,14 +874,18 @@ impl SelectParser {
                         SetOperator::Except
                     }
                 }
-                _ => return Err(crate::protocols::error::ProtocolError::ParseError(
-                     "Expected UNION, INTERSECT, or EXCEPT".to_string()
-                ).into())
+                _ => {
+                    return Err(crate::protocols::error::ProtocolError::ParseError(
+                        "Expected UNION, INTERSECT, or EXCEPT".to_string(),
+                    )
+                    .into())
+                }
             }
         } else {
-             return Err(crate::protocols::error::ProtocolError::ParseError(
-                 "Unexpected end of input".to_string()
-            ).into())
+            return Err(crate::protocols::error::ProtocolError::ParseError(
+                "Unexpected end of input".to_string(),
+            )
+            .into());
         };
 
         // Parse right side
@@ -886,9 +895,9 @@ impl SelectParser {
         // But if parse_select handles WITH, it might check WITH first.
         // Recursive union typically: ... UNION ALL SELECT ...
         // So SELECT is present.
-        
+
         let right = self.parse_select(tokens, pos)?;
-        
+
         Ok(SetOperation {
             operator,
             right: Box::new(right),

@@ -1881,7 +1881,9 @@ impl TokenParser {
                             if let Ok(int_val) = n.parse::<i64>() {
                                 serde_json::Value::Number(serde_json::Number::from(int_val))
                             } else {
-                                return Err(ProtocolError::CypherError(format!("Invalid number: {n}")));
+                                return Err(ProtocolError::CypherError(format!(
+                                    "Invalid number: {n}"
+                                )));
                             }
                         }
                         _ => {

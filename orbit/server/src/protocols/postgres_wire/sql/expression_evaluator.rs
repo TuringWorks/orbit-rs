@@ -392,38 +392,37 @@ impl ExpressionEvaluator {
             // Handle missing time/date expression variants by delegating to their respective functions
             Expression::CurrentDate => self.evaluate_current_date(&[]),
             Expression::CurrentTime(precision) => {
-                 let args = if let Some(p) = precision {
-                     vec![SqlValue::Integer(*p as i32)]
-                 } else {
-                     vec![]
-                 };
-                 self.evaluate_current_time(&args)
+                let args = if let Some(p) = precision {
+                    vec![SqlValue::Integer(*p as i32)]
+                } else {
+                    vec![]
+                };
+                self.evaluate_current_time(&args)
             }
             Expression::CurrentTimestamp(precision) => {
-                 let args = if let Some(p) = precision {
-                     vec![SqlValue::Integer(*p as i32)]
-                 } else {
-                     vec![]
-                 };
-                 self.evaluate_current_timestamp(&args)
+                let args = if let Some(p) = precision {
+                    vec![SqlValue::Integer(*p as i32)]
+                } else {
+                    vec![]
+                };
+                self.evaluate_current_timestamp(&args)
             }
             Expression::LocalTime(precision) => {
-                 let args = if let Some(p) = precision {
-                     vec![SqlValue::Integer(*p as i32)]
-                 } else {
-                     vec![]
-                 };
-                 self.evaluate_localtime(&args)
+                let args = if let Some(p) = precision {
+                    vec![SqlValue::Integer(*p as i32)]
+                } else {
+                    vec![]
+                };
+                self.evaluate_localtime(&args)
             }
             Expression::LocalTimestamp(precision) => {
-                 let args = if let Some(p) = precision {
-                     vec![SqlValue::Integer(*p as i32)]
-                 } else {
-                     vec![]
-                 };
-                 self.evaluate_localtimestamp(&args)
+                let args = if let Some(p) = precision {
+                    vec![SqlValue::Integer(*p as i32)]
+                } else {
+                    vec![]
+                };
+                self.evaluate_localtimestamp(&args)
             }
-
         }
     }
 
@@ -515,8 +514,6 @@ impl ExpressionEvaluator {
             BinaryOperator::And => self.logical_and(&left_val, &right_val),
             BinaryOperator::Or => self.logical_or(&left_val, &right_val),
 
-
-            
             BinaryOperator::Concat => self.string_concat(&left_val, &right_val),
             BinaryOperator::Like => self.pattern_match(&left_val, &right_val, false, false),
             BinaryOperator::ILike => self.pattern_match(&left_val, &right_val, true, false),
@@ -857,7 +854,9 @@ impl ExpressionEvaluator {
             "SHOW_CHUNKS" => self.evaluate_show_chunks(&args),
             "ATTACH_TABLESPACE" => self.evaluate_attach_tablespace(&args),
             "DETACH_TABLESPACE" => self.evaluate_detach_tablespace(&args),
-            "ADD_CONTINUOUS_AGGREGATE_POLICY" => self.evaluate_add_continuous_aggregate_policy(&args),
+            "ADD_CONTINUOUS_AGGREGATE_POLICY" => {
+                self.evaluate_add_continuous_aggregate_policy(&args)
+            }
             "ADD_COMPRESSION_POLICY" => self.evaluate_add_compression_policy(&args),
             "TIME_BUCKET" => self.evaluate_time_bucket(&args),
             "FIRST" => self.evaluate_first(&args),
@@ -3192,9 +3191,11 @@ impl ExpressionEvaluator {
                 let dim = if args.len() == 2 {
                     match &args[1] {
                         SqlValue::Integer(d) => *d,
-                        _ => return Err(ProtocolError::PostgresError(
-                            "array_upper dimension must be an integer".to_string(),
-                        )),
+                        _ => {
+                            return Err(ProtocolError::PostgresError(
+                                "array_upper dimension must be an integer".to_string(),
+                            ))
+                        }
                     }
                 } else {
                     1
@@ -3868,7 +3869,7 @@ impl ExpressionEvaluator {
                 "array_sample requires 2 arguments (array, count)".to_string(),
             ));
         }
-        
+
         match (&args[0], &args[1]) {
             (SqlValue::Array(arr), SqlValue::Integer(n)) => {
                 use rand::seq::SliceRandom;
@@ -3885,7 +3886,7 @@ impl ExpressionEvaluator {
     }
 
     fn evaluate_array_shuffle(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
-         if args.len() != 1 {
+        if args.len() != 1 {
             return Err(ProtocolError::PostgresError(
                 "array_shuffle requires 1 argument (array)".to_string(),
             ));
@@ -3909,31 +3910,31 @@ impl ExpressionEvaluator {
     fn evaluate_pg_sequence_parameters(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         // Stub implementation returning default parameters
         if args.len() != 1 {
-             return Err(ProtocolError::PostgresError(
+            return Err(ProtocolError::PostgresError(
                 "pg_sequence_parameters requires 1 argument (regclass)".to_string(),
             ));
         }
-        
+
         let mut params = HashMap::new();
         params.insert("start_value".to_string(), SqlValue::BigInt(1));
         params.insert("minimum_value".to_string(), SqlValue::BigInt(1));
         params.insert("maximum_value".to_string(), SqlValue::BigInt(i64::MAX));
         params.insert("increment".to_string(), SqlValue::BigInt(1));
         params.insert("cycle_option".to_string(), SqlValue::Boolean(false));
-        
+
         Ok(SqlValue::Composite(params))
     }
 
     fn evaluate_pg_sequence_last_value(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
-         // Stub implementation
-         if args.len() != 1 {
-             return Err(ProtocolError::PostgresError(
+        // Stub implementation
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
                 "pg_sequence_last_value requires 1 argument (regclass)".to_string(),
             ));
         }
-        Ok(SqlValue::BigInt(1)) 
+        Ok(SqlValue::BigInt(1))
     }
-    
+
     // --- TimescaleDB Functions ---
 
     fn evaluate_create_hypertable(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
@@ -3941,14 +3942,17 @@ impl ExpressionEvaluator {
         Ok(SqlValue::Boolean(true))
     }
 
-    fn evaluate_create_distributed_hypertable(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+    fn evaluate_create_distributed_hypertable(
+        &self,
+        _args: &[SqlValue],
+    ) -> ProtocolResult<SqlValue> {
         Ok(SqlValue::Boolean(true))
     }
 
     fn evaluate_add_dimension(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         Ok(SqlValue::Boolean(true))
     }
-    
+
     fn evaluate_attach_tablespace(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         Ok(SqlValue::Boolean(true))
     }
@@ -3956,11 +3960,14 @@ impl ExpressionEvaluator {
     fn evaluate_detach_tablespace(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         Ok(SqlValue::Boolean(true))
     }
-    
-    fn evaluate_add_continuous_aggregate_policy(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+
+    fn evaluate_add_continuous_aggregate_policy(
+        &self,
+        _args: &[SqlValue],
+    ) -> ProtocolResult<SqlValue> {
         Ok(SqlValue::Boolean(true))
     }
-    
+
     fn evaluate_add_compression_policy(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         Ok(SqlValue::Boolean(true))
     }
@@ -3968,11 +3975,11 @@ impl ExpressionEvaluator {
     fn evaluate_drop_chunks(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         Ok(SqlValue::Text("Chunks dropped successfully".to_string()))
     }
-    
+
     fn evaluate_histogram(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
-         Ok(SqlValue::Array(vec![]))
+        Ok(SqlValue::Array(vec![]))
     }
-    
+
     fn evaluate_approx_percentile(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         Ok(SqlValue::DoublePrecision(0.5))
     }
@@ -4012,14 +4019,20 @@ impl ExpressionEvaluator {
                         let months_micros = pg_interval.months as i64 * 30 * 24 * 3600 * 1_000_000;
                         pg_interval.microseconds + days_micros + months_micros
                     }
-                    _ => return Err(ProtocolError::PostgresError(
-                        format!("Invalid interval string: {}", s)
-                    )),
+                    _ => {
+                        return Err(ProtocolError::PostgresError(format!(
+                            "Invalid interval string: {}",
+                            s
+                        )))
+                    }
                 }
             }
-            _ => return Err(ProtocolError::PostgresError(
-                format!("time_bucket first argument must be an interval or interval string, got {:?}", interval)
-            )),
+            _ => {
+                return Err(ProtocolError::PostgresError(format!(
+                    "time_bucket first argument must be an interval or interval string, got {:?}",
+                    interval
+                )))
+            }
         };
 
         // Extract timestamp
@@ -4051,16 +4064,16 @@ impl ExpressionEvaluator {
 
     fn evaluate_first(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         if args.len() < 2 {
-             return Err(ProtocolError::PostgresError(
+            return Err(ProtocolError::PostgresError(
                 "first requires at least 2 arguments".to_string(),
             ));
         }
         Ok(args[0].clone())
     }
 
-     fn evaluate_last(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+    fn evaluate_last(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
         if args.len() < 2 {
-             return Err(ProtocolError::PostgresError(
+            return Err(ProtocolError::PostgresError(
                 "last requires at least 2 arguments".to_string(),
             ));
         }
@@ -9123,22 +9136,22 @@ impl ExpressionEvaluator {
         operator: &BinaryOperator,
     ) -> ProtocolResult<SqlValue> {
         match operator {
-            BinaryOperator::Equal => {
-                Ok(SqlValue::Boolean(self.compare_values(left, right)? == Ordering::Equal))
-            }
-            BinaryOperator::NotEqual => {
-                Ok(SqlValue::Boolean(self.compare_values(left, right)? != Ordering::Equal))
-            }
-            BinaryOperator::LessThan => {
-                Ok(SqlValue::Boolean(self.compare_values(left, right)? == Ordering::Less))
-            }
+            BinaryOperator::Equal => Ok(SqlValue::Boolean(
+                self.compare_values(left, right)? == Ordering::Equal,
+            )),
+            BinaryOperator::NotEqual => Ok(SqlValue::Boolean(
+                self.compare_values(left, right)? != Ordering::Equal,
+            )),
+            BinaryOperator::LessThan => Ok(SqlValue::Boolean(
+                self.compare_values(left, right)? == Ordering::Less,
+            )),
             BinaryOperator::LessThanOrEqual => Ok(SqlValue::Boolean(matches!(
                 self.compare_values(left, right)?,
                 Ordering::Less | Ordering::Equal
             ))),
-            BinaryOperator::GreaterThan => {
-                Ok(SqlValue::Boolean(self.compare_values(left, right)? == Ordering::Greater))
-            }
+            BinaryOperator::GreaterThan => Ok(SqlValue::Boolean(
+                self.compare_values(left, right)? == Ordering::Greater,
+            )),
             BinaryOperator::GreaterThanOrEqual => Ok(SqlValue::Boolean(matches!(
                 self.compare_values(left, right)?,
                 Ordering::Greater | Ordering::Equal

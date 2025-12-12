@@ -16,17 +16,17 @@ pub mod bolt_types;
 #[cfg(feature = "protocol-neo4j")]
 pub mod bolt_writer;
 #[cfg(feature = "protocol-neo4j")]
-pub mod spatial_types;
-#[cfg(feature = "protocol-neo4j")]
-pub mod spatial_functions;
+pub mod database_admin;
 #[cfg(feature = "protocol-neo4j")]
 pub mod graph_functions;
 #[cfg(feature = "protocol-neo4j")]
 pub mod schema;
 #[cfg(feature = "protocol-neo4j")]
-pub mod database_admin;
-#[cfg(feature = "protocol-neo4j")]
 pub mod security;
+#[cfg(feature = "protocol-neo4j")]
+pub mod spatial_functions;
+#[cfg(feature = "protocol-neo4j")]
+pub mod spatial_types;
 
 pub mod cypher_spatial;
 

@@ -6,17 +6,14 @@
 // - MongoDB: Text indexes, $text operator
 // - Redis: FT.CREATE, FT.SEARCH (RedisSearch compatibility)
 
-pub mod engine;
-pub mod index_manager;
 pub mod query_parser;
-pub mod ranking;
-pub mod schema;
 
-pub use engine::FtsEngine;
-pub use index_manager::IndexManager;
 pub use query_parser::QueryParser;
-pub use ranking::RankingEngine;
-pub use schema::FtsSchema;
+
+// Re-export FTS Engine from common protocols
+pub use crate::protocols::common::fts::{
+    SharedFtsConfig as FtsEngineConfig, SharedFtsEngine as FtsEngine,
+};
 
 use std::path::PathBuf;
 

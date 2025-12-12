@@ -466,7 +466,7 @@ pub enum Token {
     JsonbExistsAll, // ?& - All keys exist
     JsonPathExists, // @? - JSON path exists
     JsonPathMatch,  // @@ - JSON path match
-    
+
     // SQL/JSON keywords
     JsonQuery,
     JsonValue,
@@ -1382,7 +1382,6 @@ impl Lexer {
                             }
                         }
 
-
                         '(' => {
                             self.advance();
                             return Token::LeftParen;
@@ -1518,9 +1517,7 @@ impl Lexer {
                             return Token::BitwiseNot;
                         }
 
-
                         '#' => {
-
                             self.advance();
                             return match self.current_char {
                                 Some('>') => {

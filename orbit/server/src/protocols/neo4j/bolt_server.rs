@@ -8,7 +8,9 @@
 use crate::protocols::cypher::graph_engine::GraphEngine;
 use crate::protocols::cypher::storage::CypherGraphStorage;
 use crate::protocols::graph_database::PersistentGraphStorage;
-use crate::protocols::neo4j::bolt_messages::{BoltConnectionState, BoltMessageHandler, BoltProtocolWriter};
+use crate::protocols::neo4j::bolt_messages::{
+    BoltConnectionState, BoltMessageHandler, BoltProtocolWriter,
+};
 use crate::protocols::neo4j::bolt_writer::BoltWriter;
 use std::error::Error;
 use std::path::PathBuf;
@@ -109,7 +111,14 @@ async fn handle_connection(
                 // HELLO
                 let (user_agent, auth_token, routing) = parse_hello(&message_data)?;
                 handler
-                    .handle_hello(&mut state, user_agent, auth_token, routing, &mut socket, &mut writer)
+                    .handle_hello(
+                        &mut state,
+                        user_agent,
+                        auth_token,
+                        routing,
+                        &mut socket,
+                        &mut writer,
+                    )
                     .await?;
                 true
             }
@@ -138,7 +147,14 @@ async fn handle_connection(
                 // RUN
                 let (query, parameters, extra) = parse_run(&message_data)?;
                 handler
-                    .handle_run(&mut state, query, parameters, extra, &mut socket, &mut writer)
+                    .handle_run(
+                        &mut state,
+                        query,
+                        parameters,
+                        extra,
+                        &mut socket,
+                        &mut writer,
+                    )
                     .await?;
                 true
             }
@@ -286,7 +302,14 @@ fn extract_signature(data: &[u8]) -> Result<u8, Box<dyn Error>> {
 /// Parse HELLO message
 fn parse_hello(
     _data: &[u8],
-) -> Result<(String, std::collections::HashMap<String, serde_json::Value>, Option<std::collections::HashMap<String, serde_json::Value>>), Box<dyn Error>> {
+) -> Result<
+    (
+        String,
+        std::collections::HashMap<String, serde_json::Value>,
+        Option<std::collections::HashMap<String, serde_json::Value>>,
+    ),
+    Box<dyn Error>,
+> {
     // TODO: Implement proper PackStream parsing
     // For now, return defaults
     Ok((
@@ -297,7 +320,9 @@ fn parse_hello(
 }
 
 /// Parse LOGON message
-fn parse_logon(_data: &[u8]) -> Result<std::collections::HashMap<String, serde_json::Value>, Box<dyn Error>> {
+fn parse_logon(
+    _data: &[u8],
+) -> Result<std::collections::HashMap<String, serde_json::Value>, Box<dyn Error>> {
     // TODO: Implement proper PackStream parsing
     Ok(std::collections::HashMap::new())
 }
@@ -305,7 +330,14 @@ fn parse_logon(_data: &[u8]) -> Result<std::collections::HashMap<String, serde_j
 /// Parse RUN message
 fn parse_run(
     _data: &[u8],
-) -> Result<(String, std::collections::HashMap<String, serde_json::Value>, std::collections::HashMap<String, serde_json::Value>), Box<dyn Error>> {
+) -> Result<
+    (
+        String,
+        std::collections::HashMap<String, serde_json::Value>,
+        std::collections::HashMap<String, serde_json::Value>,
+    ),
+    Box<dyn Error>,
+> {
     // TODO: Implement proper PackStream parsing
     Ok((
         "RETURN 1".to_string(),
@@ -327,7 +359,9 @@ fn parse_discard(_data: &[u8]) -> Result<(Option<i64>, Option<i64>), Box<dyn Err
 }
 
 /// Parse BEGIN message
-fn parse_begin(_data: &[u8]) -> Result<std::collections::HashMap<String, serde_json::Value>, Box<dyn Error>> {
+fn parse_begin(
+    _data: &[u8],
+) -> Result<std::collections::HashMap<String, serde_json::Value>, Box<dyn Error>> {
     // TODO: Implement proper PackStream parsing
     Ok(std::collections::HashMap::new())
 }

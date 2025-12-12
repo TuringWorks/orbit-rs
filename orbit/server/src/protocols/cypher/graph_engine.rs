@@ -369,12 +369,11 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                         properties.clone(),
                     );
 
-                    let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+                    let storage = self.storage.as_ref().ok_or_else(|| {
+                        ProtocolError::CypherError("Storage not available".to_string())
+                    })?;
                     // Check if exists and handle if_not_exists
-                    let exists = storage
-                        .index_exists(&index_name)
-                        .await
-                        .unwrap_or(false);
+                    let exists = storage.index_exists(&index_name).await.unwrap_or(false);
                     if exists && *if_not_exists {
                         info!(
                             "Index {} already exists, skipping due to IF NOT EXISTS",
@@ -451,7 +450,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                         properties.clone(),
                     );
 
-                    let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+                    let storage = self.storage.as_ref().ok_or_else(|| {
+                        ProtocolError::CypherError("Storage not available".to_string())
+                    })?;
                     // Check if exists and handle if_not_exists
                     let exists = storage
                         .constraint_exists(&constraint_name)
@@ -492,7 +493,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 CypherClause::DropIndex { name, if_exists } => {
                     tracing::debug!("DROP INDEX: name={}, if_exists={}", name, if_exists);
 
-                    let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+                    let storage = self.storage.as_ref().ok_or_else(|| {
+                        ProtocolError::CypherError("Storage not available".to_string())
+                    })?;
                     let exists = storage.index_exists(name).await.unwrap_or(false);
                     if !exists && *if_exists {
                         info!("Index {} does not exist, skipping due to IF EXISTS", name);
@@ -526,7 +529,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 CypherClause::DropConstraint { name, if_exists } => {
                     tracing::debug!("DROP CONSTRAINT: name={}, if_exists={}", name, if_exists);
 
-                    let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+                    let storage = self.storage.as_ref().ok_or_else(|| {
+                        ProtocolError::CypherError("Storage not available".to_string())
+                    })?;
                     let exists = storage.constraint_exists(name).await.unwrap_or(false);
                     if !exists && *if_exists {
                         info!(
@@ -563,7 +568,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 CypherClause::ShowIndexes => {
                     tracing::debug!("SHOW INDEXES");
 
-                    let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+                    let storage = self.storage.as_ref().ok_or_else(|| {
+                        ProtocolError::CypherError("Storage not available".to_string())
+                    })?;
                     match storage.list_indexes().await {
                         Ok(indexes) => {
                             for idx in indexes {
@@ -606,7 +613,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 CypherClause::ShowConstraints => {
                     tracing::debug!("SHOW CONSTRAINTS");
 
-                    let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+                    let storage = self.storage.as_ref().ok_or_else(|| {
+                        ProtocolError::CypherError("Storage not available".to_string())
+                    })?;
                     match storage.list_constraints().await {
                         Ok(constraints) => {
                             for c in constraints {
@@ -1098,7 +1107,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 Some(pattern.properties.clone())
             };
 
-            let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+            let storage = self
+                .storage
+                .as_ref()
+                .ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
             let nodes = storage
                 .find_nodes_by_label(label, property_filters, None)
                 .await
@@ -1136,7 +1148,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     pattern.rel_type.as_ref().map(|t| vec![t.clone()])
                 };
 
-                let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+                let storage = self.storage.as_ref().ok_or_else(|| {
+                    ProtocolError::CypherError("Storage not available".to_string())
+                })?;
                 // Check if this is a variable-length path
                 if let Some(ref var_length) = pattern.variable_length {
                     // Variable-length path traversal
@@ -1193,7 +1207,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             }
 
             // Get relationships from current node
-            let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+            let storage = self
+                .storage
+                .as_ref()
+                .ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
             let relationships = storage
                 .get_relationships(&current_node_id, direction, rel_types.map(|t| t.to_vec()))
                 .await
@@ -1248,7 +1265,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
 
     /// Create a node from pattern
     async fn create_node_from_pattern(&self, pattern: &NodePattern) -> ProtocolResult<GraphNode> {
-        let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+        let storage = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
         let node = storage
             .create_node(pattern.labels.clone(), pattern.properties.clone())
             .await
@@ -1277,7 +1297,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         let end_node = &all_nodes[1].id;
         let rel_type = pattern.rel_type.as_deref().unwrap_or("RELATED");
 
-        let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+        let storage = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
         let relationship = storage
             .create_relationship(
                 start_node,
@@ -1547,7 +1570,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                         result.push(serde_json::json!(current));
                         current += step_val;
                     }
-                    }
+                }
                 Ok(result)
             }
             UnwindExpression::FunctionCall { name, args } => {
@@ -1660,7 +1683,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 for node in nodes.clone() {
                     if detach {
                         // DETACH DELETE: First delete all relationships connected to this node
-                        let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+                        let storage = self.storage.as_ref().ok_or_else(|| {
+                            ProtocolError::CypherError("Storage not available".to_string())
+                        })?;
                         let outgoing_rels = storage
                             .get_relationships(&node.id, Direction::Outgoing, None)
                             .await
@@ -1681,7 +1706,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     }
 
                     // Delete the node
-                    let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+                    let storage = self.storage.as_ref().ok_or_else(|| {
+                        ProtocolError::CypherError("Storage not available".to_string())
+                    })?;
                     storage
                         .delete_node(&node.id)
                         .await
@@ -1693,7 +1720,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             // Check if variable is bound to relationships
             if let Some(rels) = context.get_relationships(var) {
                 for rel in rels.clone() {
-                    let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+                    let storage = self.storage.as_ref().ok_or_else(|| {
+                        ProtocolError::CypherError("Storage not available".to_string())
+                    })?;
                     storage
                         .delete_relationship(&rel.id)
                         .await
@@ -1745,7 +1774,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     let mut new_properties = node.properties.clone();
                     new_properties.insert(prop.to_string(), assignment.value.clone());
 
-                    let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+                    let storage = self.storage.as_ref().ok_or_else(|| {
+                        ProtocolError::CypherError("Storage not available".to_string())
+                    })?;
                     storage
                         .update_node(&node.id, new_properties.clone())
                         .await
@@ -1842,7 +1873,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                             let mut new_properties = node.properties.clone();
                             new_properties.remove(property);
 
-                            let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+                            let storage = self.storage.as_ref().ok_or_else(|| {
+                                ProtocolError::CypherError("Storage not available".to_string())
+                            })?;
                             storage
                                 .update_node(&node.id, new_properties.clone())
                                 .await
@@ -1861,7 +1894,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     // Remove label from nodes
                     if let Some(nodes) = context.get_nodes(variable) {
                         for node in nodes.clone() {
-                            let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+                            let storage = self.storage.as_ref().ok_or_else(|| {
+                                ProtocolError::CypherError("Storage not available".to_string())
+                            })?;
                             storage
                                 .remove_labels(&node.id, vec![label.clone()])
                                 .await
@@ -1900,7 +1935,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         );
 
         // Create procedure executor
-        let storage = self.storage.as_ref().ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
+        let storage = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
         let procedures = GraphAlgorithmProcedures::new(storage.clone());
 
         // Execute the procedure

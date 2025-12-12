@@ -12,13 +12,11 @@ use crate::protocols::aql::{
     AqlDocument, AqlGraphRAGEngine, AqlParser, AqlQuery, AqlStorage, AqlValue,
 };
 use crate::protocols::common::graph_algorithms as graph_algo;
-use crate::protocols::common::fts::{UnifiedFtsEngine, SharedFtsEngine, FtsQuery};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use orbit_client::OrbitClient;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{info, warn};
-use async_recursion::async_recursion;
 
 /// Convert AqlValue to serde_json::Value for graph properties
 fn aql_value_to_json(value: &AqlValue) -> serde_json::Value {
@@ -78,30 +76,6 @@ pub struct AqlQueryEngine {
     graphrag_engine: Option<AqlGraphRAGEngine>,
     /// Storage backend for document operations
     storage: Option<Arc<AqlStorage>>,
-    /// Full-text search engine
-    fts_engine: Arc<dyn UnifiedFtsEngine>,
-    /// Enable query profiling
-    enable_profiling: bool,
-}
-
-/// Helper function to convert serde_json::Value to AqlValue
-fn json_value_to_aql_value(json: &serde_json::Value) -> AqlValue {
-    match json {
-        serde_json::Value::Null => AqlValue::Null,
-        serde_json::Value::Bool(b) => AqlValue::Bool(*b),
-        serde_json::Value::Number(n) => AqlValue::Number(n.clone()),
-        serde_json::Value::String(s) => AqlValue::String(s.clone()),
-        serde_json::Value::Array(arr) => {
-            AqlValue::Array(arr.iter().map(json_value_to_aql_value).collect())
-        }
-        serde_json::Value::Object(obj) => {
-            let mut map = HashMap::new();
-            for (k, v) in obj {
-                map.insert(k.clone(), json_value_to_aql_value(v));
-            }
-            AqlValue::Object(map)
-        }
-    }
 }
 
 impl AqlQueryEngine {
@@ -111,8 +85,6 @@ impl AqlQueryEngine {
             parser: AqlParser::new(),
             graphrag_engine: None,
             storage: None,
-            fts_engine: Arc::new(SharedFtsEngine::default()),
-            enable_profiling: false,
         }
     }
 
@@ -122,8 +94,6 @@ impl AqlQueryEngine {
             parser: AqlParser::new(),
             graphrag_engine: None,
             storage: Some(storage),
-            fts_engine: Arc::new(SharedFtsEngine::default()),
-            enable_profiling: false,
         }
     }
 
@@ -133,14 +103,7 @@ impl AqlQueryEngine {
             parser: AqlParser::new(),
             graphrag_engine: Some(AqlGraphRAGEngine::new(orbit_client)),
             storage: None,
-            fts_engine: Arc::new(SharedFtsEngine::default()),
-            enable_profiling: false,
         }
-    }
-
-    /// Enable or disable query profiling
-    pub fn set_profiling(&mut self, enable: bool) {
-        self.enable_profiling = enable;
     }
 
     /// Execute an AQL query
@@ -228,11 +191,7 @@ impl AqlQueryEngine {
 
     /// Execute parsed AQL query
     async fn execute_parsed_query(&self, query: AqlQuery) -> ProtocolResult<AqlQueryResult> {
-        // Start timing for profiling
-        let start_time = std::time::Instant::now();
-        let profile_data = HashMap::new();
-
-        // Check if query requires storage (has FOR, INSERT, UPDATE, REMOVE, REPLACE, UPSERT, or graph traversal)
+        // Check if query requires storage (has FOR, INSERT, UPDATE, REMOVE, REPLACE, UPSERT)
         let needs_storage = query.clauses.iter().any(|clause| {
             matches!(
                 clause,
@@ -242,10 +201,6 @@ impl AqlQueryEngine {
                     | AqlClause::Replace { .. }
                     | AqlClause::Remove { .. }
                     | AqlClause::Upsert { .. }
-                    | AqlClause::ForTraversal { .. }
-                    | AqlClause::ForShortestPath { .. }
-                    | AqlClause::ForKShortestPaths { .. }
-                    | AqlClause::ForAllShortestPaths { .. }
             )
         });
 
@@ -283,15 +238,11 @@ impl AqlQueryEngine {
                 AqlClause::Filter { condition } => {
                     // Apply filter to documents from FOR clause
                     if let Some(ref var) = for_variable {
-                        let mut filtered_docs = Vec::new();
-                        for doc in for_documents {
+                        for_documents.retain(|doc| {
                             let mut ctx = context.clone();
-                            ctx.insert(var.clone(), self.document_to_value(&doc));
-                            if self.evaluate_condition(condition, &ctx).await? {
-                                filtered_docs.push(doc);
-                            }
-                        }
-                        for_documents = filtered_docs;
+                            ctx.insert(var.clone(), self.document_to_value(doc));
+                            self.evaluate_condition(condition, &ctx).unwrap_or(false)
+                        });
                     }
                 }
                 AqlClause::Return {
@@ -303,12 +254,12 @@ impl AqlQueryEngine {
                         // Return documents from FOR clause
                         for doc in &for_documents {
                             context.insert(var.clone(), self.document_to_value(doc));
-                            let value = self.evaluate_expression(expression, &context).await?;
+                            let value = self.evaluate_expression(expression, &context)?;
                             result_data.push(value);
                         }
                     } else {
                         // No FOR clause - evaluate expression directly
-                        let value = self.evaluate_expression(expression, &context).await?;
+                        let value = self.evaluate_expression(expression, &context)?;
                         result_data.push(value);
                     }
 
@@ -335,15 +286,12 @@ impl AqlQueryEngine {
                     // Execute SEARCH clause - full-text search on documents
                     if let Some(ref var) = for_variable {
                         let analyzer_name = analyzer.as_deref().unwrap_or("text_en");
-                        let mut filtered_docs = Vec::new();
-                        for doc in for_documents {
+                        for_documents.retain(|doc| {
                             let mut ctx = context.clone();
-                            ctx.insert(var.clone(), self.document_to_value(&doc));
-                            if self.evaluate_search_expression(expression, &ctx, analyzer_name).await? {
-                                filtered_docs.push(doc);
-                            }
-                        }
-                        for_documents = filtered_docs;
+                            ctx.insert(var.clone(), self.document_to_value(doc));
+                            self.evaluate_search_expression(expression, &ctx, analyzer_name)
+                                .unwrap_or(false)
+                        });
                     }
                 }
                 AqlClause::Insert {
@@ -461,230 +409,28 @@ impl AqlQueryEngine {
                     expression,
                 } => {
                     // Execute LET clause - bind variable to expression result
-                    let value = self.evaluate_expression(expression, &context).await?;
+                    let value = self.evaluate_expression(expression, &context)?;
                     context.insert(variable.clone(), value);
                 }
-                AqlClause::ForTraversal {
-                    vertex_var,
-                    edge_var,
-                    path_var,
-                    min_depth,
-                    max_depth,
-                    direction,
-                    start_vertex,
-                    graph_name,
-                    options,
-                    prune,
-                } => {
-                    // Execute graph traversal
-                    let storage = storage_opt.ok_or_else(|| {
-                        ProtocolError::AqlError(
-                            "Storage backend required for graph traversal".to_string(),
-                        )
-                    })?;
-
-                    let traversal_results = self
-                        .execute_for_traversal(
-                            storage,
-                            vertex_var,
-                            edge_var,
-                            path_var,
-                            *min_depth,
-                            *max_depth,
-                            direction,
-                            start_vertex,
-                            graph_name,
-                            options,
-                            prune,
-                            &context,
-                        )
-                        .await?;
-
-                    // Store traversal results for subsequent clauses
-                    // Each result is a binding (vertex_var, edge_var, path_var)
-                    for_documents = traversal_results
-                        .iter()
-                        .map(|binding| {
-                            // Convert binding to AqlDocument (approximation)
-                            let mut data = HashMap::new();
-                            for (k, v) in binding {
-                                data.insert(k.clone(), v.clone());
-                            }
-                            AqlDocument::new("_traversal", uuid::Uuid::new_v4().to_string(), data)
-                        })
-                        .collect();
-
-                    // Also add traversal bindings to context for RETURN to access
-                    if let Some(first_binding) = traversal_results.first() {
-                        for (k, v) in first_binding {
-                            context.insert(k.clone(), v.clone());
-                        }
-                    }
-                    for_variable = Some(vertex_var.clone());
-                }
-                AqlClause::ForShortestPath { path_var, query } => {
-                    // Execute shortest path query
-                    let storage = storage_opt.ok_or_else(|| {
-                        ProtocolError::AqlError(
-                            "Storage backend required for shortest path query".to_string(),
-                        )
-                    })?;
-
-                    let path_results = self
-                        .execute_for_shortest_path(storage, path_var, query, &context)
-                        .await?;
-
-                    // Store path results
-                    for_documents = path_results
-                        .iter()
-                        .map(|binding| {
-                            let mut data = HashMap::new();
-                            for (k, v) in binding {
-                                data.insert(k.clone(), v.clone());
-                            }
-                            AqlDocument::new("_path", uuid::Uuid::new_v4().to_string(), data)
-                        })
-                        .collect();
-
-                    if let Some(first_binding) = path_results.first() {
-                        for (k, v) in first_binding {
-                            context.insert(k.clone(), v.clone());
-                        }
-                    }
-                    for_variable = Some(path_var.clone());
-                }
-                AqlClause::ForKShortestPaths { path_var, query } => {
-                    // Execute K shortest paths query
-                    let storage = storage_opt.ok_or_else(|| {
-                        ProtocolError::AqlError(
-                            "Storage backend required for K shortest paths query".to_string(),
-                        )
-                    })?;
-
-                    let path_results = self
-                        .execute_for_k_shortest_paths(storage, path_var, query, &context)
-                        .await?;
-
-                    // Store path results
-                    for_documents = path_results
-                        .iter()
-                        .map(|binding| {
-                            let mut data = HashMap::new();
-                            for (k, v) in binding {
-                                data.insert(k.clone(), v.clone());
-                            }
-                            AqlDocument::new("_kpaths", uuid::Uuid::new_v4().to_string(), data)
-                        })
-                        .collect();
-
-                    if let Some(first_binding) = path_results.first() {
-                        for (k, v) in first_binding {
-                            context.insert(k.clone(), v.clone());
-                        }
-                    }
-                    for_variable = Some(path_var.clone());
-                }
-                AqlClause::ForAllShortestPaths {
-                    path_var,
-                    start_vertex,
-                    target_vertex,
-                    direction,
-                    graph_source,
-                } => {
-                    // Execute all shortest paths query
-                    let storage = storage_opt.ok_or_else(|| {
-                        ProtocolError::AqlError(
-                            "Storage backend required for all shortest paths query".to_string(),
-                        )
-                    })?;
-
-                    let path_results = self
-                        .execute_for_all_shortest_paths(
-                            storage,
-                            path_var,
-                            start_vertex,
-                            target_vertex,
-                            direction,
-                            graph_source,
-                            &context,
-                        )
-                        .await?;
-
-                    // Store path results
-                    for_documents = path_results
-                        .iter()
-                        .map(|binding| {
-                            let mut data = HashMap::new();
-                            for (k, v) in binding {
-                                data.insert(k.clone(), v.clone());
-                            }
-                            AqlDocument::new("_allpaths", uuid::Uuid::new_v4().to_string(), data)
-                        })
-                        .collect();
-
-                    if let Some(first_binding) = path_results.first() {
-                        for (k, v) in first_binding {
-                            context.insert(k.clone(), v.clone());
-                        }
-                    }
-                    for_variable = Some(path_var.clone());
-                }
-                AqlClause::Collect {
-                    groups,
-                    into,
-                    keep,
-                    aggregates,
-                    count_into,
-                } => {
-                    // Execute COLLECT clause - group and aggregate
-                    let collected_results = self.execute_collect(
-                        &for_documents,
-                        &for_variable,
-                        groups,
-                        into,
-                        keep,
-                        aggregates,
-                        count_into,
-                        &context,
-                    ).await?;
-
-                    // COLLECT transforms the document stream
-                    for_documents = collected_results;
-                }
                 _ => {
-                    // Other clauses not yet implemented (WINDOW, etc.)
+                    // Other clauses not yet implemented
                     warn!("Unsupported clause type in AQL query execution");
                 }
             }
         }
 
         // Apply SORT and LIMIT if present
-        result_data = self.apply_sort_and_limit(&query.clauses, result_data).await?;
+        result_data = self.apply_sort_and_limit(&query.clauses, result_data)?;
 
-        // Calculate execution time
-        let execution_duration = start_time.elapsed();
-
-        // Build metadata
         let mut metadata = HashMap::new();
         metadata.insert(
             "rows_returned".to_string(),
             AqlValue::Number(serde_json::Number::from(result_data.len())),
         );
         metadata.insert(
-            "execution_time_ms".to_string(),
-            AqlValue::Number(serde_json::Number::from(
-                execution_duration.as_millis() as i64
-            )),
+            "execution_time".to_string(),
+            AqlValue::String(chrono::Utc::now().to_rfc3339()),
         );
-
-        // Add profiling data if enabled
-        if self.enable_profiling {
-            metadata.insert("profile".to_string(), AqlValue::Object(profile_data));
-            metadata.insert(
-                "query_clauses_count".to_string(),
-                AqlValue::Number(serde_json::Number::from(query.clauses.len())),
-            );
-        }
 
         Ok(AqlQueryResult {
             data: result_data,
@@ -711,7 +457,7 @@ impl AqlQueryEngine {
         context: &HashMap<String, AqlValue>,
     ) -> ProtocolResult<AqlValue> {
         // Evaluate the document expression to get the document data
-        let doc_value = self.evaluate_expression(document_expr, context).await?;
+        let doc_value = self.evaluate_expression(document_expr, context)?;
 
         // Convert AqlValue to document data
         let doc_data = match doc_value {
@@ -744,24 +490,6 @@ impl AqlQueryEngine {
         storage.store_document(doc.clone()).await?;
         info!("AQL INSERT: Created document {}/{}", collection, key);
 
-        // Index document for FTS
-        let index_name = collection;
-        let indexes = self.fts_engine.list_indexes().await;
-        if !indexes.iter().any(|i| i == index_name) {
-            let _ = self.fts_engine.create_index(index_name, &[]).await;
-        }
-
-        let mut fields = HashMap::new();
-        for (k, v) in &doc.data {
-            if let AqlValue::String(s) = v {
-                fields.insert(k.clone(), s.clone());
-            } else {
-                fields.insert(k.clone(), format!("{:?}", v));
-            }
-        }
-        let doc_id = format!("{}/{}", collection, key);
-        let _ = self.fts_engine.index_document(index_name, &doc_id, fields).await;
-
         // Return the created document as result
         Ok(self.document_to_value(&doc))
     }
@@ -776,10 +504,10 @@ impl AqlQueryEngine {
         context: &HashMap<String, AqlValue>,
     ) -> ProtocolResult<AqlValue> {
         // Evaluate the key expression
-        let key = self.extract_document_key(key_expr, context).await?;
+        let key = self.extract_document_key(key_expr, context)?;
 
         // Evaluate the update expression to get the update data
-        let update_value = self.evaluate_expression(document_expr, context).await?;
+        let update_value = self.evaluate_expression(document_expr, context)?;
 
         let updates = match update_value {
             AqlValue::Object(obj) => obj,
@@ -802,24 +530,6 @@ impl AqlQueryEngine {
             })?;
 
         info!("AQL UPDATE: Updated document {}/{}", collection, key);
-
-        // Update FTS index
-        let index_name = collection;
-        let indexes = self.fts_engine.list_indexes().await;
-        if !indexes.iter().any(|i| i == index_name) {
-             let _ = self.fts_engine.create_index(index_name, &[]).await;
-        }
-
-        let mut fields = HashMap::new();
-        for (k, v) in &updated_doc.data {
-            if let AqlValue::String(s) = v {
-                 fields.insert(k.clone(), s.clone());
-            } else {
-                 fields.insert(k.clone(), format!("{:?}", v));
-            }
-        }
-        let doc_id = format!("{}/{}", collection, key);
-        let _ = self.fts_engine.index_document(index_name, &doc_id, fields).await;
         Ok(self.document_to_value(&updated_doc))
     }
 
@@ -833,10 +543,10 @@ impl AqlQueryEngine {
         context: &HashMap<String, AqlValue>,
     ) -> ProtocolResult<AqlValue> {
         // Evaluate the key expression
-        let key = self.extract_document_key(key_expr, context).await?;
+        let key = self.extract_document_key(key_expr, context)?;
 
         // Evaluate the replacement document expression
-        let replace_value = self.evaluate_expression(document_expr, context).await?;
+        let replace_value = self.evaluate_expression(document_expr, context)?;
 
         let new_data = match replace_value {
             AqlValue::Object(obj) => obj,
@@ -862,24 +572,6 @@ impl AqlQueryEngine {
         storage.store_document(doc.clone()).await?;
 
         info!("AQL REPLACE: Replaced document {}/{}", collection, key);
-
-        // Update FTS index
-        let index_name = collection;
-        let indexes = self.fts_engine.list_indexes().await;
-        if !indexes.iter().any(|i| i == index_name) {
-             let _ = self.fts_engine.create_index(index_name, &[]).await;
-        }
-
-        let mut fields = HashMap::new();
-        for (k, v) in &doc.data {
-            if let AqlValue::String(s) = v {
-                 fields.insert(k.clone(), s.clone());
-            } else {
-                 fields.insert(k.clone(), format!("{:?}", v));
-            }
-        }
-        let doc_id = format!("{}/{}", collection, key);
-        let _ = self.fts_engine.index_document(index_name, &doc_id, fields).await;
         Ok(self.document_to_value(&doc))
     }
 
@@ -892,7 +584,7 @@ impl AqlQueryEngine {
         context: &HashMap<String, AqlValue>,
     ) -> ProtocolResult<AqlValue> {
         // Evaluate the key expression
-        let key = self.extract_document_key(key_expr, context).await?;
+        let key = self.extract_document_key(key_expr, context)?;
 
         // Get the document before deletion to return it
         let doc = storage.get_document(collection, &key).await?;
@@ -902,12 +594,6 @@ impl AqlQueryEngine {
 
         if deleted {
             info!("AQL REMOVE: Deleted document {}/{}", collection, key);
-            
-            // Remove from FTS index
-            let index_name = collection;
-            let doc_id = format!("{}/{}", collection, key);
-            let _ = self.fts_engine.remove_document(index_name, &doc_id).await;
-
             if let Some(d) = doc {
                 Ok(self.document_to_value(&d))
             } else {
@@ -937,7 +623,7 @@ impl AqlQueryEngine {
         context: &HashMap<String, AqlValue>,
     ) -> ProtocolResult<AqlValue> {
         // Evaluate the search expression to find matching document
-        let search_value = self.evaluate_expression(search_expr, context).await?;
+        let search_value = self.evaluate_expression(search_expr, context)?;
 
         // Try to find the document by _key if present in search
         let existing_key = if let AqlValue::Object(ref obj) = search_value {
@@ -964,7 +650,7 @@ impl AqlQueryEngine {
             let key = existing_key.unwrap();
             match update_or_replace {
                 UpsertAction::Update(update_expr) => {
-                    let update_value = self.evaluate_expression(update_expr, context).await?;
+                    let update_value = self.evaluate_expression(update_expr, context)?;
                     let updates = match update_value {
                         AqlValue::Object(obj) => obj,
                         _ => {
@@ -989,7 +675,7 @@ impl AqlQueryEngine {
                     Ok(self.document_to_value(&updated_doc))
                 }
                 UpsertAction::Replace(replace_expr) => {
-                    let replace_value = self.evaluate_expression(replace_expr, context).await?;
+                    let replace_value = self.evaluate_expression(replace_expr, context)?;
                     let new_data = match replace_value {
                         AqlValue::Object(obj) => obj,
                         _ => {
@@ -1017,7 +703,7 @@ impl AqlQueryEngine {
             }
         } else {
             // Document doesn't exist - perform INSERT
-            let insert_value = self.evaluate_expression(insert_expr, context).await?;
+            let insert_value = self.evaluate_expression(insert_expr, context)?;
             let doc_data = match insert_value {
                 AqlValue::Object(obj) => obj,
                 _ => {
@@ -1049,961 +735,13 @@ impl AqlQueryEngine {
         }
     }
 
-    /// Execute ForTraversal clause - graph traversal
-    #[allow(clippy::too_many_arguments)]
-    async fn execute_for_traversal(
-        &self,
-        storage: &AqlStorage,
-        vertex_var: &str,
-        edge_var: &Option<String>,
-        path_var: &Option<String>,
-        min_depth: Option<u32>,
-        max_depth: Option<u32>,
-        direction: &crate::protocols::aql::aql_parser::TraversalDirection,
-        start_vertex: &str,
-        graph_name: &Option<String>,
-        options: &Option<crate::protocols::aql::aql_parser::TraversalOptions>,
-        prune: &Option<crate::protocols::aql::aql_parser::PruneClause>,
-        _context: &HashMap<String, AqlValue>,
-    ) -> ProtocolResult<Vec<HashMap<String, AqlValue>>> {
-        use crate::protocols::aql::aql_parser::TraversalOrder;
-
-        // Build graph from storage
-        let graph = self.build_graph_from_storage(storage, graph_name).await?;
-
-        // Determine traversal order and uniqueness constraints
-        let (use_bfs, unique_vertices, unique_edges) = if let Some(opts) = options {
-            (
-                opts.order == TraversalOrder::Bfs,
-                opts.unique_vertices.clone(),
-                opts.unique_edges.clone(),
-            )
-        } else {
-            (
-                true, // Default to BFS
-                crate::protocols::aql::aql_parser::UniquenessLevel::None,
-                crate::protocols::aql::aql_parser::UniquenessLevel::None,
-            )
-        };
-
-        // Perform custom traversal with PRUNE and uniqueness support
-        let max_depth_usize = max_depth.map(|d| d as usize);
-        let min_depth_usize = min_depth.unwrap_or(0) as usize;
-
-        let traversal_result = self.custom_traversal(
-            &graph,
-            start_vertex,
-            direction,
-            min_depth_usize,
-            max_depth_usize,
-            use_bfs,
-            &unique_vertices,
-            &unique_edges,
-            prune,
-        ).await?;
-
-        // Build result: for each visited vertex, create a binding with vertex, edge, and path
-        let mut results = Vec::new();
-        for (vertex_id, parent_id, _depth) in &traversal_result {
-            let mut binding = HashMap::new();
-
-            // Add vertex data
-            if let Some(node) = graph.nodes.get(vertex_id) {
-                let mut vertex_obj = HashMap::new();
-                vertex_obj.insert("_key".to_string(), AqlValue::String(vertex_id.clone()));
-                vertex_obj.insert("_id".to_string(), AqlValue::String(vertex_id.clone()));
-                for (k, v) in &node.properties {
-                    vertex_obj.insert(k.clone(), json_to_aql_value(v));
-                }
-                binding.insert(vertex_var.to_string(), AqlValue::Object(vertex_obj));
-            }
-
-            // Add edge data if requested
-            if let Some(edge_var_name) = edge_var {
-                if let Some(parent) = parent_id {
-                    let edge_obj = self.find_edge(&graph, parent, vertex_id, direction);
-                    binding.insert(edge_var_name.clone(), edge_obj);
-                } else {
-                    binding.insert(edge_var_name.clone(), AqlValue::Null);
-                }
-            }
-
-            // Add path data if requested
-            if let Some(path_var_name) = path_var {
-                // Build path from current position back to start
-                let path =
-                    self.build_path_from_traversal(&traversal_result, vertex_id, &graph, direction);
-                binding.insert(path_var_name.clone(), path);
-            }
-
-            results.push(binding);
-        }
-
-        Ok(results)
-    }
-
-    /// Execute ForShortestPath clause - shortest path between two vertices
-    async fn execute_for_shortest_path(
-        &self,
-        storage: &AqlStorage,
-        path_var: &str,
-        query: &crate::protocols::aql::aql_parser::ShortestPathQuery,
-        context: &HashMap<String, AqlValue>,
-    ) -> ProtocolResult<Vec<HashMap<String, AqlValue>>> {
-        // Build graph from storage
-        let graph_name = match &query.graph_source {
-            crate::protocols::aql::aql_parser::GraphSource::Graph(name) => Some(name.as_str()),
-            _ => None,
-        };
-        let graph = self
-            .build_graph_from_storage(storage, &graph_name.map(|s| s.to_string()))
-            .await?;
-
-        // Evaluate start and target vertex expressions
-        let start_vertex = self.evaluate_expression(&query.start_vertex, context).await?;
-        let target_vertex = self.evaluate_expression(&query.target_vertex, context).await?;
-
-        let start_id = self.extract_vertex_id(&start_vertex)?;
-        let target_id = self.extract_vertex_id(&target_vertex)?;
-
-        // Find shortest path using Dijkstra's algorithm
-        let path_result = graph_algo::dijkstra(&graph, &start_id, &target_id);
-
-        // If no path found, return empty
-        if !path_result.found {
-            return Ok(vec![]);
-        }
-
-        // Build path object
-        let mut path_obj = HashMap::new();
-
-        // Add vertices in path
-        let vertices: Vec<AqlValue> = path_result
-            .path
-            .iter()
-            .map(|id| {
-                let mut vertex = HashMap::new();
-                vertex.insert("_key".to_string(), AqlValue::String(id.clone()));
-                vertex.insert("_id".to_string(), AqlValue::String(id.clone()));
-                if let Some(node) = graph.nodes.get(id) {
-                    for (k, v) in &node.properties {
-                        vertex.insert(k.clone(), json_to_aql_value(v));
-                    }
-                }
-                AqlValue::Object(vertex)
-            })
-            .collect();
-
-        path_obj.insert("vertices".to_string(), AqlValue::Array(vertices));
-
-        // Add edges in path
-        let mut edges = Vec::new();
-        for i in 0..path_result.path.len().saturating_sub(1) {
-            let from = &path_result.path[i];
-            let to = &path_result.path[i + 1];
-            let edge_obj = self.find_edge(&graph, from, to, &query.direction);
-            edges.push(edge_obj);
-        }
-        path_obj.insert("edges".to_string(), AqlValue::Array(edges));
-
-        // Add metadata
-        path_obj.insert(
-            "distance".to_string(),
-            AqlValue::Number(
-                serde_json::Number::from_f64(path_result.cost)
-                    .unwrap_or(serde_json::Number::from(0)),
-            ),
-        );
-        path_obj.insert(
-            "length".to_string(),
-            AqlValue::Number(serde_json::Number::from(path_result.length)),
-        );
-
-        let mut binding = HashMap::new();
-        binding.insert(path_var.to_string(), AqlValue::Object(path_obj));
-
-        Ok(vec![binding])
-    }
-
-    /// Execute ForKShortestPaths clause - K shortest paths
-    async fn execute_for_k_shortest_paths(
-        &self,
-        storage: &AqlStorage,
-        path_var: &str,
-        query: &crate::protocols::aql::aql_parser::KShortestPathsQuery,
-        context: &HashMap<String, AqlValue>,
-    ) -> ProtocolResult<Vec<HashMap<String, AqlValue>>> {
-        // Build graph from storage
-        let graph_name = match &query.graph_source {
-            crate::protocols::aql::aql_parser::GraphSource::Graph(name) => Some(name.as_str()),
-            _ => None,
-        };
-        let graph = self
-            .build_graph_from_storage(storage, &graph_name.map(|s| s.to_string()))
-            .await?;
-
-        // Evaluate start and target vertex expressions
-        let start_vertex = self.evaluate_expression(&query.start_vertex, context).await?;
-        let target_vertex = self.evaluate_expression(&query.target_vertex, context).await?;
-
-        let start_id = self.extract_vertex_id(&start_vertex)?;
-        let target_id = self.extract_vertex_id(&target_vertex)?;
-
-        // Find K shortest paths
-        let k_paths_result =
-            graph_algo::k_shortest_paths(&graph, &start_id, &target_id, query.k as usize);
-
-        // Build result for each path
-        let mut results = Vec::new();
-        for path_result in k_paths_result.paths {
-            if !path_result.found {
-                continue;
-            }
-
-            let mut path_obj = HashMap::new();
-
-            // Add vertices
-            let vertices: Vec<AqlValue> = path_result
-                .path
-                .iter()
-                .map(|id| {
-                    let mut vertex = HashMap::new();
-                    vertex.insert("_key".to_string(), AqlValue::String(id.clone()));
-                    vertex.insert("_id".to_string(), AqlValue::String(id.clone()));
-                    if let Some(node) = graph.nodes.get(id) {
-                        for (k, v) in &node.properties {
-                            vertex.insert(k.clone(), json_to_aql_value(v));
-                        }
-                    }
-                    AqlValue::Object(vertex)
-                })
-                .collect();
-
-            path_obj.insert("vertices".to_string(), AqlValue::Array(vertices));
-
-            // Add edges
-            let mut edges = Vec::new();
-            for i in 0..path_result.path.len().saturating_sub(1) {
-                let from = &path_result.path[i];
-                let to = &path_result.path[i + 1];
-                let edge_obj = self.find_edge(&graph, from, to, &query.direction);
-                edges.push(edge_obj);
-            }
-            path_obj.insert("edges".to_string(), AqlValue::Array(edges));
-
-            // Add metadata
-            path_obj.insert(
-                "distance".to_string(),
-                AqlValue::Number(
-                    serde_json::Number::from_f64(path_result.cost)
-                        .unwrap_or(serde_json::Number::from(0)),
-                ),
-            );
-            path_obj.insert(
-                "length".to_string(),
-                AqlValue::Number(serde_json::Number::from(path_result.length)),
-            );
-
-            let mut binding = HashMap::new();
-            binding.insert(path_var.to_string(), AqlValue::Object(path_obj));
-            results.push(binding);
-        }
-
-        Ok(results)
-    }
-
-    /// Execute ForAllShortestPaths clause - all shortest paths
-    #[allow(clippy::too_many_arguments)]
-    async fn execute_for_all_shortest_paths(
-        &self,
-        storage: &AqlStorage,
-        path_var: &str,
-        start_vertex: &AqlExpression,
-        target_vertex: &AqlExpression,
-        direction: &crate::protocols::aql::aql_parser::TraversalDirection,
-        graph_source: &crate::protocols::aql::aql_parser::GraphSource,
-        context: &HashMap<String, AqlValue>,
-    ) -> ProtocolResult<Vec<HashMap<String, AqlValue>>> {
-        // Build graph from storage
-        let graph_name = match graph_source {
-            crate::protocols::aql::aql_parser::GraphSource::Graph(name) => Some(name.as_str()),
-            _ => None,
-        };
-        let graph = self
-            .build_graph_from_storage(storage, &graph_name.map(|s| s.to_string()))
-            .await?;
-
-        // Evaluate start and target vertex expressions
-        let start = self.evaluate_expression(start_vertex, context).await?;
-        let target = self.evaluate_expression(target_vertex, context).await?;
-
-        let start_id = self.extract_vertex_id(&start)?;
-        let target_id = self.extract_vertex_id(&target)?;
-
-        // Find all shortest paths
-        let all_paths_result = graph_algo::all_shortest_paths(&graph, &start_id, &target_id);
-
-        // Build result for each path
-        let mut results = Vec::new();
-        for path_vec in all_paths_result.paths {
-            let mut path_obj = HashMap::new();
-
-            // Add vertices
-            let vertices: Vec<AqlValue> = path_vec
-                .iter()
-                .map(|id| {
-                    let mut vertex = HashMap::new();
-                    vertex.insert("_key".to_string(), AqlValue::String(id.clone()));
-                    vertex.insert("_id".to_string(), AqlValue::String(id.clone()));
-                    if let Some(node) = graph.nodes.get(id) {
-                        for (k, v) in &node.properties {
-                            vertex.insert(k.clone(), json_to_aql_value(v));
-                        }
-                    }
-                    AqlValue::Object(vertex)
-                })
-                .collect();
-
-            path_obj.insert("vertices".to_string(), AqlValue::Array(vertices));
-
-            // Add edges
-            let mut edges = Vec::new();
-            for i in 0..path_vec.len().saturating_sub(1) {
-                let from = &path_vec[i];
-                let to = &path_vec[i + 1];
-                let edge_obj = self.find_edge(&graph, from, to, direction);
-                edges.push(edge_obj);
-            }
-            path_obj.insert("edges".to_string(), AqlValue::Array(edges));
-
-            // Add length
-            path_obj.insert(
-                "length".to_string(),
-                AqlValue::Number(serde_json::Number::from(path_vec.len().saturating_sub(1))),
-            );
-
-            let mut binding = HashMap::new();
-            binding.insert(path_var.to_string(), AqlValue::Object(path_obj));
-            results.push(binding);
-        }
-
-        Ok(results)
-    }
-
-    /// Build graph from storage by loading edge and vertex collections
-    async fn build_graph_from_storage(
-        &self,
-        storage: &AqlStorage,
-        _graph_name: &Option<String>,
-    ) -> ProtocolResult<graph_algo::Graph> {
-        let mut graph = graph_algo::Graph::new();
-
-        // Get all collections
-        let collections = storage.list_collections().await?;
-
-        // Identify edge collections (collections whose documents have _from and _to)
-        for collection_name in &collections {
-            let documents = storage.get_collection_documents(collection_name).await?;
-
-            for doc in documents {
-                // Check if this is an edge document
-                if doc.data.contains_key("_from") && doc.data.contains_key("_to") {
-                    // This is an edge collection
-                    let from = if let Some(AqlValue::String(f)) = doc.data.get("_from") {
-                        f.clone()
-                    } else {
-                        continue;
-                    };
-
-                    let to = if let Some(AqlValue::String(t)) = doc.data.get("_to") {
-                        t.clone()
-                    } else {
-                        continue;
-                    };
-
-                    let weight = doc
-                        .data
-                        .get("weight")
-                        .or(doc.data.get("cost"))
-                        .and_then(|v| {
-                            if let AqlValue::Number(n) = v {
-                                n.as_f64()
-                            } else {
-                                None
-                            }
-                        })
-                        .unwrap_or(1.0);
-
-                    let edge_type = doc
-                        .data
-                        .get("_type")
-                        .or(doc.data.get("type"))
-                        .and_then(|v| {
-                            if let AqlValue::String(s) = v {
-                                Some(s.clone())
-                            } else {
-                                None
-                            }
-                        });
-
-                    graph.add_edge(from, to, weight, edge_type);
-                } else {
-                    // This is a vertex document
-                    let id = doc.id.clone();
-                    let mut properties = HashMap::new();
-                    for (k, v) in &doc.data {
-                        if !k.starts_with('_') {
-                            properties.insert(k.clone(), aql_value_to_json(v));
-                        }
-                    }
-                    graph.add_node(id, properties);
-                }
-            }
-        }
-
-        Ok(graph)
-    }
-
-    /// Find edge between two vertices
-    fn find_edge(
-        &self,
-        graph: &graph_algo::Graph,
-        from: &str,
-        to: &str,
-        direction: &crate::protocols::aql::aql_parser::TraversalDirection,
-    ) -> AqlValue {
-        use crate::protocols::aql::aql_parser::TraversalDirection;
-
-        let edge_info = match direction {
-            TraversalDirection::Outbound => graph
-                .adjacency
-                .get(from)
-                .and_then(|neighbors| neighbors.iter().find(|(neighbor, _, _)| neighbor == to)),
-            TraversalDirection::Inbound => graph
-                .reverse_adjacency
-                .get(to)
-                .and_then(|neighbors| neighbors.iter().find(|(neighbor, _, _)| neighbor == from)),
-            TraversalDirection::Any => graph
-                .adjacency
-                .get(from)
-                .and_then(|neighbors| neighbors.iter().find(|(neighbor, _, _)| neighbor == to))
-                .or_else(|| {
-                    graph.reverse_adjacency.get(to).and_then(|neighbors| {
-                        neighbors.iter().find(|(neighbor, _, _)| neighbor == from)
-                    })
-                }),
-        };
-
-        if let Some((_, weight, edge_type)) = edge_info {
-            let mut edge_obj = HashMap::new();
-            edge_obj.insert("_from".to_string(), AqlValue::String(from.to_string()));
-            edge_obj.insert("_to".to_string(), AqlValue::String(to.to_string()));
-            edge_obj.insert(
-                "weight".to_string(),
-                AqlValue::Number(
-                    serde_json::Number::from_f64(*weight).unwrap_or(serde_json::Number::from(1)),
-                ),
-            );
-            if let Some(edge_type_str) = edge_type {
-                edge_obj.insert("type".to_string(), AqlValue::String(edge_type_str.clone()));
-            }
-            AqlValue::Object(edge_obj)
-        } else {
-            AqlValue::Null
-        }
-    }
-
-    /// Reconstruct full path from traversal result (kept for compatibility)
-    #[allow(dead_code)]
-    fn reconstruct_path(
-        &self,
-        traversal: &graph_algo::TraversalResult,
-        vertex_id: &str,
-        graph: &graph_algo::Graph,
-        direction: &crate::protocols::aql::aql_parser::TraversalDirection,
-    ) -> AqlValue {
-        // Build path from start to this vertex
-        let mut path_vertices = Vec::new();
-        let mut current = vertex_id;
-
-        // Backtrack to find full path
-        path_vertices.push(current.to_string());
-        while let Some(parent) = traversal.parents.get(current) {
-            path_vertices.push(parent.clone());
-            current = parent;
-        }
-        path_vertices.reverse();
-
-        // Build path object
-        let mut path_obj = HashMap::new();
-
-        // Add vertices
-        let vertices: Vec<AqlValue> = path_vertices
-            .iter()
-            .map(|id| {
-                let mut vertex = HashMap::new();
-                vertex.insert("_key".to_string(), AqlValue::String(id.clone()));
-                vertex.insert("_id".to_string(), AqlValue::String(id.clone()));
-                if let Some(node) = graph.nodes.get(id) {
-                    for (k, v) in &node.properties {
-                        vertex.insert(k.clone(), json_to_aql_value(v));
-                    }
-                }
-                AqlValue::Object(vertex)
-            })
-            .collect();
-
-        path_obj.insert("vertices".to_string(), AqlValue::Array(vertices));
-
-        // Add edges
-        let mut edges = Vec::new();
-        for i in 0..path_vertices.len().saturating_sub(1) {
-            let from = &path_vertices[i];
-            let to = &path_vertices[i + 1];
-            let edge_obj = self.find_edge(graph, from, to, direction);
-            edges.push(edge_obj);
-        }
-        path_obj.insert("edges".to_string(), AqlValue::Array(edges));
-
-        AqlValue::Object(path_obj)
-    }
-
-    /// Custom graph traversal with PRUNE and uniqueness support
-    /// Returns: Vec<(vertex_id, parent_id, depth)>
-    #[allow(clippy::too_many_arguments)]
-    async fn custom_traversal(
-        &self,
-        graph: &graph_algo::Graph,
-        start_vertex: &str,
-        direction: &crate::protocols::aql::aql_parser::TraversalDirection,
-        min_depth: usize,
-        max_depth: Option<usize>,
-        use_bfs: bool,
-        unique_vertices: &crate::protocols::aql::aql_parser::UniquenessLevel,
-        unique_edges: &crate::protocols::aql::aql_parser::UniquenessLevel,
-        prune: &Option<crate::protocols::aql::aql_parser::PruneClause>,
-    ) -> ProtocolResult<Vec<(String, Option<String>, usize)>> {
-        use crate::protocols::aql::aql_parser::{TraversalDirection, UniquenessLevel};
-        use std::collections::{HashSet, VecDeque};
-
-        let mut results = Vec::new();
-        let mut global_visited_vertices: HashSet<String> = HashSet::new();
-        let mut global_visited_edges: HashSet<(String, String)> = HashSet::new();
-
-        // Queue/Stack: (vertex_id, parent_id, depth, path_vertices, path_edges)
-        let mut queue: VecDeque<(
-            String,
-            Option<String>,
-            usize,
-            Vec<String>,
-            Vec<(String, String)>,
-        )> = VecDeque::new();
-        queue.push_back((
-            start_vertex.to_string(),
-            None,
-            0,
-            vec![start_vertex.to_string()],
-            vec![],
-        ));
-
-        while let Some((current_id, parent_id, depth, path_vertices, path_edges)) = if use_bfs {
-            queue.pop_front()
-        } else {
-            queue.pop_back()
-        } {
-            // Check max depth
-            if let Some(max_d) = max_depth {
-                if depth > max_d {
-                    continue;
-                }
-            }
-
-            // Add to results if within min_depth
-            if depth >= min_depth {
-                results.push((current_id.clone(), parent_id.clone(), depth));
-            }
-
-            // Check PRUNE condition
-            if let Some(prune_clause) = prune {
-                // Create context for condition evaluation
-                let mut context = HashMap::new();
-
-                // Add current vertex to context
-                if let Some(node) = graph.nodes.get(&current_id) {
-                    let mut vertex_obj = HashMap::new();
-                    vertex_obj.insert("_key".to_string(), AqlValue::String(current_id.clone()));
-                    vertex_obj.insert("_id".to_string(), AqlValue::String(current_id.clone()));
-                    for (k, v) in &node.properties {
-                        vertex_obj.insert(k.clone(), json_to_aql_value(v));
-                    }
-
-                    if let Some(ref var) = prune_clause.prune_var {
-                        context.insert(var.clone(), AqlValue::Object(vertex_obj.clone()));
-                    } else {
-                        context.insert("vertex".to_string(), AqlValue::Object(vertex_obj));
-                    }
-                }
-
-                // Evaluate PRUNE condition
-                if self
-                    .evaluate_condition(&prune_clause.condition, &context).await?
-                {
-                    // PRUNE: don't expand this vertex further
-                    continue;
-                }
-            }
-
-            // Don't expand beyond max_depth
-            if let Some(max_d) = max_depth {
-                if depth >= max_d {
-                    continue;
-                }
-            }
-
-            // Get neighbors based on direction
-            let neighbors = match direction {
-                TraversalDirection::Outbound => graph.get_outgoing_neighbors(&current_id),
-                TraversalDirection::Inbound => graph.get_incoming_neighbors(&current_id),
-                TraversalDirection::Any => graph.get_all_neighbors(&current_id),
-            };
-
-            // Expand to neighbors
-            for (neighbor_id, _weight, _edge_type) in neighbors {
-                // Check uniqueness constraints for vertices
-                let should_visit_vertex = match unique_vertices {
-                    UniquenessLevel::None => true,
-                    UniquenessLevel::Path => !path_vertices.contains(&neighbor_id),
-                    UniquenessLevel::Global => !global_visited_vertices.contains(&neighbor_id),
-                };
-
-                if !should_visit_vertex {
-                    continue;
-                }
-
-                // Check uniqueness constraints for edges
-                let edge = (current_id.clone(), neighbor_id.clone());
-                let should_visit_edge = match unique_edges {
-                    UniquenessLevel::None => true,
-                    UniquenessLevel::Path => !path_edges.contains(&edge),
-                    UniquenessLevel::Global => !global_visited_edges.contains(&edge),
-                };
-
-                if !should_visit_edge {
-                    continue;
-                }
-
-                // Build new path
-                let mut new_path_vertices = path_vertices.clone();
-                new_path_vertices.push(neighbor_id.clone());
-
-                let mut new_path_edges = path_edges.clone();
-                new_path_edges.push(edge.clone());
-
-                // Mark as visited if using global uniqueness
-                if matches!(unique_vertices, UniquenessLevel::Global) {
-                    global_visited_vertices.insert(neighbor_id.clone());
-                }
-                if matches!(unique_edges, UniquenessLevel::Global) {
-                    global_visited_edges.insert(edge);
-                }
-
-                // Add to queue
-                queue.push_back((
-                    neighbor_id,
-                    Some(current_id.clone()),
-                    depth + 1,
-                    new_path_vertices,
-                    new_path_edges,
-                ));
-            }
-        }
-
-        Ok(results)
-    }
-
-    /// Build path from custom traversal result
-    fn build_path_from_traversal(
-        &self,
-        traversal_result: &[(String, Option<String>, usize)],
-        target_vertex: &str,
-        graph: &graph_algo::Graph,
-        direction: &crate::protocols::aql::aql_parser::TraversalDirection,
-    ) -> AqlValue {
-        // Find the path to target_vertex by backtracking through parents
-        let mut path_vertices = vec![target_vertex.to_string()];
-        let mut current = target_vertex;
-
-        // Build parent map from traversal result
-        let mut parent_map: HashMap<String, String> = HashMap::new();
-        for (vertex_id, parent_id, _depth) in traversal_result {
-            if let Some(parent) = parent_id {
-                parent_map.insert(vertex_id.clone(), parent.clone());
-            }
-        }
-
-        // Backtrack to find full path
-        while let Some(parent) = parent_map.get(current) {
-            path_vertices.push(parent.clone());
-            current = parent;
-        }
-        path_vertices.reverse();
-
-        // Build path object
-        let mut path_obj = HashMap::new();
-
-        // Add vertices
-        let vertices: Vec<AqlValue> = path_vertices
-            .iter()
-            .map(|id| {
-                let mut vertex = HashMap::new();
-                vertex.insert("_key".to_string(), AqlValue::String(id.clone()));
-                vertex.insert("_id".to_string(), AqlValue::String(id.clone()));
-                if let Some(node) = graph.nodes.get(id) {
-                    for (k, v) in &node.properties {
-                        vertex.insert(k.clone(), json_to_aql_value(v));
-                    }
-                }
-                AqlValue::Object(vertex)
-            })
-            .collect();
-
-        path_obj.insert("vertices".to_string(), AqlValue::Array(vertices));
-
-        // Add edges
-        let mut edges = Vec::new();
-        for i in 0..path_vertices.len().saturating_sub(1) {
-            let from = &path_vertices[i];
-            let to = &path_vertices[i + 1];
-            let edge_obj = self.find_edge(graph, from, to, direction);
-            edges.push(edge_obj);
-        }
-        path_obj.insert("edges".to_string(), AqlValue::Array(edges));
-
-        AqlValue::Object(path_obj)
-    }
-
-    /// Extract vertex ID from a vertex expression result
-    fn extract_vertex_id(&self, vertex: &AqlValue) -> ProtocolResult<String> {
-        match vertex {
-            AqlValue::String(id) => Ok(id.clone()),
-            AqlValue::Object(obj) => {
-                // Try _key first, then _id
-                if let Some(AqlValue::String(id)) = obj.get("_key").or(obj.get("_id")) {
-                    Ok(id.clone())
-                } else {
-                    Err(ProtocolError::AqlError(
-                        "Vertex object must have _key or _id field".to_string(),
-                    ))
-                }
-            }
-            _ => Err(ProtocolError::AqlError(
-                "Vertex must be a string ID or an object with _key/_id".to_string(),
-            )),
-        }
-    }
-
-    /// Execute COLLECT clause - grouping and aggregation
-    #[allow(clippy::too_many_arguments)]
-    async fn execute_collect(
-        &self,
-        documents: &[AqlDocument],
-        for_variable: &Option<String>,
-        groups: &[crate::protocols::aql::aql_parser::CollectGroup],
-        into: &Option<String>,
-        _keep: &Option<Vec<String>>,
-        aggregates: &Option<Vec<crate::protocols::aql::aql_parser::CollectAggregate>>,
-        count_into: &Option<String>,
-        context: &HashMap<String, AqlValue>,
-    ) -> ProtocolResult<Vec<AqlDocument>> {
-        use std::collections::BTreeMap;
-
-        // Group documents by group expressions
-        let mut grouped: BTreeMap<Vec<String>, Vec<AqlDocument>> = BTreeMap::new();
-
-        for doc in documents {
-            // Build context for this document
-            let mut doc_context = context.clone();
-            if let Some(ref var) = for_variable {
-                doc_context.insert(var.clone(), self.document_to_value(doc));
-            }
-
-            // Evaluate group keys
-            let mut group_key = Vec::new();
-            for group in groups {
-                let value = if let Some(ref expr) = group.expression {
-                    self.evaluate_expression(expr, &doc_context).await?
-                } else {
-                    // If no expression, use the variable value directly
-                    doc_context
-                        .get(&group.variable)
-                        .cloned()
-                        .unwrap_or(AqlValue::Null)
-                };
-
-                // Convert to string for grouping
-                group_key.push(format!("{:?}", value));
-            }
-
-            grouped.entry(group_key).or_default().push(doc.clone());
-        }
-
-        // Build result documents from groups
-        let mut result_docs = Vec::new();
-
-        for (group_keys, group_docs) in grouped {
-            let mut result_data = HashMap::new();
-
-            // Add group variables
-            for (i, group) in groups.iter().enumerate() {
-                if let Some(key_str) = group_keys.get(i) {
-                    // Parse the debug string back (simplified - in production would preserve original values)
-                    result_data.insert(group.variable.clone(), AqlValue::String(key_str.clone()));
-                }
-            }
-
-            // Add INTO variable if specified (array of grouped documents)
-            if let Some(into_var) = into {
-                let group_array: Vec<AqlValue> = group_docs
-                    .iter()
-                    .map(|doc| {
-                        let mut obj = HashMap::new();
-                        for (k, v) in &doc.data {
-                            obj.insert(k.clone(), v.clone());
-                        }
-                        AqlValue::Object(obj)
-                    })
-                    .collect();
-                result_data.insert(into_var.clone(), AqlValue::Array(group_array));
-            }
-
-            // Add COUNT variable if specified
-            if let Some(count_var) = count_into {
-                result_data.insert(
-                    count_var.clone(),
-                    AqlValue::Number(serde_json::Number::from(group_docs.len())),
-                );
-            }
-
-            // Compute aggregates if specified
-            if let Some(agg_list) = aggregates {
-                for agg in agg_list {
-                    let agg_value = self.compute_aggregate(
-                        &agg.function,
-                        &agg.expression,
-                        &group_docs,
-                        for_variable,
-                        context,
-                    ).await?;
-                    result_data.insert(agg.variable.clone(), agg_value);
-                }
-            }
-
-            // Create result document
-            let doc = AqlDocument::new("_collect", uuid::Uuid::new_v4().to_string(), result_data);
-            result_docs.push(doc);
-        }
-
-        Ok(result_docs)
-    }
-
-    /// Compute aggregate function over a group of documents
-    async fn compute_aggregate(
-        &self,
-        function: &crate::protocols::aql::aql_parser::AggregateFunction,
-        expression: &AqlExpression,
-        documents: &[AqlDocument],
-        for_variable: &Option<String>,
-        base_context: &HashMap<String, AqlValue>,
-    ) -> ProtocolResult<AqlValue> {
-        use crate::protocols::aql::aql_parser::AggregateFunction;
-
-        let mut values: Vec<AqlValue> = Vec::new();
-        for doc in documents {
-            let mut context = base_context.clone();
-            if let Some(ref var) = for_variable {
-                context.insert(var.clone(), self.document_to_value(doc));
-            }
-            values.push(self.evaluate_expression(expression, &context).await?);
-        }
-
-        match function {
-            AggregateFunction::Count => {
-                Ok(AqlValue::Number(serde_json::Number::from(values.len())))
-            }
-            AggregateFunction::Sum => {
-                let sum: f64 = values
-                    .iter()
-                    .filter_map(|v| {
-                        if let AqlValue::Number(n) = v {
-                            n.as_f64()
-                        } else {
-                            None
-                        }
-                    })
-                    .sum();
-                Ok(AqlValue::Number(
-                    serde_json::Number::from_f64(sum).unwrap_or(serde_json::Number::from(0)),
-                ))
-            }
-            AggregateFunction::Avg => {
-                let numbers: Vec<f64> = values
-                    .iter()
-                    .filter_map(|v| {
-                        if let AqlValue::Number(n) = v {
-                            n.as_f64()
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                if numbers.is_empty() {
-                    Ok(AqlValue::Null)
-                } else {
-                    let avg = numbers.iter().sum::<f64>() / numbers.len() as f64;
-                    Ok(AqlValue::Number(
-                        serde_json::Number::from_f64(avg).unwrap_or(serde_json::Number::from(0)),
-                    ))
-                }
-            }
-            AggregateFunction::Min => values
-                .iter()
-                .min_by(|a, b| self.compare_aql_values(a, b))
-                .cloned()
-                .ok_or_else(|| ProtocolError::AqlError("MIN on empty group".to_string())),
-            AggregateFunction::Max => values
-                .iter()
-                .max_by(|a, b| self.compare_aql_values(a, b))
-                .cloned()
-                .ok_or_else(|| ProtocolError::AqlError("MAX on empty group".to_string())),
-            AggregateFunction::CountDistinct => {
-                use std::collections::HashSet;
-                let unique: HashSet<String> = values.iter().map(|v| format!("{:?}", v)).collect();
-                Ok(AqlValue::Number(serde_json::Number::from(unique.len())))
-            }
-            AggregateFunction::CollectArray => Ok(AqlValue::Array(values)),
-            AggregateFunction::CollectUnique => {
-                use std::collections::HashSet;
-                let mut seen = HashSet::new();
-                let unique: Vec<AqlValue> = values
-                    .into_iter()
-                    .filter(|v| seen.insert(format!("{:?}", v)))
-                    .collect();
-                Ok(AqlValue::Array(unique))
-            }
-            _ => {
-                // Stddev, Variance, etc. - not implemented yet
-                Ok(AqlValue::Null)
-            }
-        }
-    }
-
     /// Extract document key from key expression
-    async fn extract_document_key(
+    fn extract_document_key(
         &self,
         key_expr: &AqlExpression,
         context: &HashMap<String, AqlValue>,
     ) -> ProtocolResult<String> {
-        let key_value = self.evaluate_expression(key_expr, context).await?;
+        let key_value = self.evaluate_expression(key_expr, context)?;
 
         match key_value {
             AqlValue::String(k) => Ok(k),
@@ -2025,136 +763,66 @@ impl AqlQueryEngine {
     }
 
     /// Evaluate an AQL expression
-    #[async_recursion]
-    async fn evaluate_expression(
+    #[allow(clippy::only_used_in_recursion)]
+    fn evaluate_expression(
         &self,
         expression: &AqlExpression,
         context: &HashMap<String, AqlValue>,
     ) -> ProtocolResult<AqlValue> {
+        use crate::protocols::aql::aql_parser::AqlExpression;
+
         match expression {
-            AqlExpression::Literal(val) => Ok(val.clone()),
-            AqlExpression::Variable(name) => {
-                if let Some(val) = context.get(name) {
-                    Ok(val.clone())
-                } else if name == "CURRENT" {
-                    // Special case for CURRENT variable (used in array expansion)
-                     // If it's not in context, it might be handled by the caller, but for now return Null
-                    Ok(AqlValue::Null)
-                } else {
-                    // Check if it's a collection name or known identifier
-                    // For now, treat as Null if not found
-                    Ok(AqlValue::Null)
-                }
-            }
+            AqlExpression::Variable(name) => context
+                .get(name)
+                .cloned()
+                .ok_or_else(|| ProtocolError::AqlError(format!("Variable '{}' not found", name))),
+            AqlExpression::Literal(value) => Ok(value.clone()),
             AqlExpression::PropertyAccess { object, property } => {
-                // If resolving from a variable, try to find it in context
-                if let Some(AqlValue::Object(map)) = context.get(object) {
-                     if let Some(val) = map.get(property) {
-                         Ok(val.clone())
-                     } else {
-                         Ok(AqlValue::Null)
-                     }
-                } else if object == "doc" || object == "_" {
-                     // Special variables "doc" or "_" often refer to the current document in context
-                     // But usually context maps "doc" -> AqlValue.
-                     if let Some(AqlValue::Object(map)) = context.get(object) {
-                         map.get(property).cloned().ok_or(ProtocolError::AqlError(format!("Property not found: {}", property))).or(Ok(AqlValue::Null))
-                     } else {
-                         // Fallback: try to find "doc" in context if object name is "doc"
-                         Ok(AqlValue::Null)
-                     }
+                let obj_value = context.get(object).ok_or_else(|| {
+                    ProtocolError::AqlError(format!("Object '{}' not found", object))
+                })?;
+
+                if let AqlValue::Object(obj_map) = obj_value {
+                    obj_map.get(property).cloned().ok_or_else(|| {
+                        ProtocolError::AqlError(format!("Property '{}' not found", property))
+                    })
                 } else {
-                    // Try to resolve variable first
-                    let var_val = self.evaluate_expression(&AqlExpression::Variable(object.clone()), context).await?;
-                    if let AqlValue::Object(map) = var_val {
-                        Ok(map.get(property).cloned().unwrap_or(AqlValue::Null))
-                    } else {
-                        Ok(AqlValue::Null)
-                    }
+                    Err(ProtocolError::AqlError(
+                        "Property access on non-object".to_string(),
+                    ))
                 }
             }
-            AqlExpression::Object(entries) => {
-                let mut map = HashMap::new();
-                for (k, v) in entries {
-                    let val = self.evaluate_expression(v, context).await?;
-                    map.insert(k.clone(), val);
+            AqlExpression::Object(fields) => {
+                let mut result = HashMap::new();
+                for (key, expr) in fields {
+                    result.insert(key.clone(), self.evaluate_expression(expr, context)?);
                 }
-                Ok(AqlValue::Object(map))
+                Ok(AqlValue::Object(result))
             }
-            AqlExpression::Array(items) => {
-                let mut list = Vec::new();
-                for item in items {
-                    let val = self.evaluate_expression(item, context).await?;
-                    list.push(val);
+            AqlExpression::Array(elements) => {
+                let mut result = Vec::new();
+                for expr in elements {
+                    result.push(self.evaluate_expression(expr, context)?);
                 }
-                Ok(AqlValue::Array(list))
+                Ok(AqlValue::Array(result))
             }
             AqlExpression::FunctionCall { name, args } => {
-                // Evaluate arguments first? No, evaluate_builtin_function might handle args differently (e.g. lazy)
-                // But generally AQL functions take evaluated args.
-                // evaluate_builtin_function implementation (Step 2819 refactor) takes `&[AqlExpression]`.
-                // So we pass expressions directly!
-                let mut evaluated_args = Vec::with_capacity(args.len());
-                for arg in args {
-                    evaluated_args.push(self.evaluate_expression(arg, context).await?);
-                }
-                self.evaluate_builtin_function(name, &evaluated_args, context).await
-            },
+                // Evaluate built-in functions
+                let evaluated_args: Vec<AqlValue> = args
+                    .iter()
+                    .map(|arg| self.evaluate_expression(arg, context))
+                    .collect::<ProtocolResult<Vec<_>>>()?;
 
-            AqlExpression::UnaryOp { op, expr } => {
-                let val = self.evaluate_expression(expr, context).await?;
-                match op.as_str() {
-                    "NOT" => match val {
-                        AqlValue::Bool(b) => Ok(AqlValue::Bool(!b)),
-                        AqlValue::Null => Ok(AqlValue::Bool(true)), // NOT null is true
-                        _ => Ok(AqlValue::Bool(false)), // Any other value is "truthy", so NOT is false
-                    },
-                    "-" => match val {
-                        AqlValue::Number(n) => {
-                             if let Some(i) = n.as_i64() {
-                                 Ok(AqlValue::Number(serde_json::Number::from(-i)))
-                             } else if let Some(f) = n.as_f64() {
-                                 Ok(AqlValue::Number(serde_json::Number::from_f64(-f).unwrap_or(serde_json::Number::from(0))))
-                             } else {
-                                 Ok(AqlValue::Null)
-                             }
-                        },
-                        _ => Ok(AqlValue::Number(serde_json::Number::from(0))), // Should produce null/0
-                    },
-                    "+" => match val {
-                         AqlValue::Number(n) => Ok(AqlValue::Number(n)),
-                         _ => Ok(AqlValue::Number(serde_json::Number::from(0))),
-                    }
-                    _ => Err(ProtocolError::AqlError(format!("Unknown unary operator: {}", op))),
-                }
+                self.evaluate_builtin_function(name, &evaluated_args, context)
             }
             AqlExpression::BinaryOp { op, left, right } => {
-                let left_val = self.evaluate_expression(left, context).await?;
-                let right_val = self.evaluate_expression(right, context).await?;
+                let left_val = self.evaluate_expression(left, context)?;
+                let right_val = self.evaluate_expression(right, context)?;
 
                 match op.as_str() {
-                    "AND" => {
-                        if self.is_truthy(&left_val) && self.is_truthy(&right_val) {
-                            Ok(AqlValue::Bool(true))
-                        } else {
-                            Ok(AqlValue::Bool(false))
-                        }
-                    }
-                    "OR" => {
-                        if self.is_truthy(&left_val) || self.is_truthy(&right_val) {
-                            Ok(AqlValue::Bool(true))
-                        } else {
-                            Ok(AqlValue::Bool(false))
-                        }
-                    }
-                    "==" => Ok(AqlValue::Bool(left_val == right_val)),
-                    "!=" => Ok(AqlValue::Bool(left_val != right_val)),
-                    "<" => Ok(AqlValue::Bool(self.compare_aql_values(&left_val, &right_val) == std::cmp::Ordering::Less)),
-                    "<=" => Ok(AqlValue::Bool(self.compare_aql_values(&left_val, &right_val) != std::cmp::Ordering::Greater)),
-                    ">" => Ok(AqlValue::Bool(self.compare_aql_values(&left_val, &right_val) == std::cmp::Ordering::Greater)),
-                    ">=" => Ok(AqlValue::Bool(self.compare_aql_values(&left_val, &right_val) != std::cmp::Ordering::Less)),
                     "+" => match (&left_val, &right_val) {
                         (AqlValue::Number(l), AqlValue::Number(r)) => {
+                            // Preserve integer type if both operands are integers
                             if let (Some(l_i64), Some(r_i64)) = (l.as_i64(), r.as_i64()) {
                                 Ok(AqlValue::Number(serde_json::Number::from(l_i64 + r_i64)))
                             } else {
@@ -2168,7 +836,7 @@ impl AqlQueryEngine {
                         (AqlValue::String(l), AqlValue::String(r)) => {
                             Ok(AqlValue::String(format!("{}{}", l, r)))
                         }
-                         _ => Ok(AqlValue::Null),
+                        _ => Ok(AqlValue::Null),
                     },
                     "-" => match (&left_val, &right_val) {
                         (AqlValue::Number(l), AqlValue::Number(r)) => {
@@ -2211,7 +879,7 @@ impl AqlQueryEngine {
                                 ))
                             }
                         }
-                         _ => Ok(AqlValue::Null),
+                        _ => Ok(AqlValue::Null),
                     },
                     "%" => match (&left_val, &right_val) {
                         (AqlValue::Number(l), AqlValue::Number(r)) => {
@@ -2219,14 +887,45 @@ impl AqlQueryEngine {
                             if r_f64.abs() < f64::EPSILON {
                                 Ok(AqlValue::Null)
                             } else {
-                                let l_f64 = l.as_f64().unwrap_or(0.0);
+                                let result = l.as_f64().unwrap_or(0.0) % r_f64;
                                 Ok(AqlValue::Number(
-                                    serde_json::Number::from_f64(l_f64 % r_f64)
+                                    serde_json::Number::from_f64(result)
                                         .unwrap_or(serde_json::Number::from(0)),
                                 ))
                             }
                         }
                         _ => Ok(AqlValue::Null),
+                    },
+                    "==" | "=" => Ok(AqlValue::Bool(left_val == right_val)),
+                    "!=" | "<>" => Ok(AqlValue::Bool(left_val != right_val)),
+                    "AND" | "&&" => match (&left_val, &right_val) {
+                        (AqlValue::Bool(l), AqlValue::Bool(r)) => Ok(AqlValue::Bool(*l && *r)),
+                        _ => Ok(AqlValue::Bool(false)),
+                    },
+                    "OR" | "||" => match (&left_val, &right_val) {
+                        (AqlValue::Bool(l), AqlValue::Bool(r)) => Ok(AqlValue::Bool(*l || *r)),
+                        _ => Ok(AqlValue::Bool(false)),
+                    },
+                    _ => Ok(AqlValue::Null),
+                }
+            }
+            AqlExpression::UnaryOp { op, expr } => {
+                let val = self.evaluate_expression(expr, context)?;
+
+                match op.as_str() {
+                    "-" => match val {
+                        AqlValue::Number(n) => {
+                            let result = -n.as_f64().unwrap_or(0.0);
+                            Ok(AqlValue::Number(
+                                serde_json::Number::from_f64(result)
+                                    .unwrap_or(serde_json::Number::from(0)),
+                            ))
+                        }
+                        _ => Ok(AqlValue::Null),
+                    },
+                    "NOT" | "!" => match val {
+                        AqlValue::Bool(b) => Ok(AqlValue::Bool(!b)),
+                        _ => Ok(AqlValue::Bool(false)),
                     },
                     _ => Ok(AqlValue::Null),
                 }
@@ -2235,36 +934,29 @@ impl AqlQueryEngine {
     }
 
     /// Evaluate an AQL condition
-    #[async_recursion]
-    async fn evaluate_condition(
+    fn evaluate_condition(
         &self,
         condition: &AqlCondition,
         context: &HashMap<String, AqlValue>,
     ) -> ProtocolResult<bool> {
+        use crate::protocols::aql::aql_parser::AqlCondition;
+
         match condition {
             AqlCondition::Comparison {
                 left,
                 operator,
                 right,
             } => {
-                let left_val = self.evaluate_expression(left, context).await?;
-                let right_val = self.evaluate_expression(right, context).await?;
-
-                Ok(match operator {
-                    ComparisonOperator::Equals => left_val == right_val,
-                    ComparisonOperator::NotEquals => left_val != right_val,
-                    ComparisonOperator::Less => self.compare_aql_values(&left_val, &right_val) == std::cmp::Ordering::Less,
-                    ComparisonOperator::LessOrEqual => self.compare_aql_values(&left_val, &right_val) != std::cmp::Ordering::Greater,
-                    ComparisonOperator::Greater => self.compare_aql_values(&left_val, &right_val) == std::cmp::Ordering::Greater,
-                    ComparisonOperator::GreaterOrEqual => self.compare_aql_values(&left_val, &right_val) != std::cmp::Ordering::Less,
-                })
+                let left_val = self.evaluate_expression(left, context)?;
+                let right_val = self.evaluate_expression(right, context)?;
+                self.compare_values(&left_val, operator, &right_val)
             }
-            AqlCondition::Expression(expr) => self.evaluate_expression_as_bool(expr, context).await,
+            AqlCondition::Expression(expr) => self.evaluate_expression_as_bool(expr, context),
         }
     }
+
     /// Evaluate an expression and convert the result to a boolean
-    #[async_recursion]
-    async fn evaluate_expression_as_bool(
+    fn evaluate_expression_as_bool(
         &self,
         expr: &AqlExpression,
         context: &HashMap<String, AqlValue>,
@@ -2274,24 +966,24 @@ impl AqlQueryEngine {
         match expr {
             AqlExpression::BinaryOp { op, left, right } => {
                 match op.as_str() {
-                    "AND" | "&&" => {
-                        let left_bool = self.evaluate_expression_as_bool(left, context).await?;
+                    "AND" => {
+                        let left_bool = self.evaluate_expression_as_bool(left, context)?;
                         if !left_bool {
                             return Ok(false); // Short-circuit
                         }
-                        self.evaluate_expression_as_bool(right, context).await
+                        self.evaluate_expression_as_bool(right, context)
                     }
-                    "OR" | "||" => {
-                        let left_bool = self.evaluate_expression_as_bool(left, context).await?;
+                    "OR" => {
+                        let left_bool = self.evaluate_expression_as_bool(left, context)?;
                         if left_bool {
                             return Ok(true); // Short-circuit
                         }
-                        self.evaluate_expression_as_bool(right, context).await
+                        self.evaluate_expression_as_bool(right, context)
                     }
                     "==" | "!=" | "<" | "<=" | ">" | ">=" => {
                         // Comparison operators
-                        let left_val = self.evaluate_expression(left, context).await?;
-                        let right_val = self.evaluate_expression(right, context).await?;
+                        let left_val = self.evaluate_expression(left, context)?;
+                        let right_val = self.evaluate_expression(right, context)?;
                         let cmp_op = match op.as_str() {
                             "==" => ComparisonOperator::Equals,
                             "!=" => ComparisonOperator::NotEquals,
@@ -2301,31 +993,22 @@ impl AqlQueryEngine {
                             ">=" => ComparisonOperator::GreaterOrEqual,
                             _ => unreachable!(),
                         };
-                        // Use compare_aql_values logic instead of compare_values if compare_values is missing
-                        // Or just evaluate comparison directly
-                        Ok(match cmp_op {
-                            ComparisonOperator::Equals => left_val == right_val,
-                            ComparisonOperator::NotEquals => left_val != right_val,
-                            ComparisonOperator::Less => self.compare_aql_values(&left_val, &right_val) == std::cmp::Ordering::Less,
-                            ComparisonOperator::LessOrEqual => self.compare_aql_values(&left_val, &right_val) != std::cmp::Ordering::Greater,
-                            ComparisonOperator::Greater => self.compare_aql_values(&left_val, &right_val) == std::cmp::Ordering::Greater,
-                            ComparisonOperator::GreaterOrEqual => self.compare_aql_values(&left_val, &right_val) != std::cmp::Ordering::Less,
-                        })
+                        self.compare_values(&left_val, &cmp_op, &right_val)
                     }
                     _ => {
                         // Other binary ops - evaluate and check if truthy
-                        let val = self.evaluate_expression(expr, context).await?;
+                        let val = self.evaluate_expression(expr, context)?;
                         Ok(self.is_truthy(&val))
                     }
                 }
             }
-            AqlExpression::UnaryOp { op, expr: inner } if op == "NOT" || op == "!" => {
-                let inner_bool = self.evaluate_expression_as_bool(inner, context).await?;
+            AqlExpression::UnaryOp { op, expr: inner } if op == "NOT" => {
+                let inner_bool = self.evaluate_expression_as_bool(inner, context)?;
                 Ok(!inner_bool)
             }
             _ => {
                 // For other expressions, evaluate and check truthiness
-                let val = self.evaluate_expression(expr, context).await?;
+                let val = self.evaluate_expression(expr, context)?;
                 Ok(self.is_truthy(&val))
             }
         }
@@ -2345,7 +1028,6 @@ impl AqlQueryEngine {
     }
 
     /// Compare two AQL values
-    #[allow(dead_code)]
     fn compare_values(
         &self,
         left: &AqlValue,
@@ -2390,7 +1072,7 @@ impl AqlQueryEngine {
     }
 
     /// Apply SORT and LIMIT clauses
-    async fn apply_sort_and_limit(
+    fn apply_sort_and_limit(
         &self,
         clauses: &[AqlClause],
         mut results: Vec<AqlValue>,
@@ -2401,23 +1083,14 @@ impl AqlQueryEngine {
         for clause in clauses {
             if let AqlClause::Sort { items } = clause {
                 if !items.is_empty() {
-                    // Pre-calculate sort keys asynchronously because sort_by expects a synchronous closure
-                    let mut results_with_keys = Vec::with_capacity(results.len());
-                    for result in results {
-                         let mut keys = Vec::with_capacity(items.len());
-                         for item in items {
-                              keys.push(self.extract_sort_value(&result, &item.expression).await);
-                         }
-                         results_with_keys.push((result, keys));
-                    }
+                    // Sort the results based on sort items
+                    results.sort_by(|a, b| {
+                        for item in items {
+                            // Extract value for comparison from each result
+                            let val_a = self.extract_sort_value(a, &item.expression);
+                            let val_b = self.extract_sort_value(b, &item.expression);
 
-                    // Sort the results synchronously
-                    results_with_keys.sort_by(|(_, keys_a), (_, keys_b)| {
-                        for (i, item) in items.iter().enumerate() {
-                            let val_a = &keys_a[i];
-                            let val_b = &keys_b[i];
-
-                            let cmp = self.compare_aql_values(val_a, val_b);
+                            let cmp = self.compare_aql_values(&val_a, &val_b);
                             if cmp != std::cmp::Ordering::Equal {
                                 return match item.direction {
                                     crate::protocols::aql::aql_parser::SortDirection::Asc => cmp,
@@ -2429,9 +1102,6 @@ impl AqlQueryEngine {
                         }
                         std::cmp::Ordering::Equal
                     });
-                    
-                    // Extract results back
-                    results = results_with_keys.into_iter().map(|(res, _)| res).collect();
                 }
                 break;
             }
@@ -2478,9 +1148,8 @@ impl AqlQueryEngine {
     /// - BOOST(expression, factor) - relevance boost
     /// - EXISTS(doc.field) - field existence check
     /// - Boolean operators: AND, OR, NOT
-    /// Evaluate a search expression for SEARCH clause
-    #[async_recursion]
-    async fn evaluate_search_expression(
+    #[allow(dead_code)]
+    fn evaluate_search_expression(
         &self,
         expression: &AqlExpression,
         context: &HashMap<String, AqlValue>,
@@ -2488,11 +1157,11 @@ impl AqlQueryEngine {
     ) -> ProtocolResult<bool> {
         match expression {
             AqlExpression::FunctionCall { name, args } => {
-                self.evaluate_search_function(name, args, context).await
+                self.evaluate_search_function(name, args, context)
             }
             AqlExpression::BinaryOp { op, left, right } => {
-                let left_result = self.evaluate_search_expression(left, context, _analyzer).await?;
-                let right_result = self.evaluate_search_expression(right, context, _analyzer).await?;
+                let left_result = self.evaluate_search_expression(left, context, _analyzer)?;
+                let right_result = self.evaluate_search_expression(right, context, _analyzer)?;
 
                 match op.as_str() {
                     "AND" | "&&" => Ok(left_result && right_result),
@@ -2501,7 +1170,7 @@ impl AqlQueryEngine {
                 }
             }
             AqlExpression::UnaryOp { op, expr } if op == "NOT" || op == "!" => {
-                let result = self.evaluate_search_expression(expr, context, _analyzer).await?;
+                let result = self.evaluate_search_expression(expr, context, _analyzer)?;
                 Ok(!result)
             }
             AqlExpression::Literal(value) => match value {
@@ -2509,15 +1178,12 @@ impl AqlQueryEngine {
                 _ => Ok(false),
             },
             // For conditions like doc.field == "value", evaluate as equality check
-             _ => {
-                 let val = self.evaluate_expression(expression, context).await?;
-                 Ok(self.is_truthy(&val))
-             }
+            _ => Ok(true),
         }
     }
 
     /// Evaluate a search function call
-    async fn evaluate_search_function(
+    fn evaluate_search_function(
         &self,
         name: &str,
         args: &[AqlExpression],
@@ -2529,8 +1195,8 @@ impl AqlQueryEngine {
                 if args.len() < 2 {
                     return Ok(false);
                 }
-                let field_value = self.evaluate_expression(&args[0], context).await?;
-                let search_phrase = self.evaluate_expression(&args[1], context).await?;
+                let field_value = self.evaluate_expression(&args[0], context)?;
+                let search_phrase = self.evaluate_expression(&args[1], context)?;
 
                 if let (AqlValue::String(text), AqlValue::String(phrase)) =
                     (&field_value, &search_phrase)
@@ -2545,8 +1211,8 @@ impl AqlQueryEngine {
                 if args.len() < 2 {
                     return Ok(false);
                 }
-                let field_value = self.evaluate_expression(&args[0], context).await?;
-                let prefix = self.evaluate_expression(&args[1], context).await?;
+                let field_value = self.evaluate_expression(&args[0], context)?;
+                let prefix = self.evaluate_expression(&args[1], context)?;
 
                 if let (AqlValue::String(text), AqlValue::String(pref)) = (&field_value, &prefix) {
                     Ok(text.to_lowercase().starts_with(&pref.to_lowercase()))
@@ -2559,8 +1225,8 @@ impl AqlQueryEngine {
                 if args.len() < 2 {
                     return Ok(false);
                 }
-                let field_value = self.evaluate_expression(&args[0], context).await?;
-                let pattern = self.evaluate_expression(&args[1], context).await?;
+                let field_value = self.evaluate_expression(&args[0], context)?;
+                let pattern = self.evaluate_expression(&args[1], context)?;
 
                 if let (AqlValue::String(text), AqlValue::String(pat)) = (&field_value, &pattern) {
                     // Simple pattern matching: % = any chars, _ = single char
@@ -2579,10 +1245,10 @@ impl AqlQueryEngine {
                 if args.len() < 2 {
                     return Ok(false);
                 }
-                let field_value = self.evaluate_expression(&args[0], context).await?;
-                let term = self.evaluate_expression(&args[1], context).await?;
+                let field_value = self.evaluate_expression(&args[0], context)?;
+                let term = self.evaluate_expression(&args[1], context)?;
                 let max_distance: usize = if args.len() >= 3 {
-                    if let Ok(AqlValue::Number(n)) = self.evaluate_expression(&args[2], context).await {
+                    if let Ok(AqlValue::Number(n)) = self.evaluate_expression(&args[2], context) {
                         n.as_u64().unwrap_or(2) as usize
                     } else {
                         2
@@ -2606,17 +1272,21 @@ impl AqlQueryEngine {
                 if args.len() < 3 {
                     return Ok(false);
                 }
-                let field_value = self.evaluate_expression(&args[0], context).await?;
-                let min_val = self.evaluate_expression(&args[1], context).await?;
-                let max_val = self.evaluate_expression(&args[2], context).await?;
-                
-                // Helper to evaluate bool expressions
-                let include_min = if let Some(e) = args.get(3) { 
-                    matches!(self.evaluate_expression(e, context).await, Ok(AqlValue::Bool(true)))
-                } else { true };
-                let include_max = if let Some(e) = args.get(4) { 
-                    matches!(self.evaluate_expression(e, context).await, Ok(AqlValue::Bool(true)))
-                } else { true };
+                let field_value = self.evaluate_expression(&args[0], context)?;
+                let min_val = self.evaluate_expression(&args[1], context)?;
+                let max_val = self.evaluate_expression(&args[2], context)?;
+                let include_min = args.get(3).is_none_or(|e| {
+                    matches!(
+                        self.evaluate_expression(e, context),
+                        Ok(AqlValue::Bool(true))
+                    )
+                });
+                let include_max = args.get(4).is_none_or(|e| {
+                    matches!(
+                        self.evaluate_expression(e, context),
+                        Ok(AqlValue::Bool(true))
+                    )
+                });
 
                 if let (AqlValue::Number(val), AqlValue::Number(min), AqlValue::Number(max)) =
                     (&field_value, &min_val, &max_val)
@@ -2637,7 +1307,7 @@ impl AqlQueryEngine {
                 if args.is_empty() {
                     return Ok(false);
                 }
-                let value = self.evaluate_expression(&args[0], context).await;
+                let value = self.evaluate_expression(&args[0], context);
                 Ok(value.is_ok() && !matches!(value.unwrap(), AqlValue::Null))
             }
             "ANALYZER" => {
@@ -2646,23 +1316,22 @@ impl AqlQueryEngine {
                     return Ok(false);
                 }
                 // For now, just evaluate the inner expression with default analyzer
-                Box::pin(self.evaluate_search_expression(&args[0], context, "text_en")).await
+                self.evaluate_search_expression(&args[0], context, "text_en")
             }
             "BOOST" => {
                 // BOOST(expression, factor) - boost relevance (just evaluate expression for now)
                 if args.is_empty() {
                     return Ok(false);
                 }
-                // Just evaluate the expression
-                Box::pin(self.evaluate_search_expression(&args[0], context, "text_en")).await
+                self.evaluate_search_expression(&args[0], context, "text_en")
             }
             "TOKENS" | "NGRAM_MATCH" | "NGRAM_SIMILARITY" => {
                 // Token-based and n-gram functions - simplified implementation
                 if args.len() < 2 {
                     return Ok(false);
                 }
-                let field_value = self.evaluate_expression(&args[0], context).await?;
-                let search_value = self.evaluate_expression(&args[1], context).await?;
+                let field_value = self.evaluate_expression(&args[0], context)?;
+                let search_value = self.evaluate_expression(&args[1], context)?;
 
                 if let (AqlValue::String(text), AqlValue::String(search)) =
                     (&field_value, &search_value)
@@ -2730,14 +1399,12 @@ impl AqlQueryEngine {
 
     /// Public wrapper for evaluate_expression (for testing)
     #[cfg(test)]
-    /// Public wrapper for evaluate_expression (for testing)
-    #[cfg(test)]
-    pub async fn evaluate_expression_public(
+    pub fn evaluate_expression_public(
         &self,
         expression: &AqlExpression,
         context: &HashMap<String, AqlValue>,
     ) -> ProtocolResult<AqlValue> {
-        self.evaluate_expression(expression, context).await
+        self.evaluate_expression(expression, context)
     }
 
     /// Public wrapper for levenshtein_distance (for testing)
@@ -2747,8 +1414,9 @@ impl AqlQueryEngine {
     }
 
     /// Extract a value from a result for sorting based on the expression
-    /// Extract a value from a result for sorting based on the expression
-    async fn extract_sort_value(&self, value: &AqlValue, expression: &AqlExpression) -> AqlValue {
+    fn extract_sort_value(&self, value: &AqlValue, expression: &AqlExpression) -> AqlValue {
+        use crate::protocols::aql::aql_parser::AqlExpression;
+
         match expression {
             AqlExpression::Variable(name) => {
                 // If the value is an object, try to get the field
@@ -2787,7 +1455,6 @@ impl AqlQueryEngine {
                 }
                 context.insert("doc".to_string(), value.clone());
                 self.evaluate_expression(expression, &context)
-                    .await
                     .unwrap_or(AqlValue::Null)
             }
         }
@@ -2920,25 +1587,25 @@ impl AqlQueryEngine {
         graph
     }
 
-    /// Evaluate a built-in function
-    async fn evaluate_builtin_function(
+    /// Evaluate built-in AQL functions
+    /// The context parameter provides access to query variables including graph data
+    fn evaluate_builtin_function(
         &self,
         name: &str,
         args: &[AqlValue],
-        context: &HashMap<String, AqlValue>, // Added context for nested evaluations if needed
+        context: &HashMap<String, AqlValue>,
     ) -> ProtocolResult<AqlValue> {
         match name.to_uppercase().as_str() {
-            // --- String Functions ---
-            "LENGTH" | "CHAR_LENGTH" => {
+            // ============ String Functions ============
+            "LENGTH" => {
                 if let Some(AqlValue::String(s)) = args.first() {
-                    Ok(AqlValue::Number(serde_json::Number::from(s.chars().count())))
+                    Ok(AqlValue::Number(serde_json::Number::from(s.len())))
                 } else if let Some(AqlValue::Array(arr)) = args.first() {
-                     Ok(AqlValue::Number(serde_json::Number::from(arr.len())))
+                    Ok(AqlValue::Number(serde_json::Number::from(arr.len())))
                 } else if let Some(AqlValue::Object(obj)) = args.first() {
-                     Ok(AqlValue::Number(serde_json::Number::from(obj.len())))
-                }
-                 else {
-                    Ok(AqlValue::Null)
+                    Ok(AqlValue::Number(serde_json::Number::from(obj.len())))
+                } else {
+                    Ok(AqlValue::Number(serde_json::Number::from(0)))
                 }
             }
             "UPPER" => {
@@ -3180,100 +1847,14 @@ impl AqlQueryEngine {
             }
             "DECODE_URI_COMPONENT" => {
                 if let Some(AqlValue::String(s)) = args.first() {
-                    Ok(AqlValue::String(
-                        urlencoding::decode(s)
-                            .map(|cow| cow.into_owned())
-                            .unwrap_or_else(|_| s.clone()),
-                    ))
+                    match urlencoding::decode(s) {
+                        Ok(decoded) => Ok(AqlValue::String(decoded.to_string())),
+                        Err(_) => Ok(AqlValue::String(s.clone())),
+                    }
                 } else {
                     Ok(AqlValue::Null)
                 }
             }
-            "FIND_LAST" => {
-                if let (Some(AqlValue::String(haystack)), Some(AqlValue::String(needle))) =
-                    (args.first(), args.get(1))
-                {
-                    let _pos = args.get(2).and_then(|v| {
-                         if let AqlValue::Number(n) = v { n.as_i64() } else { None }
-                    });
-                     // Note: AQL FIND_LAST(str, search, start, end) behavior is strictly finding last occurrence
-                     // Simple impl for now:
-                     match haystack.rfind(needle) {
-                         Some(p) => Ok(AqlValue::Number(serde_json::Number::from(p))),
-                         None => Ok(AqlValue::Number(serde_json::Number::from(-1))),
-                     }
-                } else {
-                    Ok(AqlValue::Null)
-                }
-            }
-            "SUBSTITUTE" => {
-                if args.len() < 3 {
-                     return Ok(args.first().cloned().unwrap_or(AqlValue::Null));
-                }
-                if let (
-                    Some(AqlValue::String(val)), 
-                    Some(AqlValue::String(search)), 
-                    Some(AqlValue::String(replace))
-                ) = (args.first(), args.get(1), args.get(2)) {
-                    let limit = args.get(3).and_then(|v| {
-                        if let AqlValue::Number(n) = v { n.as_i64() } else { None }
-                    });
-                    
-                    if let Some(l) = limit {
-                         if l > 0 {
-                             Ok(AqlValue::String(val.replacen(search, replace, l as usize)))
-                         } else {
-                             Ok(AqlValue::String(val.replace(search, replace)))
-                         }
-                    } else {
-                        Ok(AqlValue::String(val.replace(search, replace)))
-                    }
-                } else {
-                     Ok(AqlValue::Null)
-                }
-            }
-            "SOUNDEX" => {
-                 if let Some(AqlValue::String(s)) = args.first() {
-                    let s_upper = s.to_uppercase();
-                    let mut chars = s_upper.chars().filter(|c| c.is_ascii_alphabetic());
-                    if let Some(first) = chars.next() {
-                         let mut code = String::with_capacity(4);
-                         code.push(first);
-                         let mut last_digit = match first {
-                            'B' | 'F' | 'P' | 'V' => '1',
-                            'C' | 'G' | 'J' | 'K' | 'Q' | 'S' | 'X' | 'Z' => '2',
-                            'D' | 'T' => '3',
-                            'L' => '4',
-                            'M' | 'N' => '5',
-                            'R' => '6',
-                            _ => '0',
-                         };
-                         for c in chars {
-                             let digit = match c {
-                                'B' | 'F' | 'P' | 'V' => '1',
-                                'C' | 'G' | 'J' | 'K' | 'Q' | 'S' | 'X' | 'Z' => '2',
-                                'D' | 'T' => '3',
-                                'L' => '4',
-                                'M' | 'N' => '5',
-                                'R' => '6',
-                                _ => '0',
-                             };
-                             if digit != '0' && digit != last_digit {
-                                 code.push(digit);
-                                 last_digit = digit;
-                             }
-                             if code.len() == 4 { break; }
-                         }
-                         while code.len() < 4 { code.push('0'); }
-                         Ok(AqlValue::String(code))
-                    } else {
-                         Ok(AqlValue::String(String::new()))
-                    }
-                 } else {
-                     Ok(AqlValue::Null)
-                 }
-            }
-            "UUID" => Ok(AqlValue::String(uuid::Uuid::new_v4().to_string())),
 
             // ============ Numeric Functions ============
             "ABS" => {
@@ -3479,83 +2060,16 @@ impl AqlQueryEngine {
                     Ok(AqlValue::Null)
                 }
             }
-            "MEDIAN" | "PERCENTILE" => {
-                if args.is_empty() { return Ok(AqlValue::Null); }
-                let mut numbers = Vec::new();
-                let percentile = if name.to_uppercase() == "PERCENTILE" {
-                     args.get(1).and_then(|v| if let AqlValue::Number(n) = v { n.as_f64() } else { None }).unwrap_or(50.0)
+            "RADIANS" => {
+                if let Some(AqlValue::Number(n)) = args.first() {
+                    let f = n.as_f64().unwrap_or(0.0);
+                    Ok(AqlValue::Number(
+                        serde_json::Number::from_f64(f.to_radians())
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ))
                 } else {
-                     50.0
-                };
-                
-                let source = if name.to_uppercase() == "PERCENTILE" { args.first() } else { Some(&AqlValue::Array(args.to_vec())) };
-                
-                if let Some(AqlValue::Array(arr)) = source {
-                    for item in arr {
-                        if let AqlValue::Number(n) = item {
-                            numbers.push(n.as_f64().unwrap_or(0.0));
-                        }
-                    }
-                } else if name.to_uppercase() == "MEDIAN" {
-                     for arg in args {
-                         if let AqlValue::Number(n) = arg {
-                             numbers.push(n.as_f64().unwrap_or(0.0));
-                         }
-                     }
+                    Ok(AqlValue::Null)
                 }
-
-                if numbers.is_empty() { return Ok(AqlValue::Null); }
-                numbers.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                
-                // Simple percentile calc
-                let k = (percentile / 100.0) * (numbers.len() - 1) as f64;
-                let f = k.floor();
-                let c = k.ceil();
-                let idx_f = f as usize;
-                let idx_c = c as usize;
-                
-                let result = if idx_f == idx_c {
-                    numbers[idx_f]
-                } else {
-                    numbers[idx_f] * (c - k) + numbers[idx_c] * (k - f)
-                };
-                Ok(AqlValue::Number(serde_json::Number::from_f64(result).unwrap_or(serde_json::Number::from(0))))
-            }
-            "VARIANCE_SAMPLE" | "VARIANCE_POPULATION" | "STDDEV_SAMPLE" | "STDDEV_POPULATION" => {
-                 let mut numbers = Vec::new();
-                 let input_args = if args.len() == 1 {
-                     if let AqlValue::Array(arr) = &args[0] {
-                         arr.iter().collect::<Vec<_>>()
-                     } else {
-                         args.iter().collect()
-                     }
-                 } else {
-                     args.iter().collect()
-                 };
-
-                 for arg in input_args {
-                     if let AqlValue::Number(n) = arg {
-                         numbers.push(n.as_f64().unwrap_or(0.0));
-                     }
-                 }
-                 
-                 if numbers.is_empty() { return Ok(AqlValue::Null); }
-                 let n = numbers.len() as f64;
-                 let mean = numbers.iter().sum::<f64>() / n;
-                 let sum_sq_diff: f64 = numbers.iter().map(|x| (x - mean).powi(2)).sum();
-                 
-                 let is_population = name.to_uppercase().contains("POPULATION");
-                 let divisor = if is_population { n } else { n - 1.0 };
-                 
-                 if divisor <= 0.0 { return Ok(AqlValue::Null); }
-                 
-                 let variance = sum_sq_diff / divisor;
-                 
-                 if name.to_uppercase().contains("STDDEV") {
-                      Ok(AqlValue::Number(serde_json::Number::from_f64(variance.sqrt()).unwrap_or(serde_json::Number::from(0))))
-                 } else {
-                      Ok(AqlValue::Number(serde_json::Number::from_f64(variance).unwrap_or(serde_json::Number::from(0))))
-                 }
             }
             "MIN" => {
                 if args.is_empty() {
@@ -3935,61 +2449,6 @@ impl AqlQueryEngine {
                     .collect();
                 Ok(AqlValue::Array(result))
             }
-            "OUTERSECTION" => {
-                 let mut value_map = HashMap::new();
-                 let mut counts = HashMap::new();
-                 
-                  for arg in args {
-                     if let AqlValue::Array(arr) = arg {
-                         for item in arr {
-                             let key = format!("{:?}", item);
-                             value_map.entry(key.clone()).or_insert_with(|| item.clone());
-                             *counts.entry(key).or_insert(0) += 1;
-                         }
-                     }
-                 }
-                 
-                 let result: Vec<AqlValue> = counts.into_iter()
-                     .filter(|(_, count)| *count == 1)
-                     .filter_map(|(key, _)| value_map.get(&key).cloned())
-                     .collect();
-                 Ok(AqlValue::Array(result))
-            }
-            "JACCARD" => {
-                 if let (Some(AqlValue::Array(arr1)), Some(AqlValue::Array(arr2))) = (args.first(), args.get(1)) {
-                     let set1: std::collections::HashSet<String> = arr1.iter().map(|v| format!("{:?}", v)).collect();
-                     let set2: std::collections::HashSet<String> = arr2.iter().map(|v| format!("{:?}", v)).collect();
-                     
-                     let intersection_count = set1.intersection(&set2).count();
-                     let union_count = set1.union(&set2).count();
-                     
-                     if union_count == 0 {
-                         Ok(AqlValue::Number(serde_json::Number::from(0)))
-                     } else {
-                         Ok(AqlValue::Number(serde_json::Number::from_f64(intersection_count as f64 / union_count as f64).unwrap()))
-                     }
-                 } else {
-                      Ok(AqlValue::Null)
-                 }
-            }
-            "INTERLEAVE" => {
-                 if args.is_empty() { return Ok(AqlValue::Array(vec![])); }
-                 
-                 let arrays: Vec<&Vec<AqlValue>> = args.iter().filter_map(|a| if let AqlValue::Array(arr) = a { Some(arr) } else { None }).collect();
-                 if arrays.is_empty() { return Ok(AqlValue::Array(vec![])); }
-                 
-                 let max_len = arrays.iter().map(|a| a.len()).max().unwrap_or(0);
-                 let mut result = Vec::new();
-                 
-                 for i in 0..max_len {
-                     for arr in &arrays {
-                         if let Some(val) = arr.get(i) {
-                             result.push(val.clone());
-                         }
-                     }
-                 }
-                 Ok(AqlValue::Array(result))
-            }
 
             // ============ Object/Document Functions ============
             "KEYS" | "ATTRIBUTES" => {
@@ -4113,25 +2572,6 @@ impl AqlQueryEngine {
                     Ok(AqlValue::Null)
                 }
             }
-            "MATCHES" => {
-                 if let (Some(AqlValue::Object(doc)), Some(AqlValue::Object(example))) = (args.first(), args.get(1)) {
-                     let matches = example.iter().all(|(k, v)| {
-                         doc.get(k).map_or(false, |doc_v| doc_v == v)
-                     });
-                     Ok(AqlValue::Bool(matches))
-                 } else if let (Some(AqlValue::Array(arr)), Some(AqlValue::Object(example))) = (args.first(), args.get(1)) {
-                      let matches: Vec<AqlValue> = arr.iter().filter(|item| {
-                           if let AqlValue::Object(doc) = item {
-                               example.iter().all(|(k, v)|  doc.get(k).map_or(false, |doc_v| doc_v == v))
-                           } else {
-                               false
-                           }
-                      }).cloned().collect();
-                      Ok(AqlValue::Array(matches))
-                 } else {
-                     Ok(AqlValue::Null)
-                 }
-            }
 
             // ============ Type Functions ============
             "IS_NULL" => Ok(AqlValue::Bool(matches!(
@@ -4158,41 +2598,6 @@ impl AqlQueryEngine {
                 args.first(),
                 Some(AqlValue::Object(_))
             ))),
-            "IS_DATETIME" => Ok(AqlValue::Bool(matches!(
-                args.first(),
-                Some(AqlValue::DateTime(_))
-            ))),
-            "IS_KEY" => {
-                 if let Some(AqlValue::String(s)) = args.first() {
-                     let is_valid = s.chars().all(|c| c.is_ascii_alphanumeric() || "_-:.@()+,=;$!*'%".contains(c));
-                     Ok(AqlValue::Bool(is_valid))
-                 } else {
-                     Ok(AqlValue::Bool(false))
-                 }
-            }
-            "IS_ID" => {
-                 if let Some(AqlValue::String(s)) = args.first() {
-                     let parts: Vec<&str> = s.split('/').collect();
-                     Ok(AqlValue::Bool(parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty()))
-                 } else {
-                     Ok(AqlValue::Bool(false))
-                 }
-            }
-            "TO_INT" => {
-                let result = match args.first() {
-                     Some(AqlValue::Number(n)) => {
-                         let f = n.as_f64().unwrap_or(0.0);
-                         serde_json::Number::from(f as i64)
-                     },
-                     Some(AqlValue::String(s)) => {
-                         let f = s.parse::<f64>().unwrap_or(0.0);
-                         serde_json::Number::from(f as i64)
-                     },
-                     Some(AqlValue::Bool(true)) => serde_json::Number::from(1),
-                     _ => serde_json::Number::from(0),
-                };
-                Ok(AqlValue::Number(result))
-            }
             "TYPENAME" => {
                 let type_name = match args.first() {
                     Some(AqlValue::Null) => "null",
@@ -4362,99 +2767,6 @@ impl AqlQueryEngine {
                     Ok(AqlValue::Null)
                 }
             }
-            "DATE_FORMAT" => {
-                 if let (Some(val), Some(AqlValue::String(fmt))) = (args.first(), args.get(1)) {
-                      let dt = match val {
-                          AqlValue::String(s) => chrono::DateTime::parse_from_rfc3339(s).map(|d| d.with_timezone(&chrono::Utc)).ok(),
-                          AqlValue::Number(n) => chrono::DateTime::from_timestamp_millis(n.as_i64().unwrap_or(0)),
-                          _ => None
-                      };
-                      if let Some(d) = dt {
-                          Ok(AqlValue::String(d.format(fmt).to_string()))
-                      } else {
-                          Ok(AqlValue::Null)
-                      }
-                 } else {
-                      Ok(AqlValue::Null)
-                 }
-            }
-            "DATE_LEAPYEAR" => {
-                 use chrono::Datelike;
-                 let year = match args.first() {
-                     Some(AqlValue::Number(n)) => Some(n.as_i64().unwrap_or(0) as i32),
-                     Some(AqlValue::String(s)) => chrono::DateTime::parse_from_rfc3339(s).map(|d| d.year()).ok(),
-                     _ => None
-                 };
-                 if let Some(y) = year {
-                     let is_leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
-                     Ok(AqlValue::Bool(is_leap))
-                 } else {
-                     Ok(AqlValue::Null)
-                 }
-            }
-            "DATE_QUARTER" => {
-                 use chrono::Datelike;
-                 let dt = match args.first() {
-                     Some(AqlValue::Number(n)) => chrono::DateTime::from_timestamp_millis(n.as_i64().unwrap_or(0)),
-                     Some(AqlValue::String(s)) => chrono::DateTime::parse_from_rfc3339(s).map(|d| d.with_timezone(&chrono::Utc)).ok(),
-                     _ => None
-                 };
-                 if let Some(d) = dt {
-                     let q = (d.month() - 1) / 3 + 1;
-                     Ok(AqlValue::Number(serde_json::Number::from(q)))
-                 } else {
-                     Ok(AqlValue::Null)
-                 }
-            }
-            "DATE_DAYS_IN_MONTH" => {
-                 use chrono::Datelike;
-                 let dt = match args.first() {
-                     Some(AqlValue::Number(n)) => chrono::DateTime::from_timestamp_millis(n.as_i64().unwrap_or(0)),
-                     Some(AqlValue::String(s)) => chrono::DateTime::parse_from_rfc3339(s).map(|d| d.with_timezone(&chrono::Utc)).ok(),
-                     _ => None
-                 };
-                 if let Some(d) = dt {
-                     let year = d.year();
-                     let month = d.month();
-                     let days = match month {
-                         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-                         4 | 6 | 9 | 11 => 30,
-                         2 => if (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0) { 29 } else { 28 },
-                         _ => 0,
-                     };
-                     Ok(AqlValue::Number(serde_json::Number::from(days)))
-                 } else {
-                     Ok(AqlValue::Null)
-                 }
-            }
-            "DATE_TRUNC" => {
-                // Truncate to precision: YEAR, MONTH, DAY, HOUR, MINUTE, SECOND
-                Ok(args.first().cloned().unwrap_or(AqlValue::Null)) // Placeholder for now, date truncation is complex
-            }
-            "DATE_COMPARE" => {
-                 if let (Some(_d1_val), Some(_d2_val), Some(AqlValue::String(_unit))) = (args.first(), args.get(1), args.get(2)) {
-                      // Compare dates with unit
-                      Ok(AqlValue::Bool(false)) // Placeholder
-                 } else {
-                      Ok(AqlValue::Bool(false))
-                 }
-            }
-            "DATE_ISOWEEK" => {
-                 use chrono::Datelike;
-                 let dt = match args.first() {
-                     Some(AqlValue::Number(n)) => chrono::DateTime::from_timestamp_millis(n.as_i64().unwrap_or(0)),
-                     Some(AqlValue::String(s)) => chrono::DateTime::parse_from_rfc3339(s).map(|d| d.with_timezone(&chrono::Utc)).ok(),
-                     _ => None
-                 };
-                 if let Some(d) = dt {
-                     Ok(AqlValue::Number(serde_json::Number::from(d.iso_week().week())))
-                 } else {
-                     Ok(AqlValue::Null)
-                 }
-            }
-
-            // ============ Graph Functions ============
-
 
             // ============ Misc Functions ============
             "NOT_NULL" | "FIRST_LIST" | "FIRST_DOCUMENT" => {
@@ -4516,6 +2828,7 @@ impl AqlQueryEngine {
                 // Pass-through functions
                 Ok(args.first().cloned().unwrap_or(AqlValue::Null))
             }
+            "UUID" => Ok(AqlValue::String(uuid::Uuid::new_v4().to_string())),
             "HASH" => {
                 // Simple hash - return a numeric hash
                 let input = format!("{:?}", args);
@@ -5110,58 +3423,12 @@ impl AqlQueryEngine {
                 Ok(AqlValue::Bool(false))
             }
 
-
+            // ============ Fulltext Functions ============
             "FULLTEXT" => {
                 // FULLTEXT(collection, attribute, query) - Full-text search
-                if args.len() < 3 {
-                    return Err(ProtocolError::AqlError(
-                        "FULLTEXT expects at least 3 arguments: collection, attribute, query"
-                            .to_string(),
-                    ));
-                }
-
-                if let (
-                    Some(AqlValue::String(collection_name)),
-                    Some(AqlValue::String(attribute)),
-                    Some(AqlValue::String(query_text)),
-                ) = (args.get(0), args.get(1), args.get(2))
-                {
-                    // Check if collection exists
-                    if let Some(storage) = &self.storage {
-                        if storage.get_collection(collection_name).await?.is_none() {
-                            return Err(ProtocolError::AqlError(format!(
-                                "Collection '{}' not found",
-                                collection_name
-                            )));
-                        }
-                    }
-
-                    // Create FTS query
-                    let mut query = FtsQuery::default();
-                    query.must_terms = query_text.split_whitespace().map(|s| s.to_string()).collect();
-                    query.fields = Some(vec![attribute.clone()]);
-                    let index_name = collection_name;
-                    
-                    match self.fts_engine.search(index_name, &query).await {
-                        Ok(results) => {
-                            let mut docs = Vec::new();
-                            if let Some(storage) = &self.storage {
-                                for result in results {
-                                    let parts: Vec<&str> = result.doc_id.split('/').collect();
-                                    if parts.len() == 2 {
-                                        if let Some(doc) = storage.get_document(parts[0], parts[1]).await? {
-                                            docs.push(AqlValue::Object(doc.data));
-                                        }
-                                    }
-                                }
-                            }
-                            Ok(AqlValue::Array(docs))
-                        }
-                        Err(_) => Ok(AqlValue::Array(vec![]))
-                    }
-                } else {
-                     Ok(AqlValue::Array(vec![]))
-                }
+                // Returns matching documents from collection where attribute matches query
+                // This is a stub that returns empty array - real implementation needs FTS index
+                Ok(AqlValue::Array(vec![]))
             }
             "TOKENS" => {
                 // TOKENS(input, analyzer) - Tokenize text using analyzer
@@ -5560,59 +3827,61 @@ impl AqlQueryEngine {
                         None
                     }
                 });
-                
-                // Fallback: build from context (for compatibility with existing tests that might use context variables?)
-                // But primarily we want storage.
-                // Let's try storage first.
-                let mut neighbor_ids = Vec::new();
-                if let Some(name) = graph_name {
-                    if let Some(storage) = &self.storage {
-                        if let Ok(edges) = storage.get_collection_documents(name).await {
-                         // Graph name is treated as edge collection name
-                         let start_node = args.get(1).and_then(|v| if let AqlValue::String(s) = v { Some(s.clone()) } else { None }).unwrap_or_default();
-                         
-                         // Parse direction
-                         let direction = args.get(2).and_then(|v| {
-                             if let AqlValue::Object(opts) = v {
-                                 opts.get("direction").and_then(|d| if let AqlValue::String(s) = d { Some(s.clone()) } else { None })
-                             } else {
-                                 None
-                             }
-                         }).unwrap_or("ANY".to_string());
-                         
-                         let dir_upper = direction.to_uppercase();
-                         
-                         for edge in edges {
-                             let from = edge.data.get("_from").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             let to = edge.data.get("_to").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             
-                             if dir_upper == "OUTBOUND" {
-                                 if from == start_node {
-                                     neighbor_ids.push(AqlValue::String(to.to_string()));
-                                 }
-                             } else if dir_upper == "INBOUND" {
-                                 if to == start_node {
-                                     neighbor_ids.push(AqlValue::String(from.to_string()));
-                                 }
-                             } else { // ANY
-                                 if from == start_node {
-                                     neighbor_ids.push(AqlValue::String(to.to_string()));
-                                 } else if to == start_node {
-                                     neighbor_ids.push(AqlValue::String(from.to_string()));
-                                 }
-                             }
-                         }
+                let graph = self.build_graph_from_context(context, graph_name);
+
+                let start = args.get(1).and_then(|v| {
+                    if let AqlValue::String(s) = v {
+                        Some(s.as_str())
+                    } else {
+                        None
                     }
+                });
+
+                // Parse direction from options
+                let direction = args
+                    .get(2)
+                    .and_then(|v| {
+                        if let AqlValue::Object(opts) = v {
+                            opts.get("direction").and_then(|d| {
+                                if let AqlValue::String(s) = d {
+                                    match s.to_uppercase().as_str() {
+                                        "INBOUND" => Some(graph_algo::NeighborDirection::Incoming),
+                                        "OUTBOUND" => Some(graph_algo::NeighborDirection::Outgoing),
+                                        "ANY" | "BOTH" => Some(graph_algo::NeighborDirection::Both),
+                                        _ => None,
+                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(graph_algo::NeighborDirection::Both);
+
+                if let Some(start_id) = start {
+                    let result = graph_algo::get_neighbors(&graph, start_id, direction);
+                    let neighbors: Vec<AqlValue> = result
+                        .neighbors
+                        .iter()
+                        .map(|id| {
+                            if let Some(node) = graph.nodes.get(id) {
+                                let mut obj = HashMap::new();
+                                obj.insert("_key".to_string(), AqlValue::String(id.clone()));
+                                for (k, v) in &node.properties {
+                                    obj.insert(k.clone(), json_to_aql_value(v));
+                                }
+                                AqlValue::Object(obj)
+                            } else {
+                                AqlValue::String(id.clone())
+                            }
+                        })
+                        .collect();
+                    Ok(AqlValue::Array(neighbors))
+                } else {
+                    Ok(AqlValue::Array(vec![]))
                 }
-            }
-                
-                // If storage yielded nothing, maybe try context? 
-                // But for now let's just return what we found.
-                // If we found neighbors, return them.
-                // Note: Duplicate removal might be needed.
-                return Ok(AqlValue::Array(neighbor_ids));
-
-
             }
             "GRAPH_COMMON_NEIGHBORS" => {
                 // GRAPH_COMMON_NEIGHBORS(graphName, vertex1, vertex2, options)
@@ -5623,22 +3892,7 @@ impl AqlQueryEngine {
                         None
                     }
                 });
-                let mut graph = graph_algo::Graph::new();
-                if let Some(name) = graph_name {
-                     if let Some(storage) = &self.storage {
-                         if let Ok(edges) = storage.get_collection_documents(name).await {
-                         for edge in edges {
-                             let from = edge.data.get("_from").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             let to = edge.data.get("_to").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             if !from.is_empty() && !to.is_empty() {
-                                 graph.add_node(from.to_string(), HashMap::new());
-                                 graph.add_node(to.to_string(), HashMap::new());
-                                 graph.add_edge(from.to_string(), to.to_string(), 1.0, None);
-                             }
-                         }
-                     }
-                }
-            }
+                let graph = self.build_graph_from_context(context, graph_name);
 
                 let vertex1 = args.get(1).and_then(|v| {
                     if let AqlValue::String(s) = v {
@@ -5731,22 +3985,7 @@ impl AqlQueryEngine {
                         None
                     }
                 });
-                let mut graph = graph_algo::Graph::new();
-                if let Some(name) = graph_name {
-                     if let Some(storage) = &self.storage {
-                         if let Ok(edges) = storage.get_collection_documents(name).await {
-                         for edge in edges {
-                             let from = edge.data.get("_from").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             let to = edge.data.get("_to").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             if !from.is_empty() && !to.is_empty() {
-                                 graph.add_node(from.to_string(), HashMap::new());
-                                 graph.add_node(to.to_string(), HashMap::new());
-                                 graph.add_edge(from.to_string(), to.to_string(), 1.0, None);
-                             }
-                         }
-                     }
-                }
-            }
+                let graph = self.build_graph_from_context(context, graph_name);
 
                 // Get start vertex and max depth from options
                 let (start, max_depth) = if let Some(AqlValue::Object(opts)) = args.get(1) {
@@ -5792,22 +4031,7 @@ impl AqlQueryEngine {
                         None
                     }
                 });
-                let mut graph = graph_algo::Graph::new();
-                if let Some(name) = graph_name {
-                     if let Some(storage) = &self.storage {
-                         if let Ok(edges) = storage.get_collection_documents(name).await {
-                         for edge in edges {
-                             let from = edge.data.get("_from").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             let to = edge.data.get("_to").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             if !from.is_empty() && !to.is_empty() {
-                                 graph.add_node(from.to_string(), HashMap::new());
-                                 graph.add_node(to.to_string(), HashMap::new());
-                                 graph.add_edge(from.to_string(), to.to_string(), 1.0, None);
-                             }
-                         }
-                     }
-                }
-            }
+                let graph = self.build_graph_from_context(context, graph_name);
 
                 let start = args.get(1).and_then(|v| {
                     if let AqlValue::String(s) = v {
@@ -5869,22 +4093,7 @@ impl AqlQueryEngine {
                         None
                     }
                 });
-                let mut graph = graph_algo::Graph::new();
-                if let Some(name) = graph_name {
-                     if let Some(storage) = &self.storage {
-                         if let Ok(edges) = storage.get_collection_documents(name).await {
-                         for edge in edges {
-                             let from = edge.data.get("_from").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             let to = edge.data.get("_to").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             if !from.is_empty() && !to.is_empty() {
-                                 graph.add_node(from.to_string(), HashMap::new());
-                                 graph.add_node(to.to_string(), HashMap::new());
-                                 graph.add_edge(from.to_string(), to.to_string(), 1.0, None);
-                             }
-                         }
-                     }
-                }
-            }
+                let graph = self.build_graph_from_context(context, graph_name);
 
                 let start = args.get(1).and_then(|v| {
                     if let AqlValue::String(s) = v {
@@ -5913,160 +4122,11 @@ impl AqlQueryEngine {
                     Ok(AqlValue::Number(serde_json::Number::from(-1)))
                 }
             }
-            "GRAPH_ECCENTRICITY" => {
-                // GRAPH_ECCENTRICITY(graphName, [vertex], [options])
-                let graph_name = args.first().and_then(|v| {
-                    if let AqlValue::String(s) = v {
-                        Some(s.as_str())
-                    } else {
-                        None
-                    }
-                });
-                
-                let mut graph = graph_algo::Graph::new();
-                if let Some(name) = graph_name {
-                     if let Some(storage) = &self.storage {
-                         if let Ok(edges) = storage.get_collection_documents(name).await {
-                         for edge in edges {
-                             let from = edge.data.get("_from").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             let to = edge.data.get("_to").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             if !from.is_empty() && !to.is_empty() {
-                                 graph.add_node(from.to_string(), HashMap::new());
-                                 graph.add_node(to.to_string(), HashMap::new());
-                                 graph.add_edge(from.to_string(), to.to_string(), 1.0, None);
-                             }
-                         }
-                     }
-                }
-            }
-
-                // Check for vertex argument
-                let vertex = args.get(1).and_then(|v| {
-                     if let AqlValue::String(s) = v {
-                         Some(s.as_str())
-                     } else {
-                         None
-                     }
-                });
-
-                if let Some(v_id) = vertex {
-                    // Single vertex eccentricity
-                    if let Some(ecc) = graph_algo::eccentricity(&graph, v_id) {
-                         Ok(AqlValue::Number(serde_json::Number::from(ecc)))
-                    } else {
-                         Ok(AqlValue::Number(serde_json::Number::from(-1)))
-                    }
-                } else {
-                    // All vertices
-                    let results = graph_algo::all_eccentricities(&graph);
-                    let mut map = HashMap::new();
-                    for (k, v) in results {
-                         map.insert(k, AqlValue::Number(serde_json::Number::from(v)));
-                    }
-                    Ok(AqlValue::Object(map))
-                }
-            }
-            "GRAPH_RADIUS" => {
-                 // GRAPH_RADIUS(graphName, options)
-                let graph_name = args.first().and_then(|v| {
-                    if let AqlValue::String(s) = v {
-                        Some(s.as_str())
-                    } else {
-                        None
-                    }
-                });
-                
-                let mut graph = graph_algo::Graph::new();
-                if let Some(name) = graph_name {
-                     if let Some(storage) = &self.storage {
-                         if let Ok(edges) = storage.get_collection_documents(name).await {
-                         for edge in edges {
-                             let from = edge.data.get("_from").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             let to = edge.data.get("_to").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             if !from.is_empty() && !to.is_empty() {
-                                 graph.add_node(from.to_string(), HashMap::new());
-                                 graph.add_node(to.to_string(), HashMap::new());
-                                 graph.add_edge(from.to_string(), to.to_string(), 1.0, None);
-                             }
-                         }
-                     }
-                }
-            }
-                
-                if let Some(rad) = graph_algo::radius(&graph) {
-                    Ok(AqlValue::Number(serde_json::Number::from(rad)))
-                } else {
-                    Ok(AqlValue::Number(serde_json::Number::from(-1)))
-                }
-            }
-            "GRAPH_DIAMETER" => {
-                 // GRAPH_DIAMETER(graphName, options)
-                let graph_name = args.first().and_then(|v| {
-                    if let AqlValue::String(s) = v {
-                        Some(s.as_str())
-                    } else {
-                        None
-                    }
-                });
-                
-                let mut graph = graph_algo::Graph::new();
-                if let Some(name) = graph_name {
-                     if let Some(storage) = &self.storage {
-                         if let Ok(edges) = storage.get_collection_documents(name).await {
-                         for edge in edges {
-                             let from = edge.data.get("_from").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             let to = edge.data.get("_to").and_then(|v| if let AqlValue::String(s) = v { Some(s.as_str()) } else { None }).unwrap_or("");
-                             if !from.is_empty() && !to.is_empty() {
-                                 graph.add_node(from.to_string(), HashMap::new());
-                                 graph.add_node(to.to_string(), HashMap::new());
-                                 graph.add_edge(from.to_string(), to.to_string(), 1.0, None);
-                             }
-                         }
-                     }
-                }
-            }
-                
-                if let Some(dia) = graph_algo::diameter(&graph) {
-                    Ok(AqlValue::Number(serde_json::Number::from(dia)))
-                } else {
-                    Ok(AqlValue::Number(serde_json::Number::from(-1)))
-                }
-            }
             "PREGEL_RESULT" => {
                 // PREGEL_RESULT(id) - Get Pregel algorithm result
                 // Pregel is a distributed graph processing framework
                 // This requires a separate Pregel engine which is not yet implemented
                 Ok(AqlValue::Array(vec![]))
-            }
-
-            // ============ JSON Functions ============
-            "JSON_PARSE" => {
-                // JSON_PARSE(json_string) - Parse a JSON string into an AQL value
-                if let Some(AqlValue::String(json_str)) = args.first() {
-                    match serde_json::from_str::<serde_json::Value>(json_str) {
-                        Ok(json_val) => {
-                            // Convert serde_json::Value to AqlValue
-                            Ok(json_value_to_aql_value(&json_val))
-                        }
-                        Err(_) => {
-                            // Invalid JSON string returns null
-                            Ok(AqlValue::Null)
-                        }
-                    }
-                } else {
-                    Ok(AqlValue::Null)
-                }
-            }
-            "JSON_STRINGIFY" => {
-                // JSON_STRINGIFY(value) - Convert an AQL value to a JSON string
-                let value = args.first().unwrap_or(&AqlValue::Null);
-                match serde_json::to_string(value) {
-                    Ok(json_str) => Ok(AqlValue::String(json_str)),
-                    Err(_) => {
-                        // Fallback to simple string conversion
-                        Ok(AqlValue::String(format!("{:?}", value)))
-                    }
-                }
             }
 
             // ============ Default Case ============

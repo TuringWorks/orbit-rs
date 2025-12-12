@@ -1,4 +1,3 @@
-
 #[cfg(test)]
 mod tests {
     use crate::protocols::cypher::bolt_protocol::{BoltProtocolHandler, PackStreamDecoder};
@@ -51,11 +50,17 @@ mod tests {
             std::task::Poll::Ready(Ok(buf.len()))
         }
 
-        fn poll_flush(self: std::pin::Pin<&mut Self>, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), std::io::Error>> {
+        fn poll_flush(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), std::io::Error>> {
             std::task::Poll::Ready(Ok(()))
         }
 
-        fn poll_shutdown(self: std::pin::Pin<&mut Self>, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), std::io::Error>> {
+        fn poll_shutdown(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), std::io::Error>> {
             std::task::Poll::Ready(Ok(()))
         }
     }
@@ -64,7 +69,8 @@ mod tests {
     #[derive(Clone)]
     struct MockStorage {
         nodes: Arc<tokio::sync::RwLock<std::collections::HashMap<String, GraphNode>>>,
-        relationships: Arc<tokio::sync::RwLock<std::collections::HashMap<String, GraphRelationship>>>,
+        relationships:
+            Arc<tokio::sync::RwLock<std::collections::HashMap<String, GraphRelationship>>>,
     }
 
     impl MockStorage {
@@ -95,7 +101,10 @@ mod tests {
             self.relationships.write().await.insert(rel.id.clone(), rel);
             Ok(())
         }
-        async fn get_relationship(&self, rel_id: &str) -> ProtocolResult<Option<GraphRelationship>> {
+        async fn get_relationship(
+            &self,
+            rel_id: &str,
+        ) -> ProtocolResult<Option<GraphRelationship>> {
             Ok(self.relationships.read().await.get(rel_id).cloned())
         }
         async fn get_all_relationships(&self) -> ProtocolResult<Vec<GraphRelationship>> {
@@ -106,14 +115,19 @@ mod tests {
         }
     }
 
-
     fn create_hello_message() -> Vec<u8> {
         let mut buf = bytes::BytesMut::new();
         let mut metadata = std::collections::HashMap::new();
-        metadata.insert("user_agent".to_string(), Value::String("test-client/1.0".to_string()));
+        metadata.insert(
+            "user_agent".to_string(),
+            Value::String("test-client/1.0".to_string()),
+        );
         metadata.insert("scheme".to_string(), Value::String("basic".to_string()));
         metadata.insert("principal".to_string(), Value::String("neo4j".to_string()));
-        metadata.insert("credentials".to_string(), Value::String("password".to_string()));
+        metadata.insert(
+            "credentials".to_string(),
+            Value::String("password".to_string()),
+        );
 
         let mut routing = std::collections::HashMap::new();
         routing.insert("policy".to_string(), Value::String("leader".to_string()));
@@ -157,13 +171,13 @@ mod tests {
                 }
                 Value::Object(obj) => {
                     let obj_len = obj.len();
-                     if obj_len < 16 {
+                    if obj_len < 16 {
                         buf.put_u8(0xA0 + obj_len as u8); // Tiny Map
                     } else {
                         // Handle larger maps if needed
                     }
                     for (k, v) in obj {
-                         let k_bytes = k.as_bytes();
+                        let k_bytes = k.as_bytes();
                         if k_bytes.len() < 16 {
                             buf.put_u8(0x80 + k_bytes.len() as u8);
                         } else {
@@ -194,7 +208,6 @@ mod tests {
         message_with_chunk_header
     }
 
-
     #[tokio::test]
     async fn test_handle_hello() {
         // 1. Setup
@@ -207,10 +220,12 @@ mod tests {
         #[cfg(feature = "storage-rocksdb")]
         let mut handler = BoltProtocolHandler::new(Some(Arc::new(MockStorage::new())));
 
-
         // 2. Act
         let mut read_buf = bytes::BytesMut::with_capacity(1024);
-        let chunk_size = handler.read_chunk(&mut stream, &mut read_buf).await.unwrap();
+        let chunk_size = handler
+            .read_chunk(&mut stream, &mut read_buf)
+            .await
+            .unwrap();
         assert_ne!(chunk_size, 0);
 
         let message_bytes = read_buf.freeze();
@@ -254,7 +269,10 @@ mod tests {
         let mut metadata = std::collections::HashMap::new();
         metadata.insert("scheme".to_string(), Value::String("basic".to_string()));
         metadata.insert("principal".to_string(), Value::String("neo4j".to_string()));
-        metadata.insert("credentials".to_string(), Value::String("new_password".to_string()));
+        metadata.insert(
+            "credentials".to_string(),
+            Value::String("new_password".to_string()),
+        );
 
         // Manually encode the LOGON message
         // Structure: 1 field, signature 0x6A (LOGON)
@@ -307,7 +325,10 @@ mod tests {
 
         // 2. Act
         let mut read_buf = bytes::BytesMut::with_capacity(1024);
-        let chunk_size = handler.read_chunk(&mut stream, &mut read_buf).await.unwrap();
+        let chunk_size = handler
+            .read_chunk(&mut stream, &mut read_buf)
+            .await
+            .unwrap();
         assert_ne!(chunk_size, 0);
 
         let message_bytes = read_buf.freeze();
@@ -360,7 +381,10 @@ mod tests {
 
         // 2. Act
         let mut read_buf = bytes::BytesMut::with_capacity(1024);
-        let chunk_size = handler.read_chunk(&mut stream, &mut read_buf).await.unwrap();
+        let chunk_size = handler
+            .read_chunk(&mut stream, &mut read_buf)
+            .await
+            .unwrap();
         assert_ne!(chunk_size, 0);
 
         let message_bytes = read_buf.freeze();
@@ -428,10 +452,12 @@ mod tests {
         let mut handler = BoltProtocolHandler::new(Some(Arc::new(MockStorage::new())));
         handler.auth_state.authenticated = true;
 
-
         // 2. Act
         let mut read_buf = bytes::BytesMut::with_capacity(1024);
-        let chunk_size = handler.read_chunk(&mut stream, &mut read_buf).await.unwrap();
+        let chunk_size = handler
+            .read_chunk(&mut stream, &mut read_buf)
+            .await
+            .unwrap();
         assert_ne!(chunk_size, 0);
 
         let message_bytes = read_buf.freeze();
@@ -480,11 +506,11 @@ mod tests {
 
         // The single field is a map with n=-1 and qid=-1
         buf.put_u8(0xA2); // Tiny Map (2 fields)
-        // n
+                          // n
         buf.put_u8(0x81);
         buf.put_u8(b'n');
         buf.put_u8(0xFF); // -1
-        // qid
+                          // qid
         buf.put_u8(0x83);
         buf.put_u8(b'q');
         buf.put_u8(b'i');
@@ -520,14 +546,19 @@ mod tests {
         let mut handler = BoltProtocolHandler::new(Some(Arc::new(MockStorage::new())));
         handler.auth_state.authenticated = true;
 
-
         // 2. Act
         // Process RUN
         let mut read_buf = bytes::BytesMut::with_capacity(1024);
-        let chunk_size = handler.read_chunk(&mut stream, &mut read_buf).await.unwrap();
+        let chunk_size = handler
+            .read_chunk(&mut stream, &mut read_buf)
+            .await
+            .unwrap();
         assert_ne!(chunk_size, 0);
         let message_bytes = read_buf.freeze();
-        handler.process_message(&message_bytes, &mut stream).await.unwrap();
+        handler
+            .process_message(&message_bytes, &mut stream)
+            .await
+            .unwrap();
         assert!(!handler.pending_results.is_empty());
 
         // Consume the end-of-message marker
@@ -537,11 +568,13 @@ mod tests {
 
         // Process DISCARD
         let mut read_buf_2 = bytes::BytesMut::with_capacity(1024);
-        let chunk_size = handler.read_chunk(&mut stream, &mut read_buf_2).await.unwrap();
+        let chunk_size = handler
+            .read_chunk(&mut stream, &mut read_buf_2)
+            .await
+            .unwrap();
         assert_ne!(chunk_size, 0);
         let message_bytes_2 = read_buf_2.freeze();
         let result = handler.process_message(&message_bytes_2, &mut stream).await;
-
 
         // 3. Assert
         assert!(result.is_ok());
@@ -562,7 +595,7 @@ mod tests {
 
         // The single field is a map with n=-1
         buf.put_u8(0xA1); // Tiny Map (1 field)
-        // n
+                          // n
         buf.put_u8(0x81);
         buf.put_u8(b'n');
         buf.put_u8(0xFF); // -1
@@ -595,13 +628,18 @@ mod tests {
         let mut handler = BoltProtocolHandler::new(Some(Arc::new(MockStorage::new())));
         handler.auth_state.authenticated = true;
 
-
         // 2. Act
         // Process RUN
         let mut read_buf = bytes::BytesMut::with_capacity(1024);
-        handler.read_chunk(&mut stream, &mut read_buf).await.unwrap();
+        handler
+            .read_chunk(&mut stream, &mut read_buf)
+            .await
+            .unwrap();
         let message_bytes = read_buf.freeze();
-        handler.process_message(&message_bytes, &mut stream).await.unwrap();
+        handler
+            .process_message(&message_bytes, &mut stream)
+            .await
+            .unwrap();
 
         // Consume the end-of-message marker
         let mut end_marker = [0u8; 2];
@@ -610,10 +648,15 @@ mod tests {
 
         // Process PULL
         let mut read_buf_2 = bytes::BytesMut::with_capacity(1024);
-        handler.read_chunk(&mut stream, &mut read_buf_2).await.unwrap();
+        handler
+            .read_chunk(&mut stream, &mut read_buf_2)
+            .await
+            .unwrap();
         let message_bytes_2 = read_buf_2.freeze();
-        handler.process_message(&message_bytes_2, &mut stream).await.unwrap();
-
+        handler
+            .process_message(&message_bytes_2, &mut stream)
+            .await
+            .unwrap();
 
         // 3. Assert
         let response = stream.write_data;
@@ -665,13 +708,17 @@ mod tests {
         let mut handler = BoltProtocolHandler::new(Some(Arc::new(MockStorage::new())));
         handler.auth_state.authenticated = true;
 
-
         // 2. Act
         let mut read_buf = bytes::BytesMut::with_capacity(1024);
-        handler.read_chunk(&mut stream, &mut read_buf).await.unwrap();
+        handler
+            .read_chunk(&mut stream, &mut read_buf)
+            .await
+            .unwrap();
         let message_bytes = read_buf.freeze();
-        handler.process_message(&message_bytes, &mut stream).await.unwrap();
-
+        handler
+            .process_message(&message_bytes, &mut stream)
+            .await
+            .unwrap();
 
         // 3. Assert
         let response = stream.write_data;
@@ -683,7 +730,10 @@ mod tests {
         assert_eq!(message_data[0], 0xB1); // Tiny Struct (1 field)
         assert_eq!(message_data[1], 0x70); // SUCCESS signature
 
-        assert_eq!(handler.transaction_state, crate::protocols::cypher::bolt_protocol::TransactionState::Active);
+        assert_eq!(
+            handler.transaction_state,
+            crate::protocols::cypher::bolt_protocol::TransactionState::Active
+        );
     }
 
     fn create_commit_message() -> Vec<u8> {
@@ -722,13 +772,18 @@ mod tests {
         let mut handler = BoltProtocolHandler::new(Some(Arc::new(MockStorage::new())));
         handler.auth_state.authenticated = true;
 
-
         // 2. Act
         // Process BEGIN
         let mut read_buf = bytes::BytesMut::with_capacity(1024);
-        handler.read_chunk(&mut stream, &mut read_buf).await.unwrap();
+        handler
+            .read_chunk(&mut stream, &mut read_buf)
+            .await
+            .unwrap();
         let message_bytes = read_buf.freeze();
-        handler.process_message(&message_bytes, &mut stream).await.unwrap();
+        handler
+            .process_message(&message_bytes, &mut stream)
+            .await
+            .unwrap();
 
         // Consume the end-of-message marker
         let mut end_marker = [0u8; 2];
@@ -737,13 +792,21 @@ mod tests {
 
         // Process COMMIT
         let mut read_buf_2 = bytes::BytesMut::with_capacity(1024);
-        handler.read_chunk(&mut stream, &mut read_buf_2).await.unwrap();
+        handler
+            .read_chunk(&mut stream, &mut read_buf_2)
+            .await
+            .unwrap();
         let message_bytes_2 = read_buf_2.freeze();
-        handler.process_message(&message_bytes_2, &mut stream).await.unwrap();
-
+        handler
+            .process_message(&message_bytes_2, &mut stream)
+            .await
+            .unwrap();
 
         // 3. Assert
-        assert_eq!(handler.transaction_state, crate::protocols::cypher::bolt_protocol::TransactionState::None);
+        assert_eq!(
+            handler.transaction_state,
+            crate::protocols::cypher::bolt_protocol::TransactionState::None
+        );
     }
 
     fn create_rollback_message() -> Vec<u8> {
@@ -782,13 +845,18 @@ mod tests {
         let mut handler = BoltProtocolHandler::new(Some(Arc::new(MockStorage::new())));
         handler.auth_state.authenticated = true;
 
-
         // 2. Act
         // Process BEGIN
         let mut read_buf = bytes::BytesMut::with_capacity(1024);
-        handler.read_chunk(&mut stream, &mut read_buf).await.unwrap();
+        handler
+            .read_chunk(&mut stream, &mut read_buf)
+            .await
+            .unwrap();
         let message_bytes = read_buf.freeze();
-        handler.process_message(&message_bytes, &mut stream).await.unwrap();
+        handler
+            .process_message(&message_bytes, &mut stream)
+            .await
+            .unwrap();
 
         // Consume the end-of-message marker
         let mut end_marker = [0u8; 2];
@@ -797,13 +865,21 @@ mod tests {
 
         // Process ROLLBACK
         let mut read_buf_2 = bytes::BytesMut::with_capacity(1024);
-        handler.read_chunk(&mut stream, &mut read_buf_2).await.unwrap();
+        handler
+            .read_chunk(&mut stream, &mut read_buf_2)
+            .await
+            .unwrap();
         let message_bytes_2 = read_buf_2.freeze();
-        handler.process_message(&message_bytes_2, &mut stream).await.unwrap();
-
+        handler
+            .process_message(&message_bytes_2, &mut stream)
+            .await
+            .unwrap();
 
         // 3. Assert
-        assert_eq!(handler.transaction_state, crate::protocols::cypher::bolt_protocol::TransactionState::None);
+        assert_eq!(
+            handler.transaction_state,
+            crate::protocols::cypher::bolt_protocol::TransactionState::None
+        );
     }
 
     fn create_reset_message() -> Vec<u8> {
@@ -846,13 +922,18 @@ mod tests {
         let mut handler = BoltProtocolHandler::new(Some(Arc::new(MockStorage::new())));
         handler.auth_state.authenticated = true;
 
-
         // 2. Act
         // Process BEGIN
         let mut read_buf = bytes::BytesMut::with_capacity(1024);
-        handler.read_chunk(&mut stream, &mut read_buf).await.unwrap();
+        handler
+            .read_chunk(&mut stream, &mut read_buf)
+            .await
+            .unwrap();
         let message_bytes = read_buf.freeze();
-        handler.process_message(&message_bytes, &mut stream).await.unwrap();
+        handler
+            .process_message(&message_bytes, &mut stream)
+            .await
+            .unwrap();
 
         // Consume the end-of-message marker
         let mut end_marker = [0u8; 2];
@@ -861,9 +942,15 @@ mod tests {
 
         // Process RUN
         let mut read_buf_2 = bytes::BytesMut::with_capacity(1024);
-        handler.read_chunk(&mut stream, &mut read_buf_2).await.unwrap();
+        handler
+            .read_chunk(&mut stream, &mut read_buf_2)
+            .await
+            .unwrap();
         let message_bytes_2 = read_buf_2.freeze();
-        handler.process_message(&message_bytes_2, &mut stream).await.unwrap();
+        handler
+            .process_message(&message_bytes_2, &mut stream)
+            .await
+            .unwrap();
 
         // Consume the end-of-message marker
         let mut end_marker = [0u8; 2];
@@ -872,13 +959,21 @@ mod tests {
 
         // Process RESET
         let mut read_buf_3 = bytes::BytesMut::with_capacity(1024);
-        handler.read_chunk(&mut stream, &mut read_buf_3).await.unwrap();
+        handler
+            .read_chunk(&mut stream, &mut read_buf_3)
+            .await
+            .unwrap();
         let message_bytes_3 = read_buf_3.freeze();
-        handler.process_message(&message_bytes_3, &mut stream).await.unwrap();
-
+        handler
+            .process_message(&message_bytes_3, &mut stream)
+            .await
+            .unwrap();
 
         // 3. Assert
-        assert_eq!(handler.transaction_state, crate::protocols::cypher::bolt_protocol::TransactionState::None);
+        assert_eq!(
+            handler.transaction_state,
+            crate::protocols::cypher::bolt_protocol::TransactionState::None
+        );
         assert!(handler.current_query.is_none());
         assert!(handler.pending_results.is_empty());
     }
@@ -919,13 +1014,17 @@ mod tests {
         let mut handler = BoltProtocolHandler::new(Some(Arc::new(MockStorage::new())));
         handler.auth_state.authenticated = true;
 
-
         // 2. Act
         let mut read_buf = bytes::BytesMut::with_capacity(1024);
-        handler.read_chunk(&mut stream, &mut read_buf).await.unwrap();
+        handler
+            .read_chunk(&mut stream, &mut read_buf)
+            .await
+            .unwrap();
         let message_bytes = read_buf.freeze();
-        handler.process_message(&message_bytes, &mut stream).await.unwrap();
-
+        handler
+            .process_message(&message_bytes, &mut stream)
+            .await
+            .unwrap();
 
         // 3. Assert
         let response = stream.write_data;
@@ -987,13 +1086,17 @@ mod tests {
         let mut handler = BoltProtocolHandler::new(Some(Arc::new(MockStorage::new())));
         handler.auth_state.authenticated = true;
 
-
         // 2. Act
         let mut read_buf = bytes::BytesMut::with_capacity(1024);
-        handler.read_chunk(&mut stream, &mut read_buf).await.unwrap();
+        handler
+            .read_chunk(&mut stream, &mut read_buf)
+            .await
+            .unwrap();
         let message_bytes = read_buf.freeze();
-        handler.process_message(&message_bytes, &mut stream).await.unwrap();
-
+        handler
+            .process_message(&message_bytes, &mut stream)
+            .await
+            .unwrap();
 
         // 3. Assert
         let response = stream.write_data;
@@ -1034,13 +1137,14 @@ mod tests {
         let mut handler = BoltProtocolHandler::new(Some(Arc::new(MockStorage::new())));
         handler.auth_state.authenticated = true;
 
-
         // 2. Act
         let mut read_buf = bytes::BytesMut::with_capacity(1024);
-        handler.read_chunk(&mut stream, &mut read_buf).await.unwrap();
+        handler
+            .read_chunk(&mut stream, &mut read_buf)
+            .await
+            .unwrap();
         let message_bytes = read_buf.freeze();
         let result = handler.process_message(&message_bytes, &mut stream).await;
-
 
         // 3. Assert
         assert!(result.is_ok());
@@ -1051,7 +1155,8 @@ mod tests {
     #[ignore] // Disabled: Test needs review
     async fn test_match_relationship_with_properties() {
         // 1. Setup
-        let mut run_message = create_run_message("MATCH (n:Person)-[r {name: 'test'}]->(m:Person) RETURN r");
+        let mut run_message =
+            create_run_message("MATCH (n:Person)-[r {name: 'test'}]->(m:Person) RETURN r");
         run_message.extend_from_slice(&[0x00, 0x00]); // End of message
         let mut stream = MockStream::new(run_message);
 
@@ -1087,13 +1192,17 @@ mod tests {
         };
         storage.store_relationship(rel).await.unwrap();
 
-
         // 2. Act
         let mut read_buf = bytes::BytesMut::with_capacity(1024);
-        handler.read_chunk(&mut stream, &mut read_buf).await.unwrap();
+        handler
+            .read_chunk(&mut stream, &mut read_buf)
+            .await
+            .unwrap();
         let message_bytes = read_buf.freeze();
-        handler.process_message(&message_bytes, &mut stream).await.unwrap();
-
+        handler
+            .process_message(&message_bytes, &mut stream)
+            .await
+            .unwrap();
 
         // 3. Assert
         assert!(!handler.pending_results.is_empty());

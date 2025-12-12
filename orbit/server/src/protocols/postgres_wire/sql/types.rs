@@ -124,8 +124,8 @@ pub enum SqlType {
     // PostgreSQL-specific types
     PgLsn,
     PgSnapshot,
-    Xid, // Transaction ID
-    AclItem, // Access Control List
+    Xid,        // Transaction ID
+    AclItem,    // Access Control List
     PgNodeTree, // Internal node tree
     Int2Vector,
     OidVector,
@@ -216,7 +216,7 @@ pub enum SqlValue {
     PgLsn(u64),         // Log sequence number
     PgSnapshot(String), // Transaction snapshot (simplified as string)
     Xid(u32),
-    AclItem(String), // Simplification
+    AclItem(String),    // Simplification
     PgNodeTree(String), // Simplification
     Int2Vector(Vec<i16>),
     OidVector(Vec<u32>),
@@ -322,12 +322,8 @@ impl SqlType {
             ) => e1.can_cast_to(e2),
 
             (
-                SqlType::MultiRange {
-                    element_type: e1,
-                },
-                SqlType::MultiRange {
-                    element_type: e2,
-                },
+                SqlType::MultiRange { element_type: e1 },
+                SqlType::MultiRange { element_type: e2 },
             ) => e1.can_cast_to(e2),
 
             // JSON conversions
@@ -405,13 +401,17 @@ impl SqlType {
             SqlType::OidVector => 30,
 
             SqlType::MultiRange { element_type } => match **element_type {
-                SqlType::Integer => 4451, // int4multirange
+                SqlType::Integer => 4451,        // int4multirange
                 SqlType::Numeric { .. } => 4532, // nummultirange
-                SqlType::Timestamp { with_timezone: false } => 4533, // tsmultirange
-                SqlType::Timestamp { with_timezone: true } => 4534, // tstzmultirange
-                SqlType::Date => 4535, // datemultirange
-                SqlType::BigInt => 4536, // int8multirange
-                _ => 0, // Unknown/Custom multirange
+                SqlType::Timestamp {
+                    with_timezone: false,
+                } => 4533, // tsmultirange
+                SqlType::Timestamp {
+                    with_timezone: true,
+                } => 4534, // tstzmultirange
+                SqlType::Date => 4535,           // datemultirange
+                SqlType::BigInt => 4536,         // int8multirange
+                _ => 0,                          // Unknown/Custom multirange
             },
 
             _ => 0, // Unknown type
@@ -500,17 +500,20 @@ impl SqlValue {
                 element_type: Box::new(SqlType::Text),
             },
             SqlValue::MultiRange(ranges) => {
-                 let element_type = if ranges.is_empty() {
-                      SqlType::Text
-                 } else {
-                      // Infer from first range's lower or upper if present
-                      ranges[0].lower.as_ref().map(|v| v.sql_type())
+                let element_type = if ranges.is_empty() {
+                    SqlType::Text
+                } else {
+                    // Infer from first range's lower or upper if present
+                    ranges[0]
+                        .lower
+                        .as_ref()
+                        .map(|v| v.sql_type())
                         .or_else(|| ranges[0].upper.as_ref().map(|v| v.sql_type()))
                         .unwrap_or(SqlType::Text)
-                 };
-                 SqlType::MultiRange {
-                      element_type: Box::new(element_type),
-                 }
+                };
+                SqlType::MultiRange {
+                    element_type: Box::new(element_type),
+                }
             }
             SqlValue::Inet(_) => SqlType::Inet,
             SqlValue::Cidr(_) => SqlType::Cidr,
@@ -616,15 +619,26 @@ impl SqlValue {
                 format!("[{}]", elements.join(","))
             }
             SqlValue::MultiRange(ranges) => {
-                let elements: Vec<String> = ranges.iter().map(|r| {
-                     let lower = r.lower.as_ref().map(|v| v.to_postgres_string()).unwrap_or_default();
-                     let upper = r.upper.as_ref().map(|v| v.to_postgres_string()).unwrap_or_default();
-                     // Construct range string depending on bounds
-                     // Note: Simplification here, assuming standard range format [lower,upper)
-                     let start_bracket = if r.lower_inclusive { '[' } else { '(' };
-                     let end_bracket = if r.upper_inclusive { ']' } else { ')' };
-                     format!("{}{},{}{}", start_bracket, lower, upper, end_bracket)
-                }).collect();
+                let elements: Vec<String> = ranges
+                    .iter()
+                    .map(|r| {
+                        let lower = r
+                            .lower
+                            .as_ref()
+                            .map(|v| v.to_postgres_string())
+                            .unwrap_or_default();
+                        let upper = r
+                            .upper
+                            .as_ref()
+                            .map(|v| v.to_postgres_string())
+                            .unwrap_or_default();
+                        // Construct range string depending on bounds
+                        // Note: Simplification here, assuming standard range format [lower,upper)
+                        let start_bracket = if r.lower_inclusive { '[' } else { '(' };
+                        let end_bracket = if r.upper_inclusive { ']' } else { ')' };
+                        format!("{}{},{}{}", start_bracket, lower, upper, end_bracket)
+                    })
+                    .collect();
                 format!("{{{}}}", elements.join(","))
             }
             SqlValue::Point(x, y) => format!("({x},{y})"),
@@ -649,12 +663,12 @@ impl SqlValue {
             SqlValue::Xid(x) => x.to_string(),
             SqlValue::AclItem(s) | SqlValue::PgNodeTree(s) => s.clone(),
             SqlValue::Int2Vector(v) => {
-                 let elements: Vec<String> = v.iter().map(|i| i.to_string()).collect();
-                 elements.join(" ")
+                let elements: Vec<String> = v.iter().map(|i| i.to_string()).collect();
+                elements.join(" ")
             }
             SqlValue::OidVector(v) => {
-                 let elements: Vec<String> = v.iter().map(|i| i.to_string()).collect();
-                 elements.join(" ")
+                let elements: Vec<String> = v.iter().map(|i| i.to_string()).collect();
+                elements.join(" ")
             }
 
             _ => format!("{self:?}"), // Fallback for complex types

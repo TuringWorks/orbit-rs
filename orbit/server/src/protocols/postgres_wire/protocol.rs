@@ -288,7 +288,8 @@ impl PostgresWireProtocol {
                 self.handle_ssl_request(buf).await?;
             }
             FrontendMessage::SASLInitialResponse { mechanism, data } => {
-                self.handle_sasl_initial_response(&mechanism, data, buf).await?;
+                self.handle_sasl_initial_response(&mechanism, data, buf)
+                    .await?;
             }
             FrontendMessage::SASLResponse { data } => {
                 self.handle_sasl_response(data, buf).await?;
@@ -296,7 +297,9 @@ impl PostgresWireProtocol {
             FrontendMessage::FunctionCall { .. } => {
                 // Function call support is minimal/stubbed
             }
-            FrontendMessage::CopyData { .. } | FrontendMessage::CopyDone | FrontendMessage::CopyFail { .. } => {
+            FrontendMessage::CopyData { .. }
+            | FrontendMessage::CopyDone
+            | FrontendMessage::CopyFail { .. } => {
                 // Copy protocol not fully supported by server yet
             }
         }
@@ -359,19 +362,28 @@ impl PostgresWireProtocol {
 
         // Auto-register user for SCRAM testing if needed
         if matches!(self.auth_manager.auth_method(), AuthMethod::ScramSha256) {
-             if let Some(user) = &self.username {
-                 if self.auth_manager.user_store().get_user(user).await.is_none() {
-                     // Auto-create user with password same as username for testing
-                     self.auth_manager.user_store().add_user(user.clone(), user.clone(), &AuthMethod::ScramSha256).await;
-                 }
-             }
+            if let Some(user) = &self.username {
+                if self
+                    .auth_manager
+                    .user_store()
+                    .get_user(user)
+                    .await
+                    .is_none()
+                {
+                    // Auto-create user with password same as username for testing
+                    self.auth_manager
+                        .user_store()
+                        .add_user(user.clone(), user.clone(), &AuthMethod::ScramSha256)
+                        .await;
+                }
+            }
         }
 
         let response = self.auth_manager.get_initial_auth_response();
         BackendMessage::Authentication(response.clone()).encode(buf);
 
         if let AuthenticationResponse::Ok = response {
-             self.finish_authentication(buf);
+            self.finish_authentication(buf);
         }
 
         Ok(())
@@ -491,7 +503,7 @@ impl PostgresWireProtocol {
                     self.send_error(buf, "Invalid SCRAM client-first-message: missing nonce");
                 }
             } else {
-                 self.send_error(buf, "User not configured for SCRAM");
+                self.send_error(buf, "User not configured for SCRAM");
             }
         } else {
             self.send_error(buf, "Authentication failed");

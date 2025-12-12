@@ -58,7 +58,7 @@ impl DatabaseManager {
     pub fn new() -> Self {
         let mut databases = HashMap::new();
         let default_name = "neo4j".to_string();
-        
+
         // Create default database
         databases.insert(
             default_name.clone(),
@@ -72,7 +72,11 @@ impl DatabaseManager {
     }
 
     /// Create a new database
-    pub fn create_database(&mut self, name: String, options: HashMap<String, String>) -> ProtocolResult<()> {
+    pub fn create_database(
+        &mut self,
+        name: String,
+        options: HashMap<String, String>,
+    ) -> ProtocolResult<()> {
         if self.databases.contains_key(&name) {
             return Err(ProtocolError::CypherError(format!(
                 "Database '{}' already exists",
@@ -213,21 +217,29 @@ mod tests {
     #[test]
     fn test_create_database() {
         let mut manager = DatabaseManager::new();
-        assert!(manager.create_database("testdb".to_string(), HashMap::new()).is_ok());
+        assert!(manager
+            .create_database("testdb".to_string(), HashMap::new())
+            .is_ok());
         assert_eq!(manager.list_databases().len(), 2); // neo4j + testdb
     }
 
     #[test]
     fn test_duplicate_database() {
         let mut manager = DatabaseManager::new();
-        manager.create_database("testdb".to_string(), HashMap::new()).unwrap();
-        assert!(manager.create_database("testdb".to_string(), HashMap::new()).is_err());
+        manager
+            .create_database("testdb".to_string(), HashMap::new())
+            .unwrap();
+        assert!(manager
+            .create_database("testdb".to_string(), HashMap::new())
+            .is_err());
     }
 
     #[test]
     fn test_drop_database() {
         let mut manager = DatabaseManager::new();
-        manager.create_database("testdb".to_string(), HashMap::new()).unwrap();
+        manager
+            .create_database("testdb".to_string(), HashMap::new())
+            .unwrap();
         assert!(manager.drop_database("testdb").is_ok());
         assert_eq!(manager.list_databases().len(), 1);
     }
@@ -241,8 +253,10 @@ mod tests {
     #[test]
     fn test_start_stop_database() {
         let mut manager = DatabaseManager::new();
-        manager.create_database("testdb".to_string(), HashMap::new()).unwrap();
-        
+        manager
+            .create_database("testdb".to_string(), HashMap::new())
+            .unwrap();
+
         assert!(manager.stop_database("testdb").is_ok());
         assert_eq!(
             manager.get_database("testdb").unwrap().state,
@@ -267,8 +281,10 @@ mod tests {
     #[test]
     fn test_set_default_database() {
         let mut manager = DatabaseManager::new();
-        manager.create_database("testdb".to_string(), HashMap::new()).unwrap();
-        
+        manager
+            .create_database("testdb".to_string(), HashMap::new())
+            .unwrap();
+
         assert!(manager.set_default_database("testdb").is_ok());
         assert_eq!(manager.get_default_database().name, "testdb");
         assert!(!manager.get_database("neo4j").unwrap().is_default);

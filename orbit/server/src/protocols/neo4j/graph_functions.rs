@@ -100,10 +100,7 @@ where
             }
 
             visited.insert(neighbor_node.id.clone());
-            parent_map.insert(
-                neighbor_node.id.clone(),
-                (current_id.clone(), relationship),
-            );
+            parent_map.insert(neighbor_node.id.clone(), (current_id.clone(), relationship));
 
             // Check if we reached the target
             if neighbor_node.id == end_node.id {
@@ -229,7 +226,7 @@ where
     while current_id != start_node.id {
         if let Some((parent_id, relationship)) = parent_map.get(&current_id) {
             relationships.push(relationship.clone());
-            
+
             // Get the parent node
             let parent_neighbors = get_node(parent_id)?;
             let parent_node = parent_neighbors
@@ -237,7 +234,7 @@ where
                 .find(|(n, _)| &n.id == parent_id)
                 .map(|(n, _)| n)
                 .unwrap_or_else(|| GraphNode::new(vec![], HashMap::new()));
-            
+
             nodes.push(parent_node);
             current_id = parent_id.clone();
         } else {
@@ -295,11 +292,7 @@ where
                 for (parent_id, relationship) in parents {
                     let mut new_path = path.clone();
                     // Create a simple node for the parent (in real implementation, would fetch from graph)
-                    let parent_node = GraphNode::with_id(
-                        parent_id.clone(),
-                        vec![],
-                        HashMap::new(),
-                    );
+                    let parent_node = GraphNode::with_id(parent_id.clone(), vec![], HashMap::new());
                     new_path.push((parent_node, Some(relationship.clone())));
                     next_paths.push(new_path);
                 }
@@ -325,11 +318,7 @@ mod tests {
         )
     }
 
-    fn create_test_relationship(
-        start: &str,
-        end: &str,
-        rel_type: &str,
-    ) -> GraphRelationship {
+    fn create_test_relationship(start: &str, end: &str, rel_type: &str) -> GraphRelationship {
         GraphRelationship::new(
             NodeId::new(start.to_string()),
             NodeId::new(end.to_string()),
@@ -366,14 +355,15 @@ mod tests {
         let rel_ab = create_test_relationship("A", "B", "CONNECTS");
         let rel_bc = create_test_relationship("B", "C", "CONNECTS");
 
-        let get_neighbors = |node_id: &NodeId| -> ProtocolResult<Vec<(GraphNode, GraphRelationship)>> {
-            match node_id.as_str() {
-                "A" => Ok(vec![(node_b.clone(), rel_ab.clone())]),
-                "B" => Ok(vec![(node_c.clone(), rel_bc.clone())]),
-                "C" => Ok(vec![]),
-                _ => Ok(vec![]),
-            }
-        };
+        let get_neighbors =
+            |node_id: &NodeId| -> ProtocolResult<Vec<(GraphNode, GraphRelationship)>> {
+                match node_id.as_str() {
+                    "A" => Ok(vec![(node_b.clone(), rel_ab.clone())]),
+                    "B" => Ok(vec![(node_c.clone(), rel_bc.clone())]),
+                    "C" => Ok(vec![]),
+                    _ => Ok(vec![]),
+                }
+            };
 
         let result = shortest_path(&node_a, &node_c, get_neighbors, None).unwrap();
         assert!(result.is_some());
@@ -388,9 +378,10 @@ mod tests {
         let node_a = create_test_node("A", "Node");
         let node_z = create_test_node("Z", "Node");
 
-        let get_neighbors = |_node_id: &NodeId| -> ProtocolResult<Vec<(GraphNode, GraphRelationship)>> {
-            Ok(vec![])
-        };
+        let get_neighbors =
+            |_node_id: &NodeId| -> ProtocolResult<Vec<(GraphNode, GraphRelationship)>> {
+                Ok(vec![])
+            };
 
         let result = shortest_path(&node_a, &node_z, get_neighbors, None).unwrap();
         assert!(result.is_none());
@@ -400,9 +391,10 @@ mod tests {
     fn test_shortest_path_same_node() {
         let node_a = create_test_node("A", "Node");
 
-        let get_neighbors = |_node_id: &NodeId| -> ProtocolResult<Vec<(GraphNode, GraphRelationship)>> {
-            Ok(vec![])
-        };
+        let get_neighbors =
+            |_node_id: &NodeId| -> ProtocolResult<Vec<(GraphNode, GraphRelationship)>> {
+                Ok(vec![])
+            };
 
         let result = shortest_path(&node_a, &node_a, get_neighbors, None).unwrap();
         assert!(result.is_some());

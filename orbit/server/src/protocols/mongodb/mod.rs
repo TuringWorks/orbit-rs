@@ -1,5 +1,6 @@
-#[cfg(feature = "fts")]
-pub mod fts;
+// FTS module temporarily disabled - needs API update to work with SharedFtsEngine
+// #[cfg(feature = "fts")]
+// pub mod fts;
 pub mod graph;
 pub mod protocol;
 pub mod server;

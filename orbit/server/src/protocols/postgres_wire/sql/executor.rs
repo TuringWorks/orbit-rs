@@ -10,9 +10,9 @@ use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::{
     ast::{
         AccessMode, AlterDomainStatement, AlterPolicyStatement, AlterRoleStatement,
-        AlterSequenceStatement, AlterTableAction, AlterTableStatement, AlterTypeStatement, AssignmentTarget,
-        BeginStatement, ColumnConstraint, CommitStatement, CopyDirection, CopySource,
-        CopyStatement, CopyTarget, CreateDatabaseStatement, CreateDomainStatement,
+        AlterSequenceStatement, AlterTableAction, AlterTableStatement, AlterTypeStatement,
+        AssignmentTarget, BeginStatement, ColumnConstraint, CommitStatement, CopyDirection,
+        CopySource, CopyStatement, CopyTarget, CreateDatabaseStatement, CreateDomainStatement,
         CreateExtensionStatement, CreateFunctionStatement, CreateIndexStatement,
         CreatePolicyStatement, CreateRoleStatement, CreateRuleStatement, CreateSchemaStatement,
         CreateSequenceStatement, CreateTableStatement, CreateTriggerStatement, CreateTypeStatement,
@@ -1487,13 +1487,17 @@ impl SqlExecutor {
             match action {
                 AlterTableAction::AddColumn(column_def) => {
                     // Check if column already exists
-                    if table_schema.columns.iter().any(|c| c.name == column_def.name) {
+                    if table_schema
+                        .columns
+                        .iter()
+                        .any(|c| c.name == column_def.name)
+                    {
                         return Err(ProtocolError::PostgresError(format!(
                             "Column \"{}\" of relation \"{}\" already exists",
                             column_def.name, table_name
                         )));
                     }
-                    
+
                     // Convert AST ColumnDefinition to schema ColumnSchema
                     let new_col = ColumnSchema {
                         name: column_def.name.clone(),
@@ -1503,16 +1507,20 @@ impl SqlExecutor {
                         constraints: column_def.constraints.iter().map(|c| format!("{:?}", c)).collect(),
                         generated: None,
                     };
-                    
+
                     table_schema.columns.push(new_col);
                     // No need to update rows as missing keys are treated as NULL
                 }
-                AlterTableAction::DropColumn { name, if_exists, cascade: _ } => {
+                AlterTableAction::DropColumn {
+                    name,
+                    if_exists,
+                    cascade: _,
+                } => {
                     // Check if column exists
                     if let Some(idx) = table_schema.columns.iter().position(|c| c.name == name) {
                         // Remove from schema
                         table_schema.columns.remove(idx);
-                        
+
                         // Remove from data
                         if let Some(rows) = table_data.get_mut(&table_name) {
                             for row in rows {
@@ -1527,8 +1535,8 @@ impl SqlExecutor {
                     }
                 }
                 _ => {
-                     // Other actions ignored for now
-                     tracing::warn!("Unsupported ALTER TABLE action: {:?}", action);
+                    // Other actions ignored for now
+                    tracing::warn!("Unsupported ALTER TABLE action: {:?}", action);
                 }
             }
         }
@@ -3171,7 +3179,9 @@ impl SqlExecutor {
 
                 Ok(rows)
             }
-            FromClause::Subquery { query, alias: _, .. } => {
+            FromClause::Subquery {
+                query, alias: _, ..
+            } => {
                 // Source is a subquery - execute it
                 let result = self.execute_select(*query.clone()).await?;
                 match result {
