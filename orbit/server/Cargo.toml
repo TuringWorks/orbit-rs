@@ -33,6 +33,7 @@ lazy_static = "1.4"
 url = "2.5"
 geohash = "0.13"
 md5 = "0.8"
+sha1 = "0.10"  # For Redis EVALSHA script hashing
 sha2 = "0.10"
 hex = "0.4"
 # base64 already defined below
@@ -102,6 +103,10 @@ snap = "1.1"          # Snappy compression
 boa_engine = { version = "0.19", optional = true }
 # rquickjs - QuickJS bindings for MongoDB/Redis (performance-critical)
 rquickjs = { version = "0.6", features = ["array-buffer", "classes", "futures"], optional = true }
+
+# Lua Engine
+# mlua - LuaJIT/Lua 5.4 bindings for Redis FUNCTION/EVAL and PL/Lua
+mlua = { version = "0.9", features = ["lua54", "async", "send", "serialize"], optional = true }
 tokio-rustls = "0.26.4"
 rustls-pemfile = "2.2.0"
 rustls = { version = "0.23.35", features = ["ring"] }
@@ -153,6 +158,7 @@ default = [
     "heterogeneous-compute",
     "tracing",
     "fts",
+    "lua-redis",  # Redis Lua scripting support
 ]
 
 # Core System Features
@@ -258,6 +264,13 @@ js-postgres = ["js-boa", "protocol-postgres"]      # PL/JavaScript for PostgreSQ
 js-mongodb = ["js-quickjs"]                        # $where/$function for MongoDB
 js-redis = ["js-quickjs", "protocol-redis"]        # EVAL/EVALSHA for Redis
 javascript = ["js-postgres", "js-mongodb", "js-redis"]  # All JavaScript features
+
+# Lua Engine Support
+lua-mlua = ["mlua"]                        # mlua engine (LuaJIT/Lua 5.4)
+lua-redis = ["lua-mlua", "protocol-redis"]          # Redis FUNCTION/EVAL/SCRIPT commands
+lua-postgres = ["lua-mlua", "protocol-postgres"]    # PL/Lua for PostgreSQL
+lua-mysql = ["lua-mlua", "protocol-mysql"]          # Lua procedures for MySQL
+lua-all = ["lua-redis", "lua-postgres", "lua-mysql"]  # All Lua features
 
 [dev-dependencies]
 mockall.workspace = true

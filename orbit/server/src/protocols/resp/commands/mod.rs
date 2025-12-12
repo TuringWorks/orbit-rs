@@ -11,6 +11,7 @@ pub mod graphrag;
 pub mod hash;
 pub mod list;
 pub mod pubsub;
+pub mod scripting;
 pub mod server;
 pub mod set;
 pub mod sorted_set;
@@ -34,10 +35,10 @@ mod handler {
     use super::{
         acl::AclCommands, cluster::ClusterCommands, connection::ConnectionCommands,
         functions::FunctionCommands, graph::GraphCommands, graphrag::GraphRAGCommands,
-        hash::HashCommands, list::ListCommands, pubsub::PubSubCommands, server::ServerCommands,
-        set::SetCommands, sorted_set::SortedSetCommands, stream::StreamCommands,
-        string::StringCommands, time_series::TimeSeriesCommands, transactions::TransactionCommands,
-        vector::VectorCommands,
+        hash::HashCommands, list::ListCommands, pubsub::PubSubCommands, scripting::ScriptingCommands,
+        server::ServerCommands, set::SetCommands, sorted_set::SortedSetCommands,
+        stream::StreamCommands, string::StringCommands, time_series::TimeSeriesCommands,
+        transactions::TransactionCommands, vector::VectorCommands,
     };
     use crate::protocols::error::ProtocolResult;
     use crate::protocols::resp::simple_local::SimpleLocalRegistry;
@@ -52,6 +53,7 @@ mod handler {
         Cluster,
         Connection,
         Functions,
+        Scripting,
         String,
         Hash,
         List,
@@ -80,6 +82,7 @@ mod handler {
         cluster: ClusterCommands,
         connection: ConnectionCommands,
         functions: FunctionCommands,
+        scripting: ScriptingCommands,
         string: StringCommands,
         hash: HashCommands,
         list: ListCommands,
@@ -120,6 +123,7 @@ mod handler {
                 cluster: ClusterCommands::new(orbit_client.clone(), local_registry.clone()),
                 connection: ConnectionCommands::new(orbit_client.clone(), local_registry.clone()),
                 functions: FunctionCommands::new(orbit_client.clone(), local_registry.clone()),
+                scripting: ScriptingCommands::new(orbit_client.clone(), local_registry.clone()),
                 string: StringCommands::new(orbit_client.clone(), local_registry.clone()),
                 hash: HashCommands::new(orbit_client.clone(), local_registry.clone()),
                 list: ListCommands::new(orbit_client.clone(), local_registry.clone()),
@@ -175,6 +179,9 @@ mod handler {
                 }
                 CommandCategory::Functions => {
                     CommandHandlerTrait::handle(&self.functions, &command_name, &args).await
+                }
+                CommandCategory::Scripting => {
+                    CommandHandlerTrait::handle(&self.scripting, &command_name, &args).await
                 }
                 CommandCategory::String => {
                     CommandHandlerTrait::handle(&self.string, &command_name, &args).await
@@ -260,6 +267,9 @@ mod handler {
 
                 // Functions commands
                 "FCALL" | "FCALL_RO" | "FUNCTION" => CommandCategory::Functions,
+
+                // Scripting commands
+                "EVAL" | "EVALSHA" | "SCRIPT" => CommandCategory::Scripting,
 
                 // Connection commands
                 "PING" | "ECHO" | "SELECT" | "AUTH" | "QUIT" => CommandCategory::Connection,

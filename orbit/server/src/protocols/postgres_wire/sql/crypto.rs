@@ -15,7 +15,7 @@ use argon2::{
 use bcrypt::{hash, verify, DEFAULT_COST};
 use pbkdf2::{
     password_hash::{
-        PasswordHasher as Pbkdf2Hasher, PasswordVerifier as Pbkdf2Verifier, SaltString as Pbkdf2Salt,
+        SaltString as Pbkdf2Salt,
     },
     Pbkdf2,
 };

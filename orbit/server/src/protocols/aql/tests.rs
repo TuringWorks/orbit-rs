@@ -1015,7 +1015,7 @@ mod aql_tests {
             args: vec![AqlExpression::Variable("text".to_string())],
         };
 
-        let result = engine.evaluate_expression_public(&expr, &context).await;
+        let result = engine.evaluate_expression_public(&expr, &context);
         assert!(result.is_ok());
         if let AqlValue::Number(n) = result.unwrap() {
             assert_eq!(n.as_u64().unwrap(), 11);
@@ -1036,7 +1036,7 @@ mod aql_tests {
             args: vec![AqlExpression::Variable("text".to_string())],
         };
 
-        let result = engine.evaluate_expression_public(&expr, &context).await;
+        let result = engine.evaluate_expression_public(&expr, &context);
         assert!(result.is_ok());
         if let AqlValue::String(s) = result.unwrap() {
             assert_eq!(s, "HELLO");
@@ -1057,7 +1057,7 @@ mod aql_tests {
             args: vec![AqlExpression::Variable("text".to_string())],
         };
 
-        let result = engine.evaluate_expression_public(&expr, &context).await;
+        let result = engine.evaluate_expression_public(&expr, &context);
         assert!(result.is_ok());
         if let AqlValue::String(s) = result.unwrap() {
             assert_eq!(s, "hello");
@@ -1086,7 +1086,7 @@ mod aql_tests {
             right: Box::new(AqlExpression::Variable("b".to_string())),
         };
 
-        let result = engine.evaluate_expression_public(&expr, &context).await;
+        let result = engine.evaluate_expression_public(&expr, &context);
         assert!(result.is_ok());
         if let AqlValue::Number(n) = result.unwrap() {
             assert_eq!(n.as_f64().unwrap(), 8.0);
@@ -1109,7 +1109,7 @@ mod aql_tests {
             right: Box::new(AqlExpression::Variable("b".to_string())),
         };
 
-        let result = engine.evaluate_expression_public(&expr, &context).await;
+        let result = engine.evaluate_expression_public(&expr, &context);
         assert!(result.is_ok());
         if let AqlValue::String(s) = result.unwrap() {
             assert_eq!(s, "Hello World");
@@ -1138,7 +1138,7 @@ mod aql_tests {
             right: Box::new(AqlExpression::Variable("b".to_string())),
         };
 
-        let result = engine.evaluate_expression_public(&expr, &context).await;
+        let result = engine.evaluate_expression_public(&expr, &context);
         assert!(result.is_ok());
         if let AqlValue::Number(n) = result.unwrap() {
             assert_eq!(n.as_f64().unwrap(), 5.0);
@@ -1167,7 +1167,7 @@ mod aql_tests {
             right: Box::new(AqlExpression::Variable("b".to_string())),
         };
 
-        let result = engine.evaluate_expression_public(&expr, &context).await;
+        let result = engine.evaluate_expression_public(&expr, &context);
         assert!(result.is_ok());
         if let AqlValue::Bool(b) = result.unwrap() {
             assert!(b);
@@ -1191,7 +1191,7 @@ mod aql_tests {
             expr: Box::new(AqlExpression::Variable("x".to_string())),
         };
 
-        let result = engine.evaluate_expression_public(&expr, &context).await;
+        let result = engine.evaluate_expression_public(&expr, &context);
         assert!(result.is_ok());
         if let AqlValue::Number(n) = result.unwrap() {
             assert_eq!(n.as_f64().unwrap(), -5.0);
@@ -1212,7 +1212,7 @@ mod aql_tests {
             expr: Box::new(AqlExpression::Variable("flag".to_string())),
         };
 
-        let result = engine.evaluate_expression_public(&expr, &context).await;
+        let result = engine.evaluate_expression_public(&expr, &context);
         assert!(result.is_ok());
         if let AqlValue::Bool(b) = result.unwrap() {
             assert!(!b);

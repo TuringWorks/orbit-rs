@@ -3,7 +3,7 @@
 // This module will provide geospatial functions for OrbitQL.
 // Full implementation to be completed with proper geohash dependencies.
 
-use serde_json::{json, Value};
+use serde_json::Value;
 use crate::protocols::{ProtocolError, ProtocolResult};
 
 // Placeholder implementations - to be fully implemented
