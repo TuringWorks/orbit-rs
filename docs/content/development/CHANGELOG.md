@@ -11,9 +11,142 @@ All notable changes to the Orbit-RS project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2025-12-12
+
+### Added
+
+- **Platform-Specific Async I/O APIs** (2025-12-12): Added platform-specific async I/O APIs to architecture whitepaper
+  - Documented async I/O patterns for different platforms
+  - Added implementation details for platform-specific optimizations
+  - Enhanced architecture documentation with I/O considerations
+
+- **OrbitQL Function Implementations** (2025-12-12): Expanded OrbitQL with crypto, parse, array, and string functions
+  - Cryptographic functions for data security and hashing
+  - Parse functions for type conversion and data transformation
+  - Array manipulation functions for complex data operations
+  - String processing functions for text manipulation
+  - Enhanced OrbitQL compatibility with standard SQL functions
+
+- **Neo4j Comprehensive Bolt Protocol Support** (2025-12-12): Complete Neo4j Bolt v4.0-4.4 implementation (~4,375 lines, 10 modules)
+  - **Bolt Protocol Core** (`bolt_messages.rs`, `bolt_types.rs`, `bolt_writer.rs`, `bolt_server.rs`, ~1,900 lines):
+    - All 11 Bolt protocol messages: HELLO, LOGON, LOGOFF, RUN, PULL, DISCARD, BEGIN, COMMIT, ROLLBACK, RESET, GOODBYE
+    - Complete PackStream encoding/decoding for all data types (Null, Boolean, Integer, Float, String, List, Map, Structure)
+    - Transaction state management with BEGIN/COMMIT/ROLLBACK support
+    - TCP server with Bolt handshake negotiation (v4.0-4.4)
+    - Chunked message framing with proper protocol headers
+  - **Spatial & Graph Features** (`spatial_types.rs`, ~1,115 lines):
+    - Point2D/3D types for Cartesian (SRID 7203, 9157) and Geographic WGS84 (SRID 4326, 4979)
+    - Spatial functions: `point()`, `distance()`, `withinBBox()`
+    - Graph pathfinding: `shortestPath()`, `allShortestPaths()`
+    - Haversine distance calculation for geographic points
+  - **Schema Management** (530 lines):
+    - 4 constraint types: Unique, NodePropertyExistence, RelationshipPropertyExistence, NodeKey
+    - 6 index types: BTree, Fulltext, Lookup, Point, Range, Text
+    - Full validation and CREATE/DROP operations
+  - **Administration Features** (830 lines):
+    - Database management: CREATE/DROP/START/STOP/SHOW DATABASE
+    - User management: CREATE/ALTER/DROP/SHOW USERS
+    - Role management: CREATE/DROP/GRANT/REVOKE/SHOW ROLES
+    - Privilege management: GRANT/DENY/REVOKE/SHOW PRIVILEGES
+    - 4 built-in roles: admin, reader, editor, architect
+  - **Testing**: 52 comprehensive tests covering all protocol features
+  - **Specification Coverage**: Increased from 48% to 85%
+
+- **Neo4j Aggregating Functions** (2025-12-12): Completed missing Neo4j aggregating functions
+  - `stDev(expression)` - Standard deviation calculation
+  - `stDevP(expression)` - Population standard deviation
+  - `percentileCont(expression, percentile)` - Continuous percentile calculation
+  - `percentileDisc(expression, percentile)` - Discrete percentile calculation
+  - Full compatibility with Neo4j Bolt protocol aggregation operations
+
+### Changed
+
+- **OrbitQL Compatibility Documentation** (2025-12-12): Updated compatibility specifications
+  - Updated compatibility spec with implemented crypto, parse, array, and string functions
+  - Updated compatibility spec with implemented JSON functions
+  - Improved function coverage tracking and documentation
+
+- **Neo4j Bolt Compatibility Documentation** (2025-12-12): Updated with completed aggregating functions
+  - Marked stDev, stDevP, percentileCont, percentileDisc as completed
+  - Updated coverage metrics for Neo4j protocol support
+  - Enhanced compatibility matrix
+
+- **MySQL Compatibility Documentation** (2025-12-12): Complete MySQL compatibility achievement
+  - Updated compatibility documentation to mark ALL features as fully supported
+  - Coverage increased to 100% across all categories
+  - Table Commands, Database Commands, DML Commands marked as fully supported
+  - CTEs and Window Functions marked as fully supported
+  - Binary Result Set protocol marked as fully supported
+  - All client compatibility (mysql-cli, MySQL Workbench, DBeaver, etc.) verified
+  - All MySQL versions (5.7, 8.0, 8.1, 8.2, 8.3, 8.4, 9.0, 9.1) supported
+
+### Fixed
+
+- **PostgreSQL Wire Protocol Parser** (2025-12-12): Fixed critical parser bugs
+  - Fixed CTE (Common Table Expressions) parsing issues
+  - Fixed CREATE TABLE statement parsing with duplicate keywords
+  - Improved expression parsing in SELECT statements
+  - Added utility functions for better parsing robustness
+  - Enhanced error handling and recovery
+
+- **Test Stability** (2025-12-12): Improved test reliability
+  - Fixed failing tests across workspace
+  - Ignored slow timeout test to improve test suite performance
+  - Added proper test isolation and cleanup
+
+- **Build Quality** (2025-12-12): Resolved build errors and warnings
+  - Fixed build errors in workspace crates
+  - Resolved compiler warnings for cleaner builds
+  - Improved code quality and maintainability
+
+---
+
 ## [Unreleased] - 2025-12-11
 
 ### Added
+
+- **Lua Runtime Support** (2025-12-11): Comprehensive Lua scripting engine using mlua (LuaJIT/Lua 5.4)
+  - **Multi-Protocol Support**:
+    - Redis FUNCTION, EVAL, EVALSHA, SCRIPT * commands
+    - PostgreSQL PL/Lua stored procedures
+    - MySQL Lua-based stored procedures
+    - Custom UDFs, triggers, and ETL pipelines
+  - **Redis API Implementation** (`redis_api.rs`, 336 lines):
+    - `redis.call(command, ...)` - Execute Redis command, throw error on failure
+    - `redis.pcall(command, ...)` - Protected call, returns error instead of throwing
+    - `redis.register_function(name, callback, options)` - Register Lua functions
+    - `redis.log(level, message)` - Logging from Lua scripts
+    - `redis.status_reply(message)` and `redis.error_reply(message)` - Reply helpers
+    - Log level constants (LOG_DEBUG, LOG_VERBOSE, LOG_NOTICE, LOG_WARNING)
+  - **Security Framework** (`security.rs`, 477 lines):
+    - Multi-layer security: Pre-validation, sandboxing, runtime monitoring, API restrictions
+    - `ExecutionLimits`: Configurable timeouts, memory limits, operation counting
+    - `SecurityConfig`: Blocked globals (os, io, debug, package), eval restrictions
+    - `ExecutionGuard`: Runtime resource tracking and enforcement
+    - `ScriptValidator`: Pre-execution security checks, syntax validation, forbidden pattern detection
+    - Memory limit enforcement (default 50MB, configurable)
+    - Timeout enforcement (default 5000ms, configurable)
+    - Maximum script size validation (1MB limit)
+  - **Runtime Engine** (`mlua_runtime.rs`, 670 lines):
+    - Script evaluation with `eval()` and `eval_with_keys_args()` for Redis-style KEYS/ARGV
+    - SHA1-based script caching for EVALSHA support
+    - Function registry for persistent Lua functions
+    - Async execution with tokio integration
+    - Sandbox setup with restricted global access
+    - Memory management and cleanup
+  - **Type System** (`types.rs`, 447 lines):
+    - `LuaValue` enum: Nil, Boolean, Integer, Float, String, Array, Map
+    - `LuaFunction` metadata: name, parameters, description, persistent flag
+    - `LuaParameter`: name, type, optional flag
+    - Bidirectional conversion between Lua types and Rust types
+    - Error handling with `LuaError` and `LuaResult`
+  - **Feature Flags**:
+    - `lua-mlua`: Core mlua engine support
+    - `lua-redis`: Redis FUNCTION/EVAL/SCRIPT commands
+    - `lua-postgres`: PL/Lua for PostgreSQL
+    - `lua-mysql`: Lua procedures for MySQL
+  - **Hybrid State Model**: Ephemeral by default, opt-in persistent actors
+  - **Integration**: Full mlua dependency with async support
 
 - **CQL Compression Support** (2025-12-11): Active wire protocol compression for CQL Native Protocol v4
   - Snappy compression support via `snap` crate
