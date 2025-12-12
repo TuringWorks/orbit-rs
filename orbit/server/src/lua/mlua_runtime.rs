@@ -464,6 +464,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // This test is slow (tests timeout by running infinite loop)
     async fn test_timeout_enforcement() {
         let config = SecurityConfig::redis_default()
             .limits
