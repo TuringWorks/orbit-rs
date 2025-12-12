@@ -314,6 +314,68 @@ fn main() {
 
 **Verdict:** **Recommended for Linux deployments** with gradual migration path.
 
+#### Platform-Specific Async I/O APIs
+
+Different operating systems provide specialized high-performance async I/O interfaces that can significantly improve performance beyond standard epoll/select/poll mechanisms:
+
+| Operating System | API | Introduced | Key Features |
+|-----------------|-----|------------|--------------|
+| **Linux** | io_uring | Kernel 5.1+ (2019) | Shared ring buffers, batch operations, minimal syscalls, zero-copy |
+| **Windows** | IORing | Windows 11 21H1 (2021) | Similar to io_uring, shared ring buffers, modern design |
+| **Windows** | IOCP (I/O Completion Ports) | Windows NT 3.1 (1993) | Mature, robust, completion-based, thread pool integration |
+| **macOS/BSD** | kqueue (kernel queue) | FreeBSD 4.1 (2000) | Stateful event notification, more efficient than select/poll |
+
+**io_uring (Linux):**
+- **Performance:** 10-100x better than epoll for high-throughput workloads
+- **Zero-copy:** Supports true zero-copy I/O operations
+- **Batching:** Submit multiple operations in one syscall
+- **Polling:** Can poll for completions without syscalls
+- **Use case:** Best for Linux production deployments
+
+**IORing (Windows):**
+- **Design:** Directly inspired by io_uring with similar ring buffer architecture
+- **Performance:** Comparable to io_uring on Windows 11+
+- **Compatibility:** Only available on Windows 11 and Server 2022+
+- **Use case:** Modern Windows deployments
+
+**IOCP (Windows):**
+- **Maturity:** Battle-tested for 30+ years
+- **Thread pool:** Integrates with Windows thread pool
+- **Completion-based:** Different model than io_uring (completion vs submission)
+- **Performance:** Excellent, though lacks batching capabilities of IORing
+- **Use case:** Windows Server 2019 and earlier, production stability
+
+**kqueue (macOS/BSD):**
+- **Stateful:** Maintains state in kernel, reducing overhead
+- **Events:** Supports file, socket, timer, signal, and process events
+- **Performance:** 2-5x better than select/poll
+- **Scalability:** Handles 100K+ connections efficiently
+- **Use case:** macOS development and BSD production
+
+**Glommio Runtime Support:**
+```rust
+// Linux: Uses io_uring automatically
+#[cfg(target_os = "linux")]
+use glommio::LocalExecutor;
+
+// macOS: Falls back to kqueue via mio
+#[cfg(target_os = "macos")]
+// Note: Glommio doesn't support macOS natively
+// Use Tokio with kqueue backend instead
+
+// Windows: Not supported
+#[cfg(target_os = "windows")]
+// Use Tokio with IOCP backend
+```
+
+**Recommendation for Cross-Platform:**
+- **Linux:** Glommio with io_uring for maximum performance
+- **macOS:** Tokio with kqueue backend (default)
+- **Windows:** Tokio with IOCP backend (default)
+- **Cross-platform:** Tokio as baseline, with platform-specific optimizations
+
+
+
 ### 3.4 Hybrid Approach
 
 **Recommendation:** Implement a **hybrid runtime strategy**:
