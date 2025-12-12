@@ -2,8 +2,8 @@
 
 **Target**: OrbitQL Native Query Language (SurrealDB-inspired)
 **Reference**: https://surrealdb.com/docs/surrealql
-**Last Updated**: 2025-12-09
-**Current Estimated Coverage**: ~65%
+**Last Updated**: 2025-12-11
+**Current Estimated Coverage**: ~70%
 
 ---
 
@@ -418,9 +418,27 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | json_extract_text / ->> | ✅ | Extract as text |
 | json_contains / @> | ✅ | Contains check |
 | json_contained / <@ | ✅ | Is contained check |
-| json_array_length | ❌ | Array length |
-| json_each | ❌ | Expand to rows |
-| jsonb_set | ❌ | Set value |
+| json_array_length | ✅ | JSON array length |
+| json_each | ✅ | Expand object to key-value rows |
+| json_each_text | ✅ | Expand object to key-value rows (text) |
+| jsonb_set | ✅ | Set JSON value at path |
+| jsonb_insert | ✅ | Insert JSON value at path |
+| jsonb_delete_path | ✅ | Delete JSON path |
+| json_agg | ✅ | Aggregate values to JSON array |
+| jsonb_agg | ✅ | Aggregate values to JSONB array |
+| json_object_agg | ✅ | Aggregate key-value pairs to JSON object |
+| jsonb_object_agg | ✅ | Aggregate key-value pairs to JSONB object |
+| json_build_object | ✅ | Build JSON object from arguments |
+| json_build_array | ✅ | Build JSON array from arguments |
+| json_typeof | ✅ | Get JSON value type |
+| json_object_keys | ✅ | Get object keys as array |
+| json_strip_nulls | ✅ | Remove null values |
+| json_extract_path | ✅ | Extract value at path (variadic) |
+| json_extract_path_text | ✅ | Extract text at path (variadic) |
+| jsonb_pretty | ✅ | Pretty-print JSONB |
+| to_json | ✅ | Convert SQL value to JSON |
+| to_jsonb | ✅ | Convert SQL value to JSONB |
+| row_to_json | ✅ | Convert row to JSON |
 
 ### Geo Functions
 
@@ -529,7 +547,7 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | DML Commands | ~90% | Full CRUD, CALL |
 | Query Features | ~80% | Advanced SQL |
 | Data Types | ~85% | Comprehensive types |
-| Functions | ~70% | Core functions |
+| Functions | ~75% | Comprehensive JSON functions, core functions |
 | Vector Operations | ~90% | Full vector support |
 | Graph Operations | ~40% | Basic graph queries |
 | Protocol | ~70% | Multiple interfaces |
