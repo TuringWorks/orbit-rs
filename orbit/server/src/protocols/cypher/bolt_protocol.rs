@@ -27,6 +27,7 @@ use crate::protocols::cypher::cypher_parser::CypherParser;
 #[cfg(feature = "storage-rocksdb")]
 use crate::protocols::cypher::storage::CypherStorageProvider;
 use crate::protocols::cypher::types::{GraphNode, GraphRelationship};
+#[cfg(feature = "protocol-neo4j")]
 use crate::protocols::neo4j::bolt_types::PackStreamValue;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use bytes::{BufMut, Bytes, BytesMut};
