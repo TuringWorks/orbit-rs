@@ -3,7 +3,7 @@
 **Target**: Neo4j Bolt Protocol v5.x / Cypher Query Language
 **Reference**: https://neo4j.com/docs/bolt/current/
 **Last Updated**: 2025-12-11
-**Current Estimated Coverage**: ~85%
+**Current Estimated Coverage**: ~87%
 
 ---
 
@@ -272,10 +272,10 @@ This document specifies OrbitRS's compatibility with the Neo4j Bolt protocol and
 | count() | ✅ | Count |
 | max() | ✅ | Maximum |
 | min() | ✅ | Minimum |
-| percentileCont() | ❌ | Percentile continuous |
-| percentileDisc() | ❌ | Percentile discrete |
-| stDev() | ❌ | Standard deviation |
-| stDevP() | ❌ | Population std dev |
+| percentileCont() | ✅ | Percentile continuous (linear interpolation) |
+| percentileDisc() | ✅ | Percentile discrete (nearest value) |
+| stDev() | ✅ | Sample standard deviation (n-1 formula) |
+| stDevP() | ✅ | Population standard deviation (n formula) |
 | sum() | ✅ | Sum |
 
 ### List Functions
@@ -381,7 +381,7 @@ This document specifies OrbitRS's compatibility with the Neo4j Bolt protocol and
 | Cypher Writing | ~70% | CREATE/MERGE/DELETE |
 | Pattern Matching | ~65% | Basic patterns |
 | Data Types | ~75% | Most types supported |
-| Functions | ~70% | Core functions |
+| Functions | ~75% | All aggregating functions complete |
 | Administration | ~10% | Limited admin |
 | Spatial | ~5% | Minimal support |
 
