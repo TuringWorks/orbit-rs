@@ -3,7 +3,7 @@
 **Target**: OrbitQL Native Query Language (SurrealDB-inspired)
 **Reference**: https://surrealdb.com/docs/surrealql
 **Last Updated**: 2025-12-11
-**Current Estimated Coverage**: ~70%
+**Current Estimated Coverage**: ~72%
 
 ---
 
@@ -260,8 +260,8 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | max() / MAX | ✅ | Maximum |
 | ARRAY_AGG | ✅ | Aggregate to array |
 | STRING_AGG | ✅ | Concatenate strings |
-| array::group() | ❌ | Group to array |
-| string::join() | ❌ | Join strings |
+| array::group() | ✅ | Group to array |
+| string::join() | ✅ | Join strings |
 
 ### String Functions
 
@@ -316,7 +316,7 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | array::difference() | ✅ | Set difference |
 | array::distinct() | ✅ | Unique values |
 | array::flatten() | ✅ | Flatten nested |
-| array::group() | ❌ | Group elements |
+| array::group() | ✅ | Group elements |
 | array::insert() | ✅ | Insert at index |
 | array::intersect() | ✅ | Set intersection |
 | array::len() | ✅ | Array length |
@@ -377,12 +377,12 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | crypto::sha1() | ✅ | SHA-1 hash |
 | crypto::sha256() | ✅ | SHA-256 hash |
 | crypto::sha512() | ✅ | SHA-512 hash |
-| crypto::argon2::compare() | ❌ | Argon2 verify |
-| crypto::argon2::generate() | ❌ | Argon2 hash |
-| crypto::bcrypt::compare() | ❌ | Bcrypt verify |
-| crypto::bcrypt::generate() | ❌ | Bcrypt hash |
-| crypto::pbkdf2::compare() | ❌ | PBKDF2 verify |
-| crypto::pbkdf2::generate() | ❌ | PBKDF2 hash |
+| crypto::argon2::compare() | ✅ | Argon2 verify |
+| crypto::argon2::generate() | ✅ | Argon2 hash |
+| crypto::bcrypt::compare() | ✅ | Bcrypt verify |
+| crypto::bcrypt::generate() | ✅ | Bcrypt hash |
+| crypto::pbkdf2::compare() | ✅ | PBKDF2 verify |
+| crypto::pbkdf2::generate() | ✅ | PBKDF2 hash |
 
 ### Vector Functions
 
@@ -455,14 +455,14 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 
 | Function | Status | Notes |
 |----------|--------|-------|
-| parse::email::domain() | ❌ | Extract email domain |
-| parse::email::user() | ❌ | Extract email user |
-| parse::url::domain() | ❌ | Extract URL domain |
-| parse::url::fragment() | ❌ | Extract URL fragment |
-| parse::url::host() | ❌ | Extract URL host |
-| parse::url::path() | ❌ | Extract URL path |
-| parse::url::port() | ❌ | Extract URL port |
-| parse::url::query() | ❌ | Extract URL query |
+| parse::email::domain() | ✅ | Extract email domain |
+| parse::email::user() | ✅ | Extract email user |
+| parse::url::domain() | ✅ | Extract URL domain |
+| parse::url::fragment() | ✅ | Extract URL fragment |
+| parse::url::host() | ✅ | Extract URL host |
+| parse::url::path() | ✅ | Extract URL path |
+| parse::url::port() | ✅ | Extract URL port |
+| parse::url::query() | ✅ | Extract URL query |
 
 ### Random Functions
 
