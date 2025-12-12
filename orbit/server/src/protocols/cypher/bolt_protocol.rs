@@ -27,8 +27,6 @@ use crate::protocols::cypher::cypher_parser::CypherParser;
 #[cfg(feature = "storage-rocksdb")]
 use crate::protocols::cypher::storage::CypherStorageProvider;
 use crate::protocols::cypher::types::{GraphNode, GraphRelationship};
-#[cfg(feature = "protocol-neo4j")]
-use crate::protocols::neo4j::bolt_types::PackStreamValue;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use bytes::{BufMut, Bytes, BytesMut};
 use serde_json::Value;
@@ -526,8 +524,10 @@ pub struct BoltProtocolHandler {
     /// Authentication state
     pub(crate) auth_state: AuthState,
     /// Transaction state
+    #[allow(dead_code)]
     pub(crate) transaction_state: TransactionState,
     /// Transaction ID counter
+    #[allow(dead_code)]
     transaction_id: u64,
     pub(crate) current_query: Option<String>,
     current_parameters: Option<HashMap<String, Value>>,
