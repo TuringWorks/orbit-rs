@@ -198,6 +198,255 @@ fn bench_max(c: &mut Criterion) {
     group.finish();
 }
 
+
+fn bench_filter_f32_eq(c: &mut Criterion) {
+    let mut group = c.benchmark_group("filter_f32_eq");
+
+    for size in [100, 1_000, 10_000, 100_000].iter() {
+        let values: Vec<f32> = (0..*size).map(|x| x as f32).collect();
+        let target = (*size / 2) as f32;
+
+        group.bench_with_input(BenchmarkId::new("scalar", size), size, |b, _| {
+            let backend = ScalarBackend;
+            b.iter(|| black_box(backend.filter_f32_eq(black_box(&values), black_box(target))));
+        });
+
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") {
+            group.bench_with_input(BenchmarkId::new("avx2", size), size, |b, _| {
+                let backend = Avx2Backend;
+                b.iter(|| black_box(backend.filter_f32_eq(black_box(&values), black_box(target))));
+            });
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            group.bench_with_input(BenchmarkId::new("neon", size), size, |b, _| {
+                let backend = NeonBackend;
+                b.iter(|| black_box(backend.filter_f32_eq(black_box(&values), black_box(target))));
+            });
+        }
+    }
+    group.finish();
+}
+
+fn bench_sum_f32(c: &mut Criterion) {
+    let mut group = c.benchmark_group("sum_f32");
+
+    for size in [100, 1_000, 10_000, 100_000].iter() {
+        let values: Vec<f32> = (0..*size).map(|x| x as f32).collect();
+        let null_bitmap = NullBitmap::new_all_valid(*size as usize);
+
+        group.bench_with_input(BenchmarkId::new("scalar", size), size, |b, _| {
+            let backend = ScalarBackend;
+            b.iter(|| black_box(backend.sum_f32(black_box(&values), black_box(&null_bitmap))));
+        });
+
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") {
+            group.bench_with_input(BenchmarkId::new("avx2", size), size, |b, _| {
+                let backend = Avx2Backend;
+                b.iter(|| black_box(backend.sum_f32(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            group.bench_with_input(BenchmarkId::new("neon", size), size, |b, _| {
+                let backend = NeonBackend;
+                b.iter(|| black_box(backend.sum_f32(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+    }
+    group.finish();
+}
+
+fn bench_min_f32(c: &mut Criterion) {
+    let mut group = c.benchmark_group("min_f32");
+
+    for size in [100, 1_000, 10_000, 100_000].iter() {
+        let values: Vec<f32> = (0..*size).map(|x| x as f32).collect();
+        let null_bitmap = NullBitmap::new_all_valid(*size as usize);
+
+        group.bench_with_input(BenchmarkId::new("scalar", size), size, |b, _| {
+            let backend = ScalarBackend;
+            b.iter(|| black_box(backend.min_f32(black_box(&values), black_box(&null_bitmap))));
+        });
+
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") {
+            group.bench_with_input(BenchmarkId::new("avx2", size), size, |b, _| {
+                let backend = Avx2Backend;
+                b.iter(|| black_box(backend.min_f32(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            group.bench_with_input(BenchmarkId::new("neon", size), size, |b, _| {
+                let backend = NeonBackend;
+                b.iter(|| black_box(backend.min_f32(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+    }
+    group.finish();
+}
+
+fn bench_max_f32(c: &mut Criterion) {
+    let mut group = c.benchmark_group("max_f32");
+
+    for size in [100, 1_000, 10_000, 100_000].iter() {
+        let values: Vec<f32> = (0..*size).map(|x| x as f32).collect();
+        let null_bitmap = NullBitmap::new_all_valid(*size as usize);
+
+        group.bench_with_input(BenchmarkId::new("scalar", size), size, |b, _| {
+            let backend = ScalarBackend;
+            b.iter(|| black_box(backend.max_f32(black_box(&values), black_box(&null_bitmap))));
+        });
+
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") {
+            group.bench_with_input(BenchmarkId::new("avx2", size), size, |b, _| {
+                let backend = Avx2Backend;
+                b.iter(|| black_box(backend.max_f32(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            group.bench_with_input(BenchmarkId::new("neon", size), size, |b, _| {
+                let backend = NeonBackend;
+                b.iter(|| black_box(backend.max_f32(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+    }
+    group.finish();
+}
+
+fn bench_filter_f64_eq(c: &mut Criterion) {
+    let mut group = c.benchmark_group("filter_f64_eq");
+
+    for size in [100, 1_000, 10_000, 100_000].iter() {
+        let values: Vec<f64> = (0..*size).map(|x| x as f64).collect();
+        let target = (*size / 2) as f64;
+
+        group.bench_with_input(BenchmarkId::new("scalar", size), size, |b, _| {
+            let backend = ScalarBackend;
+            b.iter(|| black_box(backend.filter_f64_eq(black_box(&values), black_box(target))));
+        });
+
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") {
+            group.bench_with_input(BenchmarkId::new("avx2", size), size, |b, _| {
+                let backend = Avx2Backend;
+                b.iter(|| black_box(backend.filter_f64_eq(black_box(&values), black_box(target))));
+            });
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            group.bench_with_input(BenchmarkId::new("neon", size), size, |b, _| {
+                let backend = NeonBackend;
+                b.iter(|| black_box(backend.filter_f64_eq(black_box(&values), black_box(target))));
+            });
+        }
+    }
+    group.finish();
+}
+
+fn bench_sum_f64(c: &mut Criterion) {
+    let mut group = c.benchmark_group("sum_f64");
+
+    for size in [100, 1_000, 10_000, 100_000].iter() {
+        let values: Vec<f64> = (0..*size).map(|x| x as f64).collect();
+        let null_bitmap = NullBitmap::new_all_valid(*size as usize);
+
+        group.bench_with_input(BenchmarkId::new("scalar", size), size, |b, _| {
+            let backend = ScalarBackend;
+            b.iter(|| black_box(backend.sum_f64(black_box(&values), black_box(&null_bitmap))));
+        });
+
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") {
+            group.bench_with_input(BenchmarkId::new("avx2", size), size, |b, _| {
+                let backend = Avx2Backend;
+                b.iter(|| black_box(backend.sum_f64(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            group.bench_with_input(BenchmarkId::new("neon", size), size, |b, _| {
+                let backend = NeonBackend;
+                b.iter(|| black_box(backend.sum_f64(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+    }
+    group.finish();
+}
+
+fn bench_min_f64(c: &mut Criterion) {
+    let mut group = c.benchmark_group("min_f64");
+
+    for size in [100, 1_000, 10_000, 100_000].iter() {
+        let values: Vec<f64> = (0..*size).map(|x| x as f64).collect();
+        let null_bitmap = NullBitmap::new_all_valid(*size as usize);
+
+        group.bench_with_input(BenchmarkId::new("scalar", size), size, |b, _| {
+            let backend = ScalarBackend;
+            b.iter(|| black_box(backend.min_f64(black_box(&values), black_box(&null_bitmap))));
+        });
+
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") {
+            group.bench_with_input(BenchmarkId::new("avx2", size), size, |b, _| {
+                let backend = Avx2Backend;
+                b.iter(|| black_box(backend.min_f64(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            group.bench_with_input(BenchmarkId::new("neon", size), size, |b, _| {
+                let backend = NeonBackend;
+                b.iter(|| black_box(backend.min_f64(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+    }
+    group.finish();
+}
+
+fn bench_max_f64(c: &mut Criterion) {
+    let mut group = c.benchmark_group("max_f64");
+
+    for size in [100, 1_000, 10_000, 100_000].iter() {
+        let values: Vec<f64> = (0..*size).map(|x| x as f64).collect();
+        let null_bitmap = NullBitmap::new_all_valid(*size as usize);
+
+        group.bench_with_input(BenchmarkId::new("scalar", size), size, |b, _| {
+            let backend = ScalarBackend;
+            b.iter(|| black_box(backend.max_f64(black_box(&values), black_box(&null_bitmap))));
+        });
+
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") {
+            group.bench_with_input(BenchmarkId::new("avx2", size), size, |b, _| {
+                let backend = Avx2Backend;
+                b.iter(|| black_box(backend.max_f64(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            group.bench_with_input(BenchmarkId::new("neon", size), size, |b, _| {
+                let backend = NeonBackend;
+                b.iter(|| black_box(backend.max_f64(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_filter_eq,
@@ -205,6 +454,14 @@ criterion_group!(
     bench_sum,
     bench_min,
     bench_max,
-    bench_compare_bytes
+    bench_compare_bytes,
+    bench_filter_f32_eq,
+    bench_sum_f32,
+    bench_min_f32,
+    bench_max_f32,
+    bench_filter_f64_eq,
+    bench_sum_f64,
+    bench_min_f64,
+    bench_max_f64
 );
 criterion_main!(benches);
