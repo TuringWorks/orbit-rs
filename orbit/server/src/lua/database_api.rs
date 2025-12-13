@@ -325,12 +325,14 @@ pub fn setup_database_api(_lua: &Lua, _orbit_client: Arc<OrbitClient>) -> LuaRes
 #[cfg(test)]
 mod tests {
     use super::*;
+    use orbit_client::OrbitClientConfig;
 
     #[cfg(feature = "lua-mlua")]
     #[tokio::test]
     async fn test_database_api_registration() {
         let lua = Lua::new();
-        let client = OrbitClient::new_offline();
+        let config = OrbitClientConfig::default();
+        let client = OrbitClient::new_offline(config).await.unwrap();
         setup_database_api(&lua, Arc::new(client)).unwrap();
 
         // Verify sql table exists
