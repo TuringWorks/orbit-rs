@@ -72,6 +72,18 @@ pub struct WasmConfig {
     /// Inherit stdin/stdout/stderr in WASI
     /// Default: false (for security)
     pub wasi_inherit_stdio: bool,
+
+    /// Enable streaming I/O for large datasets
+    /// Default: true
+    pub enable_streaming: bool,
+
+    /// Chunk size for streaming operations (bytes)
+    /// Default: 64KB
+    pub streaming_chunk_size: usize,
+
+    /// Maximum total bytes to stream per function call
+    /// Default: 1GB
+    pub streaming_max_bytes: usize,
 }
 
 impl Default for WasmConfig {
@@ -93,6 +105,9 @@ impl Default for WasmConfig {
             wasi_allow_network: false,     // No network by default
             wasi_inherit_env: false,       // No env vars by default
             wasi_inherit_stdio: false,     // No stdio by default
+            enable_streaming: true,        // Enable streaming by default
+            streaming_chunk_size: 64 * 1024, // 64KB chunks
+            streaming_max_bytes: 1024 * 1024 * 1024, // 1GB max
         }
     }
 }
@@ -153,6 +168,14 @@ impl WasmConfig {
 
         if self.max_concurrent_instances == 0 {
             return Err("max_concurrent_instances must be greater than 0".to_string());
+        }
+
+        if self.streaming_chunk_size < 1024 {
+            return Err("streaming_chunk_size must be at least 1KB".to_string());
+        }
+
+        if self.streaming_max_bytes < self.streaming_chunk_size {
+            return Err("streaming_max_bytes must be at least streaming_chunk_size".to_string());
         }
 
         Ok(())

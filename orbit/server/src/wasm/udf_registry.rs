@@ -2,7 +2,7 @@
 //!
 //! This module manages the registration and execution of WASM user-defined functions.
 
-use super::runtime::{WasmError, WasmRuntime};
+use super::runtime::WasmRuntime;
 use super::types::{WasmFunctionMetadata, WasmValue};
 use crate::protocols::error::ProtocolResult;
 use crate::protocols::postgres_wire::sql::types::SqlValue;
