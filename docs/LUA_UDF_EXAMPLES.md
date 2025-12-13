@@ -418,37 +418,37 @@ return {
 ```sql
 CREATE FUNCTION calculate_progressive_tax(income DOUBLE PRECISION)
 RETURNS DOUBLE PRECISION
-LANGUAGE PLPGSQL
+LANGUAGE LUA
 AS $$
-DECLARE
-    tax DOUBLE PRECISION := 0;
-    remaining DOUBLE PRECISION := income;
-BEGIN
+function calculate_progressive_tax(income)
+    local tax = 0
+    local remaining = income
+
     -- Tier 1: 0-10000 at 10%
-    IF remaining > 10000 THEN
-        tax := tax + (10000 * 0.10);
-        remaining := remaining - 10000;
-    ELSE
-        tax := tax + (remaining * 0.10);
-        remaining := 0;
-    END IF;
+    if remaining > 10000 then
+        tax = tax + (10000 * 0.10)
+        remaining = remaining - 10000
+    else
+        tax = tax + (remaining * 0.10)
+        remaining = 0
+    end
 
     -- Tier 2: 10001-30000 at 20%
-    IF remaining > 20000 THEN
-        tax := tax + (20000 * 0.20);
-        remaining := remaining - 20000;
-    ELSIF remaining > 0 THEN
-        tax := tax + (remaining * 0.20);
-        remaining := 0;
-    END IF;
+    if remaining > 20000 then
+        tax = tax + (20000 * 0.20)
+        remaining = remaining - 20000
+    elseif remaining > 0 then
+        tax = tax + (remaining * 0.20)
+        remaining = 0
+    end
 
     -- Tier 3: 30001+ at 30%
-    IF remaining > 0 THEN
-        tax := tax + (remaining * 0.30);
-    END IF;
+    if remaining > 0 then
+        tax = tax + (remaining * 0.30)
+    end
 
-    RETURN tax;
-END;
+    return tax
+end
 $$;
 
 -- Usage
@@ -465,24 +465,34 @@ FROM employees;
 ### Example 9: JSON Data Transformation
 
 ```sql
-CREATE FUNCTION transform_user_data(user_json JSONB)
-RETURNS JSONB
-LANGUAGE PLPGSQL
+CREATE FUNCTION transform_user_data(user_json TEXT)
+RETURNS TEXT
+LANGUAGE LUA
 AS $$
-DECLARE
-    result JSONB;
-BEGIN
-    -- Transform user data
-    SELECT jsonb_build_object(
-        'id', user_json->>'id',
-        'full_name', (user_json->>'first_name') || ' ' || (user_json->>'last_name'),
-        'age', EXTRACT(YEAR FROM AGE(NOW(), (user_json->>'birthdate')::DATE)),
-        'email_domain', SPLIT_PART(user_json->>'email', '@', 2),
-        'created_at', user_json->>'created_at'
-    ) INTO result;
+function transform_user_data(user_json)
+    local json = require('cjson')
+    local user = json.decode(user_json)
 
-    RETURN result;
-END;
+    -- Calculate age
+    local birthdate = user.birthdate or ''
+    local birth_year = tonumber(birthdate:match('^(%d+)'))
+    local current_year = tonumber(os.date('%Y'))
+    local age = birth_year and (current_year - birth_year) or 0
+
+    -- Extract email domain
+    local email_domain = user.email:match('@(.+)$')
+
+    -- Transform user data
+    local result = {
+        id = user.id,
+        full_name = user.first_name .. ' ' .. user.last_name,
+        age = age,
+        email_domain = email_domain,
+        created_at = user.created_at
+    }
+
+    return json.encode(result)
+end
 $$;
 
 -- Usage
@@ -493,7 +503,7 @@ SELECT transform_user_data('{
     "birthdate": "1990-05-15",
     "email": "alice@example.com",
     "created_at": "2023-01-01T00:00:00Z"
-}'::JSONB);
+}');
 ```
 
 ---
