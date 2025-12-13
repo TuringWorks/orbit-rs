@@ -447,11 +447,11 @@ WASM UDFs now execute asynchronously, providing:
 -- Create a Lua function
 CREATE FUNCTION calculate_tax(price DOUBLE PRECISION, rate DOUBLE PRECISION)
 RETURNS DOUBLE PRECISION
-LANGUAGE PLPGSQL
+LANGUAGE LUA
 AS $$
-BEGIN
-    RETURN price * rate;
-END;
+function calculate_tax(price, rate)
+    return price * rate
+end
 $$;
 
 -- Use the function
