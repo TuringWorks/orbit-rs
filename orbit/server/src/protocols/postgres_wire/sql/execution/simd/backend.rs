@@ -26,6 +26,16 @@ pub trait SimdBackend: Send + Sync {
     fn min_i32(&self, values: &[i32], null_bitmap: &NullBitmap) -> Option<i32>;
     fn max_i32(&self, values: &[i32], null_bitmap: &NullBitmap) -> Option<i32>;
 
+    // Filter operations for i64
+    fn filter_i64_eq(&self, values: &[i64], target: i64) -> Vec<usize>;
+    fn filter_i64_lt(&self, values: &[i64], target: i64) -> Vec<usize>;
+    fn filter_i64_gt(&self, values: &[i64], target: i64) -> Vec<usize>;
+
+    // Aggregate operations for i64
+    fn sum_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64>;
+    fn min_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64>;
+    fn max_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64>;
+
     // String operations
     fn compare_bytes(&self, a: &[u8], b: &[u8]) -> bool;
     fn find_byte(&self, haystack: &[u8], needle: u8) -> Option<usize>;
@@ -90,6 +100,57 @@ impl SimdBackend for ScalarBackend {
     }
 
     fn max_i32(&self, values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> {
+        values
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &v)| null_bitmap.is_valid(i).then_some(v))
+            .max()
+    }
+
+    // i64 filter operations
+    fn filter_i64_eq(&self, values: &[i64], target: i64) -> Vec<usize> {
+        values
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &v)| (v == target).then_some(i))
+            .collect()
+    }
+
+    fn filter_i64_lt(&self, values: &[i64], target: i64) -> Vec<usize> {
+        values
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &v)| (v < target).then_some(i))
+            .collect()
+    }
+
+    fn filter_i64_gt(&self, values: &[i64], target: i64) -> Vec<usize> {
+        values
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &v)| (v > target).then_some(i))
+            .collect()
+    }
+
+    // i64 aggregate operations
+    fn sum_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
+        let sum: i64 = values
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &v)| null_bitmap.is_valid(i).then_some(v))
+            .sum();
+        Some(sum).filter(|_| values.iter().enumerate().any(|(i, _)| null_bitmap.is_valid(i)))
+    }
+
+    fn min_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
+        values
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &v)| null_bitmap.is_valid(i).then_some(v))
+            .min()
+    }
+
+    fn max_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
         values
             .iter()
             .enumerate()
@@ -165,6 +226,56 @@ impl SimdBackend for Avx2Backend {
             unsafe { max_i32_avx2(values, null_bitmap) }
         } else {
             ScalarBackend.max_i32(values, null_bitmap)
+        }
+    }
+
+    // i64 filter operations
+    fn filter_i64_eq(&self, values: &[i64], target: i64) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_i64_eq_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_i64_eq(values, target)
+        }
+    }
+
+    fn filter_i64_lt(&self, values: &[i64], target: i64) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_i64_lt_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_i64_lt(values, target)
+        }
+    }
+
+    fn filter_i64_gt(&self, values: &[i64], target: i64) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_i64_gt_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_i64_gt(values, target)
+        }
+    }
+
+    // i64 aggregate operations
+    fn sum_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { sum_i64_avx2(values, null_bitmap) }
+        } else {
+            ScalarBackend.sum_i64(values, null_bitmap)
+        }
+    }
+
+    fn min_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { min_i64_avx2(values, null_bitmap) }
+        } else {
+            ScalarBackend.min_i64(values, null_bitmap)
+        }
+    }
+
+    fn max_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { max_i64_avx2(values, null_bitmap) }
+        } else {
+            ScalarBackend.max_i64(values, null_bitmap)
         }
     }
 
@@ -513,6 +624,246 @@ unsafe fn max_i32_avx2(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
     has_value.then_some(max_val)
 }
 
+// i64 AVX2 implementations
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_i64_eq_avx2(values: &[i64], target: i64) -> Vec<usize> {
+    use std::arch::x86_64::*;
+
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_epi64x(target);
+    let mut i = 0;
+
+    // Process 4 elements at a time (256-bit / 64-bit = 4)
+    while i + 4 <= values.len() {
+        let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+        let cmp = _mm256_cmpeq_epi64(data, target_vec);
+        let mask = _mm256_movemask_pd(_mm256_castsi256_pd(cmp));
+
+        for j in 0..4 {
+            if (mask & (1 << j)) != 0 {
+                result.push(i + j);
+            }
+        }
+        i += 4;
+    }
+
+    // Handle remainder
+    for j in i..values.len() {
+        if values[j] == target {
+            result.push(j);
+        }
+    }
+
+    result
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_i64_lt_avx2(values: &[i64], target: i64) -> Vec<usize> {
+    use std::arch::x86_64::*;
+
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_epi64x(target);
+    let mut i = 0;
+
+    while i + 4 <= values.len() {
+        let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+        let cmp = _mm256_cmpgt_epi64(target_vec, data); // target > data means data < target
+        let mask = _mm256_movemask_pd(_mm256_castsi256_pd(cmp));
+
+        for j in 0..4 {
+            if (mask & (1 << j)) != 0 {
+                result.push(i + j);
+            }
+        }
+        i += 4;
+    }
+
+    // Handle remainder
+    for j in i..values.len() {
+        if values[j] < target {
+            result.push(j);
+        }
+    }
+
+    result
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_i64_gt_avx2(values: &[i64], target: i64) -> Vec<usize> {
+    use std::arch::x86_64::*;
+
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_epi64x(target);
+    let mut i = 0;
+
+    while i + 4 <= values.len() {
+        let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+        let cmp = _mm256_cmpgt_epi64(data, target_vec); // data > target
+        let mask = _mm256_movemask_pd(_mm256_castsi256_pd(cmp));
+
+        for j in 0..4 {
+            if (mask & (1 << j)) != 0 {
+                result.push(i + j);
+            }
+        }
+        i += 4;
+    }
+
+    // Handle remainder
+    for j in i..values.len() {
+        if values[j] > target {
+            result.push(j);
+        }
+    }
+
+    result
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn sum_i64_avx2(values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
+    use std::arch::x86_64::*;
+
+    if values.is_empty() {
+        return None;
+    }
+
+    let mut sum_vec = _mm256_setzero_si256();
+    let mut i = 0;
+    let mut has_value = false;
+
+    // Process 4 elements at a time
+    while i + 4 <= values.len() {
+        let all_valid = (0..4).all(|j| null_bitmap.is_valid(i + j));
+        
+        if all_valid {
+            let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+            sum_vec = _mm256_add_epi64(sum_vec, data);
+            has_value = true;
+        } else {
+            for j in i..i + 4 {
+                if null_bitmap.is_valid(j) {
+                    let val_vec = _mm256_set1_epi64x(values[j]);
+                    sum_vec = _mm256_add_epi64(sum_vec, val_vec);
+                    has_value = true;
+                }
+            }
+        }
+        i += 4;
+    }
+
+    // Extract sum from vector
+    let sum_arr: [i64; 4] = std::mem::transmute(sum_vec);
+    let mut sum: i64 = sum_arr.iter().sum();
+
+    // Handle remainder
+    for j in i..values.len() {
+        if null_bitmap.is_valid(j) {
+            sum = sum.wrapping_add(values[j]);
+            has_value = true;
+        }
+    }
+
+    has_value.then_some(sum)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn min_i64_avx2(values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
+    if values.is_empty() {
+        return None;
+    }
+
+    // Early exit for small arrays - AVX2 doesn't have native min for i64
+    if values.len() < 8 {
+        return ScalarBackend.min_i64(values, null_bitmap);
+    }
+
+    let mut min_val = i64::MAX;
+    let mut has_value = false;
+    let mut i = 0;
+
+    // Process 4 elements at a time
+    while i + 4 <= values.len() {
+        let all_valid = (0..4).all(|j| null_bitmap.is_valid(i + j));
+        
+        if all_valid {
+            for j in i..i + 4 {
+                min_val = min_val.min(values[j]);
+                has_value = true;
+            }
+        } else {
+            for j in i..i + 4 {
+                if null_bitmap.is_valid(j) {
+                    min_val = min_val.min(values[j]);
+                    has_value = true;
+                }
+            }
+        }
+        i += 4;
+    }
+
+    // Handle remainder
+    for j in i..values.len() {
+        if null_bitmap.is_valid(j) {
+            min_val = min_val.min(values[j]);
+            has_value = true;
+        }
+    }
+
+    has_value.then_some(min_val)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn max_i64_avx2(values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
+    if values.is_empty() {
+        return None;
+    }
+
+    // Early exit for small arrays - AVX2 doesn't have native max for i64
+    if values.len() < 8 {
+        return ScalarBackend.max_i64(values, null_bitmap);
+    }
+
+    let mut max_val = i64::MIN;
+    let mut has_value = false;
+    let mut i = 0;
+
+    // Process 4 elements at a time
+    while i + 4 <= values.len() {
+        let all_valid = (0..4).all(|j| null_bitmap.is_valid(i + j));
+        
+        if all_valid {
+            for j in i..i + 4 {
+                max_val = max_val.max(values[j]);
+                has_value = true;
+            }
+        } else {
+            for j in i..i + 4 {
+                if null_bitmap.is_valid(j) {
+                    max_val = max_val.max(values[j]);
+                    has_value = true;
+                }
+            }
+        }
+        i += 4;
+    }
+
+    // Handle remainder
+    for j in i..values.len() {
+        if null_bitmap.is_valid(j) {
+            max_val = max_val.max(values[j]);
+            has_value = true;
+        }
+    }
+
+    has_value.then_some(max_val)
+}
+
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2")]
@@ -570,6 +921,32 @@ impl SimdBackend for NeonBackend {
 
     fn max_i32(&self, values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> {
         unsafe { max_i32_neon(values, null_bitmap) }
+    }
+
+    // i64 filter operations
+    fn filter_i64_eq(&self, values: &[i64], target: i64) -> Vec<usize> {
+        unsafe { filter_i64_eq_neon(values, target) }
+    }
+
+    fn filter_i64_lt(&self, values: &[i64], target: i64) -> Vec<usize> {
+        unsafe { filter_i64_lt_neon(values, target) }
+    }
+
+    fn filter_i64_gt(&self, values: &[i64], target: i64) -> Vec<usize> {
+        unsafe { filter_i64_gt_neon(values, target) }
+    }
+
+    // i64 aggregate operations
+    fn sum_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
+        unsafe { sum_i64_neon(values, null_bitmap) }
+    }
+
+    fn min_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
+        unsafe { min_i64_neon(values, null_bitmap) }
+    }
+
+    fn max_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
+        unsafe { max_i64_neon(values, null_bitmap) }
     }
 
     fn compare_bytes(&self, a: &[u8], b: &[u8]) -> bool {
@@ -902,6 +1279,244 @@ unsafe fn max_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
     }
 
     has_value.then_some(result)
+}
+
+// i64 NEON implementations
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_i64_eq_neon(values: &[i64], target: i64) -> Vec<usize> {
+    use std::arch::aarch64::*;
+
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_s64(target);
+    let mut i = 0;
+
+    // Process 2 elements at a time (128-bit / 64-bit = 2)
+    while i + 2 <= values.len() {
+        let data = vld1q_s64(values[i..].as_ptr());
+        let cmp = vceqq_s64(data, target_vec);
+        
+        // Extract mask
+        let mask_arr: [u64; 2] = std::mem::transmute(cmp);
+        if mask_arr[0] != 0 {
+            result.push(i);
+        }
+        if mask_arr[1] != 0 {
+            result.push(i + 1);
+        }
+        i += 2;
+    }
+
+    // Handle remainder
+    for j in i..values.len() {
+        if values[j] == target {
+            result.push(j);
+        }
+    }
+
+    result
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_i64_lt_neon(values: &[i64], target: i64) -> Vec<usize> {
+    use std::arch::aarch64::*;
+
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_s64(target);
+    let mut i = 0;
+
+    while i + 2 <= values.len() {
+        let data = vld1q_s64(values[i..].as_ptr());
+        let cmp = vcltq_s64(data, target_vec); // data < target
+        
+        let mask_arr: [u64; 2] = std::mem::transmute(cmp);
+        if mask_arr[0] != 0 {
+            result.push(i);
+        }
+        if mask_arr[1] != 0 {
+            result.push(i + 1);
+        }
+        i += 2;
+    }
+
+    // Handle remainder
+    for j in i..values.len() {
+        if values[j] < target {
+            result.push(j);
+        }
+    }
+
+    result
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_i64_gt_neon(values: &[i64], target: i64) -> Vec<usize> {
+    use std::arch::aarch64::*;
+
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_s64(target);
+    let mut i = 0;
+
+    while i + 2 <= values.len() {
+        let data = vld1q_s64(values[i..].as_ptr());
+        let cmp = vcgtq_s64(data, target_vec); // data > target
+        
+        let mask_arr: [u64; 2] = std::mem::transmute(cmp);
+        if mask_arr[0] != 0 {
+            result.push(i);
+        }
+        if mask_arr[1] != 0 {
+            result.push(i + 1);
+        }
+        i += 2;
+    }
+
+    // Handle remainder
+    for j in i..values.len() {
+        if values[j] > target {
+            result.push(j);
+        }
+    }
+
+    result
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn sum_i64_neon(values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
+    use std::arch::aarch64::*;
+
+    if values.is_empty() {
+        return None;
+    }
+
+    let mut sum_vec = vdupq_n_s64(0);
+    let mut i = 0;
+    let mut has_value = false;
+
+    // Process 2 elements at a time
+    while i + 2 <= values.len() {
+        let all_valid = (0..2).all(|j| null_bitmap.is_valid(i + j));
+        
+        if all_valid {
+            let data = vld1q_s64(values[i..].as_ptr());
+            sum_vec = vaddq_s64(sum_vec, data);
+            has_value = true;
+        } else {
+            for j in i..i + 2 {
+                if null_bitmap.is_valid(j) {
+                    let val_vec = vdupq_n_s64(values[j]);
+                    sum_vec = vaddq_s64(sum_vec, val_vec);
+                    has_value = true;
+                }
+            }
+        }
+        i += 2;
+    }
+
+    // Extract sum from vector
+    let sum_arr: [i64; 2] = std::mem::transmute(sum_vec);
+    let mut sum: i64 = sum_arr[0].wrapping_add(sum_arr[1]);
+
+    // Handle remainder
+    for j in i..values.len() {
+        if null_bitmap.is_valid(j) {
+            sum = sum.wrapping_add(values[j]);
+            has_value = true;
+        }
+    }
+
+    has_value.then_some(sum)
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn min_i64_neon(values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
+    if values.is_empty() {
+        return None;
+    }
+
+    // Early exit for small arrays - NEON doesn't have native min for i64
+    if values.len() < 4 {
+        return ScalarBackend.min_i64(values, null_bitmap);
+    }
+
+    let mut min_val = i64::MAX;
+    let mut has_value = false;
+    let mut i = 0;
+
+    // Process 2 elements at a time
+    while i + 2 <= values.len() {
+        let all_valid = (0..2).all(|j| null_bitmap.is_valid(i + j));
+        
+        if all_valid {
+            for j in i..i + 2 {
+                min_val = min_val.min(values[j]);
+                has_value = true;
+            }
+        } else {
+            for j in i..i + 2 {
+                if null_bitmap.is_valid(j) {
+                    min_val = min_val.min(values[j]);
+                    has_value = true;
+                }
+            }
+        }
+        i += 2;
+    }
+
+    // Handle remainder
+    for j in i..values.len() {
+        if null_bitmap.is_valid(j) {
+            min_val = min_val.min(values[j]);
+            has_value = true;
+        }
+    }
+
+    has_value.then_some(min_val)
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn max_i64_neon(values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
+    if values.is_empty() {
+        return None;
+    }
+
+    // Early exit for small arrays - NEON doesn't have native max for i64
+    if values.len() < 4 {
+        return ScalarBackend.max_i64(values, null_bitmap);
+    }
+
+    let mut max_val = i64::MIN;
+    let mut has_value = false;
+    let mut i = 0;
+
+    // Process 2 elements at a time
+    while i + 2 <= values.len() {
+        let all_valid = (0..2).all(|j| null_bitmap.is_valid(i + j));
+        
+        if all_valid {
+            for j in i..i + 2 {
+                max_val = max_val.max(values[j]);
+                has_value = true;
+            }
+        } else {
+            for j in i..i + 2 {
+                if null_bitmap.is_valid(j) {
+                    max_val = max_val.max(values[j]);
+                    has_value = true;
+                }
+            }
+        }
+        i += 2;
+    }
+
+    // Handle remainder
+    for j in i..values.len() {
+        if null_bitmap.is_valid(j) {
+            max_val = max_val.max(values[j]);
+            has_value = true;
+        }
+    }
+
+    has_value.then_some(max_val)
 }
 
 
