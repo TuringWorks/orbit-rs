@@ -36,6 +36,26 @@ pub trait SimdBackend: Send + Sync {
     fn min_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64>;
     fn max_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64>;
 
+    // Filter operations for f32
+    fn filter_f32_eq(&self, values: &[f32], target: f32) -> Vec<usize>;
+    fn filter_f32_lt(&self, values: &[f32], target: f32) -> Vec<usize>;
+    fn filter_f32_gt(&self, values: &[f32], target: f32) -> Vec<usize>;
+
+    // Aggregate operations for f32
+    fn sum_f32(&self, values: &[f32], null_bitmap: &NullBitmap) -> Option<f32>;
+    fn min_f32(&self, values: &[f32], null_bitmap: &NullBitmap) -> Option<f32>;
+    fn max_f32(&self, values: &[f32], null_bitmap: &NullBitmap) -> Option<f32>;
+
+    // Filter operations for f64
+    fn filter_f64_eq(&self, values: &[f64], target: f64) -> Vec<usize>;
+    fn filter_f64_lt(&self, values: &[f64], target: f64) -> Vec<usize>;
+    fn filter_f64_gt(&self, values: &[f64], target: f64) -> Vec<usize>;
+
+    // Aggregate operations for f64
+    fn sum_f64(&self, values: &[f64], null_bitmap: &NullBitmap) -> Option<f64>;
+    fn min_f64(&self, values: &[f64], null_bitmap: &NullBitmap) -> Option<f64>;
+    fn max_f64(&self, values: &[f64], null_bitmap: &NullBitmap) -> Option<f64>;
+
     // String operations
     fn compare_bytes(&self, a: &[u8], b: &[u8]) -> bool;
     fn find_byte(&self, haystack: &[u8], needle: u8) -> Option<usize>;
