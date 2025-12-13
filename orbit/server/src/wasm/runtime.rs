@@ -77,6 +77,9 @@ impl WasmRuntime {
         wasm_config.async_support(true);
         wasm_config.epoch_interruption(true);
 
+        // Enable SIMD for vectorized operations
+        wasm_config.wasm_simd(config.enable_simd);
+
         // Set memory limits
         wasm_config.max_wasm_stack(1024 * 1024); // 1MB stack
 

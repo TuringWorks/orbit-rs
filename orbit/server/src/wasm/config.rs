@@ -51,6 +51,11 @@ pub struct WasmConfig {
     /// Maximum concurrent WASM instances
     /// Default: 100
     pub max_concurrent_instances: usize,
+
+    /// Enable SIMD (Single Instruction Multiple Data) support
+    /// Allows vectorized operations for better performance
+    /// Default: true
+    pub enable_simd: bool,
 }
 
 impl Default for WasmConfig {
@@ -67,6 +72,7 @@ impl Default for WasmConfig {
             max_module_size: 10 * 1024 * 1024, // 10MB
             enable_parallel: true,
             max_concurrent_instances: 100,
+            enable_simd: true, // Enable SIMD for better performance
         }
     }
 }
