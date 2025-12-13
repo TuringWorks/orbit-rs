@@ -16,6 +16,7 @@
 //! - **Zero-Cost Abstractions**: Compile-time monomorphization where possible
 
 pub mod aggregates;
+pub mod backend;
 pub mod filters;
 
 use super::NullBitmap;

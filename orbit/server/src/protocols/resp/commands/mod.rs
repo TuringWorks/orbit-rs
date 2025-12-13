@@ -9,6 +9,7 @@ pub mod functions;
 pub mod graph;
 pub mod graphrag;
 pub mod hash;
+pub mod hyperloglog;
 pub mod list;
 pub mod pubsub;
 pub mod scripting;
@@ -35,9 +36,10 @@ mod handler {
     use super::{
         acl::AclCommands, cluster::ClusterCommands, connection::ConnectionCommands,
         functions::FunctionCommands, graph::GraphCommands, graphrag::GraphRAGCommands,
-        hash::HashCommands, list::ListCommands, pubsub::PubSubCommands, scripting::ScriptingCommands,
-        server::ServerCommands, set::SetCommands, sorted_set::SortedSetCommands,
-        stream::StreamCommands, string::StringCommands, time_series::TimeSeriesCommands,
+        hash::HashCommands, hyperloglog::HyperLogLogCommands, list::ListCommands,
+        pubsub::PubSubCommands, scripting::ScriptingCommands, server::ServerCommands,
+        set::SetCommands, sorted_set::SortedSetCommands, stream::StreamCommands,
+        string::StringCommands, time_series::TimeSeriesCommands,
         transactions::TransactionCommands, vector::VectorCommands,
     };
     use crate::protocols::error::ProtocolResult;
@@ -56,6 +58,7 @@ mod handler {
         Scripting,
         String,
         Hash,
+        HyperLogLog,
         List,
         PubSub,
         Set,
@@ -85,6 +88,7 @@ mod handler {
         scripting: ScriptingCommands,
         string: StringCommands,
         hash: HashCommands,
+        hyperloglog: HyperLogLogCommands,
         list: ListCommands,
         pubsub: PubSubCommands,
         set: SetCommands,
@@ -126,6 +130,7 @@ mod handler {
                 scripting: ScriptingCommands::new(orbit_client.clone(), local_registry.clone()),
                 string: StringCommands::new(orbit_client.clone(), local_registry.clone()),
                 hash: HashCommands::new(orbit_client.clone(), local_registry.clone()),
+                hyperloglog: HyperLogLogCommands::new(orbit_client.clone(), local_registry.clone()),
                 list: ListCommands::new(orbit_client.clone(), local_registry.clone()),
                 pubsub: PubSubCommands::new(orbit_client.clone(), local_registry.clone()),
                 set: SetCommands::new(orbit_client.clone(), local_registry.clone()),
@@ -188,6 +193,9 @@ mod handler {
                 }
                 CommandCategory::Hash => {
                     CommandHandlerTrait::handle(&self.hash, &command_name, &args).await
+                }
+                CommandCategory::HyperLogLog => {
+                    CommandHandlerTrait::handle(&self.hyperloglog, &command_name, &args).await
                 }
                 CommandCategory::List => {
                     CommandHandlerTrait::handle(&self.list, &command_name, &args).await
@@ -283,6 +291,9 @@ mod handler {
                 // Hash commands
                 "HGET" | "HSET" | "HGETALL" | "HMGET" | "HMSET" | "HDEL" | "HEXISTS" | "HKEYS"
                 | "HVALS" | "HLEN" | "HINCRBY" => CommandCategory::Hash,
+
+                // HyperLogLog commands
+                "PFADD" | "PFCOUNT" | "PFMERGE" => CommandCategory::HyperLogLog,
 
                 // List commands
                 "LPUSH" | "RPUSH" | "LPOP" | "RPOP" | "LRANGE" | "LLEN" | "LINDEX" | "LSET"

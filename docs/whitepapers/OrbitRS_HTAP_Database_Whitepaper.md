@@ -86,7 +86,7 @@ Orbit-RS already possesses significant HTAP-enabling capabilities:
 #### 2.1.1 Three-Tier Hybrid Storage Architecture ✅
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────┐
+┌────────────────────────────────────────────────────────────────────────┐
 │  HOT TIER (0-48h)       │  WARM TIER (2-30d)   │  COLD TIER (>30d)     │
 │  • Row-based (RocksDB)  │  • Columnar batches  │  • Apache Iceberg     │
 │  • HashMap index        │  • In-memory         │  • Parquet files      │
@@ -95,7 +95,7 @@ Orbit-RS already possesses significant HTAP-enabling capabilities:
 │  • Writes/Updates       │  • Analytics ready   │  • Time travel        │
 │  • <1ms latency         │  • 10-100ms latency  │  • Schema evolution   │
 │  • RocksDB LSM-tree     │  • Arrow format      │  • 100-1000x speedup  │
-└─────────────────────────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 **HTAP Relevance:**

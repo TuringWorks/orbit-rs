@@ -50,6 +50,9 @@ pub mod mlua_runtime;
 #[cfg(feature = "lua-mlua")]
 pub mod redis_api;
 
+#[cfg(feature = "lua-mlua")]
+pub mod database_api;
+
 // Re-exports for convenience
 pub use types::{LuaError, LuaFunction, LuaParameter, LuaResult, LuaValue};
 pub use security::{
@@ -62,6 +65,9 @@ pub use mlua_runtime::MluaRuntime;
 
 #[cfg(feature = "lua-mlua")]
 pub use redis_api::{setup_redis_api, RedisApi};
+
+#[cfg(feature = "lua-mlua")]
+pub use database_api::{setup_database_api, DatabaseApi};
 
 // Constants
 pub const LUA_ENGINE_VERSION: &str = "0.1.0";
