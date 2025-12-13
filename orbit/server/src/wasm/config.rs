@@ -84,6 +84,18 @@ pub struct WasmConfig {
     /// Maximum total bytes to stream per function call
     /// Default: 1GB
     pub streaming_max_bytes: usize,
+
+    /// Enable multi-threading support (WASM threads proposal)
+    /// Default: true
+    pub enable_threads: bool,
+
+    /// Maximum number of threads per WASM instance
+    /// Default: 4
+    pub max_threads: usize,
+
+    /// Thread stack size (bytes)
+    /// Default: 1MB
+    pub thread_stack_size: usize,
 }
 
 impl Default for WasmConfig {
@@ -108,6 +120,9 @@ impl Default for WasmConfig {
             enable_streaming: true,        // Enable streaming by default
             streaming_chunk_size: 64 * 1024, // 64KB chunks
             streaming_max_bytes: 1024 * 1024 * 1024, // 1GB max
+            enable_threads: true,          // Enable multi-threading
+            max_threads: 4,                // 4 threads per instance
+            thread_stack_size: 1024 * 1024, // 1MB stack per thread
         }
     }
 }
@@ -129,6 +144,9 @@ impl WasmConfig {
             wasi_allow_network: true,              // Allow network in dev
             wasi_inherit_env: true,                // Inherit env vars in dev
             wasi_inherit_stdio: true,              // Inherit stdio in dev
+            enable_threads: true,                  // Enable threading in dev
+            max_threads: 8,                        // More threads in dev
+            thread_stack_size: 2 * 1024 * 1024,    // 2MB stack in dev
             ..Default::default()
         }
     }
@@ -140,6 +158,9 @@ impl WasmConfig {
             timeout: Duration::from_secs(10),    // 10 seconds
             enable_wasi: false,                  // No WASI in prod
             fuel_limit: 500_000_000,             // 500 million
+            enable_threads: true,                // Enable threading
+            max_threads: 2,                      // Conservative thread count
+            thread_stack_size: 512 * 1024,       // 512KB stack in prod
             ..Default::default()
         }
     }
@@ -176,6 +197,18 @@ impl WasmConfig {
 
         if self.streaming_max_bytes < self.streaming_chunk_size {
             return Err("streaming_max_bytes must be at least streaming_chunk_size".to_string());
+        }
+
+        if self.max_threads == 0 {
+            return Err("max_threads must be greater than 0".to_string());
+        }
+
+        if self.max_threads > 64 {
+            return Err("max_threads must not exceed 64".to_string());
+        }
+
+        if self.thread_stack_size < 64 * 1024 {
+            return Err("thread_stack_size must be at least 64KB".to_string());
         }
 
         Ok(())

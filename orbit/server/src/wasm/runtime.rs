@@ -100,6 +100,12 @@ impl WasmRuntime {
         // Enable SIMD for vectorized operations
         wasm_config.wasm_simd(config.enable_simd);
 
+        // Enable multi-threading (WASM threads proposal)
+        if config.enable_threads {
+            wasm_config.wasm_threads(true);
+            wasm_config.thread_stack_size(config.thread_stack_size);
+        }
+
         // Set memory limits
         wasm_config.max_wasm_stack(1024 * 1024); // 1MB stack
 
@@ -211,9 +217,16 @@ impl WasmRuntime {
         let module = self.compile_module(wasm_binary).await?;
 
         // Create store limits
-        let limits = StoreLimitsBuilder::new()
-            .memory_size(self.config.max_memory_bytes)
-            .build();
+        let mut limits_builder = StoreLimitsBuilder::new();
+        limits_builder.memory_size(self.config.max_memory_bytes);
+
+        // Set thread limits if threading is enabled
+        if self.config.enable_threads {
+            limits_builder.instances(self.config.max_threads);
+            limits_builder.tables(self.config.max_threads);
+        }
+
+        let limits = limits_builder.build();
 
         // Create store data with optional WASI context
         #[cfg(feature = "wasm-wasi")]
@@ -445,9 +458,16 @@ impl WasmRuntime {
         use super::types::WasmValue;
 
         // Create store limits
-        let limits = StoreLimitsBuilder::new()
-            .memory_size(self.config.max_memory_bytes)
-            .build();
+        let mut limits_builder = StoreLimitsBuilder::new();
+        limits_builder.memory_size(self.config.max_memory_bytes);
+
+        // Set thread limits if threading is enabled
+        if self.config.enable_threads {
+            limits_builder.instances(self.config.max_threads);
+            limits_builder.tables(self.config.max_threads);
+        }
+
+        let limits = limits_builder.build();
 
         // Create store data with optional WASI context
         #[cfg(feature = "wasm-wasi")]
