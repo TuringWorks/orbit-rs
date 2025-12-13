@@ -11,6 +11,8 @@ pub mod lua;
 pub mod mesh;
 #[cfg(feature = "python-udf")]
 pub mod python;
+#[cfg(feature = "wasm-udf")]
+pub mod wasm;
 pub mod persistence;
 pub mod protocols;
 pub mod server;

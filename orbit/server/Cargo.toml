@@ -58,6 +58,9 @@ dashmap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 rmp-serde = "1.3"  # MessagePack serialization for Python UDF communication
+# WASM UDF Support
+wasmtime = { version = "28.0", optional = true, features = ["async"] }  # WASM runtime
+lru = "0.12"  # LRU cache for compiled WASM modules
 bincode = "1.3"
 tracing.workspace = true
 tracing-subscriber.workspace = true
@@ -162,6 +165,7 @@ default = [
     "fts",
     "lua-redis",  # Redis Lua scripting support
     "python-postgres",  # PostgreSQL Python UDF support
+    "wasm-postgres",  # PostgreSQL WASM UDF support
 ]
 
 # Core System Features
@@ -281,6 +285,13 @@ python-postgres = ["python-udf", "protocol-postgres"]  # PL/Python for PostgreSQ
 python-mysql = ["python-udf", "protocol-mysql"]        # Python procedures for MySQL
 python-redis = ["python-udf", "protocol-redis"]        # Python UDFs for Redis
 python-all = ["python-postgres", "python-mysql", "python-redis"]  # All Python features
+
+# WASM UDF features
+wasm-udf = ["wasmtime"]                                 # Base WASM UDF support
+wasm-postgres = ["wasm-udf", "protocol-postgres"]       # PL/WASM for PostgreSQL
+wasm-mysql = ["wasm-udf", "protocol-mysql"]             # WASM procedures for MySQL
+wasm-redis = ["wasm-udf", "protocol-redis"]             # WASM UDFs for Redis
+wasm-all = ["wasm-postgres", "wasm-mysql", "wasm-redis"]  # All WASM features
 
 [dev-dependencies]
 mockall.workspace = true
