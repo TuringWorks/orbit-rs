@@ -2,8 +2,7 @@
 
 **Target**: Full PostgreSQL 18 Wire Protocol Compatibility
 **Reference**: https://www.postgresql.org/docs/18/index.html
-**Last Updated**: 2025-12-08
-**Current Estimated Coverage**: ~90%
+**Last Updated**: 2025-12-13
 **Current Estimated Coverage**: ~85%
 
 ---
