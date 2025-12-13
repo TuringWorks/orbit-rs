@@ -43,7 +43,7 @@ fn sql_value_to_udf_sql(val: SqlValue) -> UdfSqlValue {
         SqlValue::DoublePrecision(f) => UdfSqlValue::Double(f),
         SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => UdfSqlValue::Text(s),
         SqlValue::Bytea(b) => UdfSqlValue::Bytea(b),
-        SqlValue::Timestamp(ts) => UdfSqlValue::Timestamp(ts.timestamp()),
+        SqlValue::Timestamp(ts) => UdfSqlValue::Timestamp(ts.and_utc().timestamp()),
         SqlValue::Date(d) => UdfSqlValue::Date(d.num_days_from_ce()),
         SqlValue::Time(t) => {
             // Convert NaiveTime to microseconds - use format/parse to avoid private methods
