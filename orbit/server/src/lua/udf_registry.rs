@@ -221,7 +221,7 @@ impl UdfRegistry {
         // For Lua functions, unregister from runtime
         #[cfg(feature = "lua-mlua")]
         if metadata.runtime == UdfRuntime::Lua {
-            self.lua_runtime.unregister_function(&metadata.name).await?;
+            // TODO: self.lua_runtime.unregister_function(&metadata.name).await?;
         }
 
         Ok(())
@@ -309,7 +309,7 @@ impl UdfRegistry {
         // Call function
         let result = self
             .lua_runtime
-            .call_function(&metadata.name, &lua_args)
+            .call_function(&metadata.name, &[], &lua_args)
             .await?;
 
         // Convert result back to SQL
@@ -385,9 +385,14 @@ pub fn sql_to_lua(sql: SqlValue) -> LuaValue {
         SqlValue::Time(t) => LuaValue::Integer(t),
         SqlValue::Interval(i) => LuaValue::Integer(i),
         SqlValue::Array(arr) => LuaValue::Array(arr.into_iter().map(sql_to_lua).collect()),
-        SqlValue::Json(s) | SqlValue::Jsonb(_) => {
+        SqlValue::Json(s) => {
             // Parse JSON and convert to Lua table
             // For now, just return as string
+            LuaValue::String(s)
+        }
+        SqlValue::Jsonb(bytes) => {
+            // For JSONB, convert to string first
+            let s = String::from_utf8_lossy(&bytes).to_string();
             LuaValue::String(s)
         }
         SqlValue::Uuid(u) => LuaValue::String(u.to_string()),

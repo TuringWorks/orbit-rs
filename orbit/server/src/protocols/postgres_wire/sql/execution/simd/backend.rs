@@ -153,11 +153,19 @@ impl SimdBackend for Avx2Backend {
     }
 
     fn min_i32(&self, values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> {
-        ScalarBackend.min_i32(values, null_bitmap) // TODO: SIMD implementation
+        if is_x86_feature_detected!("avx2") {
+            unsafe { min_i32_avx2(values, null_bitmap) }
+        } else {
+            ScalarBackend.min_i32(values, null_bitmap)
+        }
     }
 
     fn max_i32(&self, values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> {
-        ScalarBackend.max_i32(values, null_bitmap) // TODO: SIMD implementation
+        if is_x86_feature_detected!("avx2") {
+            unsafe { max_i32_avx2(values, null_bitmap) }
+        } else {
+            ScalarBackend.max_i32(values, null_bitmap)
+        }
     }
 
     fn compare_bytes(&self, a: &[u8], b: &[u8]) -> bool {
@@ -355,6 +363,159 @@ unsafe fn sum_i32_avx2(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
 
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2")]
+unsafe fn min_i32_avx2(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> {
+    use std::arch::x86_64::*;
+
+    if values.is_empty() {
+        return None;
+    }
+
+    // Early exit for small datasets
+    if values.len() < 16 {
+        return ScalarBackend.min_i32(values, null_bitmap);
+    }
+
+    let mut min_vec = _mm256_set1_epi32(i32::MAX);
+    let mut has_value = false;
+    let mut i = 0;
+
+    // Process in chunks of 32
+    while i + 32 <= values.len() {
+        let all_valid = (i..i + 32).all(|idx| null_bitmap.is_valid(idx));
+
+        if all_valid {
+            for _ in 0..4 {
+                let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+                min_vec = _mm256_min_epi32(min_vec, data);
+                i += 8;
+            }
+            has_value = true;
+        } else {
+            for j in i..i + 32 {
+                if null_bitmap.is_valid(j) {
+                    let val_vec = _mm256_set1_epi32(values[j]);
+                    min_vec = _mm256_min_epi32(min_vec, val_vec);
+                    has_value = true;
+                }
+            }
+            i += 32;
+        }
+    }
+
+    // Process remaining in groups of 8
+    while i + 8 <= values.len() {
+        let all_valid = (i..i + 8).all(|idx| null_bitmap.is_valid(idx));
+
+        if all_valid {
+            let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+            min_vec = _mm256_min_epi32(min_vec, data);
+            has_value = true;
+        } else {
+            for j in i..i + 8 {
+                if null_bitmap.is_valid(j) {
+                    let val_vec = _mm256_set1_epi32(values[j]);
+                    min_vec = _mm256_min_epi32(min_vec, val_vec);
+                    has_value = true;
+                }
+            }
+        }
+        i += 8;
+    }
+
+    // Extract minimum from vector
+    let min_arr: [i32; 8] = std::mem::transmute(min_vec);
+    let mut min_val = *min_arr.iter().min().unwrap();
+
+    // Handle remainder
+    for j in i..values.len() {
+        if null_bitmap.is_valid(j) {
+            min_val = min_val.min(values[j]);
+            has_value = true;
+        }
+    }
+
+    has_value.then_some(min_val)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn max_i32_avx2(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> {
+    use std::arch::x86_64::*;
+
+    if values.is_empty() {
+        return None;
+    }
+
+    // Early exit for small datasets
+    if values.len() < 16 {
+        return ScalarBackend.max_i32(values, null_bitmap);
+    }
+
+    let mut max_vec = _mm256_set1_epi32(i32::MIN);
+    let mut has_value = false;
+    let mut i = 0;
+
+    // Process in chunks of 32
+    while i + 32 <= values.len() {
+        let all_valid = (i..i + 32).all(|idx| null_bitmap.is_valid(idx));
+
+        if all_valid {
+            for _ in 0..4 {
+                let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+                max_vec = _mm256_max_epi32(max_vec, data);
+                i += 8;
+            }
+            has_value = true;
+        } else {
+            for j in i..i + 32 {
+                if null_bitmap.is_valid(j) {
+                    let val_vec = _mm256_set1_epi32(values[j]);
+                    max_vec = _mm256_max_epi32(max_vec, val_vec);
+                    has_value = true;
+                }
+            }
+            i += 32;
+        }
+    }
+
+    // Process remaining in groups of 8
+    while i + 8 <= values.len() {
+        let all_valid = (i..i + 8).all(|idx| null_bitmap.is_valid(idx));
+
+        if all_valid {
+            let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+            max_vec = _mm256_max_epi32(max_vec, data);
+            has_value = true;
+        } else {
+            for j in i..i + 8 {
+                if null_bitmap.is_valid(j) {
+                    let val_vec = _mm256_set1_epi32(values[j]);
+                    max_vec = _mm256_max_epi32(max_vec, val_vec);
+                    has_value = true;
+                }
+            }
+        }
+        i += 8;
+    }
+
+    // Extract maximum from vector
+    let max_arr: [i32; 8] = std::mem::transmute(max_vec);
+    let mut max_val = *max_arr.iter().max().unwrap();
+
+    // Handle remainder
+    for j in i..values.len() {
+        if null_bitmap.is_valid(j) {
+            max_val = max_val.max(values[j]);
+            has_value = true;
+        }
+    }
+
+    has_value.then_some(max_val)
+}
+
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
 unsafe fn compare_bytes_avx2(a: &[u8], b: &[u8]) -> bool {
     use std::arch::x86_64::*;
 
@@ -404,11 +565,11 @@ impl SimdBackend for NeonBackend {
     }
 
     fn min_i32(&self, values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> {
-        ScalarBackend.min_i32(values, null_bitmap)
+        unsafe { min_i32_neon(values, null_bitmap) }
     }
 
     fn max_i32(&self, values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> {
-        ScalarBackend.max_i32(values, null_bitmap)
+        unsafe { max_i32_neon(values, null_bitmap) }
     }
 
     fn compare_bytes(&self, a: &[u8], b: &[u8]) -> bool {
@@ -594,6 +755,157 @@ unsafe fn sum_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
 }
 
 #[cfg(target_arch = "aarch64")]
+unsafe fn min_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> {
+    use std::arch::aarch64::*;
+
+    if values.is_empty() {
+        return None;
+    }
+
+    // Early exit for small datasets
+    if values.len() < 16 {
+        return ScalarBackend.min_i32(values, null_bitmap);
+    }
+
+    let mut min_vec = vdupq_n_s32(i32::MAX);
+    let mut has_value = false;
+    let mut i = 0;
+
+    // Process in chunks of 16
+    while i + 16 <= values.len() {
+        let all_valid = (i..i + 16).all(|idx| null_bitmap.is_valid(idx));
+
+        if all_valid {
+            for _ in 0..4 {
+                let data = vld1q_s32(values[i..].as_ptr());
+                min_vec = vminq_s32(min_vec, data);
+                i += 4;
+            }
+            has_value = true;
+        } else {
+            for j in i..i + 16 {
+                if null_bitmap.is_valid(j) {
+                    let val_vec = vdupq_n_s32(values[j]);
+                    min_vec = vminq_s32(min_vec, val_vec);
+                    has_value = true;
+                }
+            }
+            i += 16;
+        }
+    }
+
+    // Process remaining in groups of 4
+    while i + 4 <= values.len() {
+        let all_valid = (i..i + 4).all(|idx| null_bitmap.is_valid(idx));
+
+        if all_valid {
+            let data = vld1q_s32(values[i..].as_ptr());
+            min_vec = vminq_s32(min_vec, data);
+            has_value = true;
+        } else {
+            for j in i..i + 4 {
+                if null_bitmap.is_valid(j) {
+                    let val_vec = vdupq_n_s32(values[j]);
+                    min_vec = vminq_s32(min_vec, val_vec);
+                    has_value = true;
+                }
+            }
+        }
+        i += 4;
+    }
+
+    // Extract minimum using horizontal min
+    let min_val = vminvq_s32(min_vec);
+    let mut result = min_val;
+
+    // Handle remainder
+    for j in i..values.len() {
+        if null_bitmap.is_valid(j) {
+            result = result.min(values[j]);
+            has_value = true;
+        }
+    }
+
+    has_value.then_some(result)
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn max_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> {
+    use std::arch::aarch64::*;
+
+    if values.is_empty() {
+        return None;
+    }
+
+    // Early exit for small datasets
+    if values.len() < 16 {
+        return ScalarBackend.max_i32(values, null_bitmap);
+    }
+
+    let mut max_vec = vdupq_n_s32(i32::MIN);
+    let mut has_value = false;
+    let mut i = 0;
+
+    // Process in chunks of 16
+    while i + 16 <= values.len() {
+        let all_valid = (i..i + 16).all(|idx| null_bitmap.is_valid(idx));
+
+        if all_valid {
+            for _ in 0..4 {
+                let data = vld1q_s32(values[i..].as_ptr());
+                max_vec = vmaxq_s32(max_vec, data);
+                i += 4;
+            }
+            has_value = true;
+        } else {
+            for j in i..i + 16 {
+                if null_bitmap.is_valid(j) {
+                    let val_vec = vdupq_n_s32(values[j]);
+                    max_vec = vmaxq_s32(max_vec, val_vec);
+                    has_value = true;
+                }
+            }
+            i += 16;
+        }
+    }
+
+    // Process remaining in groups of 4
+    while i + 4 <= values.len() {
+        let all_valid = (i..i + 4).all(|idx| null_bitmap.is_valid(idx));
+
+        if all_valid {
+            let data = vld1q_s32(values[i..].as_ptr());
+            max_vec = vmaxq_s32(max_vec, data);
+            has_value = true;
+        } else {
+            for j in i..i + 4 {
+                if null_bitmap.is_valid(j) {
+                    let val_vec = vdupq_n_s32(values[j]);
+                    max_vec = vmaxq_s32(max_vec, val_vec);
+                    has_value = true;
+                }
+            }
+        }
+        i += 4;
+    }
+
+    // Extract maximum using horizontal max
+    let max_val = vmaxvq_s32(max_vec);
+    let mut result = max_val;
+
+    // Handle remainder
+    for j in i..values.len() {
+        if null_bitmap.is_valid(j) {
+            result = result.max(values[j]);
+            has_value = true;
+        }
+    }
+
+    has_value.then_some(result)
+}
+
+
+#[cfg(target_arch = "aarch64")]
 unsafe fn compare_bytes_neon(a: &[u8], b: &[u8]) -> bool {
     use std::arch::aarch64::*;
 
@@ -691,5 +1003,33 @@ mod tests {
 
         assert!(backend.compare_bytes(a, b));
         assert!(!backend.compare_bytes(a, c));
+    }
+
+    #[test]
+    fn test_min_max_correctness() {
+        let backend = get_simd_backend();
+        let values: Vec<i32> = vec![5, 2, 8, 1, 9, 3, 7, 4, 6];
+        let null_bitmap = NullBitmap::new_all_valid(9);
+
+        let min_result = backend.min_i32(&values, &null_bitmap);
+        assert_eq!(min_result, Some(1));
+
+        let max_result = backend.max_i32(&values, &null_bitmap);
+        assert_eq!(max_result, Some(9));
+    }
+
+    #[test]
+    fn test_min_max_with_nulls() {
+        let backend = get_simd_backend();
+        let values: Vec<i32> = vec![5, 2, 8, 1, 9, 3, 7, 4, 6];
+        let mut null_bitmap = NullBitmap::new_all_valid(9);
+        null_bitmap.set_null(3); // Exclude the minimum value (1)
+        null_bitmap.set_null(4); // Exclude the maximum value (9)
+
+        let min_result = backend.min_i32(&values, &null_bitmap);
+        assert_eq!(min_result, Some(2));
+
+        let max_result = backend.max_i32(&values, &null_bitmap);
+        assert_eq!(max_result, Some(8));
     }
 }

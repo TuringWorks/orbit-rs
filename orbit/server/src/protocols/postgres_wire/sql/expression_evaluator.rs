@@ -28,6 +28,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
+#[cfg(feature = "lua-mlua")]
+use crate::lua::udf_registry::{UdfRegistry, sql_to_lua, lua_to_sql, SqlValue as UdfSqlValue};
+
 /// Sequence accessor trait for sequence function evaluation
 /// This allows the expression evaluator to access and modify sequences
 /// without directly depending on the executor's implementation.
@@ -267,12 +270,17 @@ pub struct ExpressionEvaluator {
     aggregates: HashMap<String, AggregateState>,
     /// Optional sequence accessor for nextval/currval/setval/lastval functions
     sequence_accessor: Option<Arc<dyn SequenceAccessor>>,
+    /// Optional UDF registry for user-defined functions (Lua/JS)
+    #[cfg(feature = "lua-mlua")]
+    udf_registry: Option<Arc<UdfRegistry>>,
 }
 
 impl ExpressionEvaluator {
     pub fn new() -> Self {
         Self {
             aggregates: HashMap::new(),
+            #[cfg(feature = "lua-mlua")]
+            udf_registry: None,
             sequence_accessor: None,
         }
     }
@@ -282,9 +290,27 @@ impl ExpressionEvaluator {
         Self {
             aggregates: HashMap::new(),
             sequence_accessor: Some(sequence_accessor),
+            #[cfg(feature = "lua-mlua")]
+            udf_registry: None,
         }
     }
 
+
+    /// Create an expression evaluator with a UDF registry
+    #[cfg(feature = "lua-mlua")]
+    pub fn with_udf_registry(udf_registry: Arc<UdfRegistry>) -> Self {
+        Self {
+            aggregates: HashMap::new(),
+            sequence_accessor: None,
+            udf_registry: Some(udf_registry),
+        }
+    }
+
+    /// Set the UDF registry
+    #[cfg(feature = "lua-mlua")]
+    pub fn set_udf_registry(&mut self, udf_registry: Arc<UdfRegistry>) {
+        self.udf_registry = Some(udf_registry);
+    }
     /// Set the sequence accessor
     pub fn set_sequence_accessor(&mut self, accessor: Arc<dyn SequenceAccessor>) {
         self.sequence_accessor = Some(accessor);
@@ -946,7 +972,42 @@ impl ExpressionEvaluator {
             "TS_FILTER" => self.evaluate_ts_filter(&args),
             "TSQUERY_PHRASE" => self.evaluate_tsquery_phrase(&args),
 
-            _ => Err(ProtocolError::not_implemented("Function", &func_name)),
+            _ => {
+                // Check if it's a user-defined function (UDF)
+                #[cfg(feature = "lua-mlua")]
+                if let Some(ref udf_registry) = self.udf_registry {
+                    // Check if UDF exists
+                    let udf_exists = tokio::runtime::Handle::try_current()
+                        .ok()
+                        .and_then(|_| {
+                            tokio::task::block_in_place(|| {
+                                tokio::runtime::Handle::current().block_on(async {
+                                    udf_registry.exists(&func_name).await
+                                })
+                            })
+                        })
+                        .unwrap_or(false);
+
+                    if udf_exists {
+                        // Convert args to UDF SQL values
+                        let udf_args: Vec<UdfSqlValue> = args.into_iter().map(sql_value_to_udf_sql).collect();
+
+                        // Call the UDF
+                        let result = tokio::task::block_in_place(|| {
+                            tokio::runtime::Handle::current().block_on(async {
+                                udf_registry.call_udf(&func_name, udf_args).await
+                            })
+                        });
+
+                        return match result {
+                            Ok(udf_result) => Ok(udf_sql_to_sql_value(udf_result)),
+                            Err(e) => Err(ProtocolError::Other(format!("UDF error: {}", e))),
+                        };
+                    }
+                }
+
+                Err(ProtocolError::not_implemented("Function", &func_name))
+            }
         }
     }
 
