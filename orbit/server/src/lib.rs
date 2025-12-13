@@ -7,7 +7,6 @@ pub mod fts;
 #[cfg(any(feature = "js-boa", feature = "js-quickjs"))]
 pub mod js;
 pub mod load_balancer;
-#[cfg(feature = "lua-mlua")]
 pub mod lua;
 pub mod mesh;
 #[cfg(feature = "python-udf")]

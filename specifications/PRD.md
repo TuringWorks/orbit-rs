@@ -6,7 +6,7 @@ category: "architecture"
 permalink: /PRD.html
 ---
 
-> **Last Updated**: December 11, 2025
+> **Last Updated**: December 12, 2024
 > **Status**: Production-Ready Multi-Protocol Database Platform
 > **Architecture Reference**: See [`docs/content/architecture/ORBIT_ARCHITECTURE.md`](content/architecture/ORBIT_ARCHITECTURE.md) for detailed architecture patterns, transaction layer (MVCC, 2PC, Saga), query execution (vectorized, SIMD), network layer (gRPC, Protocol Buffers), and hybrid storage architecture.
 > **Protocol Analysis**: See [`protocols/PROTOCOL_COMPLETION_ANALYSIS.md`](protocols/PROTOCOL_COMPLETION_ANALYSIS.md) for detailed protocol implementation status and gaps.
@@ -231,6 +231,26 @@ orbit/server/src/
 │   └── storage/                     # Smart Storage Manager
 │       ├── mod.rs
 │       └── tiering_engine.rs        # Hot/warm/cold tiering
+│
+├── lua/                             # Lua UDF Support (mlua-based)
+│   ├── mod.rs                       # Lua module exports
+│   ├── mlua_runtime.rs              # mlua runtime integration (LuaJIT/Lua 5.4)
+│   ├── lua_value.rs                 # LuaValue ↔ SqlValue conversion
+│   ├── security.rs                  # Execution limits, sandbox
+│   ├── udf_registry.rs              # Lua function registry
+│   ├── redis_api.rs                 # redis.call(), redis.pcall()
+│   ├── database_api.rs              # sql.execute(), db.query()
+│   └── tests.rs                     # Comprehensive test suite
+│
+├── python/                          # Python UDF Support (subprocess-based)
+│   ├── mod.rs                       # Python module exports (~2,300 lines total)
+│   ├── worker.py                    # Python worker process (327 lines)
+│   ├── runtime.rs                   # Connection pooling runtime (479 lines)
+│   ├── types.rs                     # PythonValue ↔ SqlValue conversion (204 lines)
+│   ├── config.rs                    # Configuration (PythonConfig) (128 lines)
+│   ├── udf_registry.rs              # Function metadata management (376 lines)
+│   ├── udf_handler.rs               # SQL statement handler (389 lines)
+│   └── tests.rs                     # Comprehensive test suite (530 lines)
 │
 ├── directory.rs                     # Actor directory service
 ├── load_balancer.rs                 # Load balancing
