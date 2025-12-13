@@ -5,8 +5,8 @@
 
 use crate::protocols::error::ProtocolResult;
 use crate::protocols::postgres_wire::sql::ast::{
-    Expression, FrameBound, OrderByItem, WindowFrame, WindowFrameMode, WindowFunctionType,
-    FunctionCall,
+    Expression, FrameBound, FunctionCall, OrderByItem, WindowFrame, WindowFrameMode,
+    WindowFunctionType,
 };
 use crate::protocols::postgres_wire::sql::types::SqlValue;
 use std::collections::HashMap;
@@ -166,7 +166,8 @@ impl WindowFunctionEvaluator {
         let mut results = Vec::new();
 
         for partition in &self.partitions {
-            let partition_results = self.evaluate_partition(function, frame, partition, order_by)?;
+            let partition_results =
+                self.evaluate_partition(function, frame, partition, order_by)?;
             results.extend(partition_results);
         }
 
@@ -198,7 +199,7 @@ impl WindowFunctionEvaluator {
 
                     // Check if next row has different values (simplified)
                     let is_last_in_group = idx == partition.rows.len() - 1
-                        || !self.rows_equal(row, &partition.rows[idx + 1]);
+                        || !self.rows_equal(row, &partition.rows[idx + 1], order_by);
 
                     results.push((row.index, SqlValue::BigInt(current_rank)));
 
@@ -216,7 +217,7 @@ impl WindowFunctionEvaluator {
 
                     // Check if next row has different values
                     if idx < partition.rows.len() - 1
-                        && !self.rows_equal(row, &partition.rows[idx + 1])
+                        && !self.rows_equal(row, &partition.rows[idx + 1], order_by)
                     {
                         current_rank += 1;
                     }
@@ -234,7 +235,7 @@ impl WindowFunctionEvaluator {
                         // let prev_row = &partition.rows[idx - offset_val];
                         // SqlValue::BigInt((idx - offset_val) as i64) -- original logic
                         // Fix for compilation: just create value same as original loop logic
-                         SqlValue::BigInt((idx - offset_val) as i64)
+                        SqlValue::BigInt((idx - offset_val) as i64)
                     } else {
                         SqlValue::Null
                     };
@@ -249,7 +250,7 @@ impl WindowFunctionEvaluator {
                 let offset_val: usize = 1; // Simplified
                 for (idx, row) in partition.rows.iter().enumerate() {
                     let value = if idx + offset_val < partition.rows.len() {
-                         SqlValue::BigInt((idx + offset_val) as i64)
+                        SqlValue::BigInt((idx + offset_val) as i64)
                     } else {
                         SqlValue::Null
                     };
@@ -260,15 +261,16 @@ impl WindowFunctionEvaluator {
                 // Handle aggregate functions over the window frame
 
                 for (idx, row) in partition.rows.iter().enumerate() {
-                    let (start, end) = self.calculate_frame_bounds(frame, idx, partition, order_by)?;
-                    
+                    let (start, end) =
+                        self.calculate_frame_bounds(frame, idx, partition, order_by)?;
+
                     // Create slice of rows in the frame
                     // Indices from calculate_frame_bounds are 0-based relative to partition
                     let start = std::cmp::min(start, partition.rows.len());
                     let end = std::cmp::min(end, partition.rows.len());
 
                     let frame_rows = &partition.rows[start..end];
-                    
+
                     // Evaluate aggregate on these rows
                     let result = self.evaluate_aggregate(func_call_expr, frame_rows)?;
                     results.push((row.index, result));
@@ -292,66 +294,84 @@ impl WindowFunctionEvaluator {
         order_by: &[OrderByItem],
     ) -> ProtocolResult<(usize, usize)> {
         let len = partition.rows.len();
-        
+
         if frame.is_none() {
             // Default: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
             let start = 0;
             let (_, end) = self.get_peer_group_bounds(current_idx, partition, order_by);
             return Ok((start, end));
         }
-        
+
         let frame = frame.as_ref().unwrap();
-        
+
         match frame.mode {
             WindowFrameMode::Rows => {
                 let start = self.calculate_bound_index(
-                    &frame.start_bound, current_idx, len, true, partition, order_by, WindowFrameMode::Rows
+                    &frame.start_bound,
+                    current_idx,
+                    len,
+                    true,
+                    partition,
+                    order_by,
+                    WindowFrameMode::Rows,
                 )?;
                 let end = self.calculate_bound_index(
-                    frame.end_bound.as_ref().unwrap_or(&FrameBound::CurrentRow), 
-                    current_idx, 
-                    len, 
+                    frame.end_bound.as_ref().unwrap_or(&FrameBound::CurrentRow),
+                    current_idx,
+                    len,
                     false,
-                    partition, 
+                    partition,
                     order_by,
-                    WindowFrameMode::Rows
+                    WindowFrameMode::Rows,
                 )?;
-                
+
                 let start = std::cmp::min(start, len);
                 let end = std::cmp::min(end, len);
                 let start = std::cmp::min(start, end);
-                
+
                 Ok((start, end))
             }
             WindowFrameMode::Range => {
                 let start = self.calculate_bound_index(
-                    &frame.start_bound, current_idx, len, true, partition, order_by, WindowFrameMode::Range
+                    &frame.start_bound,
+                    current_idx,
+                    len,
+                    true,
+                    partition,
+                    order_by,
+                    WindowFrameMode::Range,
                 )?;
                 let end = self.calculate_bound_index(
-                    frame.end_bound.as_ref().unwrap_or(&FrameBound::CurrentRow), 
-                    current_idx, 
-                    len, 
+                    frame.end_bound.as_ref().unwrap_or(&FrameBound::CurrentRow),
+                    current_idx,
+                    len,
                     false,
-                    partition, 
-                    order_by, 
-                    WindowFrameMode::Range
+                    partition,
+                    order_by,
+                    WindowFrameMode::Range,
                 )?;
                 Ok((std::cmp::min(start, len), std::cmp::min(end, len)))
             }
             WindowFrameMode::Groups => {
                 let start = self.calculate_bound_index(
-                    &frame.start_bound, current_idx, len, true, partition, order_by, WindowFrameMode::Groups
+                    &frame.start_bound,
+                    current_idx,
+                    len,
+                    true,
+                    partition,
+                    order_by,
+                    WindowFrameMode::Groups,
                 )?;
                 let end = self.calculate_bound_index(
-                    frame.end_bound.as_ref().unwrap_or(&FrameBound::CurrentRow), 
-                    current_idx, 
-                    len, 
+                    frame.end_bound.as_ref().unwrap_or(&FrameBound::CurrentRow),
+                    current_idx,
+                    len,
                     false,
-                    partition, 
+                    partition,
                     order_by,
-                    WindowFrameMode::Groups
+                    WindowFrameMode::Groups,
                 )?;
-                 Ok((std::cmp::min(start, len), std::cmp::min(end, len)))
+                Ok((std::cmp::min(start, len), std::cmp::min(end, len)))
             }
         }
     }
@@ -369,25 +389,23 @@ impl WindowFunctionEvaluator {
         match bound {
             FrameBound::UnboundedPreceding => Ok(0),
             FrameBound::UnboundedFollowing => Ok(len),
-            FrameBound::CurrentRow => {
-                match mode {
-                    WindowFrameMode::Rows => {
-                        if is_start {
-                            Ok(current_idx)
-                        } else {
-                            Ok(current_idx + 1)
-                        }
-                    }
-                    WindowFrameMode::Range | WindowFrameMode::Groups => {
-                        let (start, end) = self.get_peer_group_bounds(current_idx, partition, order_by);
-                        if is_start {
-                            Ok(start)
-                        } else {
-                            Ok(end)
-                        }
+            FrameBound::CurrentRow => match mode {
+                WindowFrameMode::Rows => {
+                    if is_start {
+                        Ok(current_idx)
+                    } else {
+                        Ok(current_idx + 1)
                     }
                 }
-            }
+                WindowFrameMode::Range | WindowFrameMode::Groups => {
+                    let (start, end) = self.get_peer_group_bounds(current_idx, partition, order_by);
+                    if is_start {
+                        Ok(start)
+                    } else {
+                        Ok(end)
+                    }
+                }
+            },
             FrameBound::Preceding(expr) => {
                 let offset = self.evaluate_offset_value(expr)?;
                 match mode {
@@ -395,7 +413,7 @@ impl WindowFunctionEvaluator {
                         let offset_val = match offset {
                             SqlValue::BigInt(i) => i as usize,
                             SqlValue::Integer(i) => i as usize,
-                            _ => 1 // Default/Fallback
+                            _ => 1, // Default/Fallback
                         };
                         if current_idx >= offset_val {
                             Ok(current_idx - offset_val)
@@ -403,16 +421,28 @@ impl WindowFunctionEvaluator {
                             Ok(0)
                         }
                     }
-                    WindowFrameMode::Range => {
-                        self.find_range_bound_index(current_idx, &offset, false, is_start, partition, order_by)
-                    }
+                    WindowFrameMode::Range => self.find_range_bound_index(
+                        current_idx,
+                        &offset,
+                        false,
+                        is_start,
+                        partition,
+                        order_by,
+                    ),
                     WindowFrameMode::Groups => {
-                         let offset_val = match offset {
+                        let offset_val = match offset {
                             SqlValue::BigInt(i) => i as usize,
                             SqlValue::Integer(i) => i as usize,
-                            _ => 1
+                            _ => 1,
                         };
-                        self.find_groups_bound_index(current_idx, offset_val, false, is_start, partition, order_by)
+                        self.find_groups_bound_index(
+                            current_idx,
+                            offset_val,
+                            false,
+                            is_start,
+                            partition,
+                            order_by,
+                        )
                     }
                 }
             }
@@ -420,10 +450,10 @@ impl WindowFunctionEvaluator {
                 let offset = self.evaluate_offset_value(expr)?;
                 match mode {
                     WindowFrameMode::Rows => {
-                         let offset_val = match offset {
+                        let offset_val = match offset {
                             SqlValue::BigInt(i) => i as usize,
                             SqlValue::Integer(i) => i as usize,
-                            _ => 1
+                            _ => 1,
                         };
                         if is_start {
                             Ok(current_idx + offset_val)
@@ -431,16 +461,28 @@ impl WindowFunctionEvaluator {
                             Ok(current_idx + offset_val + 1)
                         }
                     }
-                    WindowFrameMode::Range => {
-                        self.find_range_bound_index(current_idx, &offset, true, is_start, partition, order_by)
-                    }
+                    WindowFrameMode::Range => self.find_range_bound_index(
+                        current_idx,
+                        &offset,
+                        true,
+                        is_start,
+                        partition,
+                        order_by,
+                    ),
                     WindowFrameMode::Groups => {
-                         let offset_val = match offset {
+                        let offset_val = match offset {
                             SqlValue::BigInt(i) => i as usize,
                             SqlValue::Integer(i) => i as usize,
-                            _ => 1
+                            _ => 1,
                         };
-                        self.find_groups_bound_index(current_idx, offset_val, true, is_start, partition, order_by)
+                        self.find_groups_bound_index(
+                            current_idx,
+                            offset_val,
+                            true,
+                            is_start,
+                            partition,
+                            order_by,
+                        )
                     }
                 }
             }
@@ -450,9 +492,9 @@ impl WindowFunctionEvaluator {
     fn evaluate_offset_value(&self, expr: &Expression) -> ProtocolResult<SqlValue> {
         // Simplified evaluation: expect literal value
         match expr {
-            Expression::Value(val) => Ok(val.clone()),
+            Expression::Literal(val) => Ok(val.clone()),
             // TODO: Handle parameter references or simple constant expressions
-            _ => Ok(SqlValue::Integer(1)) 
+            _ => Ok(SqlValue::Integer(1)),
         }
     }
 
@@ -467,60 +509,75 @@ impl WindowFunctionEvaluator {
     ) -> ProtocolResult<usize> {
         if order_by.len() != 1 {
             return Err(crate::protocols::error::ProtocolError::PostgresError(
-                "RANGE with offset PRECEDING/FOLLOWING requires exactly one ORDER BY column".to_string()
+                "RANGE with offset PRECEDING/FOLLOWING requires exactly one ORDER BY column"
+                    .to_string(),
             ));
         }
 
         let col_name = match &order_by[0].expression {
             Expression::Column(c) => &c.name,
-            _ => return Err(crate::protocols::error::ProtocolError::PostgresError(
-                "RANGE with offset requires column reference in ORDER BY".to_string()
-            ))
+            _ => {
+                return Err(crate::protocols::error::ProtocolError::PostgresError(
+                    "RANGE with offset requires column reference in ORDER BY".to_string(),
+                ))
+            }
         };
 
-        let current_val = partition.rows[current_idx].values.get(col_name).unwrap_or(&SqlValue::Null);
-        
+        let current_val = partition.rows[current_idx]
+            .values
+            .get(col_name)
+            .unwrap_or(&SqlValue::Null);
+
         // Calculate target value
         // If Preceding: target = current - offset
         // If Following: target = current + offset
-        // Note: For DESC sort, logic is inverted? 
+        // Note: For DESC sort, logic is inverted?
         // Postgres docs: "value PRECEDING" means "value less than current" in ASC.
         // Actually, "PRECEDING" means "physically before" in sort order.
         // If ASC: before means smaller. target = current - offset.
         // If DESC: before means larger. target = current + offset.
-        
-        let is_desc = order_by[0].desc.unwrap_or(false);
+
+        let is_desc = matches!(
+            order_by[0].direction,
+            Some(crate::protocols::postgres_wire::sql::ast::SortDirection::Descending)
+        );
         let is_add = if is_desc { !is_following } else { is_following };
-        
+
         let target_val = match self.calculate_value_offset(current_val, offset, is_add) {
             Some(v) => v,
-            None => return Ok(if is_start_bound { current_idx } else { current_idx + 1 }) // Fallback? Or Error?
+            None => {
+                return Ok(if is_start_bound {
+                    current_idx
+                } else {
+                    current_idx + 1
+                })
+            } // Fallback? Or Error?
         };
 
         // Scan for boundary
         // Optimized: Binary Search could be used, but Linear Scan is easier to implement for MVP
         let len = partition.rows.len();
-        
+
         // RANGE bound includes all peers.
         // Start bound: First row >= target (ASC) or <= target (DESC) ? NO.
         // RANGE Start: First row satisfying `value >= current - offset` (ASC mode, Preceding).
         // It defines the frame.
-        
+
         // Let's rely on comparisons.
         // We want to find the first row that falls INTO the frame.
         // Frame: [current - offset, current + offset] (conceptually)
         // Bound is determining one edge of this.
-        
+
         // If is_start_bound: find first row where value >= target (if ASC/Preceding logic)
         // If !is_start_bound: find first row where value > target (exclusive end)
-        
+
         // Need to be careful with DESC/ASC and Preceding/Following.
         // Let's assume ASC for mental model.
         // Preceding bound: Target = Cur - Off. Frame starts at Target.
         // Find first row >= Target.
         // Following bound (end): Target = Cur + Off. Frame ends at Target.
         // Find first row > Target (exclusive end).
-        
+
         // If DESC:
         // Preceding bound: Target = Cur + Off. Frame starts at Target.
         // Find first row <= Target. (Ordering: Target is "smaller" in sort order because it's earlier?)
@@ -530,43 +587,46 @@ impl WindowFunctionEvaluator {
         // 10 is > 9. 8 is < 9.
         // Range covers [9, 8, ...].
         // So we look for first row <= 9.
-        
+
         // Generalizing:
         // Compare(row_val, target_val) vs SortOrder.
         // We want row such that row is "after or equal" to target in sort order.
-        
+
         for i in 0..len {
-            let row_val = partition.rows[i].values.get(col_name).unwrap_or(&SqlValue::Null);
+            let row_val = partition.rows[i]
+                .values
+                .get(col_name)
+                .unwrap_or(&SqlValue::Null);
             let cmp = self.compare_values(row_val, &target_val);
-            
+
             let satisfies = if is_desc {
                 if is_start_bound {
                     // Start (Inclusive): row <= target
-                     cmp != std::cmp::Ordering::Greater
+                    cmp != std::cmp::Ordering::Greater
                 } else {
-                    // End (Exclusive for frame end): row < target 
+                    // End (Exclusive for frame end): row < target
                     // Wait, End bound means "Where does usage stop?"
                     // Frame: ... TO 1 FOLLOWING. Target = 8-1=7. Range ends at 7.
                     // Frame includes 7. Excludes 6.
                     // So we look for first row that is strictly "after" target in sort order.
-                     cmp == std::cmp::Ordering::Less
+                    cmp == std::cmp::Ordering::Less
                 }
             } else {
                 // ASC
                 if is_start_bound {
-                     // Start (Inclusive): row >= target
-                     cmp != std::cmp::Ordering::Less
+                    // Start (Inclusive): row >= target
+                    cmp != std::cmp::Ordering::Less
                 } else {
                     // End (Exclusive): row > target
-                     cmp == std::cmp::Ordering::Greater
+                    cmp == std::cmp::Ordering::Greater
                 }
             };
-            
+
             if satisfies {
                 return Ok(i);
             }
         }
-        
+
         Ok(len)
     }
 
@@ -582,67 +642,71 @@ impl WindowFunctionEvaluator {
         // First, identify current peer group
         // Optimization: We could iterate peer groups structure but we don't have it built.
         // We can simulate it by jumping.
-        
+
         // 1. Find Current Group Start/End
         let (cur_start, cur_end) = self.get_peer_group_bounds(current_idx, partition, order_by);
-        
-        if is_following {
 
-             // If offset is 0? "0 FOLLOWING" = End of current group? No.
-             // SQL: "0 FOLLOWING" means current peer group (same as current row).
-             // Range: Current Row.
-             // Bounds: (cur_start, cur_end)
-            
+        if is_following {
+            // If offset is 0? "0 FOLLOWING" = End of current group? No.
+            // SQL: "0 FOLLOWING" means current peer group (same as current row).
+            // Range: Current Row.
+            // Bounds: (cur_start, cur_end)
+
             if offset == 0 {
                 return Ok(if is_start_bound { cur_start } else { cur_end });
             }
-            
+
             // We need to find the group at distance 'offset'.
             // Current group is distance 0.
-            
+
             // Loop to skip groups
             let mut target_group_start = cur_start;
             let mut target_group_end = cur_end;
-            
+
             for _ in 0..offset {
                 if target_group_end >= partition.rows.len() {
                     return Ok(partition.rows.len());
                 }
                 // Find next group
-                let (_, next_end) = self.get_peer_group_bounds(target_group_end, partition, order_by);
+                let (_, next_end) =
+                    self.get_peer_group_bounds(target_group_end, partition, order_by);
                 target_group_start = target_group_end;
                 target_group_end = next_end;
             }
-            
-            Ok(if is_start_bound { target_group_start } else { target_group_end })
-            
+
+            Ok(if is_start_bound {
+                target_group_start
+            } else {
+                target_group_end
+            })
         } else {
             // Preceding
             if offset == 0 {
                 return Ok(if is_start_bound { cur_start } else { cur_end });
             }
-            
-             // Move backward 'offset' groups
-             let mut target_start = cur_start;
-             
-             for _ in 0..offset {
-                 if target_start == 0 {
-                     return Ok(0);
-                 }
-                 // Find prev group
-                 let (prev_start, _) = self.get_peer_group_bounds(target_start - 1, partition, order_by);
-                 target_start = prev_start;
-             }
-             
-             // For start bound: Start of that group
-             // For end bound: End of that group (which is start of next group)
-             if is_start_bound {
-                 Ok(target_start)
-             } else {
-                 // End of target group
-                 let (_, end) = self.get_peer_group_bounds(target_start, partition, order_by);
-                 Ok(end)
-             }
+
+            // Move backward 'offset' groups
+            let mut target_start = cur_start;
+
+            for _ in 0..offset {
+                if target_start == 0 {
+                    return Ok(0);
+                }
+                // Find prev group
+                let (prev_start, _) =
+                    self.get_peer_group_bounds(target_start - 1, partition, order_by);
+                target_start = prev_start;
+            }
+
+            // For start bound: Start of that group
+            // For end bound: End of that group (which is start of next group)
+            if is_start_bound {
+                Ok(target_start)
+            } else {
+                // End of target group
+                let (_, end) = self.get_peer_group_bounds(target_start, partition, order_by);
+                Ok(end)
+            }
         }
     }
 
@@ -652,7 +716,7 @@ impl WindowFunctionEvaluator {
             if let Expression::Column(col) = &item.expression {
                 let val_a = a.values.get(&col.name).unwrap_or(&SqlValue::Null);
                 let val_b = b.values.get(&col.name).unwrap_or(&SqlValue::Null);
-                
+
                 if self.compare_values(val_a, val_b) != std::cmp::Ordering::Equal {
                     return false;
                 }
@@ -672,14 +736,14 @@ impl WindowFunctionEvaluator {
         if len == 0 {
             return (0, 0);
         }
-        
+
         // If no ORDER BY, all rows are peers
         if order_by.is_empty() {
             return (0, len);
         }
 
         let current_row = &partition.rows[current_idx];
-        
+
         // Search backwards for start
         let mut start = current_idx;
         while start > 0 {
@@ -688,7 +752,7 @@ impl WindowFunctionEvaluator {
             }
             start -= 1;
         }
-        
+
         // Search forwards for end
         let mut end = current_idx + 1;
         while end < len {
@@ -697,7 +761,7 @@ impl WindowFunctionEvaluator {
             }
             end += 1;
         }
-        
+
         (start, end)
     }
 
@@ -712,20 +776,28 @@ impl WindowFunctionEvaluator {
         match (value, offset) {
             (SqlValue::Integer(v), SqlValue::Integer(o)) => {
                 Some(SqlValue::Integer(if is_add { v + o } else { v - o }))
-            },
-            (SqlValue::Integer(v), SqlValue::BigInt(o)) => {
-                Some(SqlValue::BigInt(if is_add { *v as i64 + o } else { *v as i64 - o }))
-            },
-            (SqlValue::BigInt(v), SqlValue::Integer(o)) => {
-                Some(SqlValue::BigInt(if is_add { v + *o as i64 } else { v - *o as i64 }))
-            },
+            }
+            (SqlValue::Integer(v), SqlValue::BigInt(o)) => Some(SqlValue::BigInt(if is_add {
+                *v as i64 + o
+            } else {
+                *v as i64 - o
+            })),
+            (SqlValue::BigInt(v), SqlValue::Integer(o)) => Some(SqlValue::BigInt(if is_add {
+                v + *o as i64
+            } else {
+                v - *o as i64
+            })),
             (SqlValue::BigInt(v), SqlValue::BigInt(o)) => {
                 Some(SqlValue::BigInt(if is_add { v + o } else { v - o }))
-            },
+            }
             (SqlValue::DoublePrecision(v), SqlValue::DoublePrecision(o)) => {
-                Some(SqlValue::DoublePrecision(if is_add { v + o } else { v - o }))
-            },
-            _ => None // TODO: Support other types (Date, Timestamp, etc.)
+                Some(SqlValue::DoublePrecision(if is_add {
+                    v + o
+                } else {
+                    v - o
+                }))
+            }
+            _ => None, // TODO: Support other types (Date, Timestamp, etc.)
         }
     }
 
@@ -736,53 +808,71 @@ impl WindowFunctionEvaluator {
         rows: &[Row],
     ) -> ProtocolResult<SqlValue> {
         let name = func_call.name.to_string().to_lowercase();
-        
+
         // Handle COUNT(*) specially
         if name == "count" && func_call.args.is_empty() {
-             return Ok(SqlValue::BigInt(rows.len() as i64));
+            return Ok(SqlValue::BigInt(rows.len() as i64));
         }
 
         // Get argument expression (assume 1 arg for now)
         let arg_expr = func_call.args.first();
-        
-        let values: Vec<&SqlValue> = rows.iter().map(|row| {
-             // simplified expression evaluation
-             if let Some(expr) = arg_expr {
-                 match expr {
-                     Expression::Column(col) => {
-                         row.values.get(&col.name).unwrap_or(&SqlValue::Null)
-                     }
-                     Expression::Value(val) => val,
-                     _ => &SqlValue::Null 
-                 }
-             } else {
-                 &SqlValue::Null
-             }
-        }).collect();
+
+        let values: Vec<&SqlValue> = rows
+            .iter()
+            .map(|row| {
+                // simplified expression evaluation
+                if let Some(expr) = arg_expr {
+                    match expr {
+                        Expression::Column(col) => {
+                            row.values.get(&col.name).unwrap_or(&SqlValue::Null)
+                        }
+                        Expression::Literal(val) => val,
+                        _ => &SqlValue::Null,
+                    }
+                } else {
+                    &SqlValue::Null
+                }
+            })
+            .collect();
 
         match name.as_str() {
             "count" => {
-                 // Count non-null values
-                 let count = values.iter().filter(|v| !matches!(v, SqlValue::Null)).count();
-                 Ok(SqlValue::BigInt(count as i64))
+                // Count non-null values
+                let count = values
+                    .iter()
+                    .filter(|v| !matches!(v, SqlValue::Null))
+                    .count();
+                Ok(SqlValue::BigInt(count as i64))
             }
             "sum" => {
                 let mut sum_i = 0i64;
                 let mut sum_f = 0.0f64;
                 let mut is_float = false;
                 let mut has_vals = false;
-                
+
                 for val in values {
                     match val {
-                        SqlValue::Integer(i) => { sum_i += *i as i64; has_vals = true; }
-                        SqlValue::BigInt(i) => { sum_i += i; has_vals = true; }
-                        SqlValue::DoublePrecision(f) => { sum_f += f; is_float = true; has_vals = true; }
+                        SqlValue::Integer(i) => {
+                            sum_i += *i as i64;
+                            has_vals = true;
+                        }
+                        SqlValue::BigInt(i) => {
+                            sum_i += i;
+                            has_vals = true;
+                        }
+                        SqlValue::DoublePrecision(f) => {
+                            sum_f += f;
+                            is_float = true;
+                            has_vals = true;
+                        }
                         _ => {}
                     }
                 }
-                
-                if !has_vals { return Ok(SqlValue::Null); }
-                
+
+                if !has_vals {
+                    return Ok(SqlValue::Null);
+                }
+
                 if is_float {
                     Ok(SqlValue::DoublePrecision(sum_f + sum_i as f64))
                 } else {
@@ -790,42 +880,59 @@ impl WindowFunctionEvaluator {
                 }
             }
             "avg" => {
-                 let mut sum = 0.0f64;
-                 let mut count = 0;
-                 
-                  for val in values {
+                let mut sum = 0.0f64;
+                let mut count = 0;
+
+                for val in values {
                     match val {
-                        SqlValue::Integer(i) => { sum += *i as f64; count += 1; }
-                        SqlValue::BigInt(i) => { sum += *i as f64; count += 1; }
-                        SqlValue::DoublePrecision(f) => { sum += *f; count += 1; }
-                         _ => {}
+                        SqlValue::Integer(i) => {
+                            sum += *i as f64;
+                            count += 1;
+                        }
+                        SqlValue::BigInt(i) => {
+                            sum += *i as f64;
+                            count += 1;
+                        }
+                        SqlValue::DoublePrecision(f) => {
+                            sum += *f;
+                            count += 1;
+                        }
+                        _ => {}
                     }
                 }
-                
-                if count == 0 { return Ok(SqlValue::Null); }
+
+                if count == 0 {
+                    return Ok(SqlValue::Null);
+                }
                 Ok(SqlValue::DoublePrecision(sum / count as f64))
             }
             "min" | "max" => {
-                 let mut current_val: Option<&SqlValue> = None;
-                 let is_max = name == "max";
-                 
-                 for val in values {
-                     if matches!(val, SqlValue::Null) { continue; }
-                     
-                     match current_val {
-                         None => current_val = Some(val),
-                         Some(curr) => {
-                             let cmp = self.compare_values(val, curr);
-                             if is_max {
-                                 if cmp == std::cmp::Ordering::Greater { current_val = Some(val); }
-                             } else {
-                                  if cmp == std::cmp::Ordering::Less { current_val = Some(val); }
-                             }
-                         }
-                     }
-                 }
-                 
-                 Ok(current_val.cloned().unwrap_or(SqlValue::Null))
+                let mut current_val: Option<&SqlValue> = None;
+                let is_max = name == "max";
+
+                for val in values {
+                    if matches!(val, SqlValue::Null) {
+                        continue;
+                    }
+
+                    match current_val {
+                        None => current_val = Some(val),
+                        Some(curr) => {
+                            let cmp = self.compare_values(val, curr);
+                            if is_max {
+                                if cmp == std::cmp::Ordering::Greater {
+                                    current_val = Some(val);
+                                }
+                            } else {
+                                if cmp == std::cmp::Ordering::Less {
+                                    current_val = Some(val);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Ok(current_val.cloned().unwrap_or(SqlValue::Null))
             }
             _ => {
                 // Return Null for unsupported functions
@@ -857,7 +964,9 @@ mod tests {
 
         evaluator.partition_rows(rows, &[], &[]).unwrap();
 
-        let results = evaluator.evaluate(&WindowFunctionType::RowNumber, &None, &[]).unwrap();
+        let results = evaluator
+            .evaluate(&WindowFunctionType::RowNumber, &None, &[])
+            .unwrap();
 
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].1, SqlValue::BigInt(1));
@@ -877,7 +986,9 @@ mod tests {
 
         evaluator.partition_rows(rows, &[], &[]).unwrap();
 
-        let results = evaluator.evaluate(&WindowFunctionType::Rank, &None, &[]).unwrap();
+        let results = evaluator
+            .evaluate(&WindowFunctionType::Rank, &None, &[])
+            .unwrap();
 
         assert_eq!(results.len(), 3);
         // All should have rank 1 since we're not actually sorting in this simplified test

@@ -29,7 +29,7 @@ use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
 #[cfg(feature = "lua-mlua")]
-use crate::lua::udf_registry::{UdfRegistry, SqlValue as UdfSqlValue};
+use crate::lua::udf_registry::{SqlValue as UdfSqlValue, UdfRegistry};
 
 #[cfg(feature = "lua-mlua")]
 fn sql_value_to_udf_sql(val: SqlValue) -> UdfSqlValue {
@@ -61,14 +61,17 @@ fn sql_value_to_udf_sql(val: SqlValue) -> UdfSqlValue {
                 } else {
                     0
                 };
-                let total_micros = (hours * 3600 + minutes * 60 + seconds) as i64 * 1_000_000 + micros_part as i64;
+                let total_micros =
+                    (hours * 3600 + minutes * 60 + seconds) as i64 * 1_000_000 + micros_part as i64;
                 UdfSqlValue::Time(total_micros)
             } else {
                 UdfSqlValue::Time(0)
             }
         }
         SqlValue::Interval(i) => UdfSqlValue::Interval(i.microseconds),
-        SqlValue::Array(arr) => UdfSqlValue::Array(arr.into_iter().map(sql_value_to_udf_sql).collect()),
+        SqlValue::Array(arr) => {
+            UdfSqlValue::Array(arr.into_iter().map(sql_value_to_udf_sql).collect())
+        }
         SqlValue::Json(j) | SqlValue::Jsonb(j) => UdfSqlValue::Json(j.to_string()),
         SqlValue::Uuid(u) => UdfSqlValue::Uuid(u),
         _ => UdfSqlValue::Text(val.to_postgres_string()),
@@ -88,9 +91,11 @@ fn udf_sql_to_sql_value(udf_val: UdfSqlValue) -> SqlValue {
         UdfSqlValue::Numeric(s) => SqlValue::Text(s),
         UdfSqlValue::Text(s) => SqlValue::Text(s),
         UdfSqlValue::Bytea(b) => SqlValue::Bytea(b),
-        UdfSqlValue::Timestamp(ts) => {
-            SqlValue::Timestamp(chrono::DateTime::from_timestamp(ts, 0).unwrap_or_default().naive_utc())
-        }
+        UdfSqlValue::Timestamp(ts) => SqlValue::Timestamp(
+            chrono::DateTime::from_timestamp(ts, 0)
+                .unwrap_or_default()
+                .naive_utc(),
+        ),
         UdfSqlValue::Date(d) => {
             SqlValue::Date(chrono::NaiveDate::from_num_days_from_ce_opt(d).unwrap_or_default())
         }
@@ -104,7 +109,7 @@ fn udf_sql_to_sql_value(udf_val: UdfSqlValue) -> SqlValue {
             let nanos = micros * 1000;
             SqlValue::Time(
                 chrono::NaiveTime::from_hms_nano_opt(hours, minutes, seconds, nanos)
-                    .unwrap_or_default()
+                    .unwrap_or_default(),
             )
         }
         UdfSqlValue::Interval(i) => {
@@ -115,9 +120,15 @@ fn udf_sql_to_sql_value(udf_val: UdfSqlValue) -> SqlValue {
                 microseconds: i,
             })
         }
-        UdfSqlValue::Array(arr) => SqlValue::Array(arr.into_iter().map(udf_sql_to_sql_value).collect()),
-        UdfSqlValue::Json(s) => SqlValue::Json(serde_json::from_str(&s).unwrap_or(serde_json::Value::Null)),
-        UdfSqlValue::Jsonb(b) => SqlValue::Jsonb(serde_json::from_slice(&b).unwrap_or(serde_json::Value::Null)),
+        UdfSqlValue::Array(arr) => {
+            SqlValue::Array(arr.into_iter().map(udf_sql_to_sql_value).collect())
+        }
+        UdfSqlValue::Json(s) => {
+            SqlValue::Json(serde_json::from_str(&s).unwrap_or(serde_json::Value::Null))
+        }
+        UdfSqlValue::Jsonb(b) => {
+            SqlValue::Jsonb(serde_json::from_slice(&b).unwrap_or(serde_json::Value::Null))
+        }
         UdfSqlValue::Uuid(u) => SqlValue::Uuid(u),
     }
 }
@@ -385,7 +396,6 @@ impl ExpressionEvaluator {
             udf_registry: None,
         }
     }
-
 
     /// Create an expression evaluator with a UDF registry
     #[cfg(feature = "lua-mlua")]
@@ -1069,14 +1079,14 @@ impl ExpressionEvaluator {
                 if let Some(ref udf_registry) = self.udf_registry {
                     // Check if UDF exists
                     let udf_exists = tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current().block_on(async {
-                            udf_registry.exists(&func_name).await
-                        })
+                        tokio::runtime::Handle::current()
+                            .block_on(async { udf_registry.exists(&func_name).await })
                     });
 
                     if udf_exists {
                         // Convert args to UDF SQL values
-                        let udf_args: Vec<UdfSqlValue> = args.into_iter().map(sql_value_to_udf_sql).collect();
+                        let udf_args: Vec<UdfSqlValue> =
+                            args.into_iter().map(sql_value_to_udf_sql).collect();
 
                         // Call the UDF
                         let result = tokio::task::block_in_place(|| {

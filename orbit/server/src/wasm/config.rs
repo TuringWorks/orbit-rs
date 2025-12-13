@@ -62,8 +62,8 @@ impl Default for WasmConfig {
             enable_cache: true,
             cache_size: 100,
             enable_fuel: true,
-            fuel_limit: 1_000_000_000, // 1 billion instructions
-            enable_wasi: false,         // Disabled for security
+            fuel_limit: 1_000_000_000,         // 1 billion instructions
+            enable_wasi: false,                // Disabled for security
             max_module_size: 10 * 1024 * 1024, // 10MB
             enable_parallel: true,
             max_concurrent_instances: 100,
@@ -81,9 +81,9 @@ impl WasmConfig {
     pub fn development() -> Self {
         Self {
             max_memory_bytes: 128 * 1024 * 1024, // 128MB
-            timeout: Duration::from_secs(300),     // 5 minutes
-            enable_wasi: true,                     // Allow WASI in dev
-            fuel_limit: 10_000_000_000,            // 10 billion
+            timeout: Duration::from_secs(300),   // 5 minutes
+            enable_wasi: true,                   // Allow WASI in dev
+            fuel_limit: 10_000_000_000,          // 10 billion
             ..Default::default()
         }
     }
@@ -92,9 +92,9 @@ impl WasmConfig {
     pub fn production() -> Self {
         Self {
             max_memory_bytes: 32 * 1024 * 1024, // 32MB
-            timeout: Duration::from_secs(10),    // 10 seconds
-            enable_wasi: false,                  // No WASI in prod
-            fuel_limit: 500_000_000,             // 500 million
+            timeout: Duration::from_secs(10),   // 10 seconds
+            enable_wasi: false,                 // No WASI in prod
+            fuel_limit: 500_000_000,            // 500 million
             ..Default::default()
         }
     }

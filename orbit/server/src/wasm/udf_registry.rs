@@ -2,7 +2,7 @@
 //!
 //! This module manages the registration and execution of WASM user-defined functions.
 
-use super::runtime::{WasmError, WasmRuntime};
+use super::runtime::WasmRuntime;
 use super::types::{WasmFunctionMetadata, WasmValue};
 use crate::protocols::error::ProtocolResult;
 use crate::protocols::postgres_wire::sql::types::SqlValue;
@@ -85,15 +85,12 @@ impl WasmUdfRegistry {
         args: Vec<SqlValue>,
     ) -> ProtocolResult<SqlValue> {
         // Get function metadata
-        let metadata = self
-            .get_function(schema, name)
-            .await?
-            .ok_or_else(|| {
-                crate::protocols::error::ProtocolError::PostgresError(format!(
-                    "Function not found: {}",
-                    Self::qualified_name(schema, name)
-                ))
-            })?;
+        let metadata = self.get_function(schema, name).await?.ok_or_else(|| {
+            crate::protocols::error::ProtocolError::PostgresError(format!(
+                "Function not found: {}",
+                Self::qualified_name(schema, name)
+            ))
+        })?;
 
         // Validate argument count
         if args.len() != metadata.params.len() {
@@ -274,7 +271,10 @@ mod tests {
             .await;
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("expects 2 arguments"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("expects 2 arguments"));
     }
 
     #[tokio::test]
@@ -285,9 +285,21 @@ mod tests {
         registry.register_function(metadata).await.unwrap();
 
         let calls = vec![
-            (None, "add".to_string(), vec![SqlValue::Integer(1), SqlValue::Integer(2)]),
-            (None, "add".to_string(), vec![SqlValue::Integer(10), SqlValue::Integer(20)]),
-            (None, "add".to_string(), vec![SqlValue::Integer(100), SqlValue::Integer(200)]),
+            (
+                None,
+                "add".to_string(),
+                vec![SqlValue::Integer(1), SqlValue::Integer(2)],
+            ),
+            (
+                None,
+                "add".to_string(),
+                vec![SqlValue::Integer(10), SqlValue::Integer(20)],
+            ),
+            (
+                None,
+                "add".to_string(),
+                vec![SqlValue::Integer(100), SqlValue::Integer(200)],
+            ),
         ];
 
         let results = registry.execute_batch(calls).await.unwrap();
@@ -299,10 +311,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_qualified_name() {
-        assert_eq!(
-            WasmUdfRegistry::qualified_name(&None, "func"),
-            "func"
-        );
+        assert_eq!(WasmUdfRegistry::qualified_name(&None, "func"), "func");
         assert_eq!(
             WasmUdfRegistry::qualified_name(&Some("public".to_string()), "func"),
             "public.func"
@@ -326,7 +335,11 @@ mod tests {
 
         // Execute to populate cache
         let _ = registry
-            .execute_function(&None, "add", vec![SqlValue::Integer(1), SqlValue::Integer(2)])
+            .execute_function(
+                &None,
+                "add",
+                vec![SqlValue::Integer(1), SqlValue::Integer(2)],
+            )
             .await;
 
         registry.clear_cache().await;

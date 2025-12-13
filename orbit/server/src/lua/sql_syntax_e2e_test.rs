@@ -4,8 +4,8 @@
 
 #[cfg(all(test, feature = "lua-mlua"))]
 mod tests {
-    use crate::protocols::postgres_wire::sql::query_engine::OptimizedQueryEngine;
     use crate::protocols::postgres_wire::sql::executor::ExecutionResult;
+    use crate::protocols::postgres_wire::sql::query_engine::OptimizedQueryEngine;
 
     #[tokio::test]
     async fn test_create_function_sql_syntax() {
@@ -25,10 +25,14 @@ mod tests {
         "#;
 
         let result = engine.execute(sql).await;
-        
+
         // Should succeed
-        assert!(result.is_ok(), "CREATE FUNCTION should succeed: {:?}", result.err());
-        
+        assert!(
+            result.is_ok(),
+            "CREATE FUNCTION should succeed: {:?}",
+            result.err()
+        );
+
         let exec_result = result.unwrap();
         match exec_result.result {
             ExecutionResult::Show { variable, value } => {
@@ -80,7 +84,10 @@ mod tests {
             $$
         "#;
 
-        engine.execute(sql1).await.expect("First CREATE should succeed");
+        engine
+            .execute(sql1)
+            .await
+            .expect("First CREATE should succeed");
 
         // Replace it
         let sql2 = r#"
@@ -105,7 +112,10 @@ mod tests {
         // Drop non-existent function with IF EXISTS - should not error
         let sql = "DROP FUNCTION IF EXISTS nonexistent_function";
         let result = engine.execute(sql).await;
-        assert!(result.is_ok(), "DROP IF EXISTS should not error for non-existent function");
+        assert!(
+            result.is_ok(),
+            "DROP IF EXISTS should not error for non-existent function"
+        );
     }
 
     #[tokio::test]
@@ -125,7 +135,11 @@ mod tests {
         "#;
 
         let result = engine.execute(sql).await;
-        assert!(result.is_ok(), "Multi-parameter CREATE should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Multi-parameter CREATE should succeed: {:?}",
+            result.err()
+        );
     }
 
     #[tokio::test]
@@ -149,6 +163,10 @@ mod tests {
         "#;
 
         let result = engine.execute(sql).await;
-        assert!(result.is_ok(), "Array parameter CREATE should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Array parameter CREATE should succeed: {:?}",
+            result.err()
+        );
     }
 }

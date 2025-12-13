@@ -150,24 +150,18 @@ impl PythonUdfRegistry {
     }
 
     /// Execute a Python UDF by name
-    pub async fn execute(
-        &self,
-        name: &str,
-        args: Vec<SqlValue>,
-    ) -> PythonResult<SqlValue> {
+    pub async fn execute(&self, name: &str, args: Vec<SqlValue>) -> PythonResult<SqlValue> {
         // Get function metadata
-        let metadata = self.get_metadata(name).await.ok_or_else(|| {
-            PythonError::FunctionNotFound(name.to_string())
-        })?;
+        let metadata = self
+            .get_metadata(name)
+            .await
+            .ok_or_else(|| PythonError::FunctionNotFound(name.to_string()))?;
 
         // Validate argument count
         metadata.validate_param_count(args.len())?;
 
         // Convert SQL arguments to Python values
-        let python_args: Vec<PythonValue> = args
-            .iter()
-            .map(PythonValue::from_sql_value)
-            .collect();
+        let python_args: Vec<PythonValue> = args.iter().map(PythonValue::from_sql_value).collect();
 
         // Execute function
         let result = self
@@ -204,10 +198,8 @@ impl PythonUdfRegistry {
             metadata.validate_param_count(args.len())?;
 
             // Convert SQL arguments to Python values
-            let python_args: Vec<PythonValue> = args
-                .iter()
-                .map(PythonValue::from_sql_value)
-                .collect();
+            let python_args: Vec<PythonValue> =
+                args.iter().map(PythonValue::from_sql_value).collect();
 
             batch_requests.push((
                 metadata.source.clone(),
@@ -235,9 +227,10 @@ impl PythonUdfRegistry {
         args: Vec<PythonValue>,
     ) -> PythonResult<PythonValue> {
         // Get function metadata
-        let metadata = self.get_metadata(name).await.ok_or_else(|| {
-            PythonError::FunctionNotFound(name.to_string())
-        })?;
+        let metadata = self
+            .get_metadata(name)
+            .await
+            .ok_or_else(|| PythonError::FunctionNotFound(name.to_string()))?;
 
         // Validate argument count
         metadata.validate_param_count(args.len())?;
@@ -341,8 +334,14 @@ mod tests {
 
         // Execute batch
         let batch = vec![
-            ("add".to_string(), vec![SqlValue::Integer(10), SqlValue::Integer(5)]),
-            ("sub".to_string(), vec![SqlValue::Integer(10), SqlValue::Integer(5)]),
+            (
+                "add".to_string(),
+                vec![SqlValue::Integer(10), SqlValue::Integer(5)],
+            ),
+            (
+                "sub".to_string(),
+                vec![SqlValue::Integer(10), SqlValue::Integer(5)],
+            ),
         ];
 
         let results = registry.execute_batch(batch).await.unwrap();
@@ -376,7 +375,11 @@ mod tests {
             "test_func".to_string(),
             "def test_func(a, b, c):\n    return a + b + c".to_string(),
             "test_func".to_string(),
-            vec!["INTEGER".to_string(), "INTEGER".to_string(), "INTEGER".to_string()],
+            vec![
+                "INTEGER".to_string(),
+                "INTEGER".to_string(),
+                "INTEGER".to_string(),
+            ],
             "INTEGER".to_string(),
         );
 

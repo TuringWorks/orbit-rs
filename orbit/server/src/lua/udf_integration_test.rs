@@ -5,8 +5,8 @@
 #[cfg(all(test, feature = "lua-mlua"))]
 mod tests {
     use crate::lua::mlua_runtime::MluaRuntime;
-    use crate::lua::udf_registry::{UdfMetadata, UdfRegistry, UdfRuntime};
     use crate::lua::udf_registry::SqlValue;
+    use crate::lua::udf_registry::{UdfMetadata, UdfRegistry, UdfRuntime};
     use std::sync::Arc;
 
     #[tokio::test]
@@ -16,17 +16,16 @@ mod tests {
         let registry = Arc::new(UdfRegistry::new(runtime));
 
         // Create a simple add function
-        let metadata = UdfMetadata::new(
-            "add_numbers",
-            "return a + b",
-            UdfRuntime::Lua,
-        )
-        .with_parameter("a", "INTEGER")
-        .with_parameter("b", "INTEGER")
-        .with_return_type("INTEGER");
+        let metadata = UdfMetadata::new("add_numbers", "return a + b", UdfRuntime::Lua)
+            .with_parameter("a", "INTEGER")
+            .with_parameter("b", "INTEGER")
+            .with_return_type("INTEGER");
 
         // Register the function
-        registry.register(metadata).await.expect("Failed to register function");
+        registry
+            .register(metadata)
+            .await
+            .expect("Failed to register function");
 
         // Verify function exists
         assert!(registry.exists("add_numbers").await);
@@ -50,22 +49,18 @@ mod tests {
         let registry = Arc::new(UdfRegistry::new(runtime));
 
         // Create uppercase function
-        let metadata = UdfMetadata::new(
-            "uppercase",
-            "return string.upper(str)",
-            UdfRuntime::Lua,
-        )
-        .with_parameter("str", "TEXT")
-        .with_return_type("TEXT");
+        let metadata = UdfMetadata::new("uppercase", "return string.upper(str)", UdfRuntime::Lua)
+            .with_parameter("str", "TEXT")
+            .with_return_type("TEXT");
 
-        registry.register(metadata).await.expect("Failed to register function");
+        registry
+            .register(metadata)
+            .await
+            .expect("Failed to register function");
 
         // Call the function
         let result = registry
-            .call_udf(
-                "uppercase",
-                vec![SqlValue::Text("hello world".to_string())],
-            )
+            .call_udf("uppercase", vec![SqlValue::Text("hello world".to_string())])
             .await
             .expect("Failed to call UDF");
 
@@ -92,7 +87,10 @@ mod tests {
         .with_parameter("arr", "INTEGER[]")
         .with_return_type("INTEGER");
 
-        registry.register(metadata).await.expect("Failed to register function");
+        registry
+            .register(metadata)
+            .await
+            .expect("Failed to register function");
 
         // Call with array
         let result = registry
@@ -118,15 +116,14 @@ mod tests {
         let registry = Arc::new(UdfRegistry::new(runtime));
 
         // Create is_adult function
-        let metadata = UdfMetadata::new(
-            "is_adult",
-            "return age >= 18",
-            UdfRuntime::Lua,
-        )
-        .with_parameter("age", "INTEGER")
-        .with_return_type("BOOLEAN");
+        let metadata = UdfMetadata::new("is_adult", "return age >= 18", UdfRuntime::Lua)
+            .with_parameter("age", "INTEGER")
+            .with_return_type("BOOLEAN");
 
-        registry.register(metadata).await.expect("Failed to register function");
+        registry
+            .register(metadata)
+            .await
+            .expect("Failed to register function");
 
         // Test with age 25 (adult)
         let result = registry
@@ -149,10 +146,13 @@ mod tests {
         let registry = Arc::new(UdfRegistry::new(runtime));
 
         // Create function
-        let metadata = UdfMetadata::new("temp_func", "return 42", UdfRuntime::Lua)
-            .with_return_type("INTEGER");
+        let metadata =
+            UdfMetadata::new("temp_func", "return 42", UdfRuntime::Lua).with_return_type("INTEGER");
 
-        registry.register(metadata).await.expect("Failed to register function");
+        registry
+            .register(metadata)
+            .await
+            .expect("Failed to register function");
         assert!(registry.exists("temp_func").await);
 
         // Drop function
@@ -171,9 +171,12 @@ mod tests {
         let registry = Arc::new(UdfRegistry::new(runtime));
 
         // Create initial function
-        let metadata = UdfMetadata::new("my_func", "return 42", UdfRuntime::Lua)
-            .with_return_type("INTEGER");
-        registry.register(metadata).await.expect("Failed to register function");
+        let metadata =
+            UdfMetadata::new("my_func", "return 42", UdfRuntime::Lua).with_return_type("INTEGER");
+        registry
+            .register(metadata)
+            .await
+            .expect("Failed to register function");
 
         // Call it
         let result = registry
@@ -183,9 +186,12 @@ mod tests {
         assert_eq!(result, SqlValue::Integer(42));
 
         // Replace with new implementation
-        let metadata2 = UdfMetadata::new("my_func", "return 100", UdfRuntime::Lua)
-            .with_return_type("INTEGER");
-        registry.register(metadata2).await.expect("Failed to replace function");
+        let metadata2 =
+            UdfMetadata::new("my_func", "return 100", UdfRuntime::Lua).with_return_type("INTEGER");
+        registry
+            .register(metadata2)
+            .await
+            .expect("Failed to replace function");
 
         // Call again and verify new behavior
         let result = registry
@@ -203,13 +209,16 @@ mod tests {
         // Create function with syntax error
         let metadata = UdfMetadata::new(
             "bad_func",
-            "return 42 +",  // Incomplete expression
+            "return 42 +", // Incomplete expression
             UdfRuntime::Lua,
         )
         .with_return_type("INTEGER");
 
         // Registration should succeed (we don't validate at registration time)
-        registry.register(metadata).await.expect("Failed to register function");
+        registry
+            .register(metadata)
+            .await
+            .expect("Failed to register function");
 
         // But calling should fail
         let result = registry.call_udf("bad_func", vec![]).await;
@@ -227,13 +236,12 @@ mod tests {
 
         // Add some functions
         for i in 1..=3 {
-            let metadata = UdfMetadata::new(
-                &format!("func_{}", i),
-                "return 42",
-                UdfRuntime::Lua,
-            )
-            .with_return_type("INTEGER");
-            registry.register(metadata).await.expect("Failed to register function");
+            let metadata = UdfMetadata::new(&format!("func_{}", i), "return 42", UdfRuntime::Lua)
+                .with_return_type("INTEGER");
+            registry
+                .register(metadata)
+                .await
+                .expect("Failed to register function");
         }
 
         // List should now have 3 functions
@@ -261,7 +269,10 @@ mod tests {
         .with_parameter("value", "INTEGER")
         .with_return_type("INTEGER");
 
-        registry.register(metadata).await.expect("Failed to register function");
+        registry
+            .register(metadata)
+            .await
+            .expect("Failed to register function");
 
         // Test with null
         let result = registry
@@ -302,7 +313,10 @@ mod tests {
         .with_parameter("quantity", "INTEGER")
         .with_return_type("DOUBLE PRECISION");
 
-        registry.register(metadata).await.expect("Failed to register function");
+        registry
+            .register(metadata)
+            .await
+            .expect("Failed to register function");
 
         // Test with quantity 150 (20% discount)
         let result = registry
@@ -312,7 +326,7 @@ mod tests {
             )
             .await
             .expect("Failed to call UDF");
-        assert_eq!(result, SqlValue::Double(1200.0));  // 1500 * 0.8 = 1200
+        assert_eq!(result, SqlValue::Double(1200.0)); // 1500 * 0.8 = 1200
 
         // Test with quantity 75 (10% discount)
         let result = registry
@@ -322,7 +336,7 @@ mod tests {
             )
             .await
             .expect("Failed to call UDF");
-        assert_eq!(result, SqlValue::Double(675.0));  // 750 * 0.9 = 675
+        assert_eq!(result, SqlValue::Double(675.0)); // 750 * 0.9 = 675
 
         // Test with quantity 25 (no discount)
         let result = registry
@@ -332,6 +346,6 @@ mod tests {
             )
             .await
             .expect("Failed to call UDF");
-        assert_eq!(result, SqlValue::Double(250.0));  // 250 * 1 = 250
+        assert_eq!(result, SqlValue::Double(250.0)); // 250 * 1 = 250
     }
 }

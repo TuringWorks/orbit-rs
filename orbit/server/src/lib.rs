@@ -9,18 +9,18 @@ pub mod js;
 pub mod load_balancer;
 pub mod lua;
 pub mod mesh;
-#[cfg(feature = "python-udf")]
-pub mod python;
-#[cfg(feature = "wasm-udf")]
-pub mod wasm;
 pub mod persistence;
 pub mod protocols;
+#[cfg(feature = "python-udf")]
+pub mod python;
 pub mod server;
 pub mod services;
 pub mod tcp_proxy;
 #[cfg(test)]
 mod test_pooling_integration;
 pub mod unified_storage;
+#[cfg(feature = "wasm-udf")]
+pub mod wasm;
 
 pub use features::Features;
 pub use load_balancer::{LoadBalancer, LoadBalancerStats, LoadBalancingStrategy, NodeLoad};

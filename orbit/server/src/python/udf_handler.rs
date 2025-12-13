@@ -2,8 +2,8 @@
 //!
 //! Handles CREATE FUNCTION and DROP FUNCTION statements for Python UDFs.
 
-use super::udf_registry::{PythonUdfMetadata, PythonUdfRegistry};
 use super::types::{PythonError, PythonResult};
+use super::udf_registry::{PythonUdfMetadata, PythonUdfRegistry};
 use crate::protocols::postgres_wire::sql::types::SqlValue;
 use std::sync::Arc;
 
@@ -45,13 +45,8 @@ impl PythonUdfHandler {
         self.validate_source(&source)?;
 
         // Create metadata
-        let mut metadata = PythonUdfMetadata::new(
-            name,
-            source,
-            python_function_name,
-            param_types,
-            return_type,
-        );
+        let mut metadata =
+            PythonUdfMetadata::new(name, source, python_function_name, param_types, return_type);
 
         metadata.schema = schema;
 

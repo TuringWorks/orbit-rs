@@ -9,25 +9,25 @@ use thiserror::Error;
 pub enum PythonError {
     #[error("Runtime error: {0}")]
     RuntimeError(String),
-    
+
     #[error("Timeout error: execution exceeded {0}s")]
     TimeoutError(u64),
-    
+
     #[error("Type conversion error: {0}")]
     TypeConversionError(String),
-    
+
     #[error("Function not found: {0}")]
     FunctionNotFound(String),
-    
+
     #[error("Worker error: {0}")]
     WorkerError(String),
-    
+
     #[error("Communication error: {0}")]
     CommunicationError(String),
-    
+
     #[error("Security violation: {0}")]
     SecurityViolation(String),
-    
+
     #[error("Internal error: {0}")]
     InternalError(String),
 }
@@ -52,7 +52,7 @@ impl PythonValue {
     /// Convert to SQL-compatible value
     pub fn to_sql_value(&self) -> crate::protocols::postgres_wire::sql::types::SqlValue {
         use crate::protocols::postgres_wire::sql::types::SqlValue;
-        
+
         match self {
             PythonValue::Null => SqlValue::Null,
             PythonValue::Bool(b) => SqlValue::Boolean(*b),
@@ -76,11 +76,11 @@ impl PythonValue {
             }
         }
     }
-    
+
     /// Create from SQL value
     pub fn from_sql_value(sql: &crate::protocols::postgres_wire::sql::types::SqlValue) -> Self {
         use crate::protocols::postgres_wire::sql::types::SqlValue;
-        
+
         match sql {
             SqlValue::Null => PythonValue::Null,
             SqlValue::Boolean(b) => PythonValue::Bool(*b),
@@ -116,17 +116,13 @@ impl PythonValue {
                 // Return as ISO string
                 PythonValue::String(ts.format("%Y-%m-%dT%H:%M:%S%.f").to_string())
             }
-            SqlValue::Date(d) => {
-                PythonValue::String(d.format("%Y-%m-%d").to_string())
-            }
-            SqlValue::Time(t) => {
-                PythonValue::String(t.format("%H:%M:%S%.f").to_string())
-            }
+            SqlValue::Date(d) => PythonValue::String(d.format("%Y-%m-%d").to_string()),
+            SqlValue::Time(t) => PythonValue::String(t.format("%H:%M:%S%.f").to_string()),
             SqlValue::Uuid(u) => PythonValue::String(u.to_string()),
             _ => PythonValue::String(format!("{:?}", sql)),
         }
     }
-    
+
     fn from_json_value(json: &serde_json::Value) -> Self {
         match json {
             serde_json::Value::Null => PythonValue::Null,
@@ -158,25 +154,19 @@ impl PythonValue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_python_value_types() {
-        assert_eq!(
-            PythonValue::Null,
-            PythonValue::Null
-        );
-        
-        assert_eq!(
-            PythonValue::Int(42),
-            PythonValue::Int(42)
-        );
-        
+        assert_eq!(PythonValue::Null, PythonValue::Null);
+
+        assert_eq!(PythonValue::Int(42), PythonValue::Int(42));
+
         assert_eq!(
             PythonValue::String("test".to_string()),
             PythonValue::String("test".to_string())
         );
     }
-    
+
     #[test]
     fn test_list_and_dict() {
         let list = PythonValue::List(vec![
@@ -184,19 +174,22 @@ mod tests {
             PythonValue::Int(2),
             PythonValue::Int(3),
         ]);
-        
+
         if let PythonValue::List(items) = list {
             assert_eq!(items.len(), 3);
         } else {
             panic!("Expected list");
         }
-        
+
         let mut map = HashMap::new();
         map.insert("key".to_string(), PythonValue::String("value".to_string()));
         let dict = PythonValue::Dict(map);
-        
+
         if let PythonValue::Dict(m) = dict {
-            assert_eq!(m.get("key"), Some(&PythonValue::String("value".to_string())));
+            assert_eq!(
+                m.get("key"),
+                Some(&PythonValue::String("value".to_string()))
+            );
         } else {
             panic!("Expected dict");
         }

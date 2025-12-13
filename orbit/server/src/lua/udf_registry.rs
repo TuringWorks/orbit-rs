@@ -70,11 +70,7 @@ pub struct UdfMetadata {
 
 impl UdfMetadata {
     /// Create a new UDF metadata
-    pub fn new(
-        name: impl Into<String>,
-        source: impl Into<String>,
-        runtime: UdfRuntime,
-    ) -> Self {
+    pub fn new(name: impl Into<String>, source: impl Into<String>, runtime: UdfRuntime) -> Self {
         let now = chrono::Utc::now().timestamp();
         Self {
             name: name.into(),
@@ -92,11 +88,7 @@ impl UdfMetadata {
     }
 
     /// Add a parameter
-    pub fn with_parameter(
-        mut self,
-        name: impl Into<String>,
-        sql_type: impl Into<String>,
-    ) -> Self {
+    pub fn with_parameter(mut self, name: impl Into<String>, sql_type: impl Into<String>) -> Self {
         self.parameters.push(UdfParameter {
             name: name.into(),
             sql_type: sql_type.into(),
@@ -184,12 +176,10 @@ impl UdfRegistry {
         #[cfg(feature = "lua-mlua")]
         if metadata.runtime == UdfRuntime::Lua {
             // Convert to LuaFunction and register
-            let lua_func = super::types::LuaFunction::new(
-                metadata.name.clone(),
-                metadata.source.clone(),
-            )
-            .with_volatility(metadata.is_volatile)
-            .with_determinism(metadata.is_deterministic);
+            let lua_func =
+                super::types::LuaFunction::new(metadata.name.clone(), metadata.source.clone())
+                    .with_volatility(metadata.is_volatile)
+                    .with_determinism(metadata.is_deterministic);
 
             self.lua_runtime.register_function(lua_func).await?;
         }
@@ -267,11 +257,7 @@ impl UdfRegistry {
     }
 
     /// Call a UDF with SQL values
-    pub async fn call_udf(
-        &self,
-        name: &str,
-        args: Vec<SqlValue>,
-    ) -> LuaResult<SqlValue> {
+    pub async fn call_udf(&self, name: &str, args: Vec<SqlValue>) -> LuaResult<SqlValue> {
         // Get metadata
         let metadata = self
             .get_metadata(name)
@@ -504,7 +490,10 @@ mod tests {
         assert_eq!(lua_to_sql(&LuaValue::Nil), SqlValue::Null);
 
         // Boolean
-        assert_eq!(lua_to_sql(&LuaValue::Boolean(true)), SqlValue::Boolean(true));
+        assert_eq!(
+            lua_to_sql(&LuaValue::Boolean(true)),
+            SqlValue::Boolean(true)
+        );
 
         // Integer
         assert_eq!(lua_to_sql(&LuaValue::Integer(42)), SqlValue::BigInt(42));

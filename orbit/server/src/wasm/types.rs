@@ -141,8 +141,7 @@ fn json_to_wasm_value(json: &serde_json::Value) -> ProtocolResult<WasmValue> {
         }
         serde_json::Value::String(s) => Ok(WasmValue::String(s.clone())),
         serde_json::Value::Array(arr) => {
-            let values: Result<Vec<WasmValue>, _> =
-                arr.iter().map(json_to_wasm_value).collect();
+            let values: Result<Vec<WasmValue>, _> = arr.iter().map(json_to_wasm_value).collect();
             Ok(WasmValue::Array(values?))
         }
         serde_json::Value::Object(map) => {
@@ -169,7 +168,7 @@ pub struct WasmFunctionMetadata {
     pub params: Vec<WasmParameter>,
     pub return_type: String,
     pub wasm_module: Vec<u8>, // Compiled WASM binary
-    pub export_name: String,   // Name of exported function
+    pub export_name: String,  // Name of exported function
     pub schema: Option<String>,
 }
 

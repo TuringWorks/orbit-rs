@@ -12,8 +12,8 @@ use crate::lua::udf_registry::{UdfMetadata, UdfRegistry, UdfRuntime};
 use crate::lua::MluaRuntime;
 
 use orbit_shared::orbitql::ast::{
-    CreateDefinition, CreateStatement, DataType, DropStatement,
-    FunctionLanguage, FunctionVolatility,
+    CreateDefinition, CreateStatement, DataType, DropStatement, FunctionLanguage,
+    FunctionVolatility,
 };
 use std::sync::Arc;
 
@@ -44,10 +44,7 @@ impl UdfHandler {
     }
 
     /// Handle CREATE FUNCTION statement
-    pub async fn handle_create_function(
-        &self,
-        stmt: &CreateStatement,
-    ) -> ProtocolResult<SqlValue> {
+    pub async fn handle_create_function(&self, stmt: &CreateStatement) -> ProtocolResult<SqlValue> {
         #[cfg(feature = "lua-mlua")]
         {
             match &stmt.definition {
@@ -90,10 +87,8 @@ impl UdfHandler {
 
                     // Add parameters
                     for param in parameters {
-                        metadata = metadata.with_parameter(
-                            &param.name,
-                            data_type_to_sql_type(&param.data_type),
-                        );
+                        metadata = metadata
+                            .with_parameter(&param.name, data_type_to_sql_type(&param.data_type));
                     }
 
                     // Set volatility
@@ -110,15 +105,11 @@ impl UdfHandler {
                     }
 
                     // Register the function
-                    self.udf_registry
-                        .register(metadata)
-                        .await
-                        .map_err(|e| ProtocolError::PostgresError(format!("Failed to register function: {}", e)))?;
+                    self.udf_registry.register(metadata).await.map_err(|e| {
+                        ProtocolError::PostgresError(format!("Failed to register function: {}", e))
+                    })?;
 
-                    Ok(SqlValue::Text(format!(
-                        "CREATE FUNCTION {}",
-                        stmt.name
-                    )))
+                    Ok(SqlValue::Text(format!("CREATE FUNCTION {}", stmt.name)))
                 }
                 _ => Err(ProtocolError::PostgresError(
                     "Invalid CREATE FUNCTION definition".to_string(),
@@ -141,7 +132,7 @@ impl UdfHandler {
         {
             // Check if function exists
             let exists = self.udf_registry.exists(&stmt.name).await;
-            
+
             if !exists {
                 if stmt.if_exists {
                     return Ok(SqlValue::Text(format!(
@@ -161,7 +152,9 @@ impl UdfHandler {
             self.udf_registry
                 .unregister(&qualified_name)
                 .await
-                .map_err(|e| ProtocolError::PostgresError(format!("Failed to drop function: {}", e)))?;
+                .map_err(|e| {
+                    ProtocolError::PostgresError(format!("Failed to drop function: {}", e))
+                })?;
 
             Ok(SqlValue::Text(format!("DROP FUNCTION {}", stmt.name)))
         }
@@ -187,10 +180,6 @@ impl UdfHandler {
         Vec::new()
     }
 
-
-
-
-
     /// Handle PostgreSQL CREATE FUNCTION statement
     #[cfg(feature = "lua-mlua")]
     pub async fn handle_pg_create_function(
@@ -200,11 +189,14 @@ impl UdfHandler {
         // Check if function already exists
         let func_name = match &stmt.name {
             crate::protocols::postgres_wire::sql::ast::FunctionName::Simple(n) => n.to_uppercase(),
-            crate::protocols::postgres_wire::sql::ast::FunctionName::Qualified { schema: _, name } => name.to_uppercase(), // ignoring schema for now or assuming public
+            crate::protocols::postgres_wire::sql::ast::FunctionName::Qualified {
+                schema: _,
+                name,
+            } => name.to_uppercase(), // ignoring schema for now or assuming public
         };
 
         let exists = self.udf_registry.exists(&func_name).await;
-        
+
         if exists && !stmt.or_replace {
             return Err(ProtocolError::PostgresError(format!(
                 "Function '{}' already exists. Use CREATE OR REPLACE FUNCTION to replace it.",
@@ -214,10 +206,22 @@ impl UdfHandler {
 
         // Determine runtime from language
         let runtime = match &stmt.language {
-            Some(crate::protocols::postgres_wire::sql::ast::FunctionLanguage::Lua) => UdfRuntime::Lua,
-            Some(crate::protocols::postgres_wire::sql::ast::FunctionLanguage::PlJavaScript) => UdfRuntime::JavaScript,
-            Some(crate::protocols::postgres_wire::sql::ast::FunctionLanguage::Other(l)) if l.eq_ignore_ascii_case("lua") => UdfRuntime::Lua,
-            Some(crate::protocols::postgres_wire::sql::ast::FunctionLanguage::Other(l)) if l.eq_ignore_ascii_case("javascript") || l.eq_ignore_ascii_case("js") => UdfRuntime::JavaScript,
+            Some(crate::protocols::postgres_wire::sql::ast::FunctionLanguage::Lua) => {
+                UdfRuntime::Lua
+            }
+            Some(crate::protocols::postgres_wire::sql::ast::FunctionLanguage::PlJavaScript) => {
+                UdfRuntime::JavaScript
+            }
+            Some(crate::protocols::postgres_wire::sql::ast::FunctionLanguage::Other(l))
+                if l.eq_ignore_ascii_case("lua") =>
+            {
+                UdfRuntime::Lua
+            }
+            Some(crate::protocols::postgres_wire::sql::ast::FunctionLanguage::Other(l))
+                if l.eq_ignore_ascii_case("javascript") || l.eq_ignore_ascii_case("js") =>
+            {
+                UdfRuntime::JavaScript
+            }
             Some(lang) => {
                 return Err(ProtocolError::PostgresError(format!(
                     "Unsupported language: {:?}. Supported languages: Lua, JavaScript",
@@ -239,7 +243,8 @@ impl UdfHandler {
         if let Some(ref args) = stmt.args {
             for param in args {
                 let param_name = param.name.as_deref().unwrap_or("arg");
-                metadata = metadata.with_parameter(param_name, &pg_sql_type_to_string(&param.data_type));
+                metadata =
+                    metadata.with_parameter(param_name, &pg_sql_type_to_string(&param.data_type));
             }
         }
 
@@ -259,10 +264,9 @@ impl UdfHandler {
         }
 
         // Register the function
-        self.udf_registry
-            .register(metadata)
-            .await
-            .map_err(|e| ProtocolError::PostgresError(format!("Failed to register function: {}", e)))?;
+        self.udf_registry.register(metadata).await.map_err(|e| {
+            ProtocolError::PostgresError(format!("Failed to register function: {}", e))
+        })?;
 
         Ok(SqlValue::Text(format!("CREATE FUNCTION {}", func_name)))
     }
@@ -286,13 +290,13 @@ impl UdfHandler {
         stmt: &crate::protocols::postgres_wire::sql::ast::DropFunctionStatement,
     ) -> ProtocolResult<SqlValue> {
         let mut dropped_funcs = Vec::new();
-        
+
         for (table_name, _args) in &stmt.functions {
             let func_name = table_name.to_string().to_uppercase();
-            
+
             // Check if function exists
             let exists = self.udf_registry.exists(&func_name).await;
-            
+
             if !exists {
                 if stmt.if_exists {
                     continue;
@@ -309,12 +313,17 @@ impl UdfHandler {
             self.udf_registry
                 .unregister(&qualified_name)
                 .await
-                .map_err(|e| ProtocolError::PostgresError(format!("Failed to drop function: {}", e)))?;
-            
+                .map_err(|e| {
+                    ProtocolError::PostgresError(format!("Failed to drop function: {}", e))
+                })?;
+
             dropped_funcs.push(func_name);
         }
 
-        Ok(SqlValue::Text(format!("DROP FUNCTION {}", dropped_funcs.join(", "))))
+        Ok(SqlValue::Text(format!(
+            "DROP FUNCTION {}",
+            dropped_funcs.join(", ")
+        )))
     }
 
     #[cfg(not(feature = "lua-mlua"))]
@@ -346,9 +355,11 @@ fn data_type_to_sql_type(dt: &DataType) -> String {
 }
 
 /// Convert PostgreSQL SqlType to string representation
-fn pg_sql_type_to_string(sql_type: &crate::protocols::postgres_wire::sql::types::SqlType) -> String {
+fn pg_sql_type_to_string(
+    sql_type: &crate::protocols::postgres_wire::sql::types::SqlType,
+) -> String {
     use crate::protocols::postgres_wire::sql::types::SqlType;
-    
+
     match sql_type {
         SqlType::Boolean => "BOOLEAN".to_string(),
         SqlType::SmallInt => "SMALLINT".to_string(),
@@ -379,7 +390,10 @@ mod tests {
         assert_eq!(data_type_to_sql_type(&DataType::Boolean), "BOOLEAN");
         assert_eq!(data_type_to_sql_type(&DataType::Integer), "INTEGER");
         assert_eq!(data_type_to_sql_type(&DataType::Float), "DOUBLE PRECISION");
-        assert_eq!(data_type_to_sql_type(&DataType::String { max_length: None }), "TEXT");
+        assert_eq!(
+            data_type_to_sql_type(&DataType::String { max_length: None }),
+            "TEXT"
+        );
         assert_eq!(
             data_type_to_sql_type(&DataType::Array(Box::new(DataType::Integer))),
             "INTEGER[]"

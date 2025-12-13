@@ -1671,7 +1671,9 @@ impl SqlExecutor {
             if let Some(FromClause::Table { name, .. }) = &stmt.from_clause {
                 return self.execute_select_window(&stmt, name).await;
             } else {
-                 return Err(ProtocolError::PostgresError("Window functions currently only supported on single tables".to_string()));
+                return Err(ProtocolError::PostgresError(
+                    "Window functions currently only supported on single tables".to_string(),
+                ));
             }
         }
 
@@ -1707,7 +1709,6 @@ impl SqlExecutor {
         })
     }
 
-
     /// Execute SELECT with window functions
     async fn execute_select_window(
         &self,
@@ -1715,12 +1716,15 @@ impl SqlExecutor {
         table_name: &TableName,
     ) -> ProtocolResult<ExecutionResult> {
         let full_table_name = table_name.full_name();
-        
+
         // 1. Fetch raw rows
         let table_data = self.table_data.read().await;
         // Clone rows because we need multiple mutable passes (or immutable but shared ownership)
-        let rows = table_data.get(&full_table_name).cloned().unwrap_or_default();
-        
+        let rows = table_data
+            .get(&full_table_name)
+            .cloned()
+            .unwrap_or_default();
+
         // 2. Filter rows
         let mut filtered_rows = Vec::new();
         for row in rows {
@@ -1728,66 +1732,77 @@ impl SqlExecutor {
                 let context = EvaluationContext::with_row(row.clone());
                 match self.evaluate_where_condition(where_expr, &context).await {
                     Ok(SqlValue::Boolean(b)) => {
-                        if b { filtered_rows.push(row); }
-                    },
-                    _ => {},
+                        if b {
+                            filtered_rows.push(row);
+                        }
+                    }
+                    _ => {}
                 }
             } else {
                 filtered_rows.push(row);
             }
         }
-        
+
         // 3. Evaluate window functions
         // We need to map (row_index, col_index) -> value
         let mut window_values: HashMap<(usize, usize), SqlValue> = HashMap::new();
-        
+
         for (col_idx, item) in stmt.select_list.iter().enumerate() {
-            if let SelectItem::Expression { expr: Expression::WindowFunction { 
-                function, partition_by, order_by, frame: window_frame, ..
-            }, .. } = item {
-                
+            if let SelectItem::Expression {
+                expr:
+                    Expression::WindowFunction {
+                        function,
+                        partition_by,
+                        order_by,
+                        frame: window_frame,
+                        ..
+                    },
+                ..
+            } = item
+            {
                 // Create evaluator for this specific window function definition
                 // Note: Optimization would be to group by (partition_by, order_by) but for now create new for each
                 let mut evaluator = WindowFunctionEvaluator::new();
-                
+
                 // Partition rows
                 // WindowFunctionEvaluator::partition_rows expects Vec<HashMap>
-                // filtered_rows is Vec<HashMap>. We need to clone specific columns? 
+                // filtered_rows is Vec<HashMap>. We need to clone specific columns?
                 // partition_rows takes ownership. Clone inputs.
                 let rows_for_partition = filtered_rows.clone();
-                
+
                 evaluator.partition_rows(rows_for_partition, partition_by, order_by)?;
-                
+
                 // Evaluate
                 let results = evaluator.evaluate(function, window_frame, order_by)?;
-                
+
                 // Store results
                 for (row_idx, value) in results {
                     window_values.insert((row_idx, col_idx), value);
                 }
             }
         }
-        
+
         // 4. Construct result
         let mut columns = Vec::new();
         let mut final_rows = Vec::new();
-        
+
         // Build column names
-        self.build_result_columns(&stmt.select_list, &stmt.from_clause, &mut columns).await?;
-        
+        self.build_result_columns(&stmt.select_list, &stmt.from_clause, &mut columns)
+            .await?;
+
         for (idx, row) in filtered_rows.iter().enumerate() {
             let mut result_row = Vec::new();
-            
+
             for (col_idx, item) in stmt.select_list.iter().enumerate() {
                 if let Some(val) = window_values.get(&(idx, col_idx)) {
                     result_row.push(Some(val.to_postgres_string()));
                 } else if let SelectItem::Expression { expr, .. } = item {
-                     // Regular expression evaluation
-                     let context = EvaluationContext::with_row(row.clone());
-                     // Handle simple evaluation
-                     // evaluate_where_condition is generic evaluate?
-                     let value = self.evaluate_where_condition(expr, &context).await?;
-                     result_row.push(Some(value.to_postgres_string()));
+                    // Regular expression evaluation
+                    let context = EvaluationContext::with_row(row.clone());
+                    // Handle simple evaluation
+                    // evaluate_where_condition is generic evaluate?
+                    let value = self.evaluate_where_condition(expr, &context).await?;
+                    result_row.push(Some(value.to_postgres_string()));
                 } else {
                     // Wildcard or other?
                     // Basic support for now
@@ -1796,14 +1811,14 @@ impl SqlExecutor {
             }
             final_rows.push(result_row);
         }
-        
+
         Ok(ExecutionResult::Select {
             columns,
             row_count: final_rows.len(),
             rows: final_rows,
         })
     }
-    
+
     /// Execute a TRAVERSE query using shared graph algorithms
     async fn execute_traverse_query(
         &self,

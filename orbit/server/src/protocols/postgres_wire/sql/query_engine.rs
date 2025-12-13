@@ -177,13 +177,12 @@ impl OptimizedQueryEngine {
             use crate::python::udf_registry::PythonUdfRegistry;
 
             let python_config = PythonConfig::default();
-            let registry = Arc::new(
-                PythonUdfRegistry::new(python_config)
-                    .await
-                    .map_err(|e| crate::protocols::error::ProtocolError::PostgresError(
-                        format!("Failed to create Python UDF registry: {}", e)
-                    ))?
-            );
+            let registry = Arc::new(PythonUdfRegistry::new(python_config).await.map_err(|e| {
+                crate::protocols::error::ProtocolError::PostgresError(format!(
+                    "Failed to create Python UDF registry: {}",
+                    e
+                ))
+            })?);
             let handler = Arc::new(PythonUdfHandler::new(registry));
 
             Some(handler)
@@ -270,7 +269,9 @@ impl OptimizedQueryEngine {
                 #[cfg(feature = "python-udf")]
                 if is_python {
                     if let Some(ref python_handler) = self.python_udf_handler {
-                        let _result = Self::handle_pg_create_python_function(python_handler, create_fn).await?;
+                        let _result =
+                            Self::handle_pg_create_python_function(python_handler, create_fn)
+                                .await?;
                         let execution_time_ms = start.elapsed().as_millis() as u64;
 
                         return Ok(OptimizedExecutionResult {
@@ -312,9 +313,15 @@ impl OptimizedQueryEngine {
                     // Try Python handler first
                     for (name, _) in &drop_fn.functions {
                         if python_handler.function_exists(&name.to_string()).await {
-                            let _result = python_handler.handle_drop_function(&name.to_string()).await.map_err(|e| {
-                                crate::protocols::error::ProtocolError::PostgresError(format!("Failed to drop Python function: {}", e))
-                            })?;
+                            let _result = python_handler
+                                .handle_drop_function(&name.to_string())
+                                .await
+                                .map_err(|e| {
+                                    crate::protocols::error::ProtocolError::PostgresError(format!(
+                                        "Failed to drop Python function: {}",
+                                        e
+                                    ))
+                                })?;
                             let execution_time_ms = start.elapsed().as_millis() as u64;
 
                             return Ok(OptimizedExecutionResult {
@@ -338,7 +345,15 @@ impl OptimizedQueryEngine {
 
                     return Ok(OptimizedExecutionResult {
                         result: ExecutionResult::Show {
-                            variable: format!("DROP FUNCTION {}", drop_fn.functions.iter().map(|(name, _)| name.to_string()).collect::<Vec<_>>().join(", ")),
+                            variable: format!(
+                                "DROP FUNCTION {}",
+                                drop_fn
+                                    .functions
+                                    .iter()
+                                    .map(|(name, _)| name.to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            ),
                             value: "OK".to_string(),
                         },
                         execution_time_ms,
@@ -352,7 +367,6 @@ impl OptimizedQueryEngine {
                 // Not a UDF statement, continue normal execution
             }
         }
-
 
         // 3. Get or create execution plan
         let plan = self.get_or_create_plan(sql, &statement).await?;
@@ -701,13 +715,7 @@ impl OptimizedQueryEngine {
 
         // Call handler
         python_handler
-            .handle_create_function(
-                func_name,
-                params,
-                return_type,
-                source,
-                schema,
-            )
+            .handle_create_function(func_name, params, return_type, source, schema)
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::PostgresError(format!(
@@ -719,7 +727,9 @@ impl OptimizedQueryEngine {
 
     /// Convert PostgreSQL SqlType to SQL type string
     #[cfg(any(feature = "python-udf", feature = "lua-mlua"))]
-    fn pg_sql_type_to_string(sql_type: &crate::protocols::postgres_wire::sql::types::SqlType) -> String {
+    fn pg_sql_type_to_string(
+        sql_type: &crate::protocols::postgres_wire::sql::types::SqlType,
+    ) -> String {
         use crate::protocols::postgres_wire::sql::types::SqlType;
 
         match sql_type {
@@ -738,7 +748,9 @@ impl OptimizedQueryEngine {
             SqlType::Interval => "INTERVAL".to_string(),
             SqlType::Uuid => "UUID".to_string(),
             SqlType::Json | SqlType::Jsonb => "JSON".to_string(),
-            SqlType::Array { element_type, .. } => format!("{}[]", Self::pg_sql_type_to_string(element_type)),
+            SqlType::Array { element_type, .. } => {
+                format!("{}[]", Self::pg_sql_type_to_string(element_type))
+            }
             _ => "TEXT".to_string(),
         }
     }

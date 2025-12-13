@@ -198,7 +198,6 @@ fn bench_max(c: &mut Criterion) {
     group.finish();
 }
 
-
 fn bench_filter_f32_eq(c: &mut Criterion) {
     let mut group = c.benchmark_group("filter_f32_eq");
 
@@ -546,18 +545,22 @@ fn bench_float_filters(c: &mut Criterion) {
     for size in [1000, 10_000].iter() {
         let f32_vals: Vec<f32> = (0..*size).map(|x| x as f32).collect();
         let f32_target = (*size / 2) as f32;
-        
+
         // f32 lt
         group.bench_with_input(BenchmarkId::new("scalar_f32_lt", size), size, |b, _| {
             let backend = ScalarBackend;
-            b.iter(|| black_box(backend.filter_f32_lt(black_box(&f32_vals), black_box(f32_target))));
+            b.iter(|| {
+                black_box(backend.filter_f32_lt(black_box(&f32_vals), black_box(f32_target)))
+            });
         });
-        
+
         #[cfg(target_arch = "aarch64")]
         {
-             group.bench_with_input(BenchmarkId::new("neon_f32_lt", size), size, |b, _| {
+            group.bench_with_input(BenchmarkId::new("neon_f32_lt", size), size, |b, _| {
                 let backend = NeonBackend;
-                b.iter(|| black_box(backend.filter_f32_lt(black_box(&f32_vals), black_box(f32_target))));
+                b.iter(|| {
+                    black_box(backend.filter_f32_lt(black_box(&f32_vals), black_box(f32_target)))
+                });
             });
         }
 
@@ -567,14 +570,18 @@ fn bench_float_filters(c: &mut Criterion) {
         // f64 lt
         group.bench_with_input(BenchmarkId::new("scalar_f64_lt", size), size, |b, _| {
             let backend = ScalarBackend;
-            b.iter(|| black_box(backend.filter_f64_lt(black_box(&f64_vals), black_box(f64_target))));
+            b.iter(|| {
+                black_box(backend.filter_f64_lt(black_box(&f64_vals), black_box(f64_target)))
+            });
         });
 
         #[cfg(target_arch = "aarch64")]
         {
-             group.bench_with_input(BenchmarkId::new("neon_f64_lt", size), size, |b, _| {
+            group.bench_with_input(BenchmarkId::new("neon_f64_lt", size), size, |b, _| {
                 let backend = NeonBackend;
-                b.iter(|| black_box(backend.filter_f64_lt(black_box(&f64_vals), black_box(f64_target))));
+                b.iter(|| {
+                    black_box(backend.filter_f64_lt(black_box(&f64_vals), black_box(f64_target)))
+                });
             });
         }
     }
@@ -586,7 +593,7 @@ fn bench_operators(c: &mut Criterion) {
 
     // We can't use get_simd_backend() comfortably here because benchmarks test specific backends usually.
     // But since the trait exposes the methods, we can just test the active one or specific ones.
-    // The previous benchmarks tested Scalar/AVX2/NEON explicitly. 
+    // The previous benchmarks tested Scalar/AVX2/NEON explicitly.
     // I should follow that pattern for consistency and isolation.
 
     for size in [1000, 100_000].iter() {
@@ -594,28 +601,44 @@ fn bench_operators(c: &mut Criterion) {
         let target = 50;
 
         // Scalar
-        group.bench_with_input(BenchmarkId::new("scalar/filter_i32_le", size), size, |b, _| {
-            let backend = ScalarBackend;
-            b.iter(|| black_box(backend.filter_i32_le(black_box(&values), black_box(target))));
-        });
+        group.bench_with_input(
+            BenchmarkId::new("scalar/filter_i32_le", size),
+            size,
+            |b, _| {
+                let backend = ScalarBackend;
+                b.iter(|| black_box(backend.filter_i32_le(black_box(&values), black_box(target))));
+            },
+        );
 
         #[cfg(target_arch = "x86_64")]
         if is_x86_feature_detected!("avx2") {
-            group.bench_with_input(BenchmarkId::new("avx2/filter_i32_le", size), size, |b, _| {
-                let backend = Avx2Backend;
-                b.iter(|| black_box(backend.filter_i32_le(black_box(&values), black_box(target))));
-            });
+            group.bench_with_input(
+                BenchmarkId::new("avx2/filter_i32_le", size),
+                size,
+                |b, _| {
+                    let backend = Avx2Backend;
+                    b.iter(|| {
+                        black_box(backend.filter_i32_le(black_box(&values), black_box(target)))
+                    });
+                },
+            );
         }
 
         #[cfg(target_arch = "aarch64")]
         {
-            group.bench_with_input(BenchmarkId::new("neon/filter_i32_le", size), size, |b, _| {
-                let backend = NeonBackend;
-                b.iter(|| black_box(backend.filter_i32_le(black_box(&values), black_box(target))));
-            });
+            group.bench_with_input(
+                BenchmarkId::new("neon/filter_i32_le", size),
+                size,
+                |b, _| {
+                    let backend = NeonBackend;
+                    b.iter(|| {
+                        black_box(backend.filter_i32_le(black_box(&values), black_box(target)))
+                    });
+                },
+            );
         }
     }
-    
+
     group.finish();
 }
 

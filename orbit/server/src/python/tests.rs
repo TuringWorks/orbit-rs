@@ -1,13 +1,13 @@
 //! Comprehensive tests for Python UDF system
 
 use super::*;
+use crate::protocols::postgres_wire::sql::types::SqlValue;
 use config::PythonConfig;
 use runtime::PythonRuntimePool;
+use std::sync::Arc;
 use types::{PythonError, PythonValue};
 use udf_handler::PythonUdfHandler;
 use udf_registry::{PythonUdfMetadata, PythonUdfRegistry};
-use crate::protocols::postgres_wire::sql::types::SqlValue;
-use std::sync::Arc;
 
 // ============================================================================
 // Configuration Tests
@@ -45,7 +45,10 @@ fn test_python_value_to_sql_value() {
     assert_eq!(PythonValue::Null.to_sql_value(), SqlValue::Null);
 
     // Bool
-    assert_eq!(PythonValue::Bool(true).to_sql_value(), SqlValue::Boolean(true));
+    assert_eq!(
+        PythonValue::Bool(true).to_sql_value(),
+        SqlValue::Boolean(true)
+    );
 
     // Int (within i32 range)
     assert_eq!(PythonValue::Int(42).to_sql_value(), SqlValue::Integer(42));
@@ -89,7 +92,10 @@ fn test_python_value_to_sql_value() {
 #[test]
 fn test_sql_value_to_python_value() {
     // Null
-    assert_eq!(PythonValue::from_sql_value(&SqlValue::Null), PythonValue::Null);
+    assert_eq!(
+        PythonValue::from_sql_value(&SqlValue::Null),
+        PythonValue::Null
+    );
 
     // Boolean
     assert_eq!(
@@ -269,8 +275,14 @@ async fn test_registry_batch() {
 
     // Execute batch
     let batch = vec![
-        ("add".to_string(), vec![SqlValue::Integer(10), SqlValue::Integer(5)]),
-        ("sub".to_string(), vec![SqlValue::Integer(10), SqlValue::Integer(5)]),
+        (
+            "add".to_string(),
+            vec![SqlValue::Integer(10), SqlValue::Integer(5)],
+        ),
+        (
+            "sub".to_string(),
+            vec![SqlValue::Integer(10), SqlValue::Integer(5)],
+        ),
     ];
 
     let results = registry.execute_batch(batch).await.unwrap();
@@ -585,15 +597,15 @@ def bad_func():
     return 1
 "#;
 
-    let result = tokio::runtime::Runtime::new().unwrap().block_on(
-        handler.handle_create_function(
+    let result = tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(handler.handle_create_function(
             "bad_func".to_string(),
             vec![],
             "INTEGER".to_string(),
             source.to_string(),
             None,
-        ),
-    );
+        ));
 
     assert!(matches!(result, Err(PythonError::SecurityViolation(_))));
 }

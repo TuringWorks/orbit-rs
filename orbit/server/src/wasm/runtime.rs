@@ -53,6 +53,7 @@ impl From<WasmError> for ProtocolError {
 /// Compiled WASM module cache entry
 struct CachedModule {
     module: Module,
+    #[allow(dead_code)] // Reserved for future cache expiry logic
     compiled_at: Instant,
 }
 
@@ -67,9 +68,9 @@ pub struct WasmRuntime {
 impl WasmRuntime {
     /// Create a new WASM runtime with the given configuration
     pub fn new(config: WasmConfig) -> ProtocolResult<Self> {
-        config.validate().map_err(|e| {
-            ProtocolError::PostgresError(format!("Invalid WASM config: {}", e))
-        })?;
+        config
+            .validate()
+            .map_err(|e| ProtocolError::PostgresError(format!("Invalid WASM config: {}", e)))?;
 
         // Configure the WASM engine
         let mut wasm_config = Config::new();
@@ -100,7 +101,7 @@ impl WasmRuntime {
     }
 
     /// Compile a WASM module (with caching)
-    async fn compile_module(&self, wasm_binary: &[u8]) -> Result<Module, WasmError> {
+    pub async fn compile_module(&self, wasm_binary: &[u8]) -> Result<Module, WasmError> {
         // Validate module size
         if wasm_binary.len() > self.config.max_module_size {
             return Err(WasmError::InvalidModule(format!(
@@ -151,8 +152,13 @@ impl WasmRuntime {
         // Compile the module
         let module = self.compile_module(wasm_binary).await?;
 
-        // Create a new store for this execution
-        let mut store = Store::new(&self.engine, ());
+        // Create store limits for memory protection
+        let limits = StoreLimitsBuilder::new()
+            .memory_size(self.config.max_memory_bytes)
+            .build();
+
+        // Create a new store for this execution with limits
+        let mut store = Store::new(&self.engine, limits);
 
         // Set fuel limit if enabled
         if self.config.enable_fuel {
@@ -162,7 +168,7 @@ impl WasmRuntime {
         }
 
         // Configure memory limits
-        store.limiter(|_| StoreLimitsBuilder::new().memory_size(self.config.max_memory_bytes).build());
+        store.limiter(|s| s);
 
         // Instantiate the module
         let instance = Instance::new(&mut store, &module, &[]).map_err(|e| {
@@ -191,7 +197,7 @@ impl WasmRuntime {
     /// Execute a WASM function (internal)
     async fn execute_func(
         &self,
-        store: &mut Store<()>,
+        store: &mut Store<StoreLimits>,
         func: &Func,
         args: &[Val],
     ) -> Result<WasmValue, WasmError> {
@@ -337,9 +343,7 @@ mod tests {
     #[tokio::test]
     async fn test_function_not_found() {
         let runtime = WasmRuntime::new_default().unwrap();
-        let result = runtime
-            .execute(ADD_WASM, "nonexistent", vec![])
-            .await;
+        let result = runtime.execute(ADD_WASM, "nonexistent", vec![]).await;
         assert!(matches!(result, Err(WasmError::FunctionNotFound(_))));
     }
 

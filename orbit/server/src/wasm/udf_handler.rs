@@ -93,9 +93,8 @@ impl WasmUdfHandler {
         let hex_str = hex_str.trim_start_matches("0x");
 
         // Decode hex string
-        hex::decode(hex_str).map_err(|e| {
-            ProtocolError::PostgresError(format!("Invalid WASM hex encoding: {}", e))
-        })
+        hex::decode(hex_str)
+            .map_err(|e| ProtocolError::PostgresError(format!("Invalid WASM hex encoding: {}", e)))
     }
 
     /// Encode WASM binary as hex string
@@ -137,7 +136,8 @@ mod tests {
     use crate::wasm::runtime::WasmRuntime;
 
     // Simple WASM module that adds two i32 numbers (hex-encoded)
-    const ADD_WASM_HEX: &str = "0061736d0100000001070160027f7f017f030201000707010361646400000a09010700200020016a0b";
+    const ADD_WASM_HEX: &str =
+        "0061736d0100000001070160027f7f017f030201000707010361646400000a09010700200020016a0b";
 
     fn create_test_handler() -> WasmUdfHandler {
         let runtime = Arc::new(WasmRuntime::new(WasmConfig::default()).unwrap());

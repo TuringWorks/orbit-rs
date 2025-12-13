@@ -73,7 +73,9 @@ pub use redis_api::{setup_redis_api, RedisApi};
 pub use database_api::{setup_database_api, DatabaseApi};
 
 #[cfg(feature = "lua-mlua")]
-pub use udf_registry::{UdfMetadata, UdfParameter, UdfRegistry, UdfRuntime, SqlValue, sql_to_lua, lua_to_sql};
+pub use udf_registry::{
+    lua_to_sql, sql_to_lua, SqlValue, UdfMetadata, UdfParameter, UdfRegistry, UdfRuntime,
+};
 
 // Constants
 pub const LUA_ENGINE_VERSION: &str = "0.1.0";
@@ -117,9 +119,9 @@ mod tests {
 }
 
 #[cfg(test)]
-mod udf_integration_test;
-#[cfg(test)]
 mod sql_integration_test;
+#[cfg(test)]
+mod udf_integration_test;
 
 #[cfg(test)]
 mod sql_syntax_e2e_test;

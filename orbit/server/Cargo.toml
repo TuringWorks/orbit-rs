@@ -132,6 +132,7 @@ default = [
     "protocol-mcp",
     "storage-memory",
     "storage-rocksdb",
+    "unified-storage",
     "ai-native",
     "model-relational",
     "model-document",
@@ -194,6 +195,7 @@ storage-rocksdb = ["rocksdb"]
 storage-lsm = []
 storage-btree = []
 storage-iceberg = []
+unified-storage = []
 # storage-iceberg = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet", "opendal"]
 storage-cloud = []
 
