@@ -11,11 +11,13 @@
 //! - `storage`: Common storage abstractions
 
 pub mod formatting;
+#[cfg(feature = "fts")]
 pub mod fts;
 pub mod graph_algorithms;
 pub mod storage;
 
 // Re-export commonly used types
+#[cfg(feature = "fts")]
 pub use fts::{
     CqlQueryType, FtsDocument, FtsError, FtsQuery, FtsQueryType, FtsResult, FtsSearchResult,
     MysqlSearchMode, SharedFtsConfig, SharedFtsEngine,

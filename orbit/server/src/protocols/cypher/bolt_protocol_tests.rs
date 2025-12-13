@@ -1153,6 +1153,7 @@ mod tests {
 
     #[tokio::test]
     #[ignore] // Disabled: Test needs review
+    #[cfg(feature = "storage-rocksdb")]
     async fn test_match_relationship_with_properties() {
         // 1. Setup
         let mut run_message =

@@ -14,7 +14,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 pub mod memory;
+#[cfg(feature = "storage-rocksdb")]
 pub mod tiered;
+#[cfg(feature = "unified-storage")]
 pub mod unified;
 // TODO: Re-enable LSM storage once orbit-shared dependencies are properly resolved
 // pub mod lsm;

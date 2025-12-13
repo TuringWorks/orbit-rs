@@ -18,8 +18,10 @@ use crate::protocols::resp::RespValue;
 use async_trait::async_trait;
 use std::sync::Arc;
 
+use crate::lua::LuaValue;
+
 #[cfg(feature = "lua-mlua")]
-use crate::lua::{LuaValue, MluaRuntime};
+use crate::lua::MluaRuntime;
 
 /// Scripting commands handler
 pub struct ScriptingCommands {
