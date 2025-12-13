@@ -893,6 +893,7 @@ pub enum FunctionLanguage {
     OrbitQL,
     JavaScript,
     Python,
+    Lua,
     Other(String),
 }
 
