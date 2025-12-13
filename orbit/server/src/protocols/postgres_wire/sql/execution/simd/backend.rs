@@ -3,7 +3,7 @@
 //! Provides a unified interface for different SIMD implementations
 //! with runtime selection based on CPU capabilities.
 
-use super::{SimdFilter, NullBitmap};
+use super::{NullBitmap, SimdFilter};
 
 /// Unified SIMD backend trait
 ///
@@ -396,7 +396,7 @@ unsafe fn filter_i32_eq_neon(values: &[i32], target: i32) -> Vec<usize> {
     while i + 4 <= values.len() {
         let data = vld1q_s32(values[i..].as_ptr());
         let cmp = vceqq_s32(data, target_vec);
-        
+
         // Extract mask
         let mask: [u32; 4] = std::mem::transmute(cmp);
         for j in 0..4 {
@@ -427,7 +427,7 @@ unsafe fn filter_i32_lt_neon(values: &[i32], target: i32) -> Vec<usize> {
     while i + 4 <= values.len() {
         let data = vld1q_s32(values[i..].as_ptr());
         let cmp = vcltq_s32(data, target_vec); // data < target
-        
+
         let mask: [u32; 4] = std::mem::transmute(cmp);
         for j in 0..4 {
             if mask[j] != 0 {
@@ -457,7 +457,7 @@ unsafe fn filter_i32_gt_neon(values: &[i32], target: i32) -> Vec<usize> {
     while i + 4 <= values.len() {
         let data = vld1q_s32(values[i..].as_ptr());
         let cmp = vcgtq_s32(data, target_vec); // data > target
-        
+
         let mask: [u32; 4] = std::mem::transmute(cmp);
         for j in 0..4 {
             if mask[j] != 0 {
@@ -517,7 +517,7 @@ unsafe fn compare_bytes_neon(a: &[u8], b: &[u8]) -> bool {
         let va = vld1q_u8(a[i..].as_ptr());
         let vb = vld1q_u8(b[i..].as_ptr());
         let cmp = vceqq_u8(va, vb);
-        
+
         // Check if all bytes are equal
         let mask: [u8; 16] = std::mem::transmute(cmp);
         if !mask.iter().all(|&x| x == 0xFF) {
@@ -588,7 +588,7 @@ mod tests {
     #[test]
     fn test_compare_bytes() {
         let backend = get_simd_backend();
-        
+
         let a = b"Hello, World!";
         let b = b"Hello, World!";
         let c = b"Hello, Rust!";

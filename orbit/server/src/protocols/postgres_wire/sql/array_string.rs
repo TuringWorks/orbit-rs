@@ -15,20 +15,23 @@ use crate::protocols::{ProtocolError, ProtocolResult};
 pub fn array_group(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 2 {
         return Err(ProtocolError::PostgresError(
-            "array::group() expects 2 arguments (array, size)".to_string()
+            "array::group() expects 2 arguments (array, size)".to_string(),
         ));
     }
 
-    let array = args[0]
-        .as_array()
-        .ok_or_else(|| ProtocolError::PostgresError("First argument must be an array".to_string()))?;
+    let array = args[0].as_array().ok_or_else(|| {
+        ProtocolError::PostgresError("First argument must be an array".to_string())
+    })?;
 
     let size = args[1]
         .as_u64()
-        .ok_or_else(|| ProtocolError::PostgresError("Size must be a positive number".to_string()))? as usize;
+        .ok_or_else(|| ProtocolError::PostgresError("Size must be a positive number".to_string()))?
+        as usize;
 
     if size == 0 {
-        return Err(ProtocolError::PostgresError("Size must be greater than 0".to_string()));
+        return Err(ProtocolError::PostgresError(
+            "Size must be greater than 0".to_string(),
+        ));
     }
 
     let mut result: Vec<Value> = Vec::new();
@@ -53,13 +56,13 @@ pub fn array_group(args: &[Value]) -> ProtocolResult<Value> {
 pub fn string_join(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() < 1 || args.len() > 2 {
         return Err(ProtocolError::PostgresError(
-            "string::join() expects 1-2 arguments (array, [delimiter])".to_string()
+            "string::join() expects 1-2 arguments (array, [delimiter])".to_string(),
         ));
     }
 
-    let array = args[0]
-        .as_array()
-        .ok_or_else(|| ProtocolError::PostgresError("First argument must be an array".to_string()))?;
+    let array = args[0].as_array().ok_or_else(|| {
+        ProtocolError::PostgresError("First argument must be an array".to_string())
+    })?;
 
     let delimiter = if args.len() > 1 {
         args[1]
@@ -72,9 +75,9 @@ pub fn string_join(args: &[Value]) -> ProtocolResult<Value> {
     let strings: Result<Vec<String>, _> = array
         .iter()
         .map(|v| {
-            v.as_str()
-                .map(|s| s.to_string())
-                .ok_or_else(|| ProtocolError::PostgresError("All array elements must be strings".to_string()))
+            v.as_str().map(|s| s.to_string()).ok_or_else(|| {
+                ProtocolError::PostgresError("All array elements must be strings".to_string())
+            })
         })
         .collect();
 

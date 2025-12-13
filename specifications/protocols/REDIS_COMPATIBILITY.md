@@ -2,8 +2,8 @@
 
 **Target**: Redis 7.x RESP3 Protocol + Redis Modules
 **Reference**: https://redis.io/docs/reference/protocol-spec/
-**Last Updated**: 2025-12-09
-**Current Estimated Coverage**: ~65% (Core: ~75%, Modules: ~30%)
+**Last Updated**: 2025-12-12
+**Current Estimated Coverage**: ~72% (Core: ~85%, Modules: ~35%)
 
 ---
 
@@ -126,8 +126,8 @@ This document specifies the Redis RESP (REdis Serialization Protocol) feature se
 | ZUNIONSTORE | ✅ | Store union result |
 | ZINTERSTORE | ✅ | Store intersection result |
 | ZDIFFSTORE | ✅ | Store difference result |
-| BZPOPMIN | ❌ | Blocking - not implemented |
-| BZPOPMAX | ❌ | Blocking - not implemented |
+| BZPOPMIN | ✅ | Blocking pop minimum (timeout not fully implemented) |
+| BZPOPMAX | ✅ | Blocking pop maximum (timeout not fully implemented) |
 | ZRANDMEMBER | ✅ | Random member(s) from sorted set |
 
 ### Hash Commands
@@ -222,6 +222,48 @@ This document specifies the Redis RESP (REdis Serialization Protocol) feature se
 | COMMAND COUNT | ✅ | Command count |
 | COMMAND INFO | ✅ | Command details |
 
+### HyperLogLog Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| PFADD | ✅ | Add elements to HyperLogLog |
+| PFCOUNT | ✅ | Get cardinality estimate |
+| PFMERGE | ✅ | Merge HyperLogLogs |
+
+### Stream Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| XADD | ✅ | Add entry to stream |
+| XLEN | ✅ | Get stream length |
+| XRANGE | ✅ | Range query |
+| XREVRANGE | ✅ | Reverse range query |
+| XREAD | ✅ | Read from streams |
+| XTRIM | ✅ | Trim stream |
+| XDEL | ✅ | Delete entries |
+| XINFO | ✅ | Stream info |
+| XGROUP CREATE | ✅ | Create consumer group |
+| XGROUP DESTROY | ✅ | Destroy consumer group |
+| XREADGROUP | ✅ | Read as consumer group |
+| XACK | ✅ | Acknowledge messages |
+| XPENDING | ✅ | Get pending messages |
+| XSETID | ✅ | Set stream ID |
+| XCLAIM | ✅ | Claim messages |
+| XAUTOCLAIM | ✅ | Auto-claim messages |
+
+### Geospatial Commands
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| GEOADD | 🔶 | Implemented in spatial_commands.rs |
+| GEOPOS | 🔶 | Implemented in spatial_commands.rs |
+| GEODIST | 🔶 | Implemented in spatial_commands.rs |
+| GEOHASH | 🔶 | Implemented in spatial_commands.rs |
+| GEORADIUS | 🔶 | Implemented in spatial_commands.rs |
+| GEORADIUSBYMEMBER | 🔶 | Implemented in spatial_commands.rs |
+| GEOSEARCH | ❌ | Not implemented |
+| GEOSEARCHSTORE | ❌ | Not implemented |
+
 ---
 
 ## Data Structures
@@ -236,9 +278,9 @@ This document specifies the Redis RESP (REdis Serialization Protocol) feature se
 | Sorted Set | ✅ | Scored sets |
 | Hash | ✅ | Field-value maps |
 | Bitmap | 🔶 | Bit operations |
-| HyperLogLog | ❌ | Not implemented |
-| Stream | ❌ | Not implemented |
-| Geospatial | ❌ | Not implemented |
+| HyperLogLog | ✅ | Cardinality estimation (PFADD, PFCOUNT, PFMERGE) |
+| Stream | ✅ | Append-only log data structures |
+| Geospatial | 🔶 | Implemented in spatial_commands.rs (not integrated) |
 
 ---
 
@@ -295,9 +337,12 @@ This document specifies the Redis RESP (REdis Serialization Protocol) feature se
 | String Commands | ~95% | Nearly complete |
 | List Commands | ~100% | Full support |
 | Set Commands | ~100% | Full support |
-| Sorted Set Commands | ~94% | 29/31 commands implemented (all operations except blocking BZPOPMIN/BZPOPMAX) |
+| Sorted Set Commands | ~100% | 31/31 commands implemented (includes BZPOPMIN/BZPOPMAX) |
 | Hash Commands | ~100% | Full support |
 | Key Commands | ~95% | Nearly complete |
+| HyperLogLog Commands | ~100% | 3/3 commands (PFADD, PFCOUNT, PFMERGE) |
+| Stream Commands | ~100% | 15/15 commands (XADD, XREAD, XGROUP, etc.) |
+| Geospatial Commands | ~75% | 6/8 commands (via spatial_commands.rs, not integrated) |
 | Transaction Commands | ~100% | Full support |
 | Pub/Sub Commands | ~50% | Basic support |
 | Server Commands | ~80% | Core commands work |
@@ -311,11 +356,11 @@ This document specifies the Redis RESP (REdis Serialization Protocol) feature se
 2. ✅ RESP2/RESP3 protocols
 3. ✅ Transactions
 4. 🔶 Pub/Sub
-5. ❌ Streams
+5. ✅ Streams (15/15 commands)
 
 **Medium Priority**:
-1. ❌ HyperLogLog
-2. ❌ Geospatial
+1. ✅ HyperLogLog (3/3 commands)
+2. 🔶 Geospatial (implemented in spatial_commands.rs, needs integration)
 3. ❌ Client tracking
 4. ❌ ACL
 
@@ -328,16 +373,15 @@ This document specifies the Redis RESP (REdis Serialization Protocol) feature se
 
 ## Known Limitations
 
-1. **Streams**: Not implemented
-2. **HyperLogLog**: Not supported
-3. **Geospatial**: Not implemented
-4. **Client Tracking**: Not supported
-5. **ACL**: Not implemented
-6. **Cluster Mode**: Not supported
-7. **Sentinel**: Not supported
-8. **Modules**: Not supported
-9. **Lua Scripting**: Not implemented
-10. **Functions**: Not implemented
+1. **Geospatial**: Implemented in spatial_commands.rs but not integrated into main dispatcher
+2. **Blocking Commands**: BZPOPMIN/BZPOPMAX implemented but timeout not fully functional
+3. **Client Tracking**: Not supported
+4. **ACL**: Not implemented
+5. **Cluster Mode**: Not supported
+6. **Sentinel**: Not supported
+7. **Modules**: Not supported
+8. **Lua Scripting**: Partial support (lua-redis feature)
+9. **Functions**: Partial support (via Functions module)
 
 ---
 

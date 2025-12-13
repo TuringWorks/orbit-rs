@@ -39,8 +39,8 @@ mod handler {
         hash::HashCommands, hyperloglog::HyperLogLogCommands, list::ListCommands,
         pubsub::PubSubCommands, scripting::ScriptingCommands, server::ServerCommands,
         set::SetCommands, sorted_set::SortedSetCommands, stream::StreamCommands,
-        string::StringCommands, time_series::TimeSeriesCommands,
-        transactions::TransactionCommands, vector::VectorCommands,
+        string::StringCommands, time_series::TimeSeriesCommands, transactions::TransactionCommands,
+        vector::VectorCommands,
     };
     use crate::protocols::error::ProtocolResult;
     use crate::protocols::resp::simple_local::SimpleLocalRegistry;
@@ -309,7 +309,7 @@ mod handler {
 
                 // Sorted Set commands
                 "ZADD" | "ZREM" | "ZCARD" | "ZSCORE" | "ZINCRBY" | "ZRANGE" | "ZRANGEBYSCORE"
-                | "ZCOUNT" | "ZRANK" => CommandCategory::SortedSet,
+                | "ZCOUNT" | "ZRANK" | "BZPOPMIN" | "BZPOPMAX" => CommandCategory::SortedSet,
 
                 // Stream commands
                 "XADD" | "XREAD" | "XREADGROUP" | "XRANGE" | "XREVRANGE" | "XLEN" | "XINFO"

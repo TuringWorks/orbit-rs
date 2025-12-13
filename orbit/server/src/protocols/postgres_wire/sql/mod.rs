@@ -40,8 +40,8 @@
 pub mod analyzer;
 pub mod array_string;
 pub mod ast;
-pub mod cte_execution;
 pub mod crypto;
+pub mod cte_execution;
 pub mod execution;
 pub mod execution_strategy;
 pub mod executor;

@@ -275,7 +275,11 @@ impl ScriptingCommands {
         keys: &[String],
         argv: &[LuaValue],
     ) -> ProtocolResult<RespValue> {
-        match self.lua_runtime.eval_with_keys_args(script, keys, argv).await {
+        match self
+            .lua_runtime
+            .eval_with_keys_args(script, keys, argv)
+            .await
+        {
             Ok(result) => Ok(self.lua_value_to_resp(&result)),
             Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
         }

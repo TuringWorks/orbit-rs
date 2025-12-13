@@ -239,9 +239,7 @@ impl ExecutionGuard {
 
         // Check interrupted flag
         if self.interrupted.load(Ordering::Relaxed) {
-            return Err(LuaError::RuntimeError(
-                "Execution interrupted".to_string(),
-            ));
+            return Err(LuaError::RuntimeError("Execution interrupted".to_string()));
         }
 
         Ok(())
@@ -376,19 +374,20 @@ pub fn setup_sandbox(lua: &Lua, config: &SecurityConfig) -> LuaResult<()> {
 
     // Replace require with whitelist-based version
     let allowed_modules = config.allowed_modules.clone();
-    let require_fn = lua.create_function(move |lua, module: String| -> mlua::Result<mlua::Value> {
-        if allowed_modules.contains(&module) {
-            // Load the module normally
-            lua.globals()
-                .get::<_, mlua::Function>("_original_require")?
-                .call::<_, mlua::Value>(module)
-        } else {
-            Err(mlua::Error::RuntimeError(format!(
-                "Module '{}' is not allowed",
-                module
-            )))
-        }
-    })?;
+    let require_fn =
+        lua.create_function(move |lua, module: String| -> mlua::Result<mlua::Value> {
+            if allowed_modules.contains(&module) {
+                // Load the module normally
+                lua.globals()
+                    .get::<_, mlua::Function>("_original_require")?
+                    .call::<_, mlua::Value>(module)
+            } else {
+                Err(mlua::Error::RuntimeError(format!(
+                    "Module '{}' is not allowed",
+                    module
+                )))
+            }
+        })?;
 
     // Store original require before replacing
     if let Ok(original_require) = globals.get::<_, mlua::Function>("require") {
@@ -402,9 +401,8 @@ pub fn setup_sandbox(lua: &Lua, config: &SecurityConfig) -> LuaResult<()> {
 /// Configure memory limit for Lua context
 #[cfg(feature = "lua-mlua")]
 pub fn set_memory_limit(lua: &Lua, limit: usize) -> LuaResult<()> {
-    lua.set_memory_limit(limit).map_err(|e| {
-        LuaError::InternalError(format!("Failed to set memory limit: {}", e))
-    })?;
+    lua.set_memory_limit(limit)
+        .map_err(|e| LuaError::InternalError(format!("Failed to set memory limit: {}", e)))?;
     Ok(())
 }
 
@@ -449,9 +447,7 @@ mod tests {
         assert!(validator.validate("return 1 + 2").is_ok());
 
         // Script with forbidden pattern
-        assert!(validator
-            .validate("os.execute('rm -rf /')")
-            .is_err());
+        assert!(validator.validate("os.execute('rm -rf /')").is_err());
 
         // Script too large
         let large_script = "x".repeat(MAX_SCRIPT_SIZE + 1);

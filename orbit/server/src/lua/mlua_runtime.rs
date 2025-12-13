@@ -7,7 +7,9 @@
 //! - Security enforcement via sandboxing
 //! - Context management and pooling
 
-use super::security::{set_memory_limit, setup_sandbox, ExecutionGuard, SecurityConfig, ScriptValidator};
+use super::security::{
+    set_memory_limit, setup_sandbox, ExecutionGuard, ScriptValidator, SecurityConfig,
+};
 use super::types::{LuaError, LuaFunction, LuaResult, LuaValue};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -68,11 +70,10 @@ impl MluaRuntime {
         let config = self.config.clone();
 
         // Execute in blocking task since Lua is not Send/Sync
-        let result = tokio::task::spawn_blocking(move || {
-            eval_lua_blocking(&config, &script, &keys, &args)
-        })
-        .await
-        .map_err(|e| LuaError::InternalError(format!("Task join error: {}", e)))??;
+        let result =
+            tokio::task::spawn_blocking(move || eval_lua_blocking(&config, &script, &keys, &args))
+                .await
+                .map_err(|e| LuaError::InternalError(format!("Task join error: {}", e)))??;
 
         Ok(result)
     }
@@ -261,12 +262,14 @@ impl MluaRuntime {
         Ok(())
     }
 
-
-
     /// Convert LuaValue to mlua::Value
     #[cfg(feature = "lua-mlua")]
     #[allow(dead_code)]
-    fn lua_value_to_mlua<'lua>(&self, lua: &'lua Lua, value: &LuaValue) -> LuaResult<MluaValue<'lua>> {
+    fn lua_value_to_mlua<'lua>(
+        &self,
+        lua: &'lua Lua,
+        value: &LuaValue,
+    ) -> LuaResult<MluaValue<'lua>> {
         let mlua_value = match value {
             LuaValue::Nil => MluaValue::Nil,
             LuaValue::Boolean(b) => MluaValue::Boolean(*b),
@@ -440,11 +443,7 @@ mod tests {
         runtime.register_function(func).await.unwrap();
 
         let result = runtime
-            .call_function(
-                "add",
-                &[],
-                &[LuaValue::Integer(10), LuaValue::Integer(20)],
-            )
+            .call_function("add", &[], &[LuaValue::Integer(10), LuaValue::Integer(20)])
             .await
             .unwrap();
 
@@ -521,30 +520,30 @@ fn eval_lua_blocking(
     keys: &[String],
     args: &[LuaValue],
 ) -> LuaResult<LuaValue> {
-    use super::security::{setup_sandbox, set_memory_limit};
-    
+    use super::security::{set_memory_limit, setup_sandbox};
+
     // Create Lua context
     let lua = Lua::new();
-    
+
     // Apply security restrictions
     setup_sandbox(&lua, config)?;
-    
+
     // Set memory limit
     set_memory_limit(&lua, config.limits.memory_limit)?;
-    
+
     // Setup execution guard
     let guard = ExecutionGuard::new(&config.limits);
-    
+
     // Inject KEYS and ARGV into globals
     let globals = lua.globals();
-    
+
     // Create KEYS array
     let keys_table = lua.create_table()?;
     for (i, key) in keys.iter().enumerate() {
         keys_table.set(i + 1, key.clone())?;
     }
     globals.set("KEYS", keys_table)?;
-    
+
     // Create ARGV array
     let argv_table = lua.create_table()?;
     for (i, arg) in args.iter().enumerate() {
@@ -552,21 +551,21 @@ fn eval_lua_blocking(
         argv_table.set(i + 1, mlua_value)?;
     }
     globals.set("ARGV", argv_table)?;
-    
+
     // Compile script
     let chunk = lua
         .load(script)
         .into_function()
         .map_err(|e| LuaError::CompilationError(e.to_string()))?;
-    
+
     // Check guard before execution
     guard.should_continue()?;
-    
+
     // Execute chunk synchronously
     let mlua_result: MluaValue = chunk
         .call(())
         .map_err(|e| LuaError::RuntimeError(e.to_string()))?;
-    
+
     // Convert result to LuaValue
     mlua_value_to_lua(&mlua_result)
 }
@@ -609,7 +608,7 @@ fn lua_value_to_mlua<'lua>(lua: &'lua Lua, value: &LuaValue) -> LuaResult<MluaVa
 #[cfg(feature = "lua-mlua")]
 fn mlua_value_to_lua(value: &MluaValue) -> LuaResult<LuaValue> {
     use std::collections::HashMap;
-    
+
     let lua_value = match value {
         MluaValue::Nil => LuaValue::Nil,
         MluaValue::Boolean(b) => LuaValue::Boolean(*b),

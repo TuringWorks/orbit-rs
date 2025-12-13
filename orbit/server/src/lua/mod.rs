@@ -39,8 +39,8 @@
 //! ```
 
 // Core modules
-pub mod types;
 pub mod security;
+pub mod types;
 
 // Runtime
 #[cfg(feature = "lua-mlua")]
@@ -54,11 +54,11 @@ pub mod redis_api;
 pub mod database_api;
 
 // Re-exports for convenience
-pub use types::{LuaError, LuaFunction, LuaParameter, LuaResult, LuaValue};
 pub use security::{
-    ExecutionGuard, ExecutionLimits, ScriptValidator, SecurityConfig,
-    DEFAULT_MEMORY_LIMIT, DEFAULT_TIMEOUT_MS, MAX_SCRIPT_SIZE,
+    ExecutionGuard, ExecutionLimits, ScriptValidator, SecurityConfig, DEFAULT_MEMORY_LIMIT,
+    DEFAULT_TIMEOUT_MS, MAX_SCRIPT_SIZE,
 };
+pub use types::{LuaError, LuaFunction, LuaParameter, LuaResult, LuaValue};
 
 #[cfg(feature = "lua-mlua")]
 pub use mlua_runtime::MluaRuntime;

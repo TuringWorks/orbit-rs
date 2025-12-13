@@ -35,21 +35,24 @@ impl RedisApi {
         let redis_table = lua.create_table()?;
 
         // redis.call(command, ...)
-        let call_fn = lua.create_async_function(|lua, args: mlua::Variadic<MluaValue>| async move {
-            Self::redis_call(lua, args, false).await
-        })?;
+        let call_fn =
+            lua.create_async_function(|lua, args: mlua::Variadic<MluaValue>| async move {
+                Self::redis_call(lua, args, false).await
+            })?;
         redis_table.set("call", call_fn)?;
 
         // redis.pcall(command, ...) - protected call
-        let pcall_fn = lua.create_async_function(|lua, args: mlua::Variadic<MluaValue>| async move {
-            Self::redis_call(lua, args, true).await
-        })?;
+        let pcall_fn =
+            lua.create_async_function(|lua, args: mlua::Variadic<MluaValue>| async move {
+                Self::redis_call(lua, args, true).await
+            })?;
         redis_table.set("pcall", pcall_fn)?;
 
         // redis.register_function(name, callback, options)
-        let register_fn = lua.create_function(|lua, args: (String, mlua::Function, Option<Table>)| {
-            Self::redis_register_function(lua, args)
-        })?;
+        let register_fn =
+            lua.create_function(|lua, args: (String, mlua::Function, Option<Table>)| {
+                Self::redis_register_function(lua, args)
+            })?;
         redis_table.set("register_function", register_fn)?;
 
         // redis.log(level, message)
@@ -59,15 +62,13 @@ impl RedisApi {
         redis_table.set("log", log_fn)?;
 
         // redis.status_reply(message)
-        let status_reply_fn = lua.create_function(|lua, message: String| {
-            Self::redis_status_reply(lua, message)
-        })?;
+        let status_reply_fn =
+            lua.create_function(|lua, message: String| Self::redis_status_reply(lua, message))?;
         redis_table.set("status_reply", status_reply_fn)?;
 
         // redis.error_reply(message)
-        let error_reply_fn = lua.create_function(|lua, message: String| {
-            Self::redis_error_reply(lua, message)
-        })?;
+        let error_reply_fn =
+            lua.create_function(|lua, message: String| Self::redis_error_reply(lua, message))?;
         redis_table.set("error_reply", error_reply_fn)?;
 
         // Log level constants
@@ -180,11 +181,7 @@ impl RedisApi {
         let registry = lua.named_registry_value::<Table>("_orbit_functions")?;
         registry.set(name.clone(), callback)?;
 
-        tracing::debug!(
-            "Registered Lua function '{}' with flags {:?}",
-            name,
-            flags
-        );
+        tracing::debug!("Registered Lua function '{}' with flags {:?}", name, flags);
 
         Ok(())
     }
@@ -312,10 +309,7 @@ mod tests {
         let lua = Lua::new();
         setup_redis_api(&lua).unwrap();
 
-        let result: Table = lua
-            .load("return redis.status_reply('OK')")
-            .eval()
-            .unwrap();
+        let result: Table = lua.load("return redis.status_reply('OK')").eval().unwrap();
 
         assert_eq!(result.get::<_, String>("ok").unwrap(), "OK");
     }

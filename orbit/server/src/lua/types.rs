@@ -71,9 +71,9 @@ impl From<mlua::Error> for LuaError {
                 used_bytes: 0,
                 limit_bytes: 0,
             },
-            mlua::Error::MemoryLimitNotAvailable => LuaError::SecurityViolation(
-                "Memory limit enforcement not available".to_string(),
-            ),
+            mlua::Error::MemoryLimitNotAvailable => {
+                LuaError::SecurityViolation("Memory limit enforcement not available".to_string())
+            }
             _ => LuaError::InternalError(err.to_string()),
         }
     }
@@ -175,9 +175,7 @@ impl LuaValue {
             LuaValue::Number(f) => RespValue::BulkString(Bytes::from(f.to_string().into_bytes())),
             LuaValue::String(s) => RespValue::BulkString(Bytes::from(s.as_bytes().to_vec())),
             LuaValue::Binary(b) => RespValue::BulkString(Bytes::from(b.clone())),
-            LuaValue::Array(arr) => {
-                RespValue::Array(arr.iter().map(|v| v.to_resp()).collect())
-            }
+            LuaValue::Array(arr) => RespValue::Array(arr.iter().map(|v| v.to_resp()).collect()),
             LuaValue::Table(table) => {
                 // Convert table to array of key-value pairs
                 let mut pairs = Vec::new();
@@ -197,9 +195,7 @@ impl LuaValue {
     pub fn from_resp(resp: &RespValue) -> Self {
         match resp {
             RespValue::Null | RespValue::NullBulkString | RespValue::NullArray => LuaValue::Nil,
-            RespValue::SimpleString(s) | RespValue::Error(s) => {
-                LuaValue::String(s.clone())
-            }
+            RespValue::SimpleString(s) | RespValue::Error(s) => LuaValue::String(s.clone()),
             RespValue::Integer(i) => LuaValue::Integer(*i),
             RespValue::Boolean(b) => LuaValue::Boolean(*b),
             RespValue::Double(f) => LuaValue::Number(*f),
@@ -210,19 +206,15 @@ impl LuaValue {
                     Err(_) => LuaValue::Binary(b.to_vec()),
                 }
             }
-            RespValue::Array(arr) => {
-                LuaValue::Array(arr.iter().map(LuaValue::from_resp).collect())
-            }
+            RespValue::Array(arr) => LuaValue::Array(arr.iter().map(LuaValue::from_resp).collect()),
             // Handle other variants by converting to string or nil
             RespValue::BigNumber(n) => LuaValue::String(n.clone()),
-            RespValue::VerbatimString { data, .. } => {
-                match String::from_utf8(data.to_vec()) {
-                    Ok(s) => LuaValue::String(s),
-                    Err(_) => LuaValue::Binary(data.to_vec()),
-                }
-            }
+            RespValue::VerbatimString { data, .. } => match String::from_utf8(data.to_vec()) {
+                Ok(s) => LuaValue::String(s),
+                Err(_) => LuaValue::Binary(data.to_vec()),
+            },
             RespValue::BulkError(b) => LuaValue::Binary(b.to_vec()),
-            RespValue::Attribute(_attr) => LuaValue::Nil,  // Ignore attributes for now
+            RespValue::Attribute(_attr) => LuaValue::Nil, // Ignore attributes for now
             RespValue::Map(map) => {
                 let mut table = HashMap::new();
                 for (k, v) in map.iter() {
@@ -238,9 +230,7 @@ impl LuaValue {
                 }
                 LuaValue::Table(table)
             }
-            RespValue::Set(set) => {
-                LuaValue::Array(set.iter().map(LuaValue::from_resp).collect())
-            }
+            RespValue::Set(set) => LuaValue::Array(set.iter().map(LuaValue::from_resp).collect()),
             RespValue::Push(values) => {
                 LuaValue::Array(values.iter().map(LuaValue::from_resp).collect())
             }

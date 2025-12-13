@@ -35,12 +35,11 @@ impl DatabaseApi {
 
         // sql.execute(query, params) - Execute SQL command
         let client = self.orbit_client.clone();
-        let execute_fn = lua.create_async_function(
-            move |lua, (query, params): (String, Option<Table>)| {
+        let execute_fn =
+            lua.create_async_function(move |lua, (query, params): (String, Option<Table>)| {
                 let client = client.clone();
                 async move { Self::sql_execute(lua, client, query, params).await }
-            },
-        )?;
+            })?;
         sql_table.set("execute", execute_fn)?;
 
         // sql.query(query, params) - Execute SQL query
@@ -63,12 +62,11 @@ impl DatabaseApi {
 
         // db.call(function_name, args) - Call stored procedure/function
         let client = self.orbit_client.clone();
-        let call_fn = lua.create_async_function(
-            move |lua, (func_name, args): (String, Option<Table>)| {
+        let call_fn =
+            lua.create_async_function(move |lua, (func_name, args): (String, Option<Table>)| {
                 let client = client.clone();
                 async move { Self::db_call(lua, client, func_name, args).await }
-            },
-        )?;
+            })?;
         db_table.set("call", call_fn)?;
 
         // Set the global tables
@@ -104,7 +102,11 @@ impl DatabaseApi {
 
         // TODO: Execute SQL via OrbitClient
         // For now, return a stub result
-        tracing::info!("sql.execute('{}', {:?}) - stub implementation", query, _params_vec);
+        tracing::info!(
+            "sql.execute('{}', {:?}) - stub implementation",
+            query,
+            _params_vec
+        );
 
         // Return affected rows count
         let result = lua.create_table()?;
@@ -129,7 +131,11 @@ impl DatabaseApi {
 
         // TODO: Execute SQL query via OrbitClient
         // For now, return a stub result
-        tracing::info!("sql.query('{}', {:?}) - stub implementation", query, _params_vec);
+        tracing::info!(
+            "sql.query('{}', {:?}) - stub implementation",
+            query,
+            _params_vec
+        );
 
         // Return empty result set
         let result = lua.create_table()?;
@@ -153,7 +159,11 @@ impl DatabaseApi {
 
         // TODO: Execute SQL query via OrbitClient
         // For now, return nil
-        tracing::info!("sql.query_one('{}', {:?}) - stub implementation", query, _params_vec);
+        tracing::info!(
+            "sql.query_one('{}', {:?}) - stub implementation",
+            query,
+            _params_vec
+        );
 
         Ok(MluaValue::Nil)
     }
@@ -175,7 +185,11 @@ impl DatabaseApi {
 
         // TODO: Call function via OrbitClient
         // For now, return nil
-        tracing::info!("db.call('{}', {:?}) - stub implementation", func_name, _args_vec);
+        tracing::info!(
+            "db.call('{}', {:?}) - stub implementation",
+            func_name,
+            _args_vec
+        );
 
         Ok(MluaValue::Nil)
     }

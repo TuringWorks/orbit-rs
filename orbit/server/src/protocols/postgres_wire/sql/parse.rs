@@ -27,7 +27,7 @@ lazy_static::lazy_static! {
 pub fn email_user(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 1 {
         return Err(ProtocolError::PostgresError(
-            "parse::email::user() expects 1 argument (email)".to_string()
+            "parse::email::user() expects 1 argument (email)".to_string(),
         ));
     }
 
@@ -50,7 +50,7 @@ pub fn email_user(args: &[Value]) -> ProtocolResult<Value> {
 pub fn email_domain(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 1 {
         return Err(ProtocolError::PostgresError(
-            "parse::email::domain() expects 1 argument (email)".to_string()
+            "parse::email::domain() expects 1 argument (email)".to_string(),
         ));
     }
 
@@ -73,7 +73,7 @@ pub fn email_domain(args: &[Value]) -> ProtocolResult<Value> {
 pub fn url_domain(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 1 {
         return Err(ProtocolError::PostgresError(
-            "parse::url::domain() expects 1 argument (url)".to_string()
+            "parse::url::domain() expects 1 argument (url)".to_string(),
         ));
     }
 
@@ -98,7 +98,7 @@ pub fn url_domain(args: &[Value]) -> ProtocolResult<Value> {
 pub fn url_fragment(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 1 {
         return Err(ProtocolError::PostgresError(
-            "parse::url::fragment() expects 1 argument (url)".to_string()
+            "parse::url::fragment() expects 1 argument (url)".to_string(),
         ));
     }
 
@@ -123,7 +123,7 @@ pub fn url_fragment(args: &[Value]) -> ProtocolResult<Value> {
 pub fn url_host(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 1 {
         return Err(ProtocolError::PostgresError(
-            "parse::url::host() expects 1 argument (url)".to_string()
+            "parse::url::host() expects 1 argument (url)".to_string(),
         ));
     }
 
@@ -148,7 +148,7 @@ pub fn url_host(args: &[Value]) -> ProtocolResult<Value> {
 pub fn url_path(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 1 {
         return Err(ProtocolError::PostgresError(
-            "parse::url::path() expects 1 argument (url)".to_string()
+            "parse::url::path() expects 1 argument (url)".to_string(),
         ));
     }
 
@@ -169,7 +169,7 @@ pub fn url_path(args: &[Value]) -> ProtocolResult<Value> {
 pub fn url_port(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 1 {
         return Err(ProtocolError::PostgresError(
-            "parse::url::port() expects 1 argument (url)".to_string()
+            "parse::url::port() expects 1 argument (url)".to_string(),
         ));
     }
 
@@ -194,7 +194,7 @@ pub fn url_port(args: &[Value]) -> ProtocolResult<Value> {
 pub fn url_query(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 1 {
         return Err(ProtocolError::PostgresError(
-            "parse::url::query() expects 1 argument (url)".to_string()
+            "parse::url::query() expects 1 argument (url)".to_string(),
         ));
     }
 

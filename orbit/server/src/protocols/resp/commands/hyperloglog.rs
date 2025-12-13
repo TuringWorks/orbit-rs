@@ -222,9 +222,7 @@ impl HyperLogLogCommands {
                 .local_registry
                 .execute_keyvalue(&key, "set_value", &[serde_json::to_value(hll_str)?])
                 .await
-                .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR failed to store HLL: {}", e))
-                })?;
+                .map_err(|e| ProtocolError::RespError(format!("ERR failed to store HLL: {}", e)))?;
         }
 
         // Return 1 if modified, 0 otherwise
@@ -252,7 +250,8 @@ impl HyperLogLogCommands {
                 .ok();
 
             let hll = if let Some(value_json) = result {
-                if let Ok(Some(encoded_str)) = serde_json::from_value::<Option<String>>(value_json) {
+                if let Ok(Some(encoded_str)) = serde_json::from_value::<Option<String>>(value_json)
+                {
                     HyperLogLog::from_string(&encoded_str).unwrap_or_else(|_| HyperLogLog::new())
                 } else {
                     HyperLogLog::new()
@@ -276,7 +275,9 @@ impl HyperLogLogCommands {
                         .ok();
 
                     if let Some(value_json) = result {
-                        if let Ok(Some(encoded_str)) = serde_json::from_value::<Option<String>>(value_json) {
+                        if let Ok(Some(encoded_str)) =
+                            serde_json::from_value::<Option<String>>(value_json)
+                        {
                             if let Ok(hll) = HyperLogLog::from_string(&encoded_str) {
                                 merged.merge(&hll);
                             }
@@ -313,7 +314,9 @@ impl HyperLogLogCommands {
                     .ok();
 
                 if let Some(value_json) = result {
-                    if let Ok(Some(encoded_str)) = serde_json::from_value::<Option<String>>(value_json) {
+                    if let Ok(Some(encoded_str)) =
+                        serde_json::from_value::<Option<String>>(value_json)
+                    {
                         if let Ok(hll) = HyperLogLog::from_string(&encoded_str) {
                             merged.merge(&hll);
                         }

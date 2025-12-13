@@ -13,12 +13,7 @@ use argon2::{
     Argon2,
 };
 use bcrypt::{hash, verify, DEFAULT_COST};
-use pbkdf2::{
-    password_hash::{
-        SaltString as Pbkdf2Salt,
-    },
-    Pbkdf2,
-};
+use pbkdf2::{password_hash::SaltString as Pbkdf2Salt, Pbkdf2};
 use serde_json::{json, Value};
 
 use crate::protocols::{ProtocolError, ProtocolResult};
@@ -30,7 +25,7 @@ use crate::protocols::{ProtocolError, ProtocolResult};
 pub fn argon2_generate(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 1 {
         return Err(ProtocolError::PostgresError(
-            "crypto::argon2::generate() expects 1 argument (password)".to_string()
+            "crypto::argon2::generate() expects 1 argument (password)".to_string(),
         ));
     }
 
@@ -55,7 +50,7 @@ pub fn argon2_generate(args: &[Value]) -> ProtocolResult<Value> {
 pub fn argon2_compare(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 2 {
         return Err(ProtocolError::PostgresError(
-            "crypto::argon2::compare() expects 2 arguments (password, hash)".to_string()
+            "crypto::argon2::compare() expects 2 arguments (password, hash)".to_string(),
         ));
     }
 
@@ -84,7 +79,7 @@ pub fn argon2_compare(args: &[Value]) -> ProtocolResult<Value> {
 pub fn bcrypt_generate(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 1 {
         return Err(ProtocolError::PostgresError(
-            "crypto::bcrypt::generate() expects 1 argument (password)".to_string()
+            "crypto::bcrypt::generate() expects 1 argument (password)".to_string(),
         ));
     }
 
@@ -105,7 +100,7 @@ pub fn bcrypt_generate(args: &[Value]) -> ProtocolResult<Value> {
 pub fn bcrypt_compare(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 2 {
         return Err(ProtocolError::PostgresError(
-            "crypto::bcrypt::compare() expects 2 arguments (password, hash)".to_string()
+            "crypto::bcrypt::compare() expects 2 arguments (password, hash)".to_string(),
         ));
     }
 
@@ -129,7 +124,7 @@ pub fn bcrypt_compare(args: &[Value]) -> ProtocolResult<Value> {
 pub fn pbkdf2_generate(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 1 {
         return Err(ProtocolError::PostgresError(
-            "crypto::pbkdf2::generate() expects 1 argument (password)".to_string()
+            "crypto::pbkdf2::generate() expects 1 argument (password)".to_string(),
         ));
     }
 
@@ -152,7 +147,7 @@ pub fn pbkdf2_generate(args: &[Value]) -> ProtocolResult<Value> {
 pub fn pbkdf2_compare(args: &[Value]) -> ProtocolResult<Value> {
     if args.len() != 2 {
         return Err(ProtocolError::PostgresError(
-            "crypto::pbkdf2::compare() expects 2 arguments (password, hash)".to_string()
+            "crypto::pbkdf2::compare() expects 2 arguments (password, hash)".to_string(),
         ));
     }
 

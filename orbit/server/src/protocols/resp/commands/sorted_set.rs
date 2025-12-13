@@ -749,6 +749,110 @@ impl SortedSetCommands {
         Ok(RespValue::Array(result_values))
     }
 
+    /// BZPOPMIN key [key ...] timeout - Blocking ZPOPMIN
+    /// Remove and return the member with the lowest score from the first non-empty sorted set
+    async fn cmd_bzpopmin(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 2 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'bzpopmin' command".to_string(),
+            ));
+        }
+
+        // Last argument is timeout (currently ignored - no blocking implementation)
+        let _timeout = self.get_float_arg(args, args.len() - 1, "BZPOPMIN")?;
+
+        // Try each key until we find a non-empty sorted set
+        for i in 0..args.len() - 1 {
+            let key = self.get_string_arg(args, i, "BZPOPMIN")?;
+
+            let result = self
+                .base
+                .local_registry
+                .execute_sorted_set(&key, "zpopmin", &[serde_json::to_value(1).unwrap()])
+                .await
+                .map_err(|e| {
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                })?;
+
+            let members_with_scores: Vec<(String, f64)> = serde_json::from_value(result)
+                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+                .unwrap_or_default();
+
+            if !members_with_scores.is_empty() {
+                let (member, score) = &members_with_scores[0];
+                // Return [key, member, score]
+                debug!("BZPOPMIN {} -> {} {}", key, member, score);
+                let mut result_values: Vec<RespValue> = Vec::new();
+                result_values.push(RespValue::BulkString(Bytes::from(key.into_bytes())));
+                result_values.push(RespValue::BulkString(Bytes::from(
+                    member.clone().into_bytes(),
+                )));
+                result_values.push(RespValue::BulkString(Bytes::from(
+                    score.to_string().into_bytes(),
+                )));
+
+                return Ok(RespValue::Array(result_values));
+            }
+        }
+
+        // No elements found in any key, return null
+        // Note: Real Redis would block here for timeout seconds
+        debug!("BZPOPMIN -> null (no elements)");
+        Ok(RespValue::NullBulkString)
+    }
+
+    /// BZPOPMAX key [key ...] timeout - Blocking ZPOPMAX
+    /// Remove and return the member with the highest score from the first non-empty sorted set
+    async fn cmd_bzpopmax(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 2 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'bzpopmax' command".to_string(),
+            ));
+        }
+
+        // Last argument is timeout (currently ignored - no blocking implementation)
+        let _timeout = self.get_float_arg(args, args.len() - 1, "BZPOPMAX")?;
+
+        // Try each key until we find a non-empty sorted set
+        for i in 0..args.len() - 1 {
+            let key = self.get_string_arg(args, i, "BZPOPMAX")?;
+
+            let result = self
+                .base
+                .local_registry
+                .execute_sorted_set(&key, "zpopmax", &[serde_json::to_value(1).unwrap()])
+                .await
+                .map_err(|e| {
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                })?;
+
+            let members_with_scores: Vec<(String, f64)> = serde_json::from_value(result)
+                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+                .unwrap_or_default();
+
+            if !members_with_scores.is_empty() {
+                let (member, score) = &members_with_scores[0];
+                // Return [key, member, score]
+                debug!("BZPOPMAX {} -> {} {}", key, member, score);
+                let mut result_values: Vec<RespValue> = Vec::new();
+                result_values.push(RespValue::BulkString(Bytes::from(key.into_bytes())));
+                result_values.push(RespValue::BulkString(Bytes::from(
+                    member.clone().into_bytes(),
+                )));
+                result_values.push(RespValue::BulkString(Bytes::from(
+                    score.to_string().into_bytes(),
+                )));
+
+                return Ok(RespValue::Array(result_values));
+            }
+        }
+
+        // No elements found in any key, return null
+        // Note: Real Redis would block here for timeout seconds
+        debug!("BZPOPMAX -> null (no elements)");
+        Ok(RespValue::NullBulkString)
+    }
+
     /// ZLEXCOUNT key min max - Count members in lexicographical range
     async fn cmd_zlexcount(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         self.validate_arg_count("ZLEXCOUNT", args, 3)?;
@@ -1748,6 +1852,8 @@ impl CommandHandler for SortedSetCommands {
             "ZREMRANGEBYSCORE" => self.cmd_zremrangebyscore(args).await,
             "ZPOPMIN" => self.cmd_zpopmin(args).await,
             "ZPOPMAX" => self.cmd_zpopmax(args).await,
+            "BZPOPMIN" => self.cmd_bzpopmin(args).await,
+            "BZPOPMAX" => self.cmd_bzpopmax(args).await,
             "ZLEXCOUNT" => self.cmd_zlexcount(args).await,
             "ZSCAN" => self.cmd_zscan(args).await,
             "ZMSCORE" => self.cmd_zmscore(args).await,
@@ -1786,6 +1892,8 @@ impl CommandHandler for SortedSetCommands {
             "ZREMRANGEBYSCORE",
             "ZPOPMIN",
             "ZPOPMAX",
+            "BZPOPMIN",
+            "BZPOPMAX",
             "ZLEXCOUNT",
             "ZSCAN",
             "ZMSCORE",
