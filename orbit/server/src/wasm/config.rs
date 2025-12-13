@@ -96,6 +96,10 @@ pub struct WasmConfig {
     /// Thread stack size (bytes)
     /// Default: 1MB
     pub thread_stack_size: usize,
+
+    /// Enable Component Model support
+    /// Default: false (experimental)
+    pub enable_component_model: bool,
 }
 
 impl Default for WasmConfig {
@@ -123,6 +127,7 @@ impl Default for WasmConfig {
             enable_threads: true,          // Enable multi-threading
             max_threads: 4,                // 4 threads per instance
             thread_stack_size: 1024 * 1024, // 1MB stack per thread
+            enable_component_model: false, // Experimental feature, disabled by default
         }
     }
 }
@@ -147,6 +152,7 @@ impl WasmConfig {
             enable_threads: true,                  // Enable threading in dev
             max_threads: 8,                        // More threads in dev
             thread_stack_size: 2 * 1024 * 1024,    // 2MB stack in dev
+            enable_component_model: true,          // Enable experimental features in dev
             ..Default::default()
         }
     }

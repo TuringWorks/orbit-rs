@@ -106,6 +106,11 @@ impl WasmRuntime {
             wasm_config.thread_stack_size(config.thread_stack_size);
         }
 
+        // Enable Component Model (experimental)
+        if config.enable_component_model {
+            wasm_config.wasm_component_model(true);
+        }
+
         // Set memory limits
         wasm_config.max_wasm_stack(1024 * 1024); // 1MB stack
 

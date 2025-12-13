@@ -9,6 +9,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Component Model Support for WASM UDFs (2025-12-13) - EXPERIMENTAL
+
+**Composable, Interoperable WASM Components**
+
+- **Component Model Integration** - Added experimental support for the WebAssembly Component Model
+  - Composable modules for building complex applications
+  - Language-agnostic interface definitions (WIT - WebAssembly Interface Types)
+  - Module linking and composition
+  - Strong type safety across component boundaries
+  - Interface versioning for compatibility
+
+- **Configuration** (`orbit/server/src/wasm/config.rs`)
+  - Added `enable_component_model: bool` - Enable Component Model (default: false, experimental)
+  - Disabled by default in production for stability
+  - Enabled in development preset for experimentation
+
+- **Runtime** (`orbit/server/src/wasm/runtime.rs`)
+  - Enabled `wasm_component_model(true)` in wasmtime engine when configured
+  - Component Model support conditional on configuration flag
+
+- **Environment Presets**
+  - **Production**: Component Model disabled (not yet stable)
+  - **Development**: Component Model enabled (experimental features)
+  - **Default**: Component Model disabled (conservative approach)
+
+- **Key Features**
+  - **Interface Types (WIT)**: Language-agnostic type definitions
+  - **Component Composition**: Combine multiple components into applications
+  - **Virtualization**: Abstract over host capabilities
+  - **Portability**: Write once, run anywhere with proper interfaces
+  - **Security**: Strong sandboxing with defined capabilities
+  - **Language Interop**: Mix Rust, C++, Python, JS components seamlessly
+
+- **Use Cases**
+  - Microservices with WASM components
+  - Plugin systems with third-party components
+  - Library composition (math, crypto, ML components)
+  - Cross-language integration
+  - Portable function libraries
+  - API evolution with versioned interfaces
+
+- **Current Status**
+  - ✅ Runtime support enabled in wasmtime
+  - ✅ Configuration toggle available
+  - ⚠️ Experimental: specification still evolving
+  - ⚠️ Requires external tooling (`wasm-tools`, `cargo-component`)
+  - ⚠️ Not recommended for production yet
+
+- **Known Limitations**
+  - Specification still evolving
+  - Build tools in active development
+  - Limited ecosystem of pre-built components
+  - Learning curve for WIT syntax
+  - Debugging tools still maturing
+
+- **Future Roadmap** (when stable)
+  - Native component catalog
+  - Component versioning and dependency management
+  - Hot-reloadable component plugins
+  - Component marketplace integration
+  - Cross-protocol component sharing
+
+- **Documentation**
+  - Added comprehensive Component Model section to `docs/WASM_UDF_DOCUMENTATION.md`
+  - WIT (WebAssembly Interface Types) examples
+  - Rust component building examples
+  - Component composition patterns
+  - Compilation instructions with `cargo-component` and `wasm-tools`
+  - Benefits, use cases, and current limitations
+  - Links to specification and tooling
+
 #### Multi-threading Support for WASM UDFs (2025-12-13)
 
 **Parallel Execution with WASM Threads Proposal**

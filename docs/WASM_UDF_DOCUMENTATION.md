@@ -314,7 +314,7 @@ wasm-all = ["wasm-postgres", "wasm-mysql", "wasm-redis"]
 - [x] **Streaming I/O for large datasets** ✅ **Implemented**
 - [x] **Async WASM functions** ✅ **Implemented**
 - [x] **Multi-threading with WASM threads proposal** ✅ **Implemented**
-- [ ] Component Model support
+- [x] **Component Model support** ✅ **Implemented** (Experimental)
 
 ### WASI Support (Implemented)
 
@@ -788,6 +788,208 @@ cargo build --target wasm32-unknown-unknown --release \
 - **No Native Threads**: Threads are WASM threads, not OS threads (managed by wasmtime)
 - **Compilation Required**: Must compile with thread support flags
 - **Browser Compatibility**: SharedArrayBuffer required (not all environments support it)
+
+### Component Model Support (Implemented - Experimental)
+
+Orbit-RS now supports the **WebAssembly Component Model** for composable, interoperable WASM modules:
+
+- **Composable Modules**: Build complex applications from smaller, reusable components
+- **Interface Types**: Language-agnostic interface definitions (WIT - WebAssembly Interface Types)
+- **Module Linking**: Link multiple WASM components together
+- **Type Safety**: Strong typing across component boundaries
+- **Versioning**: Component interface versioning for compatibility
+- **Language Interop**: Components written in different languages can interoperate seamlessly
+
+#### Component Model Configuration
+
+```rust
+use orbit_server::wasm::WasmConfig;
+
+let config = WasmConfig {
+    enable_component_model: true,  // Enable Component Model (experimental)
+    ..Default::default()
+};
+```
+
+#### Environment Presets
+
+**Production** (disabled):
+```rust
+let config = WasmConfig::production();
+// enable_component_model: false (not yet stable for production)
+```
+
+**Development** (enabled):
+```rust
+let config = WasmConfig::development();
+// enable_component_model: true (experimental features enabled)
+```
+
+#### What is the Component Model?
+
+The Component Model is a new layer on top of core WebAssembly that enables:
+
+1. **Interface Types (WIT)**: Language-agnostic type definitions
+2. **Component Composition**: Combine multiple components into applications
+3. **Virtualization**: Abstract over host capabilities
+4. **Portability**: Write once, run anywhere with proper interfaces
+5. **Security**: Strong sandboxing with defined capabilities
+
+#### Component Structure
+
+A component consists of:
+- **Imports**: Capabilities the component requires from the host
+- **Exports**: Functions/interfaces the component provides
+- **Types**: Interface type definitions (WIT)
+- **Core Modules**: One or more core WASM modules
+
+#### WIT (WebAssembly Interface Types) Example
+
+```wit
+// greeter.wit
+package example:greeter
+
+interface greeter {
+    // Function that takes a string and returns a string
+    greet: func(name: string) -> string
+
+    // Function with complex types
+    record person {
+        name: string,
+        age: u32,
+    }
+
+    greet-person: func(p: person) -> string
+}
+
+world greeter-world {
+    export greeter
+}
+```
+
+#### Building a Component (Rust)
+
+```rust
+// Cargo.toml
+// [dependencies]
+// wit-bindgen = "0.18"
+
+// lib.rs
+wit_bindgen::generate!({
+    world: "greeter-world",
+    exports: {
+        world: MyGreeter,
+    },
+});
+
+struct MyGreeter;
+
+impl exports::example::greeter::greeter::Guest for MyGreeter {
+    fn greet(name: String) -> String {
+        format!("Hello, {}!", name)
+    }
+
+    fn greet_person(p: exports::example::greeter::greeter::Person) -> String {
+        format!("Hello, {}! You are {} years old.", p.name, p.age)
+    }
+}
+```
+
+#### Compiling a Component
+
+```bash
+# 1. Build the core module
+cargo component build --release
+
+# This produces a .wasm component in target/wasm32-wasi/release/
+
+# 2. Or manually compose from core module
+wasm-tools component new core.wasm -o component.wasm
+
+# 3. Verify the component
+wasm-tools component wit component.wasm
+```
+
+#### Using Components in Orbit-RS
+
+```sql
+-- Register a component (similar to regular WASM UDF)
+CREATE FUNCTION greet_user(name TEXT)
+RETURNS TEXT
+LANGUAGE WASM
+AS '0x...'  -- hex-encoded component binary
+
+-- Call the component function
+SELECT greet_user('Alice');  -- Returns: "Hello, Alice!"
+```
+
+#### Component Composition Example
+
+```wit
+// math.wit
+interface calculator {
+    add: func(a: s32, b: s32) -> s32
+    multiply: func(a: s32, b: s32) -> s32
+}
+
+// stats.wit - imports calculator
+interface statistics {
+    use calculator.{add, multiply}
+
+    average: func(numbers: list<s32>) -> f64
+    variance: func(numbers: list<s32>) -> f64
+}
+```
+
+#### Benefits of Component Model
+
+1. **Language Agnostic**: Mix Rust, C++, Python, JS components seamlessly
+2. **Type Safety**: Strong typing prevents interface mismatches
+3. **Reusability**: Build component libraries
+4. **Versioning**: Evolve interfaces without breaking compatibility
+5. **Virtualization**: Abstract host capabilities (WASI, custom APIs)
+6. **Security**: Fine-grained capability control
+
+#### Use Cases
+
+1. **Microservices**: Build distributed systems with WASM components
+2. **Plugin Systems**: Extensible applications with third-party components
+3. **Library Composition**: Combine math, crypto, ML components
+4. **Cross-Language Integration**: Rust + C++ + AssemblyScript in one app
+5. **Portable Functions**: Write once, deploy to multiple environments
+6. **API Evolution**: Version interfaces for backward compatibility
+
+#### Current Status
+
+- ✅ **Runtime Support**: Component Model enabled in wasmtime
+- ✅ **Configuration**: Enable/disable via `enable_component_model`
+- ⚠️ **Experimental**: Still evolving, not recommended for production yet
+- ⚠️ **Tooling**: Requires `wasm-tools` and `cargo-component` for building
+- ⚠️ **Ecosystem**: Growing but not yet mature
+
+#### Known Limitations
+
+- **Experimental**: Specification still evolving
+- **Tooling**: Build tools are in active development
+- **Ecosystem**: Limited library of pre-built components
+- **Learning Curve**: WIT syntax and component concepts are new
+- **Debugging**: Tools for debugging components are still maturing
+
+#### Future Roadmap
+
+When the Component Model stabilizes, Orbit-RS will support:
+- Native component catalog (browse/install components)
+- Component versioning and dependency management
+- Hot-reloadable component plugins
+- Component marketplace integration
+- Cross-protocol component sharing
+
+#### Learn More
+
+- [Component Model Proposal](https://github.com/WebAssembly/component-model)
+- [WIT Specification](https://component-model.bytecodealliance.org/design/wit.html)
+- [cargo-component](https://github.com/bytecodealliance/cargo-component)
+- [wasm-tools](https://github.com/bytecodealliance/wasm-tools)
 
 ## References
 
