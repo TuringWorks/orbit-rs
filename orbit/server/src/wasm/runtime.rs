@@ -100,7 +100,7 @@ impl WasmRuntime {
     }
 
     /// Compile a WASM module (with caching)
-    async fn compile_module(&self, wasm_binary: &[u8]) -> Result<Module, WasmError> {
+    pub async fn compile_module(&self, wasm_binary: &[u8]) -> Result<Module, WasmError> {
         // Validate module size
         if wasm_binary.len() > self.config.max_module_size {
             return Err(WasmError::InvalidModule(format!(
@@ -151,8 +151,14 @@ impl WasmRuntime {
         // Compile the module
         let module = self.compile_module(wasm_binary).await?;
 
-        // Create a new store for this execution
-        let mut store = Store::new(&self.engine, ());
+        // Create store limits
+        let limits = StoreLimitsBuilder::new()
+            .memory_size(self.config.max_memory_bytes)
+            .build();
+
+        // Create a new store for this execution with limits
+        let mut store = Store::new(&self.engine, limits);
+        store.limiter(|data| data);
 
         // Set fuel limit if enabled
         if self.config.enable_fuel {
@@ -161,11 +167,8 @@ impl WasmRuntime {
                 .map_err(|e| WasmError::ExecutionError(format!("Failed to set fuel: {}", e)))?;
         }
 
-        // Configure memory limits
-        store.limiter(|_| StoreLimitsBuilder::new().memory_size(self.config.max_memory_bytes).build());
-
-        // Instantiate the module
-        let instance = Instance::new(&mut store, &module, &[]).map_err(|e| {
+        // Instantiate the module (async for better performance)
+        let instance = Instance::new_async(&mut store, &module, &[]).await.map_err(|e| {
             WasmError::InstantiationError(format!("Failed to instantiate module: {}", e))
         })?;
 
@@ -191,13 +194,15 @@ impl WasmRuntime {
     /// Execute a WASM function (internal)
     async fn execute_func(
         &self,
-        store: &mut Store<()>,
+        store: &mut Store<StoreLimits>,
         func: &Func,
         args: &[Val],
     ) -> Result<WasmValue, WasmError> {
-        // Call the function
+        // Call the function (async version for better performance)
         let mut results = vec![Val::I32(0)]; // Placeholder for result
-        func.call(store, args, &mut results).map_err(|e| {
+
+        // Use async call for non-blocking execution
+        func.call_async(store, args, &mut results).await.map_err(|e| {
             // Check if it's an out-of-fuel error
             if e.to_string().contains("fuel") {
                 WasmError::OutOfFuelError

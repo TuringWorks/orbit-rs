@@ -6,7 +6,7 @@ Orbit-RS now supports **WebAssembly (WASM) user-defined functions (UDFs)**, enab
 
 ## Key Features
 
-### 🚀 Language Agnostic
+### Language Agnostic
 
 - **Rust**: Compile with `rustc --target wasm32-unknown-unknown`
 - **C/C++**: Use Emscripten or clang with WASM target
@@ -14,14 +14,14 @@ Orbit-RS now supports **WebAssembly (WASM) user-defined functions (UDFs)**, enab
 - **AssemblyScript**: TypeScript-like syntax for WASM
 - **Many others**: Any language with WASM compilation support
 
-### ⚡ High Performance
+### High Performance
 
 - **Near-Native Speed**: 10-20% overhead vs native code
 - **JIT Compilation**: wasmtime compiles WASM to native code
 - **Module Caching**: Compiled modules cached for repeated use
 - **No IPC Overhead**: Unlike Python subprocess approach
 
-### 🔒 Security & Sandboxing
+### Security & Sandboxing
 
 - **Memory Isolation**: Cannot access server memory
 - **CPU Limits**: Fuel-based instruction counting (default: 1 billion instructions)
@@ -29,7 +29,7 @@ Orbit-RS now supports **WebAssembly (WASM) user-defined functions (UDFs)**, enab
 - **No System Access**: No file I/O, network, or system calls by default
 - **Module Validation**: Binary format verification
 
-### 📊 Resource Management
+### Resource Management
 
 - **Memory Limit**: 64MB per function (configurable)
 - **Fuel Limit**: 1 billion instructions (configurable)
@@ -312,9 +312,22 @@ wasm-all = ["wasm-postgres", "wasm-mysql", "wasm-redis"]
 - [ ] WASI support (opt-in) for file/network I/O
 - [ ] SIMD operations for vectorized computation
 - [ ] Streaming I/O for large datasets
-- [ ] Async WASM functions
+- [x] **Async WASM functions** ✅ **Implemented**
 - [ ] Component Model support
 - [ ] Multi-threading with WASM threads proposal
+
+### Async WASM Functions (Implemented)
+
+Orbit-RS now supports fully asynchronous WASM function execution:
+
+- **Non-blocking Execution**: Uses `call_async()` for better concurrency
+- **Async Instantiation**: Modules instantiated with `Instance::new_async()`
+- **Tokio Integration**: Full async/await support throughout the runtime
+- **Better Throughput**: Improved performance for I/O-bound WASM functions
+- **Scalability**: Handle more concurrent WASM executions without blocking
+
+This enhancement allows WASM UDFs to perform better in high-concurrency scenarios,
+especially when combined with database operations, actor messaging, or external service calls.
 
 ## References
 

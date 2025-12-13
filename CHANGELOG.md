@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Async WASM Function Support (2025-12-13)
+
+**Fully Asynchronous WASM Execution**
+
+- **Non-Blocking Execution** - Upgraded WASM runtime to use async execution for better concurrency
+  - Changed from `func.call()` to `func.call_async()` for non-blocking function calls
+  - Changed from `Instance::new()` to `Instance::new_async()` for async module instantiation
+  - Full async/await support throughout the execution pipeline
+
+- **Performance Improvements**
+  - **Better Throughput**: Improved performance for I/O-bound WASM functions
+  - **Scalability**: Handle more concurrent WASM executions without blocking
+  - **Resource Efficiency**: Tokio async runtime integration for optimal resource usage
+
+- **Technical Changes** (`orbit/server/src/wasm/runtime.rs`)
+  - Updated `execute_func()` to use `call_async()` instead of synchronous `call()`
+  - Updated module instantiation to use `Instance::new_async()`
+  - Changed Store type parameter from `()` to `StoreLimits` for proper resource limiting
+  - Made `compile_module()` public for external access from udf_registry
+  - Full Tokio integration with async/await execution model
+
+- **Documentation**
+  - Updated `docs/WASM_UDF_DOCUMENTATION.md` with async implementation details
+  - Marked "Async WASM functions" as implemented in Future Enhancements section
+
+### Impact
+
+WASM UDFs now execute asynchronously, providing:
+- Better concurrency in high-load scenarios
+- Non-blocking execution for I/O operations
+- Improved scalability for database and actor system integration
+- Foundation for future async I/O enhancements (WASI support)
+
 #### Lua UDF Support (2025-12-13)
 
 **mlua-Based Lua User-Defined Functions**
