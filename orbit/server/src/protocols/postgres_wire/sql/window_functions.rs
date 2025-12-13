@@ -4,7 +4,9 @@
 // with PARTITION BY and ORDER BY support.
 
 use crate::protocols::error::ProtocolResult;
-use crate::protocols::postgres_wire::sql::ast::{Expression, OrderByItem, WindowFunctionType};
+use crate::protocols::postgres_wire::sql::ast::{
+    Expression, FrameBound, OrderByItem, WindowFrame, WindowFrameMode, WindowFunctionType,
+};
 use crate::protocols::postgres_wire::sql::types::SqlValue;
 use std::collections::HashMap;
 
@@ -157,11 +159,13 @@ impl WindowFunctionEvaluator {
     pub fn evaluate(
         &self,
         function: &WindowFunctionType,
+        frame: &Option<WindowFrame>,
+        order_by: &[OrderByItem],
     ) -> ProtocolResult<Vec<(usize, SqlValue)>> {
         let mut results = Vec::new();
 
         for partition in &self.partitions {
-            let partition_results = self.evaluate_partition(function, partition)?;
+            let partition_results = self.evaluate_partition(function, frame, partition, order_by)?;
             results.extend(partition_results);
         }
 
@@ -172,7 +176,9 @@ impl WindowFunctionEvaluator {
     fn evaluate_partition(
         &self,
         function: &WindowFunctionType,
+        frame: &Option<WindowFrame>,
         partition: &Partition,
+        order_by: &[OrderByItem],
     ) -> ProtocolResult<Vec<(usize, SqlValue)>> {
         let mut results = Vec::new();
 
@@ -224,9 +230,11 @@ impl WindowFunctionEvaluator {
                 for (idx, row) in partition.rows.iter().enumerate() {
                     let value = if idx >= offset_val {
                         // Get value from previous row
-                        SqlValue::BigInt((idx - offset_val) as i64)
+                        // let prev_row = &partition.rows[idx - offset_val];
+                        // SqlValue::BigInt((idx - offset_val) as i64) -- original logic
+                        // Fix for compilation: just create value same as original loop logic
+                         SqlValue::BigInt((idx - offset_val) as i64)
                     } else {
-                        // Use default or NULL
                         SqlValue::Null
                     };
                     results.push((row.index, value));
@@ -240,11 +248,21 @@ impl WindowFunctionEvaluator {
                 let offset_val: usize = 1; // Simplified
                 for (idx, row) in partition.rows.iter().enumerate() {
                     let value = if idx + offset_val < partition.rows.len() {
-                        SqlValue::BigInt((idx + offset_val) as i64)
+                         SqlValue::BigInt((idx + offset_val) as i64)
                     } else {
                         SqlValue::Null
                     };
                     results.push((row.index, value));
+                }
+            }
+            WindowFunctionType::Aggregate(_func_call) => {
+                // Handle aggregate functions over the window frame
+                for (idx, row) in partition.rows.iter().enumerate() {
+                    let (start, end) = self.calculate_frame_bounds(frame, idx, partition, order_by)?;
+                    
+                    // For now, we'll verify the frame calculation logic works by returning the count of rows in frame
+                    let count = (end - start) as i64;
+                    results.push((row.index, SqlValue::BigInt(count)));
                 }
             }
             _ => {
@@ -254,6 +272,91 @@ impl WindowFunctionEvaluator {
         }
 
         Ok(results)
+    }
+
+    /// Calculate the start (inclusive) and end (exclusive) indices of the window frame
+    fn calculate_frame_bounds(
+        &self,
+        frame: &Option<WindowFrame>,
+        current_idx: usize,
+        partition: &Partition,
+        _order_by: &[OrderByItem],
+    ) -> ProtocolResult<(usize, usize)> {
+        let len = partition.rows.len();
+        
+        if frame.is_none() {
+            // Default: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            // Simplified: All rows up to current (ROWS-like)
+            return Ok((0, current_idx + 1));
+        }
+        
+        let frame = frame.as_ref().unwrap();
+        
+        match frame.mode {
+            WindowFrameMode::Rows => {
+                let start = self.calculate_bound_index(&frame.start_bound, current_idx, len, true)?;
+                let end = self.calculate_bound_index(
+                    frame.end_bound.as_ref().unwrap_or(&FrameBound::CurrentRow), 
+                    current_idx, 
+                    len, 
+                    false
+                )?;
+                
+                let start = std::cmp::min(start, len);
+                let end = std::cmp::min(end, len);
+                let start = std::cmp::min(start, end);
+                
+                Ok((start, end))
+            }
+            WindowFrameMode::Range | WindowFrameMode::Groups => {
+                // Treating Range/Groups similar to Rows for now (MVP)
+                 let start = self.calculate_bound_index(&frame.start_bound, current_idx, len, true)?;
+                let end = self.calculate_bound_index(
+                    frame.end_bound.as_ref().unwrap_or(&FrameBound::CurrentRow), 
+                    current_idx, 
+                    len, 
+                    false
+                )?;
+                Ok((std::cmp::min(start, len), std::cmp::min(end, len)))
+            }
+        }
+    }
+
+    fn calculate_bound_index(
+        &self,
+        bound: &FrameBound,
+        current_idx: usize,
+        len: usize,
+        is_start: bool,
+    ) -> ProtocolResult<usize> {
+        match bound {
+            FrameBound::UnboundedPreceding => Ok(0),
+            FrameBound::UnboundedFollowing => Ok(len),
+            FrameBound::CurrentRow => {
+                if is_start {
+                    Ok(current_idx)
+                } else {
+                    Ok(current_idx + 1)
+                }
+            }
+            FrameBound::Preceding(_expr) => {
+                // Assuming offset 1 for MVP
+                let offset = 1; 
+                if current_idx >= offset {
+                    Ok(current_idx - offset)
+                } else {
+                    Ok(0)
+                }
+            }
+            FrameBound::Following(_expr) => {
+                let offset = 1;
+                if is_start {
+                    Ok(current_idx + offset)
+                } else {
+                    Ok(current_idx + offset + 1)
+                }
+            }
+        }
     }
 
     /// Check if two rows are equal (simplified)
@@ -285,7 +388,7 @@ mod tests {
 
         evaluator.partition_rows(rows, &[], &[]).unwrap();
 
-        let results = evaluator.evaluate(&WindowFunctionType::RowNumber).unwrap();
+        let results = evaluator.evaluate(&WindowFunctionType::RowNumber, &None, &[]).unwrap();
 
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].1, SqlValue::BigInt(1));
@@ -305,7 +408,7 @@ mod tests {
 
         evaluator.partition_rows(rows, &[], &[]).unwrap();
 
-        let results = evaluator.evaluate(&WindowFunctionType::Rank).unwrap();
+        let results = evaluator.evaluate(&WindowFunctionType::Rank, &None, &[]).unwrap();
 
         assert_eq!(results.len(), 3);
         // All should have rank 1 since we're not actually sorting in this simplified test

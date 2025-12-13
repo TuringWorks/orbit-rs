@@ -44,6 +44,9 @@ use crate::protocols::postgres_wire::sql::statistics::{StatisticsConfig, Statist
 use crate::protocols::postgres_wire::sql::vectorized_executor::{
     VectorizedConfig, VectorizedExecutor,
 };
+
+#[cfg(feature = "lua-mlua")]
+use crate::protocols::postgres_wire::sql::udf_handler::UdfHandler;
 use serde::{Deserialize, Serialize}; // Used by QueryMetrics, CacheStatistics
 use std::sync::Arc;
 use std::time::Instant;
@@ -140,15 +143,55 @@ pub struct OptimizedQueryEngine {
     vectorized_executor: Arc<RwLock<VectorizedExecutor>>,
     /// Query metrics
     metrics: Arc<RwLock<QueryMetrics>>,
+    /// UDF handler for Lua/JS functions
+    #[cfg(feature = "lua-mlua")]
+    udf_handler: Option<Arc<UdfHandler>>,
+    /// Python UDF handler
+    #[cfg(feature = "python-udf")]
+    python_udf_handler: Option<Arc<crate::python::udf_handler::PythonUdfHandler>>,
 }
 
 impl OptimizedQueryEngine {
     /// Create a new optimized query engine (async due to SqlExecutor initialization)
     pub async fn new(config: QueryEngineConfig) -> crate::protocols::error::ProtocolResult<Self> {
         let vectorized = VectorizedExecutor::new(config.vectorized.clone()).await?;
+        let executor = Arc::new(SqlExecutor::new().await?);
+
+        #[cfg(feature = "lua-mlua")]
+        let udf_handler = {
+            use crate::lua::mlua_runtime::MluaRuntime;
+            use crate::protocols::postgres_wire::sql::udf_handler::UdfHandler;
+            let runtime = Arc::new(MluaRuntime::new());
+            let handler = Arc::new(UdfHandler::new(runtime));
+
+            // Connect registry to executor for expression evaluation
+            executor.set_udf_registry(handler.registry()).await;
+
+            Some(handler)
+        };
+
+        #[cfg(feature = "python-udf")]
+        let python_udf_handler = {
+            use crate::python::config::PythonConfig;
+            use crate::python::udf_handler::PythonUdfHandler;
+            use crate::python::udf_registry::PythonUdfRegistry;
+
+            let python_config = PythonConfig::default();
+            let registry = Arc::new(
+                PythonUdfRegistry::new(python_config)
+                    .await
+                    .map_err(|e| crate::protocols::error::ProtocolError::PostgresError(
+                        format!("Failed to create Python UDF registry: {}", e)
+                    ))?
+            );
+            let handler = Arc::new(PythonUdfHandler::new(registry));
+
+            Some(handler)
+        };
+
         Ok(Self {
             parser: Arc::new(RwLock::new(SqlParser::new())),
-            executor: Arc::new(SqlExecutor::new().await?),
+            executor,
             query_cache: QueryCache::new(config.query_cache.clone()),
             plan_cache: Arc::new(RwLock::new(PlanCache::new(config.plan_cache.clone()))),
             statistics: StatisticsManager::new(config.statistics.clone()),
@@ -158,6 +201,10 @@ impl OptimizedQueryEngine {
             index_advisor: IndexAdvisor::new(config.index_advisor.clone()),
             vectorized_executor: Arc::new(RwLock::new(vectorized)),
             metrics: Arc::new(RwLock::new(QueryMetrics::default())),
+            #[cfg(feature = "lua-mlua")]
+            udf_handler,
+            #[cfg(feature = "python-udf")]
+            python_udf_handler,
             config,
         })
     }
@@ -207,6 +254,105 @@ impl OptimizedQueryEngine {
 
         // 2. Parse the SQL
         let statement = self.parser.write().await.parse(sql)?;
+
+        // 2.5. Intercept CREATE/DROP FUNCTION statements for UDF handling
+        use crate::protocols::postgres_wire::sql::ast::Statement;
+        match &statement {
+            Statement::CreateFunction(create_fn) => {
+                // Determine which handler to use based on language
+                let is_python = create_fn.language.as_ref()
+                    .map(|lang| {
+                        use crate::protocols::postgres_wire::sql::ast::FunctionLanguage;
+                        matches!(lang, FunctionLanguage::Other(s) if s.eq_ignore_ascii_case("python") || s.eq_ignore_ascii_case("plpython") || s.eq_ignore_ascii_case("plpython3u"))
+                    })
+                    .unwrap_or(false);
+
+                #[cfg(feature = "python-udf")]
+                if is_python {
+                    if let Some(ref python_handler) = self.python_udf_handler {
+                        let _result = Self::handle_pg_create_python_function(python_handler, create_fn).await?;
+                        let execution_time_ms = start.elapsed().as_millis() as u64;
+
+                        return Ok(OptimizedExecutionResult {
+                            result: ExecutionResult::Show {
+                                variable: format!("CREATE FUNCTION {}", create_fn.name),
+                                value: "OK".to_string(),
+                            },
+                            execution_time_ms,
+                            from_cache: false,
+                            execution_backend: ExecutionBackend::CpuScalar,
+                            parallel_partitions: 0,
+                        });
+                    }
+                }
+
+                #[cfg(feature = "lua-mlua")]
+                if !is_python {
+                    if let Some(ref udf_handler) = self.udf_handler {
+                        let _result = udf_handler.handle_pg_create_function(create_fn).await?;
+                        let execution_time_ms = start.elapsed().as_millis() as u64;
+
+                        return Ok(OptimizedExecutionResult {
+                            result: ExecutionResult::Show {
+                                variable: format!("CREATE FUNCTION {}", create_fn.name),
+                                value: "OK".to_string(),
+                            },
+                            execution_time_ms,
+                            from_cache: false,
+                            execution_backend: ExecutionBackend::CpuScalar,
+                            parallel_partitions: 0,
+                        });
+                    }
+                }
+            }
+            Statement::DropFunction(drop_fn) => {
+                // For DROP FUNCTION, check all handlers
+                #[cfg(feature = "python-udf")]
+                if let Some(ref python_handler) = self.python_udf_handler {
+                    // Try Python handler first
+                    for (name, _) in &drop_fn.functions {
+                        if python_handler.function_exists(&name.to_string()).await {
+                            let _result = python_handler.handle_drop_function(&name.to_string()).await.map_err(|e| {
+                                crate::protocols::error::ProtocolError::PostgresError(format!("Failed to drop Python function: {}", e))
+                            })?;
+                            let execution_time_ms = start.elapsed().as_millis() as u64;
+
+                            return Ok(OptimizedExecutionResult {
+                                result: ExecutionResult::Show {
+                                    variable: format!("DROP FUNCTION {}", name),
+                                    value: "OK".to_string(),
+                                },
+                                execution_time_ms,
+                                from_cache: false,
+                                execution_backend: ExecutionBackend::CpuScalar,
+                                parallel_partitions: 0,
+                            });
+                        }
+                    }
+                }
+
+                #[cfg(feature = "lua-mlua")]
+                if let Some(ref udf_handler) = self.udf_handler {
+                    let _result = udf_handler.handle_pg_drop_function(drop_fn).await?;
+                    let execution_time_ms = start.elapsed().as_millis() as u64;
+
+                    return Ok(OptimizedExecutionResult {
+                        result: ExecutionResult::Show {
+                            variable: format!("DROP FUNCTION {}", drop_fn.functions.iter().map(|(name, _)| name.to_string()).collect::<Vec<_>>().join(", ")),
+                            value: "OK".to_string(),
+                        },
+                        execution_time_ms,
+                        from_cache: false,
+                        execution_backend: ExecutionBackend::CpuScalar,
+                        parallel_partitions: 0,
+                    });
+                }
+            }
+            _ => {
+                // Not a UDF statement, continue normal execution
+            }
+        }
+
 
         // 3. Get or create execution plan
         let plan = self.get_or_create_plan(sql, &statement).await?;
@@ -508,6 +654,93 @@ impl OptimizedQueryEngine {
     /// Standard execution
     async fn execute_standard(&self, statement: &Statement) -> ProtocolResult<ExecutionResult> {
         self.executor.execute_statement(statement.clone()).await
+    }
+
+    /// Handle PostgreSQL CREATE FUNCTION statement for Python
+    #[cfg(feature = "python-udf")]
+    async fn handle_pg_create_python_function(
+        python_handler: &crate::python::udf_handler::PythonUdfHandler,
+        create_fn: &crate::protocols::postgres_wire::sql::ast::CreateFunctionStatement,
+    ) -> ProtocolResult<()> {
+        use crate::protocols::postgres_wire::sql::ast::FunctionName;
+
+        // Extract function name
+        let func_name = match &create_fn.name {
+            FunctionName::Simple(n) => n.to_uppercase(),
+            FunctionName::Qualified { schema: _, name } => name.to_uppercase(),
+        };
+
+        // Extract parameters with types
+        let params: Vec<(String, String)> = if let Some(ref args) = create_fn.args {
+            args.iter()
+                .map(|param| {
+                    let param_name = param.name.as_deref().unwrap_or("arg").to_string();
+                    let param_type = Self::pg_sql_type_to_string(&param.data_type);
+                    (param_name, param_type)
+                })
+                .collect()
+        } else {
+            vec![]
+        };
+
+        // Extract return type
+        let return_type = if let Some(ref rt) = create_fn.return_type {
+            Self::pg_sql_type_to_string(rt)
+        } else {
+            "VOID".to_string()
+        };
+
+        // Extract function body
+        let source = create_fn.body.clone();
+
+        // Extract schema from qualified name
+        let schema = match &create_fn.name {
+            FunctionName::Qualified { schema, name: _ } => Some(schema.clone()),
+            _ => None,
+        };
+
+        // Call handler
+        python_handler
+            .handle_create_function(
+                func_name,
+                params,
+                return_type,
+                source,
+                schema,
+            )
+            .await
+            .map_err(|e| {
+                crate::protocols::error::ProtocolError::PostgresError(format!(
+                    "Failed to create Python function: {}",
+                    e
+                ))
+            })
+    }
+
+    /// Convert PostgreSQL SqlType to SQL type string
+    #[cfg(any(feature = "python-udf", feature = "lua-mlua"))]
+    fn pg_sql_type_to_string(sql_type: &crate::protocols::postgres_wire::sql::types::SqlType) -> String {
+        use crate::protocols::postgres_wire::sql::types::SqlType;
+
+        match sql_type {
+            SqlType::Boolean => "BOOLEAN".to_string(),
+            SqlType::SmallInt => "SMALLINT".to_string(),
+            SqlType::Integer => "INTEGER".to_string(),
+            SqlType::BigInt => "BIGINT".to_string(),
+            SqlType::Real => "REAL".to_string(),
+            SqlType::DoublePrecision => "DOUBLE PRECISION".to_string(),
+            SqlType::Numeric { .. } => "NUMERIC".to_string(),
+            SqlType::Varchar(_) | SqlType::Char(_) | SqlType::Text => "TEXT".to_string(),
+            SqlType::Bytea => "BYTEA".to_string(),
+            SqlType::Timestamp { .. } => "TIMESTAMP".to_string(),
+            SqlType::Date => "DATE".to_string(),
+            SqlType::Time { .. } => "TIME".to_string(),
+            SqlType::Interval => "INTERVAL".to_string(),
+            SqlType::Uuid => "UUID".to_string(),
+            SqlType::Json | SqlType::Jsonb => "JSON".to_string(),
+            SqlType::Array { element_type, .. } => format!("{}[]", Self::pg_sql_type_to_string(element_type)),
+            _ => "TEXT".to_string(),
+        }
     }
 
     /// Get index recommendations for a table

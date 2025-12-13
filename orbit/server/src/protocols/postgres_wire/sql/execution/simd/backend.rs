@@ -59,6 +59,26 @@ pub trait SimdBackend: Send + Sync {
     // String operations
     fn compare_bytes(&self, a: &[u8], b: &[u8]) -> bool;
     fn find_byte(&self, haystack: &[u8], needle: u8) -> Option<usize>;
+
+    // Logic ops for i32
+    fn filter_i32_le(&self, values: &[i32], target: i32) -> Vec<usize>;
+    fn filter_i32_ge(&self, values: &[i32], target: i32) -> Vec<usize>;
+    fn filter_i32_ne(&self, values: &[i32], target: i32) -> Vec<usize>;
+
+    // Logic ops for i64
+    fn filter_i64_le(&self, values: &[i64], target: i64) -> Vec<usize>;
+    fn filter_i64_ge(&self, values: &[i64], target: i64) -> Vec<usize>;
+    fn filter_i64_ne(&self, values: &[i64], target: i64) -> Vec<usize>;
+
+    // Logic ops for f32
+    fn filter_f32_le(&self, values: &[f32], target: f32) -> Vec<usize>;
+    fn filter_f32_ge(&self, values: &[f32], target: f32) -> Vec<usize>;
+    fn filter_f32_ne(&self, values: &[f32], target: f32) -> Vec<usize>;
+
+    // Logic ops for f64
+    fn filter_f64_le(&self, values: &[f64], target: f64) -> Vec<usize>;
+    fn filter_f64_ge(&self, values: &[f64], target: f64) -> Vec<usize>;
+    fn filter_f64_ne(&self, values: &[f64], target: f64) -> Vec<usize>;
 }
 
 /// Scalar (fallback) backend
@@ -331,6 +351,70 @@ impl SimdBackend for ScalarBackend {
     fn find_byte(&self, haystack: &[u8], needle: u8) -> Option<usize> {
         haystack.iter().position(|&b| b == needle)
     }
+
+    fn filter_i32_le(&self, values: &[i32], target: i32) -> Vec<usize> {
+        values.iter().enumerate()
+            .filter_map(|(i, &v)| if v <= target { Some(i) } else { None })
+            .collect()
+    }
+    fn filter_i32_ge(&self, values: &[i32], target: i32) -> Vec<usize> {
+        values.iter().enumerate()
+            .filter_map(|(i, &v)| if v >= target { Some(i) } else { None })
+            .collect()
+    }
+    fn filter_i32_ne(&self, values: &[i32], target: i32) -> Vec<usize> {
+        values.iter().enumerate()
+            .filter_map(|(i, &v)| if v != target { Some(i) } else { None })
+            .collect()
+    }
+
+    fn filter_i64_le(&self, values: &[i64], target: i64) -> Vec<usize> {
+        values.iter().enumerate()
+            .filter_map(|(i, &v)| if v <= target { Some(i) } else { None })
+            .collect()
+    }
+    fn filter_i64_ge(&self, values: &[i64], target: i64) -> Vec<usize> {
+        values.iter().enumerate()
+            .filter_map(|(i, &v)| if v >= target { Some(i) } else { None })
+            .collect()
+    }
+    fn filter_i64_ne(&self, values: &[i64], target: i64) -> Vec<usize> {
+        values.iter().enumerate()
+            .filter_map(|(i, &v)| if v != target { Some(i) } else { None })
+            .collect()
+    }
+
+    fn filter_f32_le(&self, values: &[f32], target: f32) -> Vec<usize> {
+        values.iter().enumerate()
+            .filter_map(|(i, &v)| if v <= target { Some(i) } else { None })
+            .collect()
+    }
+    fn filter_f32_ge(&self, values: &[f32], target: f32) -> Vec<usize> {
+        values.iter().enumerate()
+            .filter_map(|(i, &v)| if v >= target { Some(i) } else { None })
+            .collect()
+    }
+    fn filter_f32_ne(&self, values: &[f32], target: f32) -> Vec<usize> {
+        values.iter().enumerate()
+            .filter_map(|(i, &v)| if v != target { Some(i) } else { None })
+            .collect()
+    }
+
+    fn filter_f64_le(&self, values: &[f64], target: f64) -> Vec<usize> {
+        values.iter().enumerate()
+            .filter_map(|(i, &v)| if v <= target { Some(i) } else { None })
+            .collect()
+    }
+    fn filter_f64_ge(&self, values: &[f64], target: f64) -> Vec<usize> {
+        values.iter().enumerate()
+            .filter_map(|(i, &v)| if v >= target { Some(i) } else { None })
+            .collect()
+    }
+    fn filter_f64_ne(&self, values: &[f64], target: f64) -> Vec<usize> {
+        values.iter().enumerate()
+            .filter_map(|(i, &v)| if v != target { Some(i) } else { None })
+            .collect()
+    }
 }
 
 /// AVX2 backend for x86_64
@@ -559,7 +643,96 @@ impl SimdBackend for Avx2Backend {
     fn find_byte(&self, haystack: &[u8], needle: u8) -> Option<usize> {
         haystack.iter().position(|&b| b == needle) // TODO: SIMD implementation
     }
+
+    fn filter_i32_le(&self, values: &[i32], target: i32) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_i32_le_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_i32_le(values, target)
+        }
+    }
+    fn filter_i32_ge(&self, values: &[i32], target: i32) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_i32_ge_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_i32_ge(values, target)
+        }
+    }
+    fn filter_i32_ne(&self, values: &[i32], target: i32) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_i32_ne_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_i32_ne(values, target)
+        }
+    }
+
+    fn filter_i64_le(&self, values: &[i64], target: i64) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_i64_le_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_i64_le(values, target)
+        }
+    }
+    fn filter_i64_ge(&self, values: &[i64], target: i64) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_i64_ge_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_i64_ge(values, target)
+        }
+    }
+    fn filter_i64_ne(&self, values: &[i64], target: i64) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_i64_ne_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_i64_ne(values, target)
+        }
+    }
+
+    fn filter_f32_le(&self, values: &[f32], target: f32) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_f32_le_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_f32_le(values, target)
+        }
+    }
+    fn filter_f32_ge(&self, values: &[f32], target: f32) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_f32_ge_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_f32_ge(values, target)
+        }
+    }
+    fn filter_f32_ne(&self, values: &[f32], target: f32) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_f32_ne_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_f32_ne(values, target)
+        }
+    }
+
+    fn filter_f64_le(&self, values: &[f64], target: f64) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_f64_le_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_f64_le(values, target)
+        }
+    }
+    fn filter_f64_ge(&self, values: &[f64], target: f64) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_f64_ge_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_f64_ge(values, target)
+        }
+    }
+    fn filter_f64_ne(&self, values: &[f64], target: f64) -> Vec<usize> {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { filter_f64_ne_avx2(values, target) }
+        } else {
+            ScalarBackend.filter_f64_ne(values, target)
+        }
+    }
 }
+
 
 // AVX2 implementations
 #[cfg(target_arch = "x86_64")]
@@ -1682,6 +1855,271 @@ unsafe fn compare_bytes_avx2(a: &[u8], b: &[u8]) -> bool {
 pub struct NeonBackend;
 
 #[cfg(target_arch = "aarch64")]
+// i32 AVX2 Implementations
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_i32_le_avx2(values: &[i32], target: i32) -> Vec<usize> {
+    use std::arch::x86_64::*;
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_epi32(target);
+    let mut i = 0;
+    while i + 8 <= values.len() {
+        let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+        // LE(a, b) <=> !GT(a, b)
+        let gt = _mm256_cmpgt_epi32(data, target_vec);
+        let le = _mm256_andnot_si256(gt, _mm256_set1_epi32(-1)); // NOT gt
+        let mask = _mm256_movemask_ps(_mm256_castsi256_ps(le));
+        if mask != 0 {
+            for j in 0..8 {
+                if (mask & (1 << j)) != 0 { result.push(i + j); }
+            }
+        }
+        i += 8;
+    }
+    for j in i..values.len() {
+        if values[j] <= target { result.push(j); }
+    }
+    result
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_i32_ge_avx2(values: &[i32], target: i32) -> Vec<usize> {
+    use std::arch::x86_64::*;
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_epi32(target);
+    let mut i = 0;
+    while i + 8 <= values.len() {
+        let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+        // GE(a, b) <=> !LT(a, b) <=> !GT(b, a)
+        // Check if target > data
+        let lt = _mm256_cmpgt_epi32(target_vec, data); 
+        // a >= b is NOT (a < b)
+        let ge = _mm256_andnot_si256(lt, _mm256_set1_epi32(-1));
+        let mask = _mm256_movemask_ps(_mm256_castsi256_ps(ge));
+        if mask != 0 {
+             for j in 0..8 { if (mask & (1 << j)) != 0 { result.push(i + j); } }
+        }
+        i += 8;
+    }
+    for j in i..values.len() {
+        if values[j] >= target { result.push(j); }
+    }
+    result
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_i32_ne_avx2(values: &[i32], target: i32) -> Vec<usize> {
+    use std::arch::x86_64::*;
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_epi32(target);
+    let mut i = 0;
+    while i + 8 <= values.len() {
+        let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+        let eq = _mm256_cmpeq_epi32(data, target_vec);
+        let ne = _mm256_andnot_si256(eq, _mm256_set1_epi32(-1));
+        let mask = _mm256_movemask_ps(_mm256_castsi256_ps(ne));
+        if mask != 0 {
+            for j in 0..8 { if (mask & (1 << j)) != 0 { result.push(i + j); } }
+        }
+        i += 8;
+    }
+    for j in i..values.len() {
+        if values[j] != target { result.push(j); }
+    }
+    result
+}
+
+// i64 AVX2 Implementations
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_i64_le_avx2(values: &[i64], target: i64) -> Vec<usize> {
+    use std::arch::x86_64::*;
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_epi64x(target);
+    let mut i = 0;
+    while i + 4 <= values.len() {
+        let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+        // LE(a, b) <=> !GT(a, b)
+        let gt = _mm256_cmpgt_epi64(data, target_vec);
+        let le = _mm256_andnot_si256(gt, _mm256_set1_epi64x(-1));
+        let mask = _mm256_movemask_pd(_mm256_castsi256_pd(le));
+        if mask != 0 {
+            for j in 0..4 { if (mask & (1 << j)) != 0 { result.push(i + j); } }
+        }
+        i += 4;
+    }
+    for j in i..values.len() { if values[j] <= target { result.push(j); } }
+    result
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_i64_ge_avx2(values: &[i64], target: i64) -> Vec<usize> {
+    use std::arch::x86_64::*;
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_epi64x(target);
+    let mut i = 0;
+    while i + 4 <= values.len() {
+        let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+        // GE(a, b) <=> !LT(a, b) <=> !GT(b, a)
+        let lt = _mm256_cmpgt_epi64(target_vec, data);
+        let ge = _mm256_andnot_si256(lt, _mm256_set1_epi64x(-1));
+        let mask = _mm256_movemask_pd(_mm256_castsi256_pd(ge));
+        if mask != 0 {
+            for j in 0..4 { if (mask & (1 << j)) != 0 { result.push(i + j); } }
+        }
+        i += 4;
+    }
+    for j in i..values.len() { if values[j] >= target { result.push(j); } }
+    result
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_i64_ne_avx2(values: &[i64], target: i64) -> Vec<usize> {
+    use std::arch::x86_64::*;
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_epi64x(target);
+    let mut i = 0;
+    while i + 4 <= values.len() {
+        let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+        let eq = _mm256_cmpeq_epi64(data, target_vec);
+        let ne = _mm256_andnot_si256(eq, _mm256_set1_epi64x(-1));
+        let mask = _mm256_movemask_pd(_mm256_castsi256_pd(ne));
+        if mask != 0 {
+            for j in 0..4 { if (mask & (1 << j)) != 0 { result.push(i + j); } }
+        }
+        i += 4;
+    }
+    for j in i..values.len() { if values[j] != target { result.push(j); } }
+    result
+}
+
+// f32 AVX2 Implementations
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_f32_le_avx2(values: &[f32], target: f32) -> Vec<usize> {
+    use std::arch::x86_64::*;
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_ps(target);
+    let mut i = 0;
+    while i + 8 <= values.len() {
+        let data = _mm256_loadu_ps(values[i..].as_ptr());
+        let cmp = _mm256_cmp_ps(data, target_vec, _CMP_LE_OQ);
+        let mask = _mm256_movemask_ps(cmp);
+        if mask != 0 {
+            for j in 0..8 { if (mask & (1 << j)) != 0 { result.push(i + j); } }
+        }
+        i += 8;
+    }
+    for j in i..values.len() { if values[j] <= target { result.push(j); } }
+    result
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_f32_ge_avx2(values: &[f32], target: f32) -> Vec<usize> {
+    use std::arch::x86_64::*;
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_ps(target);
+    let mut i = 0;
+    while i + 8 <= values.len() {
+        let data = _mm256_loadu_ps(values[i..].as_ptr());
+        let cmp = _mm256_cmp_ps(data, target_vec, _CMP_GE_OQ);
+        let mask = _mm256_movemask_ps(cmp);
+        if mask != 0 {
+            for j in 0..8 { if (mask & (1 << j)) != 0 { result.push(i + j); } }
+        }
+        i += 8;
+    }
+    for j in i..values.len() { if values[j] >= target { result.push(j); } }
+    result
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_f32_ne_avx2(values: &[f32], target: f32) -> Vec<usize> {
+    use std::arch::x86_64::*;
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_ps(target);
+    let mut i = 0;
+    while i + 8 <= values.len() {
+        let data = _mm256_loadu_ps(values[i..].as_ptr());
+        let cmp = _mm256_cmp_ps(data, target_vec, _CMP_NEQ_OQ);
+        let mask = _mm256_movemask_ps(cmp);
+        if mask != 0 {
+            for j in 0..8 { if (mask & (1 << j)) != 0 { result.push(i + j); } }
+        }
+        i += 8;
+    }
+    for j in i..values.len() { if values[j] != target { result.push(j); } }
+    result
+}
+
+// f64 AVX2 Implementations
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_f64_le_avx2(values: &[f64], target: f64) -> Vec<usize> {
+    use std::arch::x86_64::*;
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_pd(target);
+    let mut i = 0;
+    while i + 4 <= values.len() {
+        let data = _mm256_loadu_pd(values[i..].as_ptr());
+        let cmp = _mm256_cmp_pd(data, target_vec, _CMP_LE_OQ);
+        let mask = _mm256_movemask_pd(cmp);
+        if mask != 0 {
+            for j in 0..4 { if (mask & (1 << j)) != 0 { result.push(i + j); } }
+        }
+        i += 4;
+    }
+    for j in i..values.len() { if values[j] <= target { result.push(j); } }
+    result
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_f64_ge_avx2(values: &[f64], target: f64) -> Vec<usize> {
+    use std::arch::x86_64::*;
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_pd(target);
+    let mut i = 0;
+    while i + 4 <= values.len() {
+        let data = _mm256_loadu_pd(values[i..].as_ptr());
+        let cmp = _mm256_cmp_pd(data, target_vec, _CMP_GE_OQ);
+        let mask = _mm256_movemask_pd(cmp);
+        if mask != 0 {
+            for j in 0..4 { if (mask & (1 << j)) != 0 { result.push(i + j); } }
+        }
+        i += 4;
+    }
+    for j in i..values.len() { if values[j] >= target { result.push(j); } }
+    result
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn filter_f64_ne_avx2(values: &[f64], target: f64) -> Vec<usize> {
+    use std::arch::x86_64::*;
+    let mut result = Vec::new();
+    let target_vec = _mm256_set1_pd(target);
+    let mut i = 0;
+    while i + 4 <= values.len() {
+        let data = _mm256_loadu_pd(values[i..].as_ptr());
+        let cmp = _mm256_cmp_pd(data, target_vec, _CMP_NEQ_OQ);
+        let mask = _mm256_movemask_pd(cmp);
+        if mask != 0 {
+            for j in 0..4 { if (mask & (1 << j)) != 0 { result.push(i + j); } }
+        }
+        i += 4;
+    }
+    for j in i..values.len() { if values[j] != target { result.push(j); } }
+    result
+}
+
 impl SimdBackend for NeonBackend {
     fn name(&self) -> &'static str {
         "NEON"
@@ -1803,6 +2241,22 @@ impl SimdBackend for NeonBackend {
     fn find_byte(&self, haystack: &[u8], needle: u8) -> Option<usize> {
         haystack.iter().position(|&b| b == needle)
     }
+
+    fn filter_i32_le(&self, values: &[i32], target: i32) -> Vec<usize> { unsafe { filter_i32_le_neon(values, target) } }
+    fn filter_i32_ge(&self, values: &[i32], target: i32) -> Vec<usize> { unsafe { filter_i32_ge_neon(values, target) } }
+    fn filter_i32_ne(&self, values: &[i32], target: i32) -> Vec<usize> { unsafe { filter_i32_ne_neon(values, target) } }
+
+    fn filter_i64_le(&self, values: &[i64], target: i64) -> Vec<usize> { unsafe { filter_i64_le_neon(values, target) } }
+    fn filter_i64_ge(&self, values: &[i64], target: i64) -> Vec<usize> { unsafe { filter_i64_ge_neon(values, target) } }
+    fn filter_i64_ne(&self, values: &[i64], target: i64) -> Vec<usize> { unsafe { filter_i64_ne_neon(values, target) } }
+
+    fn filter_f32_le(&self, values: &[f32], target: f32) -> Vec<usize> { unsafe { filter_f32_le_neon(values, target) } }
+    fn filter_f32_ge(&self, values: &[f32], target: f32) -> Vec<usize> { unsafe { filter_f32_ge_neon(values, target) } }
+    fn filter_f32_ne(&self, values: &[f32], target: f32) -> Vec<usize> { unsafe { filter_f32_ne_neon(values, target) } }
+
+    fn filter_f64_le(&self, values: &[f64], target: f64) -> Vec<usize> { unsafe { filter_f64_le_neon(values, target) } }
+    fn filter_f64_ge(&self, values: &[f64], target: f64) -> Vec<usize> { unsafe { filter_f64_ge_neon(values, target) } }
+    fn filter_f64_ne(&self, values: &[f64], target: f64) -> Vec<usize> { unsafe { filter_f64_ne_neon(values, target) } }
 }
 
 // NEON implementations
@@ -2868,6 +3322,221 @@ unsafe fn compare_bytes_neon(a: &[u8], b: &[u8]) -> bool {
 
     // Handle remainder with scalar comparison
     a[i..] == b[i..]
+}
+
+// i32 NEON Implementations
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_i32_le_neon(values: &[i32], target: i32) -> Vec<usize> {
+    use std::arch::aarch64::*;
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_s32(target);
+    let mut i = 0;
+    while i + 4 <= values.len() {
+        let data = vld1q_s32(values[i..].as_ptr());
+        let cmp = vcleq_s32(data, target_vec);
+        let mask: [u32; 4] = std::mem::transmute(cmp);
+        for j in 0..4 { if mask[j] != 0 { result.push(i + j); } }
+        i += 4;
+    }
+    for j in i..values.len() { if values[j] <= target { result.push(j); } }
+    result
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_i32_ge_neon(values: &[i32], target: i32) -> Vec<usize> {
+    use std::arch::aarch64::*;
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_s32(target);
+    let mut i = 0;
+    while i + 4 <= values.len() {
+        let data = vld1q_s32(values[i..].as_ptr());
+        let cmp = vcgeq_s32(data, target_vec);
+        let mask: [u32; 4] = std::mem::transmute(cmp);
+        for j in 0..4 { if mask[j] != 0 { result.push(i + j); } }
+        i += 4;
+    }
+    for j in i..values.len() { if values[j] >= target { result.push(j); } }
+    result
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_i32_ne_neon(values: &[i32], target: i32) -> Vec<usize> {
+    use std::arch::aarch64::*;
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_s32(target);
+    let mut i = 0;
+    while i + 4 <= values.len() {
+        let data = vld1q_s32(values[i..].as_ptr());
+        let eq = vceqq_s32(data, target_vec);
+        let ne = vmvnq_u32(eq); // NOT eq
+        let mask: [u32; 4] = std::mem::transmute(ne);
+        for j in 0..4 { if mask[j] != 0 { result.push(i + j); } }
+        i += 4;
+    }
+    for j in i..values.len() { if values[j] != target { result.push(j); } }
+    result
+}
+
+// i64 NEON Implementations
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_i64_le_neon(values: &[i64], target: i64) -> Vec<usize> {
+    use std::arch::aarch64::*;
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_s64(target);
+    let mut i = 0;
+    while i + 2 <= values.len() {
+        let data = vld1q_s64(values[i..].as_ptr());
+        let cmp = vcleq_s64(data, target_vec);
+        let mask: [u64; 2] = std::mem::transmute(cmp);
+        for j in 0..2 { if mask[j] != 0 { result.push(i + j); } }
+        i += 2;
+    }
+    for j in i..values.len() { if values[j] <= target { result.push(j); } }
+    result
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_i64_ge_neon(values: &[i64], target: i64) -> Vec<usize> {
+    use std::arch::aarch64::*;
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_s64(target);
+    let mut i = 0;
+    while i + 2 <= values.len() {
+        let data = vld1q_s64(values[i..].as_ptr());
+        let cmp = vcgeq_s64(data, target_vec);
+        let mask: [u64; 2] = std::mem::transmute(cmp);
+        for j in 0..2 { if mask[j] != 0 { result.push(i + j); } }
+        i += 2;
+    }
+    for j in i..values.len() { if values[j] >= target { result.push(j); } }
+    result
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_i64_ne_neon(values: &[i64], target: i64) -> Vec<usize> {
+    use std::arch::aarch64::*;
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_s64(target);
+    let mut i = 0;
+    while i + 2 <= values.len() {
+        let data = vld1q_s64(values[i..].as_ptr());
+        let eq = vceqq_s64(data, target_vec);
+        // Bitwise NOT, but we have u64 vector.
+        // vmvnq_u32 works on 128-bit regs, just need cast.
+        let ne = vmvnq_u32(vreinterpretq_u32_u64(eq));
+        let mask64: [u64; 2] = std::mem::transmute(ne);
+        for j in 0..2 { if mask64[j] != 0 { result.push(i + j); } }
+        i += 2;
+    }
+    for j in i..values.len() { if values[j] != target { result.push(j); } }
+    result
+}
+
+// f32 NEON Implementations
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_f32_le_neon(values: &[f32], target: f32) -> Vec<usize> {
+    use std::arch::aarch64::*;
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_f32(target);
+    let mut i = 0;
+    while i + 4 <= values.len() {
+        let data = vld1q_f32(values[i..].as_ptr());
+        let cmp = vcleq_f32(data, target_vec);
+        let mask: [u32; 4] = std::mem::transmute(cmp);
+        for j in 0..4 { if mask[j] != 0 { result.push(i + j); } }
+        i += 4;
+    }
+    for j in i..values.len() { if values[j] <= target { result.push(j); } }
+    result
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_f32_ge_neon(values: &[f32], target: f32) -> Vec<usize> {
+    use std::arch::aarch64::*;
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_f32(target);
+    let mut i = 0;
+    while i + 4 <= values.len() {
+        let data = vld1q_f32(values[i..].as_ptr());
+        let cmp = vcgeq_f32(data, target_vec);
+        let mask: [u32; 4] = std::mem::transmute(cmp);
+        for j in 0..4 { if mask[j] != 0 { result.push(i + j); } }
+        i += 4;
+    }
+    for j in i..values.len() { if values[j] >= target { result.push(j); } }
+    result
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_f32_ne_neon(values: &[f32], target: f32) -> Vec<usize> {
+    use std::arch::aarch64::*;
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_f32(target);
+    let mut i = 0;
+    while i + 4 <= values.len() {
+        let data = vld1q_f32(values[i..].as_ptr());
+        let eq = vceqq_f32(data, target_vec);
+        let ne = vmvnq_u32(eq); 
+        let mask: [u32; 4] = std::mem::transmute(ne);
+        for j in 0..4 { if mask[j] != 0 { result.push(i + j); } }
+        i += 4;
+    }
+    for j in i..values.len() { if values[j] != target { result.push(j); } }
+    result
+}
+
+// f64 NEON Implementations
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_f64_le_neon(values: &[f64], target: f64) -> Vec<usize> {
+    use std::arch::aarch64::*;
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_f64(target);
+    let mut i = 0;
+    while i + 2 <= values.len() {
+        let data = vld1q_f64(values[i..].as_ptr());
+        let cmp = vcleq_f64(data, target_vec);
+        let mask: [u64; 2] = std::mem::transmute(cmp);
+        for j in 0..2 { if mask[j] != 0 { result.push(i + j); } }
+        i += 2;
+    }
+    for j in i..values.len() { if values[j] <= target { result.push(j); } }
+    result
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_f64_ge_neon(values: &[f64], target: f64) -> Vec<usize> {
+    use std::arch::aarch64::*;
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_f64(target);
+    let mut i = 0;
+    while i + 2 <= values.len() {
+        let data = vld1q_f64(values[i..].as_ptr());
+        let cmp = vcgeq_f64(data, target_vec);
+        let mask: [u64; 2] = std::mem::transmute(cmp);
+        for j in 0..2 { if mask[j] != 0 { result.push(i + j); } }
+        i += 2;
+    }
+    for j in i..values.len() { if values[j] >= target { result.push(j); } }
+    result
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn filter_f64_ne_neon(values: &[f64], target: f64) -> Vec<usize> {
+    use std::arch::aarch64::*;
+    let mut result = Vec::new();
+    let target_vec = vdupq_n_f64(target);
+    let mut i = 0;
+    while i + 2 <= values.len() {
+        let data = vld1q_f64(values[i..].as_ptr());
+        let eq = vceqq_f64(data, target_vec);
+        let ne = vmvnq_u32(vreinterpretq_u32_u64(eq));
+        let mask: [u64; 2] = std::mem::transmute(ne); // bitcast back to u64
+        for j in 0..2 { if mask[j] != 0 { result.push(i + j); } }
+        i += 2;
+    }
+    for j in i..values.len() { if values[j] != target { result.push(j); } }
+    result
 }
 
 /// Get the optimal SIMD backend for the current CPU

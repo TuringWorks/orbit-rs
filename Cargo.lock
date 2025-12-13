@@ -6317,6 +6317,7 @@ dependencies = [
  "redis",
  "regex",
  "reqwest 0.12.24",
+ "rmp-serde",
  "rocksdb",
  "rquickjs",
  "rust_decimal",

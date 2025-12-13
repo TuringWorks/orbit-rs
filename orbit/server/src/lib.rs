@@ -10,6 +10,8 @@ pub mod load_balancer;
 #[cfg(feature = "lua-mlua")]
 pub mod lua;
 pub mod mesh;
+#[cfg(feature = "python-udf")]
+pub mod python;
 pub mod persistence;
 pub mod protocols;
 pub mod server;

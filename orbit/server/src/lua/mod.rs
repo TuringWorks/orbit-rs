@@ -115,3 +115,11 @@ mod tests {
         assert_eq!(result.as_i64(), Some(4)); // 2 keys + 2 args
     }
 }
+
+#[cfg(test)]
+mod udf_integration_test;
+#[cfg(test)]
+mod sql_integration_test;
+
+#[cfg(test)]
+mod sql_syntax_e2e_test;

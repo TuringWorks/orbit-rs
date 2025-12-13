@@ -61,6 +61,9 @@ pub mod query_cache;
 pub mod query_engine;
 pub mod statistics;
 pub mod types;
+
+#[cfg(feature = "lua-mlua")]
+pub mod udf_handler;
 pub mod vectorized_executor;
 pub mod window_functions;
 
@@ -72,6 +75,8 @@ mod mvcc_demo;
 mod pgvector_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod window_functions_integration_test;
 
 // Include comprehensive executor unit tests
 #[cfg(test)]

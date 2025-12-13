@@ -556,6 +556,7 @@ pub enum ParameterMode {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FunctionLanguage {
+    Lua,
     Sql,
     PlPgSql,
     PlJavaScript,
@@ -1715,6 +1716,15 @@ pub enum CommentObjectType {
 impl std::fmt::Display for TableName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.full_name())
+    }
+}
+
+impl std::fmt::Display for FunctionName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionName::Simple(name) => write!(f, "{}", name),
+            FunctionName::Qualified { schema, name } => write!(f, "{}.{}", schema, name),
+        }
     }
 }
 

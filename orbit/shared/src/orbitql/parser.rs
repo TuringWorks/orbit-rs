@@ -1313,6 +1313,7 @@ impl Parser {
             "ORBITQL" => FunctionLanguage::OrbitQL,
             "JAVASCRIPT" | "JS" => FunctionLanguage::JavaScript,
             "PYTHON" | "PY" => FunctionLanguage::Python,
+            "LUA" => FunctionLanguage::Lua,
             _ => FunctionLanguage::Other(token.value.clone()),
         })
     }

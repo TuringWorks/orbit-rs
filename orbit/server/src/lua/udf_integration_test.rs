@@ -1,0 +1,337 @@
+//! Integration tests for Lua UDF functionality
+//!
+//! Tests the complete flow from CREATE FUNCTION through execution and DROP
+
+#[cfg(all(test, feature = "lua-mlua"))]
+mod tests {
+    use crate::lua::mlua_runtime::MluaRuntime;
+    use crate::lua::udf_registry::{UdfMetadata, UdfRegistry, UdfRuntime};
+    use crate::lua::udf_registry::SqlValue;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_create_and_call_simple_udf() {
+        // Create runtime and registry
+        let runtime = Arc::new(MluaRuntime::new());
+        let registry = Arc::new(UdfRegistry::new(runtime));
+
+        // Create a simple add function
+        let metadata = UdfMetadata::new(
+            "add_numbers",
+            "return a + b",
+            UdfRuntime::Lua,
+        )
+        .with_parameter("a", "INTEGER")
+        .with_parameter("b", "INTEGER")
+        .with_return_type("INTEGER");
+
+        // Register the function
+        registry.register(metadata).await.expect("Failed to register function");
+
+        // Verify function exists
+        assert!(registry.exists("add_numbers").await);
+
+        // Call the function
+        let result = registry
+            .call_udf(
+                "add_numbers",
+                vec![SqlValue::Integer(5), SqlValue::Integer(10)],
+            )
+            .await
+            .expect("Failed to call UDF");
+
+        // Verify result
+        assert_eq!(result, SqlValue::Integer(15));
+    }
+
+    #[tokio::test]
+    async fn test_udf_with_strings() {
+        let runtime = Arc::new(MluaRuntime::new());
+        let registry = Arc::new(UdfRegistry::new(runtime));
+
+        // Create uppercase function
+        let metadata = UdfMetadata::new(
+            "uppercase",
+            "return string.upper(str)",
+            UdfRuntime::Lua,
+        )
+        .with_parameter("str", "TEXT")
+        .with_return_type("TEXT");
+
+        registry.register(metadata).await.expect("Failed to register function");
+
+        // Call the function
+        let result = registry
+            .call_udf(
+                "uppercase",
+                vec![SqlValue::Text("hello world".to_string())],
+            )
+            .await
+            .expect("Failed to call UDF");
+
+        assert_eq!(result, SqlValue::Text("HELLO WORLD".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_udf_with_arrays() {
+        let runtime = Arc::new(MluaRuntime::new());
+        let registry = Arc::new(UdfRegistry::new(runtime));
+
+        // Create sum_array function
+        let metadata = UdfMetadata::new(
+            "sum_array",
+            r#"
+                local sum = 0
+                for _, v in ipairs(arr) do
+                    sum = sum + v
+                end
+                return sum
+            "#,
+            UdfRuntime::Lua,
+        )
+        .with_parameter("arr", "INTEGER[]")
+        .with_return_type("INTEGER");
+
+        registry.register(metadata).await.expect("Failed to register function");
+
+        // Call with array
+        let result = registry
+            .call_udf(
+                "sum_array",
+                vec![SqlValue::Array(vec![
+                    SqlValue::Integer(1),
+                    SqlValue::Integer(2),
+                    SqlValue::Integer(3),
+                    SqlValue::Integer(4),
+                    SqlValue::Integer(5),
+                ])],
+            )
+            .await
+            .expect("Failed to call UDF");
+
+        assert_eq!(result, SqlValue::Integer(15));
+    }
+
+    #[tokio::test]
+    async fn test_udf_with_conditionals() {
+        let runtime = Arc::new(MluaRuntime::new());
+        let registry = Arc::new(UdfRegistry::new(runtime));
+
+        // Create is_adult function
+        let metadata = UdfMetadata::new(
+            "is_adult",
+            "return age >= 18",
+            UdfRuntime::Lua,
+        )
+        .with_parameter("age", "INTEGER")
+        .with_return_type("BOOLEAN");
+
+        registry.register(metadata).await.expect("Failed to register function");
+
+        // Test with age 25 (adult)
+        let result = registry
+            .call_udf("is_adult", vec![SqlValue::Integer(25)])
+            .await
+            .expect("Failed to call UDF");
+        assert_eq!(result, SqlValue::Boolean(true));
+
+        // Test with age 15 (not adult)
+        let result = registry
+            .call_udf("is_adult", vec![SqlValue::Integer(15)])
+            .await
+            .expect("Failed to call UDF");
+        assert_eq!(result, SqlValue::Boolean(false));
+    }
+
+    #[tokio::test]
+    async fn test_drop_function() {
+        let runtime = Arc::new(MluaRuntime::new());
+        let registry = Arc::new(UdfRegistry::new(runtime));
+
+        // Create function
+        let metadata = UdfMetadata::new("temp_func", "return 42", UdfRuntime::Lua)
+            .with_return_type("INTEGER");
+
+        registry.register(metadata).await.expect("Failed to register function");
+        assert!(registry.exists("temp_func").await);
+
+        // Drop function
+        registry
+            .unregister("public.temp_func")
+            .await
+            .expect("Failed to unregister function");
+
+        // Verify it's gone
+        assert!(!registry.exists("temp_func").await);
+    }
+
+    #[tokio::test]
+    async fn test_replace_function() {
+        let runtime = Arc::new(MluaRuntime::new());
+        let registry = Arc::new(UdfRegistry::new(runtime));
+
+        // Create initial function
+        let metadata = UdfMetadata::new("my_func", "return 42", UdfRuntime::Lua)
+            .with_return_type("INTEGER");
+        registry.register(metadata).await.expect("Failed to register function");
+
+        // Call it
+        let result = registry
+            .call_udf("my_func", vec![])
+            .await
+            .expect("Failed to call UDF");
+        assert_eq!(result, SqlValue::Integer(42));
+
+        // Replace with new implementation
+        let metadata2 = UdfMetadata::new("my_func", "return 100", UdfRuntime::Lua)
+            .with_return_type("INTEGER");
+        registry.register(metadata2).await.expect("Failed to replace function");
+
+        // Call again and verify new behavior
+        let result = registry
+            .call_udf("my_func", vec![])
+            .await
+            .expect("Failed to call UDF");
+        assert_eq!(result, SqlValue::Integer(100));
+    }
+
+    #[tokio::test]
+    async fn test_udf_error_handling() {
+        let runtime = Arc::new(MluaRuntime::new());
+        let registry = Arc::new(UdfRegistry::new(runtime));
+
+        // Create function with syntax error
+        let metadata = UdfMetadata::new(
+            "bad_func",
+            "return 42 +",  // Incomplete expression
+            UdfRuntime::Lua,
+        )
+        .with_return_type("INTEGER");
+
+        // Registration should succeed (we don't validate at registration time)
+        registry.register(metadata).await.expect("Failed to register function");
+
+        // But calling should fail
+        let result = registry.call_udf("bad_func", vec![]).await;
+        assert!(result.is_err(), "Expected error for bad syntax");
+    }
+
+    #[tokio::test]
+    async fn test_list_functions() {
+        let runtime = Arc::new(MluaRuntime::new());
+        let registry = Arc::new(UdfRegistry::new(runtime));
+
+        // Initially empty
+        let functions = registry.list_all().await;
+        assert_eq!(functions.len(), 0);
+
+        // Add some functions
+        for i in 1..=3 {
+            let metadata = UdfMetadata::new(
+                &format!("func_{}", i),
+                "return 42",
+                UdfRuntime::Lua,
+            )
+            .with_return_type("INTEGER");
+            registry.register(metadata).await.expect("Failed to register function");
+        }
+
+        // List should now have 3 functions
+        let functions = registry.list_all().await;
+        assert_eq!(functions.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_udf_with_null_values() {
+        let runtime = Arc::new(MluaRuntime::new());
+        let registry = Arc::new(UdfRegistry::new(runtime));
+
+        // Create function that handles nulls
+        let metadata = UdfMetadata::new(
+            "null_handler",
+            r#"
+                if value == nil then
+                    return 0
+                else
+                    return value * 2
+                end
+            "#,
+            UdfRuntime::Lua,
+        )
+        .with_parameter("value", "INTEGER")
+        .with_return_type("INTEGER");
+
+        registry.register(metadata).await.expect("Failed to register function");
+
+        // Test with null
+        let result = registry
+            .call_udf("null_handler", vec![SqlValue::Null])
+            .await
+            .expect("Failed to call UDF");
+        assert_eq!(result, SqlValue::Integer(0));
+
+        // Test with actual value
+        let result = registry
+            .call_udf("null_handler", vec![SqlValue::Integer(21)])
+            .await
+            .expect("Failed to call UDF");
+        assert_eq!(result, SqlValue::Integer(42));
+    }
+
+    #[tokio::test]
+    async fn test_complex_calculation() {
+        let runtime = Arc::new(MluaRuntime::new());
+        let registry = Arc::new(UdfRegistry::new(runtime));
+
+        // Create discount calculator
+        let metadata = UdfMetadata::new(
+            "calculate_discount",
+            r#"
+                local total = price * quantity
+                if quantity >= 100 then
+                    return total * 0.8  -- 20% discount
+                elseif quantity >= 50 then
+                    return total * 0.9  -- 10% discount
+                else
+                    return total
+                end
+            "#,
+            UdfRuntime::Lua,
+        )
+        .with_parameter("price", "DOUBLE PRECISION")
+        .with_parameter("quantity", "INTEGER")
+        .with_return_type("DOUBLE PRECISION");
+
+        registry.register(metadata).await.expect("Failed to register function");
+
+        // Test with quantity 150 (20% discount)
+        let result = registry
+            .call_udf(
+                "calculate_discount",
+                vec![SqlValue::Double(10.0), SqlValue::Integer(150)],
+            )
+            .await
+            .expect("Failed to call UDF");
+        assert_eq!(result, SqlValue::Double(1200.0));  // 1500 * 0.8 = 1200
+
+        // Test with quantity 75 (10% discount)
+        let result = registry
+            .call_udf(
+                "calculate_discount",
+                vec![SqlValue::Double(10.0), SqlValue::Integer(75)],
+            )
+            .await
+            .expect("Failed to call UDF");
+        assert_eq!(result, SqlValue::Double(675.0));  // 750 * 0.9 = 675
+
+        // Test with quantity 25 (no discount)
+        let result = registry
+            .call_udf(
+                "calculate_discount",
+                vec![SqlValue::Double(10.0), SqlValue::Integer(25)],
+            )
+            .await
+            .expect("Failed to call UDF");
+        assert_eq!(result, SqlValue::Double(250.0));  // 250 * 1 = 250
+    }
+}

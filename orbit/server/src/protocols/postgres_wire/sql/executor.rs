@@ -32,6 +32,7 @@ use crate::protocols::postgres_wire::sql::{
     graph_traversal::{self, OrbitQLGraphBuilder},
     parser::SqlParser,
     types::{SqlType, SqlValue},
+    window_functions::WindowFunctionEvaluator,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -745,6 +746,13 @@ impl SqlExecutor {
         self.storage.metrics().await
     }
 
+    /// Set the UDF registry for expression evaluation
+    #[cfg(feature = "lua-mlua")]
+    pub async fn set_udf_registry(&self, registry: Arc<crate::lua::udf_registry::UdfRegistry>) {
+        let mut evaluator = self.expression_evaluator.write().await;
+        evaluator.set_udf_registry(registry);
+    }
+
     /// Create a sequence accessor for expression evaluation
     /// This allows expression evaluators to call nextval, currval, setval, lastval
     /// The accessor directly uses the executor's sequence storage for real-time updates.
@@ -937,6 +945,7 @@ impl SqlExecutor {
                 FunctionLanguage::Sql => FunctionLanguageType::Sql,
                 FunctionLanguage::PlPgSql => FunctionLanguageType::PlPgSql,
                 FunctionLanguage::PlJavaScript => FunctionLanguageType::PlJavaScript,
+                FunctionLanguage::Lua => FunctionLanguageType::Internal,
                 FunctionLanguage::Other(_) => FunctionLanguageType::Internal,
             })
             .unwrap_or(FunctionLanguageType::Sql);
@@ -1649,6 +1658,23 @@ impl SqlExecutor {
             return self.execute_traverse_query(&stmt, traverse_clause).await;
         }
 
+        // Check for window functions
+        let has_window_funcs = stmt.select_list.iter().any(|item| {
+            if let SelectItem::Expression { expr, .. } = item {
+                matches!(expr, Expression::WindowFunction { .. })
+            } else {
+                false
+            }
+        });
+
+        if has_window_funcs {
+            if let Some(FromClause::Table { name, .. }) = &stmt.from_clause {
+                return self.execute_select_window(&stmt, name).await;
+            } else {
+                 return Err(ProtocolError::PostgresError("Window functions currently only supported on single tables".to_string()));
+            }
+        }
+
         // Determine result columns from SELECT list
         self.build_result_columns(&stmt.select_list, &stmt.from_clause, &mut columns)
             .await?;
@@ -1681,6 +1707,103 @@ impl SqlExecutor {
         })
     }
 
+
+    /// Execute SELECT with window functions
+    async fn execute_select_window(
+        &self,
+        stmt: &SelectStatement,
+        table_name: &TableName,
+    ) -> ProtocolResult<ExecutionResult> {
+        let full_table_name = table_name.full_name();
+        
+        // 1. Fetch raw rows
+        let table_data = self.table_data.read().await;
+        // Clone rows because we need multiple mutable passes (or immutable but shared ownership)
+        let rows = table_data.get(&full_table_name).cloned().unwrap_or_default();
+        
+        // 2. Filter rows
+        let mut filtered_rows = Vec::new();
+        for row in rows {
+            if let Some(where_expr) = &stmt.where_clause {
+                let context = EvaluationContext::with_row(row.clone());
+                match self.evaluate_where_condition(where_expr, &context).await {
+                    Ok(SqlValue::Boolean(b)) => {
+                        if b { filtered_rows.push(row); }
+                    },
+                    _ => {},
+                }
+            } else {
+                filtered_rows.push(row);
+            }
+        }
+        
+        // 3. Evaluate window functions
+        // We need to map (row_index, col_index) -> value
+        let mut window_values: HashMap<(usize, usize), SqlValue> = HashMap::new();
+        
+        for (col_idx, item) in stmt.select_list.iter().enumerate() {
+            if let SelectItem::Expression { expr: Expression::WindowFunction { 
+                function, partition_by, order_by, frame: window_frame, ..
+            }, .. } = item {
+                
+                // Create evaluator for this specific window function definition
+                // Note: Optimization would be to group by (partition_by, order_by) but for now create new for each
+                let mut evaluator = WindowFunctionEvaluator::new();
+                
+                // Partition rows
+                // WindowFunctionEvaluator::partition_rows expects Vec<HashMap>
+                // filtered_rows is Vec<HashMap>. We need to clone specific columns? 
+                // partition_rows takes ownership. Clone inputs.
+                let rows_for_partition = filtered_rows.clone();
+                
+                evaluator.partition_rows(rows_for_partition, partition_by, order_by)?;
+                
+                // Evaluate
+                let results = evaluator.evaluate(function, window_frame, order_by)?;
+                
+                // Store results
+                for (row_idx, value) in results {
+                    window_values.insert((row_idx, col_idx), value);
+                }
+            }
+        }
+        
+        // 4. Construct result
+        let mut columns = Vec::new();
+        let mut final_rows = Vec::new();
+        
+        // Build column names
+        self.build_result_columns(&stmt.select_list, &stmt.from_clause, &mut columns).await?;
+        
+        for (idx, row) in filtered_rows.iter().enumerate() {
+            let mut result_row = Vec::new();
+            
+            for (col_idx, item) in stmt.select_list.iter().enumerate() {
+                if let Some(val) = window_values.get(&(idx, col_idx)) {
+                    result_row.push(Some(val.to_postgres_string()));
+                } else if let SelectItem::Expression { expr, .. } = item {
+                     // Regular expression evaluation
+                     let context = EvaluationContext::with_row(row.clone());
+                     // Handle simple evaluation
+                     // evaluate_where_condition is generic evaluate?
+                     let value = self.evaluate_where_condition(expr, &context).await?;
+                     result_row.push(Some(value.to_postgres_string()));
+                } else {
+                    // Wildcard or other?
+                    // Basic support for now
+                    result_row.push(Some("".to_string()));
+                }
+            }
+            final_rows.push(result_row);
+        }
+        
+        Ok(ExecutionResult::Select {
+            columns,
+            row_count: final_rows.len(),
+            rows: final_rows,
+        })
+    }
+    
     /// Execute a TRAVERSE query using shared graph algorithms
     async fn execute_traverse_query(
         &self,

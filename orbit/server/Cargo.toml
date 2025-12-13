@@ -57,6 +57,7 @@ futures.workspace = true
 dashmap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+rmp-serde = "1.3"  # MessagePack serialization for Python UDF communication
 bincode = "1.3"
 tracing.workspace = true
 tracing-subscriber.workspace = true
@@ -160,6 +161,7 @@ default = [
     "tracing",
     "fts",
     "lua-redis",  # Redis Lua scripting support
+    "python-postgres",  # PostgreSQL Python UDF support
 ]
 
 # Core System Features
@@ -272,6 +274,13 @@ lua-redis = ["lua-mlua", "protocol-redis"]          # Redis FUNCTION/EVAL/SCRIPT
 lua-postgres = ["lua-mlua", "protocol-postgres"]    # PL/Lua for PostgreSQL
 lua-mysql = ["lua-mlua", "protocol-mysql"]          # Lua procedures for MySQL
 lua-all = ["lua-redis", "lua-postgres", "lua-mysql"]  # All Lua features
+
+# Python UDF Support (subprocess-based, cross-platform)
+python-udf = []                                      # Base Python UDF support
+python-postgres = ["python-udf", "protocol-postgres"]  # PL/Python for PostgreSQL
+python-mysql = ["python-udf", "protocol-mysql"]        # Python procedures for MySQL
+python-redis = ["python-udf", "protocol-redis"]        # Python UDFs for Redis
+python-all = ["python-postgres", "python-mysql", "python-redis"]  # All Python features
 
 [dev-dependencies]
 mockall.workspace = true

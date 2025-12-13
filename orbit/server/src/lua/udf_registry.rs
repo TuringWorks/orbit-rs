@@ -306,10 +306,17 @@ impl UdfRegistry {
         // Convert SQL values to Lua values
         let lua_args: Vec<LuaValue> = args.into_iter().map(sql_to_lua).collect();
 
-        // Call function
+        // Build a wrapper script that assigns parameters
+        let mut script = String::new();
+        for (i, param) in metadata.parameters.iter().enumerate() {
+            script.push_str(&format!("local {} = ARGV[{}]\n", param.name, i + 1));
+        }
+        script.push_str(&metadata.source);
+
+        // Execute the wrapped script
         let result = self
             .lua_runtime
-            .call_function(&metadata.name, &[], &lua_args)
+            .eval_with_keys_args(&script, &[], &lua_args)
             .await?;
 
         // Convert result back to SQL
@@ -319,10 +326,27 @@ impl UdfRegistry {
     #[cfg(not(feature = "lua-mlua"))]
     async fn call_lua_udf(
         &self,
-        _metadata: &UdfMetadata,
-        _args: Vec<SqlValue>,
+        metadata: &UdfMetadata,
+        args: Vec<SqlValue>,
     ) -> LuaResult<SqlValue> {
-        Err(LuaError::InternalError("Lua support not enabled".to_string()))
+        // Convert SQL values to Lua values
+        let lua_args: Vec<LuaValue> = args.into_iter().map(sql_to_lua).collect();
+
+        // Build a wrapper script that assigns parameters
+        let mut script = String::new();
+        for (i, param) in metadata.parameters.iter().enumerate() {
+            script.push_str(&format!("local {} = ARGV[{}]\n", param.name, i + 1));
+        }
+        script.push_str(&metadata.source);
+
+        // Execute the wrapped script
+        let result = self
+            .lua_runtime
+            .eval_with_keys_args(&script, &[], &lua_args)
+            .await?;
+
+        // Convert result back to SQL
+        Ok(lua_to_sql(&result))
     }
 
     /// Call a JavaScript UDF (stub for now)
@@ -404,7 +428,14 @@ pub fn lua_to_sql(lua: &LuaValue) -> SqlValue {
     match lua {
         LuaValue::Nil => SqlValue::Null,
         LuaValue::Boolean(b) => SqlValue::Boolean(*b),
-        LuaValue::Integer(i) => SqlValue::BigInt(*i),
+        LuaValue::Integer(i) => {
+            // Try to fit in i32 range first
+            if *i >= i32::MIN as i64 && *i <= i32::MAX as i64 {
+                SqlValue::Integer(*i as i32)
+            } else {
+                SqlValue::BigInt(*i)
+            }
+        }
         LuaValue::Number(f) => SqlValue::Double(*f),
         LuaValue::String(s) => SqlValue::Text(s.clone()),
         LuaValue::Binary(b) => SqlValue::Bytea(b.clone()),
