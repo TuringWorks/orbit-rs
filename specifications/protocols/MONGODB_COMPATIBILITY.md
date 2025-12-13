@@ -2,8 +2,8 @@
 
 **Target**: MongoDB 6.x/7.x Wire Protocol
 **Reference**: https://www.mongodb.com/docs/manual/
-**Last Updated**: 2025-12-11
-**Current Estimated Coverage**: ~50%
+**Last Updated**: 2025-12-13
+**Current Estimated Coverage**: ~55%
 
 ---
 
@@ -120,9 +120,20 @@ This document specifies the MongoDB wire protocol feature set and tracks OrbitRS
 | Operator | Status | Notes |
 |----------|--------|-------|
 | $regex | ✅ | Regular expression |
-| $text | ❌ | Text search |
+| $text | 🔶 | FTS module disabled - needs API update (fts.rs.disabled) |
 | $where | ❌ | JavaScript expression |
 | $expr | 🔶 | Aggregation expression |
+
+#### Geospatial
+
+| Operator | Status | Notes |
+|----------|--------|-------|
+| $geoNear | ✅ | Aggregation stage - nearest neighbors |
+| $geoWithin | ✅ | Query operator - $box, $polygon, $center, $centerSphere |
+| $near | ✅ | Query operator - proximity search |
+| $nearSphere | ✅ | Query operator - spherical proximity |
+| $geoIntersects | ✅ | GeoJSON intersection |
+| $geometry | ✅ | GeoJSON geometry specification |
 
 ### Update Operators
 
@@ -175,8 +186,15 @@ This document specifies the MongoDB wire protocol feature set and tracks OrbitRS
 | $replaceRoot | ✅ | Replace document root with subdocument |
 | $facet | ✅ | Multiple parallel aggregation pipelines |
 | $bucket | ✅ | Categorize documents by boundaries |
+| $bucketAuto | ✅ | Automatically determine bucket boundaries |
+| $sortByCount | ✅ | Group and count by expression |
+| $graphLookup | ✅ | Recursive graph traversal |
 | $out | ✅ | Write results to collection |
 | $merge | ✅ | Merge results into collection |
+| $set | ✅ | Alias for $addFields |
+| $unset | ✅ | Remove fields from documents |
+| $sample | ✅ | Random sample of documents |
+| $unionWith | ✅ | Combine documents from another collection |
 
 ### Aggregation Operators
 
@@ -307,12 +325,13 @@ This document specifies the MongoDB wire protocol feature set and tracks OrbitRS
 |----------|----------|-------|
 | Database Commands | ~70% | Core commands work |
 | CRUD Operations | ~80% | Full CRUD support |
-| Query Operators | ~85% | Most operators work |
+| Query Operators | ~90% | Most operators work including geospatial |
 | Update Operators | ~90% | Full update support |
-| Aggregation | ~75% | 23 pipeline stages implemented including $replaceRoot, $facet, $bucket |
+| Aggregation | ~80% | 33+ pipeline stages implemented including $graphLookup, $facet, $bucket, $bucketAuto, $unionWith |
 | Wire Protocol | ~70% | OP_MSG complete |
 | Authentication | ~60% | SCRAM works |
 | Data Types | ~95% | All BSON types |
+| Geospatial | ~85% | Full GeoJSON and legacy coordinate support |
 
 ### Priority Roadmap
 
@@ -327,12 +346,12 @@ This document specifies the MongoDB wire protocol feature set and tracks OrbitRS
 1. ❌ Change streams
 2. ❌ Sessions
 3. ❌ Retryable operations
-4. ❌ Advanced aggregation
+4. ✅ Advanced aggregation ($graphLookup, $facet, $bucket, etc.)
 
 **Low Priority**:
 1. ❌ GridFS
-2. ❌ Text search
-3. ❌ Geospatial queries
+2. 🔶 Text search (FTS module disabled)
+3. ✅ Geospatial queries (GeoJSON + legacy coordinates)
 4. ❌ Time series collections
 
 ---
@@ -343,12 +362,12 @@ This document specifies the MongoDB wire protocol feature set and tracks OrbitRS
 2. **Change Streams**: Not supported
 3. **Sessions**: Not implemented
 4. **GridFS**: Not supported
-5. **Text Search**: Not implemented
-6. **Geospatial Queries**: Not supported
-7. **Time Series**: Not supported
-8. **Capped Collections**: Limited support
-9. **TTL Indexes**: Not implemented
-10. **Partial Indexes**: Not implemented
+5. **Text Search**: FTS module disabled - needs SharedFtsEngine API update (code in fts.rs.disabled)
+6. **Time Series**: Not supported
+7. **Capped Collections**: Limited support
+8. **TTL Indexes**: Not implemented
+9. **Partial Indexes**: Not implemented
+10. **JavaScript ($where)**: Not implemented
 
 ---
 

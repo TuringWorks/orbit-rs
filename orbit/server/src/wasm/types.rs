@@ -154,6 +154,52 @@ fn json_to_wasm_value(json: &serde_json::Value) -> ProtocolResult<WasmValue> {
     }
 }
 
+/// Streaming buffer for large dataset processing
+#[derive(Debug, Clone)]
+pub struct StreamingBuffer {
+    /// Current chunk of data
+    pub data: Vec<u8>,
+    /// Offset in the overall stream
+    pub offset: usize,
+    /// Total size of the stream (if known)
+    pub total_size: Option<usize>,
+    /// Whether this is the last chunk
+    pub is_last: bool,
+}
+
+impl StreamingBuffer {
+    /// Create a new streaming buffer
+    pub fn new(data: Vec<u8>, offset: usize, total_size: Option<usize>, is_last: bool) -> Self {
+        Self {
+            data,
+            offset,
+            total_size,
+            is_last,
+        }
+    }
+
+    /// Get progress percentage (0.0-1.0) if total size is known
+    pub fn progress(&self) -> Option<f64> {
+        self.total_size.map(|total| {
+            if total == 0 {
+                1.0
+            } else {
+                (self.offset + self.data.len()) as f64 / total as f64
+            }
+        })
+    }
+
+    /// Check if we've reached the end of the stream
+    pub fn is_complete(&self) -> bool {
+        self.is_last
+    }
+
+    /// Get the current chunk size
+    pub fn chunk_size(&self) -> usize {
+        self.data.len()
+    }
+}
+
 /// WASM function parameter metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WasmParameter {

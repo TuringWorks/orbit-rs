@@ -51,6 +51,55 @@ pub struct WasmConfig {
     /// Maximum concurrent WASM instances
     /// Default: 100
     pub max_concurrent_instances: usize,
+
+    /// Enable SIMD (Single Instruction Multiple Data) support
+    /// Allows vectorized operations for better performance
+    /// Default: true
+    pub enable_simd: bool,
+
+    /// Allowed directories for WASI file I/O (when WASI is enabled)
+    /// Default: empty (no file access)
+    pub wasi_allowed_dirs: Vec<String>,
+
+    /// Allow network access via WASI (when WASI is enabled)
+    /// Default: false
+    pub wasi_allow_network: bool,
+
+    /// Inherit environment variables in WASI
+    /// Default: false (for security)
+    pub wasi_inherit_env: bool,
+
+    /// Inherit stdin/stdout/stderr in WASI
+    /// Default: false (for security)
+    pub wasi_inherit_stdio: bool,
+
+    /// Enable streaming I/O for large datasets
+    /// Default: true
+    pub enable_streaming: bool,
+
+    /// Chunk size for streaming operations (bytes)
+    /// Default: 64KB
+    pub streaming_chunk_size: usize,
+
+    /// Maximum total bytes to stream per function call
+    /// Default: 1GB
+    pub streaming_max_bytes: usize,
+
+    /// Enable multi-threading support (WASM threads proposal)
+    /// Default: true
+    pub enable_threads: bool,
+
+    /// Maximum number of threads per WASM instance
+    /// Default: 4
+    pub max_threads: usize,
+
+    /// Thread stack size (bytes)
+    /// Default: 1MB
+    pub thread_stack_size: usize,
+
+    /// Enable Component Model support
+    /// Default: false (experimental)
+    pub enable_component_model: bool,
 }
 
 impl Default for WasmConfig {
@@ -67,6 +116,18 @@ impl Default for WasmConfig {
             max_module_size: 10 * 1024 * 1024, // 10MB
             enable_parallel: true,
             max_concurrent_instances: 100,
+            enable_simd: true,               // Enable SIMD for better performance
+            wasi_allowed_dirs: Vec::new(),   // No file access by default
+            wasi_allow_network: false,       // No network by default
+            wasi_inherit_env: false,         // No env vars by default
+            wasi_inherit_stdio: false,       // No stdio by default
+            enable_streaming: true,          // Enable streaming by default
+            streaming_chunk_size: 64 * 1024, // 64KB chunks
+            streaming_max_bytes: 1024 * 1024 * 1024, // 1GB max
+            enable_threads: true,            // Enable multi-threading
+            max_threads: 4,                  // 4 threads per instance
+            thread_stack_size: 1024 * 1024,  // 1MB stack per thread
+            enable_component_model: false,   // Experimental feature, disabled by default
         }
     }
 }
@@ -80,10 +141,18 @@ impl WasmConfig {
     /// Create a development configuration (more permissive)
     pub fn development() -> Self {
         Self {
-            max_memory_bytes: 128 * 1024 * 1024, // 128MB
-            timeout: Duration::from_secs(300),   // 5 minutes
-            enable_wasi: true,                   // Allow WASI in dev
-            fuel_limit: 10_000_000_000,          // 10 billion
+            max_memory_bytes: 128 * 1024 * 1024,         // 128MB
+            timeout: Duration::from_secs(300),           // 5 minutes
+            enable_wasi: true,                           // Allow WASI in dev
+            fuel_limit: 10_000_000_000,                  // 10 billion
+            wasi_allowed_dirs: vec!["/tmp".to_string()], // Allow /tmp access
+            wasi_allow_network: true,                    // Allow network in dev
+            wasi_inherit_env: true,                      // Inherit env vars in dev
+            wasi_inherit_stdio: true,                    // Inherit stdio in dev
+            enable_threads: true,                        // Enable threading in dev
+            max_threads: 8,                              // More threads in dev
+            thread_stack_size: 2 * 1024 * 1024,          // 2MB stack in dev
+            enable_component_model: true,                // Enable experimental features in dev
             ..Default::default()
         }
     }
@@ -95,6 +164,9 @@ impl WasmConfig {
             timeout: Duration::from_secs(10),   // 10 seconds
             enable_wasi: false,                 // No WASI in prod
             fuel_limit: 500_000_000,            // 500 million
+            enable_threads: true,               // Enable threading
+            max_threads: 2,                     // Conservative thread count
+            thread_stack_size: 512 * 1024,      // 512KB stack in prod
             ..Default::default()
         }
     }
@@ -123,6 +195,26 @@ impl WasmConfig {
 
         if self.max_concurrent_instances == 0 {
             return Err("max_concurrent_instances must be greater than 0".to_string());
+        }
+
+        if self.streaming_chunk_size < 1024 {
+            return Err("streaming_chunk_size must be at least 1KB".to_string());
+        }
+
+        if self.streaming_max_bytes < self.streaming_chunk_size {
+            return Err("streaming_max_bytes must be at least streaming_chunk_size".to_string());
+        }
+
+        if self.max_threads == 0 {
+            return Err("max_threads must be greater than 0".to_string());
+        }
+
+        if self.max_threads > 64 {
+            return Err("max_threads must not exceed 64".to_string());
+        }
+
+        if self.thread_stack_size < 64 * 1024 {
+            return Err("thread_stack_size must be at least 64KB".to_string());
         }
 
         Ok(())

@@ -13,6 +13,9 @@ use std::time::Instant;
 use tokio::sync::RwLock;
 use wasmtime::*;
 
+#[cfg(feature = "wasm-wasi")]
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder};
+
 /// WASM runtime error
 #[derive(Debug, thiserror::Error)]
 pub enum WasmError {
@@ -57,6 +60,23 @@ struct CachedModule {
     compiled_at: Instant,
 }
 
+/// Store data that can hold WASI context and resource limits
+#[cfg(feature = "wasm-wasi")]
+struct WasmStoreData {
+    wasi: Option<WasiCtx>,
+    limits: StoreLimits,
+}
+
+#[cfg(feature = "wasm-wasi")]
+impl WasmStoreData {
+    fn new(wasi: Option<WasiCtx>, limits: StoreLimits) -> Self {
+        Self { wasi, limits }
+    }
+}
+
+#[cfg(not(feature = "wasm-wasi"))]
+type WasmStoreData = StoreLimits;
+
 /// WASM runtime for executing user-defined functions
 pub struct WasmRuntime {
     config: WasmConfig,
@@ -77,6 +97,20 @@ impl WasmRuntime {
         wasm_config.consume_fuel(config.enable_fuel);
         wasm_config.async_support(true);
         wasm_config.epoch_interruption(true);
+
+        // Enable SIMD for vectorized operations
+        wasm_config.wasm_simd(config.enable_simd);
+
+        // Enable multi-threading (WASM threads proposal)
+        if config.enable_threads {
+            wasm_config.wasm_threads(true);
+            wasm_config.thread_stack_size(config.thread_stack_size);
+        }
+
+        // Enable Component Model (experimental)
+        if config.enable_component_model {
+            wasm_config.wasm_component_model(true);
+        }
 
         // Set memory limits
         wasm_config.max_wasm_stack(1024 * 1024); // 1MB stack
@@ -142,6 +176,45 @@ impl WasmRuntime {
         Ok(module)
     }
 
+    /// Create WASI context if WASI is enabled
+    #[cfg(feature = "wasm-wasi")]
+    fn create_wasi_context(&self) -> Option<WasiCtx> {
+        if !self.config.enable_wasi {
+            return None;
+        }
+
+        let mut builder = WasiCtxBuilder::new();
+
+        // Configure allowed directories
+        for dir in &self.config.wasi_allowed_dirs {
+            builder = builder.preopened_dir(
+                wasmtime_wasi::sync::Dir::open_ambient_dir(
+                    dir,
+                    wasmtime_wasi::sync::ambient_authority(),
+                )
+                .ok()?,
+                dir,
+            );
+        }
+
+        // Configure stdio
+        if self.config.wasi_inherit_stdio {
+            builder = builder.inherit_stdio();
+        }
+
+        // Configure environment
+        if self.config.wasi_inherit_env {
+            builder = builder.inherit_env();
+        }
+
+        Some(builder.build())
+    }
+
+    #[cfg(not(feature = "wasm-wasi"))]
+    fn create_wasi_context(&self) -> Option<()> {
+        None
+    }
+
     /// Execute a WASM function with the given arguments
     pub async fn execute(
         &self,
@@ -152,13 +225,34 @@ impl WasmRuntime {
         // Compile the module
         let module = self.compile_module(wasm_binary).await?;
 
-        // Create store limits for memory protection
-        let limits = StoreLimitsBuilder::new()
-            .memory_size(self.config.max_memory_bytes)
-            .build();
+        // Create store limits
+        let mut limits_builder = StoreLimitsBuilder::new();
+        limits_builder.memory_size(self.config.max_memory_bytes);
 
-        // Create a new store for this execution with limits
-        let mut store = Store::new(&self.engine, limits);
+        // Set thread limits if threading is enabled
+        if self.config.enable_threads {
+            limits_builder.instances(self.config.max_threads);
+            limits_builder.tables(self.config.max_threads);
+        }
+
+        let limits = limits_builder.build();
+
+        // Create store data with optional WASI context
+        #[cfg(feature = "wasm-wasi")]
+        let store_data = WasmStoreData::new(self.create_wasi_context(), limits);
+
+        #[cfg(not(feature = "wasm-wasi"))]
+        let store_data = limits;
+
+        // Create a new store for this execution
+        let mut store = Store::new(&self.engine, store_data);
+
+        // Set up resource limiter
+        #[cfg(feature = "wasm-wasi")]
+        store.limiter(|data| &mut data.limits);
+
+        #[cfg(not(feature = "wasm-wasi"))]
+        store.limiter(|data| data);
 
         // Set fuel limit if enabled
         if self.config.enable_fuel {
@@ -167,13 +261,36 @@ impl WasmRuntime {
                 .map_err(|e| WasmError::ExecutionError(format!("Failed to set fuel: {}", e)))?;
         }
 
-        // Configure memory limits
-        store.limiter(|s| s);
+        // Create linker and add WASI if enabled
+        #[cfg(feature = "wasm-wasi")]
+        let instance = {
+            let mut linker = Linker::new(&self.engine);
 
-        // Instantiate the module
-        let instance = Instance::new(&mut store, &module, &[]).map_err(|e| {
-            WasmError::InstantiationError(format!("Failed to instantiate module: {}", e))
-        })?;
+            // Add WASI to linker if context exists
+            if store.data().wasi.is_some() {
+                wasmtime_wasi::add_to_linker(&mut linker, |data: &mut WasmStoreData| {
+                    data.wasi.as_mut().expect("WASI context should exist")
+                })
+                .map_err(|e| {
+                    WasmError::InstantiationError(format!("Failed to link WASI: {}", e))
+                })?;
+            }
+
+            linker
+                .instantiate_async(&mut store, &module)
+                .await
+                .map_err(|e| {
+                    WasmError::InstantiationError(format!("Failed to instantiate module: {}", e))
+                })?
+        };
+
+        // Instantiate without WASI
+        #[cfg(not(feature = "wasm-wasi"))]
+        let instance = Instance::new_async(&mut store, &module, &[])
+            .await
+            .map_err(|e| {
+                WasmError::InstantiationError(format!("Failed to instantiate module: {}", e))
+            })?;
 
         // Get the exported function
         let func = instance
@@ -197,20 +314,24 @@ impl WasmRuntime {
     /// Execute a WASM function (internal)
     async fn execute_func(
         &self,
-        store: &mut Store<StoreLimits>,
+        store: &mut Store<WasmStoreData>,
         func: &Func,
         args: &[Val],
     ) -> Result<WasmValue, WasmError> {
-        // Call the function
+        // Call the function (async version for better performance)
         let mut results = vec![Val::I32(0)]; // Placeholder for result
-        func.call(store, args, &mut results).map_err(|e| {
-            // Check if it's an out-of-fuel error
-            if e.to_string().contains("fuel") {
-                WasmError::OutOfFuelError
-            } else {
-                WasmError::ExecutionError(format!("Function execution failed: {}", e))
-            }
-        })?;
+
+        // Use async call for non-blocking execution
+        func.call_async(store, args, &mut results)
+            .await
+            .map_err(|e| {
+                // Check if it's an out-of-fuel error
+                if e.to_string().contains("fuel") {
+                    WasmError::OutOfFuelError
+                } else {
+                    WasmError::ExecutionError(format!("Function execution failed: {}", e))
+                }
+            })?;
 
         // Convert result back to WasmValue
         if results.is_empty() {
@@ -260,6 +381,210 @@ impl WasmRuntime {
     pub async fn cache_stats(&self) -> (usize, usize) {
         let cache = self.module_cache.read().await;
         (cache.len(), cache.cap().get())
+    }
+
+    /// Execute a WASM function with streaming input
+    /// Processes data in chunks to avoid loading everything into memory
+    pub async fn execute_streaming<R>(
+        &self,
+        wasm_binary: &[u8],
+        export_name: &str,
+        mut reader: R,
+    ) -> Result<Vec<WasmValue>, WasmError>
+    where
+        R: tokio::io::AsyncRead + Unpin,
+    {
+        use super::types::StreamingBuffer;
+        use tokio::io::AsyncReadExt;
+
+        if !self.config.enable_streaming {
+            return Err(WasmError::ExecutionError(
+                "Streaming I/O is disabled".to_string(),
+            ));
+        }
+
+        let mut results = Vec::new();
+        let mut offset = 0;
+        let mut total_bytes = 0;
+
+        // Compile module once
+        let module = self.compile_module(wasm_binary).await?;
+
+        loop {
+            // Read next chunk
+            let mut chunk = vec![0u8; self.config.streaming_chunk_size];
+            let bytes_read = reader
+                .read(&mut chunk)
+                .await
+                .map_err(|e| WasmError::ExecutionError(format!("Streaming read error: {}", e)))?;
+
+            if bytes_read == 0 {
+                break; // End of stream
+            }
+
+            chunk.truncate(bytes_read);
+            total_bytes += bytes_read;
+
+            // Check streaming limit
+            if total_bytes > self.config.streaming_max_bytes {
+                return Err(WasmError::ExecutionError(format!(
+                    "Stream size {} exceeds limit {}",
+                    total_bytes, self.config.streaming_max_bytes
+                )));
+            }
+
+            let is_last = bytes_read < self.config.streaming_chunk_size;
+
+            // Create streaming buffer
+            let buffer = StreamingBuffer::new(chunk, offset, None, is_last);
+
+            // Serialize to MessagePack for WASM
+            let buffer_bytes = rmp_serde::to_vec(&buffer.data).map_err(|e| {
+                WasmError::TypeConversionError(format!("Failed to serialize chunk: {}", e))
+            })?;
+
+            // Process chunk through WASM
+            let chunk_result = self
+                .execute_chunk(&module, export_name, &buffer_bytes, offset, is_last)
+                .await?;
+
+            results.push(chunk_result);
+            offset += bytes_read;
+
+            if is_last {
+                break;
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Execute a single chunk of data
+    async fn execute_chunk(
+        &self,
+        module: &Module,
+        export_name: &str,
+        chunk_data: &[u8],
+        offset: usize,
+        is_last: bool,
+    ) -> Result<WasmValue, WasmError> {
+        use super::types::WasmValue;
+
+        // Create store limits
+        let mut limits_builder = StoreLimitsBuilder::new();
+        limits_builder.memory_size(self.config.max_memory_bytes);
+
+        // Set thread limits if threading is enabled
+        if self.config.enable_threads {
+            limits_builder.instances(self.config.max_threads);
+            limits_builder.tables(self.config.max_threads);
+        }
+
+        let limits = limits_builder.build();
+
+        // Create store data with optional WASI context
+        #[cfg(feature = "wasm-wasi")]
+        let store_data = WasmStoreData::new(self.create_wasi_context(), limits);
+
+        #[cfg(not(feature = "wasm-wasi"))]
+        let store_data = limits;
+
+        // Create a new store for this execution
+        let mut store = Store::new(&self.engine, store_data);
+
+        // Set up resource limiter
+        #[cfg(feature = "wasm-wasi")]
+        store.limiter(|data| &mut data.limits);
+
+        #[cfg(not(feature = "wasm-wasi"))]
+        store.limiter(|data| data);
+
+        // Set fuel limit if enabled
+        if self.config.enable_fuel {
+            store
+                .set_fuel(self.config.fuel_limit)
+                .map_err(|e| WasmError::ExecutionError(format!("Failed to set fuel: {}", e)))?;
+        }
+
+        // Instantiate module
+        #[cfg(feature = "wasm-wasi")]
+        let instance = {
+            let mut linker = Linker::new(&self.engine);
+
+            // Add WASI to linker if context exists
+            if store.data().wasi.is_some() {
+                wasmtime_wasi::add_to_linker(&mut linker, |data: &mut WasmStoreData| {
+                    data.wasi.as_mut().expect("WASI context should exist")
+                })
+                .map_err(|e| {
+                    WasmError::InstantiationError(format!("Failed to link WASI: {}", e))
+                })?;
+            }
+
+            linker
+                .instantiate_async(&mut store, module)
+                .await
+                .map_err(|e| {
+                    WasmError::InstantiationError(format!("Failed to instantiate module: {}", e))
+                })?
+        };
+
+        #[cfg(not(feature = "wasm-wasi"))]
+        let instance = Instance::new_async(&mut store, module, &[])
+            .await
+            .map_err(|e| {
+                WasmError::InstantiationError(format!("Failed to instantiate module: {}", e))
+            })?;
+
+        // Get exported function
+        let func = instance
+            .get_func(&mut store, export_name)
+            .ok_or_else(|| WasmError::FunctionNotFound(export_name.to_string()))?;
+
+        // Allocate memory in WASM for chunk data
+        let memory = instance
+            .get_memory(&mut store, "memory")
+            .ok_or_else(|| WasmError::ExecutionError("No memory export found".to_string()))?;
+
+        // Write chunk data to WASM memory
+        let data_ptr = 0; // Use offset 0 for simplicity (real impl would allocate properly)
+        memory
+            .write(&mut store, data_ptr, chunk_data)
+            .map_err(|e| {
+                WasmError::ExecutionError(format!("Failed to write to WASM memory: {}", e))
+            })?;
+
+        // Call function with (data_ptr, data_len, offset, is_last)
+        let args = &[
+            Val::I32(data_ptr as i32),
+            Val::I32(chunk_data.len() as i32),
+            Val::I32(offset as i32),
+            Val::I32(if is_last { 1 } else { 0 }),
+        ];
+
+        let mut results = vec![Val::I32(0)];
+
+        // Execute with timeout
+        tokio::time::timeout(
+            self.config.timeout,
+            func.call_async(&mut store, args, &mut results),
+        )
+        .await
+        .map_err(|_| WasmError::TimeoutError(self.config.timeout_millis()))?
+        .map_err(|e| {
+            if e.to_string().contains("fuel") {
+                WasmError::OutOfFuelError
+            } else {
+                WasmError::ExecutionError(format!("Function execution failed: {}", e))
+            }
+        })?;
+
+        // Convert result
+        if results.is_empty() {
+            return Ok(WasmValue::Null);
+        }
+
+        self.convert_wasm_result_to_value(&results[0])
     }
 }
 
