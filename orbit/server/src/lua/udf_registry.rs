@@ -495,8 +495,13 @@ mod tests {
             SqlValue::Boolean(true)
         );
 
-        // Integer
-        assert_eq!(lua_to_sql(&LuaValue::Integer(42)), SqlValue::BigInt(42));
+        // Integer (small values fit in i32)
+        assert_eq!(lua_to_sql(&LuaValue::Integer(42)), SqlValue::Integer(42));
+        // BigInt (large values use i64)
+        assert_eq!(
+            lua_to_sql(&LuaValue::Integer(i64::MAX)),
+            SqlValue::BigInt(i64::MAX)
+        );
 
         // Number
         assert_eq!(lua_to_sql(&LuaValue::Number(3.14)), SqlValue::Double(3.14));

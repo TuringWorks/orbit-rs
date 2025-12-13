@@ -7,6 +7,64 @@ use super::udf_registry::{PythonUdfMetadata, PythonUdfRegistry};
 use crate::protocols::postgres_wire::sql::types::SqlValue;
 use std::sync::Arc;
 
+/// Extract Python function name from source code
+fn extract_python_function_name(source: &str, default_name: &str) -> PythonResult<String> {
+    // Look for "def function_name(" pattern
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("def ") {
+            if let Some(end) = trimmed.find('(') {
+                let func_name = trimmed[4..end].trim();
+                if !func_name.is_empty() {
+                    return Ok(func_name.to_string());
+                }
+            }
+        }
+    }
+
+    // If no "def" found, use the default name
+    Ok(default_name.to_string())
+}
+
+/// Validate Python source code for basic safety
+fn validate_python_source(source: &str) -> PythonResult<()> {
+    // Check source size
+    if source.len() > 1_000_000 {
+        return Err(PythonError::SecurityViolation(
+            "Function source too large (max 1MB)".to_string(),
+        ));
+    }
+
+    // Check for forbidden operations (basic checks)
+    let forbidden_patterns = [
+        ("eval(", "eval() is not allowed"),
+        ("exec(", "exec() is not allowed"),
+        ("__import__", "__import__ is not allowed"),
+        ("compile(", "compile() is not allowed"),
+        ("globals(", "globals() is not allowed"),
+        ("locals(", "locals() access is restricted"),
+        ("open(", "Direct file access is not allowed"),
+    ];
+
+    for (pattern, msg) in &forbidden_patterns {
+        if source.contains(pattern) {
+            return Err(PythonError::SecurityViolation(format!(
+                "Security violation: {}",
+                msg
+            )));
+        }
+    }
+
+    // Check for at least one function definition
+    if !source.contains("def ") {
+        return Err(PythonError::RuntimeError(
+            "Source must contain at least one function definition".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
 /// Handler for Python UDF SQL statements
 pub struct PythonUdfHandler {
     registry: Arc<PythonUdfRegistry>,
@@ -39,10 +97,10 @@ impl PythonUdfHandler {
         let param_types: Vec<String> = params.iter().map(|(_, t)| t.clone()).collect();
 
         // Extract Python function name from source
-        let python_function_name = self.extract_function_name(&source, &name)?;
+        let python_function_name = extract_python_function_name(&source, &name)?;
 
         // Validate source code
-        self.validate_source(&source)?;
+        validate_python_source(&source)?;
 
         // Create metadata
         let mut metadata =
@@ -97,64 +155,6 @@ impl PythonUdfHandler {
     pub async fn health_check(&self) -> Vec<bool> {
         self.registry.health_check().await
     }
-
-    /// Extract Python function name from source code
-    fn extract_function_name(&self, source: &str, default_name: &str) -> PythonResult<String> {
-        // Look for "def function_name(" pattern
-        for line in source.lines() {
-            let trimmed = line.trim();
-            if trimmed.starts_with("def ") {
-                if let Some(end) = trimmed.find('(') {
-                    let func_name = trimmed[4..end].trim();
-                    if !func_name.is_empty() {
-                        return Ok(func_name.to_string());
-                    }
-                }
-            }
-        }
-
-        // If no "def" found, use the default name
-        Ok(default_name.to_string())
-    }
-
-    /// Validate Python source code for basic safety
-    fn validate_source(&self, source: &str) -> PythonResult<()> {
-        // Check source size
-        if source.len() > 1_000_000 {
-            return Err(PythonError::SecurityViolation(
-                "Function source too large (max 1MB)".to_string(),
-            ));
-        }
-
-        // Check for forbidden operations (basic checks)
-        let forbidden_patterns = [
-            ("eval(", "eval() is not allowed"),
-            ("exec(", "exec() is not allowed"),
-            ("__import__", "__import__ is not allowed"),
-            ("compile(", "compile() is not allowed"),
-            ("globals(", "globals() is not allowed"),
-            ("locals(", "locals() access is restricted"),
-            ("open(", "Direct file access is not allowed"),
-        ];
-
-        for (pattern, msg) in &forbidden_patterns {
-            if source.contains(pattern) {
-                return Err(PythonError::SecurityViolation(format!(
-                    "Security violation: {}",
-                    msg
-                )));
-            }
-        }
-
-        // Check for at least one function definition
-        if !source.contains("def ") {
-            return Err(PythonError::RuntimeError(
-                "Source must contain at least one function definition".to_string(),
-            ));
-        }
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -163,6 +163,7 @@ mod tests {
     use crate::python::config::PythonConfig;
 
     #[tokio::test]
+    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_create_and_execute_function() {
         let config = PythonConfig::default();
         let registry = Arc::new(PythonUdfRegistry::new(config).await.unwrap());
@@ -203,6 +204,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_function_with_schema() {
         let config = PythonConfig::default();
         let registry = Arc::new(PythonUdfRegistry::new(config).await.unwrap());
@@ -233,6 +235,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_batch_execution() {
         let config = PythonConfig::default();
         let registry = Arc::new(PythonUdfRegistry::new(config).await.unwrap());
@@ -276,56 +279,50 @@ mod tests {
 
     #[test]
     fn test_extract_function_name() {
-        let handler = PythonUdfHandler::new(Arc::new(
-            // We can't create a registry here without async, so we'll test the method separately
-            unsafe { std::mem::zeroed() },
-        ));
-
         let source1 = "def my_function(a, b):\n    return a + b";
         assert_eq!(
-            handler.extract_function_name(source1, "default").unwrap(),
+            extract_python_function_name(source1, "default").unwrap(),
             "my_function"
         );
 
         let source2 = "  def another_func(x):  \n    pass";
         assert_eq!(
-            handler.extract_function_name(source2, "default").unwrap(),
+            extract_python_function_name(source2, "default").unwrap(),
             "another_func"
         );
 
         let source3 = "# No function definition here";
         assert_eq!(
-            handler.extract_function_name(source3, "fallback").unwrap(),
+            extract_python_function_name(source3, "fallback").unwrap(),
             "fallback"
         );
     }
 
     #[test]
     fn test_validate_source() {
-        let handler = PythonUdfHandler::new(Arc::new(unsafe { std::mem::zeroed() }));
-
         // Valid source
         let valid = "def my_func():\n    return 42";
-        assert!(handler.validate_source(valid).is_ok());
+        assert!(validate_python_source(valid).is_ok());
 
         // Invalid: eval
         let invalid_eval = "def bad():\n    eval('print(1)')";
-        assert!(handler.validate_source(invalid_eval).is_err());
+        assert!(validate_python_source(invalid_eval).is_err());
 
         // Invalid: exec
         let invalid_exec = "def bad():\n    exec('x = 1')";
-        assert!(handler.validate_source(invalid_exec).is_err());
+        assert!(validate_python_source(invalid_exec).is_err());
 
         // Invalid: no function
         let no_func = "x = 1\ny = 2";
-        assert!(handler.validate_source(no_func).is_err());
+        assert!(validate_python_source(no_func).is_err());
 
         // Invalid: __import__
         let invalid_import = "def bad():\n    os = __import__('os')";
-        assert!(handler.validate_source(invalid_import).is_err());
+        assert!(validate_python_source(invalid_import).is_err());
     }
 
     #[tokio::test]
+    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_list_functions() {
         let config = PythonConfig::default();
         let registry = Arc::new(PythonUdfRegistry::new(config).await.unwrap());
@@ -365,6 +362,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_get_metadata() {
         let config = PythonConfig::default();
         let registry = Arc::new(PythonUdfRegistry::new(config).await.unwrap());

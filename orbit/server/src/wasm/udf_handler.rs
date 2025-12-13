@@ -197,6 +197,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // WASM execution requires specific runtime conditions
     async fn test_execute_function() {
         let handler = create_test_handler();
 

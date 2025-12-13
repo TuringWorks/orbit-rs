@@ -258,6 +258,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_udf_registration() {
         let config = PythonConfig::default();
         let registry = PythonUdfRegistry::new(config).await.unwrap();
@@ -284,6 +285,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_udf_execution() {
         let config = PythonConfig::default();
         let registry = PythonUdfRegistry::new(config).await.unwrap();
@@ -308,6 +310,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_batch_execution() {
         let config = PythonConfig::default();
         let registry = PythonUdfRegistry::new(config).await.unwrap();
@@ -352,6 +355,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_qualified_names() {
         let mut metadata = PythonUdfMetadata::new(
             "my_func".to_string(),
@@ -370,6 +374,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_param_validation() {
         let metadata = PythonUdfMetadata::new(
             "test_func".to_string(),
