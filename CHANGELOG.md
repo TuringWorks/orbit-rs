@@ -793,6 +793,46 @@ No migration needed for existing deployments. Python UDFs are opt-in via CREATE 
 
 **Files Changed**: 26 files, +1632 lines, -986 lines
 
+#### Lua UDF SQL Syntax Examples and Documentation Fixes (2025-12-13)
+
+**Comprehensive Documentation**
+
+- **New Documentation** (`docs/LUA_SQL_SYNTAX_EXAMPLES.md`)
+  - Created comprehensive end-to-end SQL syntax examples for Lua UDFs
+  - 21 detailed examples with proper Lua syntax
+  - Covers all major use cases: scalar functions, aggregates, JSON processing
+  - String manipulation, mathematical operations, date/time functions
+  - State management with `orbit.persist()` and `orbit.restore()`
+  - Error handling with `pcall()` and validation patterns
+  - Real-world examples: password strength checker, URL slug generator
+  - Performance testing and benchmarking examples
+  - Best practices summary
+
+- **Documentation Categories**
+  1. **Basic Function Creation** - Simple examples to get started
+  2. **Scalar Functions** - Tax calculations, progressive tax
+  3. **Aggregate Functions** - Custom sum with filtering
+  4. **JSON Processing** - Extract fields, transform data
+  5. **String Manipulation** - Title case, email validation
+  6. **Mathematical Operations** - Fibonacci, compound interest
+  7. **Date and Time Functions** - Business days calculator
+  8. **State Management** - Persistent counters with state
+  9. **Error Handling** - Safe division, try-catch patterns
+  10. **Function Management** - List, drop, replace, schema-qualified functions
+  11. **Complex Real-World Examples** - Password strength, URL slugs
+
+- **Fixed Examples** (`docs/LUA_UDF_EXAMPLES.md`)
+  - Fixed Example 8 (Progressive Tax): Changed from `LANGUAGE PLPGSQL` to `LANGUAGE LUA`
+  - Fixed Example 9 (JSON Transform): Rewrote with proper Lua syntax using `cjson`
+  - Removed PL/pgSQL-specific constructs: `DECLARE`, `BEGIN`/`END` blocks, `:=` assignments
+  - Updated to use Lua constructs: `local` variables, `if`/`then`/`end`, `return` statements
+
+- **Syntax Corrections**
+  - **Before** (incorrect): `LANGUAGE PLPGSQL` with `BEGIN...END` blocks
+  - **After** (correct): `LANGUAGE LUA` with `function...end` blocks
+  - Proper Lua function definitions and control flow
+  - Correct use of Lua standard library functions
+
 ---
 
 ## [0.1.0] - Previous Release
