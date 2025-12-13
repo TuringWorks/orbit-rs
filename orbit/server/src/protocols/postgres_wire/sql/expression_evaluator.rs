@@ -29,7 +29,98 @@ use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
 #[cfg(feature = "lua-mlua")]
-use crate::lua::udf_registry::{UdfRegistry, sql_to_lua, lua_to_sql, SqlValue as UdfSqlValue};
+use crate::lua::udf_registry::{UdfRegistry, SqlValue as UdfSqlValue};
+
+#[cfg(feature = "lua-mlua")]
+fn sql_value_to_udf_sql(val: SqlValue) -> UdfSqlValue {
+    match val {
+        SqlValue::Null => UdfSqlValue::Null,
+        SqlValue::Boolean(b) => UdfSqlValue::Boolean(b),
+        SqlValue::SmallInt(i) => UdfSqlValue::SmallInt(i),
+        SqlValue::Integer(i) => UdfSqlValue::Integer(i),
+        SqlValue::BigInt(i) => UdfSqlValue::BigInt(i),
+        SqlValue::Real(f) => UdfSqlValue::Real(f),
+        SqlValue::DoublePrecision(f) => UdfSqlValue::Double(f),
+        SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => UdfSqlValue::Text(s),
+        SqlValue::Bytea(b) => UdfSqlValue::Bytea(b),
+        SqlValue::Timestamp(ts) => UdfSqlValue::Timestamp(ts.timestamp()),
+        SqlValue::Date(d) => UdfSqlValue::Date(d.num_days_from_ce()),
+        SqlValue::Time(t) => {
+            // Convert NaiveTime to microseconds - use format/parse to avoid private methods
+            let time_str = t.format("%H:%M:%S%.f").to_string();
+            let parts: Vec<&str> = time_str.split(':').collect();
+            if parts.len() >= 3 {
+                let hours: u32 = parts[0].parse().unwrap_or(0);
+                let minutes: u32 = parts[1].parse().unwrap_or(0);
+                let secs_parts: Vec<&str> = parts[2].split('.').collect();
+                let seconds: u32 = secs_parts[0].parse().unwrap_or(0);
+                let micros_part: u32 = if secs_parts.len() > 1 {
+                    // Pad or truncate to 6 digits for microseconds
+                    let frac = format!("{:0<6}", secs_parts[1]);
+                    frac[..6].parse().unwrap_or(0)
+                } else {
+                    0
+                };
+                let total_micros = (hours * 3600 + minutes * 60 + seconds) as i64 * 1_000_000 + micros_part as i64;
+                UdfSqlValue::Time(total_micros)
+            } else {
+                UdfSqlValue::Time(0)
+            }
+        }
+        SqlValue::Interval(i) => UdfSqlValue::Interval(i.microseconds),
+        SqlValue::Array(arr) => UdfSqlValue::Array(arr.into_iter().map(sql_value_to_udf_sql).collect()),
+        SqlValue::Json(j) | SqlValue::Jsonb(j) => UdfSqlValue::Json(j.to_string()),
+        SqlValue::Uuid(u) => UdfSqlValue::Uuid(u),
+        _ => UdfSqlValue::Text(val.to_postgres_string()),
+    }
+}
+
+#[cfg(feature = "lua-mlua")]
+fn udf_sql_to_sql_value(udf_val: UdfSqlValue) -> SqlValue {
+    match udf_val {
+        UdfSqlValue::Null => SqlValue::Null,
+        UdfSqlValue::Boolean(b) => SqlValue::Boolean(b),
+        UdfSqlValue::SmallInt(i) => SqlValue::SmallInt(i),
+        UdfSqlValue::Integer(i) => SqlValue::Integer(i),
+        UdfSqlValue::BigInt(i) => SqlValue::BigInt(i),
+        UdfSqlValue::Real(f) => SqlValue::Real(f),
+        UdfSqlValue::Double(f) => SqlValue::DoublePrecision(f),
+        UdfSqlValue::Numeric(s) => SqlValue::Text(s),
+        UdfSqlValue::Text(s) => SqlValue::Text(s),
+        UdfSqlValue::Bytea(b) => SqlValue::Bytea(b),
+        UdfSqlValue::Timestamp(ts) => {
+            SqlValue::Timestamp(chrono::DateTime::from_timestamp(ts, 0).unwrap_or_default().naive_utc())
+        }
+        UdfSqlValue::Date(d) => {
+            SqlValue::Date(chrono::NaiveDate::from_num_days_from_ce_opt(d).unwrap_or_default())
+        }
+        UdfSqlValue::Time(t) => {
+            // Convert microseconds to NaiveTime
+            let total_secs = (t / 1_000_000) as u32;
+            let micros = (t % 1_000_000) as u32;
+            let hours = total_secs / 3600;
+            let minutes = (total_secs % 3600) / 60;
+            let seconds = total_secs % 60;
+            let nanos = micros * 1000;
+            SqlValue::Time(
+                chrono::NaiveTime::from_hms_nano_opt(hours, minutes, seconds, nanos)
+                    .unwrap_or_default()
+            )
+        }
+        UdfSqlValue::Interval(i) => {
+            // Create interval from microseconds
+            SqlValue::Interval(PostgresInterval {
+                months: 0,
+                days: 0,
+                microseconds: i,
+            })
+        }
+        UdfSqlValue::Array(arr) => SqlValue::Array(arr.into_iter().map(udf_sql_to_sql_value).collect()),
+        UdfSqlValue::Json(s) => SqlValue::Json(serde_json::from_str(&s).unwrap_or(serde_json::Value::Null)),
+        UdfSqlValue::Jsonb(b) => SqlValue::Jsonb(serde_json::from_slice(&b).unwrap_or(serde_json::Value::Null)),
+        UdfSqlValue::Uuid(u) => SqlValue::Uuid(u),
+    }
+}
 
 /// Sequence accessor trait for sequence function evaluation
 /// This allows the expression evaluator to access and modify sequences
@@ -977,16 +1068,11 @@ impl ExpressionEvaluator {
                 #[cfg(feature = "lua-mlua")]
                 if let Some(ref udf_registry) = self.udf_registry {
                     // Check if UDF exists
-                    let udf_exists = tokio::runtime::Handle::try_current()
-                        .ok()
-                        .and_then(|_| {
-                            tokio::task::block_in_place(|| {
-                                tokio::runtime::Handle::current().block_on(async {
-                                    udf_registry.exists(&func_name).await
-                                })
-                            })
+                    let udf_exists = tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current().block_on(async {
+                            udf_registry.exists(&func_name).await
                         })
-                        .unwrap_or(false);
+                    });
 
                     if udf_exists {
                         // Convert args to UDF SQL values
