@@ -62,7 +62,7 @@ Both systems aim to provide CQL compatibility and wide-column store capabilities
 
 OrbitRS employs a **unified multi-protocol architecture** where CQL is one of nine supported protocols sharing a common storage layer:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    OrbitRS Unified Architecture                     │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -72,11 +72,9 @@ OrbitRS employs a **unified multi-protocol architecture** where CQL is one of ni
 │  └─────┬──────┘ └────┬────┘ └────┬────┘ └────┬─────┘ └────┬────-┘   │
 │        │             │           │           │            │         │
 │  ┌─────┴─────────────┴───────────┴───────────┴────────────┴──────┐  │
-│  │                  CQL Query Engine Layer                       │  │
+│  │                    CQL Query Engine Layer                     │  │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌──────────────────┐       │  │
-│  │  │ CQL Parser  │  │ CQL Adapter │  │ CQL Protocol     │       │  │
-│  │  │  (~4,000    │  │  (~3,000    │  │  (~2,000 lines)  │       │  │
-│  │  │   lines)    │  │   lines)    │  │                  │       │  │
+│  │  │ CQL Parser  │  │ CQL Adapter │  │   CQL Protocol   │       │  │
 │  │  └─────────────┘  └─────────────┘  └──────────────────┘       │  │
 │  └──────────────────────────┬──────────────────────────────────-─┘  │
 │                             │                                       │
@@ -117,34 +115,34 @@ OrbitRS employs a **unified multi-protocol architecture** where CQL is one of ni
 
 ScyllaDB employs a **shard-per-core architecture** optimized specifically for CQL workloads:
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────────────┐
 │                      ScyllaDB Architecture                           │
 ├──────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  ┌────────────────────────────────────────────────────────────────┐  │
-│  │                   CQL Native Protocol (Port 9042)              │  │
+│  │                CQL Native Protocol (Port 9042)                 │  │
 │  └──────────────────────────────┬─────────────────────────────────┘  │
 │                                 │                                    │
 │  ┌──────────────────────────────┴─────────────────────────────────┐  │
 │  │                      Seastar Framework                         │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐            │  │
-│  │  │  Shard 1    │  │  Shard 2    │  │  Shard N    │  ...       │  │
-│  │  │ (CPU Core)  │  │ (CPU Core)  │  │ (CPU Core)  │            │  │
-│  │  │             │  │             │  │             │            │  │
-│  │  │ ┌─────────┐ │  │ ┌─────────┐ │  │ ┌─────────┐ │            │  │
-│  │  │ │MemTable │ │  │ │MemTable │ │  │ │MemTable │ │            │  │
-│  │  │ └─────────┘ │  │ └─────────┘ │  │ └─────────┘ │            │  │
-│  │  │ ┌─────────┐ │  │ ┌─────────┐ │  │ ┌─────────┐ │            │  │
-│  │  │ │ SSTable │ │  │ │ SSTable │ │  │ │ SSTable │ │            │  │
-│  │  │ └─────────┘ │  │ └─────────┘ │  │ └─────────┘ │            │  │
-│  │  └─────────────┘  └─────────────┘  └─────────────┘            │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │  │
+│  │  │  Shard 1    │  │  Shard 2    │  │  Shard N    │  ...        │  │
+│  │  │ (CPU Core)  │  │ (CPU Core)  │  │ (CPU Core)  │             │  │
+│  │  │             │  │             │  │             │             │  │
+│  │  │ ┌─────────┐ │  │ ┌─────────┐ │  │ ┌─────────┐ │             │  │
+│  │  │ │MemTable │ │  │ │MemTable │ │  │ │MemTable │ │             │  │
+│  │  │ └─────────┘ │  │ └─────────┘ │  │ └─────────┘ │             │  │
+│  │  │ ┌─────────┐ │  │ ┌─────────┐ │  │ ┌─────────┐ │             │  │
+│  │  │ │ SSTable │ │  │ │ SSTable │ │  │ │ SSTable │ │             │  │
+│  │  │ └─────────┘ │  │ └─────────┘ │  │ └─────────┘ │             │  │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘             │  │
 │  └────────────────────────────────────────────────────────────────┘  │
 │                                                                      │
 │  ┌────────────────────────────────────────────────────────────────┐  │
 │  │                   LSM-tree Storage Engine                      │  │
 │  │  ┌──────────────────────────────────────────────────────────┐  │  │
-│  │  │  Compaction  │  Bloom Filters  │  Compression (LZ4/Snappy)│  │  │
+│  │  │ Compaction  │  Bloom Filters  │  Compression (LZ4/Snappy)│  │  │
 │  │  └──────────────────────────────────────────────────────────┘  │  │
 │  └────────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────────┘
@@ -220,6 +218,7 @@ ScyllaDB employs a **shard-per-core architecture** optimized specifically for CQ
 ### 2.3 Compression Implementation
 
 **OrbitRS CQL:**
+
 ```rust
 pub enum CompressionAlgorithm {
     None,
@@ -247,6 +246,7 @@ pub fn compress_data(data: &[u8], algorithm: CompressionAlgorithm)
 - ✅ Integrated with tokio async I/O
 
 **ScyllaDB:**
+
 - C++ implementation using native libraries
 - Highly optimized with SIMD instructions
 - Integrated with Seastar's zero-copy networking
@@ -288,11 +288,11 @@ pub fn compress_data(data: &[u8], algorithm: CompressionAlgorithm)
 
 | Collection Type | OrbitRS CQL | ScyllaDB | Notes |
 |-----------------|-------------|----------|-------|
-| **list<T>** | ✅ | ✅ | Ordered, allows duplicates |
-| **set<T>** | ✅ | ✅ | Unordered, unique |
+| **list< T>** | ✅ | ✅ | Ordered, allows duplicates |
+| **set< T>** | ✅ | ✅ | Unordered, unique |
 | **map<K,V>** | ✅ | ✅ | Key-value pairs |
 | **tuple<T1,T2,...>** | ✅ | ✅ | Fixed-size heterogeneous |
-| **frozen<collection>** | ✅ | ✅ | Immutable collections |
+| **frozen< collection>** | ✅ | ✅ | Immutable collections |
 | **vector<float, N>** | ✅ | 🔶 | Vector embeddings (OrbitRS extension) |
 
 ### 3.3 User-Defined Types (UDT)
@@ -415,6 +415,7 @@ pub fn compress_data(data: &[u8], algorithm: CompressionAlgorithm)
 | **Shard-per-Core** | ❌ | ✅ | ScyllaDB-only |
 
 **OrbitRS GPU Support:**
+
 ```rust
 // GPU-accelerated aggregation
 SELECT
@@ -428,6 +429,7 @@ GROUP BY customer_id;
 ```
 
 Automatically uses GPU when:
+
 - Result set > 10,000 rows
 - Aggregation functions present
 - GPU available (Metal/CUDA/Vulkan)
@@ -511,6 +513,7 @@ Automatically uses GPU when:
 | SERIAL Consistency | 🔶 | ✅ |
 
 **OrbitRS Implementation:**
+
 ```rust
 // LWT execution with compare-and-set
 UPDATE users
@@ -535,6 +538,7 @@ Uses MVCC (Multi-Version Concurrency Control) with timestamp-based conflict dete
 | **Custom Index** | ✅ | ✅ | User-defined |
 
 **OrbitRS SASI Features:**
+
 ```sql
 CREATE CUSTOM INDEX users_name_sasi
 ON users (name)
@@ -564,12 +568,30 @@ SELECT * FROM users WHERE name LIKE '%john%';
 
 | Feature | OrbitRS CQL | ScyllaDB | Notes |
 |---------|-------------|----------|-------|
-| CREATE FUNCTION | 🔶 | ✅ | JavaScript (OrbitRS), Java/Lua (Scylla) |
+| CREATE FUNCTION | ✅ | ✅ | Python/JavaScript/Lua (OrbitRS), Java/Lua (Scylla) |
+| Python Runtime | ✅ | ❌ | Subprocess-based (OrbitRS-only, Dec 2025) |
 | JavaScript Runtime | ✅ | ❌ | QuickJS (OrbitRS-only) |
-| Java/Lua Runtime | ❌ | ✅ | ScyllaDB-only |
-| DROP FUNCTION | 🔶 | ✅ | |
+| Lua Runtime | ✅ | ⚠️ | mlua (OrbitRS), native (Scylla) |
+| Java Runtime | ❌ | ✅ | ScyllaDB-only |
+| DROP FUNCTION | ✅ | ✅ | Full support |
+
+**OrbitRS Python UDF (Implemented Dec 2025):**
+
+```sql
+CREATE FUNCTION calculate_circle_area(radius DOUBLE PRECISION)
+RETURNS DOUBLE PRECISION
+LANGUAGE PYTHON
+AS $$
+def calculate_circle_area(radius):
+    import math
+    return math.pi * radius * radius
+$$;
+
+SELECT calculate_circle_area(5.0);  -- Returns: 78.53981633974483
+```
 
 **OrbitRS JavaScript UDF (Planned):**
+
 ```sql
 CREATE FUNCTION calculate_discount(price double, rate double)
 RETURNS NULL ON NULL INPUT
@@ -590,6 +612,7 @@ $$;
 | DROP TRIGGER | ✅ | ✅ | |
 
 **OrbitRS Trigger Implementation:**
+
 ```rust
 pub struct TriggerDefinition {
     pub name: String,
@@ -620,6 +643,7 @@ impl TriggerDefinition {
 ```
 
 **Security Features:**
+
 - Execution timeouts (5s default)
 - Memory limits (16MB default)
 - Blocked dangerous globals (eval, process, require)
@@ -641,6 +665,7 @@ impl TriggerDefinition {
 | Dot Product | ✅ | ❌ |
 
 **OrbitRS Vector Search:**
+
 ```sql
 CREATE TABLE embeddings (
     id uuid PRIMARY KEY,
@@ -657,6 +682,7 @@ LIMIT 10;
 ```
 
 **Implementation:**
+
 - HNSW (Hierarchical Navigable Small World) indexing
 - GPU-accelerated similarity computation
 - Supports 128-2048 dimensions
@@ -673,6 +699,7 @@ LIMIT 10;
 | Model Versioning | ✅ | ❌ |
 
 **OrbitRS ML Functions:**
+
 ```sql
 -- Generate embeddings from text
 SELECT id, ml_embed('sentence-transformers', description) AS embedding
@@ -698,6 +725,7 @@ OrbitRS includes **native graph query capabilities** as CQL extensions:
 | All Shortest Paths | ✅ | ❌ |
 
 **Example:**
+
 ```sql
 -- Graph traversal query
 SELECT * FROM graph_traverse(
@@ -715,6 +743,7 @@ LIMIT 100;
 ```
 
 **Use Cases:**
+
 - Social network analysis
 - Fraud detection
 - Recommendation systems
@@ -736,7 +765,8 @@ OrbitRS integrates the **QuickJS JavaScript engine** for high-performance script
 | Event Handlers | ✅ | ❌ |
 
 **Architecture:**
-```
+
+```text
 ┌────────────────────────────────────────────┐
 │       QuickJS Runtime Integration          │
 ├────────────────────────────────────────────┤
@@ -766,6 +796,7 @@ OrbitRS integrates the **QuickJS JavaScript engine** for high-performance script
 ```
 
 **Example Trigger:**
+
 ```sql
 CREATE TRIGGER audit_changes ON users;
 
@@ -801,6 +832,7 @@ function onDelete(row) {
 | File System Access | ❌ | Blocked by default |
 
 **Configuration:**
+
 ```rust
 SecurityConfig {
     timeout: Duration::from_secs(5),
@@ -820,18 +852,18 @@ SecurityConfig {
 
 OrbitRS's unique architecture allows **cross-protocol queries** on the same data:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              Multi-Protocol Data Access                     │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-│  │     CQL     │    │     SQL     │    │    Redis    │     │
-│  │   :9042     │    │   :5432     │    │    :6379    │     │
-│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘     │
-│         │                  │                  │            │
-│         └──────────────────┴──────────────────┘            │
-│                            │                               │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐      │
+│  │     CQL     │    │     SQL     │    │    Redis    │      │
+│  │   :9042     │    │   :5432     │    │    :6379    │      │
+│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘      │
+│         │                  │                  │             │
+│         └──────────────────┴──────────────────┘             │
+│                            │                                │
 │                   ┌────────┴────────┐                       │
 │                   │ Unified Storage │                       │
 │                   │   (RocksDB)     │                       │
@@ -842,6 +874,7 @@ OrbitRS's unique architecture allows **cross-protocol queries** on the same data
 **Use Cases:**
 
 1. **CQL for writes, SQL for analytics:**
+
 ```bash
 # Write via CQL
 cqlsh> INSERT INTO users (id, name, email) VALUES (uuid(), 'John', 'john@example.com');
@@ -851,6 +884,7 @@ psql> SELECT name, COUNT(*) FROM users GROUP BY name;
 ```
 
 2. **CQL for data modeling, Redis for caching:**
+
 ```bash
 # Define schema in CQL
 cqlsh> CREATE TABLE products (id uuid PRIMARY KEY, name text, price decimal);
@@ -860,6 +894,7 @@ redis> SET product:123 '{"name": "Widget", "price": 9.99}'
 ```
 
 3. **CQL + Neo4j for graph analytics:**
+
 ```bash
 # Store entities in CQL
 cqlsh> INSERT INTO nodes (id, type, properties) VALUES (...);
@@ -992,6 +1027,7 @@ cypher> MATCH (a:User)-[:FOLLOWS]->(b:User) RETURN a, b;
 When using **multiple protocols on the same data**, OrbitRS eliminates replication overhead:
 
 **Traditional Architecture:**
+
 ```
 Cassandra → Sync → PostgreSQL → Sync → Redis → Sync → Elasticsearch
   (Write)          (Analytics)         (Cache)         (Search)
@@ -1001,7 +1037,8 @@ Total Cost: 4 databases + sync infrastructure
 ```
 
 **OrbitRS Architecture:**
-```
+
+```text
 OrbitRS (Single DB)
   ├─ CQL Write (5ms)
   ├─ SQL Query (same data, no sync)
@@ -1013,6 +1050,7 @@ Total Cost: 1 database
 ```
 
 **Savings:**
+
 - **Latency:** 20-100x faster (no sync delays)
 - **Cost:** 75% reduction (1 database instead of 4)
 - **Complexity:** Eliminate ETL pipelines
@@ -1109,7 +1147,7 @@ When using GPU acceleration for analytics:
 
 **Consider Using Both:**
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │        Hybrid Architecture Example          │
 ├─────────────────────────────────────────────┤
@@ -1133,6 +1171,7 @@ When using GPU acceleration for analytics:
 ```
 
 **Benefits:**
+
 - ScyllaDB for operational speed
 - OrbitRS for analytical flexibility
 - CDC stream for near-real-time sync
@@ -1144,6 +1183,7 @@ When using GPU acceleration for analytics:
 ### 16.1 Migrating from Cassandra to OrbitRS CQL
 
 **Compatibility:**
+
 - ✅ 72% CQL feature coverage
 - ✅ Wire protocol compatible (clients work as-is)
 - 🔶 Some advanced features require rewrites
@@ -1166,6 +1206,7 @@ When using GPU acceleration for analytics:
    - Cutover when confident
 
 **Tools:**
+
 ```bash
 # Export from Cassandra
 cqlsh -e "COPY keyspace.table TO 'data.csv'"
@@ -1177,6 +1218,7 @@ orbit-cli import --format csv --table keyspace.table data.csv
 ### 16.2 Migrating from Cassandra to ScyllaDB
 
 **Compatibility:**
+
 - ✅ 95%+ CQL feature coverage
 - ✅ Drop-in replacement (minimal changes)
 - ✅ Rolling upgrade supported
@@ -1194,6 +1236,7 @@ orbit-cli import --format csv --table keyspace.table data.csv
    - Cutover after validation
 
 **Tools:**
+
 ```bash
 # ScyllaDB SSTable Loader
 sstableloader -d <scylla-node> /path/to/sstables
@@ -1221,12 +1264,14 @@ sstableloader -d <scylla-node> /path/to/sstables
 ### 17.2 Technology Trajectory
 
 **OrbitRS CQL:**
+
 - **Innovation Leader:** JavaScript runtime, GPU acceleration, multi-protocol unification
 - **Growth Phase:** Rapidly adding features, community building
 - **Future Potential:** Could replace 5-9 specialized databases
 - **Risk:** Young technology, limited production track record
 
 **ScyllaDB:**
+
 - **Stability Leader:** Battle-tested, predictable performance
 - **Mature Phase:** Feature-complete, incremental improvements
 - **Future Potential:** Industry-standard Cassandra replacement
@@ -1235,6 +1280,7 @@ sstableloader -d <scylla-node> /path/to/sstables
 ### 17.3 Strategic Recommendations
 
 **Choose OrbitRS CQL if:**
+
 - Building new applications requiring multiple data models
 - Need AI/ML capabilities (vector search, inference)
 - Want to consolidate database infrastructure (cost savings)
@@ -1242,6 +1288,7 @@ sstableloader -d <scylla-node> /path/to/sstables
 - Have Rust expertise in-house
 
 **Choose ScyllaDB if:**
+
 - Migrating from existing Cassandra deployments
 - Need maximum CQL performance and maturity
 - Require enterprise SLAs and support
@@ -1249,6 +1296,7 @@ sstableloader -d <scylla-node> /path/to/sstables
 - Want proven technology at scale
 
 **Use Both if:**
+
 - ScyllaDB for hot operational data (high throughput)
 - OrbitRS for analytics, ML, and multi-model access
 - CDC stream for near-real-time synchronization
@@ -1262,6 +1310,7 @@ Both OrbitRS CQL and ScyllaDB represent significant advancements in wide-column 
 **OrbitRS CQL** represents the **next generation** of database architecture, unifying multiple data models and protocols in a single system. While less mature for pure CQL workloads, it offers unique capabilities in AI/ML, graph analytics, and JavaScript extensibility that no other CQL database can match.
 
 The choice depends on your specific requirements:
+
 - **For pure CQL at scale:** ScyllaDB is the clear winner
 - **For multi-model innovation:** OrbitRS CQL opens new possibilities
 - **For maximum flexibility:** Consider a hybrid approach
@@ -1315,18 +1364,18 @@ As OrbitRS matures and closes the CQL compatibility gap, the multi-protocol arch
 ## Appendix B: References
 
 1. **OrbitRS Documentation**
-   - GitHub: https://github.com/TuringWorks/orbit-rs
+   - GitHub: <https://github.com/TuringWorks/orbit-rs>
    - CQL Compatibility: `/specifications/protocols/CQL_COMPATIBILITY.md`
    - Architecture Guide: `/docs/content/architecture/ORBIT_ARCHITECTURE.md`
 
 2. **ScyllaDB Documentation**
-   - Official Site: https://www.scylladb.com
-   - Documentation: https://docs.scylladb.com
-   - GitHub: https://github.com/scylladb/scylladb
+   - Official Site: <https://www.scylladb.com>
+   - Documentation: <https://docs.scylladb.com>
+   - GitHub: <https://github.com/scylladb/scylladb>
 
 3. **Apache Cassandra**
-   - Official Site: https://cassandra.apache.org
-   - CQL Specification: https://cassandra.apache.org/doc/latest/cassandra/cql/
+   - Official Site: <https://cassandra.apache.org>
+   - CQL Specification: <https://cassandra.apache.org/doc/latest/cassandra/cql/>
 
 4. **Related Whitepapers**
    - OrbitRS vs ClickHouse Whitepaper
@@ -1336,7 +1385,7 @@ As OrbitRS matures and closes the CQL compatibility gap, the multi-protocol arch
 ---
 
 **Document Version:** 1.0
-**Last Updated:** December 11, 2025
+**Last Updated:** December 13, 2025
 **Authors:** Orbit-RS Development Team
 **License:** BSD-3-Clause OR MIT
 

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-#### Python UDF Support (2024-12-12)
+#### Python UDF Support (2025-12-12)
 
 **Subprocess-Based Python User-Defined Functions**
 
