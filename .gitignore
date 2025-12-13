@@ -155,6 +155,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+*.bak
 
 # Test artifacts
 test-results/
