@@ -13,6 +13,9 @@ use std::time::Instant;
 use tokio::sync::RwLock;
 use wasmtime::*;
 
+#[cfg(feature = "wasm-wasi")]
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder};
+
 /// WASM runtime error
 #[derive(Debug, thiserror::Error)]
 pub enum WasmError {
@@ -55,6 +58,23 @@ struct CachedModule {
     module: Module,
     compiled_at: Instant,
 }
+
+/// Store data that can hold WASI context and resource limits
+#[cfg(feature = "wasm-wasi")]
+struct WasmStoreData {
+    wasi: Option<WasiCtx>,
+    limits: StoreLimits,
+}
+
+#[cfg(feature = "wasm-wasi")]
+impl WasmStoreData {
+    fn new(wasi: Option<WasiCtx>, limits: StoreLimits) -> Self {
+        Self { wasi, limits }
+    }
+}
+
+#[cfg(not(feature = "wasm-wasi"))]
+type WasmStoreData = StoreLimits;
 
 /// WASM runtime for executing user-defined functions
 pub struct WasmRuntime {
@@ -144,6 +164,42 @@ impl WasmRuntime {
         Ok(module)
     }
 
+    /// Create WASI context if WASI is enabled
+    #[cfg(feature = "wasm-wasi")]
+    fn create_wasi_context(&self) -> Option<WasiCtx> {
+        if !self.config.enable_wasi {
+            return None;
+        }
+
+        let mut builder = WasiCtxBuilder::new();
+
+        // Configure allowed directories
+        for dir in &self.config.wasi_allowed_dirs {
+            builder = builder.preopened_dir(
+                wasmtime_wasi::sync::Dir::open_ambient_dir(dir, wasmtime_wasi::sync::ambient_authority())
+                    .ok()?,
+                dir,
+            );
+        }
+
+        // Configure stdio
+        if self.config.wasi_inherit_stdio {
+            builder = builder.inherit_stdio();
+        }
+
+        // Configure environment
+        if self.config.wasi_inherit_env {
+            builder = builder.inherit_env();
+        }
+
+        Some(builder.build())
+    }
+
+    #[cfg(not(feature = "wasm-wasi"))]
+    fn create_wasi_context(&self) -> Option<()> {
+        None
+    }
+
     /// Execute a WASM function with the given arguments
     pub async fn execute(
         &self,
@@ -159,8 +215,21 @@ impl WasmRuntime {
             .memory_size(self.config.max_memory_bytes)
             .build();
 
-        // Create a new store for this execution with limits
-        let mut store = Store::new(&self.engine, limits);
+        // Create store data with optional WASI context
+        #[cfg(feature = "wasm-wasi")]
+        let store_data = WasmStoreData::new(self.create_wasi_context(), limits);
+
+        #[cfg(not(feature = "wasm-wasi"))]
+        let store_data = limits;
+
+        // Create a new store for this execution
+        let mut store = Store::new(&self.engine, store_data);
+
+        // Set up resource limiter
+        #[cfg(feature = "wasm-wasi")]
+        store.limiter(|data| &mut data.limits);
+
+        #[cfg(not(feature = "wasm-wasi"))]
         store.limiter(|data| data);
 
         // Set fuel limit if enabled
@@ -170,7 +239,31 @@ impl WasmRuntime {
                 .map_err(|e| WasmError::ExecutionError(format!("Failed to set fuel: {}", e)))?;
         }
 
-        // Instantiate the module (async for better performance)
+        // Create linker and add WASI if enabled
+        #[cfg(feature = "wasm-wasi")]
+        let instance = {
+            let mut linker = Linker::new(&self.engine);
+
+            // Add WASI to linker if context exists
+            if store.data().wasi.is_some() {
+                wasmtime_wasi::add_to_linker(&mut linker, |data: &mut WasmStoreData| {
+                    data.wasi.as_mut().expect("WASI context should exist")
+                })
+                .map_err(|e| {
+                    WasmError::InstantiationError(format!("Failed to link WASI: {}", e))
+                })?;
+            }
+
+            linker
+                .instantiate_async(&mut store, &module)
+                .await
+                .map_err(|e| {
+                    WasmError::InstantiationError(format!("Failed to instantiate module: {}", e))
+                })?
+        };
+
+        // Instantiate without WASI
+        #[cfg(not(feature = "wasm-wasi"))]
         let instance = Instance::new_async(&mut store, &module, &[]).await.map_err(|e| {
             WasmError::InstantiationError(format!("Failed to instantiate module: {}", e))
         })?;
@@ -197,7 +290,7 @@ impl WasmRuntime {
     /// Execute a WASM function (internal)
     async fn execute_func(
         &self,
-        store: &mut Store<StoreLimits>,
+        store: &mut Store<WasmStoreData>,
         func: &Func,
         args: &[Val],
     ) -> Result<WasmValue, WasmError> {

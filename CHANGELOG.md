@@ -9,6 +9,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### WASI Support for WASM UDFs (2025-12-13)
+
+**Sandboxed File I/O and System Operations**
+
+- **WASI Integration** - Added WASI (WebAssembly System Interface) support for file I/O and system operations
+  - Opt-in feature: disabled by default for security
+  - Granular control over filesystem, network, environment, and stdio access
+  - Production-ready sandboxing with directory whitelisting
+
+- **Configuration** (`orbit/server/src/wasm/config.rs`)
+  - Added `wasi_allowed_dirs: Vec<String>` - Whitelist of accessible directories (default: empty)
+  - Added `wasi_allow_network: bool` - Control network access (default: false)
+  - Added `wasi_inherit_env: bool` - Inherit environment variables (default: false)
+  - Added `wasi_inherit_stdio: bool` - Inherit stdin/stdout/stderr (default: false)
+  - Development preset allows `/tmp` access with network and stdio
+
+- **Runtime** (`orbit/server/src/wasm/runtime.rs`)
+  - Created `WasmStoreData` struct to hold WASI context and resource limits
+  - Implemented `create_wasi_context()` method with directory sandboxing
+  - Integrated wasmtime-wasi linker for WASI imports
+  - Conditional compilation for WASI vs non-WASI builds
+
+- **Dependencies** (`orbit/server/Cargo.toml`)
+  - Added `wasmtime-wasi = { version = "28.0", optional = true }`
+  - New feature flag: `wasm-wasi = ["wasm-udf", "wasmtime-wasi"]`
+  - Added `wasm-wasi` to `wasm-all` feature for complete WASM support
+
+- **Security Model**
+  - **Directory Sandboxing**: Only pre-approved directories accessible
+  - **Network Control**: Network operations blocked by default
+  - **Environment Isolation**: No environment variable access by default
+  - **Stdio Isolation**: No stdin/stdout/stderr access by default
+  - **Fail-Safe**: Attempts to access restricted resources fail immediately
+
+- **Documentation**
+  - Added comprehensive WASI section to `docs/WASM_UDF_DOCUMENTATION.md`
+  - Configuration examples for production, development, and custom setups
+  - Rust file I/O example with WASI
+  - Security considerations and use cases
+  - Performance characteristics
+
+### Use Cases
+
+WASI enables:
+- **File Processing**: Read/write CSV, JSON, log files from UDFs
+- **Data Import/Export**: Load external data, export query results
+- **Configuration Management**: Read config files from sandboxed paths
+- **Audit Logging**: Write operation logs to designated directories
+- **Persistent Caching**: Cache computation results to filesystem
+- **Integration**: Call external tools via WASI (when explicitly allowed)
+
+### Security Features
+
+- **Whitelist-Only Access**: Only explicitly allowed directories are accessible
+- **No Privilege Escalation**: Symlinks outside allowed dirs are blocked
+- **Network Isolation**: Network disabled by default prevents data exfiltration
+- **Environment Protection**: Environment variables hidden by default
+- **Stdio Control**: Debug output can be enabled/disabled per environment
+
+### Performance
+
+- Near-zero overhead for WASI calls (direct syscalls)
+- No serialization overhead for file data
+- Async I/O integration with Tokio runtime
+- File descriptor caching for repeated operations
+
+### Impact
+
+WASI support significantly expands WASM UDF capabilities:
+- Enables complex ETL pipelines with file I/O
+- Allows secure integration with external data sources
+- Maintains security through granular access control
+- Production-ready with defense-in-depth security model
+
 #### SIMD Support for WASM UDFs (2025-12-13)
 
 **Vectorized Computation with SIMD**

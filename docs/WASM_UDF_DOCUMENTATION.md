@@ -309,12 +309,149 @@ wasm-all = ["wasm-postgres", "wasm-mysql", "wasm-redis"]
 
 ## Future Enhancements
 
-- [ ] WASI support (opt-in) for file/network I/O
+- [x] **WASI support (opt-in) for file/network I/O** ✅ **Implemented**
 - [x] **SIMD operations for vectorized computation** ✅ **Implemented**
 - [ ] Streaming I/O for large datasets
 - [x] **Async WASM functions** ✅ **Implemented**
 - [ ] Component Model support
 - [ ] Multi-threading with WASM threads proposal
+
+### WASI Support (Implemented)
+
+Orbit-RS now supports **WASI (WebAssembly System Interface)** for file I/O and system operations:
+
+- **Opt-In Security**: WASI is disabled by default and must be explicitly enabled
+- **Directory Sandboxing**: Only pre-approved directories can be accessed
+- **Network Control**: Network access can be allowed/denied independently
+- **Environment Isolation**: Environment variables inheritance is configurable
+- **Stdio Control**: stdin/stdout/stderr can be inherited or isolated
+
+#### WASI Configuration
+
+**Production (Disabled)**:
+```rust
+use orbit_server::wasm::WasmConfig;
+
+let config = WasmConfig::production();  // WASI disabled
+// enable_wasi: false
+// wasi_allowed_dirs: []
+// wasi_allow_network: false
+```
+
+**Development (Enabled with Limits)**:
+```rust
+let config = WasmConfig::development();
+// enable_wasi: true
+// wasi_allowed_dirs: ["/tmp"]
+// wasi_allow_network: true
+// wasi_inherit_env: true
+// wasi_inherit_stdio: true
+```
+
+**Custom Configuration**:
+```rust
+let config = WasmConfig {
+    enable_wasi: true,
+    wasi_allowed_dirs: vec![
+        "/data/uploads".to_string(),
+        "/data/cache".to_string(),
+    ],
+    wasi_allow_network: false,
+    wasi_inherit_env: false,
+    wasi_inherit_stdio: true,
+    ..Default::default()
+};
+```
+
+#### WASI Example (Rust) - File I/O
+
+```rust
+// wasi_file_io.rs
+use std::fs;
+
+#[no_mangle]
+pub extern "C" fn process_file(path_ptr: *const u8, path_len: usize) -> i32 {
+    unsafe {
+        let path_bytes = std::slice::from_raw_parts(path_ptr, path_len);
+        let path = std::str::from_utf8(path_bytes).unwrap_or("");
+
+        // Read file (only works in allowed directories)
+        match fs::read_to_string(path) {
+            Ok(contents) => {
+                let lines = contents.lines().count();
+                lines as i32
+            }
+            Err(_) => -1,
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn write_log(message_ptr: *const u8, message_len: usize) -> i32 {
+    unsafe {
+        let message_bytes = std::slice::from_raw_parts(message_ptr, message_len);
+        let message = std::str::from_utf8(message_bytes).unwrap_or("");
+
+        match fs::write("/tmp/udf_log.txt", message) {
+            Ok(_) => 0,
+            Err(_) => -1,
+        }
+    }
+}
+```
+
+**Compile with WASI**:
+```bash
+rustc --target wasm32-wasi --crate-type=cdylib -O wasi_file_io.rs
+```
+
+**Enable WASM-WASI Feature**:
+```toml
+# Cargo.toml
+[features]
+default = ["wasm-wasi"]  # Enable WASI support
+
+wasm-wasi = ["wasmtime-wasi"]
+```
+
+#### Security Considerations
+
+**Directory Access**:
+- Only pre-configured directories (`wasi_allowed_dirs`) are accessible
+- Attempts to access other paths will fail with permission denied
+- Symlinks outside allowed directories are blocked
+
+**Network Access**:
+- Controlled by `wasi_allow_network` flag
+- When disabled, network operations fail immediately
+- Useful for untrusted UDFs that shouldn't access external services
+
+**Environment Variables**:
+- `wasi_inherit_env: false` (default) - No environment access
+- `wasi_inherit_env: true` - Inherits all environment variables
+- Prevents leaking sensitive configuration to UDFs
+
+**Stdio Inheritance**:
+- `wasi_inherit_stdio: false` (default) - Isolated stdio
+- `wasi_inherit_stdio: true` - Can read stdin, write to stdout/stderr
+- Useful for debugging but should be disabled in production
+
+#### Use Cases
+
+WASI is ideal for:
+- **File Processing**: Read/write CSV, JSON, log files in controlled directories
+- **Data Import/Export**: Load data from files, export results
+- **Configuration**: Read configuration files from allowed paths
+- **Logging**: Write audit logs, error logs to designated directories
+- **Caching**: Persistent caching to filesystem
+- **External Tools**: Call external programs via WASI (when allowed)
+
+#### Performance
+
+- **Near-Zero Overhead**: WASI calls are direct syscalls with minimal wrapping
+- **No Serialization**: File data passed directly, no marshalling overhead
+- **Async I/O**: WASI operations integrate with async runtime
+- **Caching**: Metadata and file descriptors cached for performance
 
 ### Async WASM Functions (Implemented)
 

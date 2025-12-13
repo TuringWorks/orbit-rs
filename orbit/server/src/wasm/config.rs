@@ -56,6 +56,22 @@ pub struct WasmConfig {
     /// Allows vectorized operations for better performance
     /// Default: true
     pub enable_simd: bool,
+
+    /// Allowed directories for WASI file I/O (when WASI is enabled)
+    /// Default: empty (no file access)
+    pub wasi_allowed_dirs: Vec<String>,
+
+    /// Allow network access via WASI (when WASI is enabled)
+    /// Default: false
+    pub wasi_allow_network: bool,
+
+    /// Inherit environment variables in WASI
+    /// Default: false (for security)
+    pub wasi_inherit_env: bool,
+
+    /// Inherit stdin/stdout/stderr in WASI
+    /// Default: false (for security)
+    pub wasi_inherit_stdio: bool,
 }
 
 impl Default for WasmConfig {
@@ -73,6 +89,10 @@ impl Default for WasmConfig {
             enable_parallel: true,
             max_concurrent_instances: 100,
             enable_simd: true, // Enable SIMD for better performance
+            wasi_allowed_dirs: Vec::new(), // No file access by default
+            wasi_allow_network: false,     // No network by default
+            wasi_inherit_env: false,       // No env vars by default
+            wasi_inherit_stdio: false,     // No stdio by default
         }
     }
 }
@@ -90,6 +110,10 @@ impl WasmConfig {
             timeout: Duration::from_secs(300),     // 5 minutes
             enable_wasi: true,                     // Allow WASI in dev
             fuel_limit: 10_000_000_000,            // 10 billion
+            wasi_allowed_dirs: vec!["/tmp".to_string()], // Allow /tmp access
+            wasi_allow_network: true,              // Allow network in dev
+            wasi_inherit_env: true,                // Inherit env vars in dev
+            wasi_inherit_stdio: true,              // Inherit stdio in dev
             ..Default::default()
         }
     }
