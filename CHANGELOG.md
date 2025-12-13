@@ -753,6 +753,46 @@ allowed_libraries = ["numpy", "pandas", "math", "re", "decimal"]
 
 No migration needed for existing deployments. Python UDFs are opt-in via CREATE FUNCTION statements with LANGUAGE PYTHON.
 
+### Fixed
+
+#### Window Functions and WASM Runtime Improvements (2025-12-13)
+
+**Bug Fixes and Code Quality**
+
+- **Window Functions** (`orbit/server/src/protocols/postgres_wire/sql/window_functions.rs`)
+  - Fixed `rows_equal()` calls to pass `order_by` parameter correctly
+  - Updated AST to use `Expression::Literal` instead of deprecated `Expression::Value`
+  - Fixed `SortDirection` enum matching (using `direction` field instead of `desc`)
+  - Improved FIRST_VALUE and LAST_VALUE implementations
+  - Enhanced window function partition boundary detection
+
+- **WASM Runtime** (`orbit/server/src/wasm/runtime.rs`)
+  - Improved `StoreLimits` initialization with mutable builder pattern
+  - Made `compile_module()` method public for external module compilation
+  - Added `#[allow(dead_code)]` annotation for `compiled_at` field (reserved for future cache expiry)
+  - Better async instantiation error handling
+  - Consistent formatting and code style
+
+- **WASM UDF Registry** (`orbit/server/src/wasm/udf_registry.rs`)
+  - Removed unused `WasmError` import
+  - Improved execute_function parameter validation
+  - Better error messages for function lookup failures
+  - Enhanced batch execution handling
+
+- **Code Quality**
+  - Added `unified-storage` feature flag to Cargo.toml
+  - Improved SIMD backend code organization and formatting
+  - Enhanced Python UDF runtime error handling
+  - Consistent code style across all UDF modules
+  - Better documentation and inline comments
+
+- **Test Improvements**
+  - Updated window function integration tests
+  - Enhanced UDF registry test coverage
+  - Improved test assertions for error cases
+
+**Files Changed**: 26 files, +1632 lines, -986 lines
+
 ---
 
 ## [0.1.0] - Previous Release
