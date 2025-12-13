@@ -330,7 +330,7 @@ mod tests {
     #[tokio::test]
     async fn test_database_api_registration() {
         let lua = Lua::new();
-        let client = OrbitClient::new("localhost:50051").await.unwrap();
+        let client = OrbitClient::new_offline();
         setup_database_api(&lua, Arc::new(client)).unwrap();
 
         // Verify sql table exists

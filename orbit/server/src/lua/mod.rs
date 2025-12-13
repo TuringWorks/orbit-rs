@@ -53,6 +53,9 @@ pub mod redis_api;
 #[cfg(feature = "lua-mlua")]
 pub mod database_api;
 
+#[cfg(feature = "lua-mlua")]
+pub mod udf_registry;
+
 // Re-exports for convenience
 pub use security::{
     ExecutionGuard, ExecutionLimits, ScriptValidator, SecurityConfig, DEFAULT_MEMORY_LIMIT,
@@ -68,6 +71,9 @@ pub use redis_api::{setup_redis_api, RedisApi};
 
 #[cfg(feature = "lua-mlua")]
 pub use database_api::{setup_database_api, DatabaseApi};
+
+#[cfg(feature = "lua-mlua")]
+pub use udf_registry::{UdfMetadata, UdfParameter, UdfRegistry, UdfRuntime, SqlValue, sql_to_lua, lua_to_sql};
 
 // Constants
 pub const LUA_ENGINE_VERSION: &str = "0.1.0";

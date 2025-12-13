@@ -1,0 +1,364 @@
+   Compiling tokio v1.48.0
+   Compiling num-bigint v0.4.6
+warning: orbit-shared@0.1.0: Successfully compiled protobuf files
+   Compiling predicates-core v1.0.9
+   Compiling mockall_derive v0.13.1
+   Compiling plotters-backend v0.3.7
+   Compiling itertools v0.10.5
+   Compiling termtree v0.5.1
+   Compiling cast v0.3.0
+   Compiling tinytemplate v1.2.1
+   Compiling combine v4.6.7
+   Compiling num-rational v0.4.2
+   Compiling predicates-tree v1.0.12
+   Compiling predicates v3.1.3
+   Compiling num v0.4.3
+   Compiling nalgebra v0.34.1
+   Compiling arrow-buffer v55.2.0
+   Compiling ug v0.4.0
+   Compiling nalgebra v0.33.2
+   Compiling parquet v55.2.0
+   Compiling plotters-svg v0.3.7
+   Compiling arrow-data v55.2.0
+   Compiling candle-core v0.9.1
+   Compiling arrow-array v55.2.0
+   Compiling plotters v0.3.7
+   Compiling criterion-plot v0.5.0
+   Compiling tokio-util v0.7.17
+   Compiling tokio-rustls v0.26.4
+   Compiling tokio-tungstenite v0.28.0
+   Compiling arrow-select v55.2.0
+   Compiling tokio-native-tls v0.3.1
+   Compiling h2 v0.4.12
+   Compiling tower v0.5.2
+   Compiling tokio-stream v0.1.17
+   Compiling tower-lsp v0.20.0
+   Compiling sqlx-core v0.9.0-alpha.1 (https://github.com/TuringWorks/sqlx-no-rsa.git#0e77c6c5)
+   Compiling hyper v0.14.32
+   Compiling orbit-util v0.1.0 (/Users/ravindraboddipalli/sources/git/orbit-rs/orbit/util)
+   Compiling tower-http v0.6.7
+   Compiling hyper v1.8.1
+   Compiling sqlx-sqlite v0.9.0-alpha.1 (https://github.com/TuringWorks/sqlx-no-rsa.git#0e77c6c5)
+   Compiling sqlx-core v0.8.6
+   Compiling arrow-string v55.2.0
+   Compiling sqlx v0.9.0-alpha.1 (https://github.com/TuringWorks/sqlx-no-rsa.git#0e77c6c5)
+   Compiling arrow-cast v55.2.0
+   Compiling sqlx-sqlite v0.8.6
+   Compiling hyper-util v0.1.19
+   Compiling arrow-ord v55.2.0
+   Compiling arrow-row v55.2.0
+   Compiling hyper-timeout v0.5.2
+   Compiling axum v0.8.7
+   Compiling hyper-rustls v0.27.7
+   Compiling hyper-tls v0.6.0
+   Compiling arrow-arith v55.2.0
+   Compiling reqwest v0.12.24
+   Compiling backon v1.6.0
+   Compiling arrow v55.2.0
+   Compiling reqsign v0.16.5
+   Compiling sqlx v0.8.6
+   Compiling axum v0.7.9
+   Compiling opendal v0.55.0
+   Compiling tonic v0.14.2
+   Compiling statrs v0.18.0
+   Compiling candle-nn v0.9.1
+   Compiling tonic-prost v0.14.2
+   Compiling orbit-shared v0.1.0 (/Users/ravindraboddipalli/sources/git/orbit-rs/orbit/shared)
+   Compiling orbit-ml v0.1.0 (/Users/ravindraboddipalli/sources/git/orbit-rs/orbit/ml)
+   Compiling tonic-reflection v0.14.2
+   Compiling utoipa-swagger-ui v8.1.0
+   Compiling metrics-exporter-prometheus v0.18.0
+   Compiling is-terminal v0.4.17
+   Compiling fragile v2.0.1
+   Compiling anes v0.1.6
+   Compiling sha1_smol v1.0.1
+   Compiling oorandom v11.1.5
+   Compiling downcast v0.11.0
+   Compiling mockall v0.13.1
+   Compiling criterion v0.5.1
+   Compiling redis v0.32.7
+   Compiling tokio-test v0.4.4
+   Compiling orbit-proto v0.1.0 (/Users/ravindraboddipalli/sources/git/orbit-rs/orbit/proto)
+   Compiling orbit-compute v0.1.0 (/Users/ravindraboddipalli/sources/git/orbit-rs/orbit/compute)
+   Compiling orbit-client v0.1.0 (/Users/ravindraboddipalli/sources/git/orbit-rs/orbit/client)
+   Compiling orbit-engine v0.1.0 (/Users/ravindraboddipalli/sources/git/orbit-rs/orbit/engine)
+   Compiling orbit-server v0.1.0 (/Users/ravindraboddipalli/sources/git/orbit-rs/orbit/server)
+warning: unused import: `SimdFilter`
+ --> orbit/server/src/protocols/postgres_wire/sql/execution/simd/backend.rs:6:25
+  |
+6 | use super::{NullBitmap, SimdFilter};
+  |                         ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `orbit-server` (lib) generated 1 warning (run `cargo fix --lib -p orbit-server` to apply 1 suggestion)
+    Finished `bench` profile [optimized] target(s) in 3m 11s
+     Running benches/simd_benchmarks.rs (/Users/ravindraboddipalli/sources/git/orbit-rs/target/release/deps/simd_benchmarks-46fa94524a879b12)
+Benchmarking filter_eq/scalar/100
+Benchmarking filter_eq/scalar/100: Warming up for 3.0000 s
+Benchmarking filter_eq/scalar/100: Collecting 100 samples in estimated 5.0002 s (102M iterations)
+Benchmarking filter_eq/scalar/100: Analyzing
+filter_eq/scalar/100    time:   [48.357 ns 49.545 ns 50.975 ns]
+Found 10 outliers among 100 measurements (10.00%)
+  6 (6.00%) high mild
+  4 (4.00%) high severe
+Benchmarking filter_eq/neon/100
+Benchmarking filter_eq/neon/100: Warming up for 3.0000 s
+Benchmarking filter_eq/neon/100: Collecting 100 samples in estimated 5.0000 s (94M iterations)
+Benchmarking filter_eq/neon/100: Analyzing
+filter_eq/neon/100      time:   [49.462 ns 49.857 ns 50.296 ns]
+Found 6 outliers among 100 measurements (6.00%)
+  6 (6.00%) high mild
+Benchmarking filter_eq/scalar/1000
+Benchmarking filter_eq/scalar/1000: Warming up for 3.0000 s
+Benchmarking filter_eq/scalar/1000: Collecting 100 samples in estimated 5.0015 s (15M iterations)
+Benchmarking filter_eq/scalar/1000: Analyzing
+filter_eq/scalar/1000   time:   [332.50 ns 336.10 ns 340.23 ns]
+Found 9 outliers among 100 measurements (9.00%)
+  6 (6.00%) high mild
+  3 (3.00%) high severe
+Benchmarking filter_eq/neon/1000
+Benchmarking filter_eq/neon/1000: Warming up for 3.0000 s
+Benchmarking filter_eq/neon/1000: Collecting 100 samples in estimated 5.0009 s (17M iterations)
+Benchmarking filter_eq/neon/1000: Analyzing
+filter_eq/neon/1000     time:   [291.59 ns 293.48 ns 295.70 ns]
+Found 9 outliers among 100 measurements (9.00%)
+  3 (3.00%) high mild
+  6 (6.00%) high severe
+Benchmarking filter_eq/scalar/10000
+Benchmarking filter_eq/scalar/10000: Warming up for 3.0000 s
+Benchmarking filter_eq/scalar/10000: Collecting 100 samples in estimated 5.0074 s (1.7M iterations)
+Benchmarking filter_eq/scalar/10000: Analyzing
+filter_eq/scalar/10000  time:   [2.7713 µs 2.7927 µs 2.8189 µs]
+Found 8 outliers among 100 measurements (8.00%)
+  6 (6.00%) high mild
+  2 (2.00%) high severe
+Benchmarking filter_eq/neon/10000
+Benchmarking filter_eq/neon/10000: Warming up for 3.0000 s
+Benchmarking filter_eq/neon/10000: Collecting 100 samples in estimated 5.0094 s (1.9M iterations)
+Benchmarking filter_eq/neon/10000: Analyzing
+filter_eq/neon/10000    time:   [2.6071 µs 2.6359 µs 2.6822 µs]
+Found 10 outliers among 100 measurements (10.00%)
+  7 (7.00%) high mild
+  3 (3.00%) high severe
+Benchmarking filter_eq/scalar/100000
+Benchmarking filter_eq/scalar/100000: Warming up for 3.0000 s
+Benchmarking filter_eq/scalar/100000: Collecting 100 samples in estimated 5.0773 s (162k iterations)
+Benchmarking filter_eq/scalar/100000: Analyzing
+filter_eq/scalar/100000 time:   [28.790 µs 28.960 µs 29.158 µs]
+Found 7 outliers among 100 measurements (7.00%)
+  6 (6.00%) high mild
+  1 (1.00%) high severe
+Benchmarking filter_eq/neon/100000
+Benchmarking filter_eq/neon/100000: Warming up for 3.0000 s
+Benchmarking filter_eq/neon/100000: Collecting 100 samples in estimated 5.0433 s (172k iterations)
+Benchmarking filter_eq/neon/100000: Analyzing
+filter_eq/neon/100000   time:   [28.085 µs 28.526 µs 29.043 µs]
+Found 7 outliers among 100 measurements (7.00%)
+  5 (5.00%) high mild
+  2 (2.00%) high severe
+
+Benchmarking filter_lt/scalar/100
+Benchmarking filter_lt/scalar/100: Warming up for 3.0000 s
+Benchmarking filter_lt/scalar/100: Collecting 100 samples in estimated 5.0006 s (25M iterations)
+Benchmarking filter_lt/scalar/100: Analyzing
+filter_lt/scalar/100    time:   [190.74 ns 192.22 ns 193.73 ns]
+Found 2 outliers among 100 measurements (2.00%)
+  1 (1.00%) high mild
+  1 (1.00%) high severe
+Benchmarking filter_lt/neon/100
+Benchmarking filter_lt/neon/100: Warming up for 3.0000 s
+Benchmarking filter_lt/neon/100: Collecting 100 samples in estimated 5.0010 s (24M iterations)
+Benchmarking filter_lt/neon/100: Analyzing
+filter_lt/neon/100      time:   [227.25 ns 236.92 ns 245.76 ns]
+Found 5 outliers among 100 measurements (5.00%)
+  5 (5.00%) high mild
+Benchmarking filter_lt/scalar/1000
+Benchmarking filter_lt/scalar/1000: Warming up for 3.0000 s
+Benchmarking filter_lt/scalar/1000: Collecting 100 samples in estimated 5.0051 s (4.4M iterations)
+Benchmarking filter_lt/scalar/1000: Analyzing
+filter_lt/scalar/1000   time:   [1.0476 µs 1.0680 µs 1.0897 µs]
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high severe
+Benchmarking filter_lt/neon/1000
+Benchmarking filter_lt/neon/1000: Warming up for 3.0000 s
+Benchmarking filter_lt/neon/1000: Collecting 100 samples in estimated 5.0046 s (5.2M iterations)
+Benchmarking filter_lt/neon/1000: Analyzing
+filter_lt/neon/1000     time:   [762.18 ns 777.44 ns 795.88 ns]
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high severe
+Benchmarking filter_lt/scalar/10000
+Benchmarking filter_lt/scalar/10000: Warming up for 3.0000 s
+Benchmarking filter_lt/scalar/10000: Collecting 100 samples in estimated 5.0339 s (707k iterations)
+Benchmarking filter_lt/scalar/10000: Analyzing
+filter_lt/scalar/10000  time:   [6.8742 µs 6.9723 µs 7.0823 µs]
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high severe
+Benchmarking filter_lt/neon/10000
+Benchmarking filter_lt/neon/10000: Warming up for 3.0000 s
+Benchmarking filter_lt/neon/10000: Collecting 100 samples in estimated 5.0018 s (571k iterations)
+Benchmarking filter_lt/neon/10000: Analyzing
+filter_lt/neon/10000    time:   [6.0927 µs 6.1828 µs 6.2906 µs]
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high severe
+Benchmarking filter_lt/scalar/100000
+Benchmarking filter_lt/scalar/100000: Warming up for 3.0000 s
+Benchmarking filter_lt/scalar/100000: Collecting 100 samples in estimated 5.1588 s (91k iterations)
+Benchmarking filter_lt/scalar/100000: Analyzing
+filter_lt/scalar/100000 time:   [56.113 µs 57.653 µs 59.408 µs]
+Found 4 outliers among 100 measurements (4.00%)
+  3 (3.00%) high mild
+  1 (1.00%) high severe
+Benchmarking filter_lt/neon/100000
+Benchmarking filter_lt/neon/100000: Warming up for 3.0000 s
+Benchmarking filter_lt/neon/100000: Collecting 100 samples in estimated 5.2572 s (96k iterations)
+Benchmarking filter_lt/neon/100000: Analyzing
+filter_lt/neon/100000   time:   [49.688 µs 52.546 µs 57.541 µs]
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high severe
+
+Benchmarking sum/scalar/100
+Benchmarking sum/scalar/100: Warming up for 3.0000 s
+Benchmarking sum/scalar/100: Collecting 100 samples in estimated 5.0001 s (100M iterations)
+Benchmarking sum/scalar/100: Analyzing
+sum/scalar/100          time:   [45.995 ns 46.351 ns 46.818 ns]
+Found 7 outliers among 100 measurements (7.00%)
+  2 (2.00%) high mild
+  5 (5.00%) high severe
+Benchmarking sum/neon/100
+Benchmarking sum/neon/100: Warming up for 3.0000 s
+Benchmarking sum/neon/100: Collecting 100 samples in estimated 5.0002 s (77M iterations)
+Benchmarking sum/neon/100: Analyzing
+sum/neon/100            time:   [60.533 ns 61.250 ns 62.011 ns]
+Found 6 outliers among 100 measurements (6.00%)
+  4 (4.00%) high mild
+  2 (2.00%) high severe
+Benchmarking sum/scalar/1000
+Benchmarking sum/scalar/1000: Warming up for 3.0000 s
+Benchmarking sum/scalar/1000: Collecting 100 samples in estimated 5.0022 s (11M iterations)
+Benchmarking sum/scalar/1000: Analyzing
+sum/scalar/1000         time:   [412.52 ns 419.71 ns 431.62 ns]
+Found 5 outliers among 100 measurements (5.00%)
+  2 (2.00%) high mild
+  3 (3.00%) high severe
+Benchmarking sum/neon/1000
+Benchmarking sum/neon/1000: Warming up for 3.0000 s
+Benchmarking sum/neon/1000: Collecting 100 samples in estimated 5.0008 s (8.4M iterations)
+Benchmarking sum/neon/1000: Analyzing
+sum/neon/1000           time:   [552.86 ns 559.74 ns 567.47 ns]
+Found 2 outliers among 100 measurements (2.00%)
+  1 (1.00%) high mild
+  1 (1.00%) high severe
+Benchmarking sum/scalar/10000
+Benchmarking sum/scalar/10000: Warming up for 3.0000 s
+Benchmarking sum/scalar/10000: Collecting 100 samples in estimated 5.0134 s (1.1M iterations)
+Benchmarking sum/scalar/10000: Analyzing
+sum/scalar/10000        time:   [4.2110 µs 4.2555 µs 4.3085 µs]
+Found 7 outliers among 100 measurements (7.00%)
+  7 (7.00%) high mild
+Benchmarking sum/neon/10000
+Benchmarking sum/neon/10000: Warming up for 3.0000 s
+Benchmarking sum/neon/10000: Collecting 100 samples in estimated 5.0029 s (823k iterations)
+Benchmarking sum/neon/10000: Analyzing
+sum/neon/10000          time:   [5.4595 µs 5.6154 µs 5.7971 µs]
+Found 4 outliers among 100 measurements (4.00%)
+  4 (4.00%) high mild
+Benchmarking sum/scalar/100000
+Benchmarking sum/scalar/100000: Warming up for 3.0000 s
+Benchmarking sum/scalar/100000: Collecting 100 samples in estimated 5.1901 s (106k iterations)
+Benchmarking sum/scalar/100000: Analyzing
+sum/scalar/100000       time:   [41.012 µs 41.249 µs 41.536 µs]
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+Benchmarking sum/neon/100000
+Benchmarking sum/neon/100000: Warming up for 3.0000 s
+Benchmarking sum/neon/100000: Collecting 100 samples in estimated 5.0541 s (86k iterations)
+Benchmarking sum/neon/100000: Analyzing
+sum/neon/100000         time:   [55.154 µs 55.929 µs 56.755 µs]
+Found 5 outliers among 100 measurements (5.00%)
+  2 (2.00%) high mild
+  3 (3.00%) high severe
+
+Benchmarking compare_bytes/scalar/16
+Benchmarking compare_bytes/scalar/16: Warming up for 3.0000 s
+Benchmarking compare_bytes/scalar/16: Collecting 100 samples in estimated 5.0000 s (2.6B iterations)
+Benchmarking compare_bytes/scalar/16: Analyzing
+compare_bytes/scalar/16 time:   [1.6466 ns 1.6562 ns 1.6664 ns]
+Found 10 outliers among 100 measurements (10.00%)
+  7 (7.00%) high mild
+  3 (3.00%) high severe
+Benchmarking compare_bytes/neon/16
+Benchmarking compare_bytes/neon/16: Warming up for 3.0000 s
+Benchmarking compare_bytes/neon/16: Collecting 100 samples in estimated 5.0000 s (1.5B iterations)
+Benchmarking compare_bytes/neon/16: Analyzing
+compare_bytes/neon/16   time:   [3.0802 ns 3.1056 ns 3.1316 ns]
+Found 7 outliers among 100 measurements (7.00%)
+  5 (5.00%) high mild
+  2 (2.00%) high severe
+Benchmarking compare_bytes/scalar/64
+Benchmarking compare_bytes/scalar/64: Warming up for 3.0000 s
+Benchmarking compare_bytes/scalar/64: Collecting 100 samples in estimated 5.0000 s (2.0B iterations)
+Benchmarking compare_bytes/scalar/64: Analyzing
+compare_bytes/scalar/64 time:   [2.3020 ns 2.3389 ns 2.3893 ns]
+Found 9 outliers among 100 measurements (9.00%)
+  6 (6.00%) high mild
+  3 (3.00%) high severe
+Benchmarking compare_bytes/neon/64
+Benchmarking compare_bytes/neon/64: Warming up for 3.0000 s
+Benchmarking compare_bytes/neon/64: Collecting 100 samples in estimated 5.0000 s (1.0B iterations)
+Benchmarking compare_bytes/neon/64: Analyzing
+compare_bytes/neon/64   time:   [4.6286 ns 4.6640 ns 4.7046 ns]
+Found 8 outliers among 100 measurements (8.00%)
+  6 (6.00%) high mild
+  2 (2.00%) high severe
+Benchmarking compare_bytes/scalar/256
+Benchmarking compare_bytes/scalar/256: Warming up for 3.0000 s
+Benchmarking compare_bytes/scalar/256: Collecting 100 samples in estimated 5.0000 s (2.0B iterations)
+Benchmarking compare_bytes/scalar/256: Analyzing
+compare_bytes/scalar/256
+                        time:   [2.6569 ns 2.7843 ns 2.9709 ns]
+Found 9 outliers among 100 measurements (9.00%)
+  3 (3.00%) high mild
+  6 (6.00%) high severe
+Benchmarking compare_bytes/neon/256
+Benchmarking compare_bytes/neon/256: Warming up for 3.0000 s
+Benchmarking compare_bytes/neon/256: Collecting 100 samples in estimated 5.0000 s (1.6B iterations)
+Benchmarking compare_bytes/neon/256: Analyzing
+compare_bytes/neon/256  time:   [2.9452 ns 2.9691 ns 2.9976 ns]
+Found 6 outliers among 100 measurements (6.00%)
+  4 (4.00%) high mild
+  2 (2.00%) high severe
+Benchmarking compare_bytes/scalar/1024
+Benchmarking compare_bytes/scalar/1024: Warming up for 3.0000 s
+Benchmarking compare_bytes/scalar/1024: Collecting 100 samples in estimated 5.0000 s (2.0B iterations)
+Benchmarking compare_bytes/scalar/1024: Analyzing
+compare_bytes/scalar/1024
+                        time:   [2.3241 ns 2.3354 ns 2.3476 ns]
+Found 9 outliers among 100 measurements (9.00%)
+  6 (6.00%) high mild
+  3 (3.00%) high severe
+Benchmarking compare_bytes/neon/1024
+Benchmarking compare_bytes/neon/1024: Warming up for 3.0000 s
+Benchmarking compare_bytes/neon/1024: Collecting 100 samples in estimated 5.0000 s (1.5B iterations)
+Benchmarking compare_bytes/neon/1024: Analyzing
+compare_bytes/neon/1024 time:   [2.9266 ns 2.9509 ns 2.9800 ns]
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+Benchmarking compare_bytes/scalar/4096
+Benchmarking compare_bytes/scalar/4096: Warming up for 3.0000 s
+Benchmarking compare_bytes/scalar/4096: Collecting 100 samples in estimated 5.0000 s (2.0B iterations)
+Benchmarking compare_bytes/scalar/4096: Analyzing
+compare_bytes/scalar/4096
+                        time:   [2.2799 ns 2.2839 ns 2.2889 ns]
+Found 10 outliers among 100 measurements (10.00%)
+  6 (6.00%) high mild
+  4 (4.00%) high severe
+Benchmarking compare_bytes/neon/4096
+Benchmarking compare_bytes/neon/4096: Warming up for 3.0000 s
+Benchmarking compare_bytes/neon/4096: Collecting 100 samples in estimated 5.0000 s (1.6B iterations)
+Benchmarking compare_bytes/neon/4096: Analyzing
+compare_bytes/neon/4096 time:   [2.8902 ns 2.9081 ns 2.9299 ns]
+Found 4 outliers among 100 measurements (4.00%)
+  3 (3.00%) high mild
+  1 (1.00%) high severe
+

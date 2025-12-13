@@ -3,7 +3,7 @@
 //! Provides a unified interface for different SIMD implementations
 //! with runtime selection based on CPU capabilities.
 
-use super::{NullBitmap, SimdFilter};
+use super::NullBitmap;
 
 /// Unified SIMD backend trait
 ///
@@ -276,12 +276,43 @@ unsafe fn filter_i32_gt_avx2(values: &[i32], target: i32) -> Vec<usize> {
 unsafe fn sum_i32_avx2(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> {
     use std::arch::x86_64::*;
 
+    // Early exit for small datasets
+    if values.len() < 16 {
+        return ScalarBackend.sum_i32(values, null_bitmap);
+    }
+
     let mut sum_vec = _mm256_setzero_si256();
     let mut has_value = false;
     let mut i = 0;
 
+    // Process in larger chunks when all values are valid
+    while i + 32 <= values.len() {
+        let all_valid = (i..i + 32).all(|idx| null_bitmap.is_valid(idx));
+
+        if all_valid {
+            // Process 4 chunks of 8 values each
+            for _ in 0..4 {
+                let data = _mm256_loadu_si256(values[i..].as_ptr() as *const __m256i);
+                sum_vec = _mm256_add_epi32(sum_vec, data);
+                i += 8;
+            }
+            has_value = true;
+        } else {
+            // Fall back to scalar for this chunk
+            for j in i..i + 32 {
+                if null_bitmap.is_valid(j) {
+                    // Broadcast and add
+                    let val_vec = _mm256_set1_epi32(values[j]);
+                    sum_vec = _mm256_add_epi32(sum_vec, val_vec);
+                    has_value = true;
+                }
+            }
+            i += 32;
+        }
+    }
+
+    // Process remaining in groups of 8
     while i + 8 <= values.len() {
-        // Check if all values in this chunk are valid
         let all_valid = (i..i + 8).all(|idx| null_bitmap.is_valid(idx));
 
         if all_valid {
@@ -289,9 +320,10 @@ unsafe fn sum_i32_avx2(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
             sum_vec = _mm256_add_epi32(sum_vec, data);
             has_value = true;
         } else {
-            // Handle partial nulls scalar
             for j in i..i + 8 {
                 if null_bitmap.is_valid(j) {
+                    let val_vec = _mm256_set1_epi32(values[j]);
+                    sum_vec = _mm256_add_epi32(sum_vec, val_vec);
                     has_value = true;
                 }
             }
@@ -299,11 +331,18 @@ unsafe fn sum_i32_avx2(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
         i += 8;
     }
 
-    // Horizontal sum
-    let sum_arr: [i32; 8] = std::mem::transmute(sum_vec);
-    let mut total: i64 = sum_arr.iter().map(|&x| x as i64).sum();
+    // Efficient horizontal sum using hadd
+    let sum_vec = _mm256_hadd_epi32(sum_vec, sum_vec); // Horizontal add pairs
+    let sum_vec = _mm256_hadd_epi32(sum_vec, sum_vec); // Horizontal add again
+    
+    // Extract both 128-bit lanes and add
+    let low = _mm256_castsi256_si128(sum_vec);
+    let high = _mm256_extracti128_si256(sum_vec, 1);
+    let sum_128 = _mm_add_epi32(low, high);
+    let total_simd = _mm_extract_epi32(sum_128, 0) as i64;
 
     // Handle remainder
+    let mut total = total_simd;
     for j in i..values.len() {
         if null_bitmap.is_valid(j) {
             total += values[j] as i64;
@@ -480,10 +519,43 @@ unsafe fn filter_i32_gt_neon(values: &[i32], target: i32) -> Vec<usize> {
 unsafe fn sum_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> {
     use std::arch::aarch64::*;
 
+    // Early exit for small datasets - use scalar
+    if values.len() < 16 {
+        return ScalarBackend.sum_i32(values, null_bitmap);
+    }
+
     let mut sum_vec = vdupq_n_s32(0);
     let mut has_value = false;
     let mut i = 0;
 
+    // Process in larger chunks when all values are valid
+    while i + 16 <= values.len() {
+        // Check if next 16 values are all valid
+        let all_valid = (i..i + 16).all(|idx| null_bitmap.is_valid(idx));
+
+        if all_valid {
+            // Process 4 chunks of 4 values each
+            for _ in 0..4 {
+                let data = vld1q_s32(values[i..].as_ptr());
+                sum_vec = vaddq_s32(sum_vec, data);
+                i += 4;
+            }
+            has_value = true;
+        } else {
+            // Fall back to scalar for this chunk
+            for j in i..i + 16 {
+                if null_bitmap.is_valid(j) {
+                    // Accumulate in vector
+                    let val_vec = vdupq_n_s32(values[j]);
+                    sum_vec = vaddq_s32(sum_vec, val_vec);
+                    has_value = true;
+                }
+            }
+            i += 16;
+        }
+    }
+
+    // Process remaining values in groups of 4
     while i + 4 <= values.len() {
         let all_valid = (i..i + 4).all(|idx| null_bitmap.is_valid(idx));
 
@@ -491,13 +563,26 @@ unsafe fn sum_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
             let data = vld1q_s32(values[i..].as_ptr());
             sum_vec = vaddq_s32(sum_vec, data);
             has_value = true;
+        } else {
+            // Scalar for partial chunk
+            for j in i..i + 4 {
+                if null_bitmap.is_valid(j) {
+                    let val_vec = vdupq_n_s32(values[j]);
+                    sum_vec = vaddq_s32(sum_vec, val_vec);
+                    has_value = true;
+                }
+            }
         }
         i += 4;
     }
 
-    let sum_arr: [i32; 4] = std::mem::transmute(sum_vec);
-    let mut total: i64 = sum_arr.iter().map(|&x| x as i64).sum();
+    // Efficient horizontal sum using pairwise addition
+    let sum_vec = vpaddq_s32(sum_vec, sum_vec); // [a+b, c+d, a+b, c+d]
+    let sum_vec = vpaddq_s32(sum_vec, sum_vec); // [a+b+c+d, ...]
+    let total_simd = vgetq_lane_s32(sum_vec, 0) as i64;
 
+    // Handle remainder
+    let mut total = total_simd;
     for j in i..values.len() {
         if null_bitmap.is_valid(j) {
             total += values[j] as i64;
@@ -512,20 +597,31 @@ unsafe fn sum_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
 unsafe fn compare_bytes_neon(a: &[u8], b: &[u8]) -> bool {
     use std::arch::aarch64::*;
 
-    let mut i = 0;
-    while i + 16 <= a.len() {
-        let va = vld1q_u8(a[i..].as_ptr());
-        let vb = vld1q_u8(b[i..].as_ptr());
-        let cmp = vceqq_u8(va, vb);
-
-        // Check if all bytes are equal
-        let mask: [u8; 16] = std::mem::transmute(cmp);
-        if !mask.iter().all(|&x| x == 0xFF) {
-            return false;
-        }
-        i += 16;
+    // Only use SIMD for strings >= 64 bytes
+    // For smaller strings, Rust's memcmp is faster
+    if a.len() < 64 {
+        return a == b;
     }
 
+    let mut i = 0;
+    
+    // Process 64 bytes at a time (4x 16-byte vectors)
+    while i + 64 <= a.len() {
+        for _ in 0..4 {
+            let va = vld1q_u8(a[i..].as_ptr());
+            let vb = vld1q_u8(b[i..].as_ptr());
+            let cmp = vceqq_u8(va, vb);
+
+            // Quick check using vminvq_u8 - if any byte differs, result < 0xFF
+            let min_val = vminvq_u8(cmp);
+            if min_val != 0xFF {
+                return false;
+            }
+            i += 16;
+        }
+    }
+
+    // Handle remainder with scalar comparison
     a[i..] == b[i..]
 }
 

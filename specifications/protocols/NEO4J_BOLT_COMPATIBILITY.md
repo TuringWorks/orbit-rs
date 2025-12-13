@@ -2,8 +2,8 @@
 
 **Target**: Neo4j Bolt Protocol v5.x / Cypher Query Language
 **Reference**: https://neo4j.com/docs/bolt/current/
-**Last Updated**: 2025-12-11
-**Current Estimated Coverage**: ~87%
+**Last Updated**: 2025-12-12
+**Current Estimated Coverage**: ~92%
 
 ---
 
@@ -82,9 +82,9 @@ This document specifies OrbitRS's compatibility with the Neo4j Bolt protocol and
 | OPTIONAL MATCH | 🔶 | Optional patterns |
 | WHERE | ✅ | Filtering |
 | WITH | 🔶 | Chaining queries (implicit grouping) |
-| UNWIND | 🔶 | List expansion |
-| CALL | ❌ | Procedure calls |
-| CALL {} | ❌ | Subqueries |
+| UNWIND | ✅ | List expansion to rows |
+| CALL | ✅ | Procedure calls with YIELD support |
+| CALL {} | ❌ | Subqueries (not yet implemented) |
 | USE | ❌ | Database selection |
 
 ### Writing Clauses
@@ -97,7 +97,7 @@ This document specifies OrbitRS's compatibility with the Neo4j Bolt protocol and
 | DELETE | ✅ | Delete nodes/relationships |
 | DETACH DELETE | ✅ | Delete with relationships |
 | REMOVE | ✅ | Remove properties/labels |
-| FOREACH | ❌ | Iterate and update |
+| FOREACH | ✅ | Iterate and update (supports SET, CREATE, DELETE, REMOVE, MERGE) |
 
 ### General Clauses
 
@@ -123,8 +123,8 @@ This document specifies OrbitRS's compatibility with the Neo4j Bolt protocol and
 | -[r*]-> | 🔶 | Variable length path |
 | -[r*1..5]-> | 🔶 | Bounded variable path |
 | (n)-[r]->(m) | ✅ | Full pattern |
-| shortestPath() | ❌ | Shortest path |
-| allShortestPaths() | ❌ | All shortest paths |
+| shortestPath() | ✅ | Via CALL orbit.graph.shortestPath (BFS/Dijkstra with GPU support) |
+| allShortestPaths() | ✅ | Via orbit.graph functions |
 
 ### Schema Commands
 
@@ -377,13 +377,13 @@ This document specifies OrbitRS's compatibility with the Neo4j Bolt protocol and
 | Category | Coverage | Notes |
 |----------|----------|-------|
 | Bolt Protocol | ~45% | Basic protocol support |
-| Cypher Reading | ~60% | Core MATCH/WHERE |
-| Cypher Writing | ~70% | CREATE/MERGE/DELETE |
-| Pattern Matching | ~65% | Basic patterns |
+| Cypher Reading | ~75% | MATCH/WHERE/CALL/WITH/UNWIND |
+| Cypher Writing | ~85% | CREATE/MERGE/DELETE/SET/REMOVE/FOREACH |
+| Pattern Matching | ~75% | Basic patterns + shortest path via procedures |
 | Data Types | ~75% | Most types supported |
-| Functions | ~75% | All aggregating functions complete |
+| Functions | ~85% | Aggregating, scalar, graph algorithm functions |
 | Administration | ~10% | Limited admin |
-| Spatial | ~5% | Minimal support |
+| Spatial | ~60% | Point types supported, functions via procedures |
 
 ### Priority Roadmap
 
@@ -395,11 +395,11 @@ This document specifies OrbitRS's compatibility with the Neo4j Bolt protocol and
 5. ❌ Variable length paths
 
 **Medium Priority**:
-1. ❌ Shortest path algorithms
+1. ✅ Shortest path algorithms (via orbit.graph procedures)
 2. ❌ Full-text indexes
 3. ❌ Spatial types and functions
-4. ❌ Procedure calls (CALL)
-5. ❌ Subqueries
+4. ✅ Procedure calls (CALL with YIELD)
+5. ❌ Subqueries (CALL {})
 
 **Low Priority**:
 1. ❌ Database administration
@@ -412,15 +412,15 @@ This document specifies OrbitRS's compatibility with the Neo4j Bolt protocol and
 ## Known Limitations
 
 1. **Variable Length Paths**: Limited support for complex patterns
-2. **Shortest Path**: Not implemented
-3. **Spatial Types**: No spatial support
-4. **Full-Text Search**: Not implemented
-5. **Procedures**: CALL statement not supported
-6. **Subqueries**: CALL {} not supported
-7. **Administration**: Limited admin commands
-8. **Cluster Features**: No routing support
-9. **TLS/SSL**: Not implemented
-10. **Advanced Constraints**: Limited constraint types
+2. **Spatial Types**: Point types implemented but limited spatial function support
+3. **Full-Text Search**: Not implemented
+4. **Subqueries**: CALL {} not supported
+5. **Administration**: Limited admin commands
+6. **Cluster Features**: No routing support
+7. **TLS/SSL**: Not implemented
+8. **Advanced Constraints**: Limited constraint types
+9. **UNWIND**: Basic support, may not handle all edge cases
+10. **WITH**: Implicit grouping only, explicit GROUP BY not supported
 
 ---
 
