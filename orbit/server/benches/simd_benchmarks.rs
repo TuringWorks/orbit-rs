@@ -134,11 +134,77 @@ fn bench_compare_bytes(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_min(c: &mut Criterion) {
+    let mut group = c.benchmark_group("min");
+
+    for size in [100, 1_000, 10_000, 100_000].iter() {
+        let values: Vec<i32> = (1..=*size).collect();
+        let null_bitmap = NullBitmap::new_all_valid(*size as usize);
+
+        group.bench_with_input(BenchmarkId::new("scalar", size), size, |b, _| {
+            let backend = ScalarBackend;
+            b.iter(|| black_box(backend.min_i32(black_box(&values), black_box(&null_bitmap))));
+        });
+
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") {
+            group.bench_with_input(BenchmarkId::new("avx2", size), size, |b, _| {
+                let backend = Avx2Backend;
+                b.iter(|| black_box(backend.min_i32(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            group.bench_with_input(BenchmarkId::new("neon", size), size, |b, _| {
+                let backend = NeonBackend;
+                b.iter(|| black_box(backend.min_i32(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+    }
+
+    group.finish();
+}
+
+fn bench_max(c: &mut Criterion) {
+    let mut group = c.benchmark_group("max");
+
+    for size in [100, 1_000, 10_000, 100_000].iter() {
+        let values: Vec<i32> = (1..=*size).collect();
+        let null_bitmap = NullBitmap::new_all_valid(*size as usize);
+
+        group.bench_with_input(BenchmarkId::new("scalar", size), size, |b, _| {
+            let backend = ScalarBackend;
+            b.iter(|| black_box(backend.max_i32(black_box(&values), black_box(&null_bitmap))));
+        });
+
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") {
+            group.bench_with_input(BenchmarkId::new("avx2", size), size, |b, _| {
+                let backend = Avx2Backend;
+                b.iter(|| black_box(backend.max_i32(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            group.bench_with_input(BenchmarkId::new("neon", size), size, |b, _| {
+                let backend = NeonBackend;
+                b.iter(|| black_box(backend.max_i32(black_box(&values), black_box(&null_bitmap))));
+            });
+        }
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_filter_eq,
     bench_filter_lt,
     bench_sum,
+    bench_min,
+    bench_max,
     bench_compare_bytes
 );
 criterion_main!(benches);
