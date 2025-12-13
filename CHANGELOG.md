@@ -9,6 +9,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Documentation Updates (2025-12-13)
+
+**Comprehensive UDF Documentation Suite**
+
+- **Lua UDF Complete Documentation** (`docs/LUA_UDF_COMPLETE_DOCUMENTATION.md`) - ~1,200 lines
+  - Complete guide to Lua UDFs with mlua engine
+  - Redis EVAL/EVALSHA/SCRIPT commands reference
+  - PostgreSQL PL/Lua stored procedures
+  - Multi-layer security architecture (validation, sandboxing, monitoring, API restrictions)
+  - State management (ephemeral and persistent actor-based)
+  - API references: redis.call(), sql.execute(), http.get(), actor.send()
+  - Performance characteristics and comparisons
+  - Best practices and troubleshooting
+
+- **Lua UDF Examples** (`docs/LUA_UDF_EXAMPLES.md`) - ~900 lines
+  - 19 comprehensive examples covering all use cases
+  - Redis scripting: rate limiters, distributed locks, leaderboards, session management
+  - PostgreSQL PL/Lua: tax calculation, JSON transformation, order processing
+  - Data processing pipelines: ETL, aggregation
+  - Advanced patterns: pub/sub filtering, circuit breakers
+  - Performance optimization techniques
+  - Testing and debugging strategies
+  - Production-ready code samples
+
+#### WASM UDF Support (2025-12-13)
+
+**WebAssembly User-Defined Functions**
+
+- **Language-Agnostic UDF System** - Implemented WASM-based UDF execution using wasmtime for near-native performance
+  - Write UDFs in any language that compiles to WASM (Rust, C, C++, Go, AssemblyScript, Zig)
+  - JIT compilation for 10-20% overhead vs native code
+  - No external runtime dependencies
+  - Cross-platform and portable
+
+- **New Modules** (`orbit/server/src/wasm/`) - ~1,410 lines
+  - `types.rs` (~300 lines) - Type conversions (SQL ↔ WASM) with MessagePack for complex types
+  - `config.rs` (~180 lines) - Configuration with development/production presets
+  - `runtime.rs` (~400 lines) - wasmtime integration with JIT compilation and LRU module caching
+  - `udf_registry.rs` (~280 lines) - Function metadata management and execution routing
+  - `udf_handler.rs` (~250 lines) - SQL statement handler for CREATE/DROP FUNCTION
+  - `mod.rs` - Module exports with comprehensive architecture documentation
+
+- **Security & Sandboxing**
+  - **Memory Isolation**: Cannot access server memory
+  - **CPU Limits**: Fuel-based instruction counting (default: 1 billion instructions)
+  - **Time Limits**: Execution timeouts (default: 30 seconds)
+  - **No System Access**: No file I/O, network, or system calls by default (WASI disabled)
+  - **Module Validation**: Binary format verification on registration
+  - **Memory Limit**: 64MB per function (configurable)
+
+- **Performance Optimizations**
+  - **JIT Compilation**: wasmtime compiles WASM to native code
+  - **Module Caching**: LRU cache for 100 compiled modules (configurable)
+  - **Near-Native Speed**: 10-20% overhead compared to native code
+  - **No IPC Overhead**: In-process execution unlike Python subprocess approach
+  - **Fast Call Latency**: <1μs for simple functions
+
+- **SQL Integration**
+  - Integrated with OptimizedQueryEngine for CREATE/DROP FUNCTION
+  - Language detection for WASM, PLWASM
+  - Hex-encoded WASM binary in function definition
+  - Schema-qualified function names
+  - Type conversion between SQL and WASM primitive types (i32, i64, f32, f64)
+
+- **Configuration** (Cargo.toml)
+  - New dependency: `wasmtime = { version = "28.0", optional = true, features = ["async"] }`
+  - New dependency: `lru = "0.12"` for module caching
+  - Feature flags: `wasm-udf`, `wasm-postgres`, `wasm-mysql`, `wasm-redis`, `wasm-all`
+  - Added `wasm-postgres` to default features
+
+- **Type System**
+  - WASM types: i32, i64, f32, f64 (primitives), bytes (complex via MessagePack)
+  - SQL types: INTEGER, BIGINT, REAL, DOUBLE PRECISION, BOOLEAN, TEXT, BYTEA, ARRAY, JSON
+  - Bidirectional conversion with MessagePack for complex types
+  - Proper error handling for unsupported conversions
+
+- **Documentation**
+  - `docs/WASM_UDF_DOCUMENTATION.md` (~350 lines) - Complete guide with architecture, usage, security
+  - `docs/WASM_UDF_EXAMPLES.md` (~964 lines) - Examples in 6 languages with build workflows
+
+### SQL Syntax Example (WASM)
+
+```sql
+-- Compile Rust to WASM
+-- rustc --target wasm32-unknown-unknown --crate-type=cdylib -O add.rs
+
+-- Create a WASM UDF
+CREATE FUNCTION add(a INTEGER, b INTEGER)
+RETURNS INTEGER
+LANGUAGE WASM
+AS '0061736d0100000001070160027f7f017f...';  -- hex-encoded WASM binary
+
+-- Use the function
+SELECT add(5, 3);  -- Returns: 8
+```
+
 #### Python UDF Support (2025-12-12)
 
 **Subprocess-Based Python User-Defined Functions**

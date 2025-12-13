@@ -7,6 +7,7 @@ Orbit-RS now supports **WebAssembly (WASM) user-defined functions (UDFs)**, enab
 ## Key Features
 
 ### 🚀 Language Agnostic
+
 - **Rust**: Compile with `rustc --target wasm32-unknown-unknown`
 - **C/C++**: Use Emscripten or clang with WASM target
 - **Go**: TinyGo for WASM compilation
@@ -14,12 +15,14 @@ Orbit-RS now supports **WebAssembly (WASM) user-defined functions (UDFs)**, enab
 - **Many others**: Any language with WASM compilation support
 
 ### ⚡ High Performance
+
 - **Near-Native Speed**: 10-20% overhead vs native code
 - **JIT Compilation**: wasmtime compiles WASM to native code
 - **Module Caching**: Compiled modules cached for repeated use
 - **No IPC Overhead**: Unlike Python subprocess approach
 
 ### 🔒 Security & Sandboxing
+
 - **Memory Isolation**: Cannot access server memory
 - **CPU Limits**: Fuel-based instruction counting (default: 1 billion instructions)
 - **Time Limits**: Execution timeouts (default: 30 seconds)
@@ -27,6 +30,7 @@ Orbit-RS now supports **WebAssembly (WASM) user-defined functions (UDFs)**, enab
 - **Module Validation**: Binary format verification
 
 ### 📊 Resource Management
+
 - **Memory Limit**: 64MB per function (configurable)
 - **Fuel Limit**: 1 billion instructions (configurable)
 - **Timeout**: 30 seconds (configurable)
@@ -34,7 +38,7 @@ Orbit-RS now supports **WebAssembly (WASM) user-defined functions (UDFs)**, enab
 
 ## Architecture
 
-```
+```text
 ┌──────────────────────────────────────────┐
 │          SQL CREATE FUNCTION             │
 │  CREATE FUNCTION add(a INT, b INT)       │
@@ -159,6 +163,7 @@ int factorial(int n) {
 ```
 
 Compile:
+
 ```bash
 clang --target=wasm32 --no-standard-libraries \
       -Wl,--export-all -Wl,--no-entry \
@@ -175,6 +180,7 @@ export function strlen(s: string): i32 {
 ```
 
 Compile:
+
 ```bash
 asc strlen.ts --outFile strlen.wasm --optimize
 ```
@@ -242,7 +248,7 @@ let runtime = WasmRuntime::new(config)?;
 
 ### Function Not Found
 
-```
+```text
 Error: Function not found: my_function
 ```
 
@@ -250,7 +256,7 @@ Error: Function not found: my_function
 
 ### Module Compilation Failed
 
-```
+```text
 Error: Failed to compile WASM module: invalid magic number
 ```
 
@@ -258,7 +264,7 @@ Error: Failed to compile WASM module: invalid magic number
 
 ### Timeout Error
 
-```
+```text
 Error: Timeout error: function exceeded 30000ms
 ```
 
@@ -266,7 +272,7 @@ Error: Timeout error: function exceeded 30000ms
 
 ### Out of Fuel
 
-```
+```text
 Error: Out of fuel: function exceeded instruction limit
 ```
 
