@@ -4382,4 +4382,328 @@ mod tests {
             .await;
         assert!(result.is_ok(), "Failed to drop rule: {:?}", result);
     }
+
+    // ===== Time Travel Query Tests =====
+
+    #[test]
+    fn test_time_travel_at_timestamp_snowflake_syntax() {
+        let sql = "SELECT * FROM events AT(TIMESTAMP => '2025-01-01 00:00:00')";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse AT(TIMESTAMP =>) syntax: {:?}",
+            result
+        );
+
+        // Verify AST structure
+        if let Ok(Statement::Select(select_stmt)) = result {
+            if let Some(FromClause::Table { time_travel, .. }) = &select_stmt.from_clause {
+                assert!(
+                    time_travel.is_some(),
+                    "Expected time_travel clause to be present"
+                );
+                if let Some(TimeTravelClause::Timestamp(_)) = time_travel {
+                    // Expected
+                } else {
+                    panic!("Expected TimeTravelClause::Timestamp variant");
+                }
+            } else {
+                panic!("Expected FROM clause with table");
+            }
+        } else {
+            panic!("Expected SELECT statement");
+        }
+    }
+
+    #[test]
+    fn test_time_travel_at_version_syntax() {
+        let sql = "SELECT * FROM users AT(VERSION => 123)";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse AT(VERSION =>) syntax: {:?}",
+            result
+        );
+
+        // Verify AST structure
+        if let Ok(Statement::Select(select_stmt)) = result {
+            if let Some(FromClause::Table { time_travel, .. }) = &select_stmt.from_clause {
+                if let Some(TimeTravelClause::Version(_)) = time_travel {
+                    // Expected
+                } else {
+                    panic!("Expected TimeTravelClause::Version variant");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_time_travel_at_snapshot_syntax() {
+        let sql = "SELECT * FROM products AT(SNAPSHOT => 456)";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse AT(SNAPSHOT =>) syntax: {:?}",
+            result
+        );
+
+        // Verify AST structure
+        if let Ok(Statement::Select(select_stmt)) = result {
+            if let Some(FromClause::Table { time_travel, .. }) = &select_stmt.from_clause {
+                if let Some(TimeTravelClause::Version(_)) = time_travel {
+                    // Expected (SNAPSHOT maps to Version variant)
+                } else {
+                    panic!("Expected TimeTravelClause::Version variant for SNAPSHOT");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_time_travel_for_system_time_as_of() {
+        let sql = "SELECT * FROM orders FOR SYSTEM_TIME AS OF '2025-01-01 12:00:00'";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse FOR SYSTEM_TIME AS OF syntax: {:?}",
+            result
+        );
+
+        // Verify AST structure
+        if let Ok(Statement::Select(select_stmt)) = result {
+            if let Some(FromClause::Table { time_travel, .. }) = &select_stmt.from_clause {
+                if let Some(TimeTravelClause::SystemTime(_)) = time_travel {
+                    // Expected
+                } else {
+                    panic!("Expected TimeTravelClause::SystemTime variant");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_time_travel_with_where_clause() {
+        let sql = "SELECT id, name FROM events AT(TIMESTAMP => '2025-01-01') WHERE status = 'active'";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse time travel with WHERE clause: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_time_travel_with_joins() {
+        let sql = "SELECT * FROM orders AT(TIMESTAMP => '2025-01-01') o JOIN customers c ON o.customer_id = c.id";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse time travel with JOIN: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_time_travel_executor_integration() {
+        let mut engine = SqlEngine::new();
+
+        // Create a table first
+        engine
+            .execute("CREATE TABLE time_travel_test (id INTEGER, name TEXT)")
+            .await
+            .unwrap();
+
+        // Execute time travel query - should return informative error
+        let result = engine
+            .execute("SELECT * FROM time_travel_test AT(TIMESTAMP => '2025-01-01 00:00:00')")
+            .await;
+
+        // Expect error explaining Iceberg integration pending
+        assert!(result.is_err(), "Expected error for unimplemented time travel");
+        let err_msg = format!("{:?}", result.unwrap_err());
+        assert!(
+            err_msg.contains("Iceberg") || err_msg.contains("time travel"),
+            "Error should mention Iceberg or time travel: {}",
+            err_msg
+        );
+    }
+
+    // ===== UNDROP TABLE Tests =====
+
+    #[test]
+    fn test_undrop_table_parsing() {
+        let sql = "UNDROP TABLE users";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse UNDROP TABLE: {:?}",
+            result
+        );
+
+        // Verify AST structure
+        if let Ok(Statement::UndropTable(stmt)) = result {
+            assert_eq!(stmt.name.full_name(), "users");
+        } else {
+            panic!("Expected UndropTable statement");
+        }
+    }
+
+    #[test]
+    fn test_undrop_table_with_schema() {
+        let sql = "UNDROP TABLE myschema.mytable";
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse UNDROP TABLE with schema: {:?}",
+            result
+        );
+
+        if let Ok(Statement::UndropTable(stmt)) = result {
+            assert_eq!(stmt.name.full_name(), "myschema.mytable");
+        }
+    }
+
+    #[test]
+    fn test_undrop_lexer_tokenization() {
+        let sql = "UNDROP TABLE test";
+        let mut lexer = Lexer::new(sql);
+        let tokens: Vec<Token> = lexer.tokenize();
+
+        assert_eq!(tokens[0], Token::Undrop);
+        assert_eq!(tokens[1], Token::Table);
+        if let Token::Identifier(name) = &tokens[2] {
+            assert_eq!(name, "test");
+        } else {
+            panic!("Expected identifier token");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_undrop_table_executor() {
+        let mut engine = SqlEngine::new();
+
+        // Execute UNDROP - should return informative error
+        let result = engine.execute("UNDROP TABLE deleted_table").await;
+
+        // Expect error explaining feature not yet implemented
+        assert!(result.is_err(), "Expected error for unimplemented UNDROP");
+        let err_msg = format!("{:?}", result.unwrap_err());
+        assert!(
+            err_msg.contains("not yet implemented") || err_msg.contains("UNDROP"),
+            "Error should explain UNDROP status: {}",
+            err_msg
+        );
+    }
+
+    // ===== Iceberg Write Operation Tests =====
+
+    #[cfg(feature = "storage-iceberg")]
+    #[test]
+    fn test_column_batch_to_arrow_int32() {
+        use crate::protocols::postgres_wire::sql::execution::column_batch_to_arrow;
+        use crate::protocols::postgres_wire::sql::execution::{Column, ColumnBatch, NullBitmap};
+
+        let values = vec![1, 2, 3, 4, 5];
+        let column = Column::Int32(values.clone());
+        let null_bitmap = NullBitmap::new_all_valid(5);
+
+        let batch = ColumnBatch {
+            columns: vec![column],
+            null_bitmaps: vec![null_bitmap],
+            row_count: 5,
+            column_names: Some(vec!["id".to_string()]),
+        };
+
+        let arrow_batch = column_batch_to_arrow(&batch);
+        assert!(
+            arrow_batch.is_ok(),
+            "Failed to convert ColumnBatch to Arrow: {:?}",
+            arrow_batch
+        );
+
+        let arrow_batch = arrow_batch.unwrap();
+        assert_eq!(arrow_batch.num_rows(), 5);
+        assert_eq!(arrow_batch.num_columns(), 1);
+    }
+
+    #[cfg(feature = "storage-iceberg")]
+    #[test]
+    fn test_column_batch_to_arrow_multiple_types() {
+        use crate::protocols::postgres_wire::sql::execution::column_batch_to_arrow;
+        use crate::protocols::postgres_wire::sql::execution::{Column, ColumnBatch, NullBitmap};
+
+        let batch = ColumnBatch {
+            columns: vec![
+                Column::Int32(vec![1, 2, 3]),
+                Column::String(vec!["a".to_string(), "b".to_string(), "c".to_string()]),
+                Column::Float64(vec![1.1, 2.2, 3.3]),
+            ],
+            null_bitmaps: vec![
+                NullBitmap::new_all_valid(3),
+                NullBitmap::new_all_valid(3),
+                NullBitmap::new_all_valid(3),
+            ],
+            row_count: 3,
+            column_names: Some(vec![
+                "id".to_string(),
+                "name".to_string(),
+                "value".to_string(),
+            ]),
+        };
+
+        let arrow_batch = column_batch_to_arrow(&batch);
+        assert!(
+            arrow_batch.is_ok(),
+            "Failed to convert mixed types: {:?}",
+            arrow_batch
+        );
+
+        let arrow_batch = arrow_batch.unwrap();
+        assert_eq!(arrow_batch.num_rows(), 3);
+        assert_eq!(arrow_batch.num_columns(), 3);
+    }
+
+    #[cfg(feature = "storage-iceberg")]
+    #[test]
+    fn test_column_batch_to_arrow_with_nulls() {
+        use crate::protocols::postgres_wire::sql::execution::column_batch_to_arrow;
+        use crate::protocols::postgres_wire::sql::execution::{Column, ColumnBatch, NullBitmap};
+
+        let values = vec![1, 2, 3, 4, 5];
+        let column = Column::Int32(values);
+        let mut null_bitmap = NullBitmap::new_all_valid(5);
+        null_bitmap.set_null(1); // Second value is null
+        null_bitmap.set_null(3); // Fourth value is null
+
+        let batch = ColumnBatch {
+            columns: vec![column],
+            null_bitmaps: vec![null_bitmap],
+            row_count: 5,
+            column_names: Some(vec!["id".to_string()]),
+        };
+
+        let arrow_batch = column_batch_to_arrow(&batch);
+        assert!(
+            arrow_batch.is_ok(),
+            "Failed to convert with nulls: {:?}",
+            arrow_batch
+        );
+
+        let arrow_batch = arrow_batch.unwrap();
+        assert_eq!(arrow_batch.num_rows(), 5);
+
+        // Verify null handling
+        let array = arrow_batch.column(0);
+        assert!(array.is_null(1), "Expected null at index 1");
+        assert!(array.is_null(3), "Expected null at index 3");
+        assert!(!array.is_null(0), "Expected non-null at index 0");
+    }
 }

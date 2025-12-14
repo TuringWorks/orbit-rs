@@ -830,10 +830,12 @@ mod tests {
                 left: Box::new(FromClause::Table {
                     name: TableName::new("orders"),
                     alias: None,
+                    time_travel: None,
                 }),
                 right: Box::new(FromClause::Table {
                     name: TableName::new("customers"),
                     alias: None,
+                    time_travel: None,
                 }),
                 join_type: crate::protocols::postgres_wire::sql::ast::JoinType::Inner,
                 condition: JoinCondition::On(Expression::Binary {

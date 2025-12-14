@@ -682,6 +682,7 @@ mod tests {
             from_clause: Some(FromClause::Table {
                 name: TableName::new("users"),
                 alias: None,
+                time_travel: None,
             }),
             where_clause: None,
             group_by: None,
@@ -726,6 +727,7 @@ mod tests {
             from_clause: Some(FromClause::Table {
                 name: TableName::new("products"),
                 alias: None,
+                time_travel: None,
             }),
             where_clause: None,
             group_by: None,
@@ -759,6 +761,7 @@ mod tests {
             from_clause: Some(FromClause::Table {
                 name: TableName::new("orders"),
                 alias: None,
+                time_travel: None,
             }),
             where_clause: Some(Expression::Binary {
                 left: Box::new(Expression::Column(ColumnRef {
@@ -838,6 +841,7 @@ mod tests {
             from_clause: Some(FromClause::Table {
                 name: TableName::new("users"),
                 alias: None,
+                time_travel: None,
             }),
             where_clause: None,
             group_by: None,
@@ -884,6 +888,7 @@ mod tests {
             from_clause: Some(FromClause::Table {
                 name: TableName::new("products"),
                 alias: None,
+                time_travel: None,
             }),
             where_clause: None,
             group_by: None,

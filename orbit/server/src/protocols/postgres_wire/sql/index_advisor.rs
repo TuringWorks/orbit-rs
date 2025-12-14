@@ -875,6 +875,7 @@ mod tests {
             from_clause: Some(FromClause::Table {
                 name: TableName::new(table),
                 alias: None,
+                time_travel: None,
             }),
             where_clause,
             group_by: None,
