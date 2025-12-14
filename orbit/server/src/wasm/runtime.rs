@@ -226,8 +226,7 @@ impl WasmRuntime {
         let module = self.compile_module(wasm_binary).await?;
 
         // Create store limits
-        let limits_builder = StoreLimitsBuilder::new()
-            .memory_size(self.config.max_memory_bytes);
+        let limits_builder = StoreLimitsBuilder::new().memory_size(self.config.max_memory_bytes);
 
         // Set thread limits if threading is enabled
         let limits = if self.config.enable_threads {
@@ -473,8 +472,7 @@ impl WasmRuntime {
         use super::types::WasmValue;
 
         // Create store limits
-        let limits_builder = StoreLimitsBuilder::new()
-            .memory_size(self.config.max_memory_bytes);
+        let limits_builder = StoreLimitsBuilder::new().memory_size(self.config.max_memory_bytes);
 
         // Set thread limits if threading is enabled
         let limits = if self.config.enable_threads {

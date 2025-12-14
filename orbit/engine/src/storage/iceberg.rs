@@ -425,14 +425,19 @@ impl IcebergColdStore {
                 .set_compression(Compression::ZSTD(compression_level))
                 .build();
 
-            let mut writer = ArrowWriter::try_new(&mut parquet_buffer, arrow_batch.schema(), Some(props))
-                .map_err(|e| EngineError::storage(format!("Failed to create Parquet writer: {}", e)))?;
+            let mut writer =
+                ArrowWriter::try_new(&mut parquet_buffer, arrow_batch.schema(), Some(props))
+                    .map_err(|e| {
+                        EngineError::storage(format!("Failed to create Parquet writer: {}", e))
+                    })?;
 
-            writer.write(&arrow_batch)
+            writer
+                .write(&arrow_batch)
                 .map_err(|e| EngineError::storage(format!("Failed to write Arrow batch: {}", e)))?;
 
-            writer.close()
-                .map_err(|e| EngineError::storage(format!("Failed to close Parquet writer: {}", e)))?;
+            writer.close().map_err(|e| {
+                EngineError::storage(format!("Failed to close Parquet writer: {}", e))
+            })?;
         }
 
         // 3. Generate unique file name using timestamp

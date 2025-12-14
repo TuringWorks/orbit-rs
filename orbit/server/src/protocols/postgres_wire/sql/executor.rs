@@ -20,14 +20,14 @@ use crate::protocols::postgres_wire::sql::{
         DropDomainStatement, DropExtensionStatement, DropIndexStatement, DropPolicyStatement,
         DropRoleStatement, DropRuleStatement, DropSchemaStatement, DropSequenceStatement,
         DropTableStatement, DropTriggerStatement, DropTypeStatement, DropViewStatement,
-        UndropTableStatement,
         ExplainStatement, Expression, FromClause, FunctionLanguage, FunctionVolatility,
         GeneratedColumnStorage, GrantStatement, IndexType, InsertSource, InsertStatement,
         IsolationLevel, JoinCondition, JoinType, MergeAction, MergeInsertValues, MergeStatement,
         ParameterMode, Privilege, ReleaseSavepointStatement, RevokeStatement, RollbackStatement,
         SavepointStatement, SelectItem, SelectStatement, SetStatement, ShowStatement, ShowVariable,
         Statement, TableConstraint, TableName, TraverseClause, TriggerEvent, TriggerForEach,
-        TriggerTiming, TruncateStatement, TypeDefinition, UpdateStatement, UseStatement,
+        TriggerTiming, TruncateStatement, TypeDefinition, UndropTableStatement, UpdateStatement,
+        UseStatement,
     },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator, SequenceAccessor},
     graph_traversal::{self, OrbitQLGraphBuilder},
@@ -3851,7 +3851,9 @@ impl SqlExecutor {
         columns: &[String],
     ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
         match from_clause {
-            FromClause::Table { name, time_travel, .. } => {
+            FromClause::Table {
+                name, time_travel, ..
+            } => {
                 // Check if this is a time travel query
                 if let Some(tt_clause) = time_travel {
                     self.execute_time_travel_query(name, tt_clause, where_clause, columns)

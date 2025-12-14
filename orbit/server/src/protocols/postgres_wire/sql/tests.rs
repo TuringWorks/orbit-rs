@@ -4487,7 +4487,8 @@ mod tests {
 
     #[test]
     fn test_time_travel_with_where_clause() {
-        let sql = "SELECT id, name FROM events AT(TIMESTAMP => '2025-01-01') WHERE status = 'active'";
+        let sql =
+            "SELECT id, name FROM events AT(TIMESTAMP => '2025-01-01') WHERE status = 'active'";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
         assert!(
@@ -4525,7 +4526,10 @@ mod tests {
             .await;
 
         // Expect error explaining Iceberg integration pending
-        assert!(result.is_err(), "Expected error for unimplemented time travel");
+        assert!(
+            result.is_err(),
+            "Expected error for unimplemented time travel"
+        );
         let err_msg = format!("{:?}", result.unwrap_err());
         assert!(
             err_msg.contains("Iceberg") || err_msg.contains("time travel"),
@@ -4541,11 +4545,7 @@ mod tests {
         let sql = "UNDROP TABLE users";
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
-        assert!(
-            result.is_ok(),
-            "Failed to parse UNDROP TABLE: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "Failed to parse UNDROP TABLE: {:?}", result);
 
         // Verify AST structure
         if let Ok(Statement::UndropTable(stmt)) = result {
