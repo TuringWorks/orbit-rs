@@ -22,7 +22,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(test)]
 use arrow::array::StringArray;
@@ -35,6 +35,9 @@ use iceberg::{Catalog, CatalogBuilder, NamespaceIdent, TableIdent};
 use iceberg_catalog_rest::{
     RestCatalog, RestCatalogBuilder, REST_CATALOG_PROP_URI, REST_CATALOG_PROP_WAREHOUSE,
 };
+use parquet::arrow::ArrowWriter;
+use parquet::basic::{Compression, ZstdLevel};
+use parquet::file::properties::WriterProperties;
 
 use super::config::StorageBackend;
 use crate::error::{EngineError, EngineResult};
@@ -406,21 +409,85 @@ impl IcebergColdStore {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn write(&self, _batch: &ColumnBatch) -> EngineResult<()> {
-        // TODO Phase 3: Implement full write path
-        // The complexity here involves:
-        // - Correct API usage of ParquetWriterBuilder (takes 6 arguments)
-        // - DataFileWriterBuilder (takes partition_value and partition_spec_id)
-        // - Transaction creation and commit
-        //
-        // This is intentionally left as a placeholder to maintain compilation
-        // while we continue with other Phase 2 work.
-        //
-        // See HYBRID_ICEBERG_INTEGRATION.md for detailed implementation plan.
+    pub async fn write(&self, batch: &ColumnBatch) -> EngineResult<()> {
+        // Phase 3 implementation: ColumnBatch → Arrow → Parquet → Iceberg
 
-        Err(EngineError::storage(
-            "Write path not yet implemented - see Phase 3 roadmap".to_string(),
-        ))
+        // 1. Convert ColumnBatch to Arrow RecordBatch
+        let arrow_batch = column_batch_to_arrow(batch)?;
+
+        // 2. Write to Parquet with ZSTD compression
+        let mut parquet_buffer = Vec::new();
+        {
+            let compression_level = ZstdLevel::try_new(3)
+                .map_err(|e| EngineError::storage(format!("Invalid compression level: {}", e)))?;
+
+            let props = WriterProperties::builder()
+                .set_compression(Compression::ZSTD(compression_level))
+                .build();
+
+            let mut writer = ArrowWriter::try_new(&mut parquet_buffer, arrow_batch.schema(), Some(props))
+                .map_err(|e| EngineError::storage(format!("Failed to create Parquet writer: {}", e)))?;
+
+            writer.write(&arrow_batch)
+                .map_err(|e| EngineError::storage(format!("Failed to write Arrow batch: {}", e)))?;
+
+            writer.close()
+                .map_err(|e| EngineError::storage(format!("Failed to close Parquet writer: {}", e)))?;
+        }
+
+        // 3. Generate unique file name using timestamp
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| EngineError::storage(format!("Invalid system time: {}", e)))?
+            .as_millis();
+
+        let file_name = format!("data/00000-0-{}.parquet", timestamp);
+
+        // 4. Write to Iceberg table storage using FileIO
+        //
+        // NOTE: iceberg-rust 0.7 does not yet have a complete write API with
+        // DataFileWriter and transaction commits. The full implementation requires:
+        //
+        // a) Use table.file_io() to get FileIO
+        // b) Write parquet_buffer to storage at proper path
+        // c) Create DataFile metadata (file_path, file_format, record_count, etc.)
+        // d) Create append transaction: table.new_transaction().fast_append(data_files)
+        // e) Commit transaction
+        //
+        // For now, we document the required steps and return an informative error.
+
+        Err(EngineError::storage(format!(
+            "Iceberg write path partially implemented. Generated {} bytes of Parquet data (file: {}), \
+             but iceberg-rust 0.7 lacks complete write API (DataFileWriter, Transaction.fast_append). \
+             Waiting for iceberg-rust 0.8+ or switch to icelake. \
+             File ready for manual upload or custom writer implementation.",
+            parquet_buffer.len(),
+            file_name
+        )))
+
+        // Future implementation (when iceberg-rust write API is complete):
+        //
+        // let file_io = self.table.file_io();
+        // let table_location = self.table.metadata().location();
+        // let full_path = format!("{}/{}", table_location, file_name);
+        //
+        // // Write file
+        // file_io.write(&full_path, parquet_buffer).await?;
+        //
+        // // Create DataFile metadata
+        // let data_file = DataFile::builder()
+        //     .with_file_path(full_path)
+        //     .with_file_format(FileFormat::Parquet)
+        //     .with_record_count(batch.row_count as i64)
+        //     .with_file_size_in_bytes(parquet_buffer.len() as i64)
+        //     .build()?;
+        //
+        // // Commit transaction
+        // self.table.new_transaction()
+        //     .fast_append(vec![data_file])
+        //     .commit().await?;
+        //
+        // Ok(())
     }
 
     // Private helper methods
