@@ -3817,8 +3817,14 @@ impl SqlExecutor {
         columns: &[String],
     ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
         match from_clause {
-            FromClause::Table { name, .. } => {
-                self.execute_single_table(name, where_clause, columns).await
+            FromClause::Table { name, time_travel, .. } => {
+                // Check if this is a time travel query
+                if let Some(tt_clause) = time_travel {
+                    self.execute_time_travel_query(name, tt_clause, where_clause, columns)
+                        .await
+                } else {
+                    self.execute_single_table(name, where_clause, columns).await
+                }
             }
             FromClause::Join {
                 left,
@@ -3922,6 +3928,81 @@ impl SqlExecutor {
         }
 
         Ok(rows)
+    }
+
+    /// Execute time travel query on Iceberg cold tier
+    ///
+    /// This function routes time travel queries to the appropriate Iceberg snapshot query method.
+    ///
+    /// ## Implementation Status
+    ///
+    /// **PHASE 1 (Current)**: SQL syntax parsing complete, executor stub in place
+    ///
+    /// **PHASE 2 (TODO)**: Full implementation requires:
+    /// 1. IcebergColdStore instance management in QueryExecutor
+    /// 2. Expression evaluation to convert timestamp/version to appropriate types
+    /// 3. Arrow RecordBatch to row format conversion
+    /// 4. Integration with hybrid storage tier (check if table is in cold tier)
+    ///
+    /// ## Examples
+    ///
+    /// ```sql
+    /// -- Query by timestamp
+    /// SELECT * FROM orders AT(TIMESTAMP => '2025-01-01 00:00:00');
+    ///
+    /// -- Query by snapshot ID
+    /// SELECT * FROM users AT(VERSION => 123456789);
+    ///
+    /// -- SQL:2011 temporal syntax
+    /// SELECT * FROM inventory FOR SYSTEM_TIME AS OF TIMESTAMP '2024-12-01';
+    /// ```
+    async fn execute_time_travel_query(
+        &self,
+        table_name: &TableName,
+        time_travel_clause: &crate::protocols::postgres_wire::sql::ast::TimeTravelClause,
+        _where_clause: &Option<Expression>,
+        _columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        use crate::protocols::postgres_wire::sql::ast::TimeTravelClause;
+
+        // Determine the type of time travel query
+        let query_type = match time_travel_clause {
+            TimeTravelClause::Timestamp(_) => "TIMESTAMP",
+            TimeTravelClause::Version(_) => "VERSION/SNAPSHOT",
+            TimeTravelClause::SystemTime(_) => "FOR SYSTEM_TIME AS OF",
+        };
+
+        // TODO: Full implementation
+        // 1. Check if table exists in Iceberg cold tier
+        //    - Query hybrid storage configuration
+        //    - Verify table has Iceberg metadata
+        //
+        // 2. Evaluate time travel expression
+        //    - For Timestamp/SystemTime: convert to SystemTime
+        //    - For Version: extract i64 snapshot ID
+        //
+        // 3. Create/get IcebergColdStore instance
+        //    - Load Iceberg table from catalog
+        //    - Use existing instance if cached
+        //
+        // 4. Execute appropriate Iceberg query
+        //    - query_as_of(SystemTime) for timestamp queries
+        //    - query_by_snapshot_id(i64) for version queries
+        //
+        // 5. Convert Arrow RecordBatch to rows
+        //    - Map Arrow schema to SQL columns
+        //    - Convert Arrow arrays to PostgreSQL wire format
+        //    - Apply WHERE clause filtering
+        //
+        // 6. Return result rows
+
+        Err(ProtocolError::PostgresError(format!(
+            "Time travel query ({}) on table '{}' requires Iceberg cold tier. \
+             Time travel SQL syntax is implemented but Iceberg integration is pending. \
+             See orbit/engine/src/storage/iceberg.rs for query_as_of() and query_by_snapshot_id() methods.",
+            query_type,
+            table_name.full_name()
+        )))
     }
 
     /// Execute JSON_TABLE function
