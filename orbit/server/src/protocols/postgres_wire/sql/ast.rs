@@ -774,6 +774,7 @@ pub enum FromClause {
     Table {
         name: TableName,
         alias: Option<TableAlias>,
+        time_travel: Option<TimeTravelClause>,
     },
     Join {
         left: Box<FromClause>,
@@ -796,6 +797,27 @@ pub enum FromClause {
         lateral: bool,
     },
     JsonTable(JsonTable),
+}
+
+/// Time travel clause for querying historical data
+///
+/// Supports multiple syntaxes:
+/// - Snowflake-style: `AT(TIMESTAMP => '2025-01-01')`
+/// - Snowflake-style: `AT(VERSION => 123456789)`
+/// - SQL:2011 temporal: `FOR SYSTEM_TIME AS OF TIMESTAMP '2025-01-01'`
+#[derive(Debug, Clone, PartialEq)]
+pub enum TimeTravelClause {
+    /// Query table as it existed at a specific timestamp
+    /// Example: `AT(TIMESTAMP => '2025-01-01 00:00:00')`
+    Timestamp(Expression),
+
+    /// Query table at a specific version/snapshot ID
+    /// Example: `AT(VERSION => 123456789)`
+    Version(Expression),
+
+    /// SQL:2011 FOR SYSTEM_TIME AS OF syntax
+    /// Example: `FOR SYSTEM_TIME AS OF TIMESTAMP '2025-01-01'`
+    SystemTime(Expression),
 }
 
 #[derive(Debug, Clone, PartialEq)]

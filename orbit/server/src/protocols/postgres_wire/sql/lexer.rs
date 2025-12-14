@@ -133,6 +133,9 @@ pub enum Token {
     Routine,
     // System
     System,
+    // Time Travel
+    At,
+    Snapshot,
     // Privileges
     Privileges,
     // Owned
@@ -486,6 +489,7 @@ pub enum Token {
 
     // Operators - JSON/JSONB
     Arrow,               // -> (JSON field extraction)
+    FatArrow,            // => (used in time travel: AT(TIMESTAMP => ...))
     JsonExtractText,     // ->> (JSON field extraction as text)
     JsonPathExtract,     // #> (JSON path extraction)
     JsonPathExtractText, // #>> (JSON path extraction as text)
@@ -755,6 +759,9 @@ impl Lexer {
             ("ROUTINE", Token::Routine),
             // System
             ("SYSTEM", Token::System),
+            // Time Travel
+            ("AT", Token::At),
+            ("SNAPSHOT", Token::Snapshot),
             // Privileges
             ("PRIVILEGES", Token::Privileges),
             // Refresh
@@ -1420,6 +1427,10 @@ impl Lexer {
                         }
                         '=' => {
                             self.advance();
+                            if self.current_char == Some('>') {
+                                self.advance();
+                                return Token::FatArrow;
+                            }
                             return Token::Equal;
                         }
                         '!' if self.peek() == Some('=') => {

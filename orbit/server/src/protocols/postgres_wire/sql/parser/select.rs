@@ -9,7 +9,7 @@ use crate::protocols::error::ProtocolResult;
 use crate::protocols::postgres_wire::sql::ast::{
     CommonTableExpression, DistinctClause, Expression, FromClause, JoinCondition, JoinType,
     LimitClause, NullsOrder, OrderByItem, SelectItem, SelectStatement, SetOperation, SetOperator,
-    SortDirection, TableAlias, TableName, WithClause,
+    SortDirection, TableAlias, TableName, TimeTravelClause, WithClause,
 };
 use crate::protocols::postgres_wire::sql::lexer::Token;
 use crate::protocols::postgres_wire::sql::parser::expressions::ExpressionParser;
@@ -508,7 +508,14 @@ impl SelectParser {
             let table = TableName { schema, name };
             let alias = self.parse_table_alias(tokens, pos)?;
 
-            Ok(FromClause::Table { name: table, alias })
+            // Parse time travel clause if present
+            let time_travel = self.parse_time_travel_clause(tokens, pos)?;
+
+            Ok(FromClause::Table {
+                name: table,
+                alias,
+                time_travel,
+            })
         } else {
             Err(crate::protocols::error::ProtocolError::ParseError(
                 "Expected table reference".to_string(),
@@ -641,6 +648,79 @@ impl SelectParser {
 
             Ok(Some(TableAlias { name, columns }))
         } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse time travel clause for historical queries
+    ///
+    /// Supports multiple syntaxes:
+    /// - Snowflake-style: `AT(TIMESTAMP => '2025-01-01')`
+    /// - Snowflake-style: `AT(VERSION => 123456789)`
+    /// - Snowflake-style: `AT(SNAPSHOT => 123456789)`
+    /// - SQL:2011 temporal: `FOR SYSTEM_TIME AS OF TIMESTAMP '2025-01-01'`
+    fn parse_time_travel_clause(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<Option<TimeTravelClause>> {
+        // Check for AT(...) syntax (Snowflake-style)
+        if self.matches_at(tokens, *pos, &Token::At) {
+            *pos += 1;
+            self.expect_token(tokens, pos, &Token::LeftParen)?;
+
+            // Check for TIMESTAMP => or VERSION => or SNAPSHOT =>
+            if self.matches_at(tokens, *pos, &Token::Timestamp) {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::FatArrow)?;
+                let expr = self.expression_parser.parse_expression(tokens, pos)?;
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+                Ok(Some(TimeTravelClause::Timestamp(expr)))
+            } else if self.matches_at(tokens, *pos, &Token::Version) {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::FatArrow)?;
+                let expr = self.expression_parser.parse_expression(tokens, pos)?;
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+                Ok(Some(TimeTravelClause::Version(expr)))
+            } else if self.matches_at(tokens, *pos, &Token::Snapshot) {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::FatArrow)?;
+                let expr = self.expression_parser.parse_expression(tokens, pos)?;
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+                Ok(Some(TimeTravelClause::Version(expr))) // Snapshot ID is same as Version
+            } else {
+                Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Expected TIMESTAMP, VERSION, or SNAPSHOT after AT(".to_string(),
+                )
+                .into())
+            }
+        }
+        // Check for FOR SYSTEM_TIME AS OF syntax (SQL:2011 temporal)
+        else if self.matches_at(tokens, *pos, &Token::For) {
+            let start_pos = *pos;
+            *pos += 1;
+
+            if self.matches_at(tokens, *pos, &Token::System) {
+                *pos += 1;
+                if self.matches_at(tokens, *pos, &Token::Time) {
+                    *pos += 1;
+                    if self.matches_at(tokens, *pos, &Token::As) {
+                        *pos += 1;
+                        if self.matches_at(tokens, *pos, &Token::Of) {
+                            *pos += 1;
+                            let expr = self.expression_parser.parse_expression(tokens, pos)?;
+                            return Ok(Some(TimeTravelClause::SystemTime(expr)));
+                        }
+                    }
+                }
+            }
+
+            // If we didn't match the full FOR SYSTEM_TIME AS OF pattern, backtrack
+            // This might be a FOR UPDATE/SHARE clause instead
+            *pos = start_pos;
+            Ok(None)
+        } else {
+            // No time travel clause
             Ok(None)
         }
     }

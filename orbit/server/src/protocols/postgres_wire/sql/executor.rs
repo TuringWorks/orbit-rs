@@ -3276,7 +3276,7 @@ impl SqlExecutor {
         source: &FromClause,
     ) -> ProtocolResult<Vec<HashMap<String, SqlValue>>> {
         match source {
-            FromClause::Table { name, alias: _ } => {
+            FromClause::Table { name, alias: _, .. } => {
                 // Source is a table - read all rows
                 let table_name = name.full_name();
                 let table_data = self.table_data.read().await;
@@ -3427,7 +3427,7 @@ impl SqlExecutor {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ProtocolResult<()>> + Send + 'a>> {
         Box::pin(async move {
             match from_clause {
-                FromClause::Table { name, alias } => {
+                FromClause::Table { name, alias, .. } => {
                     // Handle information_schema tables
                     if let Some(schema) = &name.schema {
                         if schema.to_lowercase() == "information_schema" {
@@ -3669,7 +3669,7 @@ impl SqlExecutor {
             let mut valid_columns = Vec::new();
 
             match from_clause {
-                FromClause::Table { name, alias: _ } => {
+                FromClause::Table { name, alias: _, .. } => {
                     // Handle information_schema tables
                     if let Some(schema) = &name.schema {
                         if schema.to_lowercase() == "information_schema" {
@@ -3784,7 +3784,7 @@ impl SqlExecutor {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ProtocolResult<()>> + Send + 'a>> {
         Box::pin(async move {
             match from_clause {
-                FromClause::Table { name, alias } => {
+                FromClause::Table { name, alias, .. } => {
                     let table_name = name.full_name();
                     let alias_name = alias.as_ref().map(|a| &a.name).unwrap_or(&table_name);
 
@@ -4307,7 +4307,7 @@ impl SqlExecutor {
         from_clause: &FromClause,
     ) -> ProtocolResult<Vec<HashMap<String, SqlValue>>> {
         match from_clause {
-            FromClause::Table { name, alias } => {
+            FromClause::Table { name, alias, .. } => {
                 let table_name = name.full_name();
                 let table_data = self.table_data.read().await;
 

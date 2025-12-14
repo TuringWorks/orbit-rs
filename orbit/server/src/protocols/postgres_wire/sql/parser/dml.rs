@@ -783,6 +783,7 @@ fn parse_from_clause(parser: &mut SqlParser) -> ParseResult<FromClause> {
     let mut left = FromClause::Table {
         name: table_name,
         alias,
+        time_travel: None, // UPDATE/DELETE don't support time travel
     };
 
     // Check for JOINs and parse them recursively
@@ -876,6 +877,7 @@ fn parse_join(parser: &mut SqlParser, left: FromClause) -> ParseResult<FromClaus
     let right = FromClause::Table {
         name: right_table_name,
         alias: right_alias,
+        time_travel: None, // UPDATE/DELETE don't support time travel
     };
 
     // Parse join condition (ON or USING)
