@@ -67,7 +67,7 @@ This whitepaper provides a comprehensive feature-by-feature comparison between O
 | **Data Storage** |
 | | Columnar Storage | ✅ | 🟡 | Orbit has columnar model but not optimized like Snowflake |
 | | Semi-Structured (JSON/XML) | ✅ | ✅ | Parity - both support JSON natively |
-| | Time Travel | ✅ (90 days) | 🟡 | SQL syntax complete, Iceberg execution pending |
+| | Time Travel | ✅ (90 days) | ✅ | Core complete (requires Iceberg catalog config) |
 | | Zero-Copy Cloning | ✅ | ❌ | Gap - needs implementation |
 | | Storage Compression | ✅ (auto) | 🟡 | Orbit has LZ4/Snappy, needs auto-compression |
 | | External Tables | ✅ | 🟡 | Orbit has Iceberg, needs more formats |
@@ -162,28 +162,32 @@ This whitepaper provides a comprehensive feature-by-feature comparison between O
 
 **Snowflake Feature**: 90-day time travel, zero-copy cloning, fail-safe recovery
 
-**Current Orbit-RS**: 🟡 SQL Syntax Complete, Execution Pending
+**Current Orbit-RS**: ✅ Core Implementation Complete
 
 **Implemented (December 2025)**:
 - ✅ Full SQL parser support for time travel queries
 - ✅ Snowflake-compatible syntax: `AT(TIMESTAMP => ...)`, `AT(VERSION => ...)`, `AT(SNAPSHOT => ...)`
 - ✅ SQL:2011 temporal syntax: `FOR SYSTEM_TIME AS OF`
-- ✅ UNDROP TABLE syntax parsing
+- ✅ UNDROP TABLE syntax and executor integration
 - ✅ Time travel with JOINs and table aliases
+- ✅ IcebergColdStore `query_as_of()` method - timestamp-based time travel
+- ✅ IcebergColdStore `query_by_snapshot_id()` method - version-based time travel
+- ✅ `list_snapshots()` and `current_snapshot()` helpers
+- ✅ MVCC executor integration with time travel routing
 
-**Gap Impact**: **HIGH** - Execution requires Iceberg cold tier integration
-- SQL syntax is production-ready
-- Query executor returns informative error about pending Iceberg integration
-- Users can query historical data once Iceberg integration is complete
+**Activation Requirements**:
+- Enable `storage-iceberg` feature flag
+- Configure Iceberg REST catalog (URI, warehouse location)
+- Tables must be in Iceberg cold tier
 
-**Remaining Path to Parity**:
+**Remaining Path to Full Parity**:
 1. ~~Add SQL syntax~~ ✅ Complete
 2. ~~Implement UNDROP syntax~~ ✅ Complete
-3. Connect time travel executor to Iceberg `query_as_of()` and `query_by_snapshot_id()` methods
-4. Implement snapshot isolation with configurable retention (default 7 days, up to 90)
-5. Implement copy-on-write for zero-copy clones
+3. ~~Connect time travel executor to Iceberg methods~~ ✅ Complete
+4. Implement configurable retention (default 7 days, up to 90) - **2 weeks**
+5. Implement copy-on-write for zero-copy clones - **4 weeks**
 
-**Effort**: 4-6 weeks, 1 engineer (reduced - syntax complete)
+**Effort**: 6 weeks remaining (core complete, retention & cloning pending)
 
 ---
 

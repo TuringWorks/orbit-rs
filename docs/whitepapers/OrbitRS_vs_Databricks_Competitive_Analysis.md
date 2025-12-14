@@ -68,7 +68,7 @@ This whitepaper provides a comprehensive feature-by-feature comparison between O
 | | Delta Lake Format | ✅ | ❌ | Major gap - lakehouse standard |
 | | Apache Iceberg | ✅ | 🟡 | Orbit has Iceberg but needs Delta Lake |
 | | Apache Parquet | ✅ | ✅ | Parity |
-| | Time Travel (Versioning) | ✅ (30 days default) | 🟡 | SQL syntax complete, Iceberg execution pending |
+| | Time Travel (Versioning) | ✅ (30 days default) | ✅ | Core complete (requires Iceberg catalog config) |
 | | ACID Transactions | ✅ | ✅ | Parity - both support ACID |
 | | Schema Evolution | ✅ | 🟡 | Gap - Orbit needs better schema migration |
 | | Z-Ordering | ✅ | ❌ | Gap - data layout optimization |

@@ -1061,9 +1061,10 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | **Time Travel & Data Recovery** | | | |
 | Time Travel SQL Syntax (AT TIMESTAMP/VERSION/SNAPSHOT) | Complete | 7 | `sql/parser/select.rs`, `sql/lexer.rs` |
 | Time Travel SQL:2011 (FOR SYSTEM_TIME AS OF) | Complete | 7 | `sql/parser/select.rs`, `sql/lexer.rs` |
-| Time Travel Executor (Iceberg Integration) | Pending | - | `sql/executor.rs` (requires Iceberg cold tier) |
+| Time Travel Iceberg Storage (query_as_of, query_by_snapshot_id) | Complete | - | `execution/iceberg_cold.rs`, `engine/storage/iceberg.rs` |
+| Time Travel Executor Integration | Complete | - | `sql/executor.rs`, `sql/execution_strategy.rs` (requires `storage-iceberg` feature) |
 | UNDROP TABLE Syntax | Complete | 4 | `sql/parser/ddl.rs`, `sql/lexer.rs` |
-| UNDROP TABLE Executor (Iceberg Integration) | Pending | - | `sql/execution_strategy.rs` (requires Iceberg snapshots) |
+| UNDROP TABLE Executor | Complete | - | `sql/execution_strategy.rs` (requires Iceberg catalog config) |
 | **AQL (ArangoDB) Features** | | | |
 | AQL Parser | Complete | ~20 | `aql/aql_parser.rs` (2941 lines) |
 | AQL Query Engine | Complete | ~30 | `aql/query_engine.rs` (5300+ lines) |

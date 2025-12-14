@@ -2204,8 +2204,10 @@ UNDROP TABLE myschema.archived_data;
 
 **Implementation Status:**
 - **SQL Parsing**: Complete - All syntaxes fully parsed and validated
-- **Execution**: Pending Iceberg cold tier integration
-- **Key Files**: `sql/parser/select.rs`, `sql/lexer.rs`, `sql/executor.rs`
+- **Iceberg Storage**: Complete - `query_as_of()`, `query_by_snapshot_id()`, `list_snapshots()` implemented
+- **Executor Integration**: Complete - MVCC strategy routes to IcebergColdStore when configured
+- **Activation**: Requires `storage-iceberg` feature flag and Iceberg catalog configuration
+- **Key Files**: `sql/parser/select.rs`, `execution/iceberg_cold.rs`, `engine/storage/iceberg.rs`
 
 ### Cluster Coordination
 

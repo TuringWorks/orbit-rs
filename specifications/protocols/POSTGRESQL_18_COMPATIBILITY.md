@@ -1424,8 +1424,10 @@ This section tracks OrbitRS implementation of features new to PostgreSQL 18.
 | FOR SYSTEM_TIME AS OF | ✅ | SQL:2011 temporal syntax, parsing complete |
 | SYSTEM_TIME keyword | ✅ | Single token lexer support |
 | Time travel with JOINs | ✅ | Supports table alias after time travel clause |
-| Time travel execution | 🔶 | Pending Iceberg cold tier integration |
-| UNDROP TABLE | 🔶 | Syntax complete, execution pending Iceberg |
+| IcebergColdStore query_as_of() | ✅ | Timestamp-based time travel |
+| IcebergColdStore query_by_snapshot_id() | ✅ | Version-based time travel |
+| Time travel execution | ✅ | Complete (requires `storage-iceberg` feature + catalog config) |
+| UNDROP TABLE | ✅ | Syntax and executor complete (requires Iceberg catalog) |
 
 ### Security
 
@@ -1465,7 +1467,8 @@ This section tracks OrbitRS implementation of features new to PostgreSQL 18.
 
 | Date | Version | Changes |
 |------|---------|---------|
-| 2025-12-13 | 1.6.0 | Added Time Travel Queries section: AT(TIMESTAMP/VERSION/SNAPSHOT) Snowflake syntax, FOR SYSTEM_TIME AS OF SQL:2011 syntax, UNDROP TABLE; all parsing complete, execution pending Iceberg integration |
+| 2025-12-13 | 1.7.0 | Completed Time Travel implementation: IcebergColdStore query_as_of(), query_by_snapshot_id(), list_snapshots() methods; MVCC executor integration; UNDROP TABLE executor. Requires storage-iceberg feature + Iceberg catalog config |
+| 2025-12-13 | 1.6.0 | Added Time Travel Queries section: AT(TIMESTAMP/VERSION/SNAPSHOT) Snowflake syntax, FOR SYSTEM_TIME AS OF SQL:2011 syntax, UNDROP TABLE; all parsing complete |
 | 2025-12-08 | 1.5.0 | Added full-text search support: tsvector/tsquery types, FTS functions (to_tsvector, to_tsquery, plainto_tsquery, phraseto_tsquery, websearch_to_tsquery, setweight, ts_rank, ts_rank_cd, ts_headline, numnode, querytree, strip, ts_lexize), FTS operators (@@, @>, <@, \|\|, &&, !!, <->) |
 | 2025-12-08 | 1.4.0 | Added two-phase commit (PREPARE/COMMIT/ROLLBACK PREPARED) and DCL commands (REASSIGN OWNED, SECURITY LABEL). Coverage increased to ~90% |
 | 2025-12-08 | 1.3.0 | Added TCL commands (SET TRANSACTION, SET CONSTRAINTS, LOCK) and utility commands (LOAD, REFRESH MATERIALIZED VIEW, IMPORT FOREIGN SCHEMA). Coverage increased to ~88% |
