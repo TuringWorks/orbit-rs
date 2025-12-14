@@ -2165,6 +2165,48 @@ Orbit-RS implements a sophisticated three-tier storage architecture optimized fo
 - **Schema Evolution**: Add/modify columns without rewriting data
 - **Interoperability**: Standard format accessible by multiple query engines
 
+### Time Travel SQL Syntax
+
+Orbit-RS supports multiple time travel query syntaxes for accessing historical data in Iceberg cold tier tables:
+
+#### Snowflake-Compatible Syntax
+```sql
+-- Query by timestamp
+SELECT * FROM orders AT(TIMESTAMP => '2025-01-01 00:00:00') WHERE status = 'active';
+
+-- Query by version/snapshot ID
+SELECT * FROM orders AT(VERSION => 123456789);
+
+-- Query by snapshot
+SELECT * FROM orders AT(SNAPSHOT => 987654321);
+
+-- With table alias and JOINs
+SELECT o.*, c.name
+FROM orders AT(TIMESTAMP => '2025-01-01') o
+JOIN customers c ON o.customer_id = c.id;
+```
+
+#### SQL:2011 Temporal Syntax
+```sql
+-- FOR SYSTEM_TIME AS OF (standard temporal query)
+SELECT * FROM orders FOR SYSTEM_TIME AS OF TIMESTAMP '2025-01-01 00:00:00';
+
+-- Also supports underscore form
+SELECT * FROM orders FOR SYSTEM_TIME AS OF '2025-01-01';
+```
+
+#### UNDROP TABLE (Data Recovery)
+```sql
+-- Restore a recently dropped table from Iceberg snapshots
+UNDROP TABLE deleted_orders;
+UNDROP TABLE myschema.archived_data;
+```
+
+**Implementation Status:**
+- **SQL Parsing**: Complete - All syntaxes fully parsed and validated
+- **Execution**: Pending Iceberg cold tier integration
+- **Key Files**: `sql/parser/select.rs`, `sql/lexer.rs`, `sql/executor.rs`
+
 ### Cluster Coordination
 
 The cluster layer provides distributed system capabilities:

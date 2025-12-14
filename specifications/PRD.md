@@ -1058,6 +1058,12 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | CREATE/ALTER/DROP: Transforms, Languages, Statistics | Complete | - | `sql/parser/ddl.rs` |
 | CREATE/ALTER/DROP: Operators, Aggregates, Casts | Complete | - | `sql/parser/ddl.rs` |
 | CREATE/ALTER/DROP: Collations, Conversions, Tablespaces | Complete | - | `sql/parser/ddl.rs` |
+| **Time Travel & Data Recovery** | | | |
+| Time Travel SQL Syntax (AT TIMESTAMP/VERSION/SNAPSHOT) | Complete | 7 | `sql/parser/select.rs`, `sql/lexer.rs` |
+| Time Travel SQL:2011 (FOR SYSTEM_TIME AS OF) | Complete | 7 | `sql/parser/select.rs`, `sql/lexer.rs` |
+| Time Travel Executor (Iceberg Integration) | Pending | - | `sql/executor.rs` (requires Iceberg cold tier) |
+| UNDROP TABLE Syntax | Complete | 4 | `sql/parser/ddl.rs`, `sql/lexer.rs` |
+| UNDROP TABLE Executor (Iceberg Integration) | Pending | - | `sql/execution_strategy.rs` (requires Iceberg snapshots) |
 | **AQL (ArangoDB) Features** | | | |
 | AQL Parser | Complete | ~20 | `aql/aql_parser.rs` (2941 lines) |
 | AQL Query Engine | Complete | ~30 | `aql/query_engine.rs` (5300+ lines) |

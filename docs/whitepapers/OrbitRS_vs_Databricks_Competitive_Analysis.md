@@ -68,7 +68,7 @@ This whitepaper provides a comprehensive feature-by-feature comparison between O
 | | Delta Lake Format | ✅ | ❌ | Major gap - lakehouse standard |
 | | Apache Iceberg | ✅ | 🟡 | Orbit has Iceberg but needs Delta Lake |
 | | Apache Parquet | ✅ | ✅ | Parity |
-| | Time Travel (Versioning) | ✅ (30 days default) | ❌ | Major gap - critical feature |
+| | Time Travel (Versioning) | ✅ (30 days default) | 🟡 | SQL syntax complete, Iceberg execution pending |
 | | ACID Transactions | ✅ | ✅ | Parity - both support ACID |
 | | Schema Evolution | ✅ | 🟡 | Gap - Orbit needs better schema migration |
 | | Z-Ordering | ✅ | ❌ | Gap - data layout optimization |
@@ -185,9 +185,10 @@ This whitepaper provides a comprehensive feature-by-feature comparison between O
 **Path to Parity**:
 1. **Delta Lake Reader** (12 weeks)
    - Read Delta Lake tables (transaction log parsing)
-   - Support time travel: `SELECT * FROM table VERSION AS OF 123`
+   - ~~Support time travel: `SELECT * FROM table VERSION AS OF 123`~~ ✅ SQL syntax complete (AT TIMESTAMP/VERSION/SNAPSHOT, FOR SYSTEM_TIME AS OF)
    - Handle schema evolution and deletions
    - Implement Delta checkpoint files
+   - Connect time travel syntax to Delta Lake/Iceberg query methods
 
 2. **Delta Lake Writer** (16 weeks)
    - Write Delta Lake format (transaction log, Parquet)

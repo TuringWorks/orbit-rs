@@ -141,7 +141,7 @@ OrbitQL is OrbitRS's native query language, heavily inspired by SurrealDB's Surr
 | LIMIT/OFFSET | ✅ | Pagination |
 | FETCH | 🔶 | Traverse record links |
 | SPLIT | ❌ | Split results |
-| VERSION | ❌ | Time-travel queries |
+| VERSION | 🔶 | Time-travel queries (SQL syntax complete, execution pending Iceberg) |
 | TIMEOUT | ❌ | Query timeout |
 | PARALLEL | ❌ | Parallel execution |
 
