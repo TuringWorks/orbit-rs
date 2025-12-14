@@ -844,6 +844,15 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                     transaction_id: Some(transaction_id),
                 })
             }
+            Statement::UndropTable(undrop_stmt) => {
+                // UNDROP TABLE requires Iceberg snapshot integration
+                Err(ProtocolError::PostgresError(format!(
+                    "UNDROP TABLE '{}' is not yet implemented. \
+                     This feature requires Iceberg snapshot-based restoration. \
+                     See orbit/engine/src/storage/iceberg.rs for implementation details.",
+                    undrop_stmt.name.full_name()
+                )))
+            }
             _ => Ok(UnifiedExecutionResult::Other {
                 message: "Command completed successfully".to_string(),
                 transaction_id: Some(transaction_id),
