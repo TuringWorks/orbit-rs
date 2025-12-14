@@ -134,6 +134,7 @@ pub enum Token {
     Routine,
     // System
     System,
+    SystemTime,
     // Time Travel
     At,
     Snapshot,
@@ -761,6 +762,7 @@ impl Lexer {
             ("ROUTINE", Token::Routine),
             // System
             ("SYSTEM", Token::System),
+            ("SYSTEM_TIME", Token::SystemTime),
             // Time Travel
             ("AT", Token::At),
             ("SNAPSHOT", Token::Snapshot),

@@ -476,6 +476,28 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                 }
             }
             Statement::Select(select_stmt) => {
+                // Check for time travel clause - this requires Iceberg integration
+                if let Some(FromClause::Table {
+                    time_travel: Some(tt_clause),
+                    name,
+                    ..
+                }) = &select_stmt.from_clause
+                {
+                    use crate::protocols::postgres_wire::sql::ast::TimeTravelClause;
+                    let query_type = match tt_clause {
+                        TimeTravelClause::Timestamp(_) => "TIMESTAMP",
+                        TimeTravelClause::Version(_) => "VERSION/SNAPSHOT",
+                        TimeTravelClause::SystemTime(_) => "FOR SYSTEM_TIME AS OF",
+                    };
+                    return Err(ProtocolError::PostgresError(format!(
+                        "Time travel query ({}) on table '{}' requires Iceberg cold tier. \
+                         Time travel SQL syntax is implemented but Iceberg integration is pending. \
+                         See orbit/engine/src/storage/iceberg.rs for query_as_of() and query_by_snapshot_id() methods.",
+                        query_type,
+                        name.full_name()
+                    )));
+                }
+
                 // Check if we have a FROM clause
                 if select_stmt.from_clause.is_none() {
                     // Evaluate expressions without a table context (e.g. SELECT 1, SELECT func())

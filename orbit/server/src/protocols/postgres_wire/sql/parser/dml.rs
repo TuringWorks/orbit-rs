@@ -777,13 +777,30 @@ fn parse_from_clause(parser: &mut SqlParser) -> ParseResult<FromClause> {
     // Parse the first table reference
     let table_name = utilities::parse_table_name(parser)?;
 
-    // Check for table alias
+    // Parse time travel clause if present (comes before alias in SQL syntax)
+    // Note: UPDATE/DELETE will ignore this as they're parsed before getting here
+    let time_travel = {
+        let mut select_parser = super::select::SelectParser::new();
+        let tt = select_parser
+            .parse_time_travel_clause(&parser.tokens, &mut parser.position)
+            .map_err(|e| ParseError {
+                message: e.to_string(),
+                position: parser.position,
+                expected: vec!["time travel clause".to_string()],
+                found: parser.current_token.clone(),
+            })?;
+        // Update current_token as SelectParser advances position
+        parser.current_token = parser.tokens.get(parser.position).cloned();
+        tt
+    };
+
+    // Check for table alias (comes after time travel clause)
     let alias = parse_alias_clause(parser)?;
 
     let mut left = FromClause::Table {
         name: table_name,
         alias,
-        time_travel: None, // UPDATE/DELETE don't support time travel
+        time_travel,
     };
 
     // Check for JOINs and parse them recursively

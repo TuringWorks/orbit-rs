@@ -506,10 +506,12 @@ impl SelectParser {
             }
 
             let table = TableName { schema, name };
-            let alias = self.parse_table_alias(tokens, pos)?;
 
-            // Parse time travel clause if present
+            // Parse time travel clause if present (comes before alias in SQL syntax)
             let time_travel = self.parse_time_travel_clause(tokens, pos)?;
+
+            // Parse table alias (comes after time travel clause)
+            let alias = self.parse_table_alias(tokens, pos)?;
 
             Ok(FromClause::Table {
                 name: table,
@@ -659,7 +661,7 @@ impl SelectParser {
     /// - Snowflake-style: `AT(VERSION => 123456789)`
     /// - Snowflake-style: `AT(SNAPSHOT => 123456789)`
     /// - SQL:2011 temporal: `FOR SYSTEM_TIME AS OF TIMESTAMP '2025-01-01'`
-    fn parse_time_travel_clause(
+    pub(super) fn parse_time_travel_clause(
         &mut self,
         tokens: &[Token],
         pos: &mut usize,
@@ -700,7 +702,20 @@ impl SelectParser {
             let start_pos = *pos;
             *pos += 1;
 
-            if self.matches_at(tokens, *pos, &Token::System) {
+            // Try SYSTEM_TIME as single token first (SQL:2011 standard)
+            if self.matches_at(tokens, *pos, &Token::SystemTime) {
+                *pos += 1;
+                if self.matches_at(tokens, *pos, &Token::As) {
+                    *pos += 1;
+                    if self.matches_at(tokens, *pos, &Token::Of) {
+                        *pos += 1;
+                        let expr = self.expression_parser.parse_expression(tokens, pos)?;
+                        return Ok(Some(TimeTravelClause::SystemTime(expr)));
+                    }
+                }
+            }
+            // Also support SYSTEM TIME as two tokens (space-separated)
+            else if self.matches_at(tokens, *pos, &Token::System) {
                 *pos += 1;
                 if self.matches_at(tokens, *pos, &Token::Time) {
                     *pos += 1;
