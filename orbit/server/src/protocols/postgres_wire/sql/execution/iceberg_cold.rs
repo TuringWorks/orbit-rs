@@ -22,7 +22,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use arrow::array::{Array, ArrayRef, Int32Array, Int64Array};
 use arrow::datatypes::{DataType, Field, Schema as ArrowSchema};
@@ -41,6 +41,9 @@ use super::{
 };
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::types::SqlValue;
+
+// Import Iceberg extension traits from engine for snapshot access
+use orbit_engine::storage::iceberg_ext::TableMetadataExt;
 
 /// Iceberg cold tier storage
 ///
@@ -147,23 +150,164 @@ impl IcebergColdStore {
     }
 
     /// Query table as of specific timestamp (time travel)
+    ///
+    /// Uses Iceberg snapshot history to query data as it existed at a specific point in time.
+    ///
+    /// # Example
+    ///
+    /// ```sql
+    /// SELECT * FROM orders AT(TIMESTAMP => '2025-01-01 00:00:00');
+    /// SELECT * FROM inventory FOR SYSTEM_TIME AS OF TIMESTAMP '2024-12-01';
+    /// ```
     pub async fn query_as_of(
         &self,
         timestamp: SystemTime,
-        filter: Option<&FilterPredicate>,
+        _filter: Option<&FilterPredicate>,
     ) -> ProtocolResult<Vec<RecordBatch>> {
-        // TODO: Implement time travel
-        // let snapshot = self.table.snapshot_as_of_timestamp(timestamp)
-        //     .map_err(|e| ProtocolError::PostgresError(
-        //         format!("Failed to get snapshot: {}", e)
-        //     ))?;
-        //
-        // let scan = snapshot.scan()
-        //     .with_filter(...)
-        //     .build()?;
+        // 1. Convert SystemTime to milliseconds since epoch
+        let timestamp_ms = timestamp
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| {
+                ProtocolError::PostgresError(format!("Invalid timestamp: {}", e))
+            })?
+            .as_millis() as i64;
 
-        // Placeholder
-        Ok(vec![])
+        // 2. Find snapshot at or before timestamp using extension trait
+        let snapshot = self
+            .table
+            .metadata()
+            .snapshot_by_timestamp_ext(timestamp_ms)
+            .map_err(|e| {
+                ProtocolError::PostgresError(format!("Failed to find snapshot: {}", e))
+            })?
+            .ok_or_else(|| {
+                ProtocolError::PostgresError(format!(
+                    "No snapshot found at or before timestamp: {} ms",
+                    timestamp_ms
+                ))
+            })?;
+
+        // 3. Build scan from historical snapshot
+        let scan = self
+            .table
+            .scan()
+            .snapshot_id(snapshot.snapshot_id())
+            .build()
+            .map_err(|e| {
+                ProtocolError::PostgresError(format!(
+                    "Failed to build scan from snapshot {}: {}",
+                    snapshot.snapshot_id(),
+                    e
+                ))
+            })?;
+
+        // 4. Execute scan and collect Arrow batches
+        let mut batches = Vec::new();
+        let mut stream = scan.to_arrow().await.map_err(|e| {
+            ProtocolError::PostgresError(format!(
+                "Failed to create Arrow stream from snapshot: {}",
+                e
+            ))
+        })?;
+
+        use futures::StreamExt;
+        while let Some(batch_result) = stream.next().await {
+            let batch = batch_result.map_err(|e| {
+                ProtocolError::PostgresError(format!(
+                    "Failed to read Arrow batch from snapshot: {}",
+                    e
+                ))
+            })?;
+            batches.push(batch);
+        }
+
+        Ok(batches)
+    }
+
+    /// Query table by snapshot ID (version-based time travel)
+    ///
+    /// Enables querying specific table versions using snapshot IDs.
+    ///
+    /// # Example
+    ///
+    /// ```sql
+    /// SELECT * FROM orders AT(VERSION => 2583872980615177898);
+    /// SELECT * FROM orders AT(SNAPSHOT => 2583872980615177898);
+    /// ```
+    pub async fn query_by_snapshot_id(
+        &self,
+        snapshot_id: i64,
+        _filter: Option<&FilterPredicate>,
+    ) -> ProtocolResult<Vec<RecordBatch>> {
+        // 1. Find snapshot by ID using extension trait
+        let snapshot = self
+            .table
+            .metadata()
+            .snapshot_by_id_ext(snapshot_id)
+            .map_err(|e| {
+                ProtocolError::PostgresError(format!("Failed to find snapshot: {}", e))
+            })?
+            .ok_or_else(|| {
+                ProtocolError::PostgresError(format!(
+                    "Snapshot with ID {} not found",
+                    snapshot_id
+                ))
+            })?;
+
+        // 2. Build scan from specified snapshot
+        let scan = self
+            .table
+            .scan()
+            .snapshot_id(snapshot.snapshot_id())
+            .build()
+            .map_err(|e| {
+                ProtocolError::PostgresError(format!(
+                    "Failed to build scan from snapshot {}: {}",
+                    snapshot_id, e
+                ))
+            })?;
+
+        // 3. Execute scan and collect Arrow batches
+        let mut batches = Vec::new();
+        let mut stream = scan.to_arrow().await.map_err(|e| {
+            ProtocolError::PostgresError(format!(
+                "Failed to create Arrow stream from snapshot: {}",
+                e
+            ))
+        })?;
+
+        use futures::StreamExt;
+        while let Some(batch_result) = stream.next().await {
+            let batch = batch_result.map_err(|e| {
+                ProtocolError::PostgresError(format!(
+                    "Failed to read Arrow batch from snapshot: {}",
+                    e
+                ))
+            })?;
+            batches.push(batch);
+        }
+
+        Ok(batches)
+    }
+
+    /// List all available snapshots (for time travel history)
+    ///
+    /// Returns snapshot metadata as (snapshot_id, timestamp_ms) pairs.
+    pub fn list_snapshots(&self) -> ProtocolResult<Vec<(i64, i64)>> {
+        let snapshots = self
+            .table
+            .metadata()
+            .snapshots_ext()
+            .iter()
+            .map(|s| (s.snapshot_id(), s.timestamp_ms()))
+            .collect();
+        Ok(snapshots)
+    }
+
+    /// Get current snapshot metadata
+    pub fn current_snapshot(&self) -> ProtocolResult<Option<(i64, i64)>> {
+        let snapshot = self.table.metadata().current_snapshot_ext();
+        Ok(snapshot.map(|s| (s.snapshot_id(), s.timestamp_ms())))
     }
 
     /// Get table schema
