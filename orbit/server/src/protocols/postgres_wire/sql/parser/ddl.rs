@@ -17,7 +17,7 @@ use crate::protocols::postgres_wire::sql::{
         DomainConstraintType, DropDatabaseStatement, DropDomainStatement, DropExtensionStatement,
         DropIndexStatement, DropPolicyStatement, DropRoleStatement, DropRuleStatement,
         DropSchemaStatement, DropSequenceStatement, DropTableStatement, DropTriggerStatement,
-        DropTypeStatement, DropViewStatement, EnumValuePosition, FunctionLanguage, FunctionName,
+        DropTypeStatement, DropViewStatement, UndropTableStatement, EnumValuePosition, FunctionLanguage, FunctionName,
         FunctionParameter, FunctionVolatility, GeneratedColumnStorage, IndexColumn, IndexOption,
         IndexType, NullsOrder, ParameterMode, PolicyCommand, ReferentialAction, RoleOption,
         RuleAction, RuleEvent, SequenceBound, SequenceOptions, SequenceOwner, SortDirection,
@@ -1086,6 +1086,20 @@ pub fn parse_drop_table(parser: &mut SqlParser) -> ParseResult<Statement> {
         names,
         cascade,
     }))
+}
+
+/// Parse UNDROP TABLE statement
+///
+/// Syntax: `UNDROP TABLE table_name`
+///
+/// Restores a previously dropped table using Iceberg snapshot history.
+pub fn parse_undrop_table(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Table)?;
+
+    // Parse table name (single table only)
+    let name = utilities::parse_table_name(parser)?;
+
+    Ok(Statement::UndropTable(UndropTableStatement { name }))
 }
 
 /// Parse DROP INDEX statement

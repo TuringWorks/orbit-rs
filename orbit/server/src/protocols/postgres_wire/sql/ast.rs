@@ -23,6 +23,7 @@ pub enum Statement {
     DropIndex(DropIndexStatement),
     DropView(DropViewStatement),
     DropSchema(DropSchemaStatement),
+    UndropTable(UndropTableStatement),
 
     // Data Manipulation Language (DML)
     Select(Box<SelectStatement>),
@@ -410,6 +411,17 @@ pub struct DropTableStatement {
     pub if_exists: bool,
     pub names: Vec<TableName>,
     pub cascade: bool,
+}
+
+/// UNDROP TABLE statement for restoring dropped tables
+///
+/// Syntax: `UNDROP TABLE table_name`
+///
+/// Uses Iceberg snapshot history to restore tables to their state before dropping.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UndropTableStatement {
+    /// Table name to restore
+    pub name: TableName,
 }
 
 #[derive(Debug, Clone, PartialEq)]

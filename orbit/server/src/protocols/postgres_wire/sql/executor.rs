@@ -20,6 +20,7 @@ use crate::protocols::postgres_wire::sql::{
         DropDomainStatement, DropExtensionStatement, DropIndexStatement, DropPolicyStatement,
         DropRoleStatement, DropRuleStatement, DropSchemaStatement, DropSequenceStatement,
         DropTableStatement, DropTriggerStatement, DropTypeStatement, DropViewStatement,
+        UndropTableStatement,
         ExplainStatement, Expression, FromClause, FunctionLanguage, FunctionVolatility,
         GeneratedColumnStorage, GrantStatement, IndexType, InsertSource, InsertStatement,
         IsolationLevel, JoinCondition, JoinType, MergeAction, MergeInsertValues, MergeStatement,
@@ -804,6 +805,7 @@ impl SqlExecutor {
             Statement::DropView(stmt) => self.execute_drop_view(stmt).await,
             Statement::DropSchema(stmt) => self.execute_drop_schema(stmt).await,
             Statement::DropExtension(stmt) => self.execute_drop_extension(stmt).await,
+            Statement::UndropTable(stmt) => self.execute_undrop_table(stmt).await,
             Statement::CreateFunction(stmt) => self.execute_create_function(stmt).await,
 
             // DML Operations
@@ -1575,6 +1577,38 @@ impl SqlExecutor {
         }
 
         Ok(ExecutionResult::DropTable { table_names })
+    }
+
+    async fn execute_undrop_table(
+        &self,
+        stmt: UndropTableStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let table_name = stmt.name.full_name();
+
+        // UNDROP implementation requires:
+        // 1. Maintain a dropped_tables collection with table metadata and drop timestamp
+        // 2. For Iceberg tables: use table.history() to find the last snapshot before drop
+        // 3. Restore table metadata to the tables collection
+        // 4. Restore table data from Iceberg snapshot or from backup
+        //
+        // Current implementation (Phase 3):
+        // - Return informative error explaining the feature is not yet fully implemented
+        // - Requires integration with Iceberg snapshot management
+        // - Requires retention policy for dropped table metadata
+
+        Err(ProtocolError::PostgresError(format!(
+            "UNDROP TABLE '{}' not yet implemented. This feature requires:\n\
+             1. Dropped table metadata retention (current: tables removed immediately)\n\
+             2. Iceberg snapshot-based restoration for cold tier tables\n\
+             3. Configurable retention period for undrop capability\n\n\
+             Planned implementation:\n\
+             - Track dropped tables with timestamp in dropped_tables collection\n\
+             - Use Iceberg table.metadata().snapshots() for historical state\n\
+             - Restore table to last snapshot before DROP operation\n\
+             - Support time-based UNDROP (e.g., UNDROP TABLE foo AT TIMESTAMP '...')\n\n\
+             Status: Parser and AST complete, executor pending full Iceberg integration.",
+            table_name
+        )))
     }
 
     async fn execute_drop_index(

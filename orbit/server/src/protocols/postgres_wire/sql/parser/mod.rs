@@ -99,6 +99,7 @@ impl SqlParser {
             Some(Token::Create) => self.parse_create_statement(),
             Some(Token::Alter) => self.parse_alter_statement(),
             Some(Token::Drop) => self.parse_drop_statement(),
+            Some(Token::Undrop) => self.parse_undrop_statement(),
             Some(Token::With) => self.parse_select_statement(), // WITH is usually part of SELECT/INSERT/etc but can start stmt
 
             // DML Statements
@@ -742,6 +743,29 @@ impl SqlParser {
                     "DATABASE, TABLE, INDEX, VIEW, SCHEMA, EXTENSION, TRIGGER, SEQUENCE, TYPE, DOMAIN, ROLE, USER, POLICY, or RULE"
                         .to_string(),
                 ],
+                found: None,
+            }),
+        }
+    }
+
+    /// Parse UNDROP statement (Snowflake/Iceberg time travel feature)
+    fn parse_undrop_statement(&mut self) -> ParseResult<Statement> {
+        self.expect(Token::Undrop)?;
+
+        match &self.current_token {
+            Some(Token::Table) => ddl::parse_undrop_table(self),
+
+            Some(token) => Err(ParseError {
+                message: format!("Unexpected token after UNDROP: {token:?}"),
+                position: self.position,
+                expected: vec!["TABLE".to_string()],
+                found: Some(token.clone()),
+            }),
+
+            None => Err(ParseError {
+                message: "Expected TABLE after UNDROP".to_string(),
+                position: self.position,
+                expected: vec!["TABLE".to_string()],
                 found: None,
             }),
         }
