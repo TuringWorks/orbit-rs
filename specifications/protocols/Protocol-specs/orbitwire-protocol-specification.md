@@ -54,20 +54,20 @@ OrbitWire is a purpose-built binary wire protocol designed specifically for Orbi
 
 ### Protocol Stack
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
-│                    Client Application                        │
+│                    Client Application                       │
 ├─────────────────────────────────────────────────────────────┤
-│                   OrbitWire Client SDK                       │
+│                   OrbitWire Client SDK                      │
 ├─────────────────────────────────────────────────────────────┤
-│                   OrbitWire Protocol                         │
+│                   OrbitWire Protocol                        │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
 │  │   Framing   │  │  Messages   │  │    Serialization    │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
-│                    TLS 1.3 (optional)                        │
+│                    TLS 1.3 (optional)                       │
 ├─────────────────────────────────────────────────────────────┤
-│                       TCP / QUIC                             │
+│                       TCP / QUIC                            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -95,23 +95,23 @@ OrbitWire is a purpose-built binary wire protocol designed specifically for Orbi
 
 ### Connection Model
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
-│                        Connection                             │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │                    Control Channel                      │  │
-│  │  - Authentication                                       │  │
-│  │  - Connection settings                                  │  │
-│  │  - Heartbeat/Keepalive                                  │  │
+│                        Connection                            │
+│  ┌────────────────────────────────────────────────────────┐  │ 
+│  │                    Control Channel                     │  │
+│  │  - Authentication                                      │  │
+│  │  - Connection settings                                 │  │
+│  │  - Heartbeat/Keepalive                                 │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                                                              │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
-│  │   Query 1   │  │   Query 2   │  │   Query N   │  ...     │
-│  │   Stream    │  │   Stream    │  │   Stream    │          │
-│  └─────────────┘  └─────────────┘  └─────────────┘          │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐           │
+│  │   Query 1   │  │   Query 2   │  │   Query N   │  ...      │
+│  │   Stream    │  │   Stream    │  │   Stream    │           │
+│  └─────────────┘  └─────────────┘  └─────────────┘           │
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │               Subscription Channels                     │  │
+│  │               Subscription Channels                    │  │
 │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐                 │  │
 │  │  │ LIVE 1  │  │ LIVE 2  │  │ LIVE N  │  ...            │  │
 │  │  └─────────┘  └─────────┘  └─────────┘                 │  │
@@ -123,9 +123,9 @@ OrbitWire is a purpose-built binary wire protocol designed specifically for Orbi
 
 Each query/subscription gets a unique stream ID, allowing multiple concurrent operations on a single TCP connection.
 
-```
+```text
 ┌────────────────────────────────────────────────────────────┐
-│                     TCP Connection                          │
+│                     TCP Connection                         │
 ├────────────────────────────────────────────────────────────┤
 │ Stream 0 (Control)  │ Auth, Settings, Heartbeat            │
 ├────────────────────────────────────────────────────────────┤
@@ -145,7 +145,7 @@ Each query/subscription gets a unique stream ID, allowing multiple concurrent op
 
 ### Connection Establishment
 
-```
+```text
 Client                                           Server
    │                                                │
    │──── TCP Connect ──────────────────────────────▶│
@@ -153,13 +153,13 @@ Client                                           Server
    │──── Hello ────────────────────────────────────▶│
    │        { version, capabilities, compression }  │
    │                                                │
-   │◀─── HelloAck ─────────────────────────────────│
+   │◀─── HelloAck ──────────────────────────────-───│
    │        { version, capabilities, compression }  │
    │                                                │
    │──── Authenticate ─────────────────────────────▶│
    │        { method, credentials }                 │
    │                                                │
-   │◀─── AuthResult ───────────────────────────────│
+   │◀─── AuthResult ────────────────────────────────│
    │        { success, token, user_info }           │
    │                                                │
    │     Connection Established                     │
@@ -168,34 +168,34 @@ Client                                           Server
 
 ### Normal Operation
 
-```
+```text
 Client                                           Server
    │                                                │
    │──── Query ────────────────────────────────────▶│
    │        { stream_id: 1, sql: "SELECT ..." }     │
    │                                                │
-   │◀─── RowDescription ───────────────────────────│
+   │◀─── RowDescription ────────────────────────────│
    │        { stream_id: 1, columns: [...] }        │
    │                                                │
-   │◀─── DataRow ──────────────────────────────────│
+   │◀─── DataRow ───────────────────────────────────│
    │        { stream_id: 1, values: [...] }         │
    │                                                │
-   │◀─── DataRow ──────────────────────────────────│
+   │◀─── DataRow ───────────────────────────────────│
    │        { stream_id: 1, values: [...] }         │
    │                                                │
-   │◀─── CommandComplete ──────────────────────────│
+   │◀─── CommandComplete ───────────────────────────│
    │        { stream_id: 1, tag: "SELECT", rows: 2 }│
    │                                                │
 ```
 
 ### Connection Termination
 
-```
+```text
 Client                                           Server
    │                                                │
    │──── Terminate ────────────────────────────────▶│
    │                                                │
-   │◀─── TerminateAck ─────────────────────────────│
+   │◀─── TerminateAck ─────────────────────────-────│
    │                                                │
    │──── TCP Close ────────────────────────────────▶│
    │                                                │
@@ -209,19 +209,19 @@ Client                                           Server
 
 All messages are wrapped in a frame:
 
-```
+```text
 ┌────────────────────────────────────────────────────────────┐
-│                        Frame Header                         │
+│                        Frame Header                        │
 ├────────────┬────────────┬────────────┬─────────────────────┤
 │   Magic    │  Version   │   Flags    │      Length         │
 │  (2 bytes) │  (1 byte)  │  (1 byte)  │     (4 bytes)       │
 ├────────────┴────────────┴────────────┴─────────────────────┤
-│                      Stream ID (4 bytes)                    │
+│                      Stream ID (4 bytes)                   │
 ├────────────────────────────────────────────────────────────┤
-│                    Message Type (2 bytes)                   │
+│                    Message Type (2 bytes)                  │
 ├────────────────────────────────────────────────────────────┤
 │                                                            │
-│                     Payload (variable)                      │
+│                     Payload (variable)                     │
 │                                                            │
 └────────────────────────────────────────────────────────────┘
 ```

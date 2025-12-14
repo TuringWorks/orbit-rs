@@ -180,7 +180,7 @@ The CQL (Cassandra Query Language) protocol adapter provides **Cassandra-compati
                  ▼
 ┌─────────────────────────────────────────┐
 │   Orbit Query Engine                    │
-│   (QueryEngine / ConfigurableSqlEngine)│
+│   (QueryEngine / ConfigurableSqlEngine) │
 │   - MVCC execution strategy             │
 │   - Traditional execution strategy      │
 └─────────────────────────────────────────┘
