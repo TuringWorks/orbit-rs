@@ -1363,6 +1363,79 @@ pub struct UnifiedColdTierConfig {
 
     /// Async upload settings
     pub async_upload: AsyncUploadConfig,
+
+    /// Iceberg catalog configuration (required when data_format = "iceberg")
+    #[serde(default)]
+    pub iceberg: Option<IcebergCatalogConfig>,
+}
+
+/// Iceberg catalog configuration for time travel and cold tier storage
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IcebergCatalogConfig {
+    /// REST catalog URI (e.g., "http://localhost:8181")
+    /// Required for Iceberg time travel queries
+    pub catalog_uri: String,
+
+    /// Custom warehouse path (optional)
+    /// Defaults to "{bucket}/warehouse" or "{container}/warehouse"
+    #[serde(default)]
+    pub warehouse_path: Option<String>,
+
+    /// Default namespace for tables (optional)
+    /// Defaults to "default"
+    #[serde(default = "default_namespace")]
+    pub default_namespace: String,
+
+    /// Enable SSL/TLS for catalog communication
+    #[serde(default)]
+    pub ssl_enabled: bool,
+
+    /// Catalog request timeout in seconds
+    #[serde(default = "default_catalog_timeout")]
+    pub timeout_seconds: u64,
+}
+
+fn default_namespace() -> String {
+    "default".to_string()
+}
+
+fn default_catalog_timeout() -> u64 {
+    30
+}
+
+impl IcebergCatalogConfig {
+    /// Get the warehouse path, using explicit config or generating from storage config
+    ///
+    /// If `warehouse_path` is set, returns it. Otherwise, generates a default path
+    /// based on the storage backend configuration.
+    pub fn get_warehouse_path(&self, cold_tier: &UnifiedColdTierConfig) -> String {
+        if let Some(ref path) = self.warehouse_path {
+            return path.clone();
+        }
+
+        // Auto-generate warehouse path based on storage backend
+        match cold_tier.backend.as_str() {
+            "s3" | "minio" => {
+                if let Some(ref s3) = cold_tier.s3 {
+                    return format!("s3://{}/warehouse", s3.bucket);
+                }
+            }
+            "azure" => {
+                if let Some(ref azure) = cold_tier.azure {
+                    return format!("az://{}/warehouse", azure.container_name);
+                }
+            }
+            "gcs" => {
+                if let Some(ref gcs) = cold_tier.gcs {
+                    return format!("gs://{}/warehouse", gcs.bucket);
+                }
+            }
+            _ => {}
+        }
+
+        // Fallback to default
+        "s3://orbit-warehouse/warehouse".to_string()
+    }
 }
 
 /// Google Cloud Storage configuration
@@ -1852,6 +1925,7 @@ impl Default for UnifiedColdTierConfig {
             partition_strategy: "time".to_string(),
             compression: "snappy".to_string(),
             async_upload: AsyncUploadConfig::default(),
+            iceberg: None,
         }
     }
 }

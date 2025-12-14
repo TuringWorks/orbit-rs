@@ -39,6 +39,7 @@ use super::{
     AggregateFunction, Column, ColumnBatch, NullBitmap, VectorizedExecutor,
     VectorizedExecutorConfig,
 };
+use crate::config::{IcebergCatalogConfig, UnifiedColdTierConfig};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::sql::types::SqlValue;
 
@@ -85,6 +86,122 @@ impl IcebergColdStore {
             ),
             created_at: SystemTime::now(),
         })
+    }
+
+    /// Create an Iceberg cold store from server configuration
+    ///
+    /// This constructor uses the `IcebergCatalogConfig` and `UnifiedColdTierConfig`
+    /// from the server configuration to create and connect to the Iceberg REST catalog.
+    ///
+    /// # Arguments
+    ///
+    /// * `iceberg_config` - Iceberg catalog configuration (catalog_uri, namespace, etc.)
+    /// * `cold_tier_config` - Cold tier storage configuration (for warehouse path generation)
+    /// * `table_name` - Name of the table to load
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use crate::config::{IcebergCatalogConfig, UnifiedColdTierConfig};
+    ///
+    /// let iceberg_config = IcebergCatalogConfig {
+    ///     catalog_uri: "http://localhost:8181".to_string(),
+    ///     warehouse_path: None,
+    ///     default_namespace: "orbit".to_string(),
+    ///     ssl_enabled: false,
+    ///     timeout_seconds: 30,
+    /// };
+    ///
+    /// let cold_tier_config = UnifiedColdTierConfig::default();
+    ///
+    /// let store = IcebergColdStore::from_config(
+    ///     &iceberg_config,
+    ///     &cold_tier_config,
+    ///     "orders",
+    /// ).await?;
+    /// ```
+    pub async fn from_config(
+        iceberg_config: &IcebergCatalogConfig,
+        cold_tier_config: &UnifiedColdTierConfig,
+        table_name: &str,
+    ) -> ProtocolResult<Self> {
+        // Get warehouse path from config
+        let warehouse_path = iceberg_config.get_warehouse_path(cold_tier_config);
+
+        // Build catalog configuration
+        let mut config = HashMap::new();
+        config.insert(
+            REST_CATALOG_PROP_URI.to_string(),
+            iceberg_config.catalog_uri.clone(),
+        );
+        config.insert(REST_CATALOG_PROP_WAREHOUSE.to_string(), warehouse_path);
+
+        // Create the REST catalog
+        let catalog = RestCatalogBuilder::default()
+            .load("rest", config)
+            .await
+            .map_err(|e| {
+                ProtocolError::PostgresError(format!("Failed to create REST catalog: {}", e))
+            })?;
+
+        // Load the table
+        let namespace_ident = NamespaceIdent::new(iceberg_config.default_namespace.clone());
+        let table_ident = TableIdent::new(namespace_ident, table_name.to_string());
+
+        let table = catalog.load_table(&table_ident).await.map_err(|e| {
+            ProtocolError::PostgresError(format!(
+                "Failed to load Iceberg table '{}': {}",
+                table_name, e
+            ))
+        })?;
+
+        Ok(Self {
+            table: Arc::new(table),
+            table_name: table_name.to_string(),
+            vectorized_executor: VectorizedExecutor::with_config(
+                VectorizedExecutorConfig::default(),
+            ),
+            created_at: SystemTime::now(),
+        })
+    }
+
+    /// Create a shared REST catalog instance from configuration
+    ///
+    /// This is useful when you need to manage multiple tables from the same catalog.
+    /// Use this method to create a catalog once and reuse it for multiple `IcebergColdStore::new()` calls.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let catalog = IcebergColdStore::create_catalog_from_config(
+    ///     &iceberg_config,
+    ///     &cold_tier_config,
+    /// ).await?;
+    ///
+    /// let orders_store = IcebergColdStore::new(catalog.clone(), "orbit", "orders").await?;
+    /// let inventory_store = IcebergColdStore::new(catalog.clone(), "orbit", "inventory").await?;
+    /// ```
+    pub async fn create_catalog_from_config(
+        iceberg_config: &IcebergCatalogConfig,
+        cold_tier_config: &UnifiedColdTierConfig,
+    ) -> ProtocolResult<Arc<RestCatalog>> {
+        let warehouse_path = iceberg_config.get_warehouse_path(cold_tier_config);
+
+        let mut config = HashMap::new();
+        config.insert(
+            REST_CATALOG_PROP_URI.to_string(),
+            iceberg_config.catalog_uri.clone(),
+        );
+        config.insert(REST_CATALOG_PROP_WAREHOUSE.to_string(), warehouse_path);
+
+        let catalog = RestCatalogBuilder::default()
+            .load("rest", config)
+            .await
+            .map_err(|e| {
+                ProtocolError::PostgresError(format!("Failed to create REST catalog: {}", e))
+            })?;
+
+        Ok(Arc::new(catalog))
     }
 
     /// Scan table with optional filter
@@ -167,9 +284,7 @@ impl IcebergColdStore {
         // 1. Convert SystemTime to milliseconds since epoch
         let timestamp_ms = timestamp
             .duration_since(UNIX_EPOCH)
-            .map_err(|e| {
-                ProtocolError::PostgresError(format!("Invalid timestamp: {}", e))
-            })?
+            .map_err(|e| ProtocolError::PostgresError(format!("Invalid timestamp: {}", e)))?
             .as_millis() as i64;
 
         // 2. Find snapshot at or before timestamp using extension trait
@@ -177,9 +292,7 @@ impl IcebergColdStore {
             .table
             .metadata()
             .snapshot_by_timestamp_ext(timestamp_ms)
-            .map_err(|e| {
-                ProtocolError::PostgresError(format!("Failed to find snapshot: {}", e))
-            })?
+            .map_err(|e| ProtocolError::PostgresError(format!("Failed to find snapshot: {}", e)))?
             .ok_or_else(|| {
                 ProtocolError::PostgresError(format!(
                     "No snapshot found at or before timestamp: {} ms",
@@ -244,14 +357,9 @@ impl IcebergColdStore {
             .table
             .metadata()
             .snapshot_by_id_ext(snapshot_id)
-            .map_err(|e| {
-                ProtocolError::PostgresError(format!("Failed to find snapshot: {}", e))
-            })?
+            .map_err(|e| ProtocolError::PostgresError(format!("Failed to find snapshot: {}", e)))?
             .ok_or_else(|| {
-                ProtocolError::PostgresError(format!(
-                    "Snapshot with ID {} not found",
-                    snapshot_id
-                ))
+                ProtocolError::PostgresError(format!("Snapshot with ID {} not found", snapshot_id))
             })?;
 
         // 2. Build scan from specified snapshot

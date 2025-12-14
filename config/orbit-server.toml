@@ -422,6 +422,35 @@ retry_count = 3
 # project_id = "your-project"
 # service_account_key = "/path/to/key.json"
 
+# Iceberg Catalog Configuration (required for time travel queries)
+# Enable this when using data_format = "iceberg"
+# [unified_storage.cold_tier.iceberg]
+# catalog_uri = "http://localhost:8181"      # REST catalog URI (required)
+# warehouse_path = "s3://bucket/warehouse"   # Custom warehouse path (optional)
+# default_namespace = "default"              # Default namespace for tables
+# ssl_enabled = false                        # Enable SSL/TLS for catalog
+# timeout_seconds = 30                       # Catalog request timeout
+
+# Example: Complete Iceberg setup with MinIO
+# 1. Start MinIO: docker run -p 9000:9000 -p 9001:9001 minio/minio server /data --console-address ":9001"
+# 2. Start Iceberg REST Catalog: docker run -p 8181:8181 tabulario/iceberg-rest
+# 3. Configure:
+#    [unified_storage.cold_tier]
+#    enabled = true
+#    backend = "minio"
+#    data_format = "iceberg"
+#
+#    [unified_storage.cold_tier.s3]
+#    bucket = "orbit-warehouse"
+#    region = "us-east-1"
+#    access_key_id = "minioadmin"
+#    secret_access_key = "minioadmin"
+#    endpoint = "http://localhost:9000"
+#
+#    [unified_storage.cold_tier.iceberg]
+#    catalog_uri = "http://localhost:8181"
+#    default_namespace = "orbit"
+
 # Automatic Tier Migration
 [unified_storage.tier_migration]
 enabled = true
