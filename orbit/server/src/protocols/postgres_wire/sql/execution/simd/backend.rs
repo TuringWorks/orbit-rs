@@ -2487,16 +2487,16 @@ unsafe fn filter_i32_eq_neon(values: &[i32], target: i32) -> Vec<usize> {
 
         // Extract mask
         let mask: [u32; 4] = std::mem::transmute(cmp);
-        for j in 0..4 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 4;
     }
 
-    for j in i..values.len() {
-        if values[j] == target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val == target {
             result.push(j);
         }
     }
@@ -2517,16 +2517,16 @@ unsafe fn filter_i32_lt_neon(values: &[i32], target: i32) -> Vec<usize> {
         let cmp = vcltq_s32(data, target_vec); // data < target
 
         let mask: [u32; 4] = std::mem::transmute(cmp);
-        for j in 0..4 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 4;
     }
 
-    for j in i..values.len() {
-        if values[j] < target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val < target {
             result.push(j);
         }
     }
@@ -2547,16 +2547,16 @@ unsafe fn filter_i32_gt_neon(values: &[i32], target: i32) -> Vec<usize> {
         let cmp = vcgtq_s32(data, target_vec); // data > target
 
         let mask: [u32; 4] = std::mem::transmute(cmp);
-        for j in 0..4 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 4;
     }
 
-    for j in i..values.len() {
-        if values[j] > target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val > target {
             result.push(j);
         }
     }
@@ -2592,10 +2592,10 @@ unsafe fn sum_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
             has_value = true;
         } else {
             // Fall back to scalar for this chunk
-            for j in i..i + 16 {
+            for (j, val) in values.iter().enumerate().skip(i).take(16) {
                 if null_bitmap.is_valid(j) {
                     // Accumulate in vector
-                    let val_vec = vdupq_n_s32(values[j]);
+                    let val_vec = vdupq_n_s32(*val);
                     sum_vec = vaddq_s32(sum_vec, val_vec);
                     has_value = true;
                 }
@@ -2614,9 +2614,9 @@ unsafe fn sum_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
             has_value = true;
         } else {
             // Scalar for partial chunk
-            for j in i..i + 4 {
+            for (j, val) in values.iter().enumerate().skip(i).take(4) {
                 if null_bitmap.is_valid(j) {
-                    let val_vec = vdupq_n_s32(values[j]);
+                    let val_vec = vdupq_n_s32(*val);
                     sum_vec = vaddq_s32(sum_vec, val_vec);
                     has_value = true;
                 }
@@ -2632,9 +2632,9 @@ unsafe fn sum_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
 
     // Handle remainder
     let mut total = total_simd;
-    for j in i..values.len() {
+    for (j, val) in values.iter().enumerate().skip(i) {
         if null_bitmap.is_valid(j) {
-            total += values[j] as i64;
+            total += *val as i64;
             has_value = true;
         }
     }
@@ -2671,9 +2671,9 @@ unsafe fn min_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
             }
             has_value = true;
         } else {
-            for j in i..i + 16 {
+            for (j, val) in values.iter().enumerate().skip(i).take(16) {
                 if null_bitmap.is_valid(j) {
-                    let val_vec = vdupq_n_s32(values[j]);
+                    let val_vec = vdupq_n_s32(*val);
                     min_vec = vminq_s32(min_vec, val_vec);
                     has_value = true;
                 }
@@ -2691,9 +2691,9 @@ unsafe fn min_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
             min_vec = vminq_s32(min_vec, data);
             has_value = true;
         } else {
-            for j in i..i + 4 {
+            for (j, val) in values.iter().enumerate().skip(i).take(4) {
                 if null_bitmap.is_valid(j) {
-                    let val_vec = vdupq_n_s32(values[j]);
+                    let val_vec = vdupq_n_s32(*val);
                     min_vec = vminq_s32(min_vec, val_vec);
                     has_value = true;
                 }
@@ -2707,9 +2707,9 @@ unsafe fn min_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
     let mut result = min_val;
 
     // Handle remainder
-    for j in i..values.len() {
+    for (j, val) in values.iter().enumerate().skip(i) {
         if null_bitmap.is_valid(j) {
-            result = result.min(values[j]);
+            result = result.min(*val);
             has_value = true;
         }
     }
@@ -2746,9 +2746,9 @@ unsafe fn max_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
             }
             has_value = true;
         } else {
-            for j in i..i + 16 {
+            for (j, val) in values.iter().enumerate().skip(i).take(16) {
                 if null_bitmap.is_valid(j) {
-                    let val_vec = vdupq_n_s32(values[j]);
+                    let val_vec = vdupq_n_s32(*val);
                     max_vec = vmaxq_s32(max_vec, val_vec);
                     has_value = true;
                 }
@@ -2766,9 +2766,9 @@ unsafe fn max_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
             max_vec = vmaxq_s32(max_vec, data);
             has_value = true;
         } else {
-            for j in i..i + 4 {
+            for (j, val) in values.iter().enumerate().skip(i).take(4) {
                 if null_bitmap.is_valid(j) {
-                    let val_vec = vdupq_n_s32(values[j]);
+                    let val_vec = vdupq_n_s32(*val);
                     max_vec = vmaxq_s32(max_vec, val_vec);
                     has_value = true;
                 }
@@ -2782,9 +2782,9 @@ unsafe fn max_i32_neon(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
     let mut result = max_val;
 
     // Handle remainder
-    for j in i..values.len() {
+    for (j, val) in values.iter().enumerate().skip(i) {
         if null_bitmap.is_valid(j) {
-            result = result.max(values[j]);
+            result = result.max(*val);
             has_value = true;
         }
     }
@@ -2818,8 +2818,8 @@ unsafe fn filter_i64_eq_neon(values: &[i64], target: i64) -> Vec<usize> {
     }
 
     // Handle remainder
-    for j in i..values.len() {
-        if values[j] == target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val == target {
             result.push(j);
         }
     }
@@ -2850,8 +2850,8 @@ unsafe fn filter_i64_lt_neon(values: &[i64], target: i64) -> Vec<usize> {
     }
 
     // Handle remainder
-    for j in i..values.len() {
-        if values[j] < target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val < target {
             result.push(j);
         }
     }
@@ -2882,8 +2882,8 @@ unsafe fn filter_i64_gt_neon(values: &[i64], target: i64) -> Vec<usize> {
     }
 
     // Handle remainder
-    for j in i..values.len() {
-        if values[j] > target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val > target {
             result.push(j);
         }
     }
@@ -2912,9 +2912,9 @@ unsafe fn sum_i64_neon(values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> 
             sum_vec = vaddq_s64(sum_vec, data);
             has_value = true;
         } else {
-            for j in i..i + 2 {
+            for (j, val) in values.iter().enumerate().skip(i).take(2) {
                 if null_bitmap.is_valid(j) {
-                    let val_vec = vdupq_n_s64(values[j]);
+                    let val_vec = vdupq_n_s64(*val);
                     sum_vec = vaddq_s64(sum_vec, val_vec);
                     has_value = true;
                 }
@@ -2928,9 +2928,9 @@ unsafe fn sum_i64_neon(values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> 
     let mut sum: i64 = sum_arr[0].wrapping_add(sum_arr[1]);
 
     // Handle remainder
-    for j in i..values.len() {
+    for (j, val) in values.iter().enumerate().skip(i) {
         if null_bitmap.is_valid(j) {
-            sum = sum.wrapping_add(values[j]);
+            sum = sum.wrapping_add(*val);
             has_value = true;
         }
     }
@@ -2958,14 +2958,14 @@ unsafe fn min_i64_neon(values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> 
         let all_valid = (0..2).all(|j| null_bitmap.is_valid(i + j));
 
         if all_valid {
-            for j in i..i + 2 {
-                min_val = min_val.min(values[j]);
+            for val in values.iter().skip(i).take(2) {
+                min_val = min_val.min(*val);
                 has_value = true;
             }
         } else {
-            for j in i..i + 2 {
+            for (j, val) in values.iter().enumerate().skip(i).take(2) {
                 if null_bitmap.is_valid(j) {
-                    min_val = min_val.min(values[j]);
+                    min_val = min_val.min(*val);
                     has_value = true;
                 }
             }
@@ -2974,9 +2974,9 @@ unsafe fn min_i64_neon(values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> 
     }
 
     // Handle remainder
-    for j in i..values.len() {
+    for (j, val) in values.iter().enumerate().skip(i) {
         if null_bitmap.is_valid(j) {
-            min_val = min_val.min(values[j]);
+            min_val = min_val.min(*val);
             has_value = true;
         }
     }
@@ -3004,14 +3004,14 @@ unsafe fn max_i64_neon(values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> 
         let all_valid = (0..2).all(|j| null_bitmap.is_valid(i + j));
 
         if all_valid {
-            for j in i..i + 2 {
-                max_val = max_val.max(values[j]);
+            for val in values.iter().skip(i).take(2) {
+                max_val = max_val.max(*val);
                 has_value = true;
             }
         } else {
-            for j in i..i + 2 {
+            for (j, val) in values.iter().enumerate().skip(i).take(2) {
                 if null_bitmap.is_valid(j) {
-                    max_val = max_val.max(values[j]);
+                    max_val = max_val.max(*val);
                     has_value = true;
                 }
             }
@@ -3020,9 +3020,9 @@ unsafe fn max_i64_neon(values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> 
     }
 
     // Handle remainder
-    for j in i..values.len() {
+    for (j, val) in values.iter().enumerate().skip(i) {
         if null_bitmap.is_valid(j) {
-            max_val = max_val.max(values[j]);
+            max_val = max_val.max(*val);
             has_value = true;
         }
     }
@@ -3045,16 +3045,16 @@ unsafe fn filter_f32_eq_neon(values: &[f32], target: f32) -> Vec<usize> {
         let cmp = vceqq_f32(data, target_vec);
         let mask_arr: [u32; 4] = std::mem::transmute(cmp);
 
-        for j in 0..4 {
-            if mask_arr[j] != 0 {
+        for (j, item) in mask_arr.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 4;
     }
 
-    for j in i..values.len() {
-        if values[j] == target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val == target {
             result.push(j);
         }
     }
@@ -3075,16 +3075,16 @@ unsafe fn filter_f32_lt_neon(values: &[f32], target: f32) -> Vec<usize> {
         let cmp = vcltq_f32(data, target_vec);
         let mask_arr: [u32; 4] = std::mem::transmute(cmp);
 
-        for j in 0..4 {
-            if mask_arr[j] != 0 {
+        for (j, item) in mask_arr.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 4;
     }
 
-    for j in i..values.len() {
-        if values[j] < target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val < target {
             result.push(j);
         }
     }
@@ -3105,16 +3105,16 @@ unsafe fn filter_f32_gt_neon(values: &[f32], target: f32) -> Vec<usize> {
         let cmp = vcgtq_f32(data, target_vec);
         let mask_arr: [u32; 4] = std::mem::transmute(cmp);
 
-        for j in 0..4 {
-            if mask_arr[j] != 0 {
+        for (j, item) in mask_arr.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 4;
     }
 
-    for j in i..values.len() {
-        if values[j] > target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val > target {
             result.push(j);
         }
     }
@@ -3141,9 +3141,9 @@ unsafe fn sum_f32_neon(values: &[f32], null_bitmap: &NullBitmap) -> Option<f32> 
             sum_vec = vaddq_f32(sum_vec, data);
             has_value = true;
         } else {
-            for j in 0..4 {
-                if null_bitmap.is_valid(i + j) {
-                    scalar_sum += values[i + j];
+            for (j, val) in values.iter().enumerate().skip(i).take(4) {
+                if null_bitmap.is_valid(j) {
+                    scalar_sum += *val;
                     has_value = true;
                 }
             }
@@ -3154,9 +3154,9 @@ unsafe fn sum_f32_neon(values: &[f32], null_bitmap: &NullBitmap) -> Option<f32> 
     let vec_sum = vaddvq_f32(sum_vec);
     let mut final_sum = vec_sum + scalar_sum;
 
-    for j in i..values.len() {
+    for (j, val) in values.iter().enumerate().skip(i) {
         if null_bitmap.is_valid(j) {
-            final_sum += values[j];
+            final_sum += *val;
             has_value = true;
         }
     }
@@ -3192,9 +3192,9 @@ unsafe fn min_f32_neon(values: &[f32], null_bitmap: &NullBitmap) -> Option<f32> 
 
             has_value = true;
         } else {
-            for j in 0..4 {
-                if null_bitmap.is_valid(i + j) {
-                    let v = values[i + j];
+            for (j, v) in values.iter().enumerate().skip(i).take(4) {
+                if null_bitmap.is_valid(j) {
+                    let v = *v;
                     if v.is_nan() {
                         return Some(f32::NAN);
                     }
@@ -3220,9 +3220,9 @@ unsafe fn min_f32_neon(values: &[f32], null_bitmap: &NullBitmap) -> Option<f32> 
         scalar_min
     };
 
-    for j in i..values.len() {
+    for (j, v) in values.iter().enumerate().skip(i) {
         if null_bitmap.is_valid(j) {
-            let v = values[j];
+            let v = *v;
             if v.is_nan() {
                 return Some(f32::NAN);
             }
@@ -3263,9 +3263,9 @@ unsafe fn max_f32_neon(values: &[f32], null_bitmap: &NullBitmap) -> Option<f32> 
 
             has_value = true;
         } else {
-            for j in 0..4 {
-                if null_bitmap.is_valid(i + j) {
-                    let v = values[i + j];
+            for (j, v) in values.iter().enumerate().skip(i).take(4) {
+                if null_bitmap.is_valid(j) {
+                    let v = *v;
                     if v.is_nan() {
                         return Some(f32::NAN);
                     }
@@ -3291,9 +3291,9 @@ unsafe fn max_f32_neon(values: &[f32], null_bitmap: &NullBitmap) -> Option<f32> 
         scalar_max
     };
 
-    for j in i..values.len() {
+    for (j, v) in values.iter().enumerate().skip(i) {
         if null_bitmap.is_valid(j) {
-            let v = values[j];
+            let v = *v;
             if v.is_nan() {
                 return Some(f32::NAN);
             }
@@ -3320,16 +3320,16 @@ unsafe fn filter_f64_eq_neon(values: &[f64], target: f64) -> Vec<usize> {
         let cmp = vceqq_f64(data, target_vec);
         let mask: [u64; 2] = std::mem::transmute(cmp);
 
-        for j in 0..2 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 2;
     }
 
-    for j in i..values.len() {
-        if values[j] == target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val == target {
             result.push(j);
         }
     }
@@ -3349,16 +3349,16 @@ unsafe fn filter_f64_lt_neon(values: &[f64], target: f64) -> Vec<usize> {
         let cmp = vcltq_f64(data, target_vec);
         let mask: [u64; 2] = std::mem::transmute(cmp);
 
-        for j in 0..2 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 2;
     }
 
-    for j in i..values.len() {
-        if values[j] < target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val < target {
             result.push(j);
         }
     }
@@ -3378,16 +3378,16 @@ unsafe fn filter_f64_gt_neon(values: &[f64], target: f64) -> Vec<usize> {
         let cmp = vcgtq_f64(data, target_vec);
         let mask: [u64; 2] = std::mem::transmute(cmp);
 
-        for j in 0..2 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 2;
     }
 
-    for j in i..values.len() {
-        if values[j] > target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val > target {
             result.push(j);
         }
     }
@@ -3413,9 +3413,9 @@ unsafe fn sum_f64_neon(values: &[f64], null_bitmap: &NullBitmap) -> Option<f64> 
             sum_vec = vaddq_f64(sum_vec, data);
             has_value = true;
         } else {
-            for j in 0..2 {
-                if null_bitmap.is_valid(i + j) {
-                    scalar_sum += values[i + j];
+            for (j, val) in values.iter().enumerate().skip(i).take(2) {
+                if null_bitmap.is_valid(j) {
+                    scalar_sum += *val;
                     has_value = true;
                 }
             }
@@ -3426,9 +3426,9 @@ unsafe fn sum_f64_neon(values: &[f64], null_bitmap: &NullBitmap) -> Option<f64> 
     let vec_sum = vaddvq_f64(sum_vec);
     let mut final_sum = vec_sum + scalar_sum;
 
-    for j in i..values.len() {
+    for (j, val) in values.iter().enumerate().skip(i) {
         if null_bitmap.is_valid(j) {
-            final_sum += values[j];
+            final_sum += *val;
             has_value = true;
         }
     }
@@ -3464,9 +3464,9 @@ unsafe fn min_f64_neon(values: &[f64], null_bitmap: &NullBitmap) -> Option<f64> 
 
             has_value = true;
         } else {
-            for j in 0..2 {
-                if null_bitmap.is_valid(i + j) {
-                    let v = values[i + j];
+            for (j, v) in values.iter().enumerate().skip(i).take(2) {
+                if null_bitmap.is_valid(j) {
+                    let v = *v;
                     if v.is_nan() {
                         return Some(f64::NAN);
                     }
@@ -3493,9 +3493,9 @@ unsafe fn min_f64_neon(values: &[f64], null_bitmap: &NullBitmap) -> Option<f64> 
         scalar_min
     };
 
-    for j in i..values.len() {
+    for (j, v) in values.iter().enumerate().skip(i) {
         if null_bitmap.is_valid(j) {
-            let v = values[j];
+            let v = *v;
             if v.is_nan() {
                 return Some(f64::NAN);
             }
@@ -3536,9 +3536,9 @@ unsafe fn max_f64_neon(values: &[f64], null_bitmap: &NullBitmap) -> Option<f64> 
 
             has_value = true;
         } else {
-            for j in 0..2 {
-                if null_bitmap.is_valid(i + j) {
-                    let v = values[i + j];
+            for (j, v) in values.iter().enumerate().skip(i).take(2) {
+                if null_bitmap.is_valid(j) {
+                    let v = *v;
                     if v.is_nan() {
                         return Some(f64::NAN);
                     }
@@ -3564,9 +3564,9 @@ unsafe fn max_f64_neon(values: &[f64], null_bitmap: &NullBitmap) -> Option<f64> 
         scalar_max
     };
 
-    for j in i..values.len() {
+    for (j, v) in values.iter().enumerate().skip(i) {
         if null_bitmap.is_valid(j) {
-            let v = values[j];
+            let v = *v;
             if v.is_nan() {
                 return Some(f64::NAN);
             }
@@ -3624,15 +3624,15 @@ unsafe fn filter_i32_le_neon(values: &[i32], target: i32) -> Vec<usize> {
         let data = vld1q_s32(values[i..].as_ptr());
         let cmp = vcleq_s32(data, target_vec);
         let mask: [u32; 4] = std::mem::transmute(cmp);
-        for j in 0..4 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 4;
     }
-    for j in i..values.len() {
-        if values[j] <= target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val <= target {
             result.push(j);
         }
     }
@@ -3649,15 +3649,15 @@ unsafe fn filter_i32_ge_neon(values: &[i32], target: i32) -> Vec<usize> {
         let data = vld1q_s32(values[i..].as_ptr());
         let cmp = vcgeq_s32(data, target_vec);
         let mask: [u32; 4] = std::mem::transmute(cmp);
-        for j in 0..4 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 4;
     }
-    for j in i..values.len() {
-        if values[j] >= target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val >= target {
             result.push(j);
         }
     }
@@ -3675,15 +3675,15 @@ unsafe fn filter_i32_ne_neon(values: &[i32], target: i32) -> Vec<usize> {
         let eq = vceqq_s32(data, target_vec);
         let ne = vmvnq_u32(eq); // NOT eq
         let mask: [u32; 4] = std::mem::transmute(ne);
-        for j in 0..4 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 4;
     }
-    for j in i..values.len() {
-        if values[j] != target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val != target {
             result.push(j);
         }
     }
@@ -3701,15 +3701,15 @@ unsafe fn filter_i64_le_neon(values: &[i64], target: i64) -> Vec<usize> {
         let data = vld1q_s64(values[i..].as_ptr());
         let cmp = vcleq_s64(data, target_vec);
         let mask: [u64; 2] = std::mem::transmute(cmp);
-        for j in 0..2 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 2;
     }
-    for j in i..values.len() {
-        if values[j] <= target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val <= target {
             result.push(j);
         }
     }
@@ -3726,15 +3726,15 @@ unsafe fn filter_i64_ge_neon(values: &[i64], target: i64) -> Vec<usize> {
         let data = vld1q_s64(values[i..].as_ptr());
         let cmp = vcgeq_s64(data, target_vec);
         let mask: [u64; 2] = std::mem::transmute(cmp);
-        for j in 0..2 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 2;
     }
-    for j in i..values.len() {
-        if values[j] >= target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val >= target {
             result.push(j);
         }
     }
@@ -3754,15 +3754,15 @@ unsafe fn filter_i64_ne_neon(values: &[i64], target: i64) -> Vec<usize> {
         // vmvnq_u32 works on 128-bit regs, just need cast.
         let ne = vmvnq_u32(vreinterpretq_u32_u64(eq));
         let mask64: [u64; 2] = std::mem::transmute(ne);
-        for j in 0..2 {
-            if mask64[j] != 0 {
+        for (j, item) in mask64.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 2;
     }
-    for j in i..values.len() {
-        if values[j] != target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val != target {
             result.push(j);
         }
     }
@@ -3780,15 +3780,15 @@ unsafe fn filter_f32_le_neon(values: &[f32], target: f32) -> Vec<usize> {
         let data = vld1q_f32(values[i..].as_ptr());
         let cmp = vcleq_f32(data, target_vec);
         let mask: [u32; 4] = std::mem::transmute(cmp);
-        for j in 0..4 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 4;
     }
-    for j in i..values.len() {
-        if values[j] <= target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val <= target {
             result.push(j);
         }
     }
@@ -3805,15 +3805,15 @@ unsafe fn filter_f32_ge_neon(values: &[f32], target: f32) -> Vec<usize> {
         let data = vld1q_f32(values[i..].as_ptr());
         let cmp = vcgeq_f32(data, target_vec);
         let mask: [u32; 4] = std::mem::transmute(cmp);
-        for j in 0..4 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 4;
     }
-    for j in i..values.len() {
-        if values[j] >= target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val >= target {
             result.push(j);
         }
     }
@@ -3831,15 +3831,15 @@ unsafe fn filter_f32_ne_neon(values: &[f32], target: f32) -> Vec<usize> {
         let eq = vceqq_f32(data, target_vec);
         let ne = vmvnq_u32(eq);
         let mask: [u32; 4] = std::mem::transmute(ne);
-        for j in 0..4 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 4;
     }
-    for j in i..values.len() {
-        if values[j] != target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val != target {
             result.push(j);
         }
     }
@@ -3857,15 +3857,15 @@ unsafe fn filter_f64_le_neon(values: &[f64], target: f64) -> Vec<usize> {
         let data = vld1q_f64(values[i..].as_ptr());
         let cmp = vcleq_f64(data, target_vec);
         let mask: [u64; 2] = std::mem::transmute(cmp);
-        for j in 0..2 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 2;
     }
-    for j in i..values.len() {
-        if values[j] <= target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val <= target {
             result.push(j);
         }
     }
@@ -3882,15 +3882,15 @@ unsafe fn filter_f64_ge_neon(values: &[f64], target: f64) -> Vec<usize> {
         let data = vld1q_f64(values[i..].as_ptr());
         let cmp = vcgeq_f64(data, target_vec);
         let mask: [u64; 2] = std::mem::transmute(cmp);
-        for j in 0..2 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 2;
     }
-    for j in i..values.len() {
-        if values[j] >= target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val >= target {
             result.push(j);
         }
     }
@@ -3908,15 +3908,15 @@ unsafe fn filter_f64_ne_neon(values: &[f64], target: f64) -> Vec<usize> {
         let eq = vceqq_f64(data, target_vec);
         let ne = vmvnq_u32(vreinterpretq_u32_u64(eq));
         let mask: [u64; 2] = std::mem::transmute(ne); // bitcast back to u64
-        for j in 0..2 {
-            if mask[j] != 0 {
+        for (j, item) in mask.iter().enumerate() {
+            if *item != 0 {
                 result.push(i + j);
             }
         }
         i += 2;
     }
-    for j in i..values.len() {
-        if values[j] != target {
+    for (j, val) in values.iter().enumerate().skip(i) {
+        if *val != target {
             result.push(j);
         }
     }

@@ -124,6 +124,8 @@ pub use orbit_shared::orbitql::{
 
 // Protocol-specific extensions remain here
 pub mod executor;
+pub mod server;
 
 // Re-export protocol-specific types
 pub use executor::{ExecutionContext, ExecutionResult, OrbitQLExecutor};
+pub use server::OrbitQLServer;

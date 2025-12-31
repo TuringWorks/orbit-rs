@@ -375,6 +375,9 @@ pub struct ExpressionEvaluator {
     /// Optional UDF registry for user-defined functions (Lua/JS)
     #[cfg(feature = "lua-mlua")]
     udf_registry: Option<Arc<UdfRegistry>>,
+    /// Optional WASM UDF registry for user-defined functions (PL/WASM)
+    #[cfg(feature = "wasm-udf")]
+    wasm_udf_registry: Option<Arc<crate::wasm::udf_registry::WasmUdfRegistry>>,
 }
 
 impl ExpressionEvaluator {
@@ -383,6 +386,8 @@ impl ExpressionEvaluator {
             aggregates: HashMap::new(),
             #[cfg(feature = "lua-mlua")]
             udf_registry: None,
+            #[cfg(feature = "wasm-udf")]
+            wasm_udf_registry: None,
             sequence_accessor: None,
         }
     }
@@ -394,6 +399,8 @@ impl ExpressionEvaluator {
             sequence_accessor: Some(sequence_accessor),
             #[cfg(feature = "lua-mlua")]
             udf_registry: None,
+            #[cfg(feature = "wasm-udf")]
+            wasm_udf_registry: None,
         }
     }
 
@@ -404,6 +411,8 @@ impl ExpressionEvaluator {
             aggregates: HashMap::new(),
             sequence_accessor: None,
             udf_registry: Some(udf_registry),
+            #[cfg(feature = "wasm-udf")]
+            wasm_udf_registry: None,
         }
     }
 
@@ -411,6 +420,15 @@ impl ExpressionEvaluator {
     #[cfg(feature = "lua-mlua")]
     pub fn set_udf_registry(&mut self, udf_registry: Arc<UdfRegistry>) {
         self.udf_registry = Some(udf_registry);
+    }
+
+    /// Set the WASM UDF registry
+    #[cfg(feature = "wasm-udf")]
+    pub fn set_wasm_udf_registry(
+        &mut self,
+        wasm_udf_registry: Arc<crate::wasm::udf_registry::WasmUdfRegistry>,
+    ) {
+        self.wasm_udf_registry = Some(wasm_udf_registry);
     }
     /// Set the sequence accessor
     pub fn set_sequence_accessor(&mut self, accessor: Arc<dyn SequenceAccessor>) {
@@ -770,6 +788,8 @@ impl ExpressionEvaluator {
         func_call: &FunctionCall,
         context: &EvaluationContext,
     ) -> ProtocolResult<SqlValue> {
+        // WASM UDF: dynamic dispatch will be attempted for non-builtins (injected below)
+        // WASM UDF dispatch hook will be handled below for non-builtins
         let func_name = match &func_call.name {
             FunctionName::Simple(name) => name.to_uppercase(),
             FunctionName::Qualified { schema: _, name } => name.to_uppercase(),
@@ -781,6 +801,34 @@ impl ExpressionEvaluator {
             args.push(self.evaluate(arg_expr, context)?);
         }
 
+        #[cfg(feature = "wasm-udf")]
+        if let Some(ref wasm_registry) = self.wasm_udf_registry {
+            // Use raw function name (case-sensitive) for WASM functions
+            let raw_name = match &func_call.name {
+                FunctionName::Simple(n) => n.clone(),
+                FunctionName::Qualified { schema: _, name } => name.clone(),
+            };
+
+            // Check if a WASM function with this name exists
+            let exists = tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    wasm_registry
+                        .get_function(&None, &raw_name)
+                        .await
+                        .map(|opt| opt.is_some())
+                        .unwrap_or(false)
+                })
+            });
+
+            if exists {
+                // Execute the WASM function and return its result
+                return tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(async {
+                        wasm_registry.execute_function(&None, &raw_name, args).await
+                    })
+                });
+            }
+        }
         match func_name.as_str() {
             // Aggregate functions
             "COUNT" => self.evaluate_count(&args, func_call.distinct),
@@ -3608,7 +3656,21 @@ impl ExpressionEvaluator {
         // If delimiter is empty string, the string is split into characters.
 
         let elements: Vec<SqlValue> =
-            if delimiter.is_none() || delimiter.as_ref().map(|d| d.is_empty()).unwrap_or(false) {
+            if let Some(delim) = delimiter.as_ref().filter(|d| !d.is_empty()) {
+                s.split(delim)
+                    .map(|part| {
+                        if let Some(ns) = null_string {
+                            if part == ns {
+                                SqlValue::Null
+                            } else {
+                                SqlValue::Text(part.to_string())
+                            }
+                        } else {
+                            SqlValue::Text(part.to_string())
+                        }
+                    })
+                    .collect()
+            } else {
                 s.chars()
                     .map(|c| {
                         let s = c.to_string();
@@ -3620,20 +3682,6 @@ impl ExpressionEvaluator {
                             }
                         } else {
                             SqlValue::Text(s)
-                        }
-                    })
-                    .collect()
-            } else {
-                s.split(delimiter.as_ref().unwrap())
-                    .map(|part| {
-                        if let Some(ns) = null_string {
-                            if part == ns {
-                                SqlValue::Null
-                            } else {
-                                SqlValue::Text(part.to_string())
-                            }
-                        } else {
-                            SqlValue::Text(part.to_string())
                         }
                     })
                     .collect()
@@ -3651,7 +3699,7 @@ impl ExpressionEvaluator {
 
         match &args[0] {
             SqlValue::Null => Ok(SqlValue::Text("NULL".to_string())),
-            val => self.evaluate_quote_literal(&[val.clone()]),
+            val => self.evaluate_quote_literal(std::slice::from_ref(val)),
         }
     }
 
@@ -5412,6 +5460,7 @@ impl ExpressionEvaluator {
     }
 
     /// Internal helper to extract a field from a date/time value
+    #[allow(clippy::only_used_in_recursion)]
     fn extract_field_from_value(&self, field: &str, value: &SqlValue) -> ProtocolResult<SqlValue> {
         use chrono::{Datelike, Timelike};
 
@@ -5618,6 +5667,7 @@ impl ExpressionEvaluator {
     }
 
     /// Internal helper to truncate a date/time to a specified precision
+    #[allow(clippy::only_used_in_recursion)]
     fn truncate_to_precision(&self, precision: &str, value: &SqlValue) -> ProtocolResult<SqlValue> {
         use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 
@@ -8596,11 +8646,11 @@ impl ExpressionEvaluator {
         // Extract lexemes from tsvector
         let lexemes: Vec<String> = tsvector
             .split_whitespace()
-            .filter_map(|part| {
+            .map(|part| {
                 if let Some(pos) = part.find(':') {
-                    Some(part[..pos].trim_matches('\'').to_string())
+                    part[..pos].trim_matches('\'').to_string()
                 } else {
-                    Some(part.trim_matches('\'').to_string())
+                    part.trim_matches('\'').to_string()
                 }
             })
             .collect();

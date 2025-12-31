@@ -221,9 +221,7 @@ impl LuaValue {
                     // Use string representation of key
                     let key_str = match k {
                         RespValue::SimpleString(s) | RespValue::Error(s) => s.clone(),
-                        RespValue::BulkString(b) => {
-                            String::from_utf8_lossy(&b.to_vec()).to_string()
-                        }
+                        RespValue::BulkString(b) => String::from_utf8_lossy(b).to_string(),
                         _ => format!("{:?}", k),
                     };
                     table.insert(key_str, LuaValue::from_resp(v));

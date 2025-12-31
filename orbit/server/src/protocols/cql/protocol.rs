@@ -1093,8 +1093,6 @@ pub fn build_error_from_protocol_error(
     build_error_response(stream, error_code, &message)
 }
 
-/// Write a CQL string (2-byte length + UTF-8 bytes)
-
 /// Read a CQL string
 pub fn read_string(buf: &mut Bytes) -> ProtocolResult<String> {
     if buf.remaining() < 2 {

@@ -265,6 +265,7 @@ impl MluaRuntime {
     /// Convert LuaValue to mlua::Value
     #[cfg(feature = "lua-mlua")]
     #[allow(dead_code)]
+    #[allow(clippy::only_used_in_recursion)]
     fn lua_value_to_mlua<'lua>(
         &self,
         lua: &'lua Lua,

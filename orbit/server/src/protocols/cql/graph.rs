@@ -120,6 +120,7 @@ impl CqlGraphEngine {
     }
 
     /// Build graph from vertex and edge tables
+    #[allow(clippy::too_many_arguments)]
     pub fn build_from_tables(
         &mut self,
         vertices: &[HashMap<String, SqlValue>],

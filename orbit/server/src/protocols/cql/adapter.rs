@@ -440,10 +440,8 @@ impl CqlAdapter {
                                     error!("[CQL] TLS handshake failed: {}", e);
                                 }
                             }
-                        } else {
-                            if let Err(e) = adapter.handle_connection(socket).await {
-                                error!("[CQL] Connection error from {}: {:?}", addr, e);
-                            }
+                        } else if let Err(e) = adapter.handle_connection(socket).await {
+                            error!("[CQL] Connection error from {}: {:?}", addr, e);
                         }
                     });
                 }

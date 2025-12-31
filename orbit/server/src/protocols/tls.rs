@@ -29,9 +29,10 @@ impl OrbitTlsAcceptor {
             let certs = load_certs(&tls_config.cert_file)?;
             let key = load_private_key(&tls_config.key_file)?;
 
-            // TODO: Implement client cert validation (mTLS) if require_client_cert is true
-            // This requires loading the CA cert and setting up a verifier.
-            // For now, we'll stick to server-side TLS primarily, but structure is here for mTLS.
+            // Mutual TLS (mTLS) support:
+            // If `require_client_cert` is true, we require clients to present a certificate
+            // that chains to the configured CA (`ca_cert_file`) via rustls's WebPKI verifier.
+            // If `require_client_cert` is false, we use server-side TLS only (no client auth).
 
             let mut server_config = if tls_config.require_client_cert {
                 if let Some(ca_path) = &tls_config.ca_cert_file {

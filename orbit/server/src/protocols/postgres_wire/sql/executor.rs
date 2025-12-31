@@ -155,6 +155,18 @@ pub enum ExecutionResult {
         variable: String,
         value: String,
     },
+    CreateFunction {
+        function_name: String,
+    },
+    DropFunction {
+        function_names: Vec<String>,
+    },
+    CreateTrigger {
+        trigger_name: String,
+    },
+    DropTrigger {
+        trigger_names: Vec<String>,
+    },
 }
 
 /// Table schema definition
@@ -753,6 +765,16 @@ impl SqlExecutor {
         evaluator.set_udf_registry(registry);
     }
 
+    /// Set the WASM UDF registry for expression evaluation
+    #[cfg(feature = "wasm-udf")]
+    pub async fn set_wasm_udf_registry(
+        &self,
+        registry: Arc<crate::wasm::udf_registry::WasmUdfRegistry>,
+    ) {
+        let mut evaluator = self.expression_evaluator.write().await;
+        evaluator.set_wasm_udf_registry(registry);
+    }
+
     /// Create a sequence accessor for expression evaluation
     /// This allows expression evaluators to call nextval, currval, setval, lastval
     /// The accessor directly uses the executor's sequence storage for real-time updates.
@@ -975,10 +997,7 @@ impl SqlExecutor {
 
         functions.insert(function_key, stored_function);
 
-        Ok(ExecutionResult::Show {
-            variable: "CREATE FUNCTION".to_string(),
-            value: function_name,
-        })
+        Ok(ExecutionResult::CreateFunction { function_name })
     }
 
     async fn execute_create_trigger(
@@ -1098,12 +1117,14 @@ impl SqlExecutor {
                 t.table_name == table_name
                     && t.timing == timing
                     && t.enabled
-                    && t.events.iter().any(|e| match (e, event) {
-                        (TriggerEventType::Insert, TriggerEventType::Insert) => true,
-                        (TriggerEventType::Delete, TriggerEventType::Delete) => true,
-                        (TriggerEventType::Truncate, TriggerEventType::Truncate) => true,
-                        (TriggerEventType::Update(_), TriggerEventType::Update(_)) => true,
-                        _ => false,
+                    && t.events.iter().any(|e| {
+                        matches!(
+                            (e, event),
+                            (TriggerEventType::Insert, TriggerEventType::Insert)
+                                | (TriggerEventType::Delete, TriggerEventType::Delete)
+                                | (TriggerEventType::Truncate, TriggerEventType::Truncate)
+                                | (TriggerEventType::Update(_), TriggerEventType::Update(_))
+                        )
                     })
             })
             .cloned()
@@ -1730,13 +1751,12 @@ impl SqlExecutor {
         for row in rows {
             if let Some(where_expr) = &stmt.where_clause {
                 let context = EvaluationContext::with_row(row.clone());
-                match self.evaluate_where_condition(where_expr, &context).await {
-                    Ok(SqlValue::Boolean(b)) => {
-                        if b {
-                            filtered_rows.push(row);
-                        }
+                if let Ok(SqlValue::Boolean(b)) =
+                    self.evaluate_where_condition(where_expr, &context).await
+                {
+                    if b {
+                        filtered_rows.push(row);
                     }
-                    _ => {}
                 }
             } else {
                 filtered_rows.push(row);
@@ -2301,6 +2321,7 @@ impl SqlExecutor {
     /// For INSERT: old_row is None
     /// For UPDATE: old_row is pre-update, new_row is post-update
     /// For DELETE: old_row is deleted row, new_row is same as old_row
+    #[allow(clippy::type_complexity)]
     fn evaluate_returning_clause_with_old_new(
         &self,
         returning_items: &[SelectItem],
@@ -2359,6 +2380,7 @@ impl SqlExecutor {
     }
 
     /// Convert SqlValue to string representation
+    #[allow(clippy::only_used_in_recursion)]
     fn sql_value_to_string(&self, value: &SqlValue) -> String {
         match value {
             SqlValue::Null => "NULL".to_string(),
@@ -2729,6 +2751,7 @@ impl SqlExecutor {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     async fn execute_update(&self, stmt: UpdateStatement) -> ProtocolResult<ExecutionResult> {
         let table_name = stmt.table.full_name();
 
@@ -2858,6 +2881,7 @@ impl SqlExecutor {
         })
     }
 
+    #[allow(clippy::type_complexity)]
     async fn execute_delete(&self, stmt: DeleteStatement) -> ProtocolResult<ExecutionResult> {
         let table_name = stmt.table.full_name();
 
@@ -2931,6 +2955,7 @@ impl SqlExecutor {
         })
     }
 
+    #[allow(clippy::type_complexity)]
     async fn execute_merge(&self, stmt: MergeStatement) -> ProtocolResult<ExecutionResult> {
         // PostgreSQL 18 MERGE statement execution
         // MERGE INTO target USING source ON condition
@@ -4080,7 +4105,7 @@ impl SqlExecutor {
         Ok(result_rows)
     }
 
-    /// Execute LEFT JOIN strategy  
+    /// Execute LEFT JOIN strategy
     async fn execute_left_join(
         &self,
         left_rows: &[HashMap<String, SqlValue>],

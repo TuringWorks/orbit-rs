@@ -1235,7 +1235,7 @@ impl BoltProtocolHandler {
                                 let type_matches = rel_pattern
                                     .rel_type
                                     .as_ref()
-                                    .map_or(true, |t| &rel.rel_type == t);
+                                    .is_none_or(|t| &rel.rel_type == t);
                                 let props_match = rel_pattern
                                     .properties
                                     .iter()
@@ -1256,10 +1256,11 @@ impl BoltProtocolHandler {
                                             .all(|l| end_node.labels.contains(l));
 
                                         if start_node_labels_match && end_node_labels_match {
-                                            let mut row = Vec::new();
-                                            row.push(self.node_to_value(&start_node));
-                                            row.push(self.relationship_to_value(&rel));
-                                            row.push(self.node_to_value(&end_node));
+                                            let row = vec![
+                                                self.node_to_value(&start_node),
+                                                self.relationship_to_value(&rel),
+                                                self.node_to_value(&end_node),
+                                            ];
                                             results.push(row);
                                         }
                                     }
@@ -1275,7 +1276,7 @@ impl BoltProtocolHandler {
                         for row in &results {
                             let mut new_row = Vec::new();
                             for item in items {
-                                let value = self.evaluate_expression(&item.expr, &row, &columns);
+                                let value = self.evaluate_expression(&item.expr, row, &columns);
                                 new_row.push(value);
                             }
                             new_results.push(new_row);
@@ -1387,15 +1388,15 @@ impl BoltProtocolHandler {
             Value::Bool(b) => buf.put_u8(if *b { 0xC3 } else { 0xC2 }),
             Value::Number(n) => {
                 if let Some(i) = n.as_i64() {
-                    if i >= -16 && i < 128 {
+                    if (-16..128).contains(&i) {
                         buf.put_i8(i as i8);
-                    } else if i >= -128 && i < 128 {
+                    } else if (-128..128).contains(&i) {
                         buf.put_u8(0xC8);
                         buf.put_i8(i as i8);
-                    } else if i >= -32768 && i < 32768 {
+                    } else if (-32768..32768).contains(&i) {
                         buf.put_u8(0xC9);
                         buf.put_i16(i as i16);
-                    } else if i >= -2147483648 && i < 2147483648 {
+                    } else if (-2147483648..2147483648).contains(&i) {
                         buf.put_u8(0xCA);
                         buf.put_i32(i as i32);
                     } else {

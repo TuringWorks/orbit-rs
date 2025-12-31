@@ -39,6 +39,7 @@ use orbit_server::protocols::cql::CqlConfig;
 use orbit_server::protocols::cypher::{CypherGraphStorage, CypherServer, CypherStorageProvider};
 use orbit_server::protocols::mongodb::MongoDbServer;
 use orbit_server::protocols::mysql::MySqlConfig;
+use orbit_server::protocols::orbitql::OrbitQLServer;
 use orbit_server::protocols::persistence::redis_data::RedisDataProvider;
 use orbit_server::protocols::postgres_wire::sql::execution::hybrid::HybridStorageConfig;
 use orbit_server::protocols::postgres_wire::{QueryEngine, RocksDbTableStorage};
@@ -644,6 +645,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             server_version: format!("8.0.27-Orbit-DB-{}", env!("CARGO_PKG_VERSION")),
             username: None,
             password: None,
+            auth_plugin: "auto".to_string(),
         };
 
         // Use unified storage if available for cross-protocol data sharing
@@ -776,6 +778,34 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
     protocol_handles.push(aql_handle);
     debug!("[AQL] AQL/ArangoDB protocol adapter started on port 8529");
+    // Start OrbitQL HTTP server if enabled
+    if toml_config
+        .protocols
+        .orbitql
+        .as_ref()
+        .is_none_or(|c| c.enabled)
+    {
+        let orbitql_port = toml_config
+            .protocols
+            .orbitql
+            .as_ref()
+            .map(|c| c.port)
+            .unwrap_or(8081);
+        let orbitql_bind_addr = format!("{}:{}", args.bind, orbitql_port);
+        let orbitql_server =
+            OrbitQLServer::new(orbitql_bind_addr).with_tls_config(toml_config.server.tls.clone());
+        let orbitql_handle = tokio::spawn(async move {
+            orbitql_server
+                .run()
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+        });
+        protocol_handles.push(orbitql_handle);
+        info!(
+            "[OrbitQL] OrbitQL HTTP server started on port {}",
+            orbitql_port
+        );
+    }
 
     // Start REST API server (port 8080 by default)
     let rest_bind_addr = format!("{}:{}", args.bind, args.http_port);
@@ -817,6 +847,35 @@ async fn main() -> Result<(), Box<dyn Error>> {
     protocol_handles.push(mongodb_handle);
     info!("[MongoDB] MongoDB protocol server started on port 27017");
 
+    // Start Arrow Flight SQL server (port 50052)
+    let flight_config = orbit_server::protocols::flight::FlightConfig {
+        bind_address: args.bind.clone(),
+        port: 50052,
+        ..Default::default()
+    };
+    let flight_server = orbit_server::protocols::flight::FlightSqlServer::new(flight_config);
+    let flight_handle = tokio::spawn(async move { flight_server.start().await });
+    protocol_handles.push(flight_handle);
+    info!("[FlightSQL] Arrow Flight SQL server started on port 50052");
+
+    // Start OrbitWire protocol server (port 50053)
+    let orbitwire_config = orbit_server::protocols::orbitwire::OrbitWireConfig {
+        bind_address: args.bind.clone(),
+        port: 50053,
+        ..Default::default()
+    };
+    let orbitwire_server =
+        orbit_server::protocols::orbitwire::OrbitWireServer::new(orbitwire_config)
+            .with_tls_config(toml_config.server.tls.clone());
+    let orbitwire_handle = tokio::spawn(async move {
+        orbitwire_server
+            .start()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+    });
+    protocol_handles.push(orbitwire_handle);
+    info!("[OrbitWire] OrbitWire protocol server started on port 50053");
+
     info!("=========================================");
     info!("    Orbit Server Ready!");
     info!("=========================================");
@@ -828,7 +887,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("  CQL:        {}:{}", args.bind, args.cql_port);
     info!("  Cypher:     {}:7687", args.bind);
     info!("  AQL:        {}:8529", args.bind);
+    info!("  OrbitQL:    {}:8081", args.bind);
     info!("  MongoDB:    {}:27017", args.bind);
+    info!("  FlightSQL:  {}:50052", args.bind);
+    info!("  OrbitWire:  {}:50053", args.bind);
     info!("  Metrics:    {}:{}/metrics", args.bind, args.metrics_port);
 
     // Initialize MCP server if enabled

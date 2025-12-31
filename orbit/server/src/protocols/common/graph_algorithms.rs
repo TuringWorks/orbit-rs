@@ -379,6 +379,7 @@ pub fn all_shortest_paths(graph: &Graph, source: &str, target: &str) -> AllPaths
     let target_depth = shortest.length;
 
     // DFS to find all paths of exactly target_depth length
+    #[allow(clippy::too_many_arguments)]
     fn find_paths(
         graph: &Graph,
         current: &str,
@@ -815,6 +816,7 @@ pub fn strongly_connected_components(graph: &Graph) -> ConnectedComponentsResult
     let mut component_ids = vec![None::<usize>; n];
     let mut components: Vec<Vec<String>> = Vec::new();
 
+    #[allow(clippy::too_many_arguments)]
     fn strongconnect(
         v: usize,
         graph: &Graph,

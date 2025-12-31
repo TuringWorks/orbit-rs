@@ -76,10 +76,8 @@ impl CypherServer {
                                     error!("Cypher TLS handshake failed: {}", e);
                                 }
                             }
-                        } else {
-                            if let Err(e) = handler.handle_connection(stream).await {
-                                error!("Error handling Bolt connection: {}", e);
-                            }
+                        } else if let Err(e) = handler.handle_connection(stream).await {
+                            error!("Error handling Bolt connection: {}", e);
                         }
                     });
                 }

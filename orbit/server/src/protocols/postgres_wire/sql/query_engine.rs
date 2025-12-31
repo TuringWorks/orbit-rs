@@ -149,6 +149,10 @@ pub struct OptimizedQueryEngine {
     /// Python UDF handler
     #[cfg(feature = "python-udf")]
     python_udf_handler: Option<Arc<crate::python::udf_handler::PythonUdfHandler>>,
+
+    /// WASM UDF handler
+    #[cfg(feature = "wasm-udf")]
+    wasm_udf_handler: Option<Arc<crate::wasm::WasmUdfHandler>>,
 }
 
 impl OptimizedQueryEngine {
@@ -188,6 +192,26 @@ impl OptimizedQueryEngine {
             Some(handler)
         };
 
+        #[cfg(feature = "wasm-udf")]
+        let wasm_udf_handler = {
+            use crate::wasm::config::WasmConfig;
+            use crate::wasm::runtime::WasmRuntime;
+            use crate::wasm::udf_registry::WasmUdfRegistry;
+            use crate::wasm::WasmUdfHandler;
+
+            let runtime = Arc::new(WasmRuntime::new(WasmConfig::default()).map_err(|e| {
+                crate::protocols::error::ProtocolError::PostgresError(format!(
+                    "Failed to create WASM UDF runtime: {}",
+                    e
+                ))
+            })?);
+            let registry = Arc::new(WasmUdfRegistry::new(runtime));
+            // Wire WASM UDF registry into the SQL executor for expression evaluation
+            executor.set_wasm_udf_registry(registry.clone()).await;
+            let handler = Arc::new(WasmUdfHandler::new(registry));
+            Some(handler)
+        };
+
         Ok(Self {
             parser: Arc::new(RwLock::new(SqlParser::new())),
             executor,
@@ -204,6 +228,8 @@ impl OptimizedQueryEngine {
             udf_handler,
             #[cfg(feature = "python-udf")]
             python_udf_handler,
+            #[cfg(feature = "wasm-udf")]
+            wasm_udf_handler,
             config,
         })
     }
@@ -287,6 +313,72 @@ impl OptimizedQueryEngine {
                     }
                 }
 
+                #[cfg(feature = "wasm-udf")]
+                {
+                    if let Some(ref wasm_handler) = self.wasm_udf_handler {
+                        if let Some(lang) = &create_fn.language {
+                            let is_wasm = matches!(
+                                lang,
+                                crate::protocols::postgres_wire::sql::ast::FunctionLanguage::Other(l)
+                                    if l.eq_ignore_ascii_case("wasm")
+                            );
+                            if is_wasm {
+                                // Build parameter metadata for WASM handler
+                                let params: Vec<(String, String)> = create_fn
+                                    .args
+                                    .as_ref()
+                                    .map(|v| {
+                                        v.iter()
+                                            .map(|p| {
+                                                (
+                                                    p.name
+                                                        .clone()
+                                                        .unwrap_or_else(|| "arg".to_string()),
+                                                    format!("{:?}", p.data_type),
+                                                )
+                                            })
+                                            .collect()
+                                    })
+                                    .unwrap_or_default();
+
+                                // Return type string (fallback TEXT)
+                                let return_type_str = create_fn
+                                    .return_type
+                                    .as_ref()
+                                    .map(|t| format!("{:?}", t))
+                                    .unwrap_or_else(|| "TEXT".to_string());
+
+                                wasm_handler
+                                    .handle_create_function(
+                                        create_fn.name.to_string(),
+                                        None,
+                                        params,
+                                        return_type_str,
+                                        create_fn.body.clone(),
+                                    )
+                                    .await
+                                    .map_err(|e| {
+                                        crate::protocols::error::ProtocolError::PostgresError(
+                                            format!("Failed to register WASM function: {}", e),
+                                        )
+                                    })?;
+
+                                let execution_time_ms = start.elapsed().as_millis() as u64;
+                                return Ok(OptimizedExecutionResult {
+                                    result: ExecutionResult::Show {
+                                        variable: format!("CREATE FUNCTION {}", create_fn.name),
+                                        value: "OK".to_string(),
+                                    },
+                                    execution_time_ms,
+                                    from_cache: false,
+                                    execution_backend: ExecutionBackend::CpuScalar,
+                                    parallel_partitions: 0,
+                                });
+                            }
+                        }
+                    }
+                }
+
                 #[cfg(feature = "lua-mlua")]
                 if !is_python {
                     if let Some(ref udf_handler) = self.udf_handler {
@@ -322,6 +414,38 @@ impl OptimizedQueryEngine {
                                         e
                                     ))
                                 })?;
+                            let execution_time_ms = start.elapsed().as_millis() as u64;
+
+                            return Ok(OptimizedExecutionResult {
+                                result: ExecutionResult::Show {
+                                    variable: format!("DROP FUNCTION {}", name),
+                                    value: "OK".to_string(),
+                                },
+                                execution_time_ms,
+                                from_cache: false,
+                                execution_backend: ExecutionBackend::CpuScalar,
+                                parallel_partitions: 0,
+                            });
+                        }
+                    }
+                }
+
+                // Try WASM handler next
+                #[cfg(feature = "wasm-udf")]
+                if let Some(ref wasm_handler) = self.wasm_udf_handler {
+                    for (name, _) in &drop_fn.functions {
+                        // Attempt to drop; returns true if a WASM function was removed
+                        let dropped = wasm_handler
+                            .handle_drop_function(&name.to_string(), &None)
+                            .await
+                            .map_err(|e| {
+                                crate::protocols::error::ProtocolError::PostgresError(format!(
+                                    "Failed to drop WASM function: {}",
+                                    e
+                                ))
+                            })?;
+
+                        if dropped {
                             let execution_time_ms = start.elapsed().as_millis() as u64;
 
                             return Ok(OptimizedExecutionResult {

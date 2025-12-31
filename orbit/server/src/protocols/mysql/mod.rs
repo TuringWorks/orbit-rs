@@ -65,6 +65,8 @@ pub struct MySqlConfig {
     pub username: Option<String>,
     /// Password for authentication (if authentication_enabled is true)
     pub password: Option<String>,
+    /// Authentication plugin ("auto", "mysql_native_password", "caching_sha2_password")
+    pub auth_plugin: String,
 }
 
 impl Default for MySqlConfig {
@@ -76,6 +78,7 @@ impl Default for MySqlConfig {
             server_version: "8.0.27-Orbit".to_string(),
             username: None,
             password: None,
+            auth_plugin: "auto".to_string(),
         }
     }
 }

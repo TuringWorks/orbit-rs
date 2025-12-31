@@ -54,7 +54,7 @@ pub fn array_group(args: &[Value]) -> ProtocolResult<Value> {
 /// Usage: string::join(['Hello', 'world', 'from', 'OrbitRS'], ' ')
 /// Returns: 'Hello world from OrbitRS'
 pub fn string_join(args: &[Value]) -> ProtocolResult<Value> {
-    if args.len() < 1 || args.len() > 2 {
+    if args.is_empty() || args.len() > 2 {
         return Err(ProtocolError::PostgresError(
             "string::join() expects 1-2 arguments (array, [delimiter])".to_string(),
         ));

@@ -251,3 +251,4 @@ specifications/protocols/docs/*.pdf
 /devdata
 /devdata/cql
 /devdata/cql/rocksdb
+/.claude

@@ -1012,6 +1012,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
     }
 
     /// Group rows by grouping key expressions for RETURN clause
+    #[allow(clippy::type_complexity)]
     fn group_return_rows_by_keys(
         &self,
         grouping_items: &[(&ReturnItem, String)],
@@ -2260,6 +2261,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
     }
 
     /// Group rows by grouping key expressions
+    #[allow(clippy::type_complexity)]
     fn group_rows_by_keys(
         &self,
         grouping_items: &[(&WithItem, String)],

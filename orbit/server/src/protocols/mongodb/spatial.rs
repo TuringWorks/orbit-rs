@@ -428,6 +428,7 @@ impl MongoSpatialEngine {
     /// Execute $near query
     ///
     /// Returns documents sorted by distance from query point
+    #[allow(clippy::type_complexity)]
     pub fn near(
         &self,
         documents: &[(String, HashMap<String, JsonValue>)],

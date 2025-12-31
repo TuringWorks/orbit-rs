@@ -117,10 +117,8 @@ impl MySqlAdapter {
                                     error!("[MySQL] TLS handshake failed: {}", e);
                                 }
                             }
-                        } else {
-                            if let Err(e) = adapter.handle_connection(socket).await {
-                                error!("[MySQL] Connection error: {}", e);
-                            }
+                        } else if let Err(e) = adapter.handle_connection(socket).await {
+                            error!("[MySQL] Connection error: {}", e);
                         }
                     });
                 }
@@ -165,19 +163,24 @@ impl MySqlAdapter {
             % u32::MAX;
 
         // Create authentication handler with credentials if enabled
-        let mut auth = if self.config.authentication_enabled {
-            MySqlAuth::with_credentials(
-                AuthPlugin::NativePassword,
-                self.config.username.clone(),
-                self.config.password.clone(),
+        // Use caching_sha2_password by default for authenticated connections (MySQL 8.0 default)
+        let (mut auth, auth_plugin) = if self.config.authentication_enabled {
+            (
+                MySqlAuth::with_credentials(
+                    AuthPlugin::CachingSha2Password,
+                    self.config.username.clone(),
+                    self.config.password.clone(),
+                ),
+                "caching_sha2_password",
             )
         } else {
-            MySqlAuth::new(AuthPlugin::NativePassword)
+            (
+                MySqlAuth::new(AuthPlugin::NativePassword),
+                "mysql_native_password",
+            )
         };
 
         // Send handshake
-        // TODO: Support caching_sha2_password when authentication is enabled
-        let auth_plugin = "mysql_native_password";
 
         let handshake = build_handshake(connection_id, &self.config.server_version, auth_plugin);
         let packet = MySqlPacket::new(0, handshake);

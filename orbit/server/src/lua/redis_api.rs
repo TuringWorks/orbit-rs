@@ -164,10 +164,8 @@ impl RedisApi {
 
         if let Some(opts) = options {
             if let Ok(flags_val) = opts.get::<_, Table>("flags") {
-                for pair in flags_val.pairs::<i32, String>() {
-                    if let Ok((_, flag)) = pair {
-                        flags.push(flag);
-                    }
+                for (_, flag) in flags_val.pairs::<i32, String>().flatten() {
+                    flags.push(flag);
                 }
             }
 

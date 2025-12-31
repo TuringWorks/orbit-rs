@@ -69,10 +69,8 @@ impl MongoDbServer {
                                     error!("MongoDB TLS handshake failed: {}", e);
                                 }
                             }
-                        } else {
-                            if let Err(e) = handle_connection(socket, store).await {
-                                error!("MongoDB connection error: {}", e);
-                            }
+                        } else if let Err(e) = handle_connection(socket, store).await {
+                            error!("MongoDB connection error: {}", e);
                         }
                     });
                 }

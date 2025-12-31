@@ -1,5 +1,11 @@
 //! WebAssembly (WASM) User-Defined Functions
 //!
+//! Note on tests:
+//! WASM SQL e2e tests live in `sql_syntax_e2e_test.rs` and are compiled only when
+//! running tests with the `wasm-udf` feature enabled. We explicitly declare the
+//! module here so `cargo test -p orbit-server --features wasm-udf` reliably
+//! discovers and compiles the tests.
+//!
 //! This module provides support for executing WebAssembly modules as user-defined functions (UDFs).
 //! WASM UDFs offer several advantages:
 //!
@@ -143,6 +149,9 @@ pub mod runtime;
 pub mod types;
 pub mod udf_handler;
 pub mod udf_registry;
+
+#[cfg(all(test, feature = "wasm-udf"))]
+mod sql_syntax_e2e_test;
 
 pub use config::WasmConfig;
 pub use runtime::{WasmError, WasmRuntime};
