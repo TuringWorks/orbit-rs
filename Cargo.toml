@@ -71,7 +71,7 @@ kube = "0.99"
 k8s-openapi = "0.22"
 controller-rs = "0.1"
 serde_yaml = "0.9"
-clap = "4.0"
+clap = "4.5"
 hyper = "0.14"
 
 # Core async runtime
