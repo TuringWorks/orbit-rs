@@ -5604,6 +5604,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lru"
+version = "0.16.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1dc47f592c06f33f8e3aea9591776ec7c9f9e4124778ff8a3c3b87159f7e593"
+dependencies = [
+ "hashbrown 0.16.1",
+]
+
+[[package]]
 name = "lru-slab"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6000,7 +6009,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "keyed_priority_queue",
- "lru",
+ "lru 0.12.5",
  "mysql_common",
  "native-tls",
  "pem",
@@ -6974,7 +6983,7 @@ dependencies = [
  "hyper 1.8.1",
  "hyper-util",
  "lazy_static",
- "lru",
+ "lru 0.16.3",
  "lz4_flex 0.11.5",
  "md5",
  "metrics",
@@ -10457,7 +10466,7 @@ dependencies = [
  "itertools 0.12.1",
  "levenshtein_automata",
  "log",
- "lru",
+ "lru 0.12.5",
  "lz4_flex 0.11.5",
  "measure_time",
  "memmap2",
