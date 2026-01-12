@@ -75,7 +75,7 @@ clap = "4.0"
 hyper = "0.14"
 
 # Core async runtime
-tokio = { version = "1.48", features = ["full"] }
+tokio = { version = "1.49", features = ["full"] }
 tokio-stream = "0.1"
 
 # Serialization
