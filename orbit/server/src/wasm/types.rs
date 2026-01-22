@@ -220,6 +220,8 @@ pub struct WasmFunctionMetadata {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::approx_constant)] // Test values like 3.14159 are intentional test floats
+
     use super::*;
 
     #[test]

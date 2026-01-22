@@ -437,6 +437,8 @@ pub fn lua_to_sql(lua: &LuaValue) -> SqlValue {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::approx_constant)] // Test values like 3.14 are intentional test floats
+
     use super::*;
 
     #[test]

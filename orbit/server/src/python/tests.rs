@@ -1,5 +1,7 @@
 //! Comprehensive tests for Python UDF system
 
+#![allow(clippy::approx_constant)] // Test values like 3.14 are intentional, not meant to be PI
+
 use super::*;
 use crate::protocols::postgres_wire::sql::types::SqlValue;
 use config::PythonConfig;

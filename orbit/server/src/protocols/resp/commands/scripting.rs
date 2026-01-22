@@ -157,7 +157,7 @@ impl ScriptingCommands {
         {
             let mut results = Vec::new();
             for arg in args {
-                let sha = self.get_string_arg(&[arg.clone()], 0, "SCRIPT EXISTS")?;
+                let sha = self.get_string_arg(std::slice::from_ref(arg), 0, "SCRIPT EXISTS")?;
                 let exists = self.lua_runtime.script_exists(&sha).await;
                 results.push(RespValue::Integer(if exists { 1 } else { 0 }));
             }

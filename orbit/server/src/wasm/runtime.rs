@@ -352,9 +352,9 @@ impl WasmRuntime {
                 WasmValue::I64(i) => Ok(Val::I64(*i)),
                 WasmValue::F32(f) => Ok(Val::F32((*f).to_bits())),
                 WasmValue::F64(f) => Ok(Val::F64((*f).to_bits())),
-                _ => Err(WasmError::TypeConversionError(format!(
-                    "Complex types must be serialized as bytes"
-                ))),
+                _ => Err(WasmError::TypeConversionError(
+                    "Complex types must be serialized as bytes".to_string(),
+                )),
             })
             .collect()
     }

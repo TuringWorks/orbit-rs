@@ -233,7 +233,7 @@ mod tests {
 
         // 3. Assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
 
         // Check the response written to the stream
         let response = stream.write_data;
@@ -336,7 +336,7 @@ mod tests {
 
         // 3. Assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
 
         // Check the response written to the stream
         let response = stream.write_data;
@@ -392,7 +392,7 @@ mod tests {
 
         // 3. Assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
 
         // Check the response written to the stream
         let response = stream.write_data;
@@ -465,7 +465,7 @@ mod tests {
 
         // 3. Assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
 
         // Check the response written to the stream
         let response = stream.write_data;
@@ -578,7 +578,7 @@ mod tests {
 
         // 3. Assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
 
         // Check that pending results are cleared
         assert!(handler.current_query.is_none());
@@ -1148,7 +1148,7 @@ mod tests {
 
         // 3. Assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
     }
 
     #[tokio::test]

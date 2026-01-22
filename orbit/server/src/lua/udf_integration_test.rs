@@ -236,7 +236,7 @@ mod tests {
 
         // Add some functions
         for i in 1..=3 {
-            let metadata = UdfMetadata::new(&format!("func_{}", i), "return 42", UdfRuntime::Lua)
+            let metadata = UdfMetadata::new(format!("func_{}", i), "return 42", UdfRuntime::Lua)
                 .with_return_type("INTEGER");
             registry
                 .register(metadata)

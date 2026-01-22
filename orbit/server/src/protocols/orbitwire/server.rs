@@ -62,7 +62,7 @@ impl OrbitWireServer {
             .map_err(|e| ServerError::BindError(e.to_string()))?;
 
         let tls_acceptor =
-            OrbitTlsAcceptor::new(&self.tls_config).map_err(|e| ServerError::IoError(e))?;
+            OrbitTlsAcceptor::new(&self.tls_config).map_err(ServerError::IoError)?;
 
         info!("OrbitWire server listening on {}", addr);
         if tls_acceptor.is_enabled() {

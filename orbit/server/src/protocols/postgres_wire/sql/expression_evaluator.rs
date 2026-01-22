@@ -3607,37 +3607,52 @@ impl ExpressionEvaluator {
         // If delimiter is NULL, each character becomes a separate element.
         // If delimiter is empty string, the string is split into characters.
 
-        let elements: Vec<SqlValue> =
-            if delimiter.is_none() || delimiter.as_ref().map(|d| d.is_empty()).unwrap_or(false) {
-                s.chars()
-                    .map(|c| {
-                        let s = c.to_string();
-                        if let Some(ns) = null_string {
-                            if s == ns {
-                                SqlValue::Null
-                            } else {
-                                SqlValue::Text(s)
-                            }
+        let elements: Vec<SqlValue> = match &delimiter {
+            None => s
+                .chars()
+                .map(|c| {
+                    let s = c.to_string();
+                    if let Some(ns) = null_string {
+                        if s == ns {
+                            SqlValue::Null
                         } else {
                             SqlValue::Text(s)
                         }
-                    })
-                    .collect()
-            } else {
-                s.split(delimiter.as_ref().unwrap())
-                    .map(|part| {
-                        if let Some(ns) = null_string {
-                            if part == ns {
-                                SqlValue::Null
-                            } else {
-                                SqlValue::Text(part.to_string())
-                            }
+                    } else {
+                        SqlValue::Text(s)
+                    }
+                })
+                .collect(),
+            Some(delim) if delim.is_empty() => s
+                .chars()
+                .map(|c| {
+                    let s = c.to_string();
+                    if let Some(ns) = null_string {
+                        if s == ns {
+                            SqlValue::Null
+                        } else {
+                            SqlValue::Text(s)
+                        }
+                    } else {
+                        SqlValue::Text(s)
+                    }
+                })
+                .collect(),
+            Some(delim) => s
+                .split(delim.as_str())
+                .map(|part| {
+                    if let Some(ns) = null_string {
+                        if part == ns {
+                            SqlValue::Null
                         } else {
                             SqlValue::Text(part.to_string())
                         }
-                    })
-                    .collect()
-            };
+                    } else {
+                        SqlValue::Text(part.to_string())
+                    }
+                })
+                .collect(),
+        };
 
         Ok(SqlValue::Array(elements))
     }
@@ -3651,7 +3666,7 @@ impl ExpressionEvaluator {
 
         match &args[0] {
             SqlValue::Null => Ok(SqlValue::Text("NULL".to_string())),
-            val => self.evaluate_quote_literal(&[val.clone()]),
+            val => self.evaluate_quote_literal(std::slice::from_ref(val)),
         }
     }
 
@@ -8596,11 +8611,11 @@ impl ExpressionEvaluator {
         // Extract lexemes from tsvector
         let lexemes: Vec<String> = tsvector
             .split_whitespace()
-            .filter_map(|part| {
+            .map(|part| {
                 if let Some(pos) = part.find(':') {
-                    Some(part[..pos].trim_matches('\'').to_string())
+                    part[..pos].trim_matches('\'').to_string()
                 } else {
-                    Some(part.trim_matches('\'').to_string())
+                    part.trim_matches('\'').to_string()
                 }
             })
             .collect();

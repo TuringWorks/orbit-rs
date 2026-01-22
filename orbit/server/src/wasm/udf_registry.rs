@@ -107,7 +107,7 @@ impl WasmUdfRegistry {
         // Convert SQL args to WASM values
         let wasm_args: Result<Vec<WasmValue>, _> = args
             .iter()
-            .map(|arg| WasmValue::from_sql_value(arg))
+            .map(WasmValue::from_sql_value)
             .collect();
         let wasm_args = wasm_args?;
 

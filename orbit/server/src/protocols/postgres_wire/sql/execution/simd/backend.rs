@@ -3,6 +3,9 @@
 //! Provides a unified interface for different SIMD implementations
 //! with runtime selection based on CPU capabilities.
 
+// Allow indexed loops in SIMD code - these are intentional for aligned access patterns
+#![allow(clippy::needless_range_loop)]
+
 use super::NullBitmap;
 
 /// Unified SIMD backend trait

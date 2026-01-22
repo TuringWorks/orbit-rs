@@ -130,13 +130,13 @@ impl HyperLogLog {
     }
 
     /// Serialize to base64-encoded string for storage
-    pub fn to_string(&self) -> String {
+    pub fn encode_to_string(&self) -> String {
         let bytes = bincode::serialize(&self).unwrap_or_default();
         base64::engine::general_purpose::STANDARD.encode(bytes)
     }
 
     /// Deserialize from base64-encoded string
-    pub fn from_string(s: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn decode_from_string(s: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let bytes = base64::engine::general_purpose::STANDARD.decode(s)?;
         Ok(bincode::deserialize(&bytes)?)
     }
@@ -197,7 +197,7 @@ impl HyperLogLogCommands {
 
         let mut hll = if let Some(value_json) = result {
             if let Ok(Some(encoded_str)) = serde_json::from_value::<Option<String>>(value_json) {
-                HyperLogLog::from_string(&encoded_str).unwrap_or_else(|_| HyperLogLog::new())
+                HyperLogLog::decode_from_string(&encoded_str).unwrap_or_else(|_| HyperLogLog::new())
             } else {
                 HyperLogLog::new()
             }
@@ -217,7 +217,7 @@ impl HyperLogLogCommands {
 
         // Store updated HLL
         if modified {
-            let hll_str = hll.to_string();
+            let hll_str = hll.encode_to_string();
             self.base
                 .local_registry
                 .execute_keyvalue(&key, "set_value", &[serde_json::to_value(hll_str)?])
@@ -252,7 +252,7 @@ impl HyperLogLogCommands {
             let hll = if let Some(value_json) = result {
                 if let Ok(Some(encoded_str)) = serde_json::from_value::<Option<String>>(value_json)
                 {
-                    HyperLogLog::from_string(&encoded_str).unwrap_or_else(|_| HyperLogLog::new())
+                    HyperLogLog::decode_from_string(&encoded_str).unwrap_or_else(|_| HyperLogLog::new())
                 } else {
                     HyperLogLog::new()
                 }
@@ -278,7 +278,7 @@ impl HyperLogLogCommands {
                         if let Ok(Some(encoded_str)) =
                             serde_json::from_value::<Option<String>>(value_json)
                         {
-                            if let Ok(hll) = HyperLogLog::from_string(&encoded_str) {
+                            if let Ok(hll) = HyperLogLog::decode_from_string(&encoded_str) {
                                 merged.merge(&hll);
                             }
                         }
@@ -317,7 +317,7 @@ impl HyperLogLogCommands {
                     if let Ok(Some(encoded_str)) =
                         serde_json::from_value::<Option<String>>(value_json)
                     {
-                        if let Ok(hll) = HyperLogLog::from_string(&encoded_str) {
+                        if let Ok(hll) = HyperLogLog::decode_from_string(&encoded_str) {
                             merged.merge(&hll);
                         }
                     }
@@ -326,7 +326,7 @@ impl HyperLogLogCommands {
         }
 
         // Store merged result
-        let merged_str = merged.to_string();
+        let merged_str = merged.encode_to_string();
         self.base
             .local_registry
             .execute_keyvalue(&dest_key, "set_value", &[serde_json::to_value(merged_str)?])
@@ -376,7 +376,7 @@ mod tests {
 
         let count = hll.count();
         // Should estimate ~3 (allowing for error margin)
-        assert!(count >= 2 && count <= 4, "Count was {}", count);
+        assert!((2..=4).contains(&count), "Count was {}", count);
     }
 
     #[test]
@@ -390,7 +390,11 @@ mod tests {
 
         let count = hll.count();
         // Should be within ~0.81% error: 9919 to 10081
-        assert!(count >= 9900 && count <= 10100, "Count was {}", count);
+        assert!(
+            (9900..=10100).contains(&count),
+            "Count was {}",
+            count
+        );
     }
 
     #[test]
@@ -411,7 +415,11 @@ mod tests {
 
         let count = hll1.count();
         // Should estimate ~10,000
-        assert!(count >= 9800 && count <= 10200, "Count was {}", count);
+        assert!(
+            (9800..=10200).contains(&count),
+            "Count was {}",
+            count
+        );
     }
 
     #[test]
@@ -421,8 +429,8 @@ mod tests {
         hll.add(b"test2");
         hll.add(b"test3");
 
-        let encoded = hll.to_string();
-        let deserialized = HyperLogLog::from_string(&encoded).unwrap();
+        let encoded = hll.encode_to_string();
+        let deserialized = HyperLogLog::decode_from_string(&encoded).unwrap();
 
         assert_eq!(hll.count(), deserialized.count());
     }

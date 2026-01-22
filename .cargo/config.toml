@@ -1,0 +1,9 @@
+# Cargo configuration for orbit-rs
+#
+# This configuration ensures the correct C/C++ compilers are used for native
+# dependencies (e.g., RocksDB). This is necessary when other toolchains
+# (like GNAT Ada) may be present in PATH with incompatible headers.
+
+[env]
+CC = "/usr/bin/clang"
+CXX = "/usr/bin/clang++"

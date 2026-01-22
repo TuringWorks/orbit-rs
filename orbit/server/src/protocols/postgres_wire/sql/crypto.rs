@@ -175,7 +175,7 @@ mod tests {
     #[test]
     fn test_argon2_generate_and_compare() {
         let password = json!("my_secret_password");
-        let hash = argon2_generate(&[password.clone()]).unwrap();
+        let hash = argon2_generate(std::slice::from_ref(&password)).unwrap();
         let hash_str = hash.as_str().unwrap();
 
         // Should verify successfully
@@ -194,7 +194,7 @@ mod tests {
     #[test]
     fn test_bcrypt_generate_and_compare() {
         let password = json!("my_secret_password");
-        let hash = bcrypt_generate(&[password.clone()]).unwrap();
+        let hash = bcrypt_generate(std::slice::from_ref(&password)).unwrap();
         let hash_str = hash.as_str().unwrap();
 
         // Should verify successfully
@@ -213,7 +213,7 @@ mod tests {
     #[test]
     fn test_pbkdf2_generate_and_compare() {
         let password = json!("my_secret_password");
-        let hash = pbkdf2_generate(&[password.clone()]).unwrap();
+        let hash = pbkdf2_generate(std::slice::from_ref(&password)).unwrap();
         let hash_str = hash.as_str().unwrap();
 
         // Should verify successfully

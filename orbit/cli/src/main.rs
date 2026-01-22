@@ -19,6 +19,8 @@
 //! - Multi-line query support
 //! - Multiple output formats (Table, JSON, CSV, Plain)
 
+#![allow(clippy::only_used_in_recursion)] // Recursive formatters use depth parameter
+
 use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, Color, Table};

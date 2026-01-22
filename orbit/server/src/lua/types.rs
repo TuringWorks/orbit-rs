@@ -222,7 +222,7 @@ impl LuaValue {
                     let key_str = match k {
                         RespValue::SimpleString(s) | RespValue::Error(s) => s.clone(),
                         RespValue::BulkString(b) => {
-                            String::from_utf8_lossy(&b.to_vec()).to_string()
+                            String::from_utf8_lossy(b).to_string()
                         }
                         _ => format!("{:?}", k),
                     };
@@ -362,6 +362,8 @@ pub struct LuaParameter {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::approx_constant)] // Test values like 3.14 are intentional test floats
+
     use super::*;
 
     #[test]

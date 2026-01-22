@@ -408,19 +408,20 @@ impl PythonRuntimePool {
 
         let worker = workers[worker_idx].clone();
 
-        // Check if worker should be restarted
-        {
+        // Check if worker should be restarted (drop guard before any await)
+        let should_restart = {
             let worker_guard = worker.lock().unwrap();
-            if worker_guard.should_restart() {
-                drop(worker_guard);
-                drop(workers);
+            worker_guard.should_restart()
+        };
 
-                // Replace worker
-                self.replace_worker(worker_idx).await?;
+        if should_restart {
+            drop(workers);
 
-                let workers = self.workers.read().await;
-                return Ok(workers[worker_idx].clone());
-            }
+            // Replace worker
+            self.replace_worker(worker_idx).await?;
+
+            let workers = self.workers.read().await;
+            return Ok(workers[worker_idx].clone());
         }
 
         Ok(worker)

@@ -1341,7 +1341,7 @@ mod aql_tests {
         }
 
         // 3. Add edges (Alice -> Bob, Bob -> Charlie, Alice -> Dave)
-        let rels = vec![("alice", "bob"), ("bob", "charlie"), ("alice", "dave")];
+        let rels = [("alice", "bob"), ("bob", "charlie"), ("alice", "dave")];
 
         for (i, (from, to)) in rels.iter().enumerate() {
             let mut data = HashMap::new();
@@ -1479,7 +1479,7 @@ mod aql_tests {
         // 2. Populate graph
         // Alice -> Bob, Alice -> Dave
         // Bob -> Charlie
-        let rels = vec![("alice", "bob"), ("bob", "charlie"), ("alice", "dave")];
+        let rels = [("alice", "bob"), ("bob", "charlie"), ("alice", "dave")];
 
         for (i, (from, to)) in rels.iter().enumerate() {
             let mut data = HashMap::new();

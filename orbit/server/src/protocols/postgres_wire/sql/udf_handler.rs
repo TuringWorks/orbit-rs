@@ -236,7 +236,7 @@ impl UdfHandler {
 
         // Set return type if specified
         if let Some(ref return_type) = stmt.return_type {
-            metadata = metadata.with_return_type(&pg_sql_type_to_string(return_type));
+            metadata = metadata.with_return_type(pg_sql_type_to_string(return_type));
         }
 
         // Add parameters
@@ -244,7 +244,7 @@ impl UdfHandler {
             for param in args {
                 let param_name = param.name.as_deref().unwrap_or("arg");
                 metadata =
-                    metadata.with_parameter(param_name, &pg_sql_type_to_string(&param.data_type));
+                    metadata.with_parameter(param_name, pg_sql_type_to_string(&param.data_type));
             }
         }
 

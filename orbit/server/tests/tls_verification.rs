@@ -32,7 +32,7 @@ fn setup_certificates(test_dir: &std::path::Path) -> (PathBuf, PathBuf, PathBuf)
 
     // Generate CA key and cert
     let status = std::process::Command::new("openssl")
-        .args(&[
+        .args([
             "req",
             "-new",
             "-x509",
@@ -60,7 +60,7 @@ fn setup_certificates(test_dir: &std::path::Path) -> (PathBuf, PathBuf, PathBuf)
 
     // Generate Server key and CSR
     let status = std::process::Command::new("openssl")
-        .args(&[
+        .args([
             "req",
             "-new",
             "-nodes",
@@ -80,7 +80,7 @@ fn setup_certificates(test_dir: &std::path::Path) -> (PathBuf, PathBuf, PathBuf)
 
     // Sign Server CSR with CA and include SAN
     let status = std::process::Command::new("openssl")
-        .args(&[
+        .args([
             "x509",
             "-req",
             "-in",

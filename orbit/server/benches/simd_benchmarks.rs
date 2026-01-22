@@ -597,7 +597,7 @@ fn bench_operators(c: &mut Criterion) {
     // I should follow that pattern for consistency and isolation.
 
     for size in [1000, 100_000].iter() {
-        let values: Vec<i32> = (0..*size).map(|i| (i % 100) as i32).collect();
+        let values: Vec<i32> = (0..*size).map(|i| i % 100).collect();
         let target = 50;
 
         // Scalar
