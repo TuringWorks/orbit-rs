@@ -779,16 +779,16 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "sync_wrapper 1.0.2",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-layer",
  "tower-service",
 ]
 
 [[package]]
 name = "axum"
-version = "0.8.7"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b098575ebe77cb6d14fc7f32749631a6e44edbef6b796f89b020e99ba20d425"
+checksum = "8b52af3cb4058c895d37317bb27508dccc8e5f2d39454016b297bf4a400597b8"
 dependencies = [
  "axum-core 0.5.5",
  "axum-macros",
@@ -815,7 +815,7 @@ dependencies = [
  "sync_wrapper 1.0.2",
  "tokio",
  "tokio-tungstenite 0.28.0",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -4524,7 +4524,7 @@ dependencies = [
  "parquet 55.2.0",
  "rand 0.8.5",
  "reqsign",
- "reqwest 0.12.24",
+ "reqwest 0.12.28",
  "roaring",
  "rust_decimal",
  "serde",
@@ -4553,7 +4553,7 @@ dependencies = [
  "http 1.4.0",
  "iceberg",
  "itertools 0.13.0",
- "reqwest 0.12.24",
+ "reqwest 0.12.28",
  "serde",
  "serde_derive",
  "serde_json",
@@ -5225,7 +5225,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite 0.26.2",
  "tokio-util",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http",
  "tracing",
 ]
@@ -6508,7 +6508,7 @@ dependencies = [
  "percent-encoding",
  "quick-xml 0.38.4",
  "reqsign",
- "reqwest 0.12.24",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tokio",
@@ -6537,7 +6537,7 @@ dependencies = [
  "prometheus",
  "quick-xml 0.38.4",
  "reqsign",
- "reqwest 0.12.24",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "sha2",
@@ -6602,7 +6602,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "axum 0.8.7",
+ "axum 0.8.8",
  "chrono",
  "config",
  "dashmap 6.1.0",
@@ -6623,7 +6623,7 @@ dependencies = [
  "tokio",
  "tokio-cron-scheduler",
  "tokio-util",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http",
  "tracing",
  "tracing-subscriber",
@@ -6645,7 +6645,7 @@ dependencies = [
  "orbit-server",
  "owo-colors",
  "redis",
- "reqwest 0.12.24",
+ "reqwest 0.12.28",
  "rustyline",
  "serde",
  "serde_json",
@@ -6686,7 +6686,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "axum 0.8.7",
+ "axum 0.8.8",
  "bytes",
  "chrono",
  "dashmap 5.5.3",
@@ -6706,7 +6706,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tonic 0.14.2",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http",
  "tracing",
  "uuid",
@@ -6925,7 +6925,7 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait",
- "axum 0.8.7",
+ "axum 0.8.8",
  "base64 0.22.1",
  "bcrypt",
  "bincode",
@@ -6973,7 +6973,7 @@ dependencies = [
  "rand 0.8.5",
  "redis",
  "regex",
- "reqwest 0.12.24",
+ "reqwest 0.12.28",
  "rmp-serde",
  "rocksdb",
  "rquickjs",
@@ -6997,7 +6997,7 @@ dependencies = [
  "toml 0.9.8",
  "tonic 0.14.2",
  "tonic-reflection",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http",
  "tracing",
  "tracing-subscriber",
@@ -7040,7 +7040,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "axum 0.8.7",
+ "axum 0.8.8",
  "chrono",
  "dashmap 5.5.3",
  "hyper 1.8.1",
@@ -7057,7 +7057,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "toml 0.9.8",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http",
  "tracing",
 ]
@@ -7102,7 +7102,7 @@ dependencies = [
  "tonic-build 0.14.2",
  "tonic-prost",
  "tonic-prost-build",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-lsp",
  "tracing",
  "tracing-subscriber",
@@ -8677,7 +8677,7 @@ dependencies = [
  "percent-encoding",
  "quick-xml 0.37.5",
  "rand 0.8.5",
- "reqwest 0.12.24",
+ "reqwest 0.12.28",
  "rust-ini",
  "serde",
  "serde_json",
@@ -8724,9 +8724,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.24"
+version = "0.12.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d0946410b9f7b082a427e4ef5c8ff541a88b357bc6c637c40db3a68ac70a36f"
+checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -8758,7 +8758,7 @@ dependencies = [
  "tokio-native-tls",
  "tokio-rustls",
  "tokio-util",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http",
  "tower-service",
  "url",
@@ -11091,7 +11091,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb7613188ce9f7df5bfe185db26c5814347d110db17920415cf2fbcad85e7203"
 dependencies = [
  "async-trait",
- "axum 0.8.7",
+ "axum 0.8.8",
  "base64 0.22.1",
  "bytes",
  "h2 0.4.12",
@@ -11108,7 +11108,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-stream",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -11203,9 +11203,9 @@ dependencies = [
 
 [[package]]
 name = "tower"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
+checksum = "ebe5ef63511595f1344e2d5cfa636d973292adc0eec1f0ad45fae9f0851ab1d4"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -11222,9 +11222,9 @@ dependencies = [
 
 [[package]]
 name = "tower-http"
-version = "0.6.7"
+version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cf146f99d442e8e68e585f5d798ccd3cad9a7835b917e09728880a862706456"
+checksum = "d4e6559d53cc268e5031cd8429d05415bc4cb4aefc4aa5d6cc35fbf5b924a1f8"
 dependencies = [
  "base64 0.22.1",
  "bitflags 2.10.0",
@@ -11235,7 +11235,7 @@ dependencies = [
  "iri-string",
  "mime",
  "pin-project-lite",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-layer",
  "tower-service",
  "tracing",
