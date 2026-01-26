@@ -153,7 +153,7 @@ criterion = { version = "0.7", features = ["html_reports", "async_tokio"] }
 proptest = "1.0"
 tempfile = "3.0"
 env_logger = "0.11"
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.49", features = ["full"] }
 
 [[bench]]
 name = "graph_traversal_bench"
