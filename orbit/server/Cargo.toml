@@ -300,7 +300,7 @@ wasm-all = ["wasm-postgres", "wasm-mysql", "wasm-redis", "wasm-wasi"]  # All WAS
 [dev-dependencies]
 mockall.workspace = true
 tokio-test = "0.4"
-tempfile = "3.10"
+tempfile = "3.24"
 redis = "0.32"
 criterion = { version = "0.5", features = ["html_reports"] }
 
