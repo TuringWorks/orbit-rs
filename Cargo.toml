@@ -120,7 +120,7 @@ exponential-backoff = "2.0"  # Replaces unmaintained backoff
 # Testing
 mockall = "0.13"
 cucumber = "0.21"
-proptest = "1.4"
+proptest = "1.10"
 tokio-test = "0.4"
 rand = "0.9"
 
