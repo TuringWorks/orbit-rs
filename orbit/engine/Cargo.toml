@@ -14,7 +14,7 @@ orbit-client = { path = "../client" }
 orbit-compute = { path = "../compute" }
 
 # Async runtime
-tokio = { version = "1.48", features = ["full"] }
+tokio = { version = "1.49", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 futures = "0.3"
 
