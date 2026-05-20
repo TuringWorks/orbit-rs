@@ -1,4 +1,4 @@
-# Orbit-RS - A Performant Multi-Protocol Data Platfrom
+# Orbit-RS - A Performant Multi-Protocol Data Platform
 
 ![License](https://img.shields.io/badge/license-BSD--3--Clause%20OR%20MIT-blue.svg)
 [![Rust Version](https://img.shields.io/badge/rust-1.70+-red.svg)](https://www.rust-lang.org/)
@@ -9,16 +9,16 @@
 
 **Complete documentation is available in the [docs/](docs/) directory:**
 
-- **[ Documentation Index](docs/README.md)** - Navigate all documentation
-- **[ Feature Index](docs/features.md)** - Complete feature list with implementation status
-- **[ Overview](docs/overview.md)** - Architecture, features, and key benefits  
-- **[ Quick Start](docs/quick_start.md)** - Get up and running in minutes
-- **[ Virtual Actor Persistence](docs/virtual_actor_persistence.md)** - Actor state management and lifecycle
-- **[ Transaction Features](docs/features/transaction_features.md)** - Advanced distributed transactions
-- **[ Protocol Adapters](docs/protocols/protocol_adapters.md)** - Redis, PostgreSQL, MCP support
-- **[ Deployment](docs/kubernetes_deployment.md)** - Kubernetes, CI/CD, production setup
-- **[ Development](docs/development/development.md)** - Contributing and development guide
-- **[ Roadmap](docs/roadmap.md)** - Development roadmap and GitHub project
+- **[Documentation Index](docs/README.md)** - Navigate all documentation
+- **[Feature Index](docs/features.md)** - Complete feature list with implementation status
+- **[Overview](docs/overview.md)** - Architecture, features, and key benefits  
+- **[Quick Start](docs/quick_start.md)** - Get up and running in minutes
+- **[Virtual Actor Persistence](docs/virtual_actor_persistence.md)** - Actor state management and lifecycle
+- **[Transaction Features](docs/features/transaction_features.md)** - Advanced distributed transactions
+- **[Protocol Adapters](docs/protocols/protocol_adapters.md)** - Redis, PostgreSQL, MCP support
+- **[Deployment](docs/kubernetes_deployment.md)** - Kubernetes, CI/CD, production setup
+- **[Development](docs/development/development.md)** - Contributing and development guide
+- **[Roadmap](docs/roadmap.md)** - Development roadmap and GitHub project
 
 ## What is Orbit-RS?
 
@@ -323,7 +323,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - **Performance Benchmarking** - Statistical analysis and regression detection
 - **Real-time Streaming** - CDC, event sourcing, and stream processing
 - **Advanced Connection Pooling** - Enterprise-grade multi-tier pooling with circuit breakers, load balancing, health monitoring, and dynamic scaling
-- **Enterprise Security** - Authentication, authorization, audit logging
+- **Enterprise Security** - Authentication, authorization, and audit logging
 - **Kubernetes Integration** - Native operator, Helm charts, production deployment
 - **Observability** - Prometheus metrics, Grafana dashboards, comprehensive monitoring
 
@@ -417,7 +417,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | **Model Context Protocol (MCP)** | Experimental | 15% | No | 44 tests | Basic AI agent integration framework |
 | **Neo4j Cypher/Bolt** | Active | 60% | Yes | 18 tests | Bolt v4/v5 protocol, graph algorithms, db procedures |
 | **ArangoDB AQL** | Active | 65% | Yes | 61 tests | Graph traversals, window functions, aggregations, UPSERT |
-| **MongoDB Protocol** | Complete | 75% | Yes | 102 tests | 34 expression operators, findAndModify, distinct, comprehensive test coverage |
+| **MongoDB Protocol** | Complete | 75% | Yes | 102 tests | 34 expression operators, findAndModify, distinct, comprehensive aggregation support |
 | **OrbitQL Engine** | Active | 40% | No | 256 tests | Query planning works, optimizer incomplete |
 | **Persistence Layer** | Complete | 85% | Yes | 47+ tests | RocksDB, COW B+Tree, LSM-Tree, Memory, TiKV, Cloud storage |
 | **Kubernetes Integration** | Active | 70% | No | 16 tests | Operator basics, needs production hardening |
