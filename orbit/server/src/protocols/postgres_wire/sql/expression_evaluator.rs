@@ -4044,8 +4044,8 @@ impl ExpressionEvaluator {
 
         match (&args[0], &args[1]) {
             (SqlValue::Array(arr), SqlValue::Integer(n)) => {
-                use rand::seq::SliceRandom;
-                let mut rng = rand::thread_rng();
+                use rand::seq::IndexedRandom;
+                let mut rng = rand::rng();
                 let count = (*n).max(0) as usize;
                 let sample: Vec<SqlValue> = arr.choose_multiple(&mut rng, count).cloned().collect();
                 Ok(SqlValue::Array(sample))
@@ -4067,7 +4067,7 @@ impl ExpressionEvaluator {
         match &args[0] {
             SqlValue::Array(arr) => {
                 use rand::seq::SliceRandom;
-                let mut rng = rand::thread_rng();
+                let mut rng = rand::rng();
                 let mut shuffled = arr.clone();
                 shuffled.shuffle(&mut rng);
                 Ok(SqlValue::Array(shuffled))
@@ -5229,40 +5229,31 @@ impl ExpressionEvaluator {
                     if result[i..].starts_with('%') && i + 1 < result.len() {
                         let spec = result.chars().nth(i + 1).unwrap();
                         match spec {
-                            's' => {
-                                if arg_idx < args.len() {
+                            's'
+                                if arg_idx < args.len() => {
                                     let val = args[arg_idx].to_postgres_string();
                                     result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
                                     i += val.len();
                                     arg_idx += 1;
-                                } else {
-                                    i += 2;
                                 }
-                            }
-                            'I' => {
-                                if arg_idx < args.len() {
+                            'I'
+                                if arg_idx < args.len() => {
                                     let s = args[arg_idx].to_postgres_string();
                                     let escaped = s.replace('"', "\"\"");
                                     let val = format!("\"{}\"", escaped);
                                     result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
                                     i += val.len();
                                     arg_idx += 1;
-                                } else {
-                                    i += 2;
                                 }
-                            }
-                            'L' => {
-                                if arg_idx < args.len() {
+                            'L'
+                                if arg_idx < args.len() => {
                                     let s = args[arg_idx].to_postgres_string();
                                     let escaped = s.replace('\'', "''");
                                     let val = format!("'{}'", escaped);
                                     result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
                                     i += val.len();
                                     arg_idx += 1;
-                                } else {
-                                    i += 2;
                                 }
-                            }
                             '%' => {
                                 result = format!("{}{}", &result[..i], &result[i + 1..]);
                                 i += 1;
