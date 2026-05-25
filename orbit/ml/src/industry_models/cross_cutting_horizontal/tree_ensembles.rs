@@ -354,7 +354,11 @@ impl IndustryModel for GradientBoostingModel {
             let n_features = 10;
 
             let features: Vec<Vec<f64>> = (0..n_samples)
-                .map(|_| (0..n_features).map(|_| rng.gen_range(-1.0..1.0)).collect())
+                .map(|_| {
+                    (0..n_features)
+                        .map(|_| rng.random_range(-1.0..1.0))
+                        .collect()
+                })
                 .collect();
 
             // Generate targets based on features (for classification)
@@ -544,7 +548,11 @@ impl IndustryModel for GradientBoostingModel {
             let n_features = 10;
 
             let features: Vec<Vec<f64>> = (0..n_samples)
-                .map(|_| (0..n_features).map(|_| rng.gen_range(-1.0..1.0)).collect())
+                .map(|_| {
+                    (0..n_features)
+                        .map(|_| rng.random_range(-1.0..1.0))
+                        .collect()
+                })
                 .collect();
 
             let targets: Vec<f64> = features
@@ -681,7 +689,11 @@ impl IndustryModel for RandomForestModel {
             let n_features = 10;
 
             let features: Vec<Vec<f64>> = (0..n_samples)
-                .map(|_| (0..n_features).map(|_| rng.gen_range(-1.0..1.0)).collect())
+                .map(|_| {
+                    (0..n_features)
+                        .map(|_| rng.random_range(-1.0..1.0))
+                        .collect()
+                })
                 .collect();
 
             let targets: Vec<f64> = features
@@ -709,7 +721,7 @@ impl IndustryModel for RandomForestModel {
             // Bootstrap sampling
             let indices: Vec<usize> = if self.bootstrap {
                 (0..n_samples)
-                    .map(|_| rng.gen_range(0..n_samples))
+                    .map(|_| rng.random_range(0..n_samples))
                     .collect()
             } else {
                 (0..n_samples).collect()

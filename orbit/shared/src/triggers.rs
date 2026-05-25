@@ -678,11 +678,9 @@ pub struct TriggerStats {
 impl TriggerStats {
     /// Get average execution time in microseconds
     pub fn avg_execution_time_micros(&self) -> u64 {
-        if self.total_executions > 0 {
-            self.total_execution_time_micros / self.total_executions
-        } else {
-            0
-        }
+        self.total_execution_time_micros
+            .checked_div(self.total_executions)
+            .unwrap_or(0)
     }
 
     /// Get success rate as a percentage

@@ -71,7 +71,7 @@ impl From<mlua::Error> for LuaError {
                 used_bytes: 0,
                 limit_bytes: 0,
             },
-            mlua::Error::MemoryLimitNotAvailable => {
+            mlua::Error::MemoryControlNotAvailable => {
                 LuaError::SecurityViolation("Memory limit enforcement not available".to_string())
             }
             _ => LuaError::InternalError(err.to_string()),
@@ -221,9 +221,7 @@ impl LuaValue {
                     // Use string representation of key
                     let key_str = match k {
                         RespValue::SimpleString(s) | RespValue::Error(s) => s.clone(),
-                        RespValue::BulkString(b) => {
-                            String::from_utf8_lossy(b).to_string()
-                        }
+                        RespValue::BulkString(b) => String::from_utf8_lossy(b).to_string(),
                         _ => format!("{:?}", k),
                     };
                     table.insert(key_str, LuaValue::from_resp(v));

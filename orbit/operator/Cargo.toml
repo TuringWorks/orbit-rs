@@ -24,7 +24,7 @@ futures = { workspace = true }
 # Serialization and schema
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_yaml = "0.9"
+serde_yml = "0.0.12"
 schemars = { version = "0.8", features = ["chrono"] }
 
 # Error handling
@@ -46,7 +46,9 @@ clap = { version = "4.0", features = ["derive", "env"] }
 metrics = { workspace = true }
 
 # HTTP server for health/metrics
-hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp", "runtime"] }
+hyper = { version = "1.0", features = ["server", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
 
 [dev-dependencies]
 tempfile = "3.0"

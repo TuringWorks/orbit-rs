@@ -59,8 +59,8 @@ serde.workspace = true
 serde_json.workspace = true
 rmp-serde = "1.3"  # MessagePack serialization for Python UDF communication
 # WASM UDF Support
-wasmtime = { version = "39.0", optional = true, features = ["async"] }  # WASM runtime
-wasmtime-wasi = { version = "39.0", optional = true }  # WASI support for file/network I/O
+wasmtime = { version = "45.0", optional = true, features = ["async"] }  # WASM runtime
+wasmtime-wasi = { version = "45.0", optional = true }  # WASI support for file/network I/O
 lru = "0.12"  # LRU cache for compiled WASM modules
 bincode = "1.3"
 tracing.workspace = true
@@ -79,7 +79,7 @@ flate2 = "1.0" # For compression
 toml = "0.9" # For configuration file support
 # New persistence backends
 rocksdb = { version = "0.22", default-features = false, optional = true }
-rand = "0.8"
+rand.workspace = true
 uuid = { version = "1.19", features = ["v4", "v7", "serde"] }
 env_logger = "0.11"
 fastbloom-rs = "0.5" # For bloom filters in LSM-Tree
@@ -108,11 +108,11 @@ snap = "1.1"          # Snappy compression
 # Boa - Pure Rust JS engine for PostgreSQL PL/JavaScript (security-first)
 boa_engine = { version = "0.21", optional = true }
 # rquickjs - QuickJS bindings for MongoDB/Redis (performance-critical)
-rquickjs = { version = "0.6", features = ["array-buffer", "classes", "futures"], optional = true }
+rquickjs = { version = "0.11", features = ["array-buffer", "classes", "futures"], optional = true }
 
 # Lua Engine
 # mlua - LuaJIT/Lua 5.4 bindings for Redis FUNCTION/EVAL and PL/Lua
-mlua = { version = "0.9", features = ["lua54", "async", "send", "serialize"], optional = true }
+mlua = { version = "0.10", features = ["lua54", "vendored", "async", "send", "serialize"], optional = true }
 tokio-rustls = "0.26.4"
 rustls-pemfile = "2.2.0"
 rustls = { version = "0.23.35", features = ["ring"] }

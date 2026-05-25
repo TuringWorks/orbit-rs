@@ -44,7 +44,7 @@ impl IsolationNode {
         }
 
         // Randomly select a feature
-        let feature_idx = rng.gen_range(0..num_features);
+        let feature_idx = rng.random_range(0..num_features);
 
         // Find min and max for this feature
         let (min_val, max_val) = data.iter().fold((f64::MAX, f64::MIN), |(min, max), row| {
@@ -57,7 +57,7 @@ impl IsolationNode {
         }
 
         // Random split value between min and max
-        let split_value = rng.gen_range(min_val..max_val);
+        let split_value = rng.random_range(min_val..max_val);
 
         // Partition data
         let (left_data, right_data): (Vec<_>, Vec<_>) = data
@@ -214,7 +214,7 @@ impl IndustryModel for IsolationForestDetector {
             (0..256)
                 .map(|_| {
                     (0..10)
-                        .map(|_| rng.gen_range(-1.0..1.0))
+                        .map(|_| rng.random_range(-1.0..1.0))
                         .collect::<Vec<f64>>()
                 })
                 .collect::<Vec<_>>()
@@ -310,9 +310,9 @@ impl IndustryModel for IsolationForestDetector {
                     let features: Vec<f64> = (0..10)
                         .map(|_| {
                             if is_anomaly {
-                                rng.gen_range(3.0..5.0) // Anomalies are far from normal
+                                rng.random_range(3.0..5.0) // Anomalies are far from normal
                             } else {
-                                rng.gen_range(-1.0..1.0)
+                                rng.random_range(-1.0..1.0)
                             }
                         })
                         .collect();
@@ -612,7 +612,7 @@ impl IndustryModel for OneClassSVMDetector {
             (0..100)
                 .map(|_| {
                     (0..10)
-                        .map(|_| rng.gen_range(-1.0..1.0))
+                        .map(|_| rng.random_range(-1.0..1.0))
                         .collect::<Vec<f64>>()
                 })
                 .collect::<Vec<_>>()
@@ -722,9 +722,9 @@ impl IndustryModel for OneClassSVMDetector {
                     let features: Vec<f64> = (0..10)
                         .map(|_| {
                             if is_anomaly {
-                                rng.gen_range(3.0..5.0)
+                                rng.random_range(3.0..5.0)
                             } else {
-                                rng.gen_range(-1.0..1.0)
+                                rng.random_range(-1.0..1.0)
                             }
                         })
                         .collect();

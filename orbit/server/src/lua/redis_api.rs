@@ -37,14 +37,14 @@ impl RedisApi {
         // redis.call(command, ...)
         let call_fn =
             lua.create_async_function(|lua, args: mlua::Variadic<MluaValue>| async move {
-                Self::redis_call(lua, args, false).await
+                Self::redis_call(&lua, args, false).await
             })?;
         redis_table.set("call", call_fn)?;
 
         // redis.pcall(command, ...) - protected call
         let pcall_fn =
             lua.create_async_function(|lua, args: mlua::Variadic<MluaValue>| async move {
-                Self::redis_call(lua, args, true).await
+                Self::redis_call(&lua, args, true).await
             })?;
         redis_table.set("pcall", pcall_fn)?;
 
@@ -95,11 +95,11 @@ impl RedisApi {
     /// Execute a Redis command
     /// If protected=true, returns errors as values instead of throwing
     #[cfg(feature = "lua-mlua")]
-    async fn redis_call<'lua>(
-        _lua: &'lua Lua,
-        args: mlua::Variadic<MluaValue<'lua>>,
+    async fn redis_call(
+        _lua: &Lua,
+        args: mlua::Variadic<MluaValue>,
         protected: bool,
-    ) -> mlua::Result<MluaValue<'lua>> {
+    ) -> mlua::Result<MluaValue> {
         if args.is_empty() {
             return Err(mlua::Error::RuntimeError(
                 "redis.call requires at least one argument".to_string(),
@@ -119,7 +119,7 @@ impl RedisApi {
         // Extract command arguments
         let cmd_args: Vec<String> = args[1..]
             .iter()
-            .map(|v| Self::mlua_value_to_string(v))
+            .map(Self::mlua_value_to_string)
             .collect::<mlua::Result<Vec<_>>>()?;
 
         // TODO: Execute actual Redis command through command handler
@@ -163,13 +163,13 @@ impl RedisApi {
         let mut _description = None;
 
         if let Some(opts) = options {
-            if let Ok(flags_val) = opts.get::<_, Table>("flags") {
+            if let Ok(flags_val) = opts.get::<Table>("flags") {
                 for (_, flag) in flags_val.pairs::<i32, String>().flatten() {
                     flags.push(flag);
                 }
             }
 
-            if let Ok(desc) = opts.get::<_, String>("description") {
+            if let Ok(desc) = opts.get::<String>("description") {
                 _description = Some(desc);
             }
         }
@@ -199,7 +199,7 @@ impl RedisApi {
 
     /// Create a status reply
     #[cfg(feature = "lua-mlua")]
-    fn redis_status_reply(lua: &Lua, message: String) -> mlua::Result<Table<'_>> {
+    fn redis_status_reply(lua: &Lua, message: String) -> mlua::Result<Table> {
         let table = lua.create_table()?;
         table.set("ok", message)?;
         Ok(table)
@@ -207,7 +207,7 @@ impl RedisApi {
 
     /// Create an error reply
     #[cfg(feature = "lua-mlua")]
-    fn redis_error_reply(lua: &Lua, message: String) -> mlua::Result<Table<'_>> {
+    fn redis_error_reply(lua: &Lua, message: String) -> mlua::Result<Table> {
         let table = lua.create_table()?;
         table.set("err", message)?;
         Ok(table)
@@ -215,7 +215,7 @@ impl RedisApi {
 
     /// Convert mlua Value to String for command arguments
     #[cfg(feature = "lua-mlua")]
-    fn mlua_value_to_string(value: &MluaValue<'_>) -> mlua::Result<String> {
+    fn mlua_value_to_string(value: &MluaValue) -> mlua::Result<String> {
         match value {
             MluaValue::Nil => Ok("".to_string()),
             MluaValue::Boolean(b) => Ok(b.to_string()),
@@ -282,8 +282,8 @@ mod tests {
         assert!(redis_table.contains_key("error_reply").unwrap());
 
         // Verify constants
-        assert_eq!(redis_table.get::<_, i32>("LOG_DEBUG").unwrap(), 0);
-        assert_eq!(redis_table.get::<_, i32>("LOG_WARNING").unwrap(), 3);
+        assert_eq!(redis_table.get::<i32>("LOG_DEBUG").unwrap(), 0);
+        assert_eq!(redis_table.get::<i32>("LOG_WARNING").unwrap(), 3);
     }
 
     #[cfg(feature = "lua-mlua")]
@@ -309,7 +309,7 @@ mod tests {
 
         let result: Table = lua.load("return redis.status_reply('OK')").eval().unwrap();
 
-        assert_eq!(result.get::<_, String>("ok").unwrap(), "OK");
+        assert_eq!(result.get::<String>("ok").unwrap(), "OK");
     }
 
     #[cfg(feature = "lua-mlua")]
@@ -323,6 +323,6 @@ mod tests {
             .eval()
             .unwrap();
 
-        assert_eq!(result.get::<_, String>("err").unwrap(), "Error message");
+        assert_eq!(result.get::<String>("err").unwrap(), "Error message");
     }
 }

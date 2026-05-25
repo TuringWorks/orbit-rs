@@ -2165,9 +2165,9 @@ impl AqlQueryEngine {
             }
             "RAND" => {
                 use rand::Rng;
-                let mut rng = rand::thread_rng();
+                let mut rng = rand::rng();
                 Ok(AqlValue::Number(
-                    serde_json::Number::from_f64(rng.gen::<f64>())
+                    serde_json::Number::from_f64(rng.random::<f64>())
                         .unwrap_or(serde_json::Number::from(0)),
                 ))
             }
@@ -2183,8 +2183,8 @@ impl AqlQueryEngine {
                         }
                     })
                     .unwrap_or(16) as usize;
-                let token: String = rand::thread_rng()
-                    .sample_iter(&rand::distributions::Alphanumeric)
+                let token: String = rand::rng()
+                    .sample_iter(&rand::distr::Alphanumeric)
                     .take(length)
                     .map(char::from)
                     .collect();

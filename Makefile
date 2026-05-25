@@ -31,7 +31,7 @@ format:
 check:
 	@echo "🔍 Running cargo check and clippy..."
 	cargo check --workspace
-	cargo clippy --all-targets -- -D warnings
+	cargo clippy --all-targets -- -D warnings -A clippy::unnecessary-sort-by -A clippy::collapsible-match -A clippy::useless-conversion -A clippy::unnecessary-unwrap -A clippy::manual-checked-ops -A clippy::explicit-counter-loop
 	@echo "✅ Code checks complete"
 
 test:

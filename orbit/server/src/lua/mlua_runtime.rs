@@ -265,11 +265,7 @@ impl MluaRuntime {
     /// Convert LuaValue to mlua::Value
     #[cfg(feature = "lua-mlua")]
     #[allow(dead_code)]
-    fn lua_value_to_mlua<'lua>(
-        &self,
-        lua: &'lua Lua,
-        value: &LuaValue,
-    ) -> LuaResult<MluaValue<'lua>> {
+    fn lua_value_to_mlua(&self, lua: &Lua, value: &LuaValue) -> LuaResult<MluaValue> {
         let mlua_value = match value {
             LuaValue::Nil => MluaValue::Nil,
             LuaValue::Boolean(b) => MluaValue::Boolean(*b),
@@ -312,6 +308,7 @@ impl MluaRuntime {
             MluaValue::Number(f) => LuaValue::Number(*f),
             MluaValue::String(s) => {
                 let bytes = s.as_bytes();
+                let bytes: &[u8] = bytes.as_ref();
                 // Try UTF-8 first, fallback to binary
                 match std::str::from_utf8(bytes) {
                     Ok(str_val) => LuaValue::String(str_val.to_string()),
@@ -354,6 +351,11 @@ impl MluaRuntime {
             }
             MluaValue::Error(e) => {
                 return Err(LuaError::RuntimeError(e.to_string()));
+            }
+            MluaValue::Other(_) => {
+                return Err(LuaError::TypeError(
+                    "Other values not supported".to_string(),
+                ));
             }
         };
 
@@ -572,7 +574,7 @@ fn eval_lua_blocking(
 
 // Helper to convert LuaValue to mlua::Value
 #[cfg(feature = "lua-mlua")]
-fn lua_value_to_mlua<'lua>(lua: &'lua Lua, value: &LuaValue) -> LuaResult<MluaValue<'lua>> {
+fn lua_value_to_mlua(lua: &Lua, value: &LuaValue) -> LuaResult<MluaValue> {
     let mlua_value = match value {
         LuaValue::Nil => MluaValue::Nil,
         LuaValue::Boolean(b) => MluaValue::Boolean(*b),
@@ -616,6 +618,7 @@ fn mlua_value_to_lua(value: &MluaValue) -> LuaResult<LuaValue> {
         MluaValue::Number(f) => LuaValue::Number(*f),
         MluaValue::String(s) => {
             let bytes = s.as_bytes();
+            let bytes: &[u8] = bytes.as_ref();
             // Try UTF-8 first, fallback to binary
             match std::str::from_utf8(bytes) {
                 Ok(str_val) => LuaValue::String(str_val.to_string()),
@@ -658,6 +661,11 @@ fn mlua_value_to_lua(value: &MluaValue) -> LuaResult<LuaValue> {
         }
         MluaValue::Error(e) => {
             return Err(LuaError::RuntimeError(e.to_string()));
+        }
+        MluaValue::Other(_) => {
+            return Err(LuaError::TypeError(
+                "Other values not supported".to_string(),
+            ));
         }
     };
 

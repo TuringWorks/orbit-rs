@@ -4,7 +4,7 @@ use crate::error::{MLError, Result};
 use crate::neural_networks::{NetworkArchitecture, NeuralNetwork, Optimizer};
 use async_trait::async_trait;
 use ndarray::{Array1, Array2, Axis};
-use rand::distributions::Uniform;
+use rand::distr::Uniform;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
@@ -91,8 +91,8 @@ impl GRUNetwork {
     /// A new GRU network instance
     pub async fn new(architecture: NetworkArchitecture) -> Result<Self> {
         let mut layers = Vec::new();
-        let mut rng = rand::thread_rng();
-        let range = Uniform::new(-0.1, 0.1);
+        let mut rng = rand::rng();
+        let range = Uniform::new(-0.1, 0.1).unwrap();
 
         // Initialize weights for each GRU layer
         // Note: This assumes the architecture defines GRU layers correctly

@@ -313,35 +313,23 @@ fn matches_filter(doc: &Document, filter: &Document) -> bool {
 fn matches_operator(doc_val: &Bson, op_doc: &Document) -> bool {
     for (op, expected) in op_doc.iter() {
         match op.as_str() {
-            "$eq" => {
-                if doc_val != expected {
-                    return false;
-                }
+            "$eq" if doc_val != expected => {
+                return false;
             }
-            "$ne" => {
-                if doc_val == expected {
-                    return false;
-                }
+            "$ne" if doc_val == expected => {
+                return false;
             }
-            "$gt" => {
-                if !compare_bson(doc_val, expected, |a, b| a > b) {
-                    return false;
-                }
+            "$gt" if !compare_bson(doc_val, expected, |a, b| a > b) => {
+                return false;
             }
-            "$gte" => {
-                if !compare_bson(doc_val, expected, |a, b| a >= b) {
-                    return false;
-                }
+            "$gte" if !compare_bson(doc_val, expected, |a, b| a >= b) => {
+                return false;
             }
-            "$lt" => {
-                if !compare_bson(doc_val, expected, |a, b| a < b) {
-                    return false;
-                }
+            "$lt" if !compare_bson(doc_val, expected, |a, b| a < b) => {
+                return false;
             }
-            "$lte" => {
-                if !compare_bson(doc_val, expected, |a, b| a <= b) {
-                    return false;
-                }
+            "$lte" if !compare_bson(doc_val, expected, |a, b| a <= b) => {
+                return false;
             }
             "$in" => {
                 if let Bson::Array(arr) = expected {

@@ -11,22 +11,24 @@ use rand::Rng;
 
 /// Generate random i32 values for testing
 fn generate_random_i32(count: usize) -> Vec<i32> {
-    let mut rng = rand::thread_rng();
-    (0..count).map(|_| rng.gen_range(-1000..1000)).collect()
+    let mut rng = rand::rng();
+    (0..count).map(|_| rng.random_range(-1000..1000)).collect()
 }
 
 /// Generate random f64 values for testing
 fn generate_random_f64(count: usize) -> Vec<f64> {
-    let mut rng = rand::thread_rng();
-    (0..count).map(|_| rng.gen_range(-1000.0..1000.0)).collect()
+    let mut rng = rand::rng();
+    (0..count)
+        .map(|_| rng.random_range(-1000.0..1000.0))
+        .collect()
 }
 
 /// Generate null bitmap (some values null)
 fn generate_null_bitmap(count: usize, null_ratio: f64) -> Vec<u8> {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut bitmap = vec![0u8; (count + 7) / 8];
     for i in 0..count {
-        if rng.gen::<f64>() < null_ratio {
+        if rng.random::<f64>() < null_ratio {
             let byte_idx = i / 8;
             let bit_idx = i % 8;
             bitmap[byte_idx] |= 1 << bit_idx; // Set bit to 1 for null

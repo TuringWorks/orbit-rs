@@ -116,7 +116,7 @@ impl ProcedureInterpreter {
             )));
         }
 
-        for (arg_def, arg_val) in procedure.args.iter().zip(args.into_iter()) {
+        for (arg_def, arg_val) in procedure.args.iter().zip(args) {
             scope.define(arg_def.name.clone(), arg_val);
         }
 

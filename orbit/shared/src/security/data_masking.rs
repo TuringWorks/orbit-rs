@@ -669,7 +669,7 @@ impl DataMaskingEngine {
     /// Shuffle values within a column (for batch operations)
     pub fn shuffle_column(values: &mut [serde_json::Value]) {
         use rand::seq::SliceRandom;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         values.shuffle(&mut rng);
     }
 }

@@ -280,7 +280,7 @@ impl RbacEngine {
         let mut policies = self.policies.write().await;
         policies.push(policy);
         // Sort by priority (higher priority first)
-        policies.sort_by(|a, b| b.priority.cmp(&a.priority));
+        policies.sort_by_key(|b| std::cmp::Reverse(b.priority));
         Ok(())
     }
 

@@ -1041,11 +1041,9 @@ impl GeometryStatistics {
         } else {
             0.0
         };
-        let avg_polygon_vertices = if polygon_count > 0 {
-            total_polygon_vertices / polygon_count
-        } else {
-            0
-        };
+        let avg_polygon_vertices = total_polygon_vertices
+            .checked_div(polygon_count)
+            .unwrap_or(0);
 
         Ok(Self {
             total_records: geometries.len(),

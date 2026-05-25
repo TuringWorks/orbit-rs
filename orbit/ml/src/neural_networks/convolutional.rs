@@ -175,12 +175,10 @@ impl ConvolutionalNetwork {
                     current_height = (current_height - pool_size.0) / stride.0 + 1;
                     current_width = (current_width - pool_size.1) / stride.1 + 1;
                 }
-                LayerType::Flatten => {
-                    if !is_flattened {
-                        flat_size = current_channels * current_height * current_width;
-                        is_flattened = true;
-                        layers.push(CNNLayer::Flatten);
-                    }
+                LayerType::Flatten if !is_flattened => {
+                    flat_size = current_channels * current_height * current_width;
+                    is_flattened = true;
+                    layers.push(CNNLayer::Flatten);
                 }
                 LayerType::Dense => {
                     if !is_flattened {
@@ -566,12 +564,11 @@ impl NeuralNetwork for ConvolutionalNetwork {
                     // Reshape gradient back to 4D if needed
                     // For simplicity, we stop backprop at flatten for now
                 }
-                CNNLayer::Dropout { rate, training } => {
+                CNNLayer::Dropout { rate, training } if *training && *rate > 0.0 => {
                     // Dropout backward: apply same mask (simplified)
-                    if *training && *rate > 0.0 {
-                        current_grad = current_grad.clone();
-                    }
+                    current_grad = current_grad.clone();
                 }
+                CNNLayer::Dropout { .. } => {}
                 _ => {}
             }
         }

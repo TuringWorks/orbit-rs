@@ -480,10 +480,10 @@ impl QueryCache {
                 });
             }
             EvictionPolicy::LFU => {
-                entries.sort_by(|a, b| a.1.stats.hit_count.cmp(&b.1.stats.hit_count));
+                entries.sort_by_key(|a| a.1.stats.hit_count);
             }
             EvictionPolicy::TTL => {
-                entries.sort_by(|a, b| a.1.expires_at.cmp(&b.1.expires_at));
+                entries.sort_by_key(|a| a.1.expires_at);
             }
             EvictionPolicy::ARC => {
                 // TODO: Implement ARC eviction

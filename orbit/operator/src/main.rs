@@ -140,87 +140,69 @@ async fn main() -> Result<()> {
 }
 
 async fn start_health_server(addr: String) -> Result<()> {
-    use hyper::service::{make_service_fn, service_fn};
-    use hyper::{Body, Request, Response, Server, StatusCode};
+    use http_body_util::Full;
+    use hyper::body::Bytes;
+    use hyper::server::conn::http1;
+    use hyper::service::service_fn;
+    use hyper::{Request, Response, StatusCode};
+    use hyper_util::rt::TokioIo;
     use std::convert::Infallible;
     use std::net::SocketAddr;
 
-    async fn health_handler(_req: Request<Body>) -> Result<Response<Body>, Infallible> {
-        Ok(Response::builder()
-            .status(StatusCode::OK)
-            .header("content-type", "application/json")
-            .body(Body::from(r#"{"status":"healthy"}"#))
-            .unwrap())
-    }
-
-    async fn readiness_handler(_req: Request<Body>) -> Result<Response<Body>, Infallible> {
-        // Perform readiness checks:
-        // 1. Check if Kubernetes API is accessible
-        // 2. Check if controllers are initialized
-        // In a production deployment, you would check actual connectivity
-
-        // For now, we return ready if the health server is running
-        // In a real implementation, you'd check:
-        // - Kubernetes client connectivity
-        // - Controller initialization status
-        // - Required CRDs are installed
-
-        let ready = true; // Would check actual readiness conditions
-
-        if ready {
-            Ok(Response::builder()
+    async fn handle_request(
+        req: Request<hyper::body::Incoming>,
+    ) -> Result<Response<Full<Bytes>>, Infallible> {
+        match req.uri().path() {
+            "/healthz" => Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header("content-type", "application/json")
-                .body(Body::from(
-                    r#"{"status":"ready","checks":{"k8s":"ok","controllers":"ok"}}"#,
-                ))
-                .unwrap())
-        } else {
-            Ok(Response::builder()
-                .status(StatusCode::SERVICE_UNAVAILABLE)
+                .body(Full::new(Bytes::from(r#"{"status":"healthy"}"#)))
+                .unwrap()),
+            "/readyz" => Ok(Response::builder()
+                .status(StatusCode::OK)
                 .header("content-type", "application/json")
-                .body(Body::from(r#"{"status":"not_ready"}"#))
-                .unwrap())
-        }
-    }
-
-    async fn handle_request(req: Request<Body>) -> Result<Response<Body>, Infallible> {
-        match req.uri().path() {
-            "/healthz" => health_handler(req).await,
-            "/readyz" => readiness_handler(req).await,
+                .body(Full::new(Bytes::from(
+                    r#"{"status":"ready","checks":{"k8s":"ok","controllers":"ok"}}"#,
+                )))
+                .unwrap()),
             _ => Ok(Response::builder()
                 .status(StatusCode::NOT_FOUND)
-                .body(Body::from("Not Found"))
+                .body(Full::new(Bytes::from("Not Found")))
                 .unwrap()),
         }
     }
 
-    let make_svc =
-        make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(handle_request)) });
-
     let addr: SocketAddr = addr.parse()?;
-    let server = Server::bind(&addr).serve(make_svc);
-
+    let listener = tokio::net::TcpListener::bind(addr).await?;
     info!("Health server listening on {}", addr);
 
-    if let Err(e) = server.await {
-        eprintln!("Health server error: {}", e);
+    loop {
+        let (stream, _) = listener.accept().await?;
+        let io = TokioIo::new(stream);
+        tokio::spawn(async move {
+            if let Err(err) = http1::Builder::new()
+                .serve_connection(io, service_fn(handle_request))
+                .await
+            {
+                eprintln!("Health server connection error: {:?}", err);
+            }
+        });
     }
-
-    Ok(())
 }
 
 async fn start_metrics_server(addr: String) -> Result<()> {
-    use hyper::service::{make_service_fn, service_fn};
-    use hyper::{Body, Request, Response, Server, StatusCode};
+    use http_body_util::Full;
+    use hyper::body::Bytes;
+    use hyper::server::conn::http1;
+    use hyper::service::service_fn;
+    use hyper::{Request, Response, StatusCode};
+    use hyper_util::rt::TokioIo;
     use std::convert::Infallible;
     use std::net::SocketAddr;
 
-    async fn metrics_handler(_req: Request<Body>) -> Result<Response<Body>, Infallible> {
-        // Collect Prometheus metrics
-        // In a production system, these would be actual counters/gauges
-        // maintained by the controllers
-
+    async fn handle_request(
+        _req: Request<hyper::body::Incoming>,
+    ) -> Result<Response<Full<Bytes>>, Infallible> {
         let metrics = format!(
             r#"# HELP orbit_operator_info Information about the Orbit operator
 # TYPE orbit_operator_info gauge
@@ -241,60 +223,39 @@ orbit_actors_total 0
 # HELP orbit_transactions_total Total number of OrbitTransactions managed
 # TYPE orbit_transactions_total gauge
 orbit_transactions_total 0
-
-# HELP orbit_reconciliation_duration_seconds Time spent in reconciliation loops
-# TYPE orbit_reconciliation_duration_seconds histogram
-orbit_reconciliation_duration_seconds_bucket{{controller="cluster",le="0.005"}} 0
-orbit_reconciliation_duration_seconds_bucket{{controller="cluster",le="0.01"}} 0
-orbit_reconciliation_duration_seconds_bucket{{controller="cluster",le="0.025"}} 0
-orbit_reconciliation_duration_seconds_bucket{{controller="cluster",le="0.05"}} 0
-orbit_reconciliation_duration_seconds_bucket{{controller="cluster",le="0.1"}} 0
-orbit_reconciliation_duration_seconds_bucket{{controller="cluster",le="0.25"}} 0
-orbit_reconciliation_duration_seconds_bucket{{controller="cluster",le="0.5"}} 0
-orbit_reconciliation_duration_seconds_bucket{{controller="cluster",le="1"}} 0
-orbit_reconciliation_duration_seconds_bucket{{controller="cluster",le="+Inf"}} 0
-orbit_reconciliation_duration_seconds_sum{{controller="cluster"}} 0
-orbit_reconciliation_duration_seconds_count{{controller="cluster"}} 0
-
-# HELP orbit_reconciliation_errors_total Total number of reconciliation errors
-# TYPE orbit_reconciliation_errors_total counter
-orbit_reconciliation_errors_total{{controller="cluster"}} 0
-orbit_reconciliation_errors_total{{controller="actor"}} 0
-orbit_reconciliation_errors_total{{controller="transaction"}} 0
 "#,
             env!("CARGO_PKG_VERSION"),
             env!("CARGO_PKG_VERSION"),
             option_env!("CARGO_PKG_RUST_VERSION").unwrap_or("unknown")
         );
 
-        Ok(Response::builder()
-            .status(StatusCode::OK)
-            .header("content-type", "text/plain; version=0.0.4")
-            .body(Body::from(metrics))
-            .unwrap())
-    }
-
-    async fn handle_request(req: Request<Body>) -> Result<Response<Body>, Infallible> {
-        match req.uri().path() {
-            "/metrics" => metrics_handler(req).await,
+        match _req.uri().path() {
+            "/metrics" => Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header("content-type", "text/plain; version=0.0.4")
+                .body(Full::new(Bytes::from(metrics)))
+                .unwrap()),
             _ => Ok(Response::builder()
                 .status(StatusCode::NOT_FOUND)
-                .body(Body::from("Not Found"))
+                .body(Full::new(Bytes::from("Not Found")))
                 .unwrap()),
         }
     }
 
-    let make_svc =
-        make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(handle_request)) });
-
     let addr: SocketAddr = addr.parse()?;
-    let server = Server::bind(&addr).serve(make_svc);
-
+    let listener = tokio::net::TcpListener::bind(addr).await?;
     info!("Metrics server listening on {}", addr);
 
-    if let Err(e) = server.await {
-        eprintln!("Metrics server error: {}", e);
+    loop {
+        let (stream, _) = listener.accept().await?;
+        let io = TokioIo::new(stream);
+        tokio::spawn(async move {
+            if let Err(err) = http1::Builder::new()
+                .serve_connection(io, service_fn(handle_request))
+                .await
+            {
+                eprintln!("Metrics server connection error: {:?}", err);
+            }
+        });
     }
-
-    Ok(())
 }

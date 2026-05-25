@@ -1697,8 +1697,8 @@ impl SortedSetActor {
         // First get all members in order
         let members: Vec<String> = self
             .score_members
-            .iter()
-            .flat_map(|(_, members_set)| {
+            .values()
+            .flat_map(|members_set| {
                 let mut sorted_members: Vec<_> = members_set.iter().cloned().collect();
                 sorted_members.sort();
                 sorted_members

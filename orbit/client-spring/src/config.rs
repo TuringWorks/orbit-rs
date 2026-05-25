@@ -417,7 +417,7 @@ impl AppConfig {
         let config: Self = if path_ref.extension().and_then(|s| s.to_str()) == Some("yml")
             || path_ref.extension().and_then(|s| s.to_str()) == Some("yaml")
         {
-            serde_yaml::from_str(&content).map_err(|e| {
+            serde_yml::from_str(&content).map_err(|e| {
                 SpringError::configuration(format!("Failed to parse YAML config: {}", e))
             })?
         } else {

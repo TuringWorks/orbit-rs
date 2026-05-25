@@ -322,7 +322,7 @@ impl JsonOperations {
         }
 
         let mut map = Map::new();
-        for (key, value) in keys.into_iter().zip(values.into_iter()) {
+        for (key, value) in keys.into_iter().zip(values) {
             let key_str = match key {
                 SqlValue::Text(s) => s,
                 SqlValue::Varchar(s) => s,
@@ -349,7 +349,7 @@ impl JsonOperations {
         }
 
         let mut map = Map::new();
-        for (key, value) in keys.into_iter().zip(values.into_iter()) {
+        for (key, value) in keys.into_iter().zip(values) {
             let key_str = match key {
                 SqlValue::Text(s) => s,
                 SqlValue::Varchar(s) => s,

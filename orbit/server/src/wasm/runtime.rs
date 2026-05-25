@@ -95,7 +95,6 @@ impl WasmRuntime {
         // Configure the WASM engine
         let mut wasm_config = Config::new();
         wasm_config.consume_fuel(config.enable_fuel);
-        wasm_config.async_support(true);
         wasm_config.epoch_interruption(true);
 
         // Enable SIMD for vectorized operations

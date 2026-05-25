@@ -1765,10 +1765,8 @@ impl SqlExecutor {
             if let Some(where_expr) = &stmt.where_clause {
                 let context = EvaluationContext::with_row(row.clone());
                 match self.evaluate_where_condition(where_expr, &context).await {
-                    Ok(SqlValue::Boolean(b)) => {
-                        if b {
-                            filtered_rows.push(row);
-                        }
+                    Ok(SqlValue::Boolean(b)) if b => {
+                        filtered_rows.push(row);
                     }
                     _ => {}
                 }

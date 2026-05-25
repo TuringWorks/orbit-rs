@@ -829,7 +829,7 @@ impl PostgresWireProtocol {
     /// Default: 4 bytes for backward compatibility with protocol 3.0 clients
     fn random_secret_key() -> Vec<u8> {
         let mut key = vec![0u8; 4]; // 4 bytes for compatibility
-        rand::thread_rng().fill(&mut key[..]);
+        rand::rng().fill(&mut key[..]);
         key
     }
 }

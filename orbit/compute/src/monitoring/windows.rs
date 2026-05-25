@@ -719,7 +719,7 @@ impl WindowsSystemMonitor {
         // For now, we'll simulate realistic values with some variation
 
         use rand::Rng;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         Ok(SystemConditions {
             cpu_temperature_c: Some(45.0 + rng.gen::<f32>() * 10.0),
@@ -729,7 +729,7 @@ impl WindowsSystemMonitor {
             memory_utilization: 60.0 + rng.gen::<f32>() * 20.0,
             power_state: PowerState::Balanced,
             thermal_throttling: false,
-            concurrent_workloads: rng.gen_range(0..4),
+            concurrent_workloads: rng.random_range(0..4),
         })
     }
 }

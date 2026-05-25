@@ -11,17 +11,23 @@ use orbit_compute::vector_similarity::{
 /// Generate random vectors for testing
 fn generate_random_vectors(count: usize, dimension: usize) -> Vec<Vec<f32>> {
     use rand::Rng;
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     (0..count)
-        .map(|_| (0..dimension).map(|_| rng.gen_range(-1.0..1.0)).collect())
+        .map(|_| {
+            (0..dimension)
+                .map(|_| rng.random_range(-1.0..1.0))
+                .collect()
+        })
         .collect()
 }
 
 /// Generate a random query vector
 fn generate_query_vector(dimension: usize) -> Vec<f32> {
     use rand::Rng;
-    let mut rng = rand::thread_rng();
-    (0..dimension).map(|_| rng.gen_range(-1.0..1.0)).collect()
+    let mut rng = rand::rng();
+    (0..dimension)
+        .map(|_| rng.random_range(-1.0..1.0))
+        .collect()
 }
 
 /// Benchmark CPU sequential similarity calculation

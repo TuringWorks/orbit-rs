@@ -8,7 +8,7 @@
 
 use crate::exception::{OrbitError, OrbitResult};
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
 use rand::RngCore;
@@ -209,7 +209,7 @@ impl KeyManagementSystem {
     fn generate_key(&self, key_id: String) -> OrbitResult<EncryptionKey> {
         // Generate cryptographically secure random 256-bit (32 bytes) key
         let mut key_data = vec![0u8; 32];
-        OsRng.fill_bytes(&mut key_data);
+        rand::rng().fill_bytes(&mut key_data);
 
         let mut key = EncryptionKey::new(key_id, EncryptionAlgorithm::Aes256Gcm, key_data);
         key.expires_at = Some(SystemTime::now() + self.rotation_policy.max_key_age);
@@ -263,7 +263,7 @@ impl EncryptionManager {
 
         // Generate random nonce (12 bytes for AES-GCM)
         let mut nonce_bytes = [0u8; NONCE_SIZE];
-        OsRng.fill_bytes(&mut nonce_bytes);
+        rand::rng().fill_bytes(&mut nonce_bytes);
         let nonce = Nonce::from_slice(&nonce_bytes);
 
         // Encrypt data (returns ciphertext + authentication tag)

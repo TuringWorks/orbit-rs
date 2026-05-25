@@ -271,7 +271,7 @@ impl PrometheusConfig {
         } else if path.as_ref().extension().and_then(|s| s.to_str()) == Some("yaml")
             || path.as_ref().extension().and_then(|s| s.to_str()) == Some("yml")
         {
-            serde_yaml::from_str(&content).map_err(|e| {
+            serde_yml::from_str(&content).map_err(|e| {
                 PrometheusError::configuration(format!("Failed to parse YAML config: {}", e))
             })?
         } else {

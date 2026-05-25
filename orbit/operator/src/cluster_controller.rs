@@ -28,7 +28,7 @@ enum ControllerError {
     JsonSerializationError(#[from] serde_json::Error),
 
     #[error("YAML serialization error: {0}")]
-    YamlSerializationError(#[from] serde_yaml::Error),
+    YamlSerializationError(#[from] serde_yml::Error),
 
     #[error("Finalizer error: {0}")]
     FinalizerError(String),
@@ -287,7 +287,7 @@ async fn create_config_map(
 
     data.insert(
         "orbit-server.yaml".to_string(),
-        serde_yaml::to_string(&config)?,
+        serde_yml::to_string(&config)?,
     );
 
     let cm = ConfigMap {

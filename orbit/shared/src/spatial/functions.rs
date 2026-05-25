@@ -394,28 +394,12 @@ impl SpatialFunctions {
     pub fn st_astext(&self, geometry: &SpatialGeometry) -> Result<String, SpatialError> {
         match geometry {
             SpatialGeometry::Point(point) => {
-                if point.z.is_some() && point.m.is_some() {
-                    Ok(format!(
-                        "POINT ZM ({} {} {} {})",
-                        point.x,
-                        point.y,
-                        point.z.unwrap(),
-                        point.m.unwrap()
-                    ))
-                } else if point.z.is_some() {
-                    Ok(format!(
-                        "POINT Z ({} {} {})",
-                        point.x,
-                        point.y,
-                        point.z.unwrap()
-                    ))
-                } else if point.m.is_some() {
-                    Ok(format!(
-                        "POINT M ({} {} {})",
-                        point.x,
-                        point.y,
-                        point.m.unwrap()
-                    ))
+                if let (Some(z), Some(m)) = (point.z, point.m) {
+                    Ok(format!("POINT ZM ({} {} {} {})", point.x, point.y, z, m))
+                } else if let Some(z) = point.z {
+                    Ok(format!("POINT Z ({} {} {})", point.x, point.y, z))
+                } else if let Some(m) = point.m {
+                    Ok(format!("POINT M ({} {} {})", point.x, point.y, m))
                 } else {
                     Ok(format!("POINT ({} {})", point.x, point.y))
                 }

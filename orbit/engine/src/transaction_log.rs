@@ -339,7 +339,7 @@ impl SqliteTransactionLogger {
 
         // Configure synchronous mode
         let sync_pragma = format!("PRAGMA synchronous = {}", self.config.sync_mode.as_str());
-        sqlx::query(&sync_pragma)
+        sqlx::raw_sql(sqlx::AssertSqlSafe(sync_pragma))
             .execute(&self.pool)
             .await
             .map_err(|e| EngineError::internal(format!("Failed to set synchronous mode: {e}")))?;
@@ -348,7 +348,7 @@ impl SqliteTransactionLogger {
 
         // Configure cache size
         let cache_pragma = format!("PRAGMA cache_size = {}", self.config.cache_size);
-        sqlx::query(&cache_pragma)
+        sqlx::raw_sql(sqlx::AssertSqlSafe(cache_pragma))
             .execute(&self.pool)
             .await
             .map_err(|e| EngineError::internal(format!("Failed to set cache size: {e}")))?;
@@ -363,7 +363,7 @@ impl SqliteTransactionLogger {
         if self.config.enable_wal {
             let checkpoint_pages = (self.config.wal_checkpoint_interval / 10).max(1000);
             let checkpoint_pragma = format!("PRAGMA wal_autocheckpoint = {}", checkpoint_pages);
-            sqlx::query(&checkpoint_pragma)
+            sqlx::raw_sql(sqlx::AssertSqlSafe(checkpoint_pragma))
                 .execute(&self.pool)
                 .await
                 .map_err(|e| {

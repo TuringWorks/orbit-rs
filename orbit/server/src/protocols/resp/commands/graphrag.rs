@@ -154,19 +154,15 @@ impl GraphRAGCommands {
         while i < args.len() {
             if let Some(key) = args[i].as_string() {
                 match key.to_uppercase().as_str() {
-                    "MAX_HOPS" => {
-                        if i + 1 < args.len() {
-                            max_hops = args[i + 1].as_integer().map(|v| v as u32);
-                            i += 2;
-                            continue;
-                        }
+                    "MAX_HOPS" if i + 1 < args.len() => {
+                        max_hops = args[i + 1].as_integer().map(|v| v as u32);
+                        i += 2;
+                        continue;
                     }
-                    "LLM_PROVIDER" => {
-                        if i + 1 < args.len() {
-                            llm_provider = args[i + 1].as_string();
-                            i += 2;
-                            continue;
-                        }
+                    "LLM_PROVIDER" if i + 1 < args.len() => {
+                        llm_provider = args[i + 1].as_string();
+                        i += 2;
+                        continue;
                     }
                     "INCLUDE_EXPLANATION" => {
                         include_explanation = true;

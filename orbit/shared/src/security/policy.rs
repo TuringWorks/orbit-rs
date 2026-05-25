@@ -244,7 +244,7 @@ impl PolicyEngine {
         // Sort policies by priority (higher priority first)
         let mut sorted_policies: Vec<&SecurityPolicy> =
             policies.values().filter(|p| p.enabled).collect();
-        sorted_policies.sort_by(|a, b| b.priority.cmp(&a.priority));
+        sorted_policies.sort_by_key(|b| std::cmp::Reverse(b.priority));
 
         // Evaluate each policy
         for policy in sorted_policies {

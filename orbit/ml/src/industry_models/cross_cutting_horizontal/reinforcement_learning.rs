@@ -9,7 +9,7 @@
 //! Use cases: Robot control, traffic optimization, resource allocation, A/B testing, dynamic pricing
 
 use super::super::common::{IndustryModel, IndustryModelError, ModelMetrics, Result};
-use rand::distributions::Uniform;
+use rand::distr::Uniform;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -31,14 +31,14 @@ struct LayerWeights {
 
 impl MLPWeights {
     fn new(layer_sizes: &[usize]) -> Self {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut layers = Vec::new();
 
         for i in 0..layer_sizes.len() - 1 {
             let input_size = layer_sizes[i];
             let output_size = layer_sizes[i + 1];
             let scale = (2.0 / (input_size + output_size) as f64).sqrt();
-            let dist = Uniform::new(-scale, scale);
+            let dist = Uniform::new(-scale, scale).unwrap();
 
             let weights: Vec<Vec<f64>> = (0..input_size)
                 .map(|_| (0..output_size).map(|_| rng.sample(dist)).collect())
@@ -115,12 +115,12 @@ impl ReplayBuffer {
     }
 
     fn sample(&self, batch_size: usize) -> Vec<&Experience> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut indices: Vec<usize> = (0..self.experiences.len()).collect();
 
         // Fisher-Yates shuffle for first batch_size elements
         for i in 0..batch_size.min(indices.len()) {
-            let j = rng.gen_range(i..indices.len());
+            let j = rng.random_range(i..indices.len());
             indices.swap(i, j);
         }
 
@@ -228,15 +228,15 @@ impl PPOAgent {
     }
 
     fn sample_action(&self, state: &[f64]) -> Vec<f64> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let (mean, std) = self.get_action_distribution(state);
 
         mean.iter()
             .zip(std.iter())
             .map(|(&m, &s)| {
                 // Sample from Gaussian
-                let u1: f64 = rng.gen();
-                let u2: f64 = rng.gen();
+                let u1: f64 = rng.random();
+                let u2: f64 = rng.random();
                 let z = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
                 (m + s * z).clamp(-1.0, 1.0)
             })
@@ -298,14 +298,14 @@ impl IndustryModel for PPOAgent {
         // Parse or generate training data
         let training_data: RLTrainingSample = if data.is_empty() {
             // Generate synthetic trajectories for testing
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             let trajectories: Vec<Trajectory> = (0..10)
                 .map(|_| {
                     let episode_len = 50;
                     let states: Vec<Vec<f64>> = (0..episode_len)
                         .map(|_| {
                             (0..self.state_dim)
-                                .map(|_| rng.gen_range(-1.0..1.0))
+                                .map(|_| rng.random_range(-1.0..1.0))
                                 .collect()
                         })
                         .collect();
@@ -313,7 +313,8 @@ impl IndustryModel for PPOAgent {
                         states.iter().map(|s| self.sample_action(s)).collect();
                     let rewards: Vec<f64> = (0..episode_len)
                         .map(|t| {
-                            1.0 - (t as f64 / episode_len as f64) * 0.5 + rng.gen_range(-0.1..0.1)
+                            1.0 - (t as f64 / episode_len as f64) * 0.5
+                                + rng.random_range(-0.1..0.1)
                         })
                         .collect();
                     let mut dones = vec![false; episode_len];
@@ -478,14 +479,14 @@ impl IndustryModel for PPOAgent {
         }
 
         let eval_data: RLTrainingSample = if test_data.is_empty() {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             let trajectories: Vec<Trajectory> = (0..5)
                 .map(|_| {
                     let episode_len = 50;
                     let states: Vec<Vec<f64>> = (0..episode_len)
                         .map(|_| {
                             (0..self.state_dim)
-                                .map(|_| rng.gen_range(-1.0..1.0))
+                                .map(|_| rng.random_range(-1.0..1.0))
                                 .collect()
                         })
                         .collect();
@@ -618,14 +619,14 @@ impl SACAgent {
             return mean;
         }
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let std: Vec<f64> = self.log_std.iter().map(|&ls| ls.exp()).collect();
 
         mean.iter()
             .zip(std.iter())
             .map(|(&m, &s)| {
-                let u1: f64 = rng.gen();
-                let u2: f64 = rng.gen();
+                let u1: f64 = rng.random();
+                let u2: f64 = rng.random();
                 let z = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
                 (m + s * z).clamp(-1.0, 1.0)
             })
@@ -701,21 +702,22 @@ impl IndustryModel for SACAgent {
 
         // Fill replay buffer with experiences
         let training_data: RLTrainingSample = if data.is_empty() {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             let trajectories: Vec<Trajectory> = (0..5)
                 .map(|_| {
                     let episode_len = 50;
                     let states: Vec<Vec<f64>> = (0..episode_len)
                         .map(|_| {
                             (0..self.state_dim)
-                                .map(|_| rng.gen_range(-1.0..1.0))
+                                .map(|_| rng.random_range(-1.0..1.0))
                                 .collect()
                         })
                         .collect();
                     let actions: Vec<Vec<f64>> =
                         states.iter().map(|s| self.get_action(s, false)).collect();
-                    let rewards: Vec<f64> =
-                        (0..episode_len).map(|_| rng.gen_range(-0.5..1.0)).collect();
+                    let rewards: Vec<f64> = (0..episode_len)
+                        .map(|_| rng.random_range(-0.5..1.0))
+                        .collect();
                     let mut dones = vec![false; episode_len];
                     dones[episode_len - 1] = true;
                     Trajectory {
@@ -880,21 +882,22 @@ impl IndustryModel for SACAgent {
         }
 
         let eval_data: RLTrainingSample = if test_data.is_empty() {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             let trajectories: Vec<Trajectory> = (0..5)
                 .map(|_| {
                     let episode_len = 50;
                     let states: Vec<Vec<f64>> = (0..episode_len)
                         .map(|_| {
                             (0..self.state_dim)
-                                .map(|_| rng.gen_range(-1.0..1.0))
+                                .map(|_| rng.random_range(-1.0..1.0))
                                 .collect()
                         })
                         .collect();
                     let actions: Vec<Vec<f64>> =
                         states.iter().map(|s| self.get_action(s, true)).collect();
-                    let rewards: Vec<f64> =
-                        (0..episode_len).map(|_| rng.gen_range(-0.2..1.2)).collect();
+                    let rewards: Vec<f64> = (0..episode_len)
+                        .map(|_| rng.random_range(-0.2..1.2))
+                        .collect();
                     let mut dones = vec![false; episode_len];
                     dones[episode_len - 1] = true;
                     Trajectory {
@@ -1007,12 +1010,12 @@ impl DDPGAgent {
         };
 
         if add_noise {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             action
                 .iter()
                 .map(|&a| {
-                    let u1: f64 = rng.gen();
-                    let u2: f64 = rng.gen();
+                    let u1: f64 = rng.random();
+                    let u2: f64 = rng.random();
                     let noise = self.noise_std
                         * (-2.0 * u1.ln()).sqrt()
                         * (2.0 * std::f64::consts::PI * u2).cos();
@@ -1087,21 +1090,22 @@ impl IndustryModel for DDPGAgent {
         self.initialize_networks();
 
         let training_data: RLTrainingSample = if data.is_empty() {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             let trajectories: Vec<Trajectory> = (0..5)
                 .map(|_| {
                     let episode_len = 50;
                     let states: Vec<Vec<f64>> = (0..episode_len)
                         .map(|_| {
                             (0..self.state_dim)
-                                .map(|_| rng.gen_range(-1.0..1.0))
+                                .map(|_| rng.random_range(-1.0..1.0))
                                 .collect()
                         })
                         .collect();
                     let actions: Vec<Vec<f64>> =
                         states.iter().map(|s| self.get_action(s, true)).collect();
-                    let rewards: Vec<f64> =
-                        (0..episode_len).map(|_| rng.gen_range(-0.3..1.0)).collect();
+                    let rewards: Vec<f64> = (0..episode_len)
+                        .map(|_| rng.random_range(-0.3..1.0))
+                        .collect();
                     let mut dones = vec![false; episode_len];
                     dones[episode_len - 1] = true;
                     Trajectory {
@@ -1239,21 +1243,22 @@ impl IndustryModel for DDPGAgent {
         }
 
         let eval_data: RLTrainingSample = if test_data.is_empty() {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             let trajectories: Vec<Trajectory> = (0..5)
                 .map(|_| {
                     let episode_len = 50;
                     let states: Vec<Vec<f64>> = (0..episode_len)
                         .map(|_| {
                             (0..self.state_dim)
-                                .map(|_| rng.gen_range(-1.0..1.0))
+                                .map(|_| rng.random_range(-1.0..1.0))
                                 .collect()
                         })
                         .collect();
                     let actions: Vec<Vec<f64>> =
                         states.iter().map(|s| self.get_action(s, false)).collect();
-                    let rewards: Vec<f64> =
-                        (0..episode_len).map(|_| rng.gen_range(-0.1..1.0)).collect();
+                    let rewards: Vec<f64> = (0..episode_len)
+                        .map(|_| rng.random_range(-0.1..1.0))
+                        .collect();
                     let mut dones = vec![false; episode_len];
                     dones[episode_len - 1] = true;
                     Trajectory {
@@ -1452,15 +1457,15 @@ impl IndustryModel for ContextualBanditAgent {
         self.initialize();
 
         let training_data: BanditTrainingSample = if data.is_empty() {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             // Generate synthetic bandit data
             // Each arm has different expected reward based on context
             let interactions: Vec<BanditInteraction> = (0..500)
                 .map(|_| {
                     let context: Vec<f64> = (0..self.context_dim)
-                        .map(|_| rng.gen_range(-1.0..1.0))
+                        .map(|_| rng.random_range(-1.0..1.0))
                         .collect();
-                    let arm = rng.gen_range(0..self.num_arms);
+                    let arm = rng.random_range(0..self.num_arms);
                     // Reward depends on arm and context alignment
                     let arm_preference: Vec<f64> = (0..self.context_dim)
                         .map(|i| {
@@ -1473,7 +1478,7 @@ impl IndustryModel for ContextualBanditAgent {
                         .zip(arm_preference.iter())
                         .map(|(c, p)| c * p)
                         .sum();
-                    let reward = (alignment + rng.gen_range(-0.1..0.1)).clamp(0.0, 1.0);
+                    let reward = (alignment + rng.random_range(-0.1..0.1)).clamp(0.0, 1.0);
                     BanditInteraction {
                         context,
                         arm,
@@ -1571,14 +1576,14 @@ impl IndustryModel for ContextualBanditAgent {
         }
 
         let eval_data: BanditTrainingSample = if test_data.is_empty() {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             let interactions: Vec<BanditInteraction> = (0..100)
                 .map(|_| {
                     let context: Vec<f64> = (0..self.context_dim)
-                        .map(|_| rng.gen_range(-1.0..1.0))
+                        .map(|_| rng.random_range(-1.0..1.0))
                         .collect();
                     let arm = self.select_arm(&context);
-                    let reward = rng.gen_range(0.3..0.9);
+                    let reward = rng.random_range(0.3..0.9);
                     BanditInteraction {
                         context,
                         arm,

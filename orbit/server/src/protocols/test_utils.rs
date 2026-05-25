@@ -232,8 +232,8 @@ pub mod test_fixtures {
 
             (0..count)
                 .map(|i| {
-                    let first = first_names[self.rng.gen_range(0..first_names.len())];
-                    let last = last_names[self.rng.gen_range(0..last_names.len())];
+                    let first = first_names[self.rng.random_range(0..first_names.len())];
+                    let last = last_names[self.rng.random_range(0..last_names.len())];
                     CustomerData {
                         id: i as u32 + 1,
                         name: format!("{} {}", first, last),
@@ -261,7 +261,7 @@ pub mod test_fixtures {
             (0..count)
                 .map(|i| {
                     let template = &product_templates[i % product_templates.len()];
-                    let price = self.rng.gen_range(template.2..=template.3);
+                    let price = self.rng.random_range(template.2..=template.3);
                     ProductData {
                         id: i as u32 + 1,
                         name: if i >= product_templates.len() {
@@ -275,7 +275,7 @@ pub mod test_fixtures {
                         ),
                         price: (price * 100.0_f64).round() / 100.0, // Round to 2 decimal places
                         category: template.1.to_string(),
-                        stock: self.rng.gen_range(10..=100),
+                        stock: self.rng.random_range(10..=100),
                     }
                 })
                 .collect()
@@ -284,7 +284,7 @@ pub mod test_fixtures {
         /// Generate random vector with realistic properties
         pub fn generate_random_vector(&mut self, dimension: usize, id: &str) -> Vector {
             let data: Vec<f32> = (0..dimension)
-                .map(|_| self.rng.gen_range(-1.0..1.0))
+                .map(|_| self.rng.random_range(-1.0..1.0))
                 .collect();
 
             // Normalize the vector
@@ -313,7 +313,7 @@ pub mod test_fixtures {
                 let noise_amplitude = (1.0 - similarity).sqrt();
                 let mut similar_data: Vec<f32> = base_vector
                     .iter()
-                    .map(|&x| x + self.rng.gen_range(-noise_amplitude..noise_amplitude))
+                    .map(|&x| x + self.rng.random_range(-noise_amplitude..noise_amplitude))
                     .collect();
 
                 // Normalize

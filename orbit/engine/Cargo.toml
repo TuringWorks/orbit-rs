@@ -33,7 +33,7 @@ async-trait = "0.1"
 dashmap = "6.1"
 uuid = { version = "1.19", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-rand = "0.8"
+rand.workspace = true
 fastrand = "2.0"
 parking_lot = "0.12"
 crossbeam = "0.8"
@@ -43,22 +43,22 @@ regex = "1.10"
 
 # Persistence
 rocksdb = { version = "0.22", default-features = false, optional = true }
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"] }
+sqlx = { version = "0.9", features = ["runtime-tokio", "tls-rustls", "sqlite"] }
 
 # Apache Iceberg for cold tier storage
-iceberg = { version = "0.7", default-features = false, features = ["storage-memory"], optional = true }
-iceberg-catalog-rest = { version = "0.7", optional = true }
+iceberg = { version = "0.9", default-features = false, optional = true }
+iceberg-catalog-rest = { version = "0.9", optional = true }
 
 # Alternative Iceberg implementation for evaluation
 icelake = { version = "0.3.141592654", optional = true }
 
 # Columnar formats
-arrow = { version = "55.2", default-features = false }
-arrow-schema = { version = "55.2", default-features = false }
-parquet = { version = "55.2", default-features = false }
+arrow = { version = "58.3", default-features = false }
+arrow-schema = { version = "58.3", default-features = false }
+parquet = { version = "58.3", default-features = false }
 
 # Multi-cloud storage backends
-opendal = { version = "0.55", features = ["services-azblob", "services-memory", "services-s3"] }
+opendal = { version = "0.56", features = ["services-azblob", "services-memory", "services-s3"] }
 
 # Tracing
 tracing = "0.1"

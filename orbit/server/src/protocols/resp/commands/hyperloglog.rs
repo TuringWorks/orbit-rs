@@ -252,7 +252,8 @@ impl HyperLogLogCommands {
             let hll = if let Some(value_json) = result {
                 if let Ok(Some(encoded_str)) = serde_json::from_value::<Option<String>>(value_json)
                 {
-                    HyperLogLog::decode_from_string(&encoded_str).unwrap_or_else(|_| HyperLogLog::new())
+                    HyperLogLog::decode_from_string(&encoded_str)
+                        .unwrap_or_else(|_| HyperLogLog::new())
                 } else {
                     HyperLogLog::new()
                 }
@@ -390,11 +391,7 @@ mod tests {
 
         let count = hll.count();
         // Should be within ~0.81% error: 9919 to 10081
-        assert!(
-            (9900..=10100).contains(&count),
-            "Count was {}",
-            count
-        );
+        assert!((9900..=10100).contains(&count), "Count was {}", count);
     }
 
     #[test]
@@ -415,11 +412,7 @@ mod tests {
 
         let count = hll1.count();
         // Should estimate ~10,000
-        assert!(
-            (9800..=10200).contains(&count),
-            "Count was {}",
-            count
-        );
+        assert!((9800..=10200).contains(&count), "Count was {}", count);
     }
 
     #[test]

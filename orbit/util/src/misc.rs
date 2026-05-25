@@ -1,4 +1,4 @@
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use rand::{distr::Alphanumeric, Rng};
 
 /// Utility functions for random generation, equivalent to Kotlin's RNGUtils
 pub struct RngUtils;
@@ -11,7 +11,7 @@ impl RngUtils {
 
     /// Generate a random string of specified length using alphanumeric characters
     pub fn random_string_with_length(length: usize) -> String {
-        thread_rng()
+        rand::rng()
             .sample_iter(&Alphanumeric)
             .take(length)
             .map(char::from)
@@ -20,12 +20,12 @@ impl RngUtils {
 
     /// Generate a random integer within a range
     pub fn random_int(min: i32, max: i32) -> i32 {
-        thread_rng().gen_range(min..=max)
+        rand::rng().random_range(min..=max)
     }
 
     /// Generate a random u64
     pub fn random_u64() -> u64 {
-        thread_rng().gen()
+        rand::rng().random()
     }
 }
 

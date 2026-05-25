@@ -5229,31 +5229,28 @@ impl ExpressionEvaluator {
                     if result[i..].starts_with('%') && i + 1 < result.len() {
                         let spec = result.chars().nth(i + 1).unwrap();
                         match spec {
-                            's'
-                                if arg_idx < args.len() => {
-                                    let val = args[arg_idx].to_postgres_string();
-                                    result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
-                                    i += val.len();
-                                    arg_idx += 1;
-                                }
-                            'I'
-                                if arg_idx < args.len() => {
-                                    let s = args[arg_idx].to_postgres_string();
-                                    let escaped = s.replace('"', "\"\"");
-                                    let val = format!("\"{}\"", escaped);
-                                    result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
-                                    i += val.len();
-                                    arg_idx += 1;
-                                }
-                            'L'
-                                if arg_idx < args.len() => {
-                                    let s = args[arg_idx].to_postgres_string();
-                                    let escaped = s.replace('\'', "''");
-                                    let val = format!("'{}'", escaped);
-                                    result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
-                                    i += val.len();
-                                    arg_idx += 1;
-                                }
+                            's' if arg_idx < args.len() => {
+                                let val = args[arg_idx].to_postgres_string();
+                                result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
+                                i += val.len();
+                                arg_idx += 1;
+                            }
+                            'I' if arg_idx < args.len() => {
+                                let s = args[arg_idx].to_postgres_string();
+                                let escaped = s.replace('"', "\"\"");
+                                let val = format!("\"{}\"", escaped);
+                                result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
+                                i += val.len();
+                                arg_idx += 1;
+                            }
+                            'L' if arg_idx < args.len() => {
+                                let s = args[arg_idx].to_postgres_string();
+                                let escaped = s.replace('\'', "''");
+                                let val = format!("'{}'", escaped);
+                                result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
+                                i += val.len();
+                                arg_idx += 1;
+                            }
                             '%' => {
                                 result = format!("{}{}", &result[..i], &result[i + 1..]);
                                 i += 1;

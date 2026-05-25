@@ -38,7 +38,7 @@ impl DatabaseApi {
         let execute_fn =
             lua.create_async_function(move |lua, (query, params): (String, Option<Table>)| {
                 let client = client.clone();
-                async move { Self::sql_execute(lua, client, query, params).await }
+                async move { Self::sql_execute(&lua, client, query, params).await }
             })?;
         sql_table.set("execute", execute_fn)?;
 
@@ -47,7 +47,7 @@ impl DatabaseApi {
         let query_fn =
             lua.create_async_function(move |lua, (query, params): (String, Option<Table>)| {
                 let client = client.clone();
-                async move { Self::sql_query(lua, client, query, params).await }
+                async move { Self::sql_query(&lua, client, query, params).await }
             })?;
         sql_table.set("query", query_fn)?;
 
@@ -56,7 +56,7 @@ impl DatabaseApi {
         let query_one_fn =
             lua.create_async_function(move |lua, (query, params): (String, Option<Table>)| {
                 let client = client.clone();
-                async move { Self::sql_query_one(lua, client, query, params).await }
+                async move { Self::sql_query_one(&lua, client, query, params).await }
             })?;
         sql_table.set("query_one", query_one_fn)?;
 
@@ -65,7 +65,7 @@ impl DatabaseApi {
         let call_fn =
             lua.create_async_function(move |lua, (func_name, args): (String, Option<Table>)| {
                 let client = client.clone();
-                async move { Self::db_call(lua, client, func_name, args).await }
+                async move { Self::db_call(&lua, client, func_name, args).await }
             })?;
         db_table.set("call", call_fn)?;
 
@@ -87,12 +87,12 @@ impl DatabaseApi {
 
     /// Execute a SQL command (INSERT, UPDATE, DELETE, etc.)
     #[cfg(feature = "lua-mlua")]
-    async fn sql_execute<'lua>(
-        lua: &'lua Lua,
+    async fn sql_execute(
+        lua: &Lua,
         _client: Arc<OrbitClient>,
         query: String,
-        params: Option<Table<'lua>>,
-    ) -> mlua::Result<MluaValue<'lua>> {
+        params: Option<Table>,
+    ) -> mlua::Result<MluaValue> {
         // Extract parameters from Lua table
         let _params_vec = if let Some(tbl) = params {
             Self::extract_params(tbl)?
@@ -116,12 +116,12 @@ impl DatabaseApi {
 
     /// Execute a SQL query (SELECT)
     #[cfg(feature = "lua-mlua")]
-    async fn sql_query<'lua>(
-        lua: &'lua Lua,
+    async fn sql_query(
+        lua: &Lua,
         _client: Arc<OrbitClient>,
         query: String,
-        params: Option<Table<'lua>>,
-    ) -> mlua::Result<MluaValue<'lua>> {
+        params: Option<Table>,
+    ) -> mlua::Result<MluaValue> {
         // Extract parameters from Lua table
         let _params_vec = if let Some(tbl) = params {
             Self::extract_params(tbl)?
@@ -144,12 +144,12 @@ impl DatabaseApi {
 
     /// Execute a SQL query expecting a single row
     #[cfg(feature = "lua-mlua")]
-    async fn sql_query_one<'lua>(
-        _lua: &'lua Lua,
+    async fn sql_query_one(
+        _lua: &Lua,
         _client: Arc<OrbitClient>,
         query: String,
-        params: Option<Table<'lua>>,
-    ) -> mlua::Result<MluaValue<'lua>> {
+        params: Option<Table>,
+    ) -> mlua::Result<MluaValue> {
         // Extract parameters from Lua table
         let _params_vec = if let Some(tbl) = params {
             Self::extract_params(tbl)?
@@ -170,12 +170,12 @@ impl DatabaseApi {
 
     /// Call a stored procedure or function
     #[cfg(feature = "lua-mlua")]
-    async fn db_call<'lua>(
-        _lua: &'lua Lua,
+    async fn db_call(
+        _lua: &Lua,
         _client: Arc<OrbitClient>,
         func_name: String,
-        args: Option<Table<'lua>>,
-    ) -> mlua::Result<MluaValue<'lua>> {
+        args: Option<Table>,
+    ) -> mlua::Result<MluaValue> {
         // Extract arguments from Lua table
         let _args_vec = if let Some(tbl) = args {
             Self::extract_params(tbl)?
@@ -274,10 +274,7 @@ impl DatabaseApi {
 
     /// Convert LuaValue to mlua::Value
     #[cfg(feature = "lua-mlua")]
-    pub fn lua_value_to_mlua<'lua>(
-        lua: &'lua Lua,
-        value: &LuaValue,
-    ) -> mlua::Result<MluaValue<'lua>> {
+    pub fn lua_value_to_mlua(lua: &Lua, value: &LuaValue) -> mlua::Result<MluaValue> {
         match value {
             LuaValue::Nil => Ok(MluaValue::Nil),
             LuaValue::Boolean(b) => Ok(MluaValue::Boolean(*b)),

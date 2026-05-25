@@ -1212,9 +1212,9 @@ impl BoltProtocolHandler {
         // Process each clause
         for clause in &parsed.clauses {
             match clause {
-                crate::protocols::cypher::cypher_parser::CypherClause::Match { pattern } => {
+                crate::protocols::cypher::cypher_parser::CypherClause::Match { pattern }
                     // Very basic pattern matching for (n)-[r]->(m)
-                    if pattern.elements.len() == 3 {
+                    if pattern.elements.len() == 3 => {
                         if let (
                             crate::protocols::cypher::cypher_parser::PatternElement::Node(
                                 start_node_pattern,
@@ -1267,7 +1267,6 @@ impl BoltProtocolHandler {
                             }
                         }
                     }
-                }
                 crate::protocols::cypher::cypher_parser::CypherClause::Return { items } => {
                     // This is a very simplified RETURN implementation
                     if !results.is_empty() {

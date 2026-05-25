@@ -5,6 +5,7 @@
 //! - Multi-Head Attention
 //! - Sparse Attention
 //! - Cross Attention
+use rand::Rng;
 
 use ndarray::{Array2, Array3, Array4};
 use serde::{Deserialize, Serialize};
@@ -569,8 +570,14 @@ impl SparseAttention {
                 let num_connections = (query_len as f64 * key_len as f64 * sparsity_ratio) as usize;
 
                 for _ in 0..num_connections {
-                    let i = rand::random::<usize>() % query_len;
-                    let j = rand::random::<usize>() % key_len;
+                    let i = {
+                        let mut rng = rand::rng();
+                        rng.random_range(0..query_len)
+                    };
+                    let j = {
+                        let mut rng = rand::rng();
+                        rng.random_range(0..key_len)
+                    };
                     mask[[i, j]] = 1.0;
                 }
             }

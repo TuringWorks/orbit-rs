@@ -341,7 +341,7 @@ pub fn setup_sandbox(lua: &Lua, config: &SecurityConfig) -> LuaResult<()> {
         if func_name.contains('.') {
             let parts: Vec<&str> = func_name.split('.').collect();
             if parts.len() == 2 {
-                if let Ok(table) = globals.get::<_, mlua::Table>(parts[0]) {
+                if let Ok(table) = globals.get::<mlua::Table>(parts[0]) {
                     let _ = table.set(parts[1], mlua::Value::Nil);
                 }
             }
@@ -360,7 +360,7 @@ pub fn setup_sandbox(lua: &Lua, config: &SecurityConfig) -> LuaResult<()> {
         let _ = globals.set("os", mlua::Value::Nil);
     } else {
         // Remove dangerous os functions even if io is allowed
-        if let Ok(os_table) = globals.get::<_, mlua::Table>("os") {
+        if let Ok(os_table) = globals.get::<mlua::Table>("os") {
             let _ = os_table.set("execute", mlua::Value::Nil);
             let _ = os_table.set("exit", mlua::Value::Nil);
             let _ = os_table.set("remove", mlua::Value::Nil);
@@ -379,8 +379,8 @@ pub fn setup_sandbox(lua: &Lua, config: &SecurityConfig) -> LuaResult<()> {
             if allowed_modules.contains(&module) {
                 // Load the module normally
                 lua.globals()
-                    .get::<_, mlua::Function>("_original_require")?
-                    .call::<_, mlua::Value>(module)
+                    .get::<mlua::Function>("_original_require")?
+                    .call::<mlua::Value>(module)
             } else {
                 Err(mlua::Error::RuntimeError(format!(
                     "Module '{}' is not allowed",
@@ -390,7 +390,7 @@ pub fn setup_sandbox(lua: &Lua, config: &SecurityConfig) -> LuaResult<()> {
         })?;
 
     // Store original require before replacing
-    if let Ok(original_require) = globals.get::<_, mlua::Function>("require") {
+    if let Ok(original_require) = globals.get::<mlua::Function>("require") {
         globals.set("_original_require", original_require)?;
     }
     globals.set("require", require_fn)?;

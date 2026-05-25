@@ -228,7 +228,7 @@ impl PersistenceBackend for MemoryPersistenceBackend {
             snapshots.push(snapshot.clone());
 
             // Sort by version (newest first)
-            snapshots.sort_by(|a, b| b.version.cmp(&a.version));
+            snapshots.sort_by_key(|b| std::cmp::Reverse(b.version));
 
             // Limit number of snapshots
             if snapshots.len() > 10 {

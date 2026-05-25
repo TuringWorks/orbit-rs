@@ -29,7 +29,7 @@
 
 use crate::exception::{OrbitError, OrbitResult};
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -250,7 +250,7 @@ impl FieldEncryptionEngine {
     /// Generate and add a random encryption key
     pub async fn generate_key(&self, key_id: &str) -> OrbitResult<()> {
         let mut key_data = vec![0u8; 32];
-        OsRng.fill_bytes(&mut key_data);
+        rand::rng().fill_bytes(&mut key_data);
         self.add_key(key_id, key_data).await
     }
 
@@ -468,7 +468,7 @@ impl FieldEncryptionEngine {
             .map_err(|e| OrbitError::internal(format!("Invalid key: {}", e)))?;
 
         let mut nonce_bytes = [0u8; NONCE_SIZE];
-        OsRng.fill_bytes(&mut nonce_bytes);
+        rand::rng().fill_bytes(&mut nonce_bytes);
         let nonce = Nonce::from_slice(&nonce_bytes);
 
         let ciphertext = cipher

@@ -20,9 +20,9 @@ thiserror.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
 uuid.workspace = true
-# Using SQLx fork with RSA vulnerability fix (RUSTSEC-2023-0071)
-# Repository: https://github.com/TuringWorks/sqlx-no-rsa
-sqlx = { git = "https://github.com/TuringWorks/sqlx-no-rsa.git", default-features = false, features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono", "uuid"] }
+# SQLx updated to 0.9+ which resolves RSA vulnerability (RUSTSEC-2023-0071)
+# No longer needs custom fork
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono", "uuid"] }
 tokio-util = "0.7"
 md5 = "0.8"
 tempfile = "3.0"
@@ -31,7 +31,7 @@ tonic-prost = "0.14"
 prost = "0.14"
 futures.workspace = true
 tower = { version = "0.5", features = ["limit", "load-shed", "timeout"] }
-hyper = "0.14"
+hyper = "1.0"
 fastrand = "2.0"
 metrics = "0.24"
 # LSP dependencies
@@ -49,7 +49,7 @@ regex.workspace = true
 crc32fast = "1.4"
 # Encryption at rest (AES-256-GCM)
 aes-gcm = "0.10"
-rand = "0.8"
+rand.workspace = true
 base64 = "0.22"
 hex = "0.4"
 

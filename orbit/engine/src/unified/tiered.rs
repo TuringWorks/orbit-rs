@@ -521,13 +521,13 @@ impl TieredStorageBackend {
             // Sort by eviction policy
             match self.config.hot_tier.eviction_policy {
                 EvictionPolicy::Lru => {
-                    candidates.sort_by(|a, b| a.1.last_access.cmp(&b.1.last_access));
+                    candidates.sort_by_key(|a| a.1.last_access);
                 }
                 EvictionPolicy::Lfu => {
-                    candidates.sort_by(|a, b| a.1.access_count.cmp(&b.1.access_count));
+                    candidates.sort_by_key(|a| a.1.access_count);
                 }
                 EvictionPolicy::Ttl => {
-                    candidates.sort_by(|a, b| a.1.created_at.cmp(&b.1.created_at));
+                    candidates.sort_by_key(|a| a.1.created_at);
                 }
                 EvictionPolicy::Adaptive => {
                     // Combine LRU and LFU: score = access_count / idle_time

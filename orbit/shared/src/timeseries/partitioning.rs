@@ -510,11 +510,7 @@ impl PartitionManager {
         let total_partitions = self.partitions.len() as u64;
         let total_data_points: u64 = self.partitions.values().map(|p| p.data_points).sum();
         let total_size_bytes: u64 = self.partitions.values().map(|p| p.size_bytes).sum();
-        let average_partition_size = if total_partitions > 0 {
-            total_size_bytes / total_partitions
-        } else {
-            0
-        };
+        let average_partition_size = total_size_bytes.checked_div(total_partitions).unwrap_or(0);
 
         PartitioningStats {
             total_partitions,

@@ -11,11 +11,11 @@ use rand::Rng;
 
 /// Generate random points for testing
 fn generate_random_points(count: usize) -> Vec<GPUPoint> {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     (0..count)
         .map(|_| GPUPoint {
-            x: rng.gen_range(-180.0..180.0),
-            y: rng.gen_range(-90.0..90.0),
+            x: rng.random_range(-180.0..180.0),
+            y: rng.random_range(-90.0..90.0),
         })
         .collect()
 }

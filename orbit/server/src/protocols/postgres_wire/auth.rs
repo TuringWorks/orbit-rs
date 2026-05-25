@@ -110,7 +110,7 @@ impl UserStore {
         type HmacSha256 = Hmac<Sha256>;
 
         // Generate random salt
-        let salt: Vec<u8> = (0..16).map(|_| rand::thread_rng().gen()).collect();
+        let salt: Vec<u8> = (0..16).map(|_| rand::rng().random()).collect();
 
         // Compute salted password using PBKDF2
         let mut salted_password = vec![0u8; 32];
@@ -271,7 +271,7 @@ impl ScramAuth {
         // Generate server nonce by appending random data to client nonce
         let server_nonce_suffix: String = (0..16)
             .map(|_| {
-                let ch = rand::thread_rng().gen_range(33..127) as u8;
+                let ch = rand::rng().random_range(33..127) as u8;
                 ch as char
             })
             .collect();

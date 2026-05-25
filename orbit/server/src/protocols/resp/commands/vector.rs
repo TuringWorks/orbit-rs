@@ -825,13 +825,9 @@ impl VectorCommands {
                 "ON" => {
                     i += 2; // Skip ON HASH/JSON
                 }
-                "PREFIX" => {
-                    if i + 1 < args.len() {
-                        let count = self.get_int_arg(args, i + 1, "FT.CREATE")? as usize;
-                        i += 2 + count; // Skip PREFIX count prefixes...
-                    } else {
-                        i += 1;
-                    }
+                "PREFIX" if i + 1 < args.len() => {
+                    let count = self.get_int_arg(args, i + 1, "FT.CREATE")? as usize;
+                    i += 2 + count; // Skip PREFIX count prefixes...
                 }
                 "SCHEMA" => {
                     in_schema = true;
@@ -1067,29 +1063,21 @@ impl VectorCommands {
                     nocontent = true;
                     i += 1;
                 }
-                "LIMIT" => {
-                    if i + 2 < args.len() {
-                        offset = self.get_int_arg(args, i + 1, "FT.SEARCH")? as usize;
-                        limit = self.get_int_arg(args, i + 2, "FT.SEARCH")? as usize;
-                        i += 3;
-                    } else {
-                        i += 1;
-                    }
+                "LIMIT" if i + 2 < args.len() => {
+                    offset = self.get_int_arg(args, i + 1, "FT.SEARCH")? as usize;
+                    limit = self.get_int_arg(args, i + 2, "FT.SEARCH")? as usize;
+                    i += 3;
                 }
-                "RETURN" => {
-                    if i + 1 < args.len() {
-                        let count = self.get_int_arg(args, i + 1, "FT.SEARCH")? as usize;
-                        let mut fields = Vec::new();
-                        for j in 0..count {
-                            if i + 2 + j < args.len() {
-                                fields.push(self.get_string_arg(args, i + 2 + j, "FT.SEARCH")?);
-                            }
+                "RETURN" if i + 1 < args.len() => {
+                    let count = self.get_int_arg(args, i + 1, "FT.SEARCH")? as usize;
+                    let mut fields = Vec::new();
+                    for j in 0..count {
+                        if i + 2 + j < args.len() {
+                            fields.push(self.get_string_arg(args, i + 2 + j, "FT.SEARCH")?);
                         }
-                        return_fields = Some(fields);
-                        i += 2 + count;
-                    } else {
-                        i += 1;
                     }
+                    return_fields = Some(fields);
+                    i += 2 + count;
                 }
                 "SORTBY" => {
                     i += 2; // Skip SORTBY and field

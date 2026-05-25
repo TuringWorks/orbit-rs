@@ -874,10 +874,8 @@ impl OrbitQLExecutor {
                             spatial_type: None,
                         });
                     }
-                    SelectField::AllFrom(table_name) => {
-                        if table_name == &table.name {
-                            result_columns.extend(table.columns.clone());
-                        }
+                    SelectField::AllFrom(table_name) if table_name == &table.name => {
+                        result_columns.extend(table.columns.clone());
                     }
                     _ => {
                         // Handle other field types as needed
@@ -898,11 +896,9 @@ impl OrbitQLExecutor {
                             let value = self.evaluate_expression(expr).await?;
                             result_row.values.push(value);
                         }
-                        SelectField::AllFrom(table_name) => {
-                            if table_name == &table.name {
-                                result_row.values.extend(row.values.clone());
-                                result_row.spatial_values.extend(row.spatial_values.clone());
-                            }
+                        SelectField::AllFrom(table_name) if table_name == &table.name => {
+                            result_row.values.extend(row.values.clone());
+                            result_row.spatial_values.extend(row.spatial_values.clone());
                         }
                         _ => {}
                     }

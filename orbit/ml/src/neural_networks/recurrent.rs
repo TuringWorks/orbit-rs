@@ -11,7 +11,7 @@ use crate::neural_networks::{NetworkArchitecture, NeuralNetwork, Optimizer};
 /// A neural network with feedback connections that can process
 /// sequences of data by maintaining internal state across time steps.
 use ndarray::{Array1, Axis};
-use rand::distributions::Uniform;
+use rand::distr::Uniform;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
@@ -72,8 +72,8 @@ impl RecurrentNetwork {
     /// A new RNN instance
     pub async fn new(architecture: NetworkArchitecture) -> Result<Self> {
         let mut layers = Vec::new();
-        let mut rng = rand::thread_rng();
-        let range = Uniform::new(-0.1, 0.1);
+        let mut rng = rand::rng();
+        let range = Uniform::new(-0.1, 0.1).unwrap();
 
         let mut input_size = architecture.input_shape.iter().product::<usize>();
 

@@ -195,7 +195,7 @@ impl RlsEngine {
 
         // Insert and sort by priority
         table_policies.push(policy);
-        table_policies.sort_by(|a, b| b.priority.cmp(&a.priority));
+        table_policies.sort_by_key(|b| std::cmp::Reverse(b.priority));
 
         Ok(())
     }

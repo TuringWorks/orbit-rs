@@ -184,7 +184,7 @@ impl Graph {
             let out_rels: Vec<u64> = self.outgoing_rels.remove(&node_id).unwrap_or_default();
             let in_rels: Vec<u64> = self.incoming_rels.remove(&node_id).unwrap_or_default();
 
-            for rel_id in out_rels.into_iter().chain(in_rels.into_iter()) {
+            for rel_id in out_rels.into_iter().chain(in_rels) {
                 if let Some(rel) = self.relationships.remove(&rel_id) {
                     // Clean up relationship type index
                     if let Some(ids) = self.rel_type_index.get_mut(&rel.rel_type) {

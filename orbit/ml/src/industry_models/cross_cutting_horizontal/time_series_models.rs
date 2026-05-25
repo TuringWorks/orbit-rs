@@ -9,7 +9,7 @@
 //! Use cases: Demand forecasting, traffic prediction, energy load, financial time series
 
 use super::super::common::{IndustryModel, IndustryModelError, ModelMetrics, Result};
-use rand::distributions::Uniform;
+use rand::distr::Uniform;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -81,13 +81,13 @@ impl LSTMTimeSeriesForecaster {
 
     /// Initialize LSTM weights with Xavier initialization
     fn initialize_weights(&mut self) {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         self.lstm_layers.clear();
 
         let mut input_size = self.num_features;
         for _ in 0..self.num_layers {
             let scale = (2.0 / (input_size + self.hidden_dim) as f64).sqrt();
-            let dist = Uniform::new(-scale, scale);
+            let dist = Uniform::new(-scale, scale).unwrap();
 
             let lstm = LSTMWeights {
                 w_f: Self::random_matrix(&mut rng, &dist, input_size, self.hidden_dim),
@@ -112,7 +112,7 @@ impl LSTMTimeSeriesForecaster {
 
         // Output projection from hidden_dim to forecast_horizon
         let scale = (2.0 / (self.hidden_dim + self.forecast_horizon) as f64).sqrt();
-        let dist = Uniform::new(-scale, scale);
+        let dist = Uniform::new(-scale, scale).unwrap();
         self.output_projection = Some(OutputProjection {
             weights: Self::random_matrix(&mut rng, &dist, self.hidden_dim, self.forecast_horizon),
             bias: vec![0.0; self.forecast_horizon],
@@ -282,7 +282,7 @@ impl IndustryModel for LSTMTimeSeriesForecaster {
         // Each sample: { "sequence": [[f1, f2, ...], ...], "target": [t1, t2, ...] }
         let training_samples: Vec<TrainingSample> = if data.is_empty() {
             // Generate synthetic training data for demonstration
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             (0..100)
                 .map(|_| {
                     let sequence: Vec<Vec<f64>> = (0..self.input_sequence_length)
@@ -290,7 +290,7 @@ impl IndustryModel for LSTMTimeSeriesForecaster {
                             (0..self.num_features)
                                 .map(|_| {
                                     let base = (t as f64 * 0.1).sin();
-                                    base + rng.gen_range(-0.1..0.1)
+                                    base + rng.random_range(-0.1..0.1)
                                 })
                                 .collect()
                         })
@@ -298,7 +298,7 @@ impl IndustryModel for LSTMTimeSeriesForecaster {
                     let target: Vec<f64> = (0..self.forecast_horizon)
                         .map(|t| {
                             let base = ((self.input_sequence_length + t) as f64 * 0.1).sin();
-                            base + rng.gen_range(-0.1..0.1)
+                            base + rng.random_range(-0.1..0.1)
                         })
                         .collect();
                     TrainingSample { sequence, target }
@@ -404,13 +404,13 @@ impl IndustryModel for LSTMTimeSeriesForecaster {
         // Parse test data
         let test_samples: Vec<TrainingSample> = if test_data.is_empty() {
             // Generate synthetic test data
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             (0..20)
                 .map(|_| {
                     let sequence: Vec<Vec<f64>> = (0..self.input_sequence_length)
                         .map(|t| {
                             (0..self.num_features)
-                                .map(|_| (t as f64 * 0.1).sin() + rng.gen_range(-0.1..0.1))
+                                .map(|_| (t as f64 * 0.1).sin() + rng.random_range(-0.1..0.1))
                                 .collect()
                         })
                         .collect();
@@ -536,9 +536,9 @@ impl TransformerTimeSeriesModel {
 
     /// Initialize transformer weights
     fn initialize_weights(&mut self) {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let scale = (1.0 / self.d_model as f64).sqrt();
-        let dist = Uniform::new(-scale, scale);
+        let dist = Uniform::new(-scale, scale).unwrap();
 
         // Input projection: num_features -> d_model
         self.input_projection = (0..self.num_features)
@@ -760,13 +760,13 @@ impl IndustryModel for TransformerTimeSeriesModel {
 
         // Parse or generate training data
         let training_samples: Vec<TrainingSample> = if data.is_empty() {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             (0..50)
                 .map(|_| {
                     let sequence: Vec<Vec<f64>> = (0..self.input_sequence_length)
                         .map(|t| {
                             (0..self.num_features)
-                                .map(|_| (t as f64 * 0.1).sin() + rng.gen_range(-0.1..0.1))
+                                .map(|_| (t as f64 * 0.1).sin() + rng.random_range(-0.1..0.1))
                                 .collect()
                         })
                         .collect();
@@ -864,13 +864,13 @@ impl IndustryModel for TransformerTimeSeriesModel {
         }
 
         let test_samples: Vec<TrainingSample> = if test_data.is_empty() {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             (0..10)
                 .map(|_| {
                     let sequence: Vec<Vec<f64>> = (0..self.input_sequence_length)
                         .map(|t| {
                             (0..self.num_features)
-                                .map(|_| (t as f64 * 0.1).sin() + rng.gen_range(-0.1..0.1))
+                                .map(|_| (t as f64 * 0.1).sin() + rng.random_range(-0.1..0.1))
                                 .collect()
                         })
                         .collect();
@@ -954,13 +954,13 @@ impl DeepARForecaster {
 
     /// Initialize DeepAR weights
     fn initialize_weights(&mut self) {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         self.lstm_weights.clear();
 
         let mut input_size = self.num_features + 1; // +1 for autoregressive input
         for _ in 0..self.num_layers {
             let scale = (2.0 / (input_size + self.hidden_dim) as f64).sqrt();
-            let dist = Uniform::new(-scale, scale);
+            let dist = Uniform::new(-scale, scale).unwrap();
 
             let lstm = LSTMWeights {
                 w_f: LSTMTimeSeriesForecaster::random_matrix(
@@ -1022,7 +1022,7 @@ impl DeepARForecaster {
 
         // Output projections for mu and sigma
         let scale = (2.0 / (self.hidden_dim + 1) as f64).sqrt();
-        let dist = Uniform::new(-scale, scale);
+        let dist = Uniform::new(-scale, scale).unwrap();
         self.mu_projection = Some(OutputProjection {
             weights: LSTMTimeSeriesForecaster::random_matrix(&mut rng, &dist, self.hidden_dim, 1),
             bias: vec![0.0],
@@ -1117,15 +1117,15 @@ impl DeepARForecaster {
     /// Sample from normal distribution with mu and sigma
     fn sample_normal(mu: f64, sigma: f64, rng: &mut impl Rng) -> f64 {
         // Box-Muller transform
-        let u1: f64 = rng.gen_range(0.0001..1.0);
-        let u2: f64 = rng.gen_range(0.0..1.0);
+        let u1: f64 = rng.random_range(0.0001..1.0);
+        let u2: f64 = rng.random_range(0.0..1.0);
         let z = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
         mu + sigma * z
     }
 
     /// Generate predictions with uncertainty
     fn predict_with_uncertainty(&self, context: &[Vec<f64>]) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut all_samples: Vec<Vec<f64>> = Vec::new();
 
         for _ in 0..self.num_samples {
@@ -1239,13 +1239,13 @@ impl IndustryModel for DeepARForecaster {
         }
 
         let training_samples: Vec<TrainingSample> = if data.is_empty() {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             (0..50)
                 .map(|_| {
                     let sequence: Vec<Vec<f64>> = (0..self.input_sequence_length)
                         .map(|t| {
                             (0..self.num_features)
-                                .map(|_| (t as f64 * 0.1).sin() + rng.gen_range(-0.1..0.1))
+                                .map(|_| (t as f64 * 0.1).sin() + rng.random_range(-0.1..0.1))
                                 .collect()
                         })
                         .collect();
@@ -1317,13 +1317,13 @@ impl IndustryModel for DeepARForecaster {
         }
 
         let test_samples: Vec<TrainingSample> = if test_data.is_empty() {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             (0..10)
                 .map(|_| {
                     let sequence: Vec<Vec<f64>> = (0..self.input_sequence_length)
                         .map(|t| {
                             (0..self.num_features)
-                                .map(|_| (t as f64 * 0.1).sin() + rng.gen_range(-0.1..0.1))
+                                .map(|_| (t as f64 * 0.1).sin() + rng.random_range(-0.1..0.1))
                                 .collect()
                         })
                         .collect();
@@ -1612,7 +1612,7 @@ impl IndustryModel for ProphetDecompositionModel {
                 .map(|t| {
                     let trend = 0.01 * t as f64 + 10.0;
                     let seasonal = (2.0 * std::f64::consts::PI * t as f64 / 7.0).sin() * 2.0;
-                    let noise = rand::thread_rng().gen_range(-0.5..0.5);
+                    let noise = rand::rng().random_range(-0.5..0.5);
                     trend + seasonal + noise
                 })
                 .collect()
