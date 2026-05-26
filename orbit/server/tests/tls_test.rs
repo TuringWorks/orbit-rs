@@ -7,25 +7,33 @@ use tokio::net::TcpStream;
 use tokio_rustls::rustls::{pki_types::CertificateDer, ClientConfig, RootCertStore};
 use tokio_rustls::TlsConnector;
 
+/// Integration test for TLS connections to the PostgreSQL server.
+///
+/// This test requires:
+///   - Self-signed test certificates in `config/certs/`
+///   - Port 54443 to be available
+///
+/// Run with: cargo test -p orbit-server --test tls_test -- --ignored
 #[tokio::test]
+#[ignore = "requires test certificates and available ports; run with --ignored"]
 async fn test_postgres_server_tls_connection() {
     // Install crypto provider
     tokio_rustls::rustls::crypto::ring::default_provider()
         .install_default()
         .ok();
 
-    // 1. Setup paths
-    let certs_dir = PathBuf::from("/Users/ravindraboddipalli/.gemini/certs");
+    // 1. Setup paths (relative to workspace root)
+    let certs_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../config/certs");
     let ca_cert_path = certs_dir.join("ca_cert.pem");
     let server_cert_path = certs_dir.join("server_cert.pem");
     let server_key_path = certs_dir.join("server_key.pem");
     let client_cert_path = certs_dir.join("client_cert.pem");
     let client_key_path = certs_dir.join("client_key.pem");
 
-    // Ensure certs exist (assuming they were created by previous tool calls)
-    if !ca_cert_path.exists() {
-        eprintln!("SKIPPING TEST: Certs not found at {:?}", certs_dir);
-        return;
+    // Verify cert files exist
+    for path in [&ca_cert_path, &server_cert_path, &server_key_path, &client_cert_path, &client_key_path] {
+        assert!(path.exists(), "Missing cert file: {}", path.display());
     }
 
     // 2. Configure Server with mTLS
@@ -38,13 +46,13 @@ async fn test_postgres_server_tls_connection() {
     };
 
     // 3. Start Server
-    let port = 54443; // Random port
+    let port = 54443;
     let bind_addr = format!("127.0.0.1:{}", port);
 
     let server = PostgresServer::new(bind_addr.clone()).with_tls_config(Some(tls_config));
 
     let server_handle = tokio::spawn(async move {
-        server.run().await.expect("Server failed");
+        let _ = server.run().await;
     });
 
     // Give server time to start

@@ -8,23 +8,37 @@ use tokio::net::TcpStream;
 use tokio_rustls::rustls::{pki_types::CertificateDer, ClientConfig, RootCertStore};
 use tokio_rustls::TlsConnector;
 
+/// Integration test for TLS passthrough through the load balancer proxy.
+///
+/// This test requires:
+///   - Self-signed test certificates in `config/certs/`
+///   - Ports 25432 and 26432 to be available
+///
+/// Run with: cargo test -p orbit-server --test lb_tls_test -- --ignored
 #[tokio::test]
+#[ignore = "requires test certificates and available ports; run with --ignored"]
 async fn test_lb_tls_passthrough() {
     // Install crypto provider
     tokio_rustls::rustls::crypto::ring::default_provider()
         .install_default()
         .ok();
 
-    // 1. Setup paths
-    let certs_dir = PathBuf::from("/Users/ravindraboddipalli/.gemini/certs");
+    // 1. Setup paths (relative to workspace root)
+    let certs_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../config/certs");
     let ca_cert_path = certs_dir.join("ca_cert.pem");
     let server_cert_path = certs_dir.join("server_cert.pem");
     let server_key_path = certs_dir.join("server_key.pem");
     let client_cert_path = certs_dir.join("client_cert.pem");
     let client_key_path = certs_dir.join("client_key.pem");
 
+    // Verify cert files exist
+    for path in [&ca_cert_path, &server_cert_path, &server_key_path, &client_cert_path, &client_key_path] {
+        assert!(path.exists(), "Missing cert file: {}", path.display());
+    }
+
     // 2. Configure Server (Backend)
-    let server_port = 25432; // Use a random port
+    let server_port = 25432;
     let tls_config = TlsConfig {
         enabled: true,
         cert_file: server_cert_path,
@@ -38,11 +52,11 @@ async fn test_lb_tls_passthrough() {
 
     // Spawn Backend Server
     tokio::spawn(async move {
-        server.run().await.unwrap();
+        let _ = server.run().await;
     });
 
     // Wait for server to be up
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
     // 3. Configure Load Balancer (Proxy)
     let proxy_port = 26432;
@@ -51,11 +65,11 @@ async fn test_lb_tls_passthrough() {
 
     // Spawn Proxy
     tokio::spawn(async move {
-        run_proxy(proxy_config, "127.0.0.1", true).await.unwrap();
+        let _ = run_proxy(proxy_config, "127.0.0.1", true).await;
     });
 
     // Wait for proxy to be up
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
     // 4. Client Connection to PROXY
     // Load CA
