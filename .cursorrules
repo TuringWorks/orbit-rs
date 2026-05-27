@@ -2,17 +2,38 @@
 
 ## Project Context
 Orbit-RS is a high-performance, distributed multi-protocol database server in Rust.
-Read `CLAUDE.md` for quick reference and `docs/PRD.md` for detailed architecture.
+Read `CLAUDE.md` for quick reference and `specifications/PRD.md` for detailed architecture.
+
+## Build & Run (Make)
+
+All development tasks use `make` targets:
+
+```bash
+make build              # Debug build (all workspace crates)
+make build-release      # Release build (optimized)
+make check              # cargo check + clippy (with pedantic allows)
+make format             # cargo fmt --all
+make test               # All workspace tests
+make dev                # Run orbit-server in dev mode (foreground)
+make run                # Alias for make dev
+make redis              # Run with Redis on default port 6379
+make cluster            # Start 3-node cluster
+make cluster-stop       # Stop cluster
+make cluster-status     # Show status
+make cluster-lb         # Start load balancer
+make commit-ready       # Format + check + test (recommended before push)
+make all                # Full pipeline: format, check, test, build
+```
 
 ## Architecture Reference (REQUIRED)
-**Always read `docs/PRD.md` first** - it is the single source of truth for:
+**Always read `specifications/PRD.md` first** — it is the single source of truth for:
 - Module structures and directory layouts
 - Protocol implementations and commands
 - Feature status and test coverage
 - Storage and compute architecture
 
 ## PRD.md Maintenance (REQUIRED)
-When making architectural changes, you MUST update `docs/PRD.md`:
+When making architectural changes, you MUST update `specifications/PRD.md`:
 
 ### Update PRD.md when you:
 - Add new modules, crates, or significant files
@@ -23,15 +44,15 @@ When making architectural changes, you MUST update `docs/PRD.md`:
 - Modify storage or compute backends
 
 ### What to update:
-1. Module Reference - directory trees and file descriptions
-2. Feature Status Matrix - implementation status and test counts
-3. Protocol Commands - add new commands or update existing
-4. Architecture Sections - reflect structural changes
+1. Module Reference — directory trees and file descriptions
+2. Feature Status Matrix — implementation status and test counts
+3. Protocol Commands — add new commands or update existing
+4. Architecture Sections — reflect structural changes
 
 ## Client SDK & Extension Updates (Breaking Changes)
 When making breaking changes to protocols/APIs, also update:
-- `orbit-python-client/` - Python SDK (new commands, API changes)
-- `orbit-vscode-extension/` - VS Code extension (syntax, connections)
+- `orbit-python-client/` — Python SDK (new commands, API changes)
+- `orbit-vscode-extension/` — VS Code extension (syntax, connections)
 
 | Change Type | Files to Update |
 |-------------|-----------------|
@@ -40,8 +61,8 @@ When making breaking changes to protocols/APIs, also update:
 | Protocol changes | Both Python client and VS Code extension |
 
 ## Code Standards
-- Zero warnings policy: `cargo clippy -- -D warnings`
-- Always run `cargo fmt --all` before commits
+- Zero warnings policy: `make check` must pass
+- Always run `make format` before commits
 - Use `anyhow::Result` for application errors
 - Use `thiserror` for library error types
 - Tokio async runtime with `#[tokio::main]` and `#[tokio::test]`
@@ -55,21 +76,23 @@ When making breaking changes to protocols/APIs, also update:
 
 ## Testing
 ```bash
-cargo test --workspace               # All tests
-cargo test --workspace -- --ignored  # Slow integration tests
-cargo test -p orbit-server           # Specific package
+make test               # All tests
+make test-ignored       # Slow/integration tests only
+make test-server        # orbit-server tests only
+make test-quick         # Compile check only
 ```
 
 ## Commit Workflow
 1. Make code changes
-2. Update `docs/PRD.md` if architecture changed
-3. Run `cargo fmt --all`
-4. Run `cargo clippy --workspace -- -D warnings`
-5. Run `cargo test --workspace`
-6. Commit with descriptive message
+2. Update `specifications/PRD.md` if architecture changed
+3. Run `make commit-ready` (format + check + test)
+4. Commit with descriptive message
 
 ## Key Files
-- `CLAUDE.md` - Quick development reference
-- `docs/PRD.md` - Complete architecture reference (KEEP UPDATED)
-- `config/orbit-server.toml` - Server configuration
-- `Cargo.toml` - Workspace definition
+- `CLAUDE.md` — Quick development reference (you are here)
+- `specifications/PRD.md` — Complete architecture reference (KEEP UPDATED)
+- `docs/content/architecture/ORBIT_ARCHITECTURE.md` — Detailed design decisions
+- `config/orbit-server.toml` — Server configuration
+- `Cargo.toml` — Workspace definition
+- `Makefile` — Build, test, and run targets
+- `scripts/` — Development, cluster, and test scripts

@@ -1,13 +1,13 @@
 # AI Agent Instructions for Orbit-RS
 
-This document provides instructions for AI coding assistants (Gemini, Copilot, Warp, Antigravity, and others) working with the Orbit-RS codebase.
+This document provides instructions for AI coding assistants (Gemini, Copilot, Warp, Antigravity, Claude, and others) working with the Orbit-RS codebase.
 
 ## Required Reading
 
 Before making any changes, read these files:
-1. **`specifications/PRD.md`** - Single source of truth for architecture and modules
-2. **`docs/content/architecture/ORBIT_ARCHITECTURE.md`** - Detailed architecture patterns and implementation details
-3. **`CLAUDE.md`** - Quick development reference and commands
+1. **`specifications/PRD.md`** — Single source of truth for architecture and modules
+2. **`docs/content/architecture/ORBIT_ARCHITECTURE.md`** — Detailed architecture patterns and implementation details
+3. **`CLAUDE.md`** — Quick development reference and commands
 
 ## Architecture Reference
 
@@ -53,12 +53,6 @@ Update **ORBIT_ARCHITECTURE.md** when you:
 - Add new architectural patterns or design decisions
 - Modify performance characteristics or trade-offs
 
-### Sections to Update
-1. **Module Reference** - Directory trees, file descriptions
-2. **Feature Status Matrix** - Implementation status, test counts
-3. **Protocol Commands** - New commands, updated syntax
-4. **Architecture Sections** - Structural changes
-
 ### Client SDK & Extension Updates (Breaking Changes)
 
 **When making breaking changes, also update external clients:**
@@ -71,40 +65,94 @@ Update **ORBIT_ARCHITECTURE.md** when you:
 | New query languages | `orbit-vscode-extension/syntaxes/` |
 | New connection types | `orbit-vscode-extension/src/connections/` |
 
-**Files to check:**
-- `orbit-python-client/orbit_client/client.py` - Client methods
-- `orbit-python-client/examples/*.py` - Usage examples
-- `orbit-vscode-extension/src/connections/*.ts` - Connections
-- `orbit-vscode-extension/syntaxes/*.tmLanguage.json` - Syntax
-
 ### Change Management Workflow
 ```
 1. Read specifications/PRD.md to understand current architecture
 2. Make code changes
 3. Update specifications/PRD.md to reflect changes
-4. Run: cargo fmt --all
-5. Run: cargo clippy --workspace -- -D warnings
-6. Run: cargo test --workspace
+4. Run: make format
+5. Run: make check
+6. Run: make test
 7. Commit code AND PRD.md changes together
 8. Use descriptive commit messages
 ```
 
 ## Code Standards
 
-### Build and Test
+### Build and Test (Make)
+
+All development tasks use `make` targets:
+
 ```bash
-cargo build --workspace              # Build all crates
-cargo test --workspace               # Run all tests
-cargo test --workspace -- --ignored  # Run slow integration tests
-cargo fmt --all                      # Format code
-cargo clippy --workspace -- -D warnings  # Lint
+# Build & Check
+make build              # Debug build (all workspace crates)
+make build-release      # Release build (optimized)
+make check              # cargo check + clippy (with pedantic allows)
+make format             # cargo fmt --all
+make clean              # cargo clean
+
+# Run the server
+make dev                # Run orbit-server in dev mode (foreground, debug)
+make run                # Alias for make dev
+make redis              # Run with Redis on default port 6379
+
+# Testing
+make test               # All workspace tests
+make test-ignored       # Run only ignored (slow/integration) tests
+make test-include-ignored  # Run all tests including ignored
+make test-quick         # Compile check only, no test execution
+make test-server        # orbit-server tests only
+make test-verbose       # All tests with full output
+
+# Cluster management
+make cluster            # Start 3-node cluster (make cluster N=5)
+make cluster-stop       # Stop running cluster
+make cluster-status     # Show cluster node status
+make cluster-lb         # Start load balancer for 3-node cluster
+make cluster-lb-stop    # Stop load balancer
+
+# Pre-commit
+make commit-ready       # Format + check + test (recommended)
+make commit-light       # Format + check only (faster)
+make all                # Full pipeline: format, check, test, build
+```
+
+### Direct Script Usage
+
+```bash
+# Development server (non-standard ports)
+./scripts/start_server.sh
+
+# Multi-protocol server (all default ports)
+./scripts/start-multiprotocol-server.sh           # dev mode
+./scripts/start-multiprotocol-server.sh --prod     # production mode
+
+# Cluster operations
+./scripts/start-cluster.sh              # 3-node cluster
+./scripts/start-cluster.sh 5            # 5-node cluster
+./scripts/start-cluster.sh --with-lb 3  # Cluster with LB-compatible ports
+./scripts/start-cluster.sh --stop       # Stop cluster
+./scripts/start-cluster.sh --status     # Show status
+
+# Load balancer
+./scripts/start-cluster-lb.sh 3         # LB for 3-node cluster
+./scripts/start-cluster-lb.sh --stop    # Stop LB
+
+# Test runner (granular control)
+./scripts/run-tests.sh              # All workspace tests
+./scripts/run-tests.sh server       # orbit-server only
+./scripts/run-tests.sh engine       # orbit-engine only
+./scripts/run-tests.sh shared       # orbit-shared only
+./scripts/run-tests.sh time-series  # Time series tests
+./scripts/run-tests.sh ignored      # Slow integration tests
+./scripts/run-tests.sh quick        # Compile check only
 ```
 
 ### Quality Requirements
 - Zero compiler warnings
-- Clippy must pass with `-D warnings`
-- All tests must pass
-- Code must be formatted with rustfmt
+- Clippy must pass with `-D warnings` (plus targeted allows in Makefile)
+- All tests must pass (except `#[ignore]` TLS integration tests)
+- Code must be formatted with rustfmt (`make format`)
 
 ### Conventions
 - **Crates**: `orbit-{name}` (orbit-server, orbit-engine, etc.)
@@ -127,17 +175,27 @@ cargo clippy --workspace -- -D warnings  # Lint
 ```
 orbit-rs/
 ├── orbit/                    # Source code (15 workspace crates)
-│   ├── server/              # Main binary - all protocols
-│   ├── protocols/           # Protocol implementations
-│   ├── engine/              # Storage engine
-│   ├── compute/             # Hardware acceleration
-│   ├── ml/                  # ML inference
-│   ├── shared/              # Shared types and traits
-│   └── client/              # Client library
-├── config/                   # Configuration files
-├── docs/                     # Documentation
-│   └── PRD.md               # ARCHITECTURE REFERENCE (KEEP UPDATED)
-└── tests/                    # Integration tests
+│   ├── server/              # Main binary - all protocols + actor system
+│   ├── engine/              # Storage engine (RocksDB, Iceberg, LSM)
+│   ├── compute/             # Hardware acceleration (SIMD, GPU)
+│   ├── ml/                  # ML inference pipeline
+│   ├── shared/              # Shared types, traits, security, SQL
+│   ├── client/              # Client library (OrbitClient)
+│   ├── proto/               # Protocol Buffer definitions
+│   ├── operator/            # Kubernetes operator
+│   ├── application/         # Application configuration
+│   ├── cli/                 # Interactive CLI client
+│   ├── util/                # Core utilities
+│   ├── client-spring/       # Spring framework integration
+│   ├── server-etcd/         # etcd distributed directory
+│   └── server-prometheus/   # Prometheus metrics
+├── config/                   # Configuration + test TLS certs
+├── docs/                     # Documentation (258 markdown files)
+├── tests/                    # Integration tests
+├── scripts/                  # Development and cluster scripts
+├── orbit-python-client/      # Python SDK
+├── orbit-vscode-extension/   # VS Code extension
+└── benchmarks/               # Performance benchmarks (excluded from workspace)
 ```
 
 ## Protocol Ports
@@ -167,12 +225,13 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
 
 1. **Always read PRD.md first** before making architectural decisions
 2. **Always update PRD.md** when architecture changes
-3. **Never commit without running tests**
+3. **Never commit without running tests** (`make commit-ready`)
 4. **Keep PRD.md synchronized** with actual codebase
 5. **Commit PRD.md changes together** with code changes
+6. **Use `make` targets** for all build, test, and run operations
 
 ## Agent-Specific Files
 
-- `CLAUDE.md` - Claude Code / Anthropic Claude instructions
-- `.cursorrules` - Cursor AI instructions
-- `AGENTS.md` - This file (generic AI agents)
+- `AGENTS.md` — This file (generic AI agents)
+- `CLAUDE.md` — Claude Code / Anthropic Claude instructions
+- `.cursorrules` — Cursor AI instructions
