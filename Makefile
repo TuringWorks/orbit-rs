@@ -1,27 +1,50 @@
 # Orbit-RS Development Makefile
 # Common tasks for development workflow
 
-.PHONY: help format check test build clean commit-ready commit-light pre-commit-full pre-commit-light all
+.PHONY: help format check test build clean commit-ready commit-light \
+        pre-commit-full pre-commit-light all \
+        dev run cluster cluster-stop cluster-status cluster-lb cluster-lb-stop \
+        test-ignored test-include-ignored test-quick test-server test-verbose \
+        redis
 
 help:
 	@echo "🚀 Orbit-RS Development Tasks"
 	@echo ""
 	@echo "Build & Check:"
-	@echo "  format        - Run cargo fmt --all to format code"
-	@echo "  check         - Run cargo check and clippy"
-	@echo "  test          - Run all tests"
-	@echo "  build         - Build all packages in workspace"
-	@echo "  clean         - Clean build artifacts"
+	@echo "  format              - Run cargo fmt --all to format code"
+	@echo "  check               - Run cargo check and clippy"
+	@echo "  test                - Run all workspace tests"
+	@echo "  build               - Build all packages in workspace (debug)"
+	@echo "  build-release       - Build all packages (release)"
+	@echo "  clean               - Clean build artifacts"
+	@echo ""
+	@echo "Run & Develop:"
+	@echo "  dev                 - Run orbit-server in dev mode (foreground)"
+	@echo "  run                 - Alias for dev"
+	@echo "  redis               - Run orbit-server with Redis on port 6379"
+	@echo ""
+	@echo "Cluster:"
+	@echo "  cluster [N=3]       - Start N-node cluster (default: 3)"
+	@echo "  cluster-stop        - Stop running cluster"
+	@echo "  cluster-status      - Show cluster status"
+	@echo "  cluster-lb [N=3]    - Start load balancer for N-node cluster"
+	@echo "  cluster-lb-stop     - Stop load balancer"
+	@echo ""
+	@echo "Test Variants:"
+	@echo "  test-ignored        - Run only ignored (slow) tests"
+	@echo "  test-include-ignored - Run all tests including ignored"
+	@echo "  test-quick          - Compile check only, no tests"
+	@echo "  test-server         - Run orbit-server tests only"
+	@echo "  test-verbose        - Run all tests with full output"
 	@echo ""
 	@echo "Pre-commit:"
-	@echo "  commit-ready  - Format, check, and test (recommended)"
-	@echo "  commit-light  - Format and check only (faster)"
-	@echo "  pre-commit-full  - Enable full pre-commit hook with tests"
-	@echo "  pre-commit-light - Enable lightweight pre-commit hook"
+	@echo "  commit-ready        - Format, check, and test (recommended)"
+	@echo "  commit-light        - Format and check only (faster)"
+	@echo "  pre-commit-full     - Enable full pre-commit hook with tests"
+	@echo "  pre-commit-light    - Enable lightweight pre-commit hook"
 	@echo ""
 	@echo "Complete:"
-	@echo "  all           - Run format, check, test, and build"
-	@echo ""
+	@echo "  all                 - Run format, check, test, and build"
 
 format:
 	@echo "🔧 Formatting code..."
@@ -39,15 +62,75 @@ test:
 	cargo test --workspace --verbose
 	@echo "✅ Tests complete"
 
+test-ignored:
+	@echo "🧪 Running ignored (slow) tests..."
+	cargo test --workspace -- --ignored
+	@echo "✅ Ignored tests complete"
+
+test-include-ignored:
+	@echo "🧪 Running all tests including ignored..."
+	cargo test --workspace -- --include-ignored
+	@echo "✅ All tests complete"
+
+test-quick:
+	@echo "🧪 Quick compile check..."
+	cargo check --workspace
+	@echo "✅ Quick check complete"
+
+test-server:
+	@echo "🧪 Running orbit-server tests..."
+	cargo test -p orbit-server
+	@echo "✅ Server tests complete"
+
+test-verbose:
+	@echo "🧪 Running all tests with verbose output..."
+	cargo test --workspace -- --nocapture
+	@echo "✅ Verbose tests complete"
+
 build:
-	@echo "🏗️  Building workspace..."
+	@echo "🏗️  Building workspace (debug)..."
 	cargo build --workspace
 	@echo "✅ Build complete"
+
+build-release:
+	@echo "🏗️  Building workspace (release)..."
+	cargo build --workspace --release
+	@echo "✅ Release build complete"
 
 clean:
 	@echo "🧹 Cleaning build artifacts..."
 	cargo clean
 	@echo "✅ Clean complete"
+
+# Development server (foreground)
+dev: build
+	@echo "🚀 Starting orbit-server in dev mode..."
+	./target/debug/orbit-server --dev-mode
+
+run: dev
+
+# Redis-compatible mode
+redis: build
+	@echo "🔴 Starting orbit-server with Redis on port 6379..."
+	./target/debug/orbit-server --dev-mode --redis-port 6379 --log-level info
+
+# Cluster management
+cluster: build-release
+	@echo "🖥️  Starting $(or N,3)-node cluster..."
+	./scripts/start-cluster.sh $(or N,3)
+
+cluster-stop:
+	./scripts/start-cluster.sh --stop
+
+cluster-status:
+	./scripts/start-cluster.sh --status
+
+cluster-lb: build-release
+	@echo "⚖️  Starting load balancer..."
+	./scripts/start-cluster-lb.sh $(or N,3)
+
+cluster-lb-stop:
+	./scripts/start-cluster-lb.sh --stop
 
 commit-ready: format check test
 	@echo "🎉 Code is ready for commit!"

@@ -56,11 +56,6 @@ main() {
             cargo test -p orbit-client
             print_success "Client tests completed!"
             ;;
-        "protocols")
-            print_status "Running orbit-protocols tests..."
-            cargo test -p orbit-protocols
-            print_success "Protocols tests completed!"
-            ;;
         "engine")
             print_status "Running orbit-engine tests..."
             cargo test -p orbit-engine
@@ -76,6 +71,11 @@ main() {
             cargo test -p orbit-compute
             print_success "Compute tests completed!"
             ;;
+        "shared")
+            print_status "Running orbit-shared tests..."
+            cargo test -p orbit-shared
+            print_success "Shared tests completed!"
+            ;;
         "time-series")
             print_status "Running time series tests..."
             cargo test -p orbit-server time_series::
@@ -85,6 +85,11 @@ main() {
             print_status "Running ignored (slow) tests..."
             cargo test --workspace -- --ignored
             print_success "Ignored tests completed!"
+            ;;
+        "include-ignored")
+            print_status "Running all tests including ignored..."
+            cargo test --workspace -- --include-ignored
+            print_success "All tests (including ignored) completed!"
             ;;
         "verbose")
             print_status "Running all tests with verbose output..."
@@ -100,19 +105,20 @@ main() {
             echo "Usage: $0 [test-type]"
             echo ""
             echo "Test types:"
-            echo "  workspace   - Run all workspace tests (default)"
-            echo "  all         - Same as workspace"
-            echo "  server      - Run orbit-server tests only"
-            echo "  client      - Run orbit-client tests only"
-            echo "  protocols   - Run orbit-protocols tests only"
-            echo "  engine      - Run orbit-engine tests only"
-            echo "  ml          - Run orbit-ml tests only"
-            echo "  compute     - Run orbit-compute tests only"
-            echo "  time-series - Run time series command tests"
-            echo "  ignored     - Run slow/ignored integration tests"
-            echo "  verbose     - Run all tests with output"
-            echo "  quick       - Just compile, no tests"
-            echo "  help        - Show this help message"
+            echo "  workspace       - Run all workspace tests (default)"
+            echo "  all             - Same as workspace"
+            echo "  server          - Run orbit-server tests only"
+            echo "  client          - Run orbit-client tests only"
+            echo "  engine           - Run orbit-engine tests only"
+            echo "  ml              - Run orbit-ml tests only"
+            echo "  compute         - Run orbit-compute tests only"
+            echo "  shared          - Run orbit-shared tests only"
+            echo "  time-series     - Run time series command tests"
+            echo "  ignored         - Run slow/ignored integration tests"
+            echo "  include-ignored - Run all tests including ignored"
+            echo "  verbose         - Run all tests with output"
+            echo "  quick           - Just compile, no tests"
+            echo "  help            - Show this help message"
             ;;
         *)
             print_error "Unknown test type: $1"
