@@ -101,7 +101,7 @@ tantivy = { version = "0.22", optional = true }
 tantivy-jieba = { version = "0.11", optional = true }  # Chinese tokenization
 
 # Compression for CQL wire protocol
-lz4_flex = "0.11"     # LZ4 compression
+lz4_flex = "0.12"     # LZ4 compression
 snap = "1.1"          # Snappy compression
 
 # JavaScript Engines
@@ -114,8 +114,8 @@ rquickjs = { version = "0.11", features = ["array-buffer", "classes", "futures"]
 # mlua - LuaJIT/Lua 5.4 bindings for Redis FUNCTION/EVAL and PL/Lua
 mlua = { version = "0.10", features = ["lua54", "vendored", "async", "send", "serialize"], optional = true }
 tokio-rustls = "0.26.4"
-rustls-pemfile = "2.2.0"
-rustls = { version = "0.23.35", features = ["ring"] }
+rustls-pemfile = "2"
+rustls = { version = "0.23", features = ["ring"] }
 async-recursion = "1.1.1"
 
 [features]
